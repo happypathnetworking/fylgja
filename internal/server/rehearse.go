@@ -246,7 +246,7 @@ func (r *rehearsing) deadline() (time.Duration, map[string][]wire.NodePlan, erro
 		if row.stage.Bundle == nil {
 			continue
 		}
-		plans, err := lab.NodePlans(store.Path(row.stage.Bundle.ID), r.planned.reg)
+		plans, err := lab.NodePlans(store.Path(row.stage.Bundle.ID), r.planned.reg, r.planned.packages)
 		if err != nil {
 			return 0, nil, fmt.Errorf("planning stage %s's nodes for the deadline: %v", row.stage.Ref, err)
 		}
@@ -477,7 +477,7 @@ func (r *rehearsing) host(ctx context.Context, svc provision.Service, baseline r
 		return r.failed(&result{doc: provision.InFlightRefusal(held.WorkflowID, held.RunID).Document(op, subject)})
 	}
 
-	acts := dryRunActivities(r.opts, r.planned.reg, r.planned.paths)
+	acts := r.opts.c.activities(r.planned.reg, r.planned.packages, r.planned.paths)
 	host, err := acts.InspectHost(ctx)
 	if err != nil {
 		return r.failed(failAt(op, subject, findings.StepHostCheck, "lab "+wire.LabName, "inspecting the host: %v", err))

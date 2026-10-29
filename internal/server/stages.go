@@ -297,12 +297,15 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 // packages it compiled with, the state root its bundles are filed under, the reader it read
 // through, the scope it read under, and the server's clock when it began.
 type plannedStages struct {
-	res    *stages.PlanResult
-	reg    *psp.Registry
-	paths  lab.Paths
-	reader stages.Reader
-	scope  string
-	now    time.Time
+	res *stages.PlanResult
+	reg *psp.Registry
+	// packages are the probe packages every stage was compiled with (016), by which a
+	// rehearsal plans a stage's hosts.
+	packages *probe.Registry
+	paths    lab.Paths
+	reader   stages.Reader
+	scope    string
+	now      time.Time
 }
 
 // planStages is stage plan's plan of branch's open proposed change under scope, which twin
@@ -341,7 +344,7 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	return plannedStages{res: res, reg: reg, paths: paths, reader: reader, scope: scope, now: now}, nil
+	return plannedStages{res: res, reg: reg, packages: packages, paths: paths, reader: reader, scope: scope, now: now}, nil
 }
 
 // stagePipeline is the stages' pipeline on the server, under paths: each stage's read taken

@@ -61,7 +61,11 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 		return withFound(err, prior)
 	}
 
-	plan, err := lab.CheckHost(ctx, dryRunActivities(opts, reg, paths), wire.CheckHostInput{BundlePath: bundlePath, BundleID: id})
+	acts, err := dryRunActivities(opts, reg, paths)
+	if err != nil {
+		return failed(loadFailureAt(op, subject, findings.StepHostCheck, err))
+	}
+	plan, err := lab.CheckHost(ctx, acts, wire.CheckHostInput{BundlePath: bundlePath, BundleID: id})
 	if err != nil {
 		return failed(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err)))
 	}
@@ -113,9 +117,14 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 // process: lab.CheckHost and containerlab's own plan, through the server's runner, never the
 // workflow service. Shared by the create's and provision's dry run, by twin step, whose host
 // check and plan are read the same way, and by twin verify
-// (D-041).
-func dryRunActivities(opts *options, reg *psp.Registry, paths lab.Paths) *lab.Activities {
-	return opts.c.activities(reg, paths)
+// (D-041). The probe packages are loaded beside reg, as every request loads them (016); a
+// package its validation refuses is the error, which the caller files as loadFailure does.
+func dryRunActivities(opts *options, reg *psp.Registry, paths lab.Paths) (*lab.Activities, error) {
+	probes, err := opts.probes()
+	if err != nil {
+		return nil, err
+	}
+	return opts.c.activities(reg, probes, paths), nil
 }
 
 // dryRunBlock is the dry_run block over the host check's plan: each node with what it would

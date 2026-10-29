@@ -104,6 +104,25 @@ func TestWorkerRefusesAPreviousFormatOverride(t *testing.T) {
 	}
 }
 
+// A worker whose override directory's probes/ holds a probe package its validation refuses
+// refuses to serve under the package's findings, as for a support package, and exits 2
+// before dialling (016, R-08).
+func TestWorkerRefusesAnInvalidProbePackage(t *testing.T) {
+	dir, text := invalidProbePackageDir(t)
+	t.Setenv(lab.EnvTemporalAddress, "localhost:1")
+	t.Setenv(lab.EnvStateRoot, t.TempDir())
+
+	var runErr error
+	stderr := captureStderr(t, func() { runErr = runWorker(context.Background(), &options{pspDir: dir}) })
+	var status exitStatus
+	if !errors.As(runErr, &status) || int(status) != findings.ExitError {
+		t.Errorf("runWorker returned %v, want exit status 2", runErr)
+	}
+	if want := text + "fylgja worker: refusing to serve with an invalid probe package\n"; stderr != want {
+		t.Errorf("stderr:\n%s\nwant:\n%s", stderr, want)
+	}
+}
+
 // A worker whose override directory holds a package valid alone that names an embedded
 // package's manufacturer and platform pair under another NOS refuses to serve, naming
 // psp.matches.duplicate and the pair, and exits 2 before dialling: a device of that pair

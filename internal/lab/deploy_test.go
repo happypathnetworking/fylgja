@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -176,6 +177,22 @@ func TestDeployLabNodeNotRunningIsDeployFailed(t *testing.T) {
 
 // The teardown budget comes from the packages of what is there: the staged manifest, or an
 // orphan's container kinds; the default only for what no package covers (Constitution II).
+// stageManifest copies a bundle's manifest alone into the twin directory's bundle, which is
+// all PlanTeardown reads of it.
+func stageManifest(t *testing.T, a *Activities, bundleDir string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(bundleDir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(a.Paths.TwinBundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(a.Paths.TwinBundle, "manifest.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPlanTeardown(t *testing.T) {
 	ctx := context.Background()
 	heterogeneous := func(t *testing.T, a *Activities) {
@@ -197,6 +214,15 @@ func TestPlanTeardown(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, nil, wire.PlanTeardownResult{DestroyTimeoutS: 60, Basis: wire.BasisManifest}},
+		// A host is budgeted from its probe package (016): covered, with the probe packages
+		// loaded, and uncovered at the default without them.
+		{"a staged probed manifest", func(t *testing.T, a *Activities) {
+			stageManifest(t, a, probedBundle())
+		}, nil, wire.PlanTeardownResult{DestroyTimeoutS: 60, Basis: wire.BasisManifest}},
+		{"a staged probed manifest, no probe packages", func(t *testing.T, a *Activities) {
+			stageManifest(t, a, probedBundle())
+			a.Probes = nil
+		}, nil, wire.PlanTeardownResult{DestroyTimeoutS: 60, Basis: wire.BasisManifest, Uncovered: []string{"n1-loop-a", "n1-loop-b"}}},
 		{"an orphan budgeted by its containers' kind", heterogeneous,
 			[]reply{{stdout: labOf("slowos")}},
 			wire.PlanTeardownResult{DestroyTimeoutS: 120, Basis: wire.BasisInspect}},

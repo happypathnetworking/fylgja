@@ -25,6 +25,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -58,13 +59,18 @@ func reportActivities(t *testing.T, recording string, env map[string]string) (*l
 	if err != nil {
 		t.Fatal(err)
 	}
+	probes, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &lab.Activities{
 		Clab:     &lab.Clab{Runner: runner, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 		Paths:    lab.PathsAt(t.TempDir()),
 		Registry: reg,
-		// The host holds every imported image unless a test says otherwise, which is the
-		// state a lab host serves in.
-		Images: heldImages{"ceos:4.32.0.2F": true},
+		Probes:   probes,
+		// The host holds every imported image and the probe package's unless a test says
+		// otherwise, which is the state a lab host serves in.
+		Images: heldImages{"ceos:4.32.0.2F": true, "alpine:3.24.2": true},
 		Getenv: func(k string) (string, bool) {
 			v, ok := env[k]
 			return v, ok
@@ -111,6 +117,9 @@ func TestStartupReportClearHost(t *testing.T) {
 		"fylgja worker: probe login nokia_srlinux: FYLGJA_SRLINUX_USERNAME set, FYLGJA_SRLINUX_PASSWORD set",
 		"fylgja worker: nokia_srlinux (embedded): image ghcr.io/nokia/srlinux:24.7.1, push json_rpc replace over https:443, " +
 			"login FYLGJA_SRLINUX_USERNAME/FYLGJA_SRLINUX_PASSWORD (probe and push)",
+		// The probe package beside them (016, R-08), its image asked after whatever its
+		// acquisition, as the host check asks.
+		"fylgja worker: ping (embedded): image alpine:3.24.2 (public_registry, present on this host), flow ping every 0.2s, burst 5",
 		"fylgja worker: host: lab fylgja absent; twin directory absent",
 	}
 	if !slices.Equal(got, want) {
@@ -121,6 +130,40 @@ func TestStartupReportClearHost(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
 		t.Errorf("state root holds %v (%v) after the report, want nothing created", entries, err)
+	}
+}
+
+// A probe package's image is asked after whatever its acquisition, since no run pulls it
+// (016, R-12): absent, its line names the pull a create needs first; a runtime that will
+// not answer is reported, never guessed at. No probe registry, no line.
+func TestStartupReportNamesTheProbeImage(t *testing.T) {
+	probes, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		label  string
+		images lab.Images
+		want   string
+	}{
+		{"present", heldImages{"alpine:3.24.2": true},
+			"ping (embedded): image alpine:3.24.2 (public_registry, present on this host), flow ping every 0.2s, burst 5"},
+		{"absent", heldImages{},
+			"ping (embedded): image alpine:3.24.2 (public_registry, absent from this host; a create needing it is refused " +
+				"until docker pull alpine:3.24.2 fetches it), flow ping every 0.2s, burst 5"},
+		{"no image driver", nil,
+			"ping (embedded): image alpine:3.24.2 (public_registry, image presence not checked: this worker has no image driver), " +
+				"flow ping every 0.2s, burst 5"},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			got := ProbePackageLines(context.Background(), probes, tc.images)
+			if !slices.Equal(got, []string{tc.want}) {
+				t.Errorf("lines %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if got := ProbePackageLines(context.Background(), nil, heldImages{}); got != nil {
+		t.Errorf("no probe registry reports %q, want nothing", got)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/rehearsal"
@@ -134,8 +135,9 @@ func (c *call) packages() (*psp.Registry, error) {
 
 // activities are the lab host's activities as a request calls them, in the server's own
 // process: the host check and containerlab's plan through the server's runner, never the
-// workflow service, as M12's dry run built them (dryRunActivities; D-041).
-func (c *call) activities(reg *psp.Registry, paths lab.Paths) *lab.Activities {
+// workflow service, as M12's dry run built them (dryRunActivities; D-041). probes are the
+// probe packages a host is planned from (016).
+func (c *call) activities(reg *psp.Registry, probes *probe.Registry, paths lab.Paths) *lab.Activities {
 	return &lab.Activities{
 		// containerlab's invocations are logged as a worker logs them, but only when they
 		// fail: the request's text is the report.
@@ -143,6 +145,7 @@ func (c *call) activities(reg *psp.Registry, paths lab.Paths) *lab.Activities {
 		Store:    bundle.NewDirStore(paths.Bundles),
 		Paths:    paths,
 		Registry: reg,
+		Probes:   probes,
 		// Presence is asked of the host's own runtime, through the same runner, so a dry
 		// run's refusal for an image the host does not hold is the run's.
 		Images:  lab.DockerImages{Runner: c.s.Runner},

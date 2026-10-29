@@ -18,6 +18,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/server"
@@ -145,6 +146,17 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 		}
 		return serveExit(opts, "%v", err)
 	}
+	// The probe packages (016, R-08) likewise: loaded again at each request, checked once here.
+	probes, err := probe.Load(pspDir)
+	if err != nil {
+		var invalid *probe.InvalidError
+		if errors.As(err, &invalid) {
+			doc := findings.NewDocument(findings.OpPSPValidate, nil, invalid.Findings)
+			_ = doc.WriteText(opts.stderr)
+			return serveExit(opts, "refusing to serve with an invalid probe package")
+		}
+		return serveExit(opts, "%v", err)
+	}
 	netListen := opts.netListen
 	if netListen == nil {
 		netListen = net.Listen
@@ -172,7 +184,7 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 	s.Build = version
 	s.Log = logger
 
-	for _, line := range serveReport(ctx, opts, reg, paths, listeners, defaultScope, version) {
+	for _, line := range serveReport(ctx, opts, reg, probes, paths, listeners, defaultScope, version) {
 		_, _ = fmt.Fprintln(opts.stdout, "fylgja serve: "+line)
 	}
 
@@ -260,10 +272,11 @@ func listable(dir string) error {
 // version and its build, each followed straight away, when it is not loopback, by a line
 // saying the token is sent unencrypted on it; the state root; the default scope (017), or
 // that there is none; that the workflow service and Infrahub are dialled when a
-// request needs them; and the worker's own lines for the memory budget and each package.
-// It names variables, never their values, but for the default scope, which names a tag.
-func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, paths lab.Paths, listeners []listener,
-	defaultScope, version string) []string {
+// request needs them; and the worker's own lines for the memory budget, each package and
+// each probe package (016). It names variables, never their values, but for the default
+// scope, which names a tag.
+func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, probes *probe.Registry, paths lab.Paths,
+	listeners []listener, defaultScope, version string) []string {
 	var lines []string
 	for _, l := range listeners {
 		lines = append(lines, fmt.Sprintf("listening on %s (API version %s, build %s)", l.addr, api.Version, version))
@@ -283,7 +296,8 @@ func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, pat
 			envOr(opts.getenv, lab.EnvTemporalNamespace, provision.DefaultNamespace)),
 		provision.BudgetLine(opts.getenv),
 	)
-	return append(lines, provision.LoginLines(ctx, reg, opts.images, opts.getenv)...)
+	lines = append(lines, provision.LoginLines(ctx, reg, opts.images, opts.getenv)...)
+	return append(lines, provision.ProbePackageLines(ctx, probes, opts.images)...)
 }
 
 // loopback is whether the listener's address is a loopback one. A host name is judged by

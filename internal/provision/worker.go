@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -70,8 +72,8 @@ func registerActivities(w worker.Worker, table map[string]any) {
 // worker run): the queue and the service it serves, its state root, the host memory
 // budget, whether each loaded package's probe login variables are set — by name, never a
 // value — then each package's image, whether this host holds one that is not pulled, and
-// how it pushes a node its configuration (M5), and what the host holds of a
-// twin.
+// how it pushes a node its configuration (M5), then each probe package (016), and what the
+// host holds of a twin.
 //
 // The last line is the orphan detection Constitution VII requires at worker start: the
 // host check's own inspection, lab.InspectHost. It is reported and never acted on; there
@@ -87,6 +89,7 @@ func StartupReport(ctx context.Context, acts *lab.Activities, address, namespace
 		BudgetLine(getenv),
 	}
 	lines = append(lines, LoginLines(ctx, acts.Registry, acts.Images, getenv)...)
+	lines = append(lines, ProbePackageLines(ctx, acts.Probes, acts.Images)...)
 	lines = append(lines, hostLine(ctx, acts))
 	for i, l := range lines {
 		lines[i] = "fylgja worker: " + l
@@ -206,6 +209,46 @@ func imagePresent(ctx context.Context, images lab.Images, ref string) (bool, err
 		return false, errors.New("this worker has no image driver")
 	}
 	return images.Present(ctx, ref)
+}
+
+// ProbePackageLines names each loaded probe package (016, R-08), in format order, beside the
+// platform packages' lines: `ping (embedded): image alpine:3.24.2 (public_registry, present
+// on this host), flow ping every 0.2s, burst 5`. A probe image is asked after whatever its
+// acquisition, as the host check asks after it, since no run pulls it. Each line has no
+// prefix: fylgja serve's start-up report prints them too, under its own.
+func ProbePackageLines(ctx context.Context, probes *probe.Registry, images lab.Images) []string {
+	if probes == nil {
+		return nil
+	}
+	var lines []string
+	for _, format := range probes.Formats() {
+		p, _ := probes.Lookup(format)
+		flow := "flow"
+		if len(p.Flow.Command) > 0 {
+			flow += " " + p.Flow.Command[0]
+		}
+		lines = append(lines, fmt.Sprintf("%s (%s): %s, %s every %ss, burst %d", p.Format, p.Origin,
+			probeImageClause(ctx, p, images), flow, strconv.FormatFloat(p.Flow.IntervalS, 'f', -1, 64), p.Burst.Count))
+	}
+	return lines
+}
+
+// probeImageClause names a probe package's image, its acquisition and whether this host
+// holds it, with the pull a public_registry image needs before a create can use it.
+func probeImageClause(ctx context.Context, p *probe.Package, images lab.Images) string {
+	ref := p.Image.Ref
+	var state string
+	switch present, err := imagePresent(ctx, images, ref); {
+	case err != nil:
+		state = "image presence not checked: " + err.Error()
+	case present:
+		state = "present on this host"
+	case p.Image.Acquisition == psp.AcquisitionPublicRegistry:
+		state = "absent from this host; a create needing it is refused until docker pull " + ref + " fetches it"
+	default:
+		state = "absent from this host; a create needing it is refused"
+	}
+	return fmt.Sprintf("image %s (%s, %s)", ref, p.Image.Acquisition, state)
 }
 
 // hostLine says whether lab fylgja and a twin directory are present and, when either is,

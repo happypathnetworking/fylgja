@@ -13,6 +13,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
@@ -79,6 +80,19 @@ func runWorker(ctx context.Context, opts *options) error {
 		return workerExit("%v", err)
 	}
 
+	// The probe packages (016, R-08), from the same override directory's probes/, refused
+	// at start under their own findings as a support package is.
+	probes, err := probe.Load(opts.pspDir)
+	if err != nil {
+		var invalid *probe.InvalidError
+		if errors.As(err, &invalid) {
+			doc := findings.NewDocument(findings.OpPSPValidate, nil, invalid.Findings)
+			_ = doc.WriteText(os.Stderr)
+			return workerExit("refusing to serve with an invalid probe package")
+		}
+		return workerExit("%v", err)
+	}
+
 	// An unreachable service is one line naming the address, and exit 2.
 	c, err := provision.Dial(ctx, logger)
 	if err != nil {
@@ -92,6 +106,7 @@ func runWorker(ctx context.Context, opts *options) error {
 		Store:    store,
 		Paths:    paths,
 		Registry: reg,
+		Probes:   probes,
 		Prober:   lab.GNMIProber{Log: logger},
 		Images:   lab.DockerImages{Runner: lab.ExecRunner{}},
 		Getenv:   os.LookupEnv,

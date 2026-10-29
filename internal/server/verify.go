@@ -62,7 +62,10 @@ func runTwinVerify(ctx context.Context, opts *options, f *verifyFlags) error {
 	if err != nil {
 		return cannotInspect(err)
 	}
-	acts := dryRunActivities(opts, reg, paths)
+	acts, err := dryRunActivities(opts, reg, paths)
+	if err != nil {
+		return loadFailure(op, nil, err)
+	}
 	host, err := acts.InspectHost(ctx)
 	if err != nil {
 		return cannotInspect(err)

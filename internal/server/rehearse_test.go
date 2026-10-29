@@ -283,7 +283,7 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 	store := fileGoldens(t, "three-node", "mixed")
 	nodes := map[string][]wire.NodePlan{}
 	for _, st := range plan.Stages[1:] {
-		if nodes[st.Ref.String()], err = lab.NodePlans(filepath.Join(store, st.Bundle.ID), reg); err != nil {
+		if nodes[st.Ref.String()], err = lab.NodePlans(filepath.Join(store, st.Bundle.ID), reg, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

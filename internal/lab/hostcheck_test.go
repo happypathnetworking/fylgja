@@ -21,6 +21,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
@@ -33,10 +34,14 @@ func goldenBundle() string {
 }
 
 // testActivities are the host-bound activities over a fake runner, the shipped packages
-// and a fresh state root, with an empty environment and a silent log.
+// and probe packages, and a fresh state root, with an empty environment and a silent log.
 func testActivities(t *testing.T, r Runner) *Activities {
 	t.Helper()
 	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	probes, err := probe.Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +51,7 @@ func testActivities(t *testing.T, r Runner) *Activities {
 		Store:    bundle.NewDirStore(paths.Bundles),
 		Paths:    paths,
 		Registry: reg,
+		Probes:   probes,
 		Getenv:   mapEnv(nil),
 		Version:  "0.1.0-test",
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -1044,7 +1050,7 @@ func TestNodePlansAreTheHostChecks(t *testing.T) {
 	images := &fakeImages{held: map[string]bool{"ceos:4.32.0.2F": true}}
 	a := mixedActivities(t, images)
 	res := checkBundle(t, a, mixedBundle())
-	got, err := NodePlans(mixedBundle(), a.Registry)
+	got, err := NodePlans(mixedBundle(), a.Registry, a.Probes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1056,7 +1062,169 @@ func TestNodePlansAreTheHostChecks(t *testing.T) {
 			t.Errorf("node %s plans no budget: %+v", n.Name, n)
 		}
 	}
-	if _, err := NodePlans(t.TempDir(), a.Registry); err == nil {
+	if _, err := NodePlans(t.TempDir(), a.Registry, a.Probes); err == nil {
 		t.Error("a directory with no manifest was planned")
+	}
+}
+
+// probedBundle is the fourth golden: the three-node fixture with probe n1-loop's two hosts,
+// n1-loop-a and n1-loop-b, cabled to n1's ethernet-1/10 and ethernet-1/11 (016).
+func probedBundle() string {
+	return filepath.Join("..", "..", "testdata", "golden", "three-node-probed")
+}
+
+// probedActivities check the probed bundle with SR Linux's login set and a host holding
+// what images says.
+func probedActivities(t *testing.T, images Images) *Activities {
+	t.Helper()
+	a := testActivities(t, &fakeRunner{replies: map[string][]reply{"inspect": {{stdout: recorded(t, "inspect-empty.json")}}}})
+	a.Getenv = mapEnv(srlinuxLogin(nil))
+	a.Images = images
+	return a
+}
+
+// A host's node is planned from its probe package, never from a constant (Constitution II,
+// R-12): the package's memory, deploy and destroy budgets and readiness timeout, and its
+// readiness, flow and burst rendered for this host from the manifest's probes[] entry, as
+// the compiler rendered its exec lines. It has no support package, probe login, push or
+// artifact, so nothing is pushed to it and no login is asked after.
+func TestCheckHostPlansAHostFromItsProbePackage(t *testing.T) {
+	images := &fakeImages{held: map[string]bool{"alpine:3.24.2": true}}
+	a := probedActivities(t, images)
+	res := checkBundle(t, a, probedBundle())
+	if res.Findings.Rejected() {
+		t.Fatalf("findings %+v refuse a host holding the probe image", res.Findings)
+	}
+	pkg, ok := a.Probes.Lookup("ping")
+	if !ok {
+		t.Fatal("the shipped ping package is not loaded")
+	}
+	byName := map[string]wire.NodePlan{}
+	for _, n := range res.Nodes {
+		byName[n.Name] = n
+	}
+	if len(res.Nodes) != 5 {
+		t.Fatalf("planned %d nodes, want n1, n1-loop-a, n1-loop-b, n2 and n3", len(res.Nodes))
+	}
+	want := wire.NodePlan{
+		Name:            "n1-loop-a",
+		Image:           "alpine:3.24.2",
+		MemoryMB:        pkg.Image.Resources.MemoryMB,
+		TimeoutS:        pkg.Readiness.TimeoutS,
+		DeployTimeoutS:  pkg.Image.DeployTimeoutS,
+		DestroyTimeoutS: pkg.Image.DestroyTimeoutS,
+		Host: &wire.ProbePlan{
+			Format:   "ping",
+			Package:  wire.PSPRef{ID: "ping", Source: "embedded"},
+			Probe:    "n1-loop",
+			Endpoint: "a",
+			Readiness: wire.ExecProbe{Command: []string{"ip", "-4", "-o", "addr", "show", "dev", "eth1"},
+				Expect: "10.1.10.2/24", TimeoutS: pkg.Readiness.TimeoutS},
+			Flow: wire.FlowSpec{IntervalS: 0.2, Command: []string{"ping", "-i", "0.2", "10.1.11.2"},
+				StartTimeoutS: pkg.Flow.StartTimeoutS, ReadTimeoutS: pkg.Flow.ReadTimeoutS},
+			Burst: wire.BurstSpec{Count: 5, WaitS: 2,
+				Command: []string{"ping", "-c", "5", "-i", "0.2", "-W", "2", "10.1.11.2"}},
+		},
+	}
+	if got := byName["n1-loop-a"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("n1-loop-a planned\n  %+v\n  %+v\nwant\n  %+v\n  %+v", got, got.Host, want, want.Host)
+	}
+	// The far end's plan is the near end's mirror: its own address expected, the other's pinged.
+	b := byName["n1-loop-b"].Host
+	if b == nil || b.Endpoint != "b" || b.Readiness.Expect != "10.1.11.2/24" ||
+		!reflect.DeepEqual(b.Flow.Command, []string{"ping", "-i", "0.2", "10.1.10.2"}) {
+		t.Errorf("n1-loop-b planned %+v, want endpoint b expecting 10.1.11.2/24 and pinging 10.1.10.2", b)
+	}
+	if n1 := byName["n1"]; n1.Host != nil || n1.PSPID != "nokia_srlinux" || n1.Artifact == nil {
+		t.Errorf("device n1 planned %+v, want its support package's plan and no host", n1)
+	}
+	// Memory sums as a platform's does: three SR Linux budgets and the two hosts' 32 MiB.
+	srl, _ := a.Registry.LookupID("nokia_srlinux")
+	if want := 3*srl.Image.Resources.MemoryMB + 2*pkg.Image.Resources.MemoryMB; res.MemorySumMB != want {
+		t.Errorf("memory sum %d MiB, want %d", res.MemorySumMB, want)
+	}
+	absent(t, res.Findings, findings.RuleHostProbeLoginUnset)
+}
+
+// A probe image absent from the host refuses the run whatever its acquisition, naming the
+// image, the probe package, its hosts and the pull, since no run pulls it (FR-015, US6
+// scenario 3, R-12). Present, the same bundle clears. The SR Linux image, public_registry
+// in a support package, is still never asked after.
+func TestCheckHostProbeImageAbsent(t *testing.T) {
+	images := &fakeImages{held: map[string]bool{}}
+	res := checkBundle(t, probedActivities(t, images), probedBundle())
+
+	f := only(t, res.Findings, findings.RuleHostImageAbsent)
+	refusal(t, f, "alpine:3.24.2")
+	exactly(t, f, "image alpine:3.24.2 is not on this host: probe package ping (nodes n1-loop-a, n1-loop-b) declares it "+
+		"public_registry, which a run never pulls, since a host's deploy budget is sized for a container already held: "+
+		"docker pull alpine:3.24.2 fetches it; a reference held under another tag is absent")
+	if want := []string{"alpine:3.24.2"}; !reflect.DeepEqual(images.asks, want) {
+		t.Errorf("the image driver was asked %v, want %v", images.asks, want)
+	}
+	if rules := rejectedRules(res.Findings); !reflect.DeepEqual(rules, []string{findings.RuleHostImageAbsent}) {
+		t.Errorf("rejections %v, want only %s", rules, findings.RuleHostImageAbsent)
+	}
+
+	images = &fakeImages{held: map[string]bool{"alpine:3.24.2": true}}
+	if res := checkBundle(t, probedActivities(t, images), probedBundle()); res.Findings.Rejected() {
+		t.Errorf("findings %+v refuse a host that holds the probe image", res.Findings)
+	}
+}
+
+// A bundle whose probe package this worker lacks is refused host.probe_package.missing,
+// naming the package, the manifest's source and its hosts, in the one pass; its hosts are
+// left out of the plan, as a device of a missing support package is.
+func TestCheckHostProbePackageMissing(t *testing.T) {
+	for _, tc := range []struct {
+		label  string
+		probes *probe.Registry
+	}{
+		{"no probe registry", nil},
+		{"a registry holding no ping", &probe.Registry{}},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			images := &fakeImages{held: map[string]bool{}}
+			a := probedActivities(t, images)
+			a.Probes = tc.probes
+			res := checkBundle(t, a, probedBundle())
+
+			f := only(t, res.Findings, findings.RuleHostProbePackageMissing)
+			refusal(t, f, "ping")
+			exactly(t, f, "probe package ping (manifest source embedded), named by host n1-loop-a, n1-loop-b, is not on this worker")
+			if rules := rejectedRules(res.Findings); !reflect.DeepEqual(rules, []string{findings.RuleHostProbePackageMissing}) {
+				t.Errorf("rejections %v, want only %s", rules, findings.RuleHostProbePackageMissing)
+			}
+			for _, n := range res.Nodes {
+				if n.Host != nil {
+					t.Errorf("host %s planned with no package for it", n.Name)
+				}
+			}
+			if len(images.asks) != 0 {
+				t.Errorf("the image driver was asked %v for hosts with no package", images.asks)
+			}
+		})
+	}
+}
+
+// NodePlans plans a probed bundle's hosts as the host check does, so a rehearsal's deadline
+// sums the hosts' budgets beside the devices'.
+func TestNodePlansPlanTheHosts(t *testing.T) {
+	a := probedActivities(t, &fakeImages{held: map[string]bool{"alpine:3.24.2": true}})
+	res := checkBundle(t, a, probedBundle())
+	got, err := NodePlans(probedBundle(), a.Registry, a.Probes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, res.Nodes) || len(got) != 5 {
+		t.Errorf("NodePlans\n  %+v\nthe host check's\n  %+v", got, res.Nodes)
+	}
+	// Without the probe packages the hosts are left out, as the host check leaves them.
+	got, err = NodePlans(probedBundle(), a.Registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Errorf("NodePlans with no probe packages planned %d nodes, want the three devices", len(got))
 	}
 }

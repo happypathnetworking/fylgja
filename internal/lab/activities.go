@@ -16,6 +16,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
@@ -50,7 +51,11 @@ type Activities struct {
 	Store    bundle.Store
 	Paths    Paths
 	Registry *psp.Registry
-	Prober   Prober
+	// Probes are the probe packages (016, R-08), by which a host's node is planned as a
+	// device's is by Registry; nil holds none, and a bundle with a host is then refused
+	// host.probe_package.missing.
+	Probes *probe.Registry
+	Prober Prober
 	// Images reports whether the host already holds an image, for the host check's
 	// presence pass. The worker and the dry run set DockerImages over the host's runner;
 	// tier 1 fakes it.

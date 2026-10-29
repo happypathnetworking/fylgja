@@ -140,7 +140,10 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.F
 	}
 
 	// The host, read as twin show reads it, changing nothing.
-	acts := dryRunActivities(opts, reg, paths)
+	acts, err := dryRunActivities(opts, reg, paths)
+	if err != nil {
+		return loadFailureAt(op, subject, findings.StepResolve, err)
+	}
 	host, err := acts.InspectHost(ctx)
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, "lab "+wire.LabName, "inspecting the host: %v", err)

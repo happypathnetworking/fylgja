@@ -168,6 +168,52 @@ type NodePlan struct {
 	// Push names, not only for the probe (M7 D-029). A defaulted field, absent in every
 	// recorded history, where false is the behaviour those histories recorded.
 	AwaitPushTransport bool `json:"await_push_transport,omitempty"`
+	// Host is a probe's host planned from its probe package (016, R-12): its readiness, flow
+	// and burst with every template rendered for this host, so nothing is rendered on the
+	// queue's far side. Nil on a device of intent, and absent in every recorded history. A
+	// host has no PSP, no gNMI Probe, no Push and no Artifact; its budgets and memory above
+	// are its probe package's. Probe is taken by the readiness probe (M2), whose key every
+	// recorded history carries, so the host's plan is named for what the node is.
+	Host *ProbePlan `json:"host,omitempty"`
+}
+
+// ProbePlan is a host's plan from its probe package (data-model §7): the format and the
+// package it was built with, and the package's readiness, flow and burst, each command
+// rendered for this host. Every budget is the package's (Constitution II).
+type ProbePlan struct {
+	Format    string    `json:"format"`
+	Package   PSPRef    `json:"package"`
+	Probe     string    `json:"probe"`    // the probe the host is an endpoint of
+	Endpoint  string    `json:"endpoint"` // a or b
+	Readiness ExecProbe `json:"readiness"`
+	Flow      FlowSpec  `json:"flow"`
+	Burst     BurstSpec `json:"burst"`
+}
+
+// ExecProbe is a readiness probe run inside the node's container (readiness.probe exec):
+// ready once Command's output contains Expect, within TimeoutS. No login: it is the
+// container runtime's exec, not a request to the node.
+type ExecProbe struct {
+	Command  []string `json:"command"`
+	Expect   string   `json:"expect"`
+	TimeoutS int      `json:"timeout_s"`
+}
+
+// FlowSpec is a host's flow during a step: Command, rendered, sends to the far host every
+// IntervalS, started within StartTimeoutS and read within ReadTimeoutS.
+type FlowSpec struct {
+	IntervalS     float64  `json:"interval_s"`
+	Command       []string `json:"command"`
+	StartTimeoutS int      `json:"start_timeout_s"`
+	ReadTimeoutS  int      `json:"read_timeout_s"`
+}
+
+// BurstSpec is a host's burst in verify: Command, rendered, sends Count and waits WaitS for
+// each answer.
+type BurstSpec struct {
+	Count   int      `json:"count"`
+	WaitS   int      `json:"wait_s"`
+	Command []string `json:"command"`
 }
 
 // PlanArtifact is where a node's artifact is in the bundle and what it must hash to: the
@@ -302,6 +348,11 @@ type ReadinessInput struct {
 	// opens a connection and closes it, so no login is needed and none is sent.
 	AwaitPushScheme string `json:"await_push_scheme,omitempty"`
 	AwaitPushPort   int    `json:"await_push_port,omitempty"`
+	// Exec is a host's readiness (016): its package's command run in the container, in
+	// place of Probe, set only for a host and absent in every recorded history. Container
+	// is the container it runs in.
+	Exec      *ExecProbe `json:"exec,omitempty"`
+	Container string     `json:"container,omitempty"`
 }
 
 // ReadinessResult is how long a node took to answer its probe.

@@ -550,3 +550,38 @@ made.
   answers to `start`, `run`, `document` with no event of the run and each frame to
   `api.schema.json`; a running `run.read`'s documentless end is §5.2's. The CLI's
   `run_test.go` walks quickstart §3's five lines through the harness.
+
+### 5.4 The step between two snapshots (T010, Run 9, 2026-10-29)
+
+- **The goldens' step names n1 changed, by its bootstrap**: from `three-node` (`b9db37f8…`,
+  bundle `c70589c3…`) to `three-node-probed` (`aef03f5d…`, bundle `5222063b…`) the step is
+  `nodes: +n1-loop-a; +n1-loop-b; ~n1 (bootstrap)`, `links: +n1-loop-a:eth1 — n1:e1-10;
+  +n1-loop-b:eth1 — n1:e1-11`, `artifacts: unchanged`. The two goldens' `configs/n1.cli`
+  differ by `set / interface ethernet-1/10 admin-state enable` and `… ethernet-1/11 …`,
+  which 016's compile writes for the two ports a probe's hosts take, so the "no device
+  changed" of US5 scenario 1 and T010's line does not hold of the goldens: n1 changes by
+  its bootstrap alone, with no image, platform, psp or mapping reason and no artifact
+  moved. The goldens must not move (FR-033), so the test asserts the step they give; the
+  spec's scenario is the operator's to reword (SC-006's "names the two hosts and their
+  links" holds as written).
+- **The document**: `snapshot_from`, `snapshot_to`, `bundle_from`, `bundle_to` at its top,
+  each once that side resolved or filed, and the `step` block is `step.Pair` as `twin step`'s
+  dry run writes it under its `diff`, stages.schema.json's `$defs/step`, each side named
+  `snapshot <short>…`, `unchanged: true` inside it: twin.diff has no record, containerlab
+  plan or push plan, so step.schema.json's block, which requires them, cannot be its shape.
+  `contracts/findings.schema.json` gains the four ids and its `step` is `oneOf` the two
+  shapes, which `additionalProperties: false` on both keeps apart; its description gains
+  020's line. In Go the block is `findings.StepBlock` with `Pair` set, written alone, and
+  read back as a pair when it has no `diff` (`findings` cannot import `internal/step`, and
+  two fields under one JSON key would both be dropped).
+- **The order of the work**: both sides resolved (`resolveSnapshot`: an id out of the
+  store, or the request's file held to `validate.Intrinsic` and filed), then the packages
+  loaded, then each compiled on twin compile's path (`stage.Compile`) and its bundle filed
+  (`fileCompiled`), so an unknown id refuses before any compile. A side that resolves to the
+  snapshot the other did is compiled once. The text prints each side's line and its
+  snapshot's stored line at resolve, each bundle's stored line once filed, then the pair's
+  text, so a refusal's text names what it left filed. The compiles' warnings are each named
+  once, a warning both sides give being the same finding of the same object. Files: a file
+  for each of `from` and `to` that is not an id, under its path, a path both name sent once;
+  any other shape is `operation.failed` before anything is parsed (`diffFiles`), and the
+  CLI never sends one. Nothing is dialled: every test runs with `useService(t, nil)`.

@@ -148,9 +148,9 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	if err := c.GenerateArtifacts(branch); err != nil {
 		t.Fatalf("regenerating after T: %v", err)
 	}
-	for deadline := time.Now().Add(90 * time.Second); artifactsOf(t, c, branch, "device-config")["n1"].Checksum == current["n1"].Checksum; {
+	for deadline := time.Now().Add(testsupport.ArtifactWait); artifactsOf(t, c, branch, "device-config")["n1"].Checksum == current["n1"].Checksum; {
 		if time.Now().After(deadline) {
-			t.Fatalf("n1's artifact checksum stayed %s for 90s after a description change was generated", current["n1"].Checksum)
+			t.Fatalf("n1's artifact checksum stayed %s for %s after a description change was generated", current["n1"].Checksum, testsupport.ArtifactWait)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

@@ -1325,7 +1325,7 @@ func awaitJoined(t *testing.T, c *testsupport.Client, branch string) {
 // before's, as scripts/e2e.sh's await_checksums_moved does.
 func awaitMoved(t *testing.T, c *testsupport.Client, branch string, before map[string]string, devices ...string) {
 	t.Helper()
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(testsupport.ArtifactWait)
 	for {
 		now := checksums(t, c, branch)
 		moved := true
@@ -1338,7 +1338,7 @@ func awaitMoved(t *testing.T, c *testsupport.Client, branch string, before map[s
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the artifacts of %v on %s did not move from %v: %v", devices, branch, before, now)
+			t.Fatalf("the artifacts of %v on %s did not move from %v within %s: %v", devices, branch, before, testsupport.ArtifactWait, now)
 		}
 		time.Sleep(time.Second)
 	}

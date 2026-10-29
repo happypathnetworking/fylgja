@@ -469,8 +469,9 @@ job on every push to `main`, against an Infrahub the script brings up on the run
 no secret; about 34 minutes (2,017 s on 2026-10-29 with 016's `TestProbesFromTheKind` and
 `TestIntentReadFilesASnapshot2`, green once `internal/stage` and `internal/stages`, whose
 three 1m30s artifact waits lapsed under the tier's own load, were re-run alone; 2,009 s on
-2026-10-28, beside the imported checks), `internal/stages` the longest package at
-1,712.9 s, 87 s under the `-timeout 30m` it sets, then `internal/checks` alone in a second
+2026-10-28, beside the imported checks; every artifact wait is 180 s since,
+`testsupport.ArtifactWait`, the schema waits' 90 s unmoved), `internal/stages` the
+longest package at 1,712.9 s, 87 s under the `-timeout 30m` it sets, then `internal/checks` alone in a second
 `go test` (295.4 s), whose `TestChecksInsideInfrahub`
 runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
 the server on the bridge from this tree here, and skips, saying why, where the task workers

@@ -612,9 +612,13 @@ const ArtifactDefinitionName = "srlinux_device_config"
 // device outside it has no artifact, which is a refusal the tiers prove.
 const ArtifactGroupName = "fylgja-devices"
 
-// artifactWait bounds every wait for generation: twelve times the 7.6s measured for
-// three devices, the same bound the schema wait uses.
-const artifactWait = 90 * time.Second
+// ArtifactWait bounds every wait for generation, WaitForArtifacts' and each contract
+// test's wait for a checksum to move: 180s, about twenty-four times the 7.6s measured for
+// three devices alone. 90s, twelve times, lapsed three times under the whole tier on
+// 2026-10-29 (016's T044: one artifact still Pending, each test green alone) and once at
+// 019's close, as Infrahub's task workers queue the tier's generations behind one another;
+// the schema waits keep their 90s, which never lapsed.
+const ArtifactWait = 180 * time.Second
 
 // unregistered is what a lookup by name says when main lacks what the registration brings,
 // or a branch predates it: the definition comes with the repository's import, and the
@@ -727,7 +731,7 @@ func (c *Client) GenerateArtifacts(branch string) error {
 // it saw, so a test fails on the generation rather than later on a missing artifact.
 func (c *Client) WaitForArtifacts(branch string, want int) error {
 	const q = `{ CoreArtifact { count edges { node { status { value } } } } }`
-	deadline := time.Now().Add(artifactWait)
+	deadline := time.Now().Add(ArtifactWait)
 	last := "nothing yet"
 	for time.Now().Before(deadline) {
 		raw, err := c.GraphQL(branch, q)
@@ -762,7 +766,7 @@ func (c *Client) WaitForArtifacts(branch string, want int) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("branch %s: %d artifact(s) did not all reach Ready within %s (last saw %s)",
-		branch, want, artifactWait, last)
+		branch, want, ArtifactWait, last)
 }
 
 // ArtifactsReadyAt returns when the branch's last artifact was rendered: the latest

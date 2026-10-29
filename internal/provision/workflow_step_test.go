@@ -2312,3 +2312,18 @@ func TestStepWaitAfterAFailedStageNamesNoBundle(t *testing.T) {
 		t.Errorf("outcome %q step %q, want diverged at the stage", got.res.Outcome, got.res.Step)
 	}
 }
+
+// A host containerlab's plan creates, restarts or recreates is never pushed (016): the step's
+// push plan drops it, so it is neither pushed nor recorded not_attempted. A plan of devices
+// alone, every recorded history's, is returned as it was.
+func TestTheStepsPushPlanHasNoHost(t *testing.T) {
+	nodes := []wire.NodePlan{{Name: "n1"}, {Name: "n1-loop-a", Host: &wire.ProbePlan{Format: "ping"}}}
+	plan := []step.NodePush{{Node: "n1", Reasons: []string{step.PushArtifact}}, {Node: "n1-loop-a", Reasons: []string{step.PushCreated}}}
+	if got := withoutHosts(plan, nodes); !reflect.DeepEqual(got, plan[:1]) {
+		t.Errorf("push plan %+v, want n1 alone", got)
+	}
+	devices := nodes[:1]
+	if got := withoutHosts(plan, devices); !reflect.DeepEqual(got, plan) {
+		t.Errorf("a plan with no host became %+v, want it as it was", got)
+	}
+}

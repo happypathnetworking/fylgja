@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -232,4 +233,83 @@ func TestAwaitReadinessWithoutTheWaitNeverDials(t *testing.T) {
 		t.Errorf("ready_after_s = %v, want the probe's own time: the step waited for a transport nobody asked about", res.ReadyAfterS)
 	}
 	_ = port
+}
+
+// hostReadiness is n1-loop-a's readiness as the host check plans it from the shipped ping
+// package (016): its exec in its container, under timeoutS.
+func hostReadiness(timeoutS int) wire.ReadinessInput {
+	return wire.ReadinessInput{Node: "n1-loop-a", MgmtIPv4: "172.20.20.9", TimeoutS: timeoutS,
+		Container: "clab-fylgja-n1-loop-a",
+		Exec: &wire.ExecProbe{Command: []string{"ip", "-4", "-o", "addr", "show", "dev", "eth1"},
+			Expect: "10.1.10.2/24", TimeoutS: timeoutS}}
+}
+
+// What `ip -4 -o addr show dev eth1` prints once containerlab's exec line has run, and
+// before: nothing, exit 0.
+const eth1Addressed = "2: eth1    inet 10.1.10.2/24 scope global eth1\\       valid_lft forever preferred_lft forever\n"
+
+// A host is ready once its exec's output holds what its package expects: the first read,
+// before containerlab's exec line has run, is not ready, and the second is (data-model §7).
+// The exec goes through the Runner as `docker exec <container> <command>`; no prober is
+// asked and no login is read.
+func TestAwaitReadinessExecReadyOnTheSecondRead(t *testing.T) {
+	t.Parallel()
+	runner := &fakeRunner{replies: map[string][]reply{"exec": {{}, {stdout: []byte(eth1Addressed)}}}}
+	a := testActivities(t, runner)
+	a.Prober = nil // a host's readiness never reaches it
+	env := activityEnv(a.AwaitReadiness, wire.ActAwaitReadiness)
+
+	val, err := env.ExecuteActivity(wire.ActAwaitReadiness, hostReadiness(30))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res wire.ReadinessResult
+	if err := val.Get(&res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Node != "n1-loop-a" || res.ReadyAfterS < 1 {
+		t.Errorf("result = %+v, want n1-loop-a ready after at least the one interval", res)
+	}
+	want := []string{"docker", "exec", "clab-fylgja-n1-loop-a", "ip", "-4", "-o", "addr", "show", "dev", "eth1"}
+	if len(runner.calls) != 2 {
+		t.Fatalf("%d execs, want 2", len(runner.calls))
+	}
+	for _, c := range runner.calls {
+		if !slices.Equal(c.args, want) || c.env != nil {
+			t.Errorf("ran %v with env %v, want %v and nothing added to the environment", c.args, c.env, want)
+		}
+	}
+}
+
+// A host whose exec never shows the address times out under readiness.timeout at
+// readiness, naming the exec, the container, the package's timeout and the last reason.
+// One whose exec fails names how it exited, as a device's refused login is named.
+func TestAwaitReadinessExecTimesOut(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		label string
+		reply reply
+		last  string
+	}{
+		{"the address never on the port", reply{stdout: []byte("")}, "last error: its output does not contain 10.1.10.2/24"},
+		{"the exec failing", reply{stderr: []byte("Error response from daemon: container clab-fylgja-n1-loop-a is not running\n"), exit: 1},
+			"last error: exited 1: Error response from daemon: container clab-fylgja-n1-loop-a is not running"},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			t.Parallel()
+			a := testActivities(t, &fakeRunner{replies: map[string][]reply{"exec": {tc.reply}}})
+			env := activityEnv(a.AwaitReadiness, wire.ActAwaitReadiness)
+
+			_, err := env.ExecuteActivity(wire.ActAwaitReadiness, hostReadiness(2))
+			f := stepFailure(t, err, findings.RuleReadinessTimeout)
+			if f.Step != findings.StepReadiness || f.Object != "n1-loop-a" {
+				t.Errorf("finding %+v, want readiness at n1-loop-a", f)
+			}
+			want := "n1-loop-a did not answer exec ip -4 -o addr show dev eth1 expecting 10.1.10.2/24 in container " +
+				"clab-fylgja-n1-loop-a within 2s; " + tc.last
+			if f.Message != want {
+				t.Errorf("message\n  %q\nwant\n  %q", f.Message, want)
+			}
+		})
+	}
 }

@@ -106,7 +106,7 @@ func Step(ctx workflow.Context, in StepInput) (StepResult, error) {
 
 	// 4–7 touch the host; 8 records whatever they did. Every node of the push plan is not
 	// attempted until its push says otherwise.
-	pushes := withLifecycle(in.PushPlan, lab)
+	pushes := withoutHosts(withLifecycle(in.PushPlan, lab), plan.Nodes)
 	if in.Unchanged {
 		pushes = nil // nothing differs to push
 	}
@@ -356,21 +356,10 @@ func recordStep(ctx workflow.Context, in StepInput, res StepResult, st stepState
 // one, so the record names the nodes that answered beside those that did not, worded as the
 // provisioning run's readiness words them. Nothing is pushed until all have answered.
 func awaitStepReadiness(ctx workflow.Context, awaited []wire.NodePlan, lab []wire.LabNode) ([]wire.ReadinessResult, *stopped) {
-	addr := make(map[string]string, len(lab))
-	for _, n := range lab {
-		addr[n.Name] = n.MgmtIPv4
-	}
 	futures := make([]workflow.Future, len(awaited))
 	for i, node := range awaited {
 		futures[i] = workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, ReadinessOptions(node, awaited)),
-			wire.ActAwaitReadiness, wire.ReadinessInput{
-				Node:            node.Name,
-				MgmtIPv4:        addr[node.Name],
-				Probe:           node.Probe,
-				TimeoutS:        node.TimeoutS,
-				AwaitPushScheme: awaitPushScheme(node),
-				AwaitPushPort:   awaitPushPort(node),
-			})
+			wire.ActAwaitReadiness, readinessInput(node, lab))
 	}
 
 	var ready []wire.ReadinessResult
@@ -618,6 +607,29 @@ func withLifecycle(plan []step.NodePush, lab wire.ReconcilePlan) []step.NodePush
 	out := make([]step.NodePush, 0, len(reasons))
 	for _, node := range sortedSet(reasons) {
 		out = append(out, step.NodePush{Node: node, Reasons: sortedSet(reasons[node])})
+	}
+	return out
+}
+
+// withoutHosts is the push plan without a host (016): containerlab's lifecycle names a host
+// it creates, restarts or recreates as it names a device, but a host is configured by its
+// topology node's exec lines and nothing is pushed to it. A plan of devices alone, which is
+// every recorded history's, is returned as it was.
+func withoutHosts(plan []step.NodePush, nodes []wire.NodePlan) []step.NodePush {
+	hosts := map[string]bool{}
+	for _, n := range nodes {
+		if n.Host != nil {
+			hosts[n.Name] = true
+		}
+	}
+	if len(hosts) == 0 {
+		return plan
+	}
+	out := make([]step.NodePush, 0, len(plan))
+	for _, p := range plan {
+		if !hosts[p.Node] {
+			out = append(out, p)
+		}
 	}
 	return out
 }

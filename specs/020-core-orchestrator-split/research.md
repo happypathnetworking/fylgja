@@ -518,3 +518,35 @@ made.
   and document frames are. The CLI's answer test covers both operations through answers
   of the document alone (an unknown read, an ended interrupt) for that reason, and its
   command walk leaves out `run.read` and `run.interrupt` until T009 adds the commands.
+
+### 5.3 A run started detached, and the core's CLI over the identity (T008, T009, Run 8, 2026-10-29)
+
+- **Decided in the run, from R-03 and data-model §1**: `detach` is carried on the request's
+  options, set by the four runs' handlers, so `runProvision` (create, from a read or a
+  snapshot, and provision) and `runStep` answer at the run once `startRun` returns. An
+  interrupt that reached the start was the operator's before the run was detached from, so
+  under it the run is followed and asked to cancel as the stream asks; otherwise the answer
+  is `start`, `run`, then the document. A create's document carries what `carried` always
+  put on it (the snapshot, the bundle and the read's and compile's findings), and a step's
+  the command's warnings, each before `run.detached`, as a followed run's carry them, so
+  "the one finding" of data-model §1 is the one the detach adds. `run.flags.conflict` is
+  the first thing `runCreate`, `runTwinProvision` and `runTwinStep` do, its object
+  `dry_run`, its words the CLI's flags (`--detach is meaningless with --dry-run: a dry run
+  starts no run to detach from`), as `snapshot.flags.conflict`'s are.
+- **The destroy**: `provision.Service` gains `StartDestroyDetached`, `StartDestroy` that
+  returns once a worker has taken the destroy run, or once it has attached to one in
+  flight, with no `Follow` and no result read (`destroy`'s `follow` argument). What it
+  cancels first, a rehearsal, a provisioning or a step run, it still waits for, since the
+  destroy run starts only once those have closed: their progress is the detached answer's,
+  as the stream's, and never an event of the destroy's own. The detached answer writes the
+  `run` frame the destroy's stream never wrote.
+- **The CLI**: `--detach` on the four commands, sent as `detach`; `fylgja run read` and
+  `fylgja run interrupt` send `workflow_id` as `--workflow` gives it, an empty one included,
+  which the server refuses `run.unknown` (no cobra-required flag, since every guard is the
+  server's), and `run_id` only when `--run` is given. `send` reads `Answer.Next`'s `io.EOF`,
+  which only a running `run.read` yields (§5.2), as the command's end: exit 0, nothing
+  printed under `--json`.
+- **Tests**: `internal/server/exit_test.go`'s shape test holds each of the four detached
+  answers to `start`, `run`, `document` with no event of the run and each frame to
+  `api.schema.json`; a running `run.read`'s documentless end is §5.2's. The CLI's
+  `run_test.go` walks quickstart §3's five lines through the harness.

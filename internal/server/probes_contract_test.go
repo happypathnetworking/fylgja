@@ -17,10 +17,11 @@ import (
 
 // The kind is the second source of a request's one list (SC-005, US4's independent test),
 // against a real Infrahub, never a fake (D-017): n2-loop written into FylgjaProbe on the
-// default branch, then three intent reads of a seeded fylgja-test-* branch on the server's
+// default branch, then four intent reads of a seeded fylgja-test-* branch on the server's
 // path, as the API runs them. With no probe file the snapshot carries the kind's n2-loop;
 // with n1-loop's file it carries the file's alone, the kind's replaced; with the probe
-// deleted and neither, it carries [] and the read warns of nothing. Each read's document
+// deleted and neither, it carries [] and the read warns of nothing; with an empty file,
+// testdata/probes/none.json, it is the snapshot neither filed. Each read's document
 // holds no finding, since a read compiles nothing, so no placement is judged against the
 // branch's ports. The workflow service is never dialled. The probe is deleted as the test
 // goes and again when it ends, and afterwards FylgjaProbe counts 0; the branch is deleted
@@ -105,6 +106,16 @@ func TestProbesFromTheKind(t *testing.T) {
 	neither, _ := read("with neither", probesArg{})
 	if neither.Probes == nil || len(neither.Probes) != 0 {
 		t.Errorf("with neither the snapshot carries %#v; want []", neither.Probes)
+	}
+
+	// An empty file declares none: the take is the one with neither, its snapshot the same.
+	empty, _ := read("with an empty file", probeFile(t, "none.json"))
+	if empty.Probes == nil || len(empty.Probes) != 0 || empty.Version != snapshot.Version {
+		t.Errorf("with an empty file the snapshot is %s carrying %#v; want a %s carrying []", empty.Version,
+			empty.Probes, snapshot.Version)
+	}
+	if empty.ID != neither.ID {
+		t.Errorf("with an empty file the snapshot is %s; want the one with neither, %s", empty.ID, neither.ID)
 	}
 
 	ids := []string{fromKind.ID, fromFile.ID, neither.ID}

@@ -74,7 +74,14 @@ var (
 // one pass, under probes.invalid at the file or at probes[<i>].<field>; then, when the
 // shape holds, Validate's rules with no registry, each probe named by its name. The
 // declaration is returned only when nothing is rejected.
+//
+// A file that is empty, or of JSON's whitespace alone, declares no probes: it is read as
+// probes 1 with an empty list, with no finding (spec, Edge Cases), as a take with neither.
+// Anything else that is not a JSON object is refused.
 func Parse(data []byte, path string) (*Declaration, findings.List) {
+	if len(bytes.Trim(data, " \t\r\n")) == 0 {
+		return &Declaration{Version: Version, Probes: []Probe{}}, nil
+	}
 	var list findings.List
 	var outer map[string]json.RawMessage
 	if err := json.Unmarshal(data, &outer); err != nil || outer == nil {

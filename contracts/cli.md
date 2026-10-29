@@ -1779,7 +1779,7 @@ Twenty-five added, none retired; the step `flows` is new, and no status or exit 
 | Rule | Severity, exit, step | Object | When |
 |---|---|---|---|
 | `probes.version.unsupported` | rejection, 1, `start` | the file | `probes_version` is not `"1"`, or absent, naming the version read, or that none was, and `"1"` |
-| `probes.invalid` | rejection, 1, `start` | the file or `probes[<i>].<field>` | not an object, an unknown key, a missing field, or a probe of other than two endpoints |
+| `probes.invalid` | rejection, 1, `start` | the file or `probes[<i>].<field>` | not an object, an unknown key, a missing field, or a probe of other than two endpoints; a file that is empty, or of whitespace alone, is not refused: it declares none, as a take with neither |
 | `probe.name.invalid` | rejection, 1, `start` or `resolve` | `<probe>` | the name is not `^[a-z0-9][a-z0-9-]{0,23}$` |
 | `probe.name.duplicate` | rejection, 1, `start` or `resolve` | `<probe>` | two probes share the name, naming each position |
 | `probe.address.invalid` | rejection, 1, `start` or `resolve` | `<probe>/<a\|b>.address` | not an address with a prefix length |

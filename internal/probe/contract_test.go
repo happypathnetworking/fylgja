@@ -107,6 +107,17 @@ func TestTheDeclarationContractAndTheReaderAgree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// An empty file is no JSON document, so no instance of the schema: the reader takes it as
+	// declaring none, and the description says so.
+	t.Run("none.json", func(t *testing.T) {
+		if refused, list := readerRefuses(t, readFixture(t, "testdata", "probes", "none.json"), "none.json"); refused {
+			t.Errorf("the reader refuses an empty file: %v", list)
+		}
+		if !strings.Contains(string(raw), "A --probes file that is empty, or of whitespace alone") {
+			t.Errorf("the contract's description does not say what an empty file declares")
+		}
+	})
 	for _, path := range invalid {
 		rule := strings.TrimSuffix(filepath.Base(path), ".json")
 		t.Run(rule, func(t *testing.T) {

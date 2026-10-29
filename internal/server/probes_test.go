@@ -99,6 +99,17 @@ func TestReadProbesTakesTheFileElseTheKind(t *testing.T) {
 			t.Errorf("with neither (the kind answering %#v): %#v, %v; want [], no finding", empty, got, err)
 		}
 	}
+
+	// An empty file declares none: [] as with neither, and it replaces the kind's, which is
+	// never asked (spec, Edge Cases).
+	kind = &fakeKind{probes: n2}
+	got, err = readProbes(ctx, kindOptions(t, kind), findings.OpIntentRead, nil, probeFile(t, "none.json"))
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("with an empty file: %#v, %v; want [], no finding", got, err)
+	}
+	if kind.checks+kind.reads != 0 {
+		t.Errorf("with an empty file the kind was asked %d times; want none", kind.checks+kind.reads)
+	}
 }
 
 // A malformed file is refused at start under its own rule, naming the file, the probe and the

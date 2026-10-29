@@ -78,6 +78,8 @@ func TestParseRefusesTheShape(t *testing.T) {
 	}{
 		{"not an object", `[]`, want{findings.RuleProbesInvalid, file, "not a JSON object"}},
 		{"not JSON", `{`, want{findings.RuleProbesInvalid, file, "not a JSON object"}},
+		{"null", `null`, want{findings.RuleProbesInvalid, file, "not a JSON object"}},
+		{"a string", `" "`, want{findings.RuleProbesInvalid, file, "not a JSON object"}},
 		{"no version", `{"probes": []}`, want{findings.RuleProbesVersionUnsupported, file, "names no probes_version"}},
 		{"version 2", `{"probes_version": "2", "probes": []}`, want{findings.RuleProbesVersionUnsupported, file, `probes_version "2"; this build reads probes "1"`}},
 		{"version a number", `{"probes_version": 1, "probes": []}`, want{findings.RuleProbesVersionUnsupported, file, "probes_version 1;"}},
@@ -110,6 +112,28 @@ func TestParseRefusesTheShape(t *testing.T) {
 				t.Errorf("a refused declaration was returned: %+v", d)
 			}
 			holds(t, list, tc.want)
+		})
+	}
+}
+
+// A file that is empty, or of whitespace alone, declares no probes: probes 1 with an empty
+// list, never nil, and no finding, as a declaration of probes: [] reads (spec, Edge Cases).
+func TestAnEmptyFileDeclaresNone(t *testing.T) {
+	for _, tc := range []struct{ name, doc string }{
+		{"zero bytes", ""},
+		{"a newline alone", "\n"},
+		{"whitespace alone", " \t\r\n \n"},
+		{"testdata/probes/none.json", string(readFixture(t, "testdata", "probes", "none.json"))},
+		{"probes: []", `{"probes_version": "1", "probes": []}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d, list := Parse([]byte(tc.doc), "probes.json")
+			if d == nil || len(list) != 0 {
+				t.Fatalf("got %+v, %v; want a declaration and no finding", d, list)
+			}
+			if d.Version != Version || d.Probes == nil || len(d.Probes) != 0 {
+				t.Errorf("got %#v; want probes %s with an empty list", d, Version)
+			}
 		})
 	}
 }

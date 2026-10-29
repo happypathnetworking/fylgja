@@ -22,6 +22,15 @@ rejects is refused with its `psp.*` findings — exit 1 from a command, and exit
 `worker run` and `serve` at start, each printing the package's findings before it
 refuses — rather than accepted and failing later.
 
+**Probe packages are their own kind**, in [`probes/`](../probes/README.md) (format `0.1`,
+016): a probe's two hosts are synthesized nodes, not platforms, so no PSP describes them
+and no platform's `matches` names them. Their packages take a PSP's shape where the two
+share a field (`image`, the budgets, `acquisition`), are embedded and loaded beside the
+PSPs by the same two roles, and are overridden from this directory's `probes/`
+subdirectory, which the PSP loader never reads: it reads the override directory's own
+`*.yaml` alone. A probe image is verified present whatever its acquisition and never
+pulled, where a PSP's `public_registry` image may be pulled under the deploy budget.
+
 ## Supported packages
 
 A shipped package is supported when it has passed both halves of the conformance suite

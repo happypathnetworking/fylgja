@@ -544,3 +544,17 @@ Appended by the runs.
   attribute as written (addresses with their prefix length, gateways without), `format`
   defaulting to `ping`, and `object delete FylgjaProbe <name>` removes it by its
   human-friendly id. *(Infrahub 1.11.2, infrahub-sdk 1.23.2, 2026-10-29)*
+- **§4.5 `IpamIPAddress`'s namespace** (Run 18, T033): an `IpamIPAddressCreate(data:
+  {address: {value: "10.1.10.1/24"}, interface: {id: <port>}})` naming no `ip_namespace`
+  lands in the default namespace: the address's `ip_namespace` reads the one
+  `BuiltinIPNamespace`, an `IpamNamespace` named `default` with `default: true` (its
+  `default` is a field of `IpamNamespace` alone, so a query of the generic reads it in an
+  inline fragment). Its `interface` reads back the port, an `InterfacePhysical`, by its
+  id, name and device (`InterfaceLayer3` has no `name`: the port's fields are read in a
+  `... on InterfacePhysical` fragment). On two throwaway `fylgja-test-ns-*` branches,
+  seeded by this tree's `SeedThreeNode` and `SeedMixed`: six addresses each, `10.<d>.10.1/24`
+  and `10.<d>.11.1/24` on `n1`–`n3` (`s1`, `e1`, `e2`), 15 `InterfacePhysical` and 3
+  `DcimCable`; the baseline's deletion (`clearBaseline`, `-clear-main`'s, run on the
+  three-node branch) removed 6 addresses, 3 cables, 15 interfaces, 3 devices, 1 platform,
+  1 manufacturer, 4 locations and 1 tag, its 3 artifacts gone with their devices, and
+  `BuiltinIPAddress` then counts 0. Both branches deleted. *(Infrahub 1.11.2, 2026-10-29)*

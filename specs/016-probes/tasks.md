@@ -438,6 +438,42 @@ verify.
   - **Note (operator, 2026-10-29, recorded by the attended session under the pause after Run 29)**: the last gate holds. The operator ran `make build` on `d1b0786` and restarted both processes from it; the attended session read them: worker 3088208 and server 3088232, neither `/proc/<pid>/exe` `(deleted)`, `bin/fylgja`'s `vcs.revision` `d1b0786…` with `vcs.modified=false`, each environment naming both logins, `INFRAHUB_*`, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`; the server's report says `listening on 127.0.0.1:7650` and `172.17.0.1:7650` with the loopback warning, the state root with `bundles:`, `snapshots:` and `twin:`, `default scope: tag:fylgja` and `ping (embedded): image alpine:3.24.2 (public_registry, present on this host)`, as the worker's does; from inside both Infrahub task workers a `POST /v1/twin/show` answers `200` with the token and a JSON body, and `401` without the token.
 
 - [ ] T050 [operator] The review, the merge and the push, because they are the operator's at every feature's close: review this directory and the diff against `main`; `make command-log` once the session is closed; merge `016-probes` into `main` and push `origin`; `converge` follows.
+  - *2026-10-29 12:05Z, at `47e49dd`, Run 30 of the converge loop (live): left unchecked.* The review, the merge and the push are the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched, and nothing was written to Infrahub. What is ready:
+    - **The feature's diff**: `git diff main 47e49dd`, from `main` as it stands (`842c893`).
+      - 78 commits on `main..HEAD` (41 `docs`, 21 `feat`, 7 `test`, 6 `merge`, 2 `fix`, 1 `chore`) over 309 files, +44,019 and −16,983 lines.
+      - The code is 76 Go files (+5,146 −529) and their tests 118 (+8,072 −546).
+      - The 16 contract copies frozen under `internal/*/testdata/contracts/019-following-removed/` add 5,340 lines, the feature's 9 tracked files under `specs/016-probes/` 3,060, the goldens 17 files (+717 −18) and `docs/` 19 (+901 −247). Most of the rest is `schema/infrahub.graphql` (`60a3121`), whose field order is not stable between two fetches, so its line count says nothing.
+      - `git merge-tree --write-tree main HEAD` merges with no conflict. `main`'s one commit past the base, `842c893` (T041's template), is `206429f`'s content, and `infrahub/` and `.infrahub.yml` equal it.
+    - **`origin`**: its `main` is `842c893`, read with `git ls-remote` at 12:03Z, which moves no remote-tracking ref; it holds no `016-probes`. So no CI run has seen 016's Go code.
+      - The registration `fylgja` is imported at `842c893` with its two checks, and the branch changes nothing under `infrahub/` or `.infrahub.yml` beyond it, so no import is owed.
+      - CI's contract job, on that push, brings up an empty `main`, where `-prepare-main` loads `FylgjaProbe` (`scripts/bring-up.sh`'s `main_lacks` now names it too).
+    - **To read on their own**:
+      - D-064 and Constitution 2.3.0 (`1506f79`, T002), with the spec and the plan.
+      - The breaking commits, pre-1.0: snapshot `2` (`c3702c2`), bundle `6` with the hosts (`dfd79e1`), `twin.json` `11` (`1905207`), the API's `probes` argument (`5876bc5`, `afb73c8`), and the worker's four workflows and seventeen activities (`fc4c4e0`).
+      - The three golden commits, each on its own: `ddc278a` (bundle `6`), `8d7f0fc` (the fourth, three-node-probed) and `45f181f` (the probe-ready ports).
+      - The one defect found live, `ff76c8c`: a step from a probed twin panicked the server, now pinned by `TestStepInputFromAProbedTwin`.
+      - The frozen copies, `a611841`, and the C4 redraw, `9f24f8f`.
+    - **For the spec, so the operator's** (each `converge` would tag `[operator]`, since a fix changes `spec.md`):
+      - **A `10` twin's step** (Run 22, T037): the spec's edge case (`spec.md:503`) says a twin created before 016 steps, but its bundle is a `5`, which `step.Diff` refuses at `compare`; `contracts/cli.md`'s Upgrading says destroy and create again, which is what the code does.
+      - **The kind absent** (Run 25, T040): `probe.kind.absent` refuses every request that takes probes and sends no file (`internal/server/probes.go:120`), so on an install without `FylgjaProbe`, `intent read`, `twin create --branch`, a step to a stage, `stage plan`, `twin rehearse` and both checks need the kind or a file. Whether such an install should read `[]` is FR-005–FR-007's.
+    - **Found for `converge`**, as `CLAUDE.md`'s State lists them, re-read against the tree:
+      - `conformance.Boot` dereferences a host's null `psp` (`internal/conformance/boot.go:99`, `n.PSP.ID`) and would expect a discovery neighbour on a probe's port. Tier 3's boot half runs on cases 1 and 6, which carry no probe.
+      - The rehearsal's `verify` cell sums host names, ports and neighbours alone (`countsText`, `internal/rehearsal/report.go:749`), so a stage failed on its burst reads `20 held, 0 failed, 5 skipped` beside `verify.burst`.
+      - `contracts/cli.md:1877`'s 016 Upgrading says `-prepare-main` loads the kind where absent, which it does on an empty `main` alone.
+      - Tier 2's 1m30s artifact wait is tight under the whole tier: three lapsed in Run 28, and each package passed alone.
+      - **One is already fixed**: `CLAUDE.md`'s fifth, `probes/ping.yaml`'s `acquisition` comment, was corrected by `3f6b82e` (T040, Run 25), and its line 11 says a run never pulls a probe image. The State's list is stale there.
+    - **The live tiers**: tier 2 green whole (2,017 s, `internal/stage` and `internal/stages` re-run alone) and tier 3 `E2E-OK` (2,236.6 s), both in Run 28 at `4593d04`. Since then only records and this file changed (Run 29's `docs`), so they hold for the code as it stands. Neither was re-run here.
+    - **This run's gates**, on the tree with this note: `make build` is statically linked; `GOFLAGS=-count=1 make test` passes in 48.2 s wall (load 1.52, then 3.06), `internal/cli` 43.8 s of it, under the 65 s budget; `make lint` reports 0 issues.
+    - **The host**, at 12:04Z:
+      - `clab inspect --all` is `{}`, there is no `local/twin` and no Schedule, and the dev server (1039393) is up.
+      - Infrahub's `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`, `FylgjaStage`, `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` each count 0, `CoreReadOnlyRepository` holds `fylgja` alone at `842c893` with its two checks, and `main`'s hash is `8a4f3bee…`.
+      - `free -m` reads 18,694 MiB available. Infrahub's eight containers hold about 8.3 GiB (Neo4j 2.9 GiB, its server 2.7 GiB) 38 hours after their start.
+      - The worker (3088208) and the server (3088232) run from `d1b0786`, live. This run's gates replace the binary, so both are restarted from this run's commit once it is made, and verified as `CLAUDE.md` says.
+    - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `47e49dd` before this note.
+    - **The command log**: `local/command-log/` holds no `pending.jsonl`.
+      - `specs/016-probes/commands/runs.jsonl`, which is git-ignored, holds 31 entries: `specify`, `clarify`, `plan`, `tasks`, `analyze` and 26 implement sessions, Runs 1, 3–7, 9–25 and 27–29. Runs 2, 8 and 26 were the operator's by hand.
+      - By their totals, `analyze`'s 17 follow-ups included, they took 33,662 s active (9.4 h) and 35,355 s wall. Without the follow-ups they took 33,563 s active. T047's 32,641 s (9.1 hours) is the first thirty's on that count, through Run 28, so the roadmap's figure holds.
+      - This session's entry follows when it exits. `make command-log`, run once the session that closes the feature has ended, publishes whatever that session kept.
 
 ---
 

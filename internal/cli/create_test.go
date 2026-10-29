@@ -700,10 +700,14 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 // 016 moves the step, verify, rehearsal and findings contracts on: a document of this build
 // is 019's as built, a null step loss taken out (withoutNullLoss), so it is also validated
 // against 019's frozen copy; one whose step carries a loss is 016's alone, and is read
-// against no earlier copy.
+// against no copy earlier than 016's.
+//
+// 020 moves the findings contract on: every document of this build is 016's as built, so it
+// is also validated against 016's frozen copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	validateWithShow(t, contract016, "016", doc)
 	if carriesLoss(doc) {
 		return
 	}
@@ -736,22 +740,37 @@ func carriesLoss(doc *findings.Document) bool {
 }
 
 // laterContract is the next later frozen feature's copy of the block name, or the current
-// one when no later copy holds it.
+// one when no later copy holds it. The features are taken in the order they closed
+// (closeOrder).
 func laterContract(t *testing.T, feature, name string) string {
 	t.Helper()
 	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	var later []string
 	for _, d := range dirs {
-		if d.Name() <= feature {
-			continue
+		if closeOrder(d.Name()) > closeOrder(feature) {
+			later = append(later, d.Name())
 		}
-		if path := contractPath(d.Name(), name); fileExists(path) {
+	}
+	slices.SortFunc(later, func(a, b string) int { return strings.Compare(closeOrder(a), closeOrder(b)) })
+	for _, d := range later {
+		if path := contractPath(d, name); fileExists(path) {
 			return path
 		}
 	}
 	return contractPath(currentContract, name)
+}
+
+// closeOrder is feature's place in the order the features closed, as a string to compare:
+// its directory's name, but for 016's, which closed after 019 (Release 0.3 ran 017, 018,
+// 019, then 016), so that its copies are later than 019's though its number is lower.
+func closeOrder(feature string) string {
+	if feature == contract016 {
+		return contract019 + "+"
+	}
+	return feature
 }
 
 func fileExists(path string) bool {
@@ -820,6 +839,11 @@ const contract018 = "018-snapshots"
 // the step, verify and rehearsal blocks, the four 016 moves, frozen under
 // testdata/contracts/019-following-removed/.
 const contract019 = "019-following-removed"
+
+// contract016 is the feature argument that names 016's copies of the findings, API and
+// twin.json contracts, the three 020 moves, frozen under testdata/contracts/016-probes/; its
+// blocks, which 020 does not freeze, are read from contracts/ (laterContract).
+const contract016 = "016-probes"
 
 // namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
 // 018's, which no earlier contract accepts.
@@ -924,7 +948,7 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 		b = as017Contract(t, doc)
 	case contract018:
 		b = as018Contract(t, doc)
-	case currentContract, contract019:
+	case currentContract, contract016, contract019:
 		var err error
 		if b, err = json.Marshal(doc); err != nil {
 			t.Fatal(err)
@@ -932,7 +956,7 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 	default:
 		b = asEarlierContract(t, doc)
 	}
-	if feature != currentContract {
+	if feature != currentContract && feature != contract016 {
 		b = withoutNullLoss(t, b)
 	}
 	if err := validateAgainst(findingsContract(t, feature), b); err != nil {

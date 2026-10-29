@@ -33,7 +33,8 @@ func twinSchema(t *testing.T) *jsonschema.Schema {
 // earlier feature's is its frozen copy under testdata/contracts/<feature>/, which keeps the
 // records its milestone wrote, such as M11's 4 (009-stepping), M12's 5 (010-verify), 014's
 // 6 (014-proposed-change-stages), 015's 7 (015-proposed-change-rehearsal), 017's 8
-// (017-dcim-reader), 018's 9 (018-snapshots) and 019's 10 (019-following-removed).
+// (017-dcim-reader), 018's 9 (018-snapshots), 019's 10 (019-following-removed) and 016's 11
+// (contract016).
 func twinSchemaOf(t *testing.T, feature string) *jsonschema.Schema {
 	t.Helper()
 	path := filepath.Join("..", "..", "contracts", "twin.schema.json")
@@ -59,6 +60,10 @@ func twinSchemaOf(t *testing.T, feature string) *jsonschema.Schema {
 	}
 	return s
 }
+
+// contract016 is the directory 016's copy of twin.schema.json, twin.json 11, which 020 moves
+// to 12, is frozen under.
+const contract016 = "016-probes"
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
 // reader read the schema library's DCIM (017).
@@ -1162,10 +1167,11 @@ func TestRecord10(t *testing.T) {
 // twin.json 11 (016, research R-22): a create of the probed golden records each probe's host
 // with its probe in place of a support package, psp and artifact null and no push time,
 // holding the record's bundle as every device does, from a run that pushed the devices
-// alone; and twin.json 10's frozen contract refuses it, since 10 names no host.
+// alone; and twin.json 10's frozen contract refuses it, since 10 names no host. 016's frozen
+// copy accepts it as the current contract does.
 func TestRecord11RecordsAHost(t *testing.T) {
 	ctx := context.Background()
-	s, v10 := twinSchema(t), twinSchemaOf(t, "019-following-removed")
+	s, v10, v11 := twinSchema(t), twinSchemaOf(t, "019-following-removed"), twinSchemaOf(t, contract016)
 	id, err := bundle.IDOfDir(probedBundle())
 	if err != nil {
 		t.Fatal(err)
@@ -1195,6 +1201,7 @@ func TestRecord11RecordsAHost(t *testing.T) {
 	}
 	rec := res.Record
 	validateRecord(t, s, rec)
+	validateRecord(t, v11, rec)
 	if rec.TwinVersion != "11" || len(rec.Nodes) != 5 {
 		t.Fatalf("twin_version %s with %d nodes; want 11 with n1, n1-loop-a, n1-loop-b, n2 and n3", rec.TwinVersion, len(rec.Nodes))
 	}

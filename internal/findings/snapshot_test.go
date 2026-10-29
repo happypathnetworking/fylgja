@@ -25,6 +25,10 @@ const contract018 = "018-snapshots"
 // 016 does not move, are read from contracts/.
 const contract019 = "019-following-removed"
 
+// contract016 is the directory 016's copy of the findings contract, which 020 moves, is
+// frozen under; its blocks, which 020 does not freeze, are read from contracts/.
+const contract016 = "016-probes"
+
 // compile017FindingsSchema is 017's findings contract, with the four blocks 018 moves frozen
 // beside it and verify.schema.json, which 018 does not move, read from contracts/.
 func compile017FindingsSchema(t *testing.T) *jsonschema.Schema {
@@ -156,6 +160,18 @@ func TestA019DocumentIsUnchanged(t *testing.T) {
 	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
 		t.Run(c.label, func(t *testing.T) {
 			mustValidateBytes(t, v019, mutated(t, c.doc, drop016NullLoss), c.label+" against 019's contract")
+		})
+	}
+}
+
+// Every document this package builds is 016's as built, its null losses kept: 016's copy
+// stays as 016 left it when 020 moves the findings contract on, and the claim is that the
+// older contract still accepts these documents.
+func TestA016DocumentIsUnchanged(t *testing.T) {
+	v016 := compileFeatureFindingsSchema(t, contract016, currentResources...)
+	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, v016, mustMarshal(t, c.doc), c.label+" against 016's contract")
 		})
 	}
 }

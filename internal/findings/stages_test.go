@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -28,6 +29,16 @@ func contractPath(feature, name string) string {
 // stages.schema.json from 014 and rehearsal.schema.json from 015.
 var currentResources = []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"}
 
+// closeOrder is feature's place in the order the features closed, as a string to compare:
+// its directory's name, but for 016's, which closed after 019 (Release 0.3 ran 017, 018,
+// 019, then 016), so that its copies are later than 019's though its number is lower.
+func closeOrder(feature string) string {
+	if feature == contract016 {
+		return contract019 + "+"
+	}
+	return feature
+}
+
 // compileFeatureFindingsSchema loads one feature's copy of the findings contract with the
 // blocks it references added under their own $ids. A feature's findings contract that
 // refers to a block cannot compile without it, so a caller names every block its
@@ -36,18 +47,25 @@ var currentResources = []string{"show.schema.json", "stages.schema.json", "step.
 // is read in its place: the next later feature's copy that holds it, or the current one when
 // none does. So verify.schema.json beside 017's and 018's copies is 019's, which froze it as
 // it stood from 017 until 016 moved it, and the stages block beside 018's is the current one.
+// "Later" is in the order the features closed (closeOrder), so every block beside 016's copy
+// is the current one.
 func compileFeatureFindingsSchema(t *testing.T, feature string, resources ...string) *jsonschema.Schema {
 	t.Helper()
-	frozen, err := os.ReadDir(filepath.Join("testdata", "contracts"))
+	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	frozen := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		frozen = append(frozen, d.Name())
+	}
+	slices.SortFunc(frozen, func(a, b string) int { return strings.Compare(closeOrder(a), closeOrder(b)) })
 	load := func(name string) any {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil && name != "findings.schema.json" {
 			path = contractPath(currentContract, name)
 			for _, d := range frozen {
-				if later := contractPath(d.Name(), name); feature != currentContract && d.Name() > feature {
+				if later := contractPath(d, name); feature != currentContract && closeOrder(d) > closeOrder(feature) {
 					if _, err := os.Stat(later); err == nil {
 						path = later
 						break

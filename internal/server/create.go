@@ -157,10 +157,6 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 		Version:    opts.version(),
 		Scope:      scope,
 	}
-	// The run records the stage as data, and branches on nothing of it.
-	if resolved != nil {
-		in.Stage = resolved.record
-	}
 	return withStage(compiled.carried(runProvision(ctx, opts, op, subject, in)), resolved)
 }
 

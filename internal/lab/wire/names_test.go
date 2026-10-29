@@ -1,6 +1,9 @@
 package wire
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // The ids the names shorten: each name keeps the first eight characters and an ellipsis.
 const (
@@ -8,20 +11,17 @@ const (
 	nameBundle   = "f764e1fa0000000000000000000000000000000000000000000000000000beef"
 )
 
-// A step's side is named by what it names first: its stage, else its snapshot, else its
-// bundle, the side of a record of twin.json 8 that stepped, which names neither (019,
-// research R-05).
+// A step's side is named by its snapshot, else its bundle, the side of a record of
+// twin.json 8 that stepped, which names none (019, research R-05); a side names no stage
+// from 020 (research R-06), and one an input recorded before it carries decodes to nothing.
 func TestStepSideName(t *testing.T) {
-	stage := &StageRef{ProposedChange: StageChange{ID: "pc-1", Branch: "change-1"}, Label: "third-link"}
 	for _, tc := range []struct {
 		name string
 		side StepSide
 		want string
 	}{
-		{"a stage, beside its snapshot and bundle", StepSide{Stage: stage, SnapshotID: nameSnapshot, BundleID: nameBundle},
-			"stage change-1/third-link"},
-		{"a snapshot and no stage", StepSide{SnapshotID: nameSnapshot, BundleID: nameBundle}, "snapshot 576933ec…"},
-		{"neither a stage nor a snapshot", StepSide{BundleID: nameBundle}, "bundle f764e1fa…"},
+		{"a snapshot", StepSide{SnapshotID: nameSnapshot, BundleID: nameBundle}, "snapshot 576933ec…"},
+		{"no snapshot", StepSide{BundleID: nameBundle}, "bundle f764e1fa…"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.side.Name(); got != tc.want {
@@ -29,39 +29,35 @@ func TestStepSideName(t *testing.T) {
 			}
 		})
 	}
+	var old StepSide
+	if err := json.Unmarshal([]byte(`{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"third-link",`+
+		`"description":"","at_source":"given"},"snapshot_id":"`+nameSnapshot+`","bundle_id":"`+nameBundle+`","at":""}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if got := old.Name(); got != "snapshot 576933ec…" {
+		t.Errorf("a side recorded with a stage is named %q, want its snapshot", got)
+	}
 }
 
-// The record's position is named as a side is, over its top level, and a record of
-// twin.json 5 or earlier that names M10's waypoint keeps SideStage's wording.
+// The record's position is named as a side is, over its top level, whatever stage or
+// waypoint a record of 11 or earlier names.
 func TestTwinRecordPosition(t *testing.T) {
-	stage := &StageRef{ProposedChange: StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded"}
 	snapshot, empty := nameSnapshot, ""
 	for _, tc := range []struct {
 		name string
 		rec  TwinRecord
 		want string
 	}{
-		{"a stage, beside its snapshot and bundle",
-			TwinRecord{TwinVersion: "9", Stage: stage, SnapshotID: &snapshot, BundleID: nameBundle}, "stage change-1/seeded"},
-		{"a snapshot and no stage", TwinRecord{TwinVersion: "9", SnapshotID: &snapshot, BundleID: nameBundle},
-			"snapshot 576933ec…"},
+		{"a snapshot", TwinRecord{TwinVersion: "12", SnapshotID: &snapshot, BundleID: nameBundle}, "snapshot 576933ec…"},
 		{"a record of 8, which names no snapshot", TwinRecord{TwinVersion: "8", BundleID: nameBundle}, "bundle f764e1fa…"},
 		{"a snapshot id that is empty", TwinRecord{TwinVersion: "9", SnapshotID: &empty, BundleID: nameBundle},
 			"bundle f764e1fa…"},
-		{"a record of 5 naming a waypoint", TwinRecord{TwinVersion: "5", BundleID: nameBundle, Superseded: true},
-			"a waypoint of a record version this build no longer reads (twin.json 5)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.rec.Position(); got != tc.want {
 				t.Errorf("Position() = %q, want %q", got, tc.want)
 			}
 		})
-	}
-
-	// The waypoint's wording is SideStage's own for the record's stage.
-	old := TwinRecord{TwinVersion: "5", BundleID: nameBundle, Superseded: true}
-	if got, want := old.Position(), old.SideStage(old.Stage); got != want {
-		t.Errorf("Position() = %q, SideStage = %q; want them equal", got, want)
 	}
 }
 

@@ -89,85 +89,63 @@ func TestProvisionHappyPath(t *testing.T) {
 	}
 }
 
-// A create from a stage is M2–M7's pinned create (014): the same activities in the same
-// order, with the stage the server resolved copied to the record step as data, and nil
-// there when none was given.
-func TestProvisionCarriesTheStageToTheRecord(t *testing.T) {
-	live := &StageInput{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live",
-		Description: "after the first cut-over", AtSource: "written"}
-	for label, given := range map[string]*StageInput{"with a stage": live, "without": nil} {
-		t.Run(label, func(t *testing.T) {
-			h := newHarness(t)
-			var recorded wire.RecordInput
-			h.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
-				func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
-					recorded = in
-					rec := recordFor(in)
-					rec.Stage = in.Stage
-					return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: rec}, nil
-				})
-			h.mockHappyPath()
-
-			in := compiled("change-1")
-			in.At, in.Stage = "2026-09-28T15:20:44.000000+00:00", given
-			res := h.run(in)
-
-			if res.Outcome != OutcomeReady {
-				t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
-			}
-			if !reflect.DeepEqual(recorded.Stage, given) {
-				t.Errorf("record input's stage = %+v, want %+v", recorded.Stage, given)
-			}
-			if res.Twin == nil || !reflect.DeepEqual(res.Twin.Stage, given) {
-				t.Errorf("twin = %+v, want the record naming %+v", res.Twin, given)
-			}
-			if calls := h.calls(); len(calls) != 10 || calls[9] != wire.ActRecordTwin {
-				t.Errorf("activities %v, want the pinned create's ten, the record last", calls)
-			}
-		})
+// An input recorded before 020 may carry the stage the server resolved its reference from
+// (014) and the rehearsal whose baseline the run was (015): it decodes to the input it would be
+// without them, the run goes as any pinned create does, and the record step's input names
+// neither, since twin.json 12 records no stage and no rehearsal (020, research R-06).
+func TestAnInputRecordedBefore020RecordsNoStage(t *testing.T) {
+	want := compiled("change-1")
+	want.At = "2026-10-19T09:00:00+00:00"
+	b, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
+	var fields map[string]any
+	if err := json.Unmarshal(b, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["stage"] = map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"},
+		"label": "seeded", "description": "the devices, no links", "at_source": "given"}
+	fields["rehearsal"] = map[string]any{"workflow_id": wire.RehearseWorkflowID, "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
+	if b, err = json.Marshal(fields); err != nil {
+		t.Fatal(err)
+	}
+	var in ProvisionInput
+	if err := json.Unmarshal(b, &in); err != nil {
+		t.Fatalf("an input recorded before 020 does not decode: %v", err)
+	}
+	if !reflect.DeepEqual(in, want) {
+		t.Errorf("decoded %+v\nwant %+v", in, want)
+	}
 
-// A rehearsal's baseline is a create from a stage (015): the same activities, with the
-// rehearsal run copied to the record step as data beside the stage, and nil there when the
-// run was not a rehearsal's.
-func TestProvisionCarriesTheRehearsalToTheRecord(t *testing.T) {
-	seeded := &StageInput{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded",
-		Description: "the devices, no links", AtSource: "given"}
-	run := &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "01a1b2c3-0000-7000-8000-0000000000a1"}
-	for label, given := range map[string]*wire.RehearsalRef{"a rehearsal's baseline": run, "a hand create": nil} {
-		t.Run(label, func(t *testing.T) {
-			h := newHarness(t)
-			var recorded wire.RecordInput
-			h.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
-				func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
-					recorded = in
-					rec := recordFor(in)
-					rec.Stage, rec.Rehearsal = in.Stage, in.Rehearsal
-					return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: rec}, nil
-				})
-			h.mockHappyPath()
-
-			in := compiled("change-1")
-			in.At, in.Stage, in.Rehearsal = "2026-10-19T09:00:00+00:00", seeded, given
-			res := h.run(in)
-
-			if res.Outcome != OutcomeReady {
-				t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
-			}
-			if !reflect.DeepEqual(recorded.Rehearsal, given) || !reflect.DeepEqual(recorded.Stage, seeded) {
-				t.Errorf("record input's rehearsal = %+v, stage %+v; want %+v and %+v", recorded.Rehearsal, recorded.Stage, given, seeded)
-			}
-			if res.Twin == nil || !reflect.DeepEqual(res.Twin.Rehearsal, given) {
-				t.Errorf("twin = %+v, want the record naming %+v", res.Twin, given)
-			}
+	h := newHarness(t)
+	var recorded wire.RecordInput
+	h.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
+			recorded = in
+			return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: recordFor(in)}, nil
 		})
+	h.mockHappyPath()
+	res := h.run(in)
+
+	if res.Outcome != OutcomeReady {
+		t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
+	}
+	if calls := h.calls(); len(calls) != 10 || calls[9] != wire.ActRecordTwin {
+		t.Errorf("activities %v, want the pinned create's ten, the record last", calls)
+	}
+	if b, err = json.Marshal(recorded); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"stage"`) || strings.Contains(string(b), `"rehearsal"`) {
+		t.Errorf("the record step's input names a stage or a rehearsal: %s", b)
 	}
 }
 
 // The fields are omitted when nil or empty, so an M2–M7 input and the record step's input
 // for it serialise as they did: the recorded histories' payloads are byte-identical. A
-// snapshot id is omitted when empty too (018), on the inputs and on a step's sides.
+// snapshot id is omitted when empty too (018), on the inputs and on a step's sides; neither
+// input has a stage or a rehearsal to serialise from 020 (research R-06).
 func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 	for label, v := range map[string]any{
 		"ProvisionInput":   ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"},

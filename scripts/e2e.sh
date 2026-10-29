@@ -1365,7 +1365,7 @@ expect "$OUT/step-5a.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and any(.step.pushed[]; .node=="n1") and all(.step.pushed[]; .outcome=="landed")'
 RUN5A=$(jq -r .subject.run_id "$OUT/step-5a.json")
 export RUN5A
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .source=="intent" and .stage==null
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .source=="intent" and .stage==null
   and .snapshot_id==env.SID5A and .bundle_id==env.BID5A
   and .provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN5A and .step.phase==null
@@ -1646,7 +1646,7 @@ expect "$OUT/create-7.json" '.subject.stage==(env.FP + "/seeded") and .subject.b
   and .stage == {ref: (env.FP + "/seeded"), branch: env.FP, label: "seeded",
     proposed_change: {id: env.PC7, name: env.FP, branch: env.FP, draft: true},
     at: env.AT7S, at_source: "written", description: "seeded"}'
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
 readback 7 "$FP" enable "$OUT/artifacts-7-sealed-1.json"
 
@@ -1679,7 +1679,7 @@ expect "$OUT/step-7a.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and .step.from.snapshot_id==env.SNAP7S and (.step.to.snapshot_id | type)=="string" and .step.to.snapshot_id==env.SNAP7T'
 RUN7A=$(jq -r .subject.run_id "$OUT/step-7a.json")
 export RUN7A
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
   and .provenance.branch==env.FP and .provenance.at==env.AT7T
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "third-link", description: "third link", at_source: "written"}
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN7A and .step.phase==null
@@ -1936,7 +1936,7 @@ HOSTS=2
 create_twin 8
 CREATE8_TOOK=$CREATE_TOOK
 [ "$BID" = "$P1" ] || fail "case 8: create --stage $FS/seeded deployed $BID, but the plan printed $P1"
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .step==null
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .step==null
   and .stage.proposed_change.branch==env.FS and .stage.label=="seeded" and all(.nodes[]; .holds==env.P1)
   and [.nodes[] | select(.probe != null) | .name] == ["e1-loop-a", "e1-loop-b"]'
 expect "$OUT/probes-snapshot-8.json" '.probes == ["e1-loop"]'
@@ -1986,7 +1986,7 @@ expect "$OUT/step-8a.json" '.status=="ok" and .operation=="twin.step" and .bundl
   and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
 RUN8A=$(jq -r .subject.run_id "$OUT/step-8a.json")
 export RUN8A
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
   and .stage.proposed_change.branch==env.FS and .stage.label=="mixed-link" and .run.workflow_id=="fylgja-provision"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8A and .step.phase==null
   and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2

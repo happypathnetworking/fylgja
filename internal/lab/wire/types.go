@@ -380,18 +380,11 @@ type RecordInput struct {
 	// Pushed is each node's push result (M5). RecordTwin refuses record.failed for a
 	// node the results do not name, as it refuses one the manifest does not name.
 	Pushed []PushResult `json:"pushed"`
-	// Stage is the stage the server resolved the run's reference from (014), copied into
-	// the record as data. Nil in every input and recorded history of a run not created
-	// from a stage, and omitted when nil, so their activity payloads are byte-identical.
-	Stage *StageRef `json:"stage,omitempty"`
-	// Rehearsal is the rehearsal run whose baseline this create is (015), copied into the
-	// record as data, so a twin a dead rehearsal left can be told from a hand twin. Nil in
-	// every input and recorded history of a run a rehearsal did not start, and omitted when
-	// nil, as Stage is.
-	Rehearsal *RehearsalRef `json:"rehearsal,omitempty"`
 	// SnapshotID is the snapshot the run's bundle was compiled from (018), copied into the
 	// record as data. Empty in every input and recorded history before 018, and in a
-	// rebuild's and a twin provision's, and omitted when empty, as Stage is.
+	// rebuild's and a twin provision's, and omitted when empty, so their activity payloads
+	// are byte-identical. An input recorded before 020 may carry a stage and a rehearsal,
+	// which twin.json 12 does not record and which decode to nothing.
 	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
@@ -411,7 +404,7 @@ type TwinRecord struct {
 	// SnapshotID names the snapshot the twin was built from or last stepped to, or is nil
 	// (018): a twin built by twin provision, one an earlier build's following check rebuilt
 	// (until 019), and a record of 8 or earlier, which has no key and reads as nil. No omitempty: version 9
-	// writes an explicit null for none, as stage does.
+	// writes an explicit null for none, as observed_at does.
 	SnapshotID     *string       `json:"snapshot_id"`
 	BundleID       string        `json:"bundle_id"`
 	Provenance     Provenance    `json:"provenance"`
@@ -422,72 +415,32 @@ type TwinRecord struct {
 	ProvisionedBy  ProvisionedBy `json:"provisioned_by"`
 	RecordedAt     string        `json:"recorded_at"`
 	Nodes          []TwinNode    `json:"nodes"`
-	// Stage names the stage the twin was created from or last stepped to, or is nil
-	// (014). No omitempty: version 6 writes an explicit null for none, as observed_at
-	// does, and a record of 5 or earlier, which has no key, reads as nil.
-	Stage *StageRef `json:"stage"`
 	// State is ready or diverged. A record of version 3 or
 	// earlier has no key and reads as "", which is shown as ready.
 	State string `json:"state,omitempty"`
 	// Step is the twin's last step, or nil for a twin that has not stepped.
 	// An earlier record, which has no key, reads as nil. Version 4 writes an explicit
-	// null, as stage does.
+	// null, as snapshot_id does.
 	Step *StepRecord `json:"step"`
-	// Rehearsal names the rehearsal run whose baseline the twin is, or is nil for a twin no
-	// rehearsal created (015). A step's record keeps it. No omitempty: version 7 writes an
-	// explicit null for none, as stage does, and a record of 6 or earlier, which has no key,
-	// reads as nil.
-	Rehearsal *RehearsalRef `json:"rehearsal"`
-	// Superseded is set by lab.ReadRecord on a record of twin.json 5 or earlier that names
-	// the pinned reference it was created from in M10's shape, which this build no longer
-	// reads, so twin step's refusal can say so. Never written, and not carried across an
-	// activity's boundary, where the refusal is the one for a record naming no stage.
-	Superseded bool `json:"-"`
-}
-
-// SideName is s, the record's own stage or a side of its step, as a line names it:
-// s.Name(), or, when s is nil on a record of twin.json 5 or earlier that names M10's
-// waypoint (Superseded), the waypoint as twin step's refusal of the record words it, since
-// a step side of such a record named a waypoint too (014, research R-11).
-func (r *TwinRecord) SideName(s *StageRef) string {
-	if s == nil && r.Superseded {
-		return r.SupersededWaypoint()
-	}
-	return s.Name()
-}
-
-// SideStage is SideName for a line that says "stage" before the name: "stage
-// <branch>/<label>", or a superseded record's waypoint as SideName words it.
-func (r *TwinRecord) SideStage(s *StageRef) string {
-	if s == nil && r.Superseded {
-		return r.SupersededWaypoint()
-	}
-	return "stage " + s.Name()
+	// A record of 11 or earlier may name a stage (6 to 11), a rehearsal (7 to 11) or M10's
+	// waypoint (3 to 5), and each of its step's sides a stage: twin.json 12 names none (020,
+	// research R-06), and each reads as nothing.
 }
 
 // Position is where the twin is, as a step side's Name words a side, over the record's top
-// level: its stage, else its snapshot, else its bundle (019, research R-05). A record of
-// twin.json 5 or earlier that names M10's waypoint (Superseded) is named as SideStage names
-// it.
+// level: its snapshot, else its bundle (019, research R-05; 020, research R-06).
 func (r *TwinRecord) Position() string {
-	if r.Stage == nil && r.Superseded {
-		return r.SupersededWaypoint()
-	}
 	snapshot := ""
 	if r.SnapshotID != nil {
 		snapshot = *r.SnapshotID
 	}
-	return sideName(r.Stage, snapshot, r.BundleID)
+	return sideName(snapshot, r.BundleID)
 }
 
-// sideName is "stage <branch>/<label>" when stage is set, else "snapshot <short>" when
-// snapshotID is, else "bundle <short>": a side of a record of twin.json 8 that stepped,
-// which names neither.
-func sideName(stage *StageRef, snapshotID, bundleID string) string {
-	switch {
-	case stage != nil:
-		return "stage " + stage.Name()
-	case snapshotID != "":
+// sideName is "snapshot <short>" when snapshotID is set, else "bundle <short>": a side of a
+// record of twin.json 8 that stepped, which names no snapshot.
+func sideName(snapshotID, bundleID string) string {
+	if snapshotID != "" {
 		return "snapshot " + shortID(snapshotID)
 	}
 	return "bundle " + shortID(bundleID)
@@ -501,50 +454,8 @@ func shortID(id string) string {
 	return id
 }
 
-// SupersededWaypoint is what a record of twin.json 5 or earlier was created from or stepped
-// along, M10's pinned reference, which this build no longer reads: "a waypoint of a record
-// version this build no longer reads (twin.json 5)".
-func (r *TwinRecord) SupersededWaypoint() string {
-	return "a waypoint of a record version this build no longer reads (twin.json " + r.TwinVersion + ")"
-}
-
-// StageRef is the stage a twin was created from or stepped to, as the record names it
-// (014): its proposed change by id and source branch, its label (a mark's, or
-// branch-point or head), the operator's description and where the at came from (given on
-// the mark, written: the mark's own write stamp, branch_point or head). The at itself is
-// the record's provenance.at, and provenance.branch the branch read: the default branch
-// for a branch-point twin.
-type StageRef struct {
-	ProposedChange StageChange `json:"proposed_change"`
-	Label          string      `json:"label"`
-	Description    string      `json:"description"`
-	AtSource       string      `json:"at_source"`
-}
-
-// StageChange names the proposed change a stage belongs to: its id, which is its
-// identity, and its source branch, which is how a reference finds it.
-type StageChange struct {
-	ID     string `json:"id"`
-	Branch string `json:"branch"`
-}
-
-// Name is the stage as a reference names it, <branch>/<label>, or "none".
-func (s *StageRef) Name() string {
-	if s == nil {
-		return "none"
-	}
-	return s.ProposedChange.Branch + "/" + s.Label
-}
-
 // RunRef is the provisioning run's identity in Temporal.
 type RunRef struct {
-	WorkflowID string `json:"workflow_id"`
-	RunID      string `json:"run_id"`
-}
-
-// RehearsalRef is a rehearsal run's identity in Temporal, as the record names it:
-// RehearseWorkflowID and the run's id (015).
-type RehearsalRef struct {
 	WorkflowID string `json:"workflow_id"`
 	RunID      string `json:"run_id"`
 }
@@ -766,26 +677,26 @@ type ReconcileResult struct {
 	TookS float64   `json:"took_s"`
 }
 
-// StepSide is one side of a step: the stage, the snapshot, the bundle and the pinned at,
-// verbatim. Branch is the target's, for the document's to side
+// StepSide is one side of a step: the snapshot, the bundle and the pinned at, verbatim; a
+// side named a stage too before 020, which an input recorded before it carries and which
+// decodes to nothing. Branch is the target's, for the document's to side
 // (contracts/step.schema.json); the record's sides carry none (contracts/twin.schema.json),
 // so a side written into a record leaves it empty. SnapshotID is the side's snapshot (018),
 // empty where it is not known: the from side of a record of 8 or earlier. Empty in every
 // input and recorded history before 018, and omitted when empty, so their payloads are
 // byte-identical.
 type StepSide struct {
-	Stage      *StageRef `json:"stage"`
-	SnapshotID string    `json:"snapshot_id,omitempty"`
-	BundleID   string    `json:"bundle_id"`
-	At         string    `json:"at"`
-	Branch     string    `json:"branch,omitempty"`
+	SnapshotID string `json:"snapshot_id,omitempty"`
+	BundleID   string `json:"bundle_id"`
+	At         string `json:"at"`
+	Branch     string `json:"branch,omitempty"`
 }
 
-// Name is the side as a step's lines name it (019, research R-05): "stage <branch>/<label>"
-// when it names a stage, else "snapshot <first 8 of snapshot_id>…" when it names a
-// snapshot, else "bundle <first 8 of bundle_id>…".
+// Name is the side as a step's lines name it (019, research R-05; 020, research R-06):
+// "snapshot <first 8 of snapshot_id>…" when it names a snapshot, else "bundle <first 8 of
+// bundle_id>…".
 func (s StepSide) Name() string {
-	return sideName(s.Stage, s.SnapshotID, s.BundleID)
+	return sideName(s.SnapshotID, s.BundleID)
 }
 
 // RecordStepInput is everything a step's record holds that the lab host cannot read for

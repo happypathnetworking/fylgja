@@ -166,7 +166,7 @@ func TestADestroyFromASecondClientDuringAStep(t *testing.T) {
 
 	first := make(chan error, 1)
 	go func() {
-		first <- runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{allowRestart: true})
+		first <- runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
 	}()
 	waitFor(t, svc.following, "the first client's follow of the step run")
 

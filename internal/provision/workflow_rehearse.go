@@ -173,8 +173,8 @@ func (r *rehearsing) baselineStage(s RehearseStage) RehearsedStage {
 		return r.took(st, began)
 	}
 	self := workflow.GetInfo(r.ctx).WorkflowExecution
+	// The baseline's record names no rehearsal from twin.json 12 (020, research R-06).
 	in := *s.Provision
-	in.Rehearsal = &wire.RehearsalRef{WorkflowID: self.ID, RunID: self.RunID}
 	child := workflow.ExecuteChildWorkflow(workflow.WithChildOptions(r.children, ChildOptions(WorkflowProvision)),
 		provisionWorkflowType, in)
 	if st.Run = r.started(child, WorkflowProvision, findings.StepProvision); st.Run == nil {

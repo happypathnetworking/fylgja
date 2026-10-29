@@ -1367,35 +1367,35 @@ func TestTheClientSpeaksToTheServer(t *testing.T) {
 	}
 }
 
-// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 8): change-1/seeded,
-// of rehearsal run r1; nil rehearsal for the hand twin of the same stage.
-func rehearsalTwin(rehearsal *wire.RehearsalRef) *wire.TwinRecord {
+// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 12): a snapshot twin of
+// change-1, which names no stage and no rehearsal (020, research R-06), so a hand twin of the
+// same snapshot is the same record.
+func rehearsalTwin() *wire.TwinRecord {
 	snapshot := strings.Repeat("35aea06f", 8)
 	return &wire.TwinRecord{TwinVersion: lab.TwinVersion, Lab: wire.LabName, SnapshotID: &snapshot,
 		BundleID:   "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
 		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Source:     wire.SourceIntent,
 		Run:        wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
-		Stage:      &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "written"},
-		Rehearsal:  rehearsal, State: wire.StateReady,
-		Nodes: []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
+		State:      wire.StateReady,
+		Nodes:      []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
 }
 
-// twin show beside a rehearsal (015; contracts/rehearse-command.md): the kind line of a
-// rehearsal's twin names its run after the stage, a stepped one's too, and its JSON carries
-// record.rehearsal, null for a hand twin's; while the run is in flight the kind line ends
-// with where it is, its child's stage and step, and the in flight: line names the child and
-// the stage it is for; a baseline being built is the host's work, never an orphan.
+// twin show beside a rehearsal (015; contracts/rehearse-command.md): while the run is in
+// flight the kind line ends with where it is, its child's side and step, and the in flight:
+// line names the child and the side it is for; a baseline being built is the host's work,
+// never an orphan. twin.json 12 names no stage and no rehearsal (020, research R-06): the kind
+// line names the twin's snapshot alone, a stepped one's the snapshot it stepped from, between
+// two children the rehearsal's own step, and the JSON carries no record.rehearsal.
 func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
-	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
 	lab3 := lab.LabState{Present: true, Nodes: []wire.LabNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running"}}}
 	at := "2026-10-16T17:25:30.118244+00:00"
-	pinned := "snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/seeded, of rehearsal run fylgja-rehearse r1"
+	pinned := "snapshot 35aea06f… (branch change-1 at " + at + ")"
+	towards := "snapshot 9c2d01e7…"
 
-	stepped := rehearsalTwin(of)
-	stepped.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "third-link", AtSource: "given"}
+	stepped := rehearsalTwin()
 	stepped.Step = &wire.StepRecord{Outcome: wire.StepStepped,
-		From: wire.StepSide{Stage: rehearsalTwin(nil).Stage}, To: wire.StepSide{Stage: stepped.Stage},
+		From: wire.StepSide{SnapshotID: strings.Repeat("576933ec", 8)}, To: wire.StepSide{SnapshotID: *stepped.SnapshotID},
 		Run: wire.RunRef{WorkflowID: provision.WorkflowStep, RunID: "s1"}, EndedAt: "2026-10-19T10:02:00Z"}
 
 	for _, c := range []struct {
@@ -1405,32 +1405,30 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 		kind     string
 		inFlight string
 	}{
-		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)}, nil, pinned, "in flight: none"},
-		{"a hand twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(nil)}, nil,
-			"snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/seeded", "in flight: none"},
+		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()}, nil, pinned, "in flight: none"},
 		{"a rehearsal's twin stepped", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: stepped}, nil,
-			"snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/third-link (stepped from change-1/seeded by run " +
-				"fylgja-step s1, ended 2026-10-19T10:02:00Z), of rehearsal run fylgja-rehearse r1", "in flight: none"},
-		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
+			pinned + " (stepped from snapshot 576933ec… by run fylgja-step s1, ended 2026-10-19T10:02:00Z)", "in flight: none"},
+		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
 			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "step",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: "stage change-1/third-link"}}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/third-link, step push",
-			"in flight: run fylgja-rehearse r1 at step step (run fylgja-step s1 at step push), stepping towards stage change-1/third-link"},
-		{"at the baseline's wait", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: towards}}},
+			pinned + "; rehearsal run fylgja-rehearse r1 is at " + towards + ", step push",
+			"in flight: run fylgja-rehearse r1 at step step (run fylgja-step s1 at step push), stepping towards " + towards},
+		{"at the baseline's wait", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
 			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "observe"}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step observe",
+			pinned + "; rehearsal run fylgja-rehearse r1 is at step observe",
 			"in flight: run fylgja-rehearse r1 at step observe"},
-		{"destroying", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
+		{"destroying", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
 			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "destroy",
 				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d1", Step: "teardown"}}},
 			pinned + "; rehearsal run fylgja-rehearse r1 is destroying the twin, step teardown",
 			"in flight: run fylgja-rehearse r1 at step destroy (run fylgja-destroy d1 at step teardown), destroying the twin"},
+		// A provisioning run names no side (020): the baseline's child is named by its step.
 		{"building the baseline", lab.HostState{Lab: lab3, TwinDirPresent: true},
 			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy", Towards: "stage change-1/seeded"}}},
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}}},
 			"none; run fylgja-provision p1 is at step deploy, and the host holds its work; " +
-				"rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step deploy",
-			"in flight: run fylgja-rehearse r1 at step provision (run fylgja-provision p1 at step deploy), creating the twin at stage change-1/seeded"},
+				"rehearsal run fylgja-rehearse r1 is at step deploy",
+			"in flight: run fylgja-rehearse r1 at step provision (run fylgja-provision p1 at step deploy)"},
 	} {
 		block, text := decideShow(c.host, serviceReads{inFlight: c.runs}, "")
 		if text.kind != c.kind {
@@ -1446,25 +1444,19 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 		switch r := block.Record; {
 		case c.host.Twin == nil && r != nil:
 			t.Errorf("%s: a record %+v", c.name, r)
-		case c.host.Twin != nil && c.host.Twin.Rehearsal == nil && r.Rehearsal != nil:
-			t.Errorf("%s: record.rehearsal %+v", c.name, r.Rehearsal)
-		case c.host.Twin != nil && c.host.Twin.Rehearsal != nil && (r.Rehearsal == nil || *r.Rehearsal != findings.ShowRef{WorkflowID: "fylgja-rehearse", RunID: "r1"}):
-			t.Errorf("%s: record.rehearsal %+v", c.name, r.Rehearsal)
+		case c.host.Twin != nil && (r.Rehearsal != nil || r.Stage != nil):
+			t.Errorf("%s: record.rehearsal %+v, record.stage %+v; want neither", c.name, r.Rehearsal, r.Stage)
 		}
 	}
 }
 
-// twin verify beside a rehearsal (015): its first line names the rehearsal's run after the
-// stage, a hand twin's names none; a twin absent while the baseline is built names the run
-// whose work the host holds.
+// twin verify beside a rehearsal (015): its first line names the twin's branch, at, snapshot
+// and bundle, never a stage or a rehearsal (020, research R-06); a twin absent while the
+// baseline is built names the run whose work the host holds.
 func TestVerifyNamesARehearsal(t *testing.T) {
-	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
-	if got, want := verifyTwinLine(rehearsalTwin(of)), "twin: stage change-1/seeded of rehearsal run fylgja-rehearse r1 "+
-		"(snapshot 35aea06f…, bundle 5c6c1d96…), ready, pinned at 2026-10-16T17:25:30.118244+00:00; 3 nodes"; got != want {
+	if got, want := verifyTwinLine(rehearsalTwin()), "twin: branch change-1 at 2026-10-16T17:25:30.118244+00:00 "+
+		"(snapshot 35aea06f…, bundle 5c6c1d96…), ready; 3 nodes"; got != want {
 		t.Errorf("%q, want %q", got, want)
-	}
-	if got := verifyTwinLine(rehearsalTwin(nil)); strings.Contains(got, "rehearsal") {
-		t.Errorf("a hand twin's line %q", got)
 	}
 	runs := showRuns([]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
 		Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}}})

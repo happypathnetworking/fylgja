@@ -296,8 +296,8 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 		}
 		// Already compiled, as a rebuild's child is: from intent, with the bundle set.
 		if p := seeded.Provision; p == nil || p.Source != wire.SourceIntent || p.Branch != lessLink || p.At != cabledAt ||
-			p.BundleID != seeded.BundleID || p.BundleID == "" || p.BundlePath != seeded.BundlePath || p.Stage == nil ||
-			p.Stage.Label != "seeded" || p.Rehearsal != nil || seeded.Step != nil || seeded.WaitS != 120 {
+			p.BundleID != seeded.BundleID || p.BundleID == "" || p.BundlePath != seeded.BundlePath ||
+			seeded.Step != nil || seeded.WaitS != 120 {
 			t.Errorf("the baseline %+v (provision %+v); want seeded at %s provisioned from its compiled bundle, a 120s wait", seeded, p, cabledAt)
 		}
 		for i, unchanged := range map[int]bool{2: false, 3: true} {

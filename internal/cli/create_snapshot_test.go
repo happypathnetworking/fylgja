@@ -99,7 +99,8 @@ func TestCreateTakesTheSnapshotBeforeTheRun(t *testing.T) {
 }
 
 // US1 scenario 3: a create from a stage takes the stage's pinned read, and its run records
-// the stage, the snapshot and the bundle, the fixture's own at the fixture's at.
+// the snapshot and the bundle, the fixture's own at the fixture's at, and no stage, since
+// twin.json 12 names none (020, research R-06).
 func TestCreateFromAStageTakesItsPinnedRead(t *testing.T) {
 	paths := useStateRoot(t)
 	dryRunEnv(t)
@@ -116,16 +117,16 @@ func TestCreateFromAStageTakesItsPinnedRead(t *testing.T) {
 	}
 	readsAtAlone(t, "the stage's read", f, fixtureAt)
 	in := svc.started[0]
-	if in.SnapshotID != fixtureSnapshotID || in.BundleID != fixtureBundleID || in.Stage == nil || in.Stage.Label != "sealed" {
-		t.Fatalf("the run was started with %+v; want the fixture's snapshot and bundle and the stage", in)
+	if in.SnapshotID != fixtureSnapshotID || in.BundleID != fixtureBundleID {
+		t.Fatalf("the run was started with %+v; want the fixture's snapshot and bundle", in)
 	}
 
 	_, record := provisionOnSuite(t, paths, in)
 	validateTwinJSON(t, record)
 	w := decodeRecord(t, record)
-	if w.SnapshotID == nil || *w.SnapshotID != fixtureSnapshotID || w.BundleID != fixtureBundleID || w.Stage == nil ||
-		w.Stage.Label != "sealed" || w.Provenance.At != fixtureAt {
-		t.Errorf("the run recorded\n%s\nwant the stage sealed, snapshot %s and bundle %s at %s", record, fixtureSnapshotID,
+	if w.SnapshotID == nil || *w.SnapshotID != fixtureSnapshotID || w.BundleID != fixtureBundleID ||
+		w.Provenance.At != fixtureAt || bytes.Contains(record, []byte(`"stage"`)) {
+		t.Errorf("the run recorded\n%s\nwant snapshot %s and bundle %s at %s, and no stage", record, fixtureSnapshotID,
 			fixtureBundleID, fixtureAt)
 	}
 }

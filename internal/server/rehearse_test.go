@@ -268,7 +268,8 @@ func TestRehearsalStagesTakeTheBaselineRule(t *testing.T) {
 
 // The step chain (research R-05): every stage of the plan in order with its role; the
 // branch point passed over with its refusal and no child; the baseline's provision, already
-// compiled, with its stage, its read and the store's copy; and each rehearsed stage's step
+// compiled, with its read and the store's copy, naming no stage and no rehearsal since
+// twin.json 12 records neither (020, research R-06); and each rehearsed stage's step
 // from the compiled stage before it, as twin step builds one but reading no twin: From the
 // previous stage's side and To the target's, the plan's step as its diff, the push plan before
 // any lifecycle, what only containerlab's lifecycle applies, restarts allowed, every target
@@ -310,14 +311,14 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 	base := got[1]
 	want := &provision.ProvisionInput{Source: wire.SourceIntent, Branch: rehearseBranch, At: seeded.Resolved.At,
 		BundlePath: path(seeded.Bundle.ID), BundleID: seeded.Bundle.ID, ObservedAt: seeded.ObservedAt,
-		SnapshotID: snapshotOf("seeded"), Stage: seeded.Resolved.StageRef(), Version: "0.2.0-test", Scope: "tag:fylgja"}
+		SnapshotID: snapshotOf("seeded"), Version: "0.2.0-test", Scope: "tag:fylgja"}
 	if base.Role != rehearsal.RoleBaseline || base.Step != nil || base.Diff != nil || base.WaitS != waitS ||
 		base.BundlePath != path(seeded.Bundle.ID) || base.Description != "the seeded mark" || base.SnapshotID != snapshotOf("seeded") {
 		t.Errorf("the baseline %+v", base)
 	}
 	if p := base.Provision; p == nil || p.Source != want.Source || p.Branch != want.Branch || p.At != want.At ||
 		p.BundlePath != want.BundlePath || p.BundleID != want.BundleID || p.ObservedAt != want.ObservedAt || p.SnapshotID != want.SnapshotID ||
-		*p.Stage != *want.Stage || p.Version != want.Version || p.Scope != want.Scope || p.Rehearsal != nil {
+		p.Version != want.Version || p.Scope != want.Scope {
 		t.Errorf("the baseline's provision %+v, want %+v", base.Provision, want)
 	}
 
@@ -334,11 +335,11 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 		if string(got.Diff) != string(diff) || string(in.Diff) != string(diff) {
 			t.Errorf("stage %s: diff %s, want the plan's %s", got.Ref, in.Diff, diff)
 		}
-		if *in.From.Stage != *c.from.Resolved.StageRef() || in.From.BundleID != c.from.Bundle.ID || in.From.At != c.from.Resolved.At ||
+		if in.From.BundleID != c.from.Bundle.ID || in.From.At != c.from.Resolved.At ||
 			in.From.Branch != "" || in.From.SnapshotID != c.from.SnapshotID {
 			t.Errorf("stage %s: from %+v", got.Ref, in.From)
 		}
-		if *in.To.Stage != *c.to.Resolved.StageRef() || in.To.BundleID != c.to.Bundle.ID || in.To.At != c.to.Resolved.At ||
+		if in.To.BundleID != c.to.Bundle.ID || in.To.At != c.to.Resolved.At ||
 			in.To.Branch != rehearseBranch || in.To.SnapshotID != c.to.SnapshotID || got.SnapshotID != c.to.SnapshotID {
 			t.Errorf("stage %s: to %+v, the stage's snapshot %s", got.Ref, in.To, got.SnapshotID)
 		}

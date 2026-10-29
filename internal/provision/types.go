@@ -71,14 +71,9 @@ type ProvisionInput struct {
 	// snapshot's being its stored take (018), and by an earlier build's rebuild, its check's
 	// read (M4); empty for twin provision.
 	ObservedAt string `json:"observed_at,omitempty"`
-	// Stage is the stage the server resolved Branch and At from (014), which the record
-	// step writes into twin.json. The run branches on nothing of it. Nil in every input
-	// and recorded history of a run not created from a stage, and omitted when nil.
-	Stage *StageInput `json:"stage,omitempty"`
-	// Rehearsal is the rehearsal run whose baseline this run is (015), which the record step
-	// writes into twin.json. The run branches on nothing of it. Nil in every input and
-	// recorded history of a run a rehearsal did not start, and omitted when nil.
-	Rehearsal *wire.RehearsalRef `json:"rehearsal,omitempty"`
+	// An input recorded before 020 may carry the stage the server resolved Branch and At
+	// from (014) and the rehearsal whose baseline the run is (015), which twin.json 12 does
+	// not record (research R-06) and which decode to nothing; the run branched on neither.
 	// Scope is the scope the server's read was made under, tag:<name>, as the server
 	// resolved it (017), or the snapshot's: provenance, and the read's scope only in a
 	// history recorded before 018, whose run reads.
@@ -91,12 +86,6 @@ type ProvisionInput struct {
 	// a twin provision's input, and omitted when empty, so they replay.
 	SnapshotID string `json:"snapshot_id,omitempty"`
 }
-
-// StageInput names a stage as the record does: its proposed change by id and source
-// branch, its label, description and where the at came from. It is the record input's own
-// type, so the run copies it in one assignment and a nil stays nil with no branch in the
-// workflow.
-type StageInput = wire.StageRef
 
 // ProvisionResult is how a provisioning run ended.
 type ProvisionResult struct {

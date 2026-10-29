@@ -765,13 +765,12 @@ func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 	return runs, nil
 }
 
-// towards is the side a run's input names, read from the input its history starts with:
-// the side a step run steps towards, named by wire.StepSide.Name() (stage <branch>/<label>,
-// snapshot <short>…), or the stage a provisioning run builds (a rehearsal's baseline, 015),
-// stage <branch>/<label>. "" when a step's input cannot be read or a provisioning run's
-// names no stage, and for any other run.
+// towards is the side a step run steps towards, read from the input its history starts with
+// and named by wire.StepSide.Name() (snapshot <short>…, or bundle <short>…). "" when its input
+// cannot be read, and for any other run: a provisioning run's input names no stage from 020
+// (research R-06).
 func (c *Client) towards(ctx context.Context, workflowID, runID string) (string, error) {
-	if workflowID != WorkflowStep && workflowID != WorkflowProvision {
+	if workflowID != WorkflowStep {
 		return "", nil
 	}
 	iter := c.GetWorkflowHistory(ctx, workflowID, runID, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
@@ -786,19 +785,11 @@ func (c *Client) towards(ctx context.Context, workflowID, runID string) (string,
 	if attrs == nil {
 		return "", nil
 	}
-	dc := converter.GetDefaultDataConverter()
-	if workflowID == WorkflowStep {
-		var in StepInput
-		if dc.FromPayloads(attrs.GetInput(), &in) != nil {
-			return "", nil
-		}
-		return in.To.Name(), nil
-	}
-	var in ProvisionInput
-	if dc.FromPayloads(attrs.GetInput(), &in) != nil || in.Stage == nil {
+	var in StepInput
+	if converter.GetDefaultDataConverter().FromPayloads(attrs.GetInput(), &in) != nil {
 		return "", nil
 	}
-	return "stage " + in.Stage.Name(), nil
+	return in.To.Name(), nil
 }
 
 // historyStep reads a run's history once, without waiting for more, and returns the step
@@ -1633,12 +1624,7 @@ func LossBlockOf(l *wire.Loss) *findings.StepLoss {
 // run carries it as it is; StepDocument adds the run's fields.
 func StepBlockOf(in StepInput, plan wire.ReconcilePlan) *findings.StepBlock {
 	side := func(s wire.StepSide) findings.StepSideBlock {
-		b := findings.StepSideBlock{SnapshotID: s.SnapshotID, BundleID: s.BundleID, At: s.At, Branch: s.Branch}
-		if st := s.Stage; st != nil {
-			b.Stage = &findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: st.ProposedChange.ID,
-				Branch: st.ProposedChange.Branch}, Label: st.Label, Description: st.Description, AtSource: st.AtSource}
-		}
-		return b
+		return findings.StepSideBlock{SnapshotID: s.SnapshotID, BundleID: s.BundleID, At: s.At, Branch: s.Branch}
 	}
 	list := func(l []string) []string { return append([]string{}, l...) }
 	block := &findings.StepBlock{

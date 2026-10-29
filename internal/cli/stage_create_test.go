@@ -395,9 +395,7 @@ func TestCreateFromAStage(t *testing.T) {
 			}
 			got := svc.started[0]
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", At: c.block.At, Version: version,
-				Scope: defaultScope, Stage: &provision.StageInput{
-					ProposedChange: wire.StageChange{ID: demoChange, Branch: "fylgja-fixture"},
-					Label:          c.block.Label, Description: c.block.Description, AtSource: c.block.AtSource},
+				Scope:      defaultScope,
 				BundlePath: filepath.Join(paths.Bundles, got.BundleID), BundleID: got.BundleID, ObservedAt: got.ObservedAt,
 				SnapshotID: got.SnapshotID}
 			if !reflect.DeepEqual(got, want) || !bundleIDRE.MatchString(got.BundleID) || !bundleIDRE.MatchString(got.SnapshotID) ||
@@ -480,8 +478,8 @@ func TestCreateFromAStageWhoseRunRefuses(t *testing.T) {
 			if doc.Subject == nil || !reflect.DeepEqual(*doc.Subject, wantSubject) {
 				t.Errorf("subject %+v, want the --branch --at create's with the stage, %+v", doc.Subject, wantSubject)
 			}
-			if len(svc.started) != 1 || svc.started[0].Stage == nil {
-				t.Errorf("started %+v; want one pinned run carrying the stage", svc.started)
+			if len(svc.started) != 1 || svc.started[0].At != fixtureAt {
+				t.Errorf("started %+v; want one run pinned at %s", svc.started, fixtureAt)
 			}
 			mustCarryNoToken(t, c.name, doc, svc.started)
 			validateM10Document(t, doc)
@@ -635,15 +633,14 @@ func validateTwinJSON(t *testing.T, record []byte) {
 	}
 }
 
-// writtenRecord is what twin.json says of the stage and the reference it was read at, as
-// written.
+// writtenRecord is what twin.json says of the reference it was read at, as written; since
+// twin.json 12 it names no stage (020, research R-06).
 type writtenRecord struct {
 	TwinVersion string           `json:"twin_version"`
 	SnapshotID  *string          `json:"snapshot_id"`
 	BundleID    string           `json:"bundle_id"`
 	Provenance  wire.Provenance  `json:"provenance"`
 	Source      string           `json:"source"`
-	Stage       *wire.StageRef   `json:"stage"`
 	Step        *wire.StepRecord `json:"step"`
 }
 
@@ -658,10 +655,9 @@ func decodeRecord(t *testing.T, record []byte) writtenRecord {
 
 // Scenario 1 and SC-002: a twin from each kind of stage — a mark written and one given, the
 // branch point on a main that carries the contract, and the head — deploys the bundle id
-// stage plan printed for that stage, is pinned at the stage's at, and twin.json 6 names its
-// proposed change by id and branch, its label, its description and where its at came from,
-// with provenance.at the resolved at and provenance.branch the branch read: main for the
-// branch point. The branch point's dry run, read on another branch than its proposed
+// stage plan printed for that stage, is pinned at the stage's at, and twin.json 12 names no
+// stage (020, research R-06), with provenance.at the resolved at and provenance.branch the
+// branch read: main for the branch point. The branch point's dry run, read on another branch than its proposed
 // change's, says the same id; which kind of stage it is changes neither. The text's closing
 // line is the twin directory's, and nothing of following (019).
 func TestCreateFromEachKindOfStage(t *testing.T) {
@@ -700,8 +696,6 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			id := *plan.BundleID
 			ids = append(ids, id)
 			ref := lessLink + "/" + c.label
-			stage := wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: lessLink}, Label: c.label,
-				Description: c.description, AtSource: c.source}
 			block := findings.StageBlock{Ref: ref, Branch: c.branch, Label: c.label,
 				ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: lessLink, Draft: true},
 				At:             c.at, AtSource: c.source, Description: c.description}
@@ -725,7 +719,7 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			// Compiled on the server (018): the plan's bundle, and the snapshot taken of the read.
 			started := svc.started[0]
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: c.branch, At: c.at, Version: version,
-				Scope: defaultScope, Stage: &stage, BundlePath: filepath.Join(paths.Bundles, id), BundleID: id,
+				Scope: defaultScope, BundlePath: filepath.Join(paths.Bundles, id), BundleID: id,
 				ObservedAt: started.ObservedAt, SnapshotID: started.SnapshotID}
 			if code != findings.ExitOK || !reflect.DeepEqual(started, want) || !bundleIDRE.MatchString(started.SnapshotID) {
 				t.Fatalf("exit %d, started %+v; want 0 and one run of %+v", code, svc.started, want)
@@ -737,11 +731,11 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			res, record := provisionOnSuite(t, paths, svc.started[0])
 			validateTwinJSON(t, record)
 			w := decodeRecord(t, record)
-			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "11" || w.Source != wire.SourceIntent ||
+			if res.BundleID != id || w.BundleID != id || w.TwinVersion != lab.TwinVersion || w.Source != wire.SourceIntent ||
 				w.Provenance.Branch != c.branch || w.Provenance.At != c.at || w.Provenance.Scope != defaultScope ||
-				!reflect.DeepEqual(w.Stage, &stage) || w.Step != nil || w.SnapshotID == nil || *w.SnapshotID != started.SnapshotID {
-				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 11, provenance %s at %s under %s, stage %+v, step null",
-					res.BundleID, record, id, c.branch, c.at, defaultScope, stage)
+				strings.Contains(string(record), `"stage"`) || w.Step != nil || w.SnapshotID == nil || *w.SnapshotID != started.SnapshotID {
+				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version %s, provenance %s at %s under %s, no stage, step null",
+					res.BundleID, record, id, lab.TwinVersion, c.branch, c.at, defaultScope)
 			}
 			mustCarryNoToken(t, c.label, created, svc.started)
 
@@ -896,8 +890,8 @@ func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 // Scenario 7: after a twin built from a stage is destroyed, a story along main's own
 // history still works as before and names no stage. A proposed change cannot have main as
 // its source, so main has no stage to name; the create of main at a time is M3's pinned
-// create, its run's input and its dry run carrying no stage, and twin.json 6 recording
-// stage null.
+// create, its run's input and its dry run carrying no stage, and twin.json 12 recording
+// none.
 func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	const mainAt = "2026-10-16T07:30:00.000000+00:00"
 	paths := useStateRoot(t)
@@ -914,8 +908,8 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 		t.Fatalf("exit %d, findings %+v, started %d; want 0 and one run", code, doc.Findings, len(svc.started))
 	}
 	_, record := provisionOnSuite(t, paths, svc.started[0])
-	if w := decodeRecord(t, record); w.Stage == nil || w.Stage.Label != "cabled" {
-		t.Fatalf("the stage twin recorded stage %+v; want cabled", w.Stage)
+	if w := decodeRecord(t, record); w.BundleID != svc.started[0].BundleID {
+		t.Fatalf("the stage twin recorded bundle %s; want the run's %s", w.BundleID, svc.started[0].BundleID)
 	}
 
 	// twin destroy, whose run removes the lab and the twin directory; the directory is
@@ -963,9 +957,9 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	res, record := provisionOnSuite(t, paths, svc.started[0])
 	validateTwinJSON(t, record)
 	w := decodeRecord(t, record)
-	if res.BundleID != dry.BundleID || w.TwinVersion != "11" || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
-		w.Stage != nil || !strings.Contains(string(record), `"stage": null`) {
-		t.Errorf("the run deployed %s (the dry run %s) and recorded\n%s\nwant main at %s, stage null", res.BundleID, dry.BundleID,
+	if res.BundleID != dry.BundleID || w.TwinVersion != lab.TwinVersion || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
+		strings.Contains(string(record), `"stage"`) {
+		t.Errorf("the run deployed %s (the dry run %s) and recorded\n%s\nwant main at %s, no stage", res.BundleID, dry.BundleID,
 			record, mainAt)
 	}
 }

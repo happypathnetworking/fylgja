@@ -8,9 +8,9 @@ import (
 )
 
 // The conversions the surface needs: each result as the findings document carries it
-// (contracts/stages.schema.json), a resolved stage as twin.json 6 records it, and the
-// record as the listing and the step read it. The package's own types stay its own, so
-// the core reads no wire type but here.
+// (contracts/stages.schema.json). The package's own types stay its own, so the core reads
+// no wire type but here. twin.json 12 names no stage (020, research R-06), so no record is
+// read here: a RecordView is built by a caller that has one, and the server has none.
 
 // Block is the resolved stage as the document's stage block carries it ($defs/resolved).
 func (r Resolved) Block() findings.StageBlock {
@@ -21,35 +21,6 @@ func (r Resolved) Block() findings.StageBlock {
 // block is the proposed change as the blocks name it ($defs/proposed_change).
 func (pc ProposedChange) block() findings.StageChange {
 	return findings.StageChange{ID: pc.ID, Name: pc.Name, Branch: pc.Branch, Draft: pc.Draft}
-}
-
-// StageRef is the resolved stage as twin.json 6 records it: the proposed change by id and
-// source branch, the label, the description and where the at came from. The at itself is
-// the record's provenance.at.
-func (r Resolved) StageRef() *wire.StageRef {
-	return &wire.StageRef{ProposedChange: wire.StageChange{ID: r.ProposedChange.ID, Branch: r.ProposedChange.Branch},
-		Label: r.Label, Description: r.Description, AtSource: r.AtSource}
-}
-
-// RecordViewOf is what the host's record says of its stage, or nil when there is no
-// record, or it names no stage (a twin built from a branch or a bundle, or a record of 5
-// or earlier). A record before 4 has no state and reads ready; a diverged one names the
-// stage its failed step was going to, which a step keeps inside the record's proposed
-// change.
-func RecordViewOf(rec *wire.TwinRecord) *RecordView {
-	if rec == nil || rec.Stage == nil {
-		return nil
-	}
-	st := rec.Stage
-	v := &RecordView{ProposedChange: RecordChange{ID: st.ProposedChange.ID, Branch: st.ProposedChange.Branch},
-		Label: st.Label, Branch: rec.Provenance.Branch, At: rec.Provenance.At, AtSource: st.AtSource, State: rec.State}
-	if v.State == "" {
-		v.State = wire.StateReady
-	}
-	if s := rec.Step; v.State == wire.StateDiverged && s != nil && s.To.Stage != nil {
-		v.Towards = s.To.Stage.Label
-	}
-	return v
 }
 
 // Block is the record's stage as the stages block carries it ($defs/record), towards

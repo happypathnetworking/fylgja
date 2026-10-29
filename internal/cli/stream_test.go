@@ -45,7 +45,7 @@ func TestInterruptsBeforeTheStartReachNoServer(t *testing.T) {
 		}, findings.Finding{Rule: findings.RuleRunServiceUnreachable, Step: findings.StepStart}},
 		{"twin step --wait=", func(t *testing.T) error {
 			stepHost(t, "plan-link-added.json", nil)
-			return runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{allowRestart: true, waitGiven: true})
+			return runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true, waitGiven: true})
 		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleVerifyWaitInvalid, Object: "--wait", Step: findings.StepStart,
 			Message: "--wait= is empty; give a duration such as --wait=2m, or leave --wait out for the default 2m0s"}},
 	} {
@@ -224,7 +224,9 @@ func TestEveryRunRequestNamesAFreshStream(t *testing.T) {
 		{findings.OpTwinProvision, func() error {
 			return runTwinProvision(context.Background(), &options{}, &provisionFlags{}, bundleDir)
 		}},
-		{findings.OpTwinStep, func() error { return runTwinStep(context.Background(), &options{}, &stepFlags{}) }},
+		{findings.OpTwinStep, func() error {
+			return runTwinStep(context.Background(), &options{}, &stepFlags{stage: "change-1/linked", stageGiven: true})
+		}},
 		{findings.OpTwinDestroy, func() error { return runDestroy(context.Background(), &options{}, &destroyFlags{}) }},
 		{findings.OpTwinShow, func() error { return runShow(context.Background(), &options{}) }},
 	}

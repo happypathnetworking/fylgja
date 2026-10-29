@@ -258,9 +258,10 @@ func TestStepTargetFromASnapshot(t *testing.T) {
 	}
 	t.Logf("intent read --out: snapshot %s observed at %s; %d request(s) to Infrahub", s.ID, s.ObservedAt, read)
 
-	// The twin a create of this read records: the fixture's scope and the reader's mapping.
-	rec := &wire.TwinRecord{Provenance: wire.Provenance{Branch: branch, At: mark.At, Scope: fixtureScope,
-		Mapping: wire.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion}}}
+	// The twin a create of this read builds: its snapshot's envelope names the fixture's scope
+	// and the reader's mapping, which a step's target is held to (020, research R-06).
+	held := heldEnvelope{id: sid, scope: fixtureScope,
+		mapping: wire.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion}}
 	// A state root of its own, whose stores hold nothing, so the file target files the file.
 	paths := useStateRoot(t)
 	reg := shippedPackages(t)
@@ -280,7 +281,7 @@ func TestStepTargetFromASnapshot(t *testing.T) {
 		t.Helper()
 		before := requests.Load()
 		subject := &findings.Subject{Snapshot: arg, Scope: fixtureScope}
-		target, _, err := snapshotTarget(t.Context(), testOptions(t, false), findings.OpTwinStep, subject, reg, paths, rec,
+		target, _, err := snapshotTarget(t.Context(), testOptions(t, false), findings.OpTwinStep, subject, reg, paths, held,
 			arg, files)
 		if n := requests.Load() - before; n != 0 {
 			t.Errorf("the target from the %s sent %d request(s) to Infrahub; want none", how, n)
@@ -293,8 +294,8 @@ func TestStepTargetFromASnapshot(t *testing.T) {
 			t.Errorf("the target from the %s is snapshot %s, bundle %s; want the plan's %s, %s", how, target.snapshotID,
 				target.bundle.ID, sid, bid)
 		}
-		if name := (wire.StepSide{SnapshotID: sid}).Name(); target.name != name || target.stage != nil {
-			t.Errorf("the target from the %s is named %q, stage %+v; want %q and none", how, target.name, target.stage, name)
+		if name := (wire.StepSide{SnapshotID: sid}).Name(); target.name != name {
+			t.Errorf("the target from the %s is named %q; want %q", how, target.name, name)
 		}
 		if target.branch != branch || target.at != mark.At || target.observedAt != s.ObservedAt {
 			t.Errorf("the target from the %s names branch %s, at %s, observed at %s; want %s, %s, %s", how, target.branch,

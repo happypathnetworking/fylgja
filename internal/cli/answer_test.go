@@ -384,14 +384,16 @@ func answerCases() []answerCase {
 			events := stepEvents()
 			useService(t, &fakeService{runID: stepRunID, events: events, stepResult: steppedResult()})
 			useInterrupts(t)
-			return answerWant{args: map[string]any{"allow_restart": true},
+			return answerWant{args: map[string]any{"stage": "change-1/linked", "allow_restart": true},
 				kinds: runKinds(len(events)), status: findings.StatusOK, events: stepsOf(events),
-				cli: func(t *testing.T) string { return runStepCmd(t, "--allow-restart").stdout }}
+				cli: func(t *testing.T) string {
+					return runStepCmd(t, "--stage", "change-1/linked", "--allow-restart").stdout
+				}}
 		}},
 		{"twin step --dry-run (TestStepDryRun)", findings.OpTwinStep, func(t *testing.T) answerWant {
 			h := stepHost(t, "plan-link-added.json", nil)
-			toID := runStepCmd(t, "--dry-run", "--allow-restart").doc.BundleID
-			return answerWant{args: map[string]any{"dry_run": true, "allow_restart": true},
+			toID := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart").doc.BundleID
+			return answerWant{args: map[string]any{"stage": "change-1/linked", "dry_run": true, "allow_restart": true},
 				kinds: []string{api.KindDocument}, status: findings.StatusOK,
 				stdout: lines(append(stepDryRunLines(h, toID),
 					"memory: sum 5120 MiB; host budget unset",

@@ -189,7 +189,7 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 	staged := &StagedTarget{BundleID: goldenID, Provenance: recordProvenance(m.Provenance),
 		PSP: map[string]wire.PSPRef{}, Artifacts: map[string]*wire.TwinArtifact{}}
 	observed := "2026-10-03T11:58:00.000000Z"
-	create := RecordFields{BundleID: stepFromID, ObservedAt: &observed, Source: wire.SourceIntent, Stage: mark("seeded"),
+	create := RecordFields{BundleID: stepFromID, ObservedAt: &observed, Source: wire.SourceIntent,
 		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: stepFromAt, SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		RunID:      "01a0e9e3-0000-7000-8000-000000000001", Version: "0.1.0-dev", RecordedAt: time.Date(2026, 10, 3, 11, 0, 0, 0, time.UTC)}
 	var lab []wire.LabNode
@@ -209,8 +209,8 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 		t.Fatal(err)
 	}
 	f := StepFields{Outcome: wire.StepStepped,
-		From:       wire.StepSide{Stage: mark("seeded"), BundleID: stepFromID, At: stepFromAt},
-		To:         wire.StepSide{Stage: mark("cabled"), BundleID: goldenID, At: m.Provenance.At},
+		From:       wire.StepSide{BundleID: stepFromID, At: stepFromAt},
+		To:         wire.StepSide{BundleID: goldenID, At: m.Provenance.At},
 		ObservedAt: "2026-10-03T11:59:00.000000Z", RunID: run, Version: "0.1.0-dev",
 		Pushed: pushed, StartedAt: "2026-10-03T11:59:30Z", EndedAt: waitFromStamp,
 		RecordedAt: time.Date(2026, 10, 3, 12, 0, 0, 100000000, time.UTC), Nodes: lab, Staged: staged}

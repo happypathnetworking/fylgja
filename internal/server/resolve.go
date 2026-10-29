@@ -7,7 +7,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
-	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stages"
 )
@@ -48,12 +47,10 @@ func stageGuards(op string, subject *findings.Subject, step, given string, confl
 	return ref, nil
 }
 
-// resolvedStage is a stage resolved on the server: the document's block, the record's
-// stage, and the warnings the resolution found beside it (stage.main.moved), which every
+// resolvedStage is a stage resolved on the server: the document's block and the warnings the resolution found beside it (stage.main.moved), which every
 // document after it carries.
 type resolvedStage struct {
 	block    findings.StageBlock
-	record   *wire.StageRef
 	warnings findings.List
 }
 
@@ -88,7 +85,7 @@ func resolveStage(ctx context.Context, op string, subject *findings.Subject, ste
 		return nil, &result{doc: doc}
 	}
 	subject.Branch, subject.At = res.Branch, res.At
-	return &resolvedStage{block: res.Block(), record: res.StageRef(), warnings: list}, nil
+	return &resolvedStage{block: res.Block(), warnings: list}, nil
 }
 
 // withStage carries the resolved stage on the document err holds, whatever it reports,

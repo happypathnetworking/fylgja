@@ -14,7 +14,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
-	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
 // serviceReads is what twin show learned from the workflow service: the runs in flight, the
@@ -204,12 +203,8 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 			block.Record.Scope = rec.Provenance.Scope
 			block.Record.Mapping = &findings.ShowMapping{Reader: m.Reader, Model: m.Model, Version: m.Version}
 		}
-		// A version 6 record names the stage the twin was created from or stepped to, and a
-		// version 7 record the rehearsal it is the twin of (015).
-		block.Record.Stage = verify.StageBlock(rec.Stage)
-		if r := rec.Rehearsal; r != nil {
-			block.Record.Rehearsal = &findings.ShowRef{WorkflowID: r.WorkflowID, RunID: r.RunID}
-		}
+		// A record names no stage and no rehearsal from twin.json 12 (020), and one of 11 or
+		// earlier that names them shows neither.
 		// A version 4 record says whether the twin is ready or diverged, and its last step.
 		block.Record.State = rec.State
 		block.Record.Step = showStep(rec.Step, waitRecorded(rec))
@@ -269,7 +264,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		// record of 8 or earlier, cannot be stepped, and says so.
 		block.Kind = findings.ShowKindSnapshot
 		text.kind = snapshotKind(rec)
-		if rec.SnapshotID == nil {
+		if rec.SnapshotID == nil && recordSteps(rec) {
 			text.details = append(text.details, noSnapshotNote)
 			note(noSnapshotNote)
 		}
@@ -277,11 +272,18 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 			note(fmt.Sprintf("reproducing the twin with --at %s is best-effort", *rec.ObservedAt))
 		}
 	}
+	// A record of 11 or earlier is shown, naming its version, and twin step refuses it (020,
+	// research R-06): a twin, diverged or not, whose lab is there.
+	if rec != nil && host.Lab.Present && !recordSteps(rec) {
+		s := fmt.Sprintf(oldRecordNote, rec.TwinVersion)
+		text.details = append(text.details, s)
+		note(s)
+	}
 	// A rehearsal in flight holds the host from its start to its destroy's end, whatever its
 	// children have reached, and is named after the kind with where it is (015).
 	if r := rehearsalInFlight(reads.inFlight); r != nil {
 		text.hostHeld = true
-		s := rehearsalAt(*r, rec)
+		s := rehearsalAt(*r)
 		text.kind += "; " + s
 		note(s)
 	}
@@ -310,6 +312,17 @@ func waitRecorded(rec *wire.TwinRecord) bool {
 	v, err := strconv.Atoi(rec.TwinVersion)
 	return err == nil && v >= 5
 }
+
+// recordSteps says whether the record is version 12 or later, which twin step steps (020,
+// research R-06); one of 11 or earlier is shown naming its version and destroyed.
+func recordSteps(rec *wire.TwinRecord) bool {
+	v, err := strconv.Atoi(rec.TwinVersion)
+	return err == nil && v >= 12
+}
+
+// oldRecordNote is what twin show says of a record of 11 or earlier, its version in place of
+// %s (020, research R-06).
+const oldRecordNote = "the twin's record is twin.json %s, a version this build no longer steps; fylgja twin destroy clears it"
 
 // scopeRecorded says whether the record is version 8 or later, whose provenance names the
 // scope its read was made under and the mapping that read it (017). twin step refuses a
@@ -361,9 +374,6 @@ func recordLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
 	if rec.Provenance.At != "" {
 		ref += " at " + rec.Provenance.At
-	}
-	if st := verify.StageBlock(rec.Stage); st != nil {
-		ref += fmt.Sprintf(" (stage %s, at %s)", st.Ref(), st.AtSource)
 	}
 	return fmt.Sprintf("record: %s, %s, bundle_id %s, schema %s, %s", ref, snapshotClause(rec), rec.BundleID,
 		rec.Provenance.SchemaHash, provenanceClause(rec))
@@ -421,7 +431,7 @@ func showStep(st *wire.StepRecord, waitKnown bool) *findings.ShowStep {
 		return nil
 	}
 	side := func(s wire.StepSide) findings.StepSideBlock {
-		return findings.StepSideBlock{Stage: verify.StageBlock(s.Stage), SnapshotID: s.SnapshotID, BundleID: s.BundleID, At: s.At}
+		return findings.StepSideBlock{SnapshotID: s.SnapshotID, BundleID: s.BundleID, At: s.At}
 	}
 	out := &findings.ShowStep{Outcome: st.Outcome, From: side(st.From), To: side(st.To),
 		Run: findings.ShowRef{WorkflowID: st.Run.WorkflowID, RunID: st.Run.RunID}, Restarted: lifecycleNodes(st.Reconcile),
@@ -456,15 +466,14 @@ func lifecycleNodes(r wire.StepReconcile) []string {
 }
 
 // divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show). Its target
-// is named by stepSideName and where the twin is by wire.TwinRecord.Position() (019): a
-// stage as SideStage names it, a record of twin.json 5 or earlier's too, and a side naming
-// no stage by its snapshot or bundle.
+// is named by its Name() and where the twin is by wire.TwinRecord.Position() (019): by its
+// snapshot or bundle, a record naming no stage from 020.
 func divergedKind(rec *wire.TwinRecord) string {
 	st := rec.Step
 	return fmt.Sprintf("diverged towards %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
-		"the twin is at %s (bundle %s)%s; fylgja twin destroy clears it",
-		stepSideName(rec, st.To), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
-		orNone(landed(st)), orNone(notLanded(st)), rec.Position(), shortID(rec.BundleID), ofRehearsal(rec))
+		"the twin is at %s (bundle %s); fylgja twin destroy clears it",
+		st.To.Name(), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
+		orNone(landed(st)), orNone(notLanded(st)), rec.Position(), shortID(rec.BundleID))
 }
 
 // noSnapshotNote is what twin show says of a twin whose record names no snapshot (019): an
@@ -473,12 +482,11 @@ const noSnapshotNote = "the twin's record names no snapshot, so fylgja twin step
 
 // snapshotKind is the kind line of a twin built from intent or a snapshot (contracts/cli.md,
 // 019): the snapshot its record names, short, or none; in brackets its branch and its at, or
-// the time it was read when it has none; then, as before 019, the stage it names, the step
-// that took it there and the rehearsal it is the twin of. A record of 5 or earlier that names
-// M10's waypoint names no stage and, as before 019, no step on this line: its step line names
-// the waypoint.
+// the time it was read when it has none; then the step that took it there. A record names no
+// stage and no rehearsal from 020 (research R-06), and one of 11 or earlier that names them
+// shows neither.
 //
-//	snapshot 9c2d01e7… (branch change-1 at …), stage change-1/third-link (stepped from change-1/seeded by run fylgja-step 0a1b…, ended …)
+//	snapshot 9c2d01e7… (branch change-1 at …) (stepped from snapshot 576933ec… by run fylgja-step 0a1b…, ended …)
 func snapshotKind(rec *wire.TwinRecord) string {
 	id := "none"
 	if rec.SnapshotID != nil {
@@ -489,14 +497,11 @@ func snapshotKind(rec *wire.TwinRecord) string {
 		observed = *rec.ObservedAt
 	}
 	line := fmt.Sprintf("snapshot %s (%s)", id, branchRef(rec.Provenance.Branch, rec.Provenance.At, observed))
-	if st := rec.Stage; st != nil {
-		line += ", stage " + st.Name()
-	}
-	if st := rec.Step; st != nil && !rec.Superseded {
-		line += fmt.Sprintf(" (stepped from %s by run %s %s, ended %s)", stepSideRef(rec, st.From), st.Run.WorkflowID,
+	if st := rec.Step; st != nil {
+		line += fmt.Sprintf(" (stepped from %s by run %s %s, ended %s)", st.From.Name(), st.Run.WorkflowID,
 			st.Run.RunID, st.EndedAt)
 	}
-	return line + ofRehearsal(rec)
+	return line
 }
 
 // branchRef is what a snapshot is of, as the kind line and a step's twin and target lines
@@ -513,39 +518,9 @@ func branchRef(branch, at, observedAt string) string {
 	return ref
 }
 
-// stepSideRef names a step's side as twin show's lines name the side a step went from or
-// towards (contracts/cli.md, 019): a stage by its reference alone, <branch>/<label>, as M11
-// named it, and a superseded record's waypoint as SideName words it; any other side by
-// wire.StepSide.Name(), snapshot <short>… or bundle <short>….
-func stepSideRef(rec *wire.TwinRecord, s wire.StepSide) string {
-	if s.Stage != nil || rec.Superseded {
-		return rec.SideName(s.Stage)
-	}
-	return s.Name()
-}
-
-// stepSideName is stepSideRef with a stage's word, as the diverged kind line names its
-// target: stage <branch>/<label>, a superseded record's waypoint, or the side's Name().
-func stepSideName(rec *wire.TwinRecord, s wire.StepSide) string {
-	if s.Stage != nil || rec.Superseded {
-		return rec.SideStage(s.Stage)
-	}
-	return s.Name()
-}
-
-// ofRehearsal names the rehearsal a version 7 record is the twin of, as the kind line and
-// twin verify's first line say it after the stage (015), or "" for a twin of no rehearsal.
-func ofRehearsal(rec *wire.TwinRecord) string {
-	if r := rec.Rehearsal; r != nil {
-		return fmt.Sprintf(", of rehearsal run %s %s", r.WorkflowID, r.RunID)
-	}
-	return ""
-}
-
 // stepLine is the record block's line for a record that has stepped: how the step went, or
 // where it stopped (contracts/cli.md, twin show). A version 5 record's line ends with how
-// the step's wait ended. Each side is named by stepSideRef, a record of version 5 or
-// earlier's too.
+// the step's wait ended. Each side is named by its Name().
 func stepLine(rec *wire.TwinRecord, waitKnown bool) string {
 	line := m11StepLine(rec)
 	if !waitKnown {
@@ -574,10 +549,10 @@ func m11StepLine(rec *wire.TwinRecord) string {
 	st := rec.Step
 	if st.Outcome == wire.StepDiverged {
 		return fmt.Sprintf("diverged: step run %s %s towards %s (bundle %s) stopped at phase %s, ended %s; landed %s; not landed %s",
-			st.Run.WorkflowID, st.Run.RunID, stepSideRef(rec, st.To), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
+			st.Run.WorkflowID, st.Run.RunID, st.To.Name(), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
 			orNone(landed(st)), orNone(notLanded(st)))
 	}
-	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", stepSideRef(rec, st.From), st.Run.WorkflowID,
+	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", st.From.Name(), st.Run.WorkflowID,
 		st.Run.RunID, st.EndedAt)
 	if st.Outcome == wire.StepUnchanged {
 		return line + "; unchanged: nothing reconciled, awaited or pushed"
@@ -821,12 +796,12 @@ func rehearsalInFlight(runs []provision.RunInFlight) *provision.RunInFlight {
 }
 
 // rehearsalAt is where a rehearsal in flight is, as twin show's kind line ends with it
-// (contracts/rehearse-command.md): the stage its child is for and the step that child is
-// at, its destroy, or, between two children, the stage the twin's record names and the
-// rehearsal's own step.
+// (contracts/rehearse-command.md): the side its child is for and the step that child is
+// at, its destroy, or, between two children, the rehearsal's own step; the twin's record
+// names no stage from 020.
 //
-//	rehearsal run fylgja-rehearse 01a1… is at stage change-1/third-link, step push
-func rehearsalAt(r provision.RunInFlight, rec *wire.TwinRecord) string {
+//	rehearsal run fylgja-rehearse 01a1… is at snapshot 9c2d01e7…, step push
+func rehearsalAt(r provision.RunInFlight) string {
 	s := fmt.Sprintf("rehearsal run %s %s", r.WorkflowID, r.RunID)
 	switch c := r.Child; {
 	case c != nil && c.WorkflowID == provision.WorkflowDestroy:
@@ -835,8 +810,6 @@ func rehearsalAt(r provision.RunInFlight, rec *wire.TwinRecord) string {
 		return fmt.Sprintf("%s is at %s, step %s", s, c.Towards, c.Step)
 	case c != nil:
 		return fmt.Sprintf("%s is at step %s", s, c.Step)
-	case rec != nil && rec.Stage != nil:
-		return fmt.Sprintf("%s is at stage %s, step %s", s, rec.Stage.Name(), r.Step)
 	}
 	return fmt.Sprintf("%s is at step %s", s, r.Step)
 }

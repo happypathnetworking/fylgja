@@ -318,25 +318,17 @@ func verifyStatus(r verify.Report) findings.Status {
 // verifyTwinLine is the twin: line (contracts/cli.md): the record's reference as twin show
 // names it, the snapshot and the bundle the record says the twin is at (019: "snapshot
 // none" for a record naming no snapshot), its state, a diverged twin's step, its target named
-// as twin show names it (stepSideRef), and the node count.
+// as twin show names it (its Name()), and the node count. A record names no stage and no
+// rehearsal from 020.
 func verifyTwinLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
-	if rec.Stage != nil {
-		// A rehearsal's twin names its run after the stage (015).
-		ref = "stage " + rec.Stage.Name()
-		if r := rec.Rehearsal; r != nil {
-			ref += fmt.Sprintf(" of rehearsal run %s %s", r.WorkflowID, r.RunID)
-		}
-	} else if rec.Provenance.At != "" {
+	if rec.Provenance.At != "" {
 		ref += " at " + rec.Provenance.At
 	}
 	state := "ready"
-	switch st := rec.Step; {
-	case rec.State == wire.StateDiverged && st != nil:
-		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", stepSideRef(rec, st.To),
+	if st := rec.Step; rec.State == wire.StateDiverged && st != nil {
+		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", st.To.Name(),
 			shortID(st.To.BundleID), phaseOf(st), st.Run.WorkflowID, st.Run.RunID)
-	case rec.Stage != nil && rec.Provenance.At != "":
-		state += ", pinned at " + rec.Provenance.At
 	}
 	snapshot := "none"
 	if id := rec.SnapshotID; id != nil {

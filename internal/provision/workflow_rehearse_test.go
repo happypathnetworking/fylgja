@@ -158,11 +158,6 @@ func rehearsalOf(stages ...RehearseStage) RehearseInput {
 	}
 }
 
-// stageRef is a stage of pc-1 as the record names it.
-func stageRef(label string) *wire.StageRef {
-	return &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: rehearsalBranch}, Label: label, AtSource: "written"}
-}
-
 // branchPoint is the branch point the plan refused scope.empty, passed over.
 func branchPoint() RehearseStage {
 	return RehearseStage{Ref: rehearsalBranch + "/branch-point", Label: "branch-point", AtSource: "branch_point",
@@ -179,19 +174,19 @@ func baselineStage(label string) RehearseStage {
 		Role: rehearsal.RoleBaseline,
 		Provision: &ProvisionInput{Source: wire.SourceIntent, Branch: rehearsalBranch, At: "2026-10-16T17:25:30.118244+00:00",
 			BundlePath: "/state/bundles/" + id, BundleID: id, ObservedAt: "2026-10-17T14:02:10.000000Z",
-			Stage: stageRef(label), Version: "0.1.0-test", SnapshotID: snapshotOf(label)},
+			Version: "0.1.0-test", SnapshotID: snapshotOf(label)},
 		WaitS: 120}
 }
 
 // rehearsedStage is a compiled stage after the baseline, stepped to from the stage before it,
-// each side naming its snapshot (018).
+// each side naming its snapshot (018) and no stage (020, research R-06).
 func rehearsedStage(from, label string) RehearseStage {
 	id := bundleOf(label)
 	return RehearseStage{Ref: rehearsalBranch + "/" + label, Label: label, AtSource: "written", Branch: rehearsalBranch,
 		At: "2026-10-16T17:30:00.000000+00:00", BundleID: id, BundlePath: "/state/bundles/" + id, SnapshotID: snapshotOf(label),
 		Role: rehearsal.RoleRehearsed,
-		Step: &StepInput{From: wire.StepSide{Stage: stageRef(from), SnapshotID: snapshotOf(from), BundleID: bundleOf(from)},
-			To: wire.StepSide{Stage: stageRef(label), SnapshotID: snapshotOf(label), BundleID: id, Branch: rehearsalBranch,
+		Step: &StepInput{From: wire.StepSide{SnapshotID: snapshotOf(from), BundleID: bundleOf(from)},
+			To: wire.StepSide{SnapshotID: snapshotOf(label), BundleID: id, Branch: rehearsalBranch,
 				At: "2026-10-16T17:30:00.000000+00:00"},
 			ObservedAt: "2026-10-17T14:02:10.000000Z", ToBundlePath: "/state/bundles/" + id, AllowRestart: true,
 			Declared: map[string]string{"n1": "live", "n2": "live", "n3": "live"}, WaitS: 120, Version: "0.1.0-test"},
@@ -229,8 +224,7 @@ func fixtureRehearsal() RehearseInput {
 // built is the baseline's provision ending ready, its record written.
 func built(in ProvisionInput) ProvisionResult {
 	return ProvisionResult{Outcome: OutcomeReady, BundleID: in.BundleID, ObservedAt: in.ObservedAt, Findings: findings.List{},
-		Twin: &wire.TwinRecord{Lab: wire.LabName, BundleID: in.BundleID, RecordedAt: rehearsalRecordedAt, Stage: in.Stage,
-			Rehearsal: in.Rehearsal},
+		Twin:    &wire.TwinRecord{Lab: wire.LabName, BundleID: in.BundleID, RecordedAt: rehearsalRecordedAt},
 		Cleanup: CleanupResult{Teardown: CleanupSkipped, Unstage: CleanupSkipped}}
 }
 
@@ -820,12 +814,12 @@ func TestRehearseOneStage(t *testing.T) {
 	}
 }
 
-// The baseline's provision child is the server's input, already compiled, with this run
-// named as its rehearsal and nothing else added: it stops nothing first (019). Its record
-// names the run (from twin.json 7); its wait reads from the record's time, under the
-// stage's budget, as this run, which the record does not name, so the wait is written into
-// no record (R-07).
-func TestRehearseRecordNamesTheRun(t *testing.T) {
+// The baseline's provision child is the server's input, already compiled, with nothing
+// added: it stops nothing first (019), and names no rehearsal, which twin.json 12 does not
+// record (020, research R-06). Its wait reads from the record's time, under the stage's
+// budget, as this run, which the record does not name, so the wait is written into no record
+// (R-07).
+func TestRehearseBaselineIsTheServersInput(t *testing.T) {
 	h := newRehearseHarness(t)
 	in := fixtureRehearsal()
 
@@ -837,13 +831,8 @@ func TestRehearseRecordNamesTheRun(t *testing.T) {
 		t.Fatalf("provisions %+v, parents %v, waits %+v; want one of each", h.provisions, h.parentRuns, h.verifies)
 	}
 	self := h.parentRuns[0]
-	want := *in.Stages[1].Provision
-	want.Rehearsal = &wire.RehearsalRef{WorkflowID: WorkflowRehearse, RunID: self}
-	if got := h.provisions[0]; !reflect.DeepEqual(got, want) {
-		t.Errorf("the provision child was given %+v\nwant the server's input naming this run: %+v", got, want)
-	}
-	if in.Stages[1].Provision.Rehearsal != nil {
-		t.Error("the input's own provision was changed")
+	if got, want := h.provisions[0], *in.Stages[1].Provision; !reflect.DeepEqual(got, want) {
+		t.Errorf("the provision child was given %+v\nwant the server's input as it is: %+v", got, want)
 	}
 	// The stages' snapshots reach the children as data (018): the baseline's provision names
 	// its stage's, and each step names its two sides'. Each child's record step is given them

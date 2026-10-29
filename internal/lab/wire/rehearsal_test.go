@@ -53,31 +53,25 @@ func TestVerifyResultCounts(t *testing.T) {
 	}
 }
 
-// A record names the rehearsal run whose baseline it is, or says null (twin.json 7, 015),
-// and one of 6 or earlier, which has no key, reads as nil. The record input omits a nil
-// rehearsal, so the input of every run a rehearsal did not start is as it was.
-func TestRehearsalRef(t *testing.T) {
-	if got := marshal(t, TwinRecord{}); !strings.Contains(got, `"rehearsal":null`) {
-		t.Errorf("a record of no rehearsal writes %s; want an explicit null", got)
+// twin.json 12 names no rehearsal and no stage (020, research R-06): a record writes
+// neither key, and one of 11 or earlier that names them reads with neither. A record input
+// writes neither, and one recorded before 020 that carries them decodes.
+func TestARecordNamesNoRehearsalAndNoStage(t *testing.T) {
+	for _, got := range []string{marshal(t, TwinRecord{}), marshal(t, RecordInput{})} {
+		if strings.Contains(got, `"rehearsal"`) || strings.Contains(got, `"stage"`) {
+			t.Errorf("writes %s; want no rehearsal and no stage key", got)
+		}
 	}
-	ref := &RehearsalRef{WorkflowID: RehearseWorkflowID, RunID: "01a1b2c3-0000-7000-8000-00000000000a"}
-	if got, want := marshal(t, TwinRecord{Rehearsal: ref}),
-		`"rehearsal":{"workflow_id":"fylgja-rehearse","run_id":"01a1b2c3-0000-7000-8000-00000000000a"}`; !strings.Contains(got, want) {
-		t.Errorf("a rehearsal's record writes %s; want %s", got, want)
+	const old = `{"twin_version":"11","bundle_id":"b","stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},` +
+		`"label":"seeded","description":"","at_source":"given"},` +
+		`"rehearsal":{"workflow_id":"fylgja-rehearse","run_id":"01a1b2c3-0000-7000-8000-00000000000a"},"step":null}`
+	var rec TwinRecord
+	if err := json.Unmarshal([]byte(old), &rec); err != nil || rec.TwinVersion != "11" || rec.BundleID != "b" {
+		t.Errorf("a record of 11 naming a stage and a rehearsal reads %+v (%v)", rec, err)
 	}
-
-	var old TwinRecord
-	if err := json.Unmarshal([]byte(`{"twin_version":"6","stage":null,"step":null}`), &old); err != nil {
-		t.Fatal(err)
-	}
-	if old.Rehearsal != nil {
-		t.Errorf("a version 6 record reads rehearsal %+v; want nil", old.Rehearsal)
-	}
-
-	if got := marshal(t, RecordInput{}); strings.Contains(got, `"rehearsal"`) {
-		t.Errorf("a record input of no rehearsal writes %s; want no rehearsal key", got)
-	}
-	if got := marshal(t, RecordInput{Rehearsal: ref}); !strings.Contains(got, `"rehearsal":{"workflow_id":"fylgja-rehearse"`) {
-		t.Errorf("a rehearsal's record input writes %s; want its rehearsal", got)
+	var in RecordInput
+	if err := json.Unmarshal([]byte(`{"bundle_id":"b","stage":{"label":"seeded"},"rehearsal":{"run_id":"r"}}`), &in); err != nil ||
+		in.BundleID != "b" {
+		t.Errorf("a record input recorded before 020 reads %+v (%v)", in, err)
 	}
 }

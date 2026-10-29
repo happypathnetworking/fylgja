@@ -121,25 +121,25 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 			func(t *testing.T) (string, error) {
 				stepHost(t, "plan-link-added.json", nil)
 				usePSPDir(t, invalidOverrideDir(t))
-				return "", runTwinStep(ctx, &options{asJSON: true}, &stepFlags{})
+				return "", runTwinStep(ctx, &options{asJSON: true}, &stepFlags{stage: "change-1/linked", stageGiven: true})
 			}},
 		{"step, the host cannot be inspected", findings.StepResolve, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				h := stepHost(t, "plan-link-added.json", nil)
 				h.clab.inspect = []byte("not json")
-				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{})
+				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
 			}},
 		{"step, Infrahub cannot be reached", findings.StepResolve, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				stepHost(t, "plan-link-added.json", nil)
 				t.Setenv(intent.EnvAddress, unreachable)
-				return findings.OpTwinStep, runTwinStep(ctx, jsonOut, &stepFlags{})
+				return findings.OpTwinStep, runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
 			}},
 		{"step, the target's read cannot run", findings.StepRead, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				h := stepHost(t, "plan-link-added.json", nil)
 				h.infra.readStatus = map[string]int{"change-1": 500}
-				return "change-1/linked", runTwinStep(ctx, jsonOut, &stepFlags{})
+				return "change-1/linked", runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
 			}},
 		{"step, containerlab's plan cannot be read", findings.StepCompare, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -149,14 +149,14 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 					t.Fatal(err)
 				}
 				h.clab.plan = b
-				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{})
+				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
 			}},
 		{"step, the start fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				stepHost(t, "plan-link-added.json", nil)
 				useInterrupts(t)
 				useService(t, &fakeService{startErr: boom})
-				return findings.StepStart, runTwinStep(ctx, jsonOut, &stepFlags{allowRestart: true})
+				return findings.StepStart, runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
 			}},
 		{"step, waiting for the run fails during readiness", findings.StepReadiness, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -164,7 +164,7 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 				useInterrupts(t)
 				useService(t, &fakeService{runID: "run-s", resultErr: boom,
 					events: []provision.Event{event(provision.WorkflowStep, "readiness e1", findings.StepReadiness)}})
-				return findings.StepReadiness, runTwinStep(ctx, jsonOut, &stepFlags{allowRestart: true})
+				return findings.StepReadiness, runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
 			}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

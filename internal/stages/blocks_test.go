@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -114,8 +113,9 @@ func TestBlocksValidate(t *testing.T) {
 	}
 }
 
-// A resolved stage is recorded as twin.json 6 names it, and the record reads back as the
-// view the listing and the step take: its state, and a diverged step's target by label.
+// A record view's block names its stage, its state, and a diverged step's target by label.
+// twin.json 12 names no stage (020, research R-06), so the view is built here as a caller
+// holding one would build it.
 func TestRecordViewOf(t *testing.T) {
 	r, s := story()
 	res, _, err := List(context.Background(), r, s, "change-1", testScope, nil)
@@ -123,25 +123,8 @@ func TestRecordViewOf(t *testing.T) {
 		t.Fatal(err)
 	}
 	cabled := res.Rows[1].Resolved
-	ref := cabled.StageRef()
-	if want := (wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
-		AtSource: AtWritten, Description: cabled.Description}); *ref != want {
-		t.Errorf("StageRef %+v, want %+v", *ref, want)
-	}
-	if RecordViewOf(nil) != nil || RecordViewOf(&wire.TwinRecord{}) != nil {
-		t.Error("a record naming no stage has a view")
-	}
-	rec := &wire.TwinRecord{Stage: ref, Provenance: wire.Provenance{Branch: "change-1", At: cabled.At}}
-	if got, want := RecordViewOf(rec), (&RecordView{ProposedChange: RecordChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
-		Branch: "change-1", At: cabled.At, AtSource: AtWritten, State: wire.StateReady}); !reflect.DeepEqual(got, want) {
-		t.Errorf("view %+v, want %+v", got, want)
-	}
-	rec.State = wire.StateDiverged
-	rec.Step = &wire.StepRecord{To: wire.StepSide{Stage: &wire.StageRef{ProposedChange: ref.ProposedChange, Label: "live"}}}
-	v := RecordViewOf(rec)
-	if v.Towards != "live" {
-		t.Errorf("a diverged view towards %q, want live", v.Towards)
-	}
+	v := &RecordView{ProposedChange: RecordChange{ID: cabled.ProposedChange.ID, Branch: cabled.ProposedChange.Branch},
+		Label: cabled.Label, Branch: "change-1", At: cabled.At, AtSource: cabled.AtSource, State: wire.StateDiverged, Towards: "live"}
 	got := mustValidate(t, "record", v.Block())
 	if !strings.Contains(got, `"state":"diverged","towards":{"ref":"change-1/live"}`) {
 		t.Errorf("record block %s", got)

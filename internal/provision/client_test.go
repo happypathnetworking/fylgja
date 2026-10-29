@@ -910,18 +910,19 @@ func startedEvent(t *testing.T, input any) *historypb.HistoryEvent {
 }
 
 // InFlight names a step run at the step its history has reached, and the side its input
-// steps towards as wire.StepSide.Name() names it, stage <branch>/<label> (014) or snapshot
-// <short> (019), which twin show's kind line reads.
+// steps towards as wire.StepSide.Name() names it, snapshot <short> (019), or bundle <short>
+// for a side naming no snapshot, never a stage (020, research R-06), which twin show's kind
+// line reads.
 func TestInFlightNamesAStepAndItsTarget(t *testing.T) {
-	toSnapshot := stepInput()
-	toSnapshot.To = wire.StepSide{SnapshotID: strings.Repeat("9c2d01e7", 8), BundleID: toSnapshot.To.BundleID, At: toSnapshot.To.At}
+	toBundle := stepInput()
+	toBundle.To = wire.StepSide{BundleID: toBundle.To.BundleID, At: toBundle.To.At}
 	for _, c := range []struct {
 		name    string
 		in      StepInput
 		towards string
 	}{
-		{"to a stage", stepInput(), "stage change-1/live"},
-		{"to a snapshot", toSnapshot, "snapshot 9c2d01e7…"},
+		{"to a snapshot", stepInput(), "snapshot f3980cc7…"},
+		{"to a side naming no snapshot", toBundle, "bundle eeeeeeee…"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			mc := &mocks.Client{}
@@ -961,11 +962,14 @@ func TestStepBlockAndClose(t *testing.T) {
 	if block.From.Branch != "" || block.To.Branch != "change-1" || block.StepRunBlock != nil {
 		t.Errorf("from branch %q, to branch %q, run %+v; want none, change-1, none", block.From.Branch, block.To.Branch, block.StepRunBlock)
 	}
-	// Each side names its stage as the record does (014).
-	wantFrom := findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
-		Description: "before the change", AtSource: "written"}
-	if block.From.Stage == nil || *block.From.Stage != wantFrom || block.To.Stage == nil || block.To.Stage.Ref() != "change-1/live" {
-		t.Errorf("from stage %+v, to stage %+v; want %+v, change-1/live", block.From.Stage, block.To.Stage, wantFrom)
+	// Each side names its snapshot, and its stage is null: a side names no stage from
+	// twin.json 12 (020, research R-06).
+	if block.From.Stage != nil || block.To.Stage != nil {
+		t.Errorf("from stage %+v, to stage %+v; want both null", block.From.Stage, block.To.Stage)
+	}
+	if block.From.SnapshotID != stepFromSnapshot || block.To.SnapshotID != stepToSnapshot {
+		t.Errorf("from snapshot %q, to snapshot %q; want %s and %s", block.From.SnapshotID, block.To.SnapshotID,
+			stepFromSnapshot, stepToSnapshot)
 	}
 	r := block.Reconcile
 	for _, l := range []struct {
@@ -1273,7 +1277,7 @@ func TestStartProvisionRefusedBesideARehearsal(t *testing.T) {
 // baseline and one rehearsed stage.
 func rehearseInput() RehearseInput {
 	provisionIn := ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: stepFromAt, BundleID: stepFrom,
-		BundlePath: "/state/bundles/" + stepFrom, Stage: &stageCabled}
+		BundlePath: "/state/bundles/" + stepFrom}
 	stepIn := stepInput()
 	return RehearseInput{
 		ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1", Draft: false},
@@ -1542,12 +1546,16 @@ func TestReclaimRefusesARunInFlight(t *testing.T) {
 	})
 }
 
-// InFlight names a rehearsal at the child it runs and that child at its own step, with the
-// stage the child is at, and never names the child again as an operator's run (015, R-12):
-// a step child as "at step step", a provisioning child as "at step provision" with the
-// baseline it builds, and the baseline's wait, which runs no child, as observe.
+// InFlight names a rehearsal at the child it runs and that child at its own step, and never
+// names the child again as an operator's run (015, R-12): a step child as "at step step",
+// with the side it steps towards, a provisioning child as "at step provision", naming
+// nothing, since a provisioning run's input names no stage from 020 (research R-06), not even
+// one recorded before it carrying the stage it builds, and the baseline's wait, which runs no
+// child, as observe.
 func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
-	baseline := ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", BundleID: stepFrom, Stage: &stageCabled}
+	baseline := map[string]any{"source": wire.SourceIntent, "branch": "change-1", "bundle_id": stepFrom,
+		"stage": map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"}, "label": "cabled",
+			"description": "before the change", "at_source": "written"}}
 	built := []*historypb.HistoryEvent{startedEvent(t, rehearseInput()),
 		childInitiated(10, "Provision"), childStarted(10, WorkflowProvision, "r-p"), childCompleted(10)}
 	for _, c := range []struct {
@@ -1565,13 +1573,13 @@ func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
 				scheduledEvent(t, 5, wire.ActInspectTwin), completedEvent(5),
 				scheduledEvent(t, 9, wire.ActPushConfig, wire.PushInput{Node: "s1"})}},
 			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: "step"},
-			&RunInFlight{WorkflowID: WorkflowStep, RunID: "r-s", Step: findings.StepPush, Towards: "stage change-1/live"}},
+			&RunInFlight{WorkflowID: WorkflowStep, RunID: "r-s", Step: findings.StepPush, Towards: "snapshot f3980cc7…"}},
 		{"at the baseline", map[string]string{WorkflowRehearse: "r-r", WorkflowProvision: "r-p"},
 			[]*historypb.HistoryEvent{startedEvent(t, rehearseInput()), childInitiated(10, "Provision"), childStarted(10, WorkflowProvision, "r-p")},
 			map[string][]*historypb.HistoryEvent{"r-p": {startedEvent(t, baseline),
 				scheduledEvent(t, 5, wire.ActCheckHost), completedEvent(5), scheduledEvent(t, 9, wire.ActDeployLab)}},
 			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: findings.StepProvision},
-			&RunInFlight{WorkflowID: WorkflowProvision, RunID: "r-p", Step: findings.StepDeploy, Towards: "stage change-1/cabled"}},
+			&RunInFlight{WorkflowID: WorkflowProvision, RunID: "r-p", Step: findings.StepDeploy}},
 		{"at the baseline's wait", map[string]string{WorkflowRehearse: "r-r"},
 			append(slices.Clone(built), scheduledEvent(t, 12, wire.ActVerifyTwin, wire.VerifyInput{})),
 			nil,

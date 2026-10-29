@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -12,48 +10,28 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
-	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
 // US3's acceptance scenarios through the harness (014, T038): `stage list` over the fake
 // Infrahub, one test per scenario, then the text pinned as the commands contract pads it,
-// the record's mark and its moves, and the document's determinism (FR-016). Each listing
+// a twin on the host marking no row, and the document's determinism (FR-016). Since
+// twin.json 12 a record names no stage, so the listing marks no twin's row and warns of no
+// stage.twin.moved (020, research R-06). Each listing
 // reads stamps and never a branch's intent, and compiles nothing.
 //
 // The proposed change listed is planInfrahub's: pc-1 on change-1, a draft, holding
 // twoMarks (cabled written at cabledAt, live given at planLiveAt), branched from main at
 // fakeBranchedFrom, its head one microsecond after fakeWritten.
 
-// listTwin writes twin.json 6 on the host: a twin built from change-1's stage label, read
-// from branch at at, as a create or a step records it.
-func listTwin(t *testing.T, paths lab.Paths, label, description, atSource, branch, at string) wire.TwinRecord {
+// listTwin writes this build's twin.json on the host: a twin read from branch at at, as a
+// create or a step records it, naming no stage.
+func listTwin(t *testing.T, paths lab.Paths, branch, at string) wire.TwinRecord {
 	t.Helper()
 	rec := stepRecordOf(t, fixtureBundleID, func(f *lab.RecordFields) {
 		f.Provenance.Branch, f.Provenance.At = branch, at
-		f.Stage = stepStage(label, description, atSource)
 	})
 	writeTwin(t, paths, rec)
 	return rec
-}
-
-// editTwinJSON rewrites twin.json on the host as edit leaves its JSON.
-func editTwinJSON(t *testing.T, paths lab.Paths, edit func(map[string]any)) {
-	t.Helper()
-	raw, err := os.ReadFile(paths.TwinJSON)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatal(err)
-	}
-	edit(m)
-	if raw, err = json.Marshal(m); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(paths.TwinJSON, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // listedRows is the listing's rows as "<ref> <branch> <at> <source> <description>", with
@@ -262,60 +240,6 @@ proposed change "change pc-1" (pc-1) on branch change-1, draft (3 stages)
 	}
 }
 
-// Scenario 2: the row the host's twin was built from is marked, in the text and the
-// document, with the record's state: ready, or diverged with the stage the failed step was
-// going to. The record's stage still resolving to what it holds is no warning.
-func TestStageListMarksTheTwin(t *testing.T) {
-	for _, c := range []struct {
-		name, mark, state string
-		towards           *findings.StageTowards
-	}{
-		{"ready", "  ← twin", wire.StateReady, nil},
-		{"diverged", "  ← twin (diverged towards change-1/live)", wire.StateDiverged, &findings.StageTowards{Ref: "change-1/live"}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			paths := useStateRoot(t)
-			useService(t, nil)
-			f := planInfrahub(t, twoMarks()...)
-			f.start()
-			rec := listTwin(t, paths, "cabled", "the leaf cabled", findings.AtSourceWritten, lessLink, cabledAt)
-			if c.state == wire.StateDiverged {
-				phase := findings.StepPush
-				rec.State = wire.StateDiverged
-				rec.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-					Run:  wire.RunRef{WorkflowID: provision.WorkflowStep, RunID: stepRunID},
-					From: wire.StepSide{Stage: rec.Stage, BundleID: rec.BundleID, At: cabledAt},
-					To:   wire.StepSide{Stage: stepStage("live", "the leaf live", findings.AtSourceGiven), BundleID: strings.Repeat("f44ca840", 8), At: planLiveAt}}
-				writeTwin(t, paths, rec)
-			}
-
-			code, stdout, stderr := runStage(t, "list")
-			wantLine := `  change-1/cabled        change-1  at ` + cabledAt + ` (written)       "the leaf cabled"` + c.mark + "\n"
-			if code != findings.ExitOK || !strings.Contains(stdout, wantLine) || strings.Count(stdout, "← twin") != 1 || stderr != "" {
-				t.Errorf("exit %d, stdout:\n%s\nstderr %q; want 0 with the one row marked:\n%s", code, stdout, stderr, wantLine)
-			}
-
-			code, doc, raw := stageDoc(t, "list")
-			want := &findings.StageRecord{Ref: "change-1/cabled", ProposedChange: findings.StageChangeRef{ID: "pc-1", Branch: lessLink},
-				Label: "cabled", Branch: lessLink, At: cabledAt, AtSource: findings.AtSourceWritten, State: c.state, Towards: c.towards}
-			var marked []string
-			for _, r := range doc.Stages.Rows {
-				if r.Twin {
-					marked = append(marked, r.Ref)
-				}
-			}
-			if code != findings.ExitOK || len(doc.Findings) != 0 || !slices.Equal(marked, []string{"change-1/cabled"}) ||
-				!reflect.DeepEqual(doc.Stages.Record, want) {
-				t.Errorf("exit %d, marked %v, record %+v; want 0, no findings, change-1/cabled marked and %+v\n%s",
-					code, marked, doc.Stages.Record, want, raw)
-			}
-			if c.towards == nil && !strings.Contains(raw, `"towards": null`) {
-				t.Errorf("a ready record's towards is not an explicit null:\n%s", raw)
-			}
-		})
-	}
-}
-
 // Scenario 3: a stage its proposed change no longer names (D-047) is listed after the
 // proposed changes, by label, and warned of, naming it, exit 0; it is no stage of any
 // proposed change, so nothing plans it, reads it or creates from it.
@@ -479,96 +403,11 @@ func TestStageListReservedLabel(t *testing.T) {
 	}
 }
 
-// FR-016: the twin's stage moved under it is stage.twin.moved, a warning beside the
-// listing, exit 0, saying what the record holds and what the stage is now: its as_of
-// edited, the mark deleted, the head moved by a write on the branch, the branch point
-// moved by a rebase, and its proposed change closed. The record is reported as recorded,
-// since the twin stays what it was built from.
-func TestStageListTwinMoved(t *testing.T) {
-	const (
-		editedAt  = "2026-10-16T08:35:00.000000+00:00"
-		oldHead   = "2026-10-16T08:45:00.000001+00:00"
-		rebasedAt = "2026-10-16T08:20:00.000000+00:00"
-	)
-	built := func(ref, branch, at, source string) string {
-		return "the twin was built from stage " + ref + " at branch " + branch + ", at " + at + " (" + source + "); "
-	}
-	const pinned = "; the twin is pinned to what it was built from"
-	for _, c := range []struct {
-		name                      string
-		label, source, branch, at string
-		change                    func(f *fakeInfrahub)
-		message                   string
-		marked                    []string
-	}{
-		{"as_of edited", "cabled", findings.AtSourceWritten, lessLink, cabledAt,
-			func(f *fakeInfrahub) { f.changes[0].Stages[1].At = editedAt },
-			built("change-1/cabled", lessLink, cabledAt, "written") + "change-1/cabled now resolves to branch change-1, at " +
-				editedAt + " (given)" + pinned, []string{"change-1/cabled"}},
-		{"deleted", "cabled", findings.AtSourceWritten, lessLink, cabledAt,
-			func(f *fakeInfrahub) { f.changes[0].Stages = f.changes[0].Stages[:1] },
-			built("change-1/cabled", lessLink, cabledAt, "written") + "change-1/cabled no longer exists" + pinned, nil},
-		{"head moved", "head", findings.AtSourceHead, lessLink, oldHead, nil,
-			built("change-1/head", lessLink, oldHead, "head") + "change-1/head now resolves to branch change-1, at " +
-				fakeHeadAt + " (head)" + pinned, []string{"change-1/head"}},
-		{"rebased", "branch-point", findings.AtSourceBranchPoint, "main", fakeBranchedFrom,
-			func(f *fakeInfrahub) { f.changes[0].BranchedFrom = rebasedAt },
-			built("change-1/branch-point", "main", fakeBranchedFrom, "branch_point") +
-				"change-1/branch-point now resolves to branch main, at " + rebasedAt + " (branch_point)" + pinned,
-			[]string{"change-1/branch-point"}},
-		{"closed", "cabled", findings.AtSourceWritten, lessLink, cabledAt,
-			func(f *fakeInfrahub) { f.changes[0].State = "closed" },
-			built("change-1/cabled", lessLink, cabledAt, "written") + "proposed change pc-1 is no longer open, so change-1/cabled is gone" + pinned,
-			nil},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			paths := useStateRoot(t)
-			useService(t, nil)
-			f := planInfrahub(t, twoMarks()...)
-			if c.change != nil {
-				c.change(f)
-			}
-			f.start()
-			listTwin(t, paths, c.label, "", c.source, c.branch, c.at)
-
-			want := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: "change-1/" + c.label, Message: c.message}
-			// Listed whole and for the twin's branch alike, from the first case on: the text
-			// warns too, and a listing of another branch says nothing of the record's.
-			views := [][]string{{"list"}}
-			if c.name == "as_of edited" {
-				views = append(views, []string{"list", "--branch", lessLink})
-			}
-			for _, args := range views {
-				code, doc, raw := stageDoc(t, args...)
-				var marked []string
-				for _, r := range doc.Stages.Rows {
-					if r.Twin {
-						marked = append(marked, r.Ref)
-					}
-				}
-				if code != findings.ExitOK || doc.Status != findings.StatusOK || !reflect.DeepEqual(doc.Findings, findings.List{want}) ||
-					!slices.Equal(marked, c.marked) || doc.Stages.Record == nil || doc.Stages.Record.At != c.at || doc.Stages.Record.Branch != c.branch {
-					t.Errorf("%v: exit %d, findings %+v, marked %v, record %+v; want 0 with %+v, %v marked and the record as recorded\n%s",
-						args, code, doc.Findings, marked, doc.Stages.Record, want, c.marked, raw)
-				}
-			}
-			if len(views) == 1 {
-				return
-			}
-			if _, _, stderr := runStage(t, "list"); !strings.Contains(stderr, findings.RuleStageTwinMoved) {
-				t.Errorf("the text does not warn of the move:\n%s", stderr)
-			}
-			if _, doc, raw := stageDoc(t, "list", "--branch", "change-2"); carriesRule(doc.Findings, findings.RuleStageTwinMoved) {
-				t.Errorf("a listing of another branch warns of the twin's stage:\n%s", raw)
-			}
-		})
-	}
-}
-
-// US3 scenario 5 (FR-014; 019, research R-07): a twin whose record names no stage, built from
-// --branch or --snapshot, has no stage to have moved: stage list files no stage.twin.moved
-// for it, marks no row and reports no record, though the stage at the record's own (branch,
-// at) has had its as_of edited and its proposed change is then closed.
+// US3 scenario 5 (FR-014; 019, research R-07; 020, research R-06): a twin's record names no
+// stage, whether it was built from --branch, --snapshot or a stage, so there is no stage to
+// have moved: stage list files no stage.twin.moved for it, marks no row and reports no
+// record, though the stage at the record's own (branch, at) has had its as_of edited and its
+// proposed change is then closed.
 func TestStageListStagelessTwinMovesNothing(t *testing.T) {
 	for _, c := range []struct {
 		name   string
@@ -585,7 +424,7 @@ func TestStageListStagelessTwinMovesNothing(t *testing.T) {
 			c.change(f)
 			f.start()
 			writeTwin(t, paths, stepRecordOf(t, fixtureBundleID, func(r *lab.RecordFields) {
-				r.Provenance.Branch, r.Provenance.At, r.Stage, r.Source, r.SnapshotID = lessLink, cabledAt, nil, c.source, showSnapshotID
+				r.Provenance.Branch, r.Provenance.At, r.Source, r.SnapshotID = lessLink, cabledAt, c.source, showSnapshotID
 			}))
 			code, doc, raw := stageDoc(t, "list")
 			for _, r := range doc.Stages.Rows {
@@ -601,64 +440,6 @@ func TestStageListStagelessTwinMovesNothing(t *testing.T) {
 	}
 }
 
-// The twin's head is judged under the scope its record names, as twin step judges it, and
-// never the listing's (017): over a fake whose devices carry other alone, a twin recorded
-// at the head under tag:other is listed under the default tag:fylgja, whose head has no
-// at, with no stage.twin.moved, the head's row marked and listed unresolved; once its head
-// under tag:other is earlier than the record's at it is warned that the head now resolves
-// there. A twin recorded under tag:fylgja is judged under the listing's, as before 017, and
-// so is one whose record names a scope that is not tag:<name>, which no build writes.
-func TestStageListJudgesTheTwinUnderItsRecordsScope(t *testing.T) {
-	const oldHead = "2026-10-16T08:45:00.000001+00:00"
-	built := "the twin was built from stage change-1/head at branch change-1, at " + oldHead + " (head); "
-	const pinned = "; the twin is pinned to what it was built from"
-	for _, c := range []struct {
-		name, scope, at string
-		message         string // the stage.twin.moved expected, or none
-	}{
-		{"recorded under tag:other at its head", "tag:other", fakeHeadAt, ""},
-		{"recorded under tag:other before its head", "tag:other", oldHead,
-			built + "change-1/head now resolves to branch change-1, at " + fakeHeadAt + " (head)" + pinned},
-		{"recorded under tag:fylgja", "tag:fylgja", oldHead, built + "change-1/head now names no point in time" + pinned},
-		{"recorded under a scope that is not tag:<name>", "other", oldHead, built + "change-1/head now names no point in time" + pinned},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			paths := useStateRoot(t)
-			useService(t, nil)
-			f := planInfrahub(t, twoMarks()...)
-			f.tag = "other"
-			f.start()
-			writeTwin(t, paths, stepRecordOf(t, fixtureBundleID, func(r *lab.RecordFields) {
-				r.Provenance.Branch, r.Provenance.At = lessLink, c.at
-				r.Stage = stepStage("head", "", findings.AtSourceHead)
-			}))
-			// Written under tag:fylgja, then its scope edited by hand, since NewRecord refuses
-			// one that is not tag:<name>.
-			editTwinJSON(t, paths, func(m map[string]any) { m["provenance"].(map[string]any)["scope"] = c.scope })
-
-			code, doc, raw := stageDoc(t, "list")
-			var moved findings.List
-			for _, f := range doc.Findings {
-				if f.Rule == findings.RuleStageTwinMoved {
-					moved = append(moved, f)
-				}
-			}
-			var want findings.List
-			if c.message != "" {
-				want = findings.List{{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: "change-1/head",
-					Message: c.message}}
-			}
-			if code != findings.ExitOK || doc.Subject == nil || doc.Subject.Scope != "tag:fylgja" || !reflect.DeepEqual(moved, want) {
-				t.Errorf("exit %d, subject %+v, stage.twin.moved %+v; want 0 under tag:fylgja with %+v\n%s", code, doc.Subject, moved, want, raw)
-			}
-			head := doc.Stages.Rows[len(doc.Stages.Rows)-1]
-			if head.Ref != "change-1/head" || head.At != "" || !head.Twin {
-				t.Errorf("the head's row %+v; want change-1/head marked, with no at under tag:fylgja\n%s", head, raw)
-			}
-		})
-	}
-}
-
 // FR-016: the same input gives the same document, byte for byte, whatever order Infrahub
 // serves the proposed changes, their marks and the orphans in.
 func TestStageListIsDeterministic(t *testing.T) {
@@ -668,7 +449,7 @@ func TestStageListIsDeterministic(t *testing.T) {
 	f.change("pc-2", "alpha", mark("st-a", "a", "", "alpha's"))
 	f.orphans = []fakeStage{mark("st-old", "old", "", ""), mark("st-older", "older", cabledAt, "")}
 	f.start()
-	listTwin(t, paths, "live", "the leaf live", findings.AtSourceGiven, lessLink, planLiveAt)
+	listTwin(t, paths, lessLink, planLiveAt)
 
 	_, _, first := stageDoc(t, "list")
 	_, _, again := stageDoc(t, "list")

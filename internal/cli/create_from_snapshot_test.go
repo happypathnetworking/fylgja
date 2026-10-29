@@ -67,14 +67,14 @@ func snapshotFile(t *testing.T, edit func(doc map[string]any)) string {
 }
 
 // wantSnapshotRun holds in to the input a create from the fixture's snapshot starts its run with: the
-// envelope's branch, at and scope, the stored document's observed_at, both ids, and no stage.
+// envelope's branch, at and scope, the stored document's observed_at and both ids.
 func wantSnapshotRun(t *testing.T, paths lab.Paths, in provision.ProvisionInput, observedAt string) {
 	t.Helper()
 	if in.Source != wire.SourceSnapshot || in.SnapshotID != fixtureSnapshotID || in.BundleID != fixtureBundleID ||
 		in.BundlePath != filepath.Join(paths.Bundles, fixtureBundleID) || in.Branch != "fylgja-fixture" || in.At != fixtureAt ||
-		in.Scope != "tag:fylgja" || in.ObservedAt != observedAt || in.Stage != nil {
+		in.Scope != "tag:fylgja" || in.ObservedAt != observedAt {
 		t.Errorf("the run was started with %+v; want source snapshot, snapshot %s, bundle %s, branch fylgja-fixture at %s, "+
-			"scope tag:fylgja, observed at %s, and no stage", in, fixtureSnapshotID, fixtureBundleID, fixtureAt, observedAt)
+			"scope tag:fylgja, observed at %s", in, fixtureSnapshotID, fixtureBundleID, fixtureAt, observedAt)
 	}
 }
 
@@ -122,7 +122,7 @@ func TestCreateFromAStoredSnapshot(t *testing.T) {
 	validateTwinJSON(t, record)
 	w := decodeRecord(t, record)
 	if w.Source != wire.SourceSnapshot || w.SnapshotID == nil || *w.SnapshotID != fixtureSnapshotID || w.BundleID != fixtureBundleID ||
-		w.Provenance.Branch != "fylgja-fixture" || w.Provenance.At != fixtureAt || w.Stage != nil {
+		w.Provenance.Branch != "fylgja-fixture" || w.Provenance.At != fixtureAt {
 		t.Errorf("the run recorded\n%s\nwant source snapshot, snapshot %s and bundle %s of fylgja-fixture at %s", record,
 			fixtureSnapshotID, fixtureBundleID, fixtureAt)
 	}
@@ -421,7 +421,7 @@ func TestShowSnapshotTwin(t *testing.T) {
 // steps gone. Its dry run goes from the snapshot the record names, and Infrahub is asked
 // nothing. TestStepToASnapshot steps it by id and by file.
 func TestStepFromSnapshotTwin(t *testing.T) {
-	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage, f.Source = nil, wire.SourceSnapshot })
+	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Source = wire.SourceSnapshot })
 	target, toID := targetSnapshot(t, h, "linked")
 	out := runStepCmd(t, "--snapshot", target.ID, "--dry-run", "--allow-restart")
 	if out.code != findings.ExitOK || out.doc.Step == nil || out.doc.Step.From.Stage != nil || out.doc.Step.To.BundleID != toID {

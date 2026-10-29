@@ -314,8 +314,8 @@ func TestStepReadFlowsFailed(t *testing.T) {
 		t.Errorf("added %v dropped %v, want the input's, every list present", res.Loss.Added, res.Loss.Dropped)
 	}
 	d := onlyFinding(t, res.Findings, findings.RuleStepDiverged)
-	want := "step run default-test-run-id towards stage change-1/live (bundle " + shortBundle(stepTo) + ") stopped at phase flows: " +
-		"landed e1, s1; not landed none; the twin is up at stage change-1/live (bundle " + shortBundle(stepTo) + ") and its record says " +
+	want := "step run default-test-run-id towards snapshot f3980cc7… (bundle " + shortBundle(stepTo) + ") stopped at phase flows: " +
+		"landed e1, s1; not landed none; the twin is up at snapshot f3980cc7… (bundle " + shortBundle(stepTo) + ") and its record says " +
 		"it is ready there, but the step's flows could not be read and their loss is not recorded; fylgja twin destroy clears it"
 	if d.Message != want || d.Step != findings.StepFlows {
 		t.Errorf("step.diverged = %q\nwant %q", d.Message, want)

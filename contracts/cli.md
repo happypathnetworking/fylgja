@@ -268,7 +268,7 @@ exit status changes. `serve`'s refusals to start and the build line have no iden
 |---|---|---|
 | the API | `1` | new: [api.md](api.md), [api.schema.json](api.schema.json) |
 | findings | `1` | none; the four identifiers match its `rule` pattern |
-| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new; since 019 `twin.json` `10`; since 016 the bundle manifest `6`, `twin.json` `11`, the snapshot `2`, and the probe declaration `1` and probe package `0.1` new) |
+| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new; since 019 `twin.json` `10`; since 016 the bundle manifest `6`, `twin.json` `11`, the snapshot `2`, and the probe declaration `1` and probe package `0.1` new; since 020 `twin.json` `12`) |
 
 ## Workflows and activities
 
@@ -2028,13 +2028,29 @@ Five added, none retired; no step, status or exit is new.
 |---|---|---|
 | the API | `1` | [api.schema.json](api.schema.json): `detach` on `twin.create`, `twin.provision`, `twin.step` and `twin.destroy`; the operations `run.read`, `run.interrupt` and `twin.diff` and their args; `state` on the `run` frame, `run.read`'s alone |
 | findings | `1` | [findings.schema.json](findings.schema.json): the operations `run.read`, `run.interrupt` and `twin.diff`; `snapshot_from`, `snapshot_to`, `bundle_from` and `bundle_to`; `step` either [step.schema.json](step.schema.json)'s block or, on `twin.diff`, [stages.schema.json](stages.schema.json)'s `$defs/step`; the five identifiers; additive |
-| snapshot, bundle manifest, `twin.json`, PSP, CTM, probe declaration, probe package | `2`, `6`, `11`, `0.7`, `2`, `1`, `0.1` | none |
+| `twin.json` | `12` | [twin.schema.json](twin.schema.json): the `stage` block, each step side's `stage` and the `rehearsal` block gone (research R-06); an `11` is held to the copy frozen under `016-probes/` |
+| snapshot, bundle manifest, PSP, CTM, probe declaration, probe package | `2`, `6`, `0.7`, `2`, `1`, `0.1` | none |
 
 - The versions of the findings document and of the API did not move: every change is
   additive, and a client that never sends `detach` and never asks the three operations is
   answered as before.
 - The goldens are unmoved: `twin diff` compiles on their path, and its step between
   three-node and three-node-probed is the one above.
+- `twin.json` `12` names the snapshot, the bundle, the scope and the mapping, and no stage and
+  no rehearsal. `twin show`'s kinds stand; its record line loses `(stage <ref>, at <source>)`,
+  its kind line `, stage <ref>` and `, of rehearsal run …`, and every step side is named
+  `snapshot <short>…` or `bundle <short>…`. A record of `11` or earlier is shown with the note
+  `the twin's record is twin.json <N>, a version this build no longer steps; fylgja twin
+  destroy clears it`, and `twin step` refuses it, `step.twin.unsteppable`: `the twin was
+  created from a record version this build no longer steps (twin.json <N>); fylgja twin
+  destroy clears it`. The step's rule reads the twin's filed snapshot and the target's and
+  compares their envelopes' scope and mapping, `step.twin.unsteppable` naming both (`the
+  twin's snapshot <short>… names scope … and mapping …; <target> names scope … and mapping
+  …; …`); a twin whose snapshot the store does not hold is refused so, its object the id. A
+  step given neither `--snapshot` nor `--stage` is `step.target.unknown`, its object
+  `--snapshot`, before anything is read: `twin step names its target: give --snapshot
+  <id|file>, or --stage <branch>/<label>`. `twin verify`'s `twin:` line names no stage and no
+  rehearsal, and `stage list` marks no twin's row.
 
 ### Workflows and activities
 

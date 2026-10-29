@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
@@ -48,9 +47,9 @@ type rehearseFlags struct {
 //     rehearsal.deadline.unfit over the ceiling;
 //  4. the runs in flight, through the workflow service: a rehearsal, a provisioning, step or
 //     destroy run running is run.in_flight;
-//  5. the host: the twin of a rehearsal whose run is no longer running reclaimed through the
-//     destroy run (R-04), then the host check of the baseline's bundle in this process, as a
-//     dry run makes it;
+//  5. the host: the host check of the baseline's bundle in this process, as a dry run makes
+//     it; a twin a dead rehearsal left is no longer reclaimed (R-04), since twin.json 12
+//     names no rehearsal (020, research R-06), and is the host check's to refuse;
 //
 // then the run, fylgja-rehearse, its input the step chain the server computed from the plan
 // (R-05), followed to its close and its destroy, and the report (R-10).
@@ -221,8 +220,8 @@ func refusalStatus(plan *stages.PlanResult) findings.Status {
 }
 
 // rehearsing is one twin rehearse as the server decides and reports it: the request, the
-// plan, the rows the baseline rule made of it, the ceiling and the deadline, the dead
-// rehearsal reclaimed first, and the findings filed before the run.
+// plan, the rows the baseline rule made of it, the ceiling and the deadline, and the findings
+// filed before the run.
 type rehearsing struct {
 	opts      *options
 	op        string
@@ -231,7 +230,6 @@ type rehearsing struct {
 	rows      []rehearsalRow
 	ceiling   time.Duration
 	deadlineS int
-	reclaimed *findings.RehearsalReclaim
 	before    findings.List
 }
 
@@ -310,7 +308,7 @@ func rehearseStages(rows []rehearsalRow, baseline int, pairs []step.Pair, nodes 
 			r := st.Resolved
 			in.Provision = &provision.ProvisionInput{Source: wire.SourceIntent, Branch: r.Branch, At: r.At,
 				BundlePath: in.BundlePath, BundleID: in.BundleID, ObservedAt: st.ObservedAt, SnapshotID: st.SnapshotID,
-				Stage: r.StageRef(), Version: version, Scope: scope}
+				Version: version, Scope: scope}
 		case prev != nil:
 			pair, ok := pairBetween(pairs, prev.Ref.String(), in.Ref)
 			if !ok {
@@ -374,8 +372,8 @@ func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []
 	}
 	f, t := from.Resolved, to.Resolved
 	return &provision.StepInput{
-		From:         wire.StepSide{Stage: f.StageRef(), SnapshotID: from.SnapshotID, BundleID: from.Bundle.ID, At: f.At},
-		To:           wire.StepSide{Stage: t.StageRef(), SnapshotID: to.SnapshotID, BundleID: to.Bundle.ID, At: t.At, Branch: t.Branch},
+		From:         wire.StepSide{SnapshotID: from.SnapshotID, BundleID: from.Bundle.ID, At: f.At},
+		To:           wire.StepSide{SnapshotID: to.SnapshotID, BundleID: to.Bundle.ID, At: t.At, Branch: t.Branch},
 		ObservedAt:   to.ObservedAt,
 		ToBundlePath: toPath,
 		Diff:         diff,
@@ -438,7 +436,7 @@ func (r *rehearsing) report() rehearsal.Input {
 	pc := r.planned.res.ProposedChange
 	in := rehearsal.Input{ProposedChange: findings.StageChange{ID: pc.ID, Name: pc.Name, Branch: pc.Branch, Draft: pc.Draft},
 		ResolvedAt: r.resolvedAt(), Scope: r.planned.scope, DeadlineS: r.deadlineS, CeilingS: int(r.ceiling / time.Second),
-		Reclaimed: r.reclaimed}
+	}
 	for _, row := range r.rows {
 		st := rehearsal.Stage{Ref: row.stage.Ref.String(), Label: row.stage.Label, Description: row.stage.Description,
 			AtSource: row.stage.AtSource, BundleID: row.stage.BundleID(), Role: row.role, Findings: row.findings}
@@ -479,13 +477,10 @@ func (r *rehearsing) failed(err error) error {
 }
 
 // host is steps 4 and 5 (research R-04): the runs in flight through the service, then the
-// host in this process. The twin of a rehearsal whose run is no longer running is reclaimed
-// through the destroy run, which refuses rather than cancels a run begun since the read, its
-// progress in the answer before the start; a destroy that leaves something refuses the
-// rehearsal with cleanup.incomplete, exit 4. Then the host check of the baseline's bundle,
-// as a dry run makes it, every refusal it makes under its identifier at host_check. Any
-// other record, a hand twin's or an orphan's, is the host check's to refuse, and is never
-// reclaimed. nil when the host takes the baseline.
+// host in this process: the host check of the baseline's bundle, as a dry run makes it,
+// every refusal it makes under its identifier at host_check. Every record, a hand twin's, an
+// orphan's or a dead rehearsal's, which twin.json 12 no longer tells apart (020, research
+// R-06), is the host check's to refuse. nil when the host takes the baseline.
 func (r *rehearsing) host(ctx context.Context, svc provision.Service, baseline rehearsalRow) error {
 	op, subject := r.op, r.subject
 	runs, err := svc.InFlight(ctx)
@@ -497,16 +492,6 @@ func (r *rehearsing) host(ctx context.Context, svc provision.Service, baseline r
 	}
 
 	acts := r.opts.c.activities(r.planned.reg, r.planned.packages, r.planned.paths)
-	host, err := acts.InspectHost(ctx)
-	if err != nil {
-		return r.failed(failAt(op, subject, findings.StepHostCheck, "lab "+wire.LabName, "inspecting the host: %v", err))
-	}
-	if rec := host.Twin; rec != nil && rec.Rehearsal != nil && rec.Rehearsal.WorkflowID == provision.WorkflowRehearse {
-		if refused := r.reclaim(ctx, svc, *rec.Rehearsal); refused != nil {
-			return refused
-		}
-	}
-
 	bundlePath := bundle.NewDirStore(r.planned.paths.Bundles).Path(baseline.stage.Bundle.ID)
 	plan, err := lab.CheckHost(ctx, acts, wire.CheckHostInput{BundlePath: bundlePath, BundleID: baseline.stage.Bundle.ID})
 	if err != nil {
@@ -531,39 +516,6 @@ func holdingRun(runs []provision.RunInFlight) *provision.RunInFlight {
 			return &runs[i]
 		}
 	}
-	return nil
-}
-
-// reclaim destroys the twin dead's rehearsal left, through the destroy run as twin destroy
-// follows it, its progress in the answer under the notice that names the dead run, with no
-// frame of its own before the rehearsal's start. The start reads the runs in flight again
-// and cancels none: one begun since host's read refuses the rehearsal, run.in_flight naming
-// it, exit 1, with no reclaimed block. What the destroy removed is the block's reclaimed and
-// the warning rehearsal.twin.reclaimed; a destroy that leaves something refuses the
-// rehearsal, cleanup.incomplete, exit 4. nil once the twin is gone.
-func (r *rehearsing) reclaim(ctx context.Context, svc provision.Service, dead wire.RehearsalRef) error {
-	r.opts.note("reclaiming the twin of rehearsal run %s", dead.RunID)
-	run, err := svc.StartReclaim(ctx, func(e provision.Event) {
-		r.opts.c.eventFrame(e)
-		printEvent(r.opts, e)
-	})
-	if err != nil {
-		return r.failed(startFailure(r.op, r.subject, findings.StepDestroy, err))
-	}
-	printCleanup(r.opts, run.Result.Cleanup)
-	r.reclaimed = &findings.RehearsalReclaim{Run: findings.ShowRef{WorkflowID: provision.WorkflowRehearse, RunID: dead.RunID},
-		Cleanup: *provision.CleanupBlockOf(run.Result.Cleanup)}
-	r.before = append(r.before, run.Result.Findings...)
-	if len(run.Result.Cleanup.Remaining) > 0 {
-		return r.refuse(findings.StatusUnclean, nil)
-	}
-	removed := "nothing was left to remove"
-	if items := run.Result.Cleanup.Removed; len(items) > 0 {
-		removed = "it removed " + strings.Join(items, ", ")
-	}
-	r.before.AddStep(findings.Warning, findings.StepDestroy, findings.RuleRehearsalTwinReclaimed, dead.RunID, fmt.Sprintf(
-		"the twin of rehearsal run %s, which is no longer running, was destroyed by destroy run %s before this rehearsal: %s",
-		dead.RunID, run.RunID, removed))
 	return nil
 }
 

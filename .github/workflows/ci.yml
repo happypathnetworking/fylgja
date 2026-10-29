@@ -10,11 +10,13 @@ on:
 # 3 is never run here: it boots twins and stays the operator's (D-017).
 
 jobs:
-  # Lint: golangci-lint over every build tag .golangci.yml names, and shellcheck over
-  # both scripts. It runs on every push to main and every pull request. The linter's
-  # version is the one scripts/bring-up.sh installs (GOLANGCI_VERSION), so CI and the
-  # host run the same checks: left to `latest`, a release between two pushes failed a
-  # tree the host passed (2.15.0's errcheck on a discarded channel receive, 2026-10-16).
+  # Lint: golangci-lint over every build tag .golangci.yml names, shellcheck over both
+  # scripts, and ruff over the orchestrator and the checks, from the orchestrator's venv
+  # (make lint-python, the half of make lint the action does not run). It runs on every
+  # push to main and every pull request. The Go linter's version is the one
+  # scripts/bring-up.sh installs (GOLANGCI_VERSION), so CI and the host run the same
+  # checks: left to `latest`, a release between two pushes failed a tree the host passed
+  # (2.15.0's errcheck on a discarded channel receive, 2026-10-16).
   lint:
     runs-on: ubuntu-26.04
     steps:
@@ -26,9 +28,14 @@ jobs:
         with:
           version: v2.14.0
       - run: shellcheck scripts/bring-up.sh scripts/e2e.sh
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: make orchestrator-venv
+      - run: make lint-python
  
-  # Unit tier: golden files and pure logic. No infrastructure, by design (D-017). It runs
-  # on every push to main and every pull request.
+  # Unit tier: golden files and pure logic, Go's and the orchestrator's. No infrastructure,
+  # by design (D-017). It runs on every push to main and every pull request.
   unit:
     runs-on: ubuntu-26.04
     steps:
@@ -37,6 +44,10 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make build
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: make orchestrator-venv
       - run: make test
 
   # Contract tier: a real Infrahub, brought up on the runner by the bring-up script's
@@ -59,4 +70,8 @@ jobs:
       # schema/infrahub.graphql, so this step needs no Infrahub (make sdl is what fetches
       # the SDL from a live one). Tier 2 is the client's check against the live schema.
       - run: go generate ./... && git diff --exit-code
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: make orchestrator-venv
       - run: set -a; . local/.env; set +a; make test-contract

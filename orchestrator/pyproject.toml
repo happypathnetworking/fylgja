@@ -11,10 +11,13 @@ version = "0.1.0.dev0"
 description = "Fylgja's orchestrator: the source of truth's adapter, the documents and the flows."
 license = "Apache-2.0"
 requires-python = ">=3.14"
-# Prefect and the SDK pinned, as the host verified them (research §1.2); the rest at
-# the versions Prefect's own constraints settle.
+# Prefect and the SDK pinned, as the host verified them (research §1.2, §5.7): Prefect
+# 3.8.8, since 3.9.0 needs a whenever the SDK refuses, and FastAPI beside it, since 3.8.8's
+# server fails at start on the release pip otherwise picks. The rest at the versions
+# Prefect's own constraints settle.
 dependencies = [
-    "prefect==3.9.0",
+    "prefect==3.8.8",
+    "fastapi==0.150.0",
     "infrahub-sdk==1.23.2",
     "httpx",
     "pydantic",

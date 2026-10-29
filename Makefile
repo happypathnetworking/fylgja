@@ -13,7 +13,7 @@ PKGS := ./...
 VERSION ?= 0.1.0-dev
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build test test-contract test-e2e lint linkcheck sdl generate diagrams clean \
+.PHONY: all build test test-contract test-e2e lint lint-python linkcheck sdl generate diagrams clean \
         temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log \
         orchestrator-venv prefect-server orchestrator-serve
 
@@ -25,8 +25,11 @@ all: build
 build:
 	go build -ldflags '$(LDFLAGS)' -o $(BIN) ./cmd/fylgja
 
+# Tier 1: the Go packages, then the orchestrator's tests that need no Infrahub. The venv is
+# made by `make orchestrator-venv`.
 test:
 	go test $(PKGS)
+	$(ORCH_VENV)/bin/pytest -q orchestrator -m 'not contract'
 
 # Contract tier: real Infrahub, never a fake (D-017). Needs INFRAHUB_ADDRESS and
 # INFRAHUB_API_TOKEN in the environment (local/.env; see docs/development.md). Never
@@ -39,13 +42,15 @@ test:
 # change opened while it lives run its two checks, the other packages' with them, and its
 # waits are those of an Infrahub with nothing else to do: beside the rest, its draft's
 # pipeline took 260 s against 58 s alone and a link's render outlasted its 90 s (015's
-# research §5.5). Both runs go on whatever the first answers, so one tier reports both.
+# research §5.5). The orchestrator's tier 2 runs last, alone against the same Infrahub. Each
+# run goes on whatever the one before answers, so one tier reports all three.
 CHECKS_PKG     := github.com/happypathnetworking/fylgja/internal/checks
 CONTRACT_PKGS   = $(filter-out $(CHECKS_PKG),$(shell go list -tags contract $(PKGS)))
 test-contract:
 	rc=0; \
 	go test -count=1 -timeout 30m -tags contract $(CONTRACT_PKGS) || rc=1; \
 	go test -count=1 -timeout 30m -tags contract $(CHECKS_PKG) || rc=1; \
+	$(ORCH_VENV)/bin/pytest -q orchestrator -m contract || rc=1; \
 	exit $$rc
 
 # End-to-end tier: a booted NOS through Temporal. Needs the dev server (make
@@ -54,8 +59,15 @@ test-contract:
 test-e2e: build
 	scripts/e2e.sh
 
+# golangci-lint, then ruff over the orchestrator and the checks, both with the orchestrator's
+# configuration (orchestrator/pyproject.toml). CI's lint job runs golangci-lint by its action
+# and lint-python on its own.
 lint:
 	golangci-lint run
+	$(MAKE) --no-print-directory lint-python
+
+lint-python:
+	$(ORCH_VENV)/bin/ruff check --config orchestrator/pyproject.toml orchestrator infrahub/checks
 
 # The tracked Markdown's relative links and anchors (scripts/linkcheck.py). A hand tool;
 # not a CI step.

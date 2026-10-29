@@ -30,7 +30,9 @@ Infrahub](#a-proposed-change-rehearsed) is shown below.
 Today it runs Nokia SR Linux and Arista EOS, alone or mixed in one twin. A vendor is a
 YAML file, not code ([psp/README.md](psp/README.md)). A twin steps to another read or to a
 stage of a proposed change without a rebuild, and `twin verify` reports whether the running
-twin matches its intent. A rehearsal takes a twin through every
+twin matches its intent. A twin can carry **probes**, small hosts on spare ports that ping
+each other through it, so a step reports the loss its change caused and `twin verify` fails
+when a probe's burst comes back short. A rehearsal takes a twin through every
 stage of a proposed change and destroys it, from the shell or from a check inside Infrahub
 that posts the report on the proposed change and fails it when a stage fails.
 
@@ -521,6 +523,105 @@ another scope or mapping than the twin's, which are fixed when it is created
 `diverged` (exit 4), recorded with what each node was last known to hold, and a diverged
 twin accepts only `twin destroy`.
 
+## A twin with probes
+
+A twin can carry traffic of its own. A **probe** names two uncabled ports of the intent,
+each with a host's address and its gateway, and the compiler places a small `linux` host on
+each, cabled to its port, that pings the other through the device
+([D-064](docs/decisions.md#d-064)). A probe is not intent, so the reader never reads one:
+it comes from a file, `--probes <file>`, or else from the objects of the kind `FylgjaProbe`
+on Infrahub's default branch, which you write, and with neither a twin has none. The
+snapshot carries the list beside what was read, so a twin built again from it has the same
+hosts. Every device the fixture tool seeds has two spare ports, `ethernet-1/10` and
+`ethernet-1/11` on SR Linux, which Infrahub's template addresses (`10.1.10.1/24` and
+`10.1.11.1/24` on n1) and routes nowhere, so two ports of one device reach each other
+through it and two devices' do not. `testdata/probes/n1-loop.json` puts a host on each of
+n1's:
+
+```json
+{"probes_version": "1", "probes": [{"name": "n1-loop", "format": "ping", "endpoints": [
+  {"device": "n1", "interface": "ethernet-1/10", "address": "10.1.10.2/24", "gateway": "10.1.10.1"},
+  {"device": "n1", "interface": "ethernet-1/11", "address": "10.1.11.2/24", "gateway": "10.1.11.1"}]}]}
+```
+
+A host is the `ping` probe package's, `probes/ping.yaml`: `alpine:3.24.2`, 32 MiB, readied
+by its address showing on its port and never dialled. A run never pulls its image, so pull
+it once on the lab host, `docker pull alpine:3.24.2`; the worker's and the server's start-up
+reports name the package after the platform packages, `ping (embedded): image alpine:3.24.2
+(public_registry, present on this host), flow ping every 0.2s, burst 5`. No recorded session
+has run this section yet: its lines are as this build prints them, with the ids, addresses,
+counts and times a run fills trimmed to `…`. The dry run lists the hosts among the nodes,
+pushing them nothing:
+
+```console
+$ bin/fylgja twin create --branch fylgja-test-readme --probes testdata/probes/n1-loop.json --dry-run
+dry run: no lab, container, twin directory or run is created
+…
+nodes:
+  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config … (… bytes)
+  n1-loop-a  alpine:3.24.2  ping host  32 MiB
+  n1-loop-b  alpine:3.24.2  ping host  32 MiB
+  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config … (… bytes)
+  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config … (… bytes)
+mapping: 0 lossy mappings, 0 shared ports
+memory: sum 6208 MiB; host budget unset
+…
+verdict: clear
+```
+
+The create without `--dry-run` boots five nodes, the two hosts beside the three devices,
+and `twin show` lists each host with its probe, `n1-loop-a  clab-fylgja-n1-loop-a  running
+…  ping host  probe n1-loop a`. `twin verify` reads the devices as before, skips both ends
+of each host's link, since a host speaks no discovery protocol, and runs one **burst** per
+probe, five echoes from the `a` host to the `b` host's address, held when every reply came
+back:
+
+```console
+$ bin/fylgja twin verify
+twin: branch fylgja-test-readme (snapshot …, bundle …), ready; 5 nodes
+staged: bundle …; 22 assertions over 5 nodes, 4 skipped
+n1 (…:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/10, ethernet-1/11, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; record: holds …
+n1-loop-a (ping host, …): burst n1-loop 5 of 5 replies from n1-loop-b at 10.1.11.2 held; record: holds …
+n1-loop-b (ping host, …): the far end of probe n1-loop's burst; record: holds …
+…
+skipped: link n1-loop-a:eth1|n1:ethernet-1/10 at both ends (synthesized: n1-loop-a speaks no discovery protocol); link n1-loop-b:eth1|n1:ethernet-1/11 at both ends (synthesized: n1-loop-b speaks no discovery protocol)
+in flight: none
+held: 3 host names, 8 ports, 6 link ends, 5 record claims (the record's, not read); burst 1 held; failed: none; unread: none
+```
+
+A burst that comes back short is `verify.burst`, exit 5, `probe n1-loop: 4 of 5 replies
+from n1-loop-b at 10.1.11.2`. **A step measures each probe.** It starts a flow in each
+probe's `a` host once its stage is done, before the reconcile, a `ping` every 0.2 seconds,
+and stops and reads it after its wait, so the figure covers the whole change. A read taken
+with the same file carries the same probe, and a step to it measures the loss:
+
+```console
+$ bin/fylgja intent read --branch fylgja-test-readme --probes testdata/probes/n1-loop.json --out local/readme-p1.json
+wrote local/readme-p1.json: …; snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+$ bin/fylgja twin step --snapshot local/readme-p1.json
+…
+step stage: done in …
+step flows: n1-loop started
+step reconcile: …
+…
+step observe: settled after … (… reads)
+step loss: n1-loop …/… lost, longest gap …s (container timing)
+stepped to snapshot … (bundle …) in …: push n1 …; settled after …; loss n1-loop …/…
+```
+
+The loss is reported, never asserted: the twin's containers forward in software and keep
+their own timing, so the figure is the container's and compares one change with another on
+the same twin, never with a hardware forwarder. It is in the step's document and the
+record's `step.loss`; the burst is what fails a stage. A probe only the target carries is
+`added` and one only the twin carries `dropped`, its hosts created or torn down by the
+reconcile, and neither is measured. A `twin step` to a stage takes `--probes` too, and a step
+or a create from a snapshot takes the snapshot's own list (`--probes` beside `--snapshot`
+is `snapshot.flags.conflict`). A probe on a port intent cables, on a device or a port the
+snapshot does not have, or on a `mgmt_only` port refuses the compile, naming the probe, its
+endpoint and the cause (`probe.interface.cabled n1-loop/b`, …), every refusal in one pass.
+A rehearsal carries one list through all its stages, and its report gains a `loss` column.
+`twin destroy` removes the hosts with the lab.
+
 ## A proposed change, rehearsed
 
 A stepping twin is driven by hand. A **rehearsal** makes the same moves unattended, through
@@ -647,12 +748,12 @@ it:
 
 Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1950s deadline (ceiling 3600s).
 
-| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |
-|---|---|---|---|---|---|---|---|---|
-| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | — | | | | | refused (scope.empty) |
-| fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | … | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | baseline |
-| fylgja-test-readme/third-link | 2026-10-20T01:23:48.370039+00:00 | … | 9827fe8f… | stepped 5.1s; push n1, n3 | settled after 5.7s | 19 held, 0 failed, 0 skipped | none | passed |
-| fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | … | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | none | passed |
+| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | — | | | | — | | refused (scope.empty) |
+| fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | … | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | — | baseline |
+| fylgja-test-readme/third-link | 2026-10-20T01:23:48.370039+00:00 | … | 9827fe8f… | stepped 5.1s; push n1, n3 | settled after 5.7s | 19 held, 0 failed, 0 skipped | — | none | passed |
+| fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | … | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | — | none | passed |
 
 ```mermaid
 flowchart TD
@@ -676,14 +777,15 @@ flowchart TD
 
 **Baseline findings** (reported, failing nothing): none
 
-*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*
+*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing; a loss figure is the container's, never a hardware forwarder's.*
 ````
 
 The drawing runs top to bottom, and a stage that failed or erred is outlined red. Below
 the drawing the report lists the stages, with each one's branch, instant and description,
 since Infrahub's own view of the proposed change shows none; the warnings; the baseline's
 own findings, reported and failing nothing; and the caveat that a twin's fidelity is
-asserted, not measured. A comment holds at most 4,092 bytes, all Infrahub keeps of one, so
+asserted, not measured. A rehearsal with no probe reads `—` in every row of the `loss`
+column; with one, each stepped stage's cell reads `n1-loop <lost>/<sent>, gap <s>s`. A comment holds at most 4,092 bytes, all Infrahub keeps of one, so
 a longer report, a failure's with many findings, names each finding by its identifier and
 object alone and says so above the caveat. `fylgja-twin`'s message is the whole report as
 text, as `twin rehearse` prints it. **The same rehearsal from the shell** needs no check
@@ -731,8 +833,9 @@ finding what the baseline did not have: the report says why, the stages after it
 reached`, the twin is destroyed all the same, and the comment ends with the commands that
 reproduce it by hand, one `twin create`, a `twin step` for each stage up to the failed one,
 `twin verify` and `twin destroy`. The rehearsal ends `nonconforming`, exit 5, and
-`fylgja-twin` fails. Tier 3's case 9 makes one, with a port n1 does not have, refused at the
-push. The recording's has a port n4 does not have; its stage is outlined red in the drawing:
+`fylgja-twin` fails. Tier 3's case 9 makes one with a stage that disables the port a probe's
+host is cabled to, so its burst comes back short (`verify.burst`). The recording's has a
+port n4 does not have, refused at the push; its stage is outlined red in the drawing:
 
 ![The Checks tab after a failing rehearsal: fylgja-twin failed](docs/recording/rehearsal-checks-failing.png)
 
@@ -802,7 +905,7 @@ The files are yours, on the machine the command runs on. `intent read --out` wri
 snapshot the server took of what it read, and files it in the server's store too; `twin
 compile` sends a snapshot and writes the bundle the server compiled to `--out`, on your
 disk, byte for byte what the golden tests compare. A bare CTM compiles once wrapped:
-`{"snapshot_version": "1", "ctm": <the CTM>, "probes": []}`, its id and `observed_at`
+`{"snapshot_version": "2", "ctm": <the CTM>, "probes": []}`, its id and `observed_at`
 left for the server to fill. `--ctm` is retired.
 `twin provision` sends the bundle directory's files, which the server verifies and files
 in its store on the lab host before it boots them, and `psp validate` sends each package.
@@ -843,7 +946,8 @@ the script makes Infrahub's token on the runner and never prints it.
 
 Tier 3 boots twins, so it is the operator's, on a lab host, and never runs in CI. It needs
 the dev server and a worker running from the repository root (the script leaves both),
-Docker, containerlab, Infrahub and both images, and for case 9 the two checks imported and
+Docker, containerlab, Infrahub, both images and the probe hosts' `alpine:3.24.2`, the kind
+`FylgjaProbe` on `main` and holding no probe, and for case 9 the two checks imported and
 the API's server from the same tree on the Docker bridge, as [A proposed change,
 rehearsed](#a-proposed-change-rehearsed) starts it; it refuses before any case without
 them. It takes about 31.5 minutes (1,894.1 s on 2026-10-28), among them case 5's five and

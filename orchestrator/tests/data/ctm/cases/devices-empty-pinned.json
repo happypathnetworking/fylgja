@@ -1,0 +1,37 @@
+{
+  "ctm_version": "2",
+  "envelope": {
+    "branch": "fylgja-fixture",
+    "at": "2026-09-08T12:00:00Z",
+    "observed_at": "2026-09-08T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "scope": "tag:fylgja",
+    "mapping": {
+      "reader": "infrahub-dcim",
+      "model": "opsmill/schema-library",
+      "version": "26336e9"
+    },
+    "fidelity": [
+      {
+        "disposition": "approximated",
+        "object": "interface.enabled",
+        "source": "InterfacePhysical.status",
+        "reason": "a port is enabled unless its status is disabled; the library's status is not an admin state"
+      },
+      {
+        "disposition": "approximated",
+        "object": "interface.mgmt_only",
+        "source": "InterfacePhysical.role",
+        "reason": "the management port is the port whose role is management; the library has no management-only flag"
+      },
+      {
+        "disposition": "omitted",
+        "object": "platform.version",
+        "source": "DcimPlatform",
+        "reason": "the library's platform carries no version"
+      }
+    ]
+  },
+  "devices": [],
+  "links": []
+}

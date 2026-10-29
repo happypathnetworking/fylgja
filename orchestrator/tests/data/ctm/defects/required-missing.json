@@ -1,0 +1,170 @@
+{
+  "ctm_version": "2",
+  "envelope": {
+    "branch": "fylgja-fixture",
+    "observed_at": "2026-09-08T12:00:00.000000Z",
+    "schema_hash": "",
+    "scope": "tag:fylgja",
+    "mapping": {
+      "reader": "infrahub-dcim",
+      "model": "opsmill/schema-library",
+      "version": "26336e9"
+    },
+    "fidelity": [
+      {
+        "disposition": "approximated",
+        "object": "interface.enabled",
+        "source": "InterfacePhysical.status",
+        "reason": "a port is enabled unless its status is disabled; the library's status is not an admin state"
+      },
+      {
+        "disposition": "approximated",
+        "object": "interface.mgmt_only",
+        "source": "InterfacePhysical.role",
+        "reason": "the management port is the port whose role is management; the library has no management-only flag"
+      },
+      {
+        "disposition": "omitted",
+        "object": "platform.version",
+        "source": "DcimPlatform",
+        "reason": "the library's platform carries no version"
+      }
+    ]
+  },
+  "devices": [
+    {
+      "name": "n1",
+      "platform": {
+        "package": "nokia_srlinux"
+      },
+      "interfaces": [
+        {
+          "name": "ethernet-1/1",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/1|n2:ethernet-1/1"
+        },
+        {
+          "name": "ethernet-1/2",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/2|n3:ethernet-1/2"
+        },
+        {
+          "name": "mgmt0",
+          "mgmt_only": true,
+          "enabled": true
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "4d23b24bc01fce40a888a3127a23de0d",
+        "content": "# n1: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia srlinux 24.7\nset / system name host-name n1\nset / network-instance default type default\n"
+      }
+    },
+    {
+      "name": "n2",
+      "platform": {
+        "package": "nokia_srlinux"
+      },
+      "interfaces": [
+        {
+          "name": "ethernet-1/1",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/1|n2:ethernet-1/1"
+        },
+        {
+          "name": "ethernet-1/2",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n2:ethernet-1/2|n3:ethernet-1/1"
+        },
+        {
+          "name": "mgmt0",
+          "mgmt_only": true,
+          "enabled": true
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "31fdcdf3c4aaf3f725586267a673228a",
+        "content": "# n2: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia srlinux 24.7\nset / system name host-name n2\nset / network-instance default type default\n"
+      }
+    },
+    {
+      "name": "n3",
+      "platform": {
+        "package": "nokia_srlinux"
+      },
+      "interfaces": [
+        {
+          "name": "ethernet-1/1",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n2:ethernet-1/2|n3:ethernet-1/1"
+        },
+        {
+          "name": "ethernet-1/2",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/2|n3:ethernet-1/2"
+        },
+        {
+          "name": "mgmt0",
+          "mgmt_only": true,
+          "enabled": true
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "a307833e6504b9364be209ec1b1dd2f2",
+        "content": "# n3: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia  ?\nset / system name host-name n3\nset / network-instance default type default\n"
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "endpoints": [
+        {
+          "device": "n1",
+          "interface": "ethernet-1/1"
+        },
+        {
+          "device": "n2",
+          "interface": "ethernet-1/1"
+        }
+      ]
+    },
+    {
+      "id": "n1:ethernet-1/2|n3:ethernet-1/2",
+      "endpoints": [
+        {
+          "device": "n1",
+          "interface": "ethernet-1/2"
+        },
+        {
+          "device": "n3",
+          "interface": "ethernet-1/2"
+        }
+      ]
+    },
+    {
+      "id": "n2:ethernet-1/2|n3:ethernet-1/1",
+      "endpoints": [
+        {
+          "device": "n2",
+          "interface": "ethernet-1/2"
+        },
+        {
+          "device": "n3",
+          "interface": "ethernet-1/1"
+        }
+      ]
+    }
+  ]
+}

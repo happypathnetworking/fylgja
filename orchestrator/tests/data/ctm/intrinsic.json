@@ -1,0 +1,330 @@
+{
+  "cases/device-nameless.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "device",
+      "message": "a device has no name"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/2|n3:ethernet-1/2",
+      "message": "endpoint names device \"n3\", which is not in intent"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n2:ethernet-1/2|n3:ethernet-1/1",
+      "message": "endpoint names device \"n3\", which is not in intent"
+    }
+  ],
+  "cases/devices-empty-pinned.json": [
+    {
+      "severity": "rejection",
+      "rule": "ctm.devices.empty",
+      "object": "fylgja-fixture@2026-09-08T12:00:00Z",
+      "message": "no devices in intent for branch \"fylgja-fixture\" at 2026-09-08T12:00:00Z; a twin of nothing cannot be built and has no fidelity to report"
+    }
+  ],
+  "cases/devices-empty-unpinned.json": [
+    {
+      "severity": "rejection",
+      "rule": "ctm.devices.empty",
+      "object": "fylgja-fixture",
+      "message": "no devices in intent for branch \"fylgja-fixture\"; a twin of nothing cannot be built and has no fidelity to report"
+    }
+  ],
+  "cases/envelope-empty.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.branch",
+      "message": "the branch intent was read from is not recorded"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.observed_at",
+      "message": "the instant intent was read is not recorded"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.schema_hash",
+      "message": "the schema intent was read against is not recorded"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.scope",
+      "message": "the scope intent was read under is not recorded"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.mapping.reader",
+      "message": "the reader that mapped intent is not recorded"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.mapping.model",
+      "message": "the model the reader read is not recorded"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.mapping.version",
+      "message": "the version of the model the reader read is not recorded"
+    }
+  ],
+  "cases/fidelity-row-bogus.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.fidelity[2].disposition",
+      "message": "fidelity row 2 (c-9) has disposition \"bogus\": a row is approximated or omitted"
+    }
+  ],
+  "cases/fidelity-row-empty.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.fidelity[0].disposition",
+      "message": "fidelity row 0 has disposition \"\": a row is approximated or omitted"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.fidelity[0].object",
+      "message": "fidelity row 0 records no object"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.fidelity[0].source",
+      "message": "fidelity row 0 records no source"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.fidelity[0].reason",
+      "message": "fidelity row 0 records no reason"
+    }
+  ],
+  "cases/interface-nameless.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1",
+      "message": "an interface has no name"
+    }
+  ],
+  "cases/link-ending-elsewhere.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n3:ethernet-1/3",
+      "message": "n3:ethernet-1/3 carries link \"n1:ethernet-1/1|n2:ethernet-1/1\", which does not end on it; an interface names the one link it terminates, and a bundle that calls a port cabled with no cable on it is never produced"
+    }
+  ],
+  "cases/link-endpoint-not-in-intent.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/10|n9:e1",
+      "message": "endpoint names device \"n9\", which is not in intent"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/11|n2:e\u003c9\u003e",
+      "message": "endpoint names interface \"e\u003c9\u003e\", which is not on n2"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/10|n9:e1",
+      "message": "endpoint n1:ethernet-1/10 carries no link; an interface names the one link it terminates, and a bundle that cables a port its mapping calls configured-not-cabled is never produced"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/11|n2:e\u003c9\u003e",
+      "message": "endpoint n1:ethernet-1/11 carries no link; an interface names the one link it terminates, and a bundle that cables a port its mapping calls configured-not-cabled is never produced"
+    }
+  ],
+  "cases/link-not-in-intent.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n3:ethernet-1/3",
+      "message": "n3:ethernet-1/3 carries link \"n1:ethernet-1/1|n3:ethernet-1/3\", which is not in intent; an interface names the one link it terminates, and a bundle that calls a port cabled with no cable on it is never produced"
+    }
+  ],
+  "cases/link-on-an-interface-carrying-another.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "message": "endpoint n2:ethernet-1/1 carries link \"n2:ethernet-1/2|n3:ethernet-1/1\"; an interface names the one link it terminates"
+    }
+  ],
+  "cases/link-on-an-interface-carrying-none.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "message": "endpoint n2:ethernet-1/1 carries no link; an interface names the one link it terminates, and a bundle that cables a port its mapping calls configured-not-cabled is never produced"
+    }
+  ],
+  "cases/link-three-endpoints.json": [
+    {
+      "severity": "rejection",
+      "rule": "link.endpoints.count",
+      "object": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "message": "link has 3 endpoints; a link connects exactly two interfaces"
+    }
+  ],
+  "cases/link-two-on-one-interface.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/1",
+      "message": "n1:ethernet-1/1 is an endpoint of 2 links (n1:ethernet-1/1|n2:ethernet-1/1, n1:ethernet-1/1|n3:ethernet-1/3); an interface names the one link it terminates, and a bundle whose links cable one port twice is never produced"
+    }
+  ],
+  "cases/reader-not-a-name.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.mapping.reader",
+      "message": "the reader that mapped intent is named \"Infrahub DCIM\", which is not a reader's name: lowercase letters, digits and hyphens, beginning with a letter or a digit"
+    }
+  ],
+  "cases/scope-not-a-tag.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.scope",
+      "message": "the scope intent was read under is \"fylgja\", which is not a scope: the accepted form is tag:\u003cname\u003e, the literal tag: and one word"
+    }
+  ],
+  "cases/scope-quoted-escapes.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.scope",
+      "message": "the scope intent was read under is \"tag:\\t\\\"é\\u2028\", which is not a scope: the accepted form is tag:\u003cname\u003e, the literal tag: and one word"
+    }
+  ],
+  "cases/scope-two-words.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.scope",
+      "message": "the scope intent was read under is \"tag:a b\", which is not a scope: the accepted form is tag:\u003cname\u003e, the literal tag: and one word"
+    }
+  ],
+  "defects/breakout-parent-cabled.json": [],
+  "defects/device-duplicate.json": [
+    {
+      "severity": "rejection",
+      "rule": "device.name.duplicate",
+      "object": "n1",
+      "message": "two devices share this name; a node name must be unique"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n1:ethernet-1/2|n3:ethernet-1/2",
+      "message": "endpoint names device \"n3\", which is not in intent"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n2:ethernet-1/2|n3:ethernet-1/1",
+      "message": "endpoint names device \"n3\", which is not in intent"
+    }
+  ],
+  "defects/devices-empty.json": [
+    {
+      "severity": "rejection",
+      "rule": "ctm.devices.empty",
+      "object": "fylgja-fixture",
+      "message": "no devices in intent for branch \"fylgja-fixture\"; a twin of nothing cannot be built and has no fidelity to report"
+    }
+  ],
+  "defects/five.json": [
+    {
+      "severity": "rejection",
+      "rule": "device.name.duplicate",
+      "object": "n1",
+      "message": "two devices share this name; a node name must be unique"
+    },
+    {
+      "severity": "rejection",
+      "rule": "link.endpoints.count",
+      "object": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "message": "link has 1 endpoints; a link connects exactly two interfaces"
+    },
+    {
+      "severity": "rejection",
+      "rule": "link.endpoints.same_device",
+      "object": "n3:ethernet-1/1|n3:ethernet-1/2",
+      "message": "both endpoints are on the same device"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n3:ethernet-1/1",
+      "message": "n3:ethernet-1/1 is an endpoint of 2 links (n2:ethernet-1/2|n3:ethernet-1/1, n3:ethernet-1/1|n3:ethernet-1/2); an interface names the one link it terminates, and a bundle whose links cable one port twice is never produced"
+    },
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "n3:ethernet-1/2",
+      "message": "n3:ethernet-1/2 is an endpoint of 2 links (n1:ethernet-1/2|n3:ethernet-1/2, n3:ethernet-1/1|n3:ethernet-1/2); an interface names the one link it terminates, and a bundle whose links cable one port twice is never produced"
+    }
+  ],
+  "defects/link-one-endpoint.json": [
+    {
+      "severity": "rejection",
+      "rule": "link.endpoints.count",
+      "object": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "message": "link has 1 endpoints; a link connects exactly two interfaces"
+    }
+  ],
+  "defects/link-same-device.json": [
+    {
+      "severity": "rejection",
+      "rule": "link.endpoints.same_device",
+      "object": "n1:ethernet-1/1|n1:ethernet-1/2",
+      "message": "both endpoints are on the same device"
+    }
+  ],
+  "defects/platform-unsupported.json": [],
+  "defects/port-collision.json": [],
+  "defects/required-missing.json": [
+    {
+      "severity": "rejection",
+      "rule": "data.required.missing",
+      "object": "envelope.schema_hash",
+      "message": "the schema intent was read against is not recorded"
+    }
+  ],
+  "defects/rule-unmatched.json": [],
+  "defects/unmappable-linked-range.json": [],
+  "defects/unmappable-linked-unmatched.json": [],
+  "lossy.json": [],
+  "lossy.shuffled.json": [],
+  "mgmt-link.json": [],
+  "mixed.json": [],
+  "mixed.shuffled.json": [],
+  "no-mgmt.json": [],
+  "observed-later.json": [],
+  "three-node.json": [],
+  "three-node.shuffled.json": [],
+  "two-mgmt.json": []
+}

@@ -8,6 +8,10 @@ dist/
 # Python bytecode, which py_compile leaves beside infrahub/checks/
 __pycache__/
 
+# The metadata an editable install of orchestrator/ writes beside its package (make
+# orchestrator-venv)
+*.egg-info/
+
 # Go test and profiling artifacts
 *.test
 *.out

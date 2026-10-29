@@ -14,7 +14,11 @@ VERSION ?= 0.1.0-dev
 LDFLAGS := -X main.version=$(VERSION)
 
 .PHONY: all build test test-contract test-e2e lint linkcheck sdl generate diagrams clean \
-        temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log
+        temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log \
+        orchestrator-venv prefect-server orchestrator-serve
+
+# The orchestrator's venv (research R-02), made by `make orchestrator-venv`.
+ORCH_VENV := orchestrator/.venv
 
 all: build
 
@@ -115,6 +119,35 @@ worker: build
 # root is the worker's, made absolute the same way.
 serve: build
 	FYLGJA_STATE_ROOT=$(CURDIR)/local $(BIN) serve
+
+# The orchestrator's venv: Prefect, the SDK, pytest and ruff at orchestrator/pyproject.toml's
+# pins, the package installed editable. A .gitignore of * inside keeps the tree clean, as
+# the root .venv's does. A second run reinstalls nothing that is current.
+orchestrator-venv:
+	test -x $(ORCH_VENV)/bin/python || python3 -m venv $(ORCH_VENV)
+	printf '*\n' > $(ORCH_VENV)/.gitignore
+	$(ORCH_VENV)/bin/pip install -q -e 'orchestrator[dev]'
+
+# The orchestrator's Prefect server and its runner (research R-01, R-17), beside the worker
+# and the API's server on the lab host. Both read PREFECT_API_URL (http://<bridge>:4200/api,
+# where the server listens: the host's processes and Infrahub's task workers reach it there)
+# and PREFECT_API_AUTH_STRING (<user>:<password>, the server's basic authentication) from
+# the environment and refuse to start without them; load local/.env in their shell first.
+# PREFECT_HOME is local/orchestrator/prefect (the server's SQLite database), made absolute
+# as the state root is, and the runner's state root is local/orchestrator.
+PREFECT_HOME_DIR := $(CURDIR)/local/orchestrator/prefect
+prefect-server:
+	: "$${PREFECT_API_URL:?load local/.env first}" "$${PREFECT_API_AUTH_STRING:?load local/.env first}"; \
+	set -- $$(python3 -I -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p.hostname, p.port)' "$$PREFECT_API_URL"); \
+	mkdir -p $(PREFECT_HOME_DIR) && \
+	PREFECT_HOME=$(PREFECT_HOME_DIR) PREFECT_SERVER_API_AUTH_STRING="$$PREFECT_API_AUTH_STRING" \
+		$(ORCH_VENV)/bin/prefect server start --host "$$1" --port "$$2" --no-ui
+
+orchestrator-serve:
+	: "$${PREFECT_API_URL:?load local/.env first}" "$${PREFECT_API_AUTH_STRING:?load local/.env first}"; \
+	mkdir -p $(PREFECT_HOME_DIR) && \
+	PREFECT_HOME=$(PREFECT_HOME_DIR) FYLGJA_ORCHESTRATOR_ROOT=$(CURDIR)/local/orchestrator \
+		$(ORCH_VENV)/bin/fylgja-orchestrator serve
 
 # Infrahub is operator-provided: bring your own instance and point INFRAHUB_ADDRESS /
 # INFRAHUB_API_TOKEN at it (see .env.example). Fylgja neither vendors nor starts it.

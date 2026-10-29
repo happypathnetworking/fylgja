@@ -171,7 +171,7 @@ twin ready: bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd
   n1  172.20.20.3
   n2  172.20.20.4
   n3  172.20.20.2
-record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 7c413536d67ef86321c629c076a0d3a4, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
+record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 8a4f3bee8a72549e97450a414da18107, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
 twin directory /var/tmp/fylgja/twin
 warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2 2048, n3 2048) is not checked against a host budget: FYLGJA_HOST_MEMORY_MB is unset
 1 finding(s): 0 rejection, 1 warning, 0 info
@@ -192,7 +192,7 @@ twin: lab fylgja present (3 nodes); twin directory present
   n1  clab-fylgja-n1  running  172.20.20.3  nokia_srlinux  device-config f05634801639578ed97c10f9d0265546
   n2  clab-fylgja-n2  running  172.20.20.4  nokia_srlinux  device-config 36667eef6c8a92923957b9549784273b
   n3  clab-fylgja-n3  running  172.20.20.2  nokia_srlinux  device-config 7efd0c0d5f40e5119d75b8b8d31d3e57
-record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 7c413536d67ef86321c629c076a0d3a4, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
+record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 8a4f3bee8a72549e97450a414da18107, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
   intent read at 2026-10-06T19:13:21.796364Z; reproducing it with --at that instant is best-effort
   provisioned by run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc (source intent), worker 0.1.0-dev, recorded 2026-10-06T19:14:09.579682296Z, 3 nodes
 kind: snapshot … (branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z)
@@ -249,7 +249,7 @@ replace, and no container restarts:
 
 ```console
 $ bin/fylgja intent read --branch fylgja-test-readme --out local/readme-1.json
-wrote local/readme-1.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 7c413536d67ef86321c629c076a0d3a4); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+wrote local/readme-1.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 8a4f3bee8a72549e97450a414da18107); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
 $ bin/fylgja twin step --snapshot local/readme-1.json
 twin: snapshot … (bundle 777e9899…), branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z; 3 nodes
 target: snapshot … (branch fylgja-test-readme, read at …)
@@ -295,7 +295,7 @@ container, and n1 and n3 are pushed their new artifacts:
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link
 link n1:ethernet-1/3 <-> n3:ethernet-1/3 added on fylgja-test-readme
 $ bin/fylgja intent read --branch fylgja-test-readme --out local/readme-2.json
-wrote local/readme-2.json: 3 devices (nokia_srlinux 3), 11 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 7c413536d67ef86321c629c076a0d3a4); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+wrote local/readme-2.json: 3 devices (nokia_srlinux 3), 17 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 8a4f3bee8a72549e97450a414da18107); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
 $ bin/fylgja twin step --snapshot …
 twin: snapshot … (bundle e26f042a…), branch fylgja-test-readme, read at …; 3 nodes
 target: snapshot … (branch fylgja-test-readme, read at …)
@@ -402,7 +402,7 @@ step fylgja-test-readme/branch-point → fylgja-test-readme/seeded (— → b634
 fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T04:34:59.424352+00:00 (written), "seeded"
   snapshot_id …
   bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
-  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… → d05dc990…):
   nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
   links: +n1:e1-3 — n3:e1-3
@@ -410,12 +410,12 @@ step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… �
 fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T04:35:09.759424+00:00 (written), "third link"
   snapshot_id …
   bundle_id d05dc990c7f49e6de0755978bc9f4cb75f138fc79e6c5b43ee95c2e541db6daa
-  read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  read: 3 devices (nokia_srlinux 3), 17 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 step fylgja-test-readme/third-link → fylgja-test-readme/head (d05dc990… → 6ecc489c…): unchanged; the ids differ by provenance alone
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-17T04:35:08.687492+00:00 (head)
   snapshot_id …
   bundle_id 6ecc489c6a38c219abf5b3d84ecbabb57db6b74d1982e409937a060a05d188d2
-  read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  read: 3 devices (nokia_srlinux 3), 17 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at …
 1 finding(s): 1 rejection, 0 warning, 0 info
 ```
@@ -548,15 +548,19 @@ A host is the `ping` probe package's, `probes/ping.yaml`: `alpine:3.24.2`, 32 Mi
 by its address showing on its port and never dialled. A run never pulls its image, so pull
 it once on the lab host, `docker pull alpine:3.24.2`; the worker's and the server's start-up
 reports name the package after the platform packages, `ping (embedded): image alpine:3.24.2
-(public_registry, present on this host), flow ping every 0.2s, burst 5`. No recorded session
-has run this section yet: its lines are as this build prints them, with the ids, addresses,
-counts and times a run fills trimmed to `…`. The dry run lists the hosts among the nodes,
-pushing them nothing:
+(public_registry, present on this host), flow ping every 0.2s, burst 5`. This section's
+lines are tier 3's case 5 of 2026-10-29, which runs these commands on a throwaway branch of
+its own, shown here as `fylgja-test-readme`: the addresses, counts and times are that run's,
+and the ids, checksums and artifact sizes, which name its branch, are trimmed to `…`, as are
+the step's progress lines, which it read as JSON. The dry run lists the hosts among the
+nodes, pushing them nothing:
 
 ```console
 $ bin/fylgja twin create --branch fylgja-test-readme --probes testdata/probes/n1-loop.json --dry-run
 dry run: no lab, container, twin directory or run is created
-…
+read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, schema 8a4f3bee8a72549e97450a414da18107)
+snapshot_id …  stored: /var/tmp/fylgja/snapshots/….json
+bundle_id …  stored: /var/tmp/fylgja/bundles/…
 nodes:
   n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config … (… bytes)
   n1-loop-a  alpine:3.24.2  ping host  32 MiB
@@ -564,50 +568,57 @@ nodes:
   n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config … (… bytes)
   n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config … (… bytes)
 mapping: 0 lossy mappings, 0 shared ports
-memory: sum 6208 MiB; host budget unset
-…
+memory: sum 6208 MiB; host budget 22873 MiB
+host: lab fylgja absent; twin directory absent
 verdict: clear
 ```
 
-The create without `--dry-run` boots five nodes, the two hosts beside the three devices,
-and `twin show` lists each host with its probe, `n1-loop-a  clab-fylgja-n1-loop-a  running
-…  ping host  probe n1-loop a`. `twin verify` reads the devices as before, skips both ends
-of each host's link, since a host speaks no discovery protocol, and runs one **burst** per
-probe, five echoes from the `a` host to the `b` host's address, held when every reply came
-back:
+The create without `--dry-run` boots five nodes, the two hosts beside the three devices, in
+48.2 seconds, each host ready 0.13 seconds after the deploy, and `twin show` lists each host
+with its probe, `n1-loop-a  clab-fylgja-n1-loop-a  running  172.20.20.4  ping host  probe
+n1-loop a`. `twin verify` reads the devices as before, skips both ends of each host's link,
+since a host speaks no discovery protocol, and runs one **burst** per probe, five echoes
+from the `a` host to the `b` host's address, held when every reply came back:
 
 ```console
 $ bin/fylgja twin verify
 twin: branch fylgja-test-readme (snapshot …, bundle …), ready; 5 nodes
 staged: bundle …; 22 assertions over 5 nodes, 4 skipped
-n1 (…:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/10, ethernet-1/11, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; record: holds …
-n1-loop-a (ping host, …): burst n1-loop 5 of 5 replies from n1-loop-b at 10.1.11.2 held; record: holds …
-n1-loop-b (ping host, …): the far end of probe n1-loop's burst; record: holds …
-…
+n1 (172.20.20.2:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/10, ethernet-1/11, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; record: holds …
+n1-loop-a (ping host, 172.20.20.4): burst n1-loop 5 of 5 replies from n1-loop-b at 10.1.11.2 held; record: holds …
+n1-loop-b (ping host, 172.20.20.5): the far end of probe n1-loop's burst; record: holds …
+n2 (172.20.20.6:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds …
+n3 (172.20.20.3:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2; record: holds …
 skipped: link n1-loop-a:eth1|n1:ethernet-1/10 at both ends (synthesized: n1-loop-a speaks no discovery protocol); link n1-loop-b:eth1|n1:ethernet-1/11 at both ends (synthesized: n1-loop-b speaks no discovery protocol)
 in flight: none
 held: 3 host names, 8 ports, 6 link ends, 5 record claims (the record's, not read); burst 1 held; failed: none; unread: none
 ```
 
 A burst that comes back short is `verify.burst`, exit 5, `probe n1-loop: 4 of 5 replies
-from n1-loop-b at 10.1.11.2`. **A step measures each probe.** It starts a flow in each
-probe's `a` host once its stage is done, before the reconcile, a `ping` every 0.2 seconds,
-and stops and reads it after its wait, so the figure covers the whole change. A read taken
-with the same file carries the same probe, and a step to it measures the loss:
+from n1-loop-b at 10.1.11.2`. The verify took 5.6 seconds, the burst about one of them.
+**A step measures each probe.** It starts a flow in each probe's `a` host once its stage is
+done, before the reconcile, a `ping` every 0.2 seconds, and stops and reads it after its
+wait, so the figure covers the whole change. Change the branch (tier 3 disables
+`n1:ethernet-1/2`, as above); a read taken with the same file carries the same probe, and a
+step to it measures the loss:
 
 ```console
 $ bin/fylgja intent read --branch fylgja-test-readme --probes testdata/probes/n1-loop.json --out local/readme-p1.json
-wrote local/readme-p1.json: …; snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+wrote local/readme-p1.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 8a4f3bee8a72549e97450a414da18107); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
 $ bin/fylgja twin step --snapshot local/readme-p1.json
 …
 step stage: done in …
 step flows: n1-loop started
 step reconcile: …
 …
-step observe: settled after … (… reads)
-step loss: n1-loop …/… lost, longest gap …s (container timing)
-stepped to snapshot … (bundle …) in …: push n1 …; settled after …; loss n1-loop …/…
+step observe: settled after 5.2s (1 read)
+step loss: n1-loop 0/45 lost, longest gap 0.0s (container timing)
+stepped to snapshot … (bundle …) in 5.0s: push n1 3.4s; settled after 5.2s; loss n1-loop 0/45
 ```
+
+Nothing was lost here, though n1, the device the flow crosses, was pushed by replace: the
+45 echoes are the 0.2-second flow across the nine seconds or so from the step's stage to
+the end of its wait.
 
 The loss is reported, never asserted: the twin's containers forward in software and keep
 their own timing, so the figure is the container's and compares one change with another on
@@ -705,7 +716,7 @@ step fylgja-test-readme/branch-point → fylgja-test-readme/head (— → e26a0e
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-20T01:21:59.327451+00:00 (head)
   snapshot_id …
   bundle_id e26a0e6578ce80add8f096da796187d56139f204e08cd13a1c9b32b7744f98ad
-  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
 1 finding(s): 1 rejection, 0 warning, 0 info
 ```

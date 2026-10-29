@@ -25,14 +25,15 @@ const (
 // pre-1.0, as 014 renamed series to stage. From 019 twin.create takes neither interval nor
 // no_follow, which are refused the same way: a twin follows nothing; and twin.step takes
 // snapshot, a target as twin.create's snapshot is a source. From 016 the five that read
-// intent take probes, the path of the probe file the request carries.
+// intent take probes, the path of the probe file the request carries. From 020 the four runs
+// take detach, which ends the answer at the run's identity.
 var operationArgs = map[string]map[string]string{
 	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "dry_run": argBool,
-		"scope": argString, "snapshot": argString, "probes": argString},
-	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
+		"scope": argString, "snapshot": argString, "probes": argString, "detach": argBool},
+	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool, "detach": argBool},
 	findings.OpTwinStep: {"stage": argString, "snapshot": argString, "probes": argString, "allow_restart": argBool,
-		"dry_run": argBool, "wait": argString},
-	findings.OpTwinDestroy: {},
+		"dry_run": argBool, "wait": argString, "detach": argBool},
+	findings.OpTwinDestroy: {"detach": argBool},
 	findings.OpTwinShow:    {},
 	findings.OpTwinVerify:  {"wait": argString, "args": argStrings},
 	findings.OpCompile:     {"snapshot": argString, "out": argString},
@@ -123,6 +124,13 @@ func (a args) strings(name string) []string {
 	return v
 }
 
+// detachable are a run's options with the request's detach (020).
+func (c *call) detachable(a args) *options {
+	o := c.options()
+	o.detach = a.bool("detach")
+	return o
+}
+
 // handlers are the fifteen operations' runs: each fills the flags M12's command filled from
 // the request's arguments, a key's presence standing for cobra's Changed, and calls M12's
 // logic, which keeps its guards, their order, their identifiers and their words.
@@ -130,7 +138,7 @@ var handlers = map[string]func(*call) error{
 	findings.OpTwinCreate: func(c *call) error {
 		a := args(c.req.Args)
 		probes, files := probesOf(a, c.req.Files)
-		return runCreate(c.ctx, c.options(), &createFlags{
+		return runCreate(c.ctx, c.detachable(a), &createFlags{
 			branch: a.string("branch"), at: a.string("at"),
 			stage: a.string("stage"), stageGiven: a.given("stage"),
 			dryRun: a.bool("dry_run"), scope: a.string("scope"), scopeGiven: a.given("scope"),
@@ -139,12 +147,12 @@ var handlers = map[string]func(*call) error{
 	},
 	findings.OpTwinProvision: func(c *call) error {
 		a := args(c.req.Args)
-		return runTwinProvision(c.ctx, c.options(), &provisionFlags{dryRun: a.bool("dry_run")}, a.string("bundle"), c.req.Files)
+		return runTwinProvision(c.ctx, c.detachable(a), &provisionFlags{dryRun: a.bool("dry_run")}, a.string("bundle"), c.req.Files)
 	},
 	findings.OpTwinStep: func(c *call) error {
 		a := args(c.req.Args)
 		probes, files := probesOf(a, c.req.Files)
-		return runTwinStep(c.ctx, c.options(), &stepFlags{
+		return runTwinStep(c.ctx, c.detachable(a), &stepFlags{
 			stage: a.string("stage"), stageGiven: a.given("stage"),
 			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"), probes: probes,
 			allowRestart: a.bool("allow_restart"), dryRun: a.bool("dry_run"),
@@ -152,7 +160,7 @@ var handlers = map[string]func(*call) error{
 		}, files)
 	},
 	findings.OpTwinDestroy: func(c *call) error {
-		return runDestroy(c.ctx, c.options())
+		return runDestroy(c.ctx, c.detachable(args(c.req.Args)))
 	},
 	findings.OpTwinShow: func(c *call) error {
 		return runShow(c.ctx, c.options())

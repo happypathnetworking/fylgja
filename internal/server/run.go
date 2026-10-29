@@ -140,6 +140,26 @@ func runInterruptByIdentity(ctx context.Context, opts *options, workflowID, runI
 	return finish(op, subject, list)
 }
 
+// detached ends a run's answer under detach (020, R-03): the run has started and goes on, and
+// the document, status ok, names it by run.detached at step start after found, what the
+// command had found before the start; run.read reads it from here.
+func detached(op string, subject *findings.Subject, workflowID, runID string, found findings.List) error {
+	id := identity(workflowID, runID)
+	list := append(findings.List{}, found...)
+	list.AddStep(findings.Info, findings.StepStart, findings.RuleRunDetached, id,
+		fmt.Sprintf("run %s started; read it with fylgja run read", id))
+	return finish(op, subject, list)
+}
+
+// detachConflict refuses detach beside dry_run, run.flags.conflict at step start, before any
+// guard: a dry run starts no run to detach from (020).
+func detachConflict(op string, subject *findings.Subject) error {
+	var list findings.List
+	list.AddStep(findings.Rejection, findings.StepStart, findings.RuleRunFlagsConflict, "dry_run",
+		"--detach is meaningless with --dry-run: a dry run starts no run to detach from")
+	return finish(op, subject, list)
+}
+
 // reachable refuses a workflow id that names no run run.read or run.interrupt reaches,
 // before anything is dialled: run.unknown, naming the identity as the request gave it.
 func reachable(op string, subject *findings.Subject, workflowID, runID string) error {

@@ -38,6 +38,10 @@ func runDestroy(ctx context.Context, opts *options) error {
 	// server's stop cuts from here says a run may have been started and was not cancelled. It
 	// opens no stream: the destroy still takes no interrupt. As for every run, it is written
 	// only to a request still open, and a client gone before it starts nothing.
+	//
+	// Under detach (020, R-03) the runs it cancels first are still waited for, since the
+	// destroy run starts only once they have closed, and the answer ends at the destroy run's
+	// identity once a worker has taken it, or once it has attached to one in flight.
 	if _, err := opts.c.startFrame(provision.WorkflowDestroy); err != nil {
 		return goneBeforeStart(op, subject, provision.WorkflowDestroy, err)
 	}
@@ -58,7 +62,11 @@ func runDestroy(ctx context.Context, opts *options) error {
 		}
 	}()
 	followed := &followedStep{}
-	run, err := svc.StartDestroy(runCtx, func(e provision.Event) {
+	start := svc.StartDestroy
+	if opts.detach {
+		start = svc.StartDestroyDetached
+	}
+	run, err := start(runCtx, func(e provision.Event) {
 		opts.c.eventFrame(e)
 		printEvent(opts, e)
 		// A rehearsal's own destroy, which StartDestroy follows to its end first, is a
@@ -73,6 +81,12 @@ func runDestroy(ctx context.Context, opts *options) error {
 		return startFailure(op, subject, followed.get(), err)
 	}
 	subject.RunID = run.RunID
+	if opts.detach {
+		// The stream names the destroy run in a notice alone; the detached answer writes its
+		// run frame, so the client has the identity it reads the run by (R-03).
+		opts.c.runFrame(provision.WorkflowDestroy, run.RunID)
+		return detached(op, subject, provision.WorkflowDestroy, run.RunID, nil)
+	}
 
 	// What was removed is printed even when something remains: the findings, on stderr,
 	// say what is left and how to clear it.

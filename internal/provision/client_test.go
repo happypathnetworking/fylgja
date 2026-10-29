@@ -390,6 +390,26 @@ func TestDestroyCancelsInFlightProvision(t *testing.T) {
 	s.mc.AssertNotCalled(t, "ListWorkflow", mock.Anything, mock.Anything)
 }
 
+// A detached destroy (020, R-03) cancels and awaits a provisioning run in flight as the
+// followed one does, then returns once a worker has taken its run, with no result read: the
+// run's result is run.read's to read.
+func TestADetachedDestroyReadsNoResult(t *testing.T) {
+	s := scriptDestroy("run-p", "", "run-d", nothingToRemove())
+
+	run, err := (&Client{Client: s.mc}).StartDestroyDetached(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.RunID != "run-d" || run.Attached || run.Result.Cleanup.Teardown != "" {
+		t.Errorf("run = %+v, want run-d with no result read", run)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if want := []string{"cancel provision", "provision closed", "start destroy"}; !slices.Equal(s.seq, want) {
+		t.Errorf("calls in order %v, want %v", s.seq, want)
+	}
+}
+
 // wantWorkerAbsent checks err is run.worker.absent: exit 2, at step start, on the queue.
 func wantWorkerAbsent(t *testing.T, err error, says ...string) {
 	t.Helper()

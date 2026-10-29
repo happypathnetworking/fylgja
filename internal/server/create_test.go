@@ -429,3 +429,36 @@ func TestACreateOverACorruptSnapshotEntry(t *testing.T) {
 	}
 	validateWithShow(t, currentContract, "018", doc)
 }
+
+// A create detached from a snapshot (020; US4 scenario 1) files the snapshot and the bundle
+// and starts the run with them, as a followed create does, then answers at the run: the
+// stored lines are printed, the document names the snapshot, the bundle and the run, and its
+// text the run.detached line the CLI prints.
+func TestADetachedCreateNamesWhatItFiled(t *testing.T) {
+	paths := useStateRoot(t)
+	_, frames, svc := detachedAnswer(t, findings.OpTwinCreate)
+	out, doc := detachedOf(t, frames)
+	for _, line := range []string{
+		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json") + "\n",
+		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID) + "\n",
+	} {
+		if !strings.Contains(out, line) {
+			t.Errorf("printed\n%s\nwant the line %q", out, line)
+		}
+	}
+	if doc.SnapshotID != fixtureSnapshotID || doc.BundleID != fixtureBundleID {
+		t.Errorf("document names snapshot %q and bundle %q, want %s and %s", doc.SnapshotID, doc.BundleID, fixtureSnapshotID, fixtureBundleID)
+	}
+	if text := frames[len(frames)-1].Text; !strings.Contains(text, findings.RuleRunDetached) ||
+		!strings.Contains(text, "started; read it with fylgja run read") {
+		t.Errorf("the document's text is\n%s\nwant its run.detached line", text)
+	}
+	if len(svc.provisioned) != 1 || svc.provisioned[0].SnapshotID != fixtureSnapshotID || svc.provisioned[0].BundleID != fixtureBundleID {
+		t.Errorf("started %+v, want one run of snapshot %s and bundle %s", svc.provisioned, fixtureSnapshotID, fixtureBundleID)
+	}
+}
+
+// detach beside dry_run is run.flags.conflict before any of the create's guards (020).
+func TestACreateRefusesDetachBesideDryRun(t *testing.T) {
+	wantDetachConflict(t, findings.OpTwinCreate)
+}

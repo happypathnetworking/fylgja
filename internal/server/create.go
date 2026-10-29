@@ -62,6 +62,9 @@ func (f *createFlags) fromSnapshot() bool {
 func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.File) error {
 	const op = findings.OpTwinCreate
 	subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
+	if f.dryRun && opts.detach {
+		return detachConflict(op, subject)
+	}
 
 	if f.fromSnapshot() {
 		if refused := snapshotGuards(op, subject, f); refused != nil {

@@ -109,3 +109,26 @@ func TestASentPathThatIsNoFileOfTheBundleIsRefused(t *testing.T) {
 		})
 	}
 }
+
+// A provision detached (020) verifies and files the bundle it was sent, starts the run on the
+// filed copy, as a followed provision does, and answers at the run.
+func TestADetachedProvisionFilesItsBundle(t *testing.T) {
+	paths := useStateRoot(t)
+	_, frames, svc := detachedAnswer(t, findings.OpTwinProvision)
+	_, doc := detachedOf(t, frames)
+	stored := filepath.Join(paths.Bundles, fixtureBundleID)
+	if len(svc.provisioned) != 1 || svc.provisioned[0].BundleID != fixtureBundleID || svc.provisioned[0].BundlePath != stored {
+		t.Errorf("started %+v, want one run of bundle %s at %s", svc.provisioned, fixtureBundleID, stored)
+	}
+	if _, err := os.Stat(filepath.Join(stored, "manifest.json")); err != nil {
+		t.Errorf("the bundle is not filed: %v", err)
+	}
+	if doc.Subject.Bundle != fixtureBundleID || doc.Subject.RunID == "" {
+		t.Errorf("subject %+v, want the bundle as given and the run", doc.Subject)
+	}
+}
+
+// detach beside dry_run is run.flags.conflict before the bundle is verified (020).
+func TestAProvisionRefusesDetachBesideDryRun(t *testing.T) {
+	wantDetachConflict(t, findings.OpTwinProvision)
+}

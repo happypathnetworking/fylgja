@@ -349,3 +349,23 @@ func TestStepRefusesARecordThatNamesNoScope(t *testing.T) {
 		}
 	}
 }
+
+// A step detached (020) answers at its run with what the command found before the start
+// leading the document, as a followed step's carries it, then run.detached.
+func TestADetachedStepCarriesWhatItFound(t *testing.T) {
+	useStateRoot(t)
+	_, frames, svc := detachedAnswer(t, findings.OpTwinStep)
+	_, doc := detachedOf(t, frames)
+	if len(doc.Findings) != 2 || doc.Findings[0] != detachedStepWarning || doc.Findings[1].Rule != findings.RuleRunDetached {
+		t.Errorf("findings %+v, want the command's warning, then run.detached", doc.Findings)
+	}
+	if len(svc.stepped) != 1 {
+		t.Errorf("%d step runs started, want 1", len(svc.stepped))
+	}
+}
+
+// detach beside dry_run is run.flags.conflict before any of the step's guards, the twin's
+// record and the rehearsal's among them (020).
+func TestAStepRefusesDetachBesideDryRun(t *testing.T) {
+	wantDetachConflict(t, findings.OpTwinStep)
+}

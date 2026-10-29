@@ -21,6 +21,10 @@ import (
 // start can wait for the first-task guard, and an interrupt then must still stop the run
 // rather than end the command and leave the run for a worker to take later.
 // They are the operator's, delivered to this request from its start frame on.
+//
+// Under detach (020, R-03) the answer ends at the run's identity once it has started, and the
+// run goes on; an interrupt that reached the start was the operator's before the run was
+// detached from, so the run is followed and asked to cancel as the stream asks it.
 func runProvision(ctx context.Context, opts *options, op string, subject *findings.Subject, in provision.ProvisionInput) error {
 	svc, err := opts.dial(ctx)
 	if err != nil {
@@ -40,6 +44,9 @@ func runProvision(ctx context.Context, opts *options, op string, subject *findin
 	}
 	subject.RunID = runID
 	opts.c.runFrame(provision.WorkflowProvision, runID)
+	if opts.detach && !interrupted {
+		return detached(op, subject, provision.WorkflowProvision, runID, nil)
+	}
 
 	res, err := followRun(ctx, opts, svc, op, subject, provision.WorkflowProvision, runID, interrupts, interrupted,
 		func(ctx context.Context) (provision.ProvisionResult, error) {

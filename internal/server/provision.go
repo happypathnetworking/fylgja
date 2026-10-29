@@ -25,6 +25,9 @@ type provisionFlags struct {
 func runTwinProvision(ctx context.Context, opts *options, f *provisionFlags, dir string, files []api.File) error {
 	const op = findings.OpTwinProvision
 	subject := &findings.Subject{Bundle: dir}
+	if f.dryRun && opts.detach {
+		return detachConflict(op, subject)
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}

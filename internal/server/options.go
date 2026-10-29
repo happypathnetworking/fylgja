@@ -24,7 +24,10 @@ type options struct {
 	// rehearsalCeiling is the longest deadline twin rehearse admits, rehearsal.Ceiling when
 	// zero (015): the server's, which a test lowers.
 	rehearsalCeiling time.Duration
-	c                *call
+	// detach is the request's detach (020, R-03): twin create, twin provision, twin step and
+	// twin destroy answer at the run's identity rather than following it.
+	detach bool
+	c      *call
 }
 
 // options are the request's, as each M12 command resolved its own.

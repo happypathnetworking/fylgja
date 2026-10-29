@@ -74,6 +74,11 @@ type Service interface {
 	// progress, and a Notice for each thing done to a run rather than by a step. No worker
 	// to take the run is a *StartError carrying run.worker.absent.
 	StartDestroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
+	// StartDestroyDetached is StartDestroy that returns once a worker has taken the destroy
+	// run, or once it has attached to one in flight, without following it: its Result is
+	// empty, and run.read reads it (020, R-03). What it cancels first it still waits for, as
+	// StartDestroy does, since the destroy run starts only once those have closed.
+	StartDestroyDetached(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
 	// StartReclaim destroys the twin a rehearsal no longer running left, as StartDestroy
 	// does, but cancels nothing (015, FR-007): a rehearsal, provisioning or step run in
 	// flight is a *StartError carrying run.in_flight, naming the run, with nothing
@@ -542,6 +547,16 @@ func (c *Client) ResultOfRehearse(ctx context.Context, runID string) (RehearseRe
 // already in flight is asked before starting, so the attach can be reported. Nothing is cancelled or started while no worker polls the queue, and a
 // destroy run no worker takes within the first-task guard is terminated.
 func (c *Client) StartDestroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
+	return c.startDestroy(ctx, onEvent, true)
+}
+
+// StartDestroyDetached implements Service.
+func (c *Client) StartDestroyDetached(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
+	return c.startDestroy(ctx, onEvent, false)
+}
+
+// startDestroy is StartDestroy, and StartDestroyDetached when follow is false.
+func (c *Client) startDestroy(ctx context.Context, onEvent func(Event), follow bool) (DestroyRun, error) {
 	if onEvent == nil {
 		onEvent = func(Event) {}
 	}
@@ -627,7 +642,7 @@ func (c *Client) StartDestroy(ctx context.Context, onEvent func(Event)) (Destroy
 		}
 	}
 
-	return c.destroy(ctx, onEvent)
+	return c.destroy(ctx, onEvent, follow)
 }
 
 // StartReclaim implements Service.
@@ -653,12 +668,13 @@ func (c *Client) StartReclaim(ctx context.Context, onEvent func(Event)) (Destroy
 			return DestroyRun{}, InFlightRefusal(workflowID, runID)
 		}
 	}
-	return c.destroy(ctx, onEvent)
+	return c.destroy(ctx, onEvent, true)
 }
 
 // destroy is StartDestroy and StartReclaim once no rehearsal, provisioning or step run is in
-// flight: the destroy run started, or attached to, and followed to its close.
-func (c *Client) destroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
+// flight: the destroy run started, or attached to, and followed to its close, or left once a
+// worker has taken it when follow is false (020).
+func (c *Client) destroy(ctx context.Context, onEvent func(Event), follow bool) (DestroyRun, error) {
 	notice := func(format string, args ...any) { onEvent(Event{Notice: fmt.Sprintf(format, args...)}) }
 
 	inFlight, err := c.runningRun(ctx, WorkflowDestroy)
@@ -678,6 +694,9 @@ func (c *Client) destroy(ctx context.Context, onEvent func(Event)) (DestroyRun, 
 		notice("attached to destroy run %s already in flight", out.RunID)
 	} else {
 		notice("run %s %s", WorkflowDestroy, out.RunID)
+	}
+	if !follow {
+		return out, nil
 	}
 	_ = c.Follow(ctx, WorkflowDestroy, out.RunID, onEvent)
 	if err := run.Get(ctx, &out.Result); err != nil {

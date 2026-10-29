@@ -86,6 +86,9 @@ func (f *stepFlags) fromSnapshot() bool {
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.File) error {
 	const op = findings.OpTwinStep
 	subject := &findings.Subject{Snapshot: f.snapshot}
+	if f.dryRun && opts.detach {
+		return detachConflict(op, subject)
+	}
 
 	// A snapshot is the target, so --stage beside it is meaningless: the server's refusal at
 	// start, exit 2, as create's snapshot guards are (019, research R-04), and before the
@@ -812,7 +815,8 @@ func stepDryRun(opts *options, op string, subject *findings.Subject, in provisio
 // it, the first after asks the run to cancel and keeps waiting for its record, and a second
 // stops waiting. The command's own warnings lead the document, and the run's
 // repeats of them are dropped: the run checks the host and the plan again as second locks.
-// They lead a start's failure and a failure met while following too.
+// They lead a start's failure and a failure met while following too, and a detached
+// answer's run.detached (020), as runProvision detaches.
 func runStep(ctx context.Context, opts *options, op string, subject *findings.Subject, in provision.StepInput,
 	list findings.List) error {
 	svc, err := opts.dial(ctx)
@@ -833,6 +837,9 @@ func runStep(ctx context.Context, opts *options, op string, subject *findings.Su
 	}
 	subject.RunID = runID
 	opts.c.runFrame(provision.WorkflowStep, runID)
+	if opts.detach && !interrupted {
+		return detached(op, subject, provision.WorkflowStep, runID, list)
+	}
 
 	res, err := followRun(ctx, opts, svc, op, subject, provision.WorkflowStep, runID, interrupts, interrupted,
 		func(ctx context.Context) (provision.StepResult, error) { return svc.ResultOfStep(ctx, runID) },

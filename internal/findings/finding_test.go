@@ -988,9 +988,10 @@ func drop018Snapshots(doc map[string]any) {
 }
 
 // drop016NullLoss removes the step block's loss when it is null, as the dry run and a run
-// closed before its flows were read write it (016), and the burst count of a read that ran
-// no burst (016): the verify block's counts, the step's wait_counts and each rehearsed
-// stage's verify. Every contract before 016's forbids the keys, and from 016 they are always
+// closed before its flows were read write it (016), and each rehearsal stage's, null on
+// every stage whose step read no flow, and the burst count of a read that ran no burst
+// (016): the verify block's counts, the step's wait_counts and each rehearsed stage's
+// verify. Every contract before 016's forbids the keys, and from 016 they are always
 // written. A loss that is set, and a burst count that counted a burst, are left, so an
 // earlier contract still refuses a document carrying one.
 func drop016NullLoss(doc map[string]any) {
@@ -1017,6 +1018,9 @@ func drop016NullLoss(doc map[string]any) {
 		for _, st := range stages {
 			if st, ok := st.(map[string]any); ok {
 				dropNoBurst(st["verify"])
+				if v, ok := st["loss"]; ok && v == nil {
+					delete(st, "loss")
+				}
 			}
 		}
 	}

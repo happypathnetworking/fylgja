@@ -44,12 +44,12 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1980s deadline (ceiling 3600s).",
 		"",
-		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |",
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |",
-		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |",
-		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |",
+		"| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | — | | refused (scope.empty) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | — | baseline |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | — | none | passed |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | — | none | passed |",
 		"",
 		"```mermaid",
 		"flowchart TD",
@@ -85,13 +85,13 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **nonconforming**. 301.6s of the 2610s deadline (ceiling 3600s).",
 		"",
-		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |",
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | baseline |",
-		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | passed |",
-		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | diverged at push 29.8s; restarted n3 61.2s; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
-		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | | not reached |",
+		"| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | — | | refused (scope.empty) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | — | baseline |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | expired after 120.0s | 18 held, 1 failed, 0 skipped | — | none | passed |",
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | diverged at push 29.8s; restarted n3 61.2s; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | — | none | failed |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | — | | not reached |",
 		"",
 		"```mermaid",
 		"flowchart TD",
@@ -166,7 +166,7 @@ func TestMarkdown(t *testing.T) {
 func TestMarkdownOfABaselineNotVerified(t *testing.T) {
 	md := Markdown(unverifiedRun().document(), pairs())
 	for _, want := range []string{
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | incomplete after 0.0s | | — | error |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | incomplete after 0.0s | | — | — | error |",
 		"**Findings**:\n\n- `rehearsal.stage.error` change-1/seeded: its wait ended incomplete after 0.0s\n" +
 			"- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main\n\n",
 		"**Warnings**:\n\n- `operation.failed` change-1/seeded: " + rehearseRun + ": activity verify\\_twin failed: the workflow service did not answer (stage seeded)\n\n",
@@ -202,7 +202,7 @@ func TestMarkdownOfAStageNotCompared(t *testing.T) {
 				row = line
 			}
 		}
-		if !strings.HasSuffix(row, "| incomplete after 9.4s | 18 held, 1 failed, 0 skipped | not compared | error |") {
+		if !strings.HasSuffix(row, "| incomplete after 9.4s | 18 held, 1 failed, 0 skipped | — | not compared | error |") {
 			t.Errorf("brief %v: the stage's row does not say it was not compared: %q", brief, row)
 		}
 	}
@@ -221,8 +221,8 @@ func TestMarkdownNamesTheRestartsTime(t *testing.T) {
 		want string
 	}{
 		{restartedRun(), "| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 95.3s; restarted n3 61.2s; recreated n1 70.4s; push n1, n3 | settled after 6.1s |"},
-		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | cancelled at readiness; restarted n3 | | | | error |"},
-		{cutAtPushRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | cancelled at push; restarted n3 61.2s; push n3; not landed n1 | | | | error |"},
+		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | cancelled at readiness; restarted n3 | | | — | | error |"},
+		{cutAtPushRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | cancelled at push; restarted n3 61.2s; push n3; not landed n1 | | | — | | error |"},
 	} {
 		md := Markdown(c.e.document(), pairs())
 		if !strings.Contains(md, c.want) {
@@ -311,7 +311,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		t.Errorf("the markdown is %d bytes, over the %d a comment holds:\n%s", len(md), CommentMax, md)
 	}
 	for _, want := range []string{
-		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | diverged at push | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | diverged at push | expired after 120.0s | 18 held, 1 failed, 0 skipped | — | none | failed |",
 		`  s3["change-1/bad-port<br/>failed"]`,
 		"**Findings**:\n\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `scope.empty` tag:fylgja\n- `step.diverged` " + stepRun + "2\n\n",
 		"**Stages** (Infrahub's view does not show them):",
@@ -340,7 +340,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		row   string
 	}{
 		{14, "and the table each step by its outcome and its new verification failures by the first few", "the drawing and the stages are left out",
-			"| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |"},
+			"| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | — | none | passed |"},
 		{60, "; the table gives each stage's reference and verdict alone", "the drawing and the stages are left out",
 			"| change-1/mark-59 | passed |"},
 	} {
@@ -645,12 +645,12 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"Run `fylgja-rehearse " + rehearseRun + "` was started, and its end was not read: " + lostWhy + ". It goes on to its destroy, " +
 			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1980s (ceiling 3600s).",
 		"",
-		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |",
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | | | | | not read |",
-		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | | | | | not read |",
-		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | | not read |",
+		"| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | — | | refused (scope.empty) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | | | | — | | not read |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | | | | — | | not read |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | — | | not read |",
 		"",
 		"```mermaid",
 		"flowchart TD",
@@ -770,11 +770,11 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 	head := func(status, used string) string {
 		return `## Fylgja rehearsed proposed change "third link" on change-1, scope tag:fylgja` + "\n\nRun `fylgja-rehearse " + rehearseRun +
 			"`, stages resolved at 2026-10-17T14:02:11Z. Status **" + status + "**. " + used + " of the 1980s deadline (ceiling 3600s).\n\n" +
-			"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|\n"
+			"| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|---|\n"
 	}
 	const (
-		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |\n"
-		base   = "| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |\n"
+		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | — | | refused (scope.empty) |\n"
+		base   = "| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | — | baseline |\n"
 		link   = `  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2` + "\n"
 		missed = "- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main\n"
 		tail   = "**Warnings**: none\n\n**Baseline findings** (reported, failing nothing): none\n\n" + Caveat + "\n"
@@ -790,24 +790,24 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 	}{
 		{"cut", cutRun().document(), head("error", "2001.2s") +
 			base +
-			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | cancelled at readiness | | | | error |\n" +
-			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | | not reached |\n\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | cancelled at readiness | | | — | | error |\n" +
+			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | — | | not reached |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/seeded<br/>baseline"]` + "\n" + `  s1["change-1/third-link<br/>error"]` + "\n" +
 			`  s2["change-1/head<br/>not reached"]` + "\n" +
 			`  s0 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s1` + "\n" +
 			`  s1 -- "unchanged" --> s2` + "\n" + failedClass("s1") + "```\n\n**Findings**:\n\n" +
 			"- `rehearsal.deadline.cut` change-1/third-link: the deadline of 1980s passed at stage change-1/third-link: change-1/seeded took 88.1s\n\n"},
 		{"not built", notBuiltRun().document(), head("failed", "243.0s") + bp +
-			"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | not built (failed at readiness) | | | — | error |\n" +
-			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | | | | | not reached |\n\n" +
+			"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | not built (failed at readiness) | | | — | — | error |\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | | | | — | | not reached |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>error"]` + "\n" +
 			`  s2["change-1/third-link<br/>not reached"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" + link + failedClass("s1") + "```\n\n**Findings**:\n\n" +
 			"- `readiness.timeout` n2: n2 did not answer its probe within 60s\n" +
 			"- `rehearsal.baseline.failed` change-1/seeded: the baseline change-1/seeded could not be built: its provision ended failed at readiness\n" +
 			missed + "\n"},
 		{"unclean", uncleanDoc, head("unclean", "118.4s") + bp + base +
-			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |\n" +
-			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |\n\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | — | none | passed |\n" +
+			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | — | none | passed |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>baseline"]` + "\n" +
 			`  s2["change-1/third-link<br/>passed"]` + "\n" + `  s3["change-1/head<br/>passed"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" +
 			link + `  s2 -- "unchanged" --> s3` + "\n```\n\n**Findings**:\n\n" + "- `cleanup.incomplete` lab fylgja: clab destroy exited 1; fylgja twin destroy clears it\n" +
@@ -842,8 +842,8 @@ func TestSnapshotColumnBeforeBundle(t *testing.T) {
 	doc := e.document()
 	md := Markdown(doc, pairs())
 	for _, want := range []string{
-		"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|\n",
-		"\n| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |\n",
+		"\n| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|---|\n",
+		"\n| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | — | | refused (scope.empty) |\n",
 		"\n| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created |",
 		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s;",
 		"\n| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | d0d0d0d0… | unchanged |",
@@ -877,5 +877,143 @@ func TestSnapshotColumnBeforeBundle(t *testing.T) {
 		if f.Rule == findings.RuleRehearsalStepsNone {
 			t.Errorf("two compiled stages of one bundle file %s", f.Rule)
 		}
+	}
+}
+
+// The loss column (016, FR-022; US3 scenario 4): a rehearsal of three stages, created,
+// stepped and refused at the compile, reads its table with loss between verify and new
+// verification failures, the stepped stage's loss per probe and — in the other two rows, and
+// its footer is the caveat, which says a loss figure is the container's.
+func TestTheLossColumn(t *testing.T) {
+	md := Markdown(probedRun().document(), pairs())
+	for _, want := range []string{
+		"\n\n| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|---|\n",
+		"\n| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | — | baseline |\n",
+		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 64.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | n1-loop 274/300, gap 54.8s | none | passed |\n",
+		"\n| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | — | | | | — | | refused (platform.unsupported) |\n\n",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("the markdown does not hold %q:\n%s", want, md)
+		}
+	}
+	if want := "*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing; " +
+		"a loss figure is the container's, never a hardware forwarder's.*"; Caveat != want || !strings.HasSuffix(md, "\n\n"+want+"\n") {
+		t.Errorf("the caveat is %q, want %q last:\n%s", Caveat, want, md)
+	}
+}
+
+// A rehearsal with no probe reads — in every row's loss (US3 scenario 5): the baseline, a
+// refused stage, one not reached, a step cut before its flows were read, and a step whose
+// loss names no probe, as a probe-less step's is.
+func TestTheLossColumnOfARehearsalWithNoProbe(t *testing.T) {
+	none := passedRun()
+	none.name = "ok, every step's loss naming no probe"
+	for i := 1; i < len(none.res.Stages); i++ {
+		none.res.Stages[i].Loss = lossOf()
+	}
+	for _, e := range []example{passedRun(), none, failedRun(), cutRun(), notBuiltRun(), refusedRun(), lostRun()} {
+		md := Markdown(e.document(), pairs())
+		rows := 0
+		for _, line := range strings.Split(md, "\n") {
+			if !strings.HasPrefix(line, "| "+change+"/") {
+				continue
+			}
+			rows++
+			if cells := strings.Split(line, "|"); len(cells) != 12 || strings.TrimSpace(cells[8]) != "—" {
+				t.Errorf("%s: the row's loss is not —: %s", e.name, line)
+			}
+		}
+		if rows != len(e.in.Stages) {
+			t.Errorf("%s: %d rows for %d stages:\n%s", e.name, rows, len(e.in.Stages), md)
+		}
+		if strings.Contains(md, "loss without") {
+			t.Errorf("%s: the markdown names a loss it does not have:\n%s", e.name, md)
+		}
+	}
+}
+
+// The loss cell words each probe's outcome, joined by "; ": a flow measured and one
+// interrupted by their figures, a flow not started or not read in words, then the probes
+// the target added and dropped; brief, each figure drops its gap.
+func TestLossCellOfEveryOutcome(t *testing.T) {
+	l := lossOf(flowOf("a-loop", wire.FlowMeasured, 312, 0, 0), flowOf("b-loop", wire.FlowInterrupted, 40, 12, 3),
+		flowOf("c-loop", wire.FlowNotStarted, 0, 0, 0), flowOf("d-loop", wire.FlowNotRead, 0, 0, 0))
+	l.Added, l.Dropped = []string{"e-loop"}, []string{"f-loop"}
+	s := findings.RehearsalStage{Loss: l}
+	for _, c := range []struct {
+		brief bool
+		want  string
+	}{
+		{false, "a-loop 0/312, gap 0.0s; b-loop 12/40 interrupted, gap 3.0s; c-loop not started; d-loop not read; " +
+			"e-loop added, not measured; f-loop dropped, not measured"},
+		{true, "a-loop 0/312; b-loop 12/40 interrupted; c-loop not started; d-loop not read; e-loop added, not measured; f-loop dropped, not measured"},
+	} {
+		if got := lossCell(s, c.brief); got != c.want {
+			t.Errorf("brief %v: %q, want %q", c.brief, got, c.want)
+		}
+	}
+	if got := lossCell(findings.RehearsalStage{}, false); got != "—" {
+		t.Errorf("no loss: %q, want —", got)
+	}
+}
+
+// The shortening keeps the column (R-17): a probed rehearsal too long for a comment keeps
+// the brief table, each loss figure without its gap, and the note says so; one longer still
+// gives each stage's reference and verdict alone, and its note names no loss. Every size
+// across both boundaries fits a comment, the note the brief table's longer one included.
+func TestTheLossColumnShortened(t *testing.T) {
+	probed := func(marks, pad int) example {
+		e := probedRun()
+		for i := range marks {
+			s := head(RoleRehearsed)
+			s.Ref = fmt.Sprintf("%s/mark-%02d", change, i)
+			e.in.Stages = append(e.in.Stages, s)
+			e.res.Stages = append(e.res.Stages, StageResult{Ref: s.Ref, Verdict: VerdictPassed,
+				Step: stepTo(s.Ref, 3, wire.StepUnchanged, 0.9), Wait: wait(wire.WaitSettled, 1.0, 1), Counts: counts(8, 0),
+				Loss: lossOf(flowOf("n1-loop"+strings.Repeat("x", pad), wire.FlowMeasured, 300, 0, 0.2)), TookS: 1.9})
+		}
+		return e
+	}
+	md := Markdown(probed(14, 0).document(), pairs())
+	for _, want := range []string{
+		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped | settled after 6.1s | 19 held, 0 failed, 0 skipped | n1-loop 274/300 | none | passed |\n",
+		"\n| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | n1-loop 0/300 | none | passed |\n",
+		", and the table each step by its outcome, its loss without its gaps and its new verification failures by the first few;",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("14 more stages: the markdown does not hold %q:\n%s", want, md)
+		}
+	}
+	if len(md) > CommentMax || strings.Contains(md, "gap ") {
+		t.Errorf("14 more stages: %d bytes, or a gap kept:\n%s", len(md), md)
+	}
+	md = Markdown(probed(60, 0).document(), pairs())
+	if len(md) > CommentMax || !strings.Contains(md, "; the table gives each stage's reference and verdict alone") ||
+		strings.Contains(md, "its loss without") || !strings.Contains(md, "\n| change-1/mark-59 | passed |\n") {
+		t.Errorf("60 more stages: %d bytes, want each stage's reference and verdict alone and no loss:\n%s", len(md), md)
+	}
+
+	brief, verdicts := 0, 0
+	for marks := 8; marks <= 40; marks++ {
+		for pad := 0; pad <= 12; pad += 3 {
+			d := probed(marks, pad).document()
+			if full := join(parts(d, pairs(), false)); len(full) <= CommentMax {
+				continue
+			}
+			md := Markdown(d, pairs())
+			if len(md) > CommentMax {
+				t.Errorf("%d more stages padded by %d: the markdown is %d bytes, over the %d a comment holds", marks, pad, len(md), CommentMax)
+			}
+			wantStagesInTheTable(t, fmt.Sprintf("%d more stages padded by %d", marks, pad), md, *d.Rehearsal, false)
+			switch {
+			case strings.Contains(md, "its loss without its gaps"):
+				brief++
+			case strings.Contains(md, "reference and verdict alone"):
+				verdicts++
+			}
+		}
+	}
+	if brief == 0 || verdicts == 0 {
+		t.Errorf("the sweep does not cross the boundary: the brief table %d times, the verdicts alone %d", brief, verdicts)
 	}
 }

@@ -714,10 +714,13 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 }
 
 // carriesLoss says whether doc carries what 016 alone writes, which no earlier contract
-// accepts: a step block's loss its flows read, or a verify block of a twin with probes, its
-// hosts and its bursts.
+// accepts: a step block's loss its flows read, a rehearsal stage's, or a verify block of a
+// twin with probes, its hosts and its bursts.
 func carriesLoss(doc *findings.Document) bool {
 	if doc.Step != nil && doc.Step.Loss != nil {
+		return true
+	}
+	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {
 		return true
 	}
 	if v := doc.Verify; v != nil {
@@ -753,7 +756,8 @@ func fileExists(path string) bool {
 }
 
 // withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
-// is null, as the dry run and a run closed before its flows write it (016), and each burst
+// is null, as the dry run and a run closed before its flows write it (016), and each
+// rehearsal stage's, null on every stage whose step read no flow, and each burst
 // count of a read that ran no burst (016): the verify block's counts, the step's wait_counts
 // and a rehearsed stage's verify. Every contract before 016's forbids the keys, and from 016
 // they are always written.
@@ -787,6 +791,9 @@ func withoutNullLoss(t *testing.T, b []byte) []byte {
 		for _, st := range stages {
 			if st, ok := st.(map[string]any); ok {
 				noBurst(st["verify"])
+				if v, ok := st["loss"]; ok && v == nil {
+					delete(st, "loss")
+				}
 			}
 		}
 	}

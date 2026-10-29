@@ -11,8 +11,10 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
-// Caveat is the markdown's last line: what a twin's fidelity is (FR-014).
-const Caveat = "*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*"
+// Caveat is the markdown's last line: what a twin's fidelity is (FR-014), and what a loss
+// figure is (016, FR-022).
+const Caveat = "*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing; " +
+	"a loss figure is the container's, never a hardware forwarder's.*"
 
 // CommentMax is the longest markdown Infrahub keeps as a comment, in bytes: 1.11.2 refuses a
 // text attribute when 3 and its UTF-8 length reach 4096 (infrahub/core/attribute.py,
@@ -172,18 +174,25 @@ func join(ps []part) string {
 func fit(ps []part) string {
 	var names []string
 	longest := tableShrunk{none: true}
+	gaps := false
 	for _, p := range ps {
 		if p.rank > 0 {
 			names = append(names, p.name)
 		}
 		if p.table != nil {
 			longest = tableShrunk{verdicts: true, left: len(p.table.b.Stages)}
+			gaps = measuredAny(p.table.b)
 		}
 	}
-	// The note naming every part, and any table cut to no stage, is the longest it can be.
-	// The size counts the blank line before each part and, one byte short of the first
-	// one's, the newline at the end.
-	size := -1 + len(fitNote(names, longest)) + 2
+	// The note naming every part is the longest it can be with any table cut to no stage,
+	// or, when a stage measured a flow, with the brief table, whose loss it names (016). The
+	// size counts the blank line before each part and, one byte short of the first one's,
+	// the newline at the end.
+	note := len(fitNote(names, longest))
+	if gaps {
+		note = max(note, len(fitNote(names, tableShrunk{gaps: true})))
+	}
+	size := -1 + note + 2
 	for _, p := range ps {
 		if p.rank == 0 && p.table == nil {
 			size += 2 + len(p.text)
@@ -194,7 +203,7 @@ func fit(ps []part) string {
 		if p.table == nil {
 			continue
 		}
-		ps[i].text, shrunk = p.table.within(p.text, CommentMax-size-2)
+		ps[i].text, shrunk = p.table.within(p.text, CommentMax-size-2, gaps)
 		size += 2 + len(ps[i].text)
 	}
 	order := make([]int, len(ps))
@@ -225,18 +234,21 @@ func fit(ps []part) string {
 }
 
 // tableShrunk is how far fit shrank the table: to each stage's reference and verdict, and
-// how many stages it left out; none when there is no table to shrink.
+// how many stages it left out; none when there is no table to shrink. gaps is whether the
+// brief table dropped a loss figure's gap, which it does when a stage measured a flow.
 type tableShrunk struct {
 	none     bool
 	verdicts bool
 	left     int
+	gaps     bool
 }
 
 // within is the table within room bytes: brief as it is, or each stage's reference and
-// verdict alone, or as many of those rows as fit and a last one counting the rest.
-func (t tableOf) within(brief string, room int) (string, tableShrunk) {
+// verdict alone, or as many of those rows as fit and a last one counting the rest. gaps is
+// whether the brief one dropped a loss figure's gap.
+func (t tableOf) within(brief string, room int, gaps bool) (string, tableShrunk) {
 	if len(brief) <= room {
-		return brief, tableShrunk{}
+		return brief, tableShrunk{gaps: gaps}
 	}
 	lines := []string{"| stage | verdict |", "|---|---|"}
 	size := len(lines[0]) + 1 + len(lines[1])
@@ -262,8 +274,10 @@ func (t tableOf) within(brief string, room int) (string, tableShrunk) {
 func moreRow(left int) string { return row(fmt.Sprintf("… and %d more", left), "") }
 
 // fitNote says what fit shortened: every finding named by its identifier and object alone,
-// the table's steps and new verification failures briefly or each stage's reference and verdict alone
-// with how many stages are left out of it, when there is a table, and the parts left out.
+// the table's steps, loss and new verification failures briefly or each stage's reference and
+// verdict alone with how many stages are left out of it, when there is a table, and the parts
+// left out. The loss is named only when a stage measured a flow, whose gap the brief table
+// drops: a rehearsal with no probe is noted as 019 noted it.
 func fitNote(left []string, t tableShrunk) string {
 	note := "*To fit what Infrahub keeps of a comment (" + fmt.Sprint(CommentMax) +
 		" bytes), each finding is named by its identifier and object alone"
@@ -273,6 +287,8 @@ func fitNote(left []string, t tableShrunk) string {
 		note += fmt.Sprintf("; the table gives each stage's reference and verdict alone, and the last %d are left out of it", t.left)
 	case t.verdicts:
 		note += "; the table gives each stage's reference and verdict alone"
+	case t.gaps:
+		note += ", and the table each step by its outcome, its loss without its gaps and its new verification failures by the first few"
 	default:
 		note += ", and the table each step by its outcome and its new verification failures by the first few"
 	}
@@ -321,13 +337,14 @@ func whyText(doc *findings.Document, brief bool) string {
 
 // table is one row per stage: the reference, the at, the snapshot (018) and the bundle by
 // their short ids (— for a stage refused), the step's outcome with the nodes it touched,
-// the wait's outcome, the counts, the new findings and the verdict, which reads not read
-// for a stage of a run whose end was not read. Brief, the step is its outcome alone and the
-// new findings the first few and how many more.
+// the wait's outcome, the counts, the loss (016), the new findings and the verdict, which
+// reads not read for a stage of a run whose end was not read. Brief, the step is its
+// outcome alone, the loss each probe's figure without its gap, and the new findings the
+// first few and how many more.
 func table(b findings.RehearsalBlock, unread, brief bool) string {
 	lines := []string{
-		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|---|",
+		"| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|---|",
 	}
 	for _, s := range b.Stages {
 		at, snapshot, bundle := "—", "—", "—"
@@ -351,7 +368,8 @@ func table(b findings.RehearsalBlock, unread, brief bool) string {
 		if brief {
 			stepped, found = stepOutcome(s), newBrief(s)
 		}
-		lines = append(lines, row(cell(s.Ref), at, snapshot, bundle, cell(stepped), wait, counts, cell(found), cell(verdictCell(s, unread))))
+		lines = append(lines, row(cell(s.Ref), at, snapshot, bundle, cell(stepped), wait, counts, cell(lossCell(s, brief)), cell(found),
+			cell(verdictCell(s, unread))))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -442,6 +460,34 @@ func stepOutcome(s findings.RehearsalStage) string {
 		return st.Outcome
 	}
 	return "could not run"
+}
+
+// lossCell is the stage's loss (016, FR-022): each probe's figure, joined by "; ", as
+// lossFigures words it, or — for a stage whose step read no flow: the baseline, a refused
+// stage, one not reached, a step that ended before its flows were read, and every stage of
+// a rehearsal with no probe. A number per probe, never a graph.
+//
+//	n1-loop 274/300, gap 54.8s; n2-loop 0/312, gap 0.0s
+func lossCell(s findings.RehearsalStage, brief bool) string {
+	if figures := lossFigures(s.Loss, brief); len(figures) > 0 {
+		return strings.Join(figures, "; ")
+	}
+	return "—"
+}
+
+// measuredAny is whether a stage of the block carries a flow's figures, whose gap a brief
+// table drops.
+func measuredAny(b findings.RehearsalBlock) bool {
+	for _, s := range b.Stages {
+		if l := s.Loss; l != nil {
+			for _, p := range l.Probes {
+				if p.Outcome == wire.FlowMeasured || p.Outcome == wire.FlowInterrupted {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // newFew is how many new findings a brief cell names before it counts the rest.

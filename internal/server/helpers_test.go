@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -282,8 +283,11 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
 	// A step document carrying a loss its flows read is 016's, which no earlier contract
-	// accepts.
+	// accepts, as is a rehearsal whose stage carries one.
 	if doc.Step != nil && doc.Step.Loss != nil {
+		return
+	}
+	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {
 		return
 	}
 	validateWithShow(t, contract019, "019", doc)
@@ -343,22 +347,29 @@ func dropNullSnapshots(generic map[string]any) {
 }
 
 // withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
-// is null, as the dry run and a run closed before its flows write it (016): every contract
-// before 016's forbids the key, and from 016 it is always written.
+// is null, as the dry run and a run closed before its flows write it (016), and each
+// rehearsal stage's, null on every stage whose step read no flow: every contract before
+// 016's forbids the key, and from 016 it is always written.
 func withoutNullLoss(t *testing.T, b []byte) []byte {
 	t.Helper()
 	var generic map[string]any
 	if err := json.Unmarshal(b, &generic); err != nil {
 		t.Fatal(err)
 	}
-	step, ok := generic["step"].(map[string]any)
-	if !ok {
-		return b
+	dropNull := func(m any) {
+		if o, ok := m.(map[string]any); ok {
+			if v, ok := o["loss"]; ok && v == nil {
+				delete(o, "loss")
+			}
+		}
 	}
-	if v, ok := step["loss"]; !ok || v != nil {
-		return b
+	dropNull(generic["step"])
+	if r, ok := generic["rehearsal"].(map[string]any); ok {
+		stages, _ := r["stages"].([]any)
+		for _, st := range stages {
+			dropNull(st)
+		}
 	}
-	delete(step, "loss")
 	out, err := json.Marshal(generic)
 	if err != nil {
 		t.Fatal(err)
@@ -426,6 +437,30 @@ func contractPath(feature, name string) string {
 	return filepath.Join("testdata", "contracts", feature, name)
 }
 
+// laterContract is the next later frozen feature's copy of the block name, or the current
+// one when no later copy holds it.
+func laterContract(t *testing.T, feature, name string) string {
+	t.Helper()
+	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		if d.Name() <= feature {
+			continue
+		}
+		if path := contractPath(d.Name(), name); fileExists(path) {
+			return path
+		}
+	}
+	return contractPath(currentContract, name)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // findingsContract returns feature's findings contract, compiled once.
 func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 	t.Helper()
@@ -457,11 +492,13 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 			// A block the feature's contract refers to but its directory does not hold had not
 			// moved since the feature: 017's verify.schema.json, which 018 does not move, and
 			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze, and
-			// 019's show and stages blocks, which 016 does not move.
+			// 019's show and stages blocks, which 016 does not move. It is read from the next
+			// later frozen copy, which holds it as the feature left it, and from the current
+			// contract only when no later copy holds it.
 			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
 				continue
 			}
-			path = contractPath(currentContract, name)
+			path = laterContract(t, feature, name)
 		}
 		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(path)); err != nil {
 			t.Fatal(err)

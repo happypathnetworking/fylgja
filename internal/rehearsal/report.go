@@ -65,9 +65,10 @@ type Result struct {
 }
 
 // StageResult is one stage the run reached: its verdict, the child it ran (the baseline's
-// provision, or a rehearsed stage's step), its wait, the wait's last read counted, the
-// wait's findings the baseline's did not have, the child's own findings, and the stage's
-// whole time on the run's clock.
+// provision, or a rehearsed stage's step), its wait, the wait's last read counted, what the
+// step's probe flows lost as its document's block carries it (016; nil when the step read
+// none), the wait's findings the baseline's did not have, the child's own findings, and the
+// stage's whole time on the run's clock.
 type StageResult struct {
 	Ref         string
 	Verdict     Verdict
@@ -75,6 +76,7 @@ type StageResult struct {
 	Step        *StepRun
 	Wait        *wire.StepWait
 	Counts      *wire.VerifyCounts
+	Loss        *findings.StepLoss
 	NewFindings []wire.StepFinding
 	Findings    findings.List
 	TookS       float64
@@ -152,6 +154,7 @@ func Build(in Input, res Result) findings.RehearsalBlock {
 				st.Wait = &findings.RehearsalWait{Outcome: w.Outcome, BudgetS: w.BudgetS, Reads: w.Reads, AfterS: w.AfterS}
 			}
 			st.Verify = r.Counts
+			st.Loss = r.Loss
 			st.NewFindings = sortedFailing(r.NewFindings)
 			st.TookS = r.TookS
 			st.Findings = append(st.Findings, r.Findings...)
@@ -302,11 +305,13 @@ func shellWord(s string) string {
 const shellSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@%+=:,-"
 
 // StageLines are the text's one line per stage after the run (contracts/rehearse-command.md,
-// "The text"): what the run did at the stage, its wait and its counts, then its verdict.
+// "The text"): what the run did at the stage, its wait and its counts, its loss when its
+// step measured a probe's flow (016), then its verdict.
 //
 //	stage change-1/branch-point: refused (scope.empty)
 //	stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline
 //	stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed
+//	stage change-1/probed: stepped in 4.5s (…); settled after 6.1s (4 reads); 21 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap 54.8s; passed
 //	stage change-1/bad-port: diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused); …; failed
 //	stage change-1/head: not reached
 func StageLines(b findings.RehearsalBlock) []string {
@@ -325,6 +330,9 @@ func StageLines(b findings.RehearsalBlock) []string {
 			}
 			if s.Verify != nil {
 				parts = append(parts, countsText(*s.Verify))
+			}
+			if figures := lossFigures(s.Loss, false); len(figures) > 0 {
+				parts = append(parts, "loss "+strings.Join(figures, "; "))
 			}
 			parts = append(parts, verdictPhrase(s))
 		}
@@ -681,6 +689,49 @@ func refusedText(s findings.RehearsalStage) string {
 		return "refused"
 	}
 	return "refused (" + strings.Join(rules, ", ") + ")"
+}
+
+// lossFigures are what a step's probe flows lost, one figure per probe as the table's loss
+// column and the stage line word it (016, FR-022): sent and lost and the longest gap of a
+// flow measured, or one interrupted by a step that failed after its stage, a flow not
+// started or not read in words, then the probes the target added or dropped, which no flow
+// measured. Brief, a figure drops its gap. None for a loss that names no probe, and for
+// none.
+//
+//	n1-loop 274/300, gap 54.8s
+//	n1-loop 12/40 interrupted, gap 3.0s
+//	n1-loop not started
+//	n2-loop added, not measured
+func lossFigures(l *findings.StepLoss, brief bool) []string {
+	if l == nil {
+		return nil
+	}
+	var out []string
+	for _, p := range l.Probes {
+		figure := fmt.Sprintf("%s %d/%d", p.Probe, p.Lost, p.Sent)
+		switch p.Outcome {
+		case wire.FlowMeasured:
+		case wire.FlowInterrupted:
+			figure += " interrupted"
+		case wire.FlowNotStarted:
+			out = append(out, p.Probe+" not started")
+			continue
+		default:
+			out = append(out, p.Probe+" not read")
+			continue
+		}
+		if !brief {
+			figure += fmt.Sprintf(", gap %.1fs", p.LongestGapS)
+		}
+		out = append(out, figure)
+	}
+	for _, p := range l.Added {
+		out = append(out, p+" added, not measured")
+	}
+	for _, p := range l.Dropped {
+		out = append(out, p+" dropped, not measured")
+	}
+	return out
 }
 
 // waitText is how a wait ended: settled after 3.2s (2 reads).

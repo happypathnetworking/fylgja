@@ -1988,7 +1988,7 @@ overview_threads() {
 }
 
 # rehearsal.Caveat, the markdown's last line, which every comment keeps (FR-014).
-CAVEAT="*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*"
+CAVEAT="*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing; a loss figure is the container's, never a hardware forwarder's.*"
 export CAVEAT
 
 # A throwaway branch, set before seeding so the trap's -delete removes it and what hangs on
@@ -2067,7 +2067,7 @@ stage_lines 9a "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage 
   "^stage $FR/third-link: .*; passed\$" "^stage $FR/head: .*; passed\$"
 comments_of 9a "$PC9" 2> "$OUT/comments-9a.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9a.err"
 expect "$OUT/comments-9a.json" 'length == 1 and (.[0].text | contains("Status **ok**")
-  and contains("| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |")
+  and contains("| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |")
   and contains("```mermaid") and contains("**Stages**") and endswith("\n\n" + env.CAVEAT + "\n"))'
 jq -r '.[0].text' "$OUT/comments-9a.json" > "$OUT/comment-9a.md"
 comment_stages 9a "branch-point=refused (scope.empty)" seeded=baseline third-link=passed head=passed

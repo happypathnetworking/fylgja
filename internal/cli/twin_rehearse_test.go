@@ -1096,8 +1096,9 @@ func TestRehearseMarkdown(t *testing.T) {
 	if code != findings.ExitOK || stdout == "" || sameRun(stdout) != sameRun(served.Markdown) {
 		t.Errorf("exit %d, stdout:\n%s\nwant 0 and the markdown the server renders alone:\n%s", code, stdout, served.Markdown)
 	}
-	if !strings.HasPrefix(stdout, `## Fylgja rehearsed proposed change `) || !strings.HasSuffix(stdout, rehearsal.Caveat+"\n") {
-		t.Errorf("stdout:\n%s\nwant the markdown, from its heading to its caveat", stdout)
+	if !strings.HasPrefix(stdout, `## Fylgja rehearsed proposed change `) || !strings.HasSuffix(stdout, rehearsal.Caveat+"\n") ||
+		!strings.HasSuffix(stdout, "; a loss figure is the container's, never a hardware forwarder's.*\n") {
+		t.Errorf("stdout:\n%s\nwant the markdown, from its heading to its caveat, which names the loss's basis (016)", stdout)
 	}
 	// The comment fylgja-twin posts names the scope every stage was read under, as the
 	// document's subject does (017; US5 scenario 4).
@@ -1105,7 +1106,7 @@ func TestRehearseMarkdown(t *testing.T) {
 		doc.Subject == nil || doc.Subject.Scope != defaultScope {
 		t.Errorf("heading %q, subject %+v; want both naming the scope %s", heading, doc.Subject, defaultScope)
 	}
-	for _, want := range []string{"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n", "\n```mermaid\nflowchart TD\n"} {
+	for _, want := range []string{"\n| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |\n", "\n```mermaid\nflowchart TD\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("the markdown lacks %q:\n%s", want, stdout)
 		}
@@ -1121,6 +1122,13 @@ func TestRehearseMarkdown(t *testing.T) {
 		}
 		if !strings.Contains(stdout, "\n| "+s.Ref+" | ") || !strings.Contains(stdout, cells) {
 			t.Errorf("the markdown's row for %s lacks %q:\n%s", s.Ref, cells, stdout)
+		}
+		// A probe-less rehearsal's loss is — in every row (016; US3 scenario 5).
+		for _, line := range strings.Split(stdout, "\n") {
+			if cells := strings.Split(line, "|"); strings.HasPrefix(line, "| "+s.Ref+" | ") &&
+				(len(cells) != 12 || strings.TrimSpace(cells[8]) != "—") {
+				t.Errorf("the markdown's row for %s has no — for its loss: %s", s.Ref, line)
+			}
 		}
 	}
 	for _, progress := range []string{"run fylgja-rehearse r1\n", "stage " + seededRef + ": creating the twin\n", "rehearsal ok: "} {

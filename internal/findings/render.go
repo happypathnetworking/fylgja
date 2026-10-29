@@ -1243,6 +1243,10 @@ type RehearsalStage struct {
 	Wait *RehearsalWait `json:"wait"`
 	// Verify is the wait's last read counted by kind, nil when no read was made.
 	Verify *VerifyCounts `json:"verify"`
+	// Loss is what the step child's probe flows lost, the step document's block copied
+	// (016), written always: null on the baseline, a refused stage, one not reached, and a
+	// step that ended before its flows were read.
+	Loss *StepLoss `json:"loss"`
 	// NewFindings are the wait's failing assertions the baseline's wait did not have, by
 	// identifier then object.
 	NewFindings []StepWaitFailing `json:"new_findings"`

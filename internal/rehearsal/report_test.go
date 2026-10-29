@@ -342,9 +342,41 @@ func lostRun() example {
 // lostWhy is why lostRun's end was not read, as the server's wait files it.
 const lostWhy = "waiting for run " + rehearseRun + ": the workflow service did not answer"
 
+// flowOf is one probe's flow across a step, from its a host's container to its b host's, as
+// ReadFlows answers it (016).
+func flowOf(probe, outcome string, sent, lost int, gapS float64) findings.StepProbeLoss {
+	return findings.StepProbeLoss{Probe: probe, From: "clab-fylgja-" + probe + "-a", To: "clab-fylgja-" + probe + "-b",
+		Outcome: outcome, Sent: sent, Lost: lost, LongestGapS: gapS}
+}
+
+// lossOf is a step's loss on the container basis, its probes as given.
+func lossOf(probes ...findings.StepProbeLoss) *findings.StepLoss {
+	return &findings.StepLoss{Basis: wire.LossBasisContainer, Probes: probes}
+}
+
+// probedRun is US3's scenario 4 (016): three stages, the first created, the second stepped
+// with probe n1-loop's flow measured across its step, 274 of 300 lost and a 54.8s gap, and
+// the third refused at the compile, its snapshot filed and no bundle.
+func probedRun() example {
+	refusedHead := head(RoleRefused)
+	refusedHead.BundleID = ""
+	refusedHead.Findings.AddStep(findings.Rejection, findings.StepCompile, findings.RulePlatformUnsupported, "n1",
+		"node n1's platform is supported by no loaded package")
+	return example{"ok, a probe's loss across the step and the head refused at the compile",
+		input(2130, seeded(), thirdLink(RoleRehearsed), refusedHead),
+		Result{Outcome: OutcomeOK, Run: run(), UsedS: 182.0, Destroy: destroyed(), Stages: []StageResult{
+			built(wait(wire.WaitSettled, 3.2, 2), counts(6, 0), 52.6),
+			{Ref: change + "/third-link", Verdict: VerdictPassed,
+				Step: stepTo(change+"/third-link", 1, wire.StepStepped, 64.5, landed("n1", 2.5), landed("n3", 2.6)),
+				Wait: wait(wire.WaitSettled, 6.1, 4), Counts: counts(8, 0), Loss: lossOf(flowOf("n1-loop", wire.FlowMeasured, 300, 274, 54.8)),
+				TookS: 70.6},
+		}},
+		findings.StatusOK}
+}
+
 func examples() []example {
 	return []example{passedRun(), failedRun(), newFindingRun(), cutRun(), notBuiltRun(), unverifiedRun(), uncleanRun(), aloneRun(),
-		refusedRun(), heldRun(), lostRun()}
+		refusedRun(), heldRun(), lostRun(), probedRun()}
 }
 
 // document is the example's findings document as the server would send it: the block, its
@@ -973,4 +1005,54 @@ func TestFindingsAreTheStagesInOrder(t *testing.T) {
 			t.Errorf("the block does not write %s: %s", want, raw)
 		}
 	}
+}
+
+// Each stage's loss is its step's (016): the step document's block on a stepped stage, and
+// null on the baseline, a refused stage and one not reached, each written as null in the
+// document under the contract. The text's stage line names the loss after the counts when
+// it names a probe, and a probe-less run's lines are 019's.
+func TestEachStageCarriesItsStepsLoss(t *testing.T) {
+	e := probedRun()
+	e.in.Stages = append(e.in.Stages, badPort(RoleRehearsed))
+	b := Build(e.in, e.res)
+	want := lossOf(flowOf("n1-loop", wire.FlowMeasured, 300, 274, 54.8))
+	if got := b.Stages[1].Loss; !reflect.DeepEqual(got, want) {
+		t.Errorf("the stepped stage's loss %+v, want its step's %+v", got, want)
+	}
+	for _, i := range []int{0, 2, 3} {
+		if s := b.Stages[i]; s.Loss != nil {
+			t.Errorf("stage %s (%s): loss %+v, want none", s.Ref, s.Verdict, s.Loss)
+		}
+	}
+	raw := string(mustMarshalDocument(t, e.document()))
+	if !strings.Contains(raw, `"verify":null,"loss":null,"new_findings":[]`) ||
+		!strings.Contains(raw, `"loss":{"basis":"container","probes":[{"probe":"n1-loop","from":"clab-fylgja-n1-loop-a","to":"clab-fylgja-n1-loop-b","outcome":"measured","sent":300,"lost":274,"longest_gap_s":54.8}],"added":[],"dropped":[]}`) {
+		t.Errorf("the document does not write each stage's loss: %s", raw)
+	}
+
+	if got, want := StageLines(b), []string{
+		"stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
+		"stage change-1/third-link: stepped in 64.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap 54.8s; passed",
+		"stage change-1/head: refused (platform.unsupported)",
+		"stage change-1/bad-port: not reached",
+	}; !slices.Equal(got, want) {
+		t.Errorf("the stage lines:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	none := passedRun()
+	plain := StageLines(Build(none.in, none.res))
+	for i := 1; i < len(none.res.Stages); i++ {
+		none.res.Stages[i].Loss = lossOf()
+	}
+	if got := StageLines(Build(none.in, none.res)); !slices.Equal(got, plain) || strings.Contains(strings.Join(got, "\n"), "loss") {
+		t.Errorf("a step whose loss names no probe changes its line: %v, want %v", got, plain)
+	}
+}
+
+func mustMarshalDocument(t *testing.T, doc *findings.Document) []byte {
+	t.Helper()
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

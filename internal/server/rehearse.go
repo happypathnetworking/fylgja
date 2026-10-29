@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
+	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
@@ -320,7 +321,9 @@ func rehearseStages(rows []rehearsalRow, baseline int, pairs []step.Pair, nodes 
 				return nil, err
 			}
 			in.Diff = diff
-			in.Step = rehearsedStep(*prev, st, *pair.Step, diff, nodes[in.Ref], reg, in.BundlePath, waitS, version)
+			if in.Step, err = rehearsedStep(*prev, st, *pair.Step, diff, nodes[in.Ref], reg, in.BundlePath, waitS, version); err != nil {
+				return nil, fmt.Errorf("stage %s: %w", in.Ref, err)
+			}
 		}
 		out = append(out, in)
 		prev = &rows[i].stage
@@ -339,9 +342,11 @@ func pairBetween(pairs []step.Pair, from, to string) (step.Pair, bool) {
 }
 
 // rehearsedStep is the step run's input from one compiled stage to the next, each side
-// naming its stage's snapshot (018), as twin step's do.
+// naming its stage's snapshot (018), as twin step's do, and its flows the probes both
+// stages' bundles carry, from the two manifests and the target's node plans as twin step
+// takes them (flowsOf; 016), so the stage's loss is its step's.
 func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []wire.NodePlan, reg *psp.Registry,
-	toPath string, waitS int, version string) *provision.StepInput {
+	toPath string, waitS int, version string) (*provision.StepInput, error) {
 	declared := map[string]string{}
 	for _, n := range nodes {
 		linkChange := ""
@@ -355,6 +360,17 @@ func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []
 	pushes := []step.NodePush{}
 	if !s.Unchanged {
 		pushes = step.PushPlan(s, step.Lifecycle{})
+	}
+	var fm, tm compiler.Manifest
+	if err := json.Unmarshal(from.Bundle.Files[compiler.ManifestFile], &fm); err != nil {
+		return nil, fmt.Errorf("reading bundle %s's manifest: %w", from.Bundle.ID, err)
+	}
+	if err := json.Unmarshal(to.Bundle.Files[compiler.ManifestFile], &tm); err != nil {
+		return nil, fmt.Errorf("reading bundle %s's manifest: %w", to.Bundle.ID, err)
+	}
+	flows, added, dropped, err := flowsOf(fm, tm, nodes)
+	if err != nil {
+		return nil, err
 	}
 	f, t := from.Resolved, to.Resolved
 	return &provision.StepInput{
@@ -371,7 +387,10 @@ func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []
 		Declared:     declared,
 		WaitS:        waitS,
 		Version:      version,
-	}
+		Flows:        flows,
+		Added:        added,
+		Dropped:      dropped,
+	}, nil
 }
 
 // printPlan prints the plan as the rehearsal takes it (contracts/rehearse-command.md, "The
@@ -686,6 +705,7 @@ func resultOf(runID string, res provision.RehearseResult) rehearsal.Result {
 				run.Restarted, run.Recreated, run.Created = lp.Restarted, lp.Recreated, lp.Added
 			}
 			st.Step = run
+			st.Loss = provision.LossBlockOf(sr.Loss)
 			st.Findings = sr.Findings
 		}
 		out.Stages = append(out.Stages, st)

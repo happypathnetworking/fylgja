@@ -278,7 +278,7 @@ func TestRehearsalBlockWritesEveryNullableKey(t *testing.T) {
 	docs := rehearsalDocuments()
 	refused := string(mustMarshal(t, docs[3].doc))
 	for _, want := range []string{`"reclaimed":null`, `"baseline":null`, `"destroy":null`, `"reproduce":[]`, `"used_s":0`,
-		`"bundle_id":"` + seededID + `"`, `"provision":null,"step":null,"wait":null,"verify":null,"new_findings":[],"took_s":0`,
+		`"bundle_id":"` + seededID + `"`, `"provision":null,"step":null,"wait":null,"verify":null,"loss":null,"new_findings":[],"took_s":0`,
 		`"findings":[]`} {
 		if !strings.Contains(refused, want) {
 			t.Errorf("the refused rehearsal does not write %s: %s", want, refused)
@@ -317,6 +317,70 @@ func TestRecordRehearsalIsShownWhenNamed(t *testing.T) {
 	for _, c := range rehearsalTwinDocuments() {
 		if b := string(mustMarshal(t, c.doc)); !strings.Contains(b, want) {
 			t.Errorf("%s does not write %s: %s", c.label, want, b)
+		}
+	}
+}
+
+// A rehearsed stage carries its step's loss (016): the step document's block, every outcome
+// of it, under the contract, beside a stage whose step diverged at the phase flows and a
+// stage whose verify counted a burst; 019's contract refuses each, and a stage with no
+// loss, or with a misshapen one, is the contract's refusal.
+func TestRehearsalStageLossDocuments(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	v019 := compileFeatureFindingsSchema(t, contract019, currentResources...)
+
+	measured := rehearsalDocuments()[0].doc
+	live := &measured.Rehearsal.Stages[2]
+	live.Loss = stepLoss()
+	live.Verify = &VerifyCounts{HostName: heldCount(3), PortEnabled: heldSkippedCount(6), Neighbor: heldSkippedCount(6),
+		Burst: VerifyCount{Held: 1, Unread: new(int)}, Record: VerifyCount{Held: 3}}
+
+	diverged := rehearsalDocuments()[0].doc
+	badPort := &diverged.Rehearsal.Stages[3]
+	badPort.Step.Phase = "flows"
+	badPort.Loss = &StepLoss{Basis: "container", Probes: []StepProbeLoss{{Probe: "n1-loop", From: "clab-fylgja-n1-loop-a",
+		To: "clab-fylgja-n1-loop-b", Outcome: "interrupted", Sent: 300, Lost: 274, LongestGapS: 54.8}}}
+
+	for _, c := range []struct {
+		label string
+		doc   *Document
+		keys  []string
+	}{
+		{"measured, not started, added and dropped, a burst held", measured, []string{
+			`"verify":{"host_name":`, `"burst":{"held":1,"failed":0,"unread":0}`,
+			`"loss":{"basis":"container","probes":[{"probe":"n1-loop","from":"clab-fylgja-n1-loop-a","to":"clab-fylgja-n1-loop-b","outcome":"measured","sent":312,"lost":5,"longest_gap_s":1}`,
+			`"added":["n3-loop"],"dropped":["n4-loop"]},"new_findings":[]`,
+			`"verify":null,"loss":null,"new_findings":[]`}},
+		{"interrupted, diverged at flows", diverged, []string{`"phase":"flows"`,
+			`"outcome":"interrupted","sent":300,"lost":274,"longest_gap_s":54.8}],"added":[],"dropped":[]}`}},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidate(t, schema, c.doc, c.label)
+			mustCarryNoContent(t, c.doc, c.label)
+			b := mustMarshal(t, c.doc)
+			if !containsAll(string(b), c.keys) {
+				t.Errorf("does not carry every one of %q: %s", c.keys, b)
+			}
+			if err := v019.Validate(mustAny(t, b)); err == nil {
+				t.Errorf("019's contract accepts a rehearsal whose stage carries a loss: %s", b)
+			}
+		})
+	}
+
+	// The stage's loss is the contract's, required: one left out, a basis other than
+	// container and an outcome outside the enum are each refused.
+	raw := string(mustMarshal(t, measured))
+	for _, c := range []struct{ label, old, new string }{
+		{"left out", `"verify":null,"loss":null,`, `"verify":null,`},
+		{"basis", `"basis":"container"`, `"basis":"hardware"`},
+		{"outcome", `"outcome":"measured"`, `"outcome":"guessed"`},
+	} {
+		mutated := strings.Replace(raw, c.old, c.new, 1)
+		if mutated == raw {
+			t.Fatalf("%s: %s is not in the document", c.label, c.old)
+		}
+		if err := schema.Validate(mustAny(t, []byte(mutated))); err == nil {
+			t.Errorf("a stage's loss %s satisfied the rehearsal schema: %s", c.label, mutated)
 		}
 	}
 }

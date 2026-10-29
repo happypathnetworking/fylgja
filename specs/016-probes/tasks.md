@@ -474,6 +474,7 @@ verify.
       - `specs/016-probes/commands/runs.jsonl`, which is git-ignored, holds 31 entries: `specify`, `clarify`, `plan`, `tasks`, `analyze` and 26 implement sessions, Runs 1, 3–7, 9–25 and 27–29. Runs 2, 8 and 26 were the operator's by hand.
       - By their totals, `analyze`'s 17 follow-ups included, they took 33,662 s active (9.4 h) and 35,355 s wall. Without the follow-ups they took 33,563 s active. T047's 32,641 s (9.1 hours) is the first thirty's on that count, through Run 28, so the roadmap's figure holds.
       - This session's entry follows when it exits. `make command-log`, run once the session that closes the feature has ended, publishes whatever that session kept.
+  - **Note (operator, 2026-10-29, recorded by the attended session under the pause after Run 30)**: left for the operator until after convergence, by the operator's choice: the review, the merge into `main`, the push and `make command-log` follow `converge`'s passes, so the review reads the converged tree once. Skipped in this loop; not a task for a session.
 
 ---
 

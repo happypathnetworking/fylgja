@@ -406,12 +406,14 @@ justifies the CTM partly by synthesized nodes and names later traffic generators
 provenance `synthesized` is already in the model, and Constitution X demands every
 synthesized node in the fidelity manifest. So the slot is reserved, and the questions are
 where the declaration lives and which generator. Traffic is not network intent, so it does
-not belong in the operator's model the reader maps. The pattern that fits is [D-032](decisions.md#d-032)'s: a
-Fylgja-owned, branch-agnostic kind in Infrahub, operator-written, naming two device ports
-and a flow, which the compiler turns into synthesized host nodes and links, each consuming
-a port on its device and recorded in the manifest. A lossy package cares, since a port a
-probe takes is one an interface cannot. The first generator is a containerlab `linux` node
-running ping and iperf3, which measures loss at low rates and costs almost nothing. A
+not belong in the operator's model the reader maps. The pattern that fits is
+[D-045](decisions.md#d-045)'s, as it was [D-032](decisions.md#d-032)'s for the waypoint
+before it: a Fylgja-owned, branch-agnostic kind in Infrahub, `FylgjaProbe`,
+operator-written, naming two device ports, which the compiler turns into two synthesized
+hosts, `<probe>-a` and `<probe>-b`, and their links, each host consuming a port on its
+device and recorded in the manifest. A lossy package cares, since a port a probe takes is
+one an interface cannot. The first and only generator is a containerlab `linux` host
+running `ping`, which measures loss at low rates and costs almost nothing. A
 generator is not a platform, so a small probe package format is the
 [D-031](decisions.md#d-031) move: one mechanism per generator, keyed by a format value.
 Containers forward in software, so the loss measured is the container's, never the
@@ -427,7 +429,11 @@ address and its gateway**, since the CTM carries no addresses: Fylgja configures
 host from the declaration alone, the device side stays intent's, and the brief's refusal
 of a host address outside the interface's prefix is lost. [016's
 brief](../specs/016-probes/brief.md) was rewritten on 2026-10-28 against these and 017's,
-018's and 019's shape, and is re-read against 019's close before it is specified.
+018's and 019's shape, and the feature taken as [D-064](decisions.md#d-064), with
+Constitution 2.3.0: `--probes <file>` on the five commands that read intent, else the kind
+on the default branch, else none; the snapshot `2` carrying the list; one `ping` probe
+package, `probes/ping.yaml`, on `alpine:3.24.2`; and a step's flows and verify's burst
+measuring and asserting each probe.
 
 <a id="f-015"></a>
 **F-015. Operational state diff.** With verify's readers, snapshot adjacencies and routes at

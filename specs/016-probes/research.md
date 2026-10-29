@@ -558,3 +558,32 @@ Appended by the runs.
   three-node branch) removed 6 addresses, 3 cables, 15 interfaces, 3 devices, 1 platform,
   1 manufacturer, 4 locations and 1 tag, its 3 artifacts gone with their devices, and
   `BuiltinIPAddress` then counts 0. Both branches deleted. *(Infrahub 1.11.2, 2026-10-29)*
+- **R-18 The template rendered on live branches** (Run 19, T034): the command is
+  `.venv/bin/infrahubctl render srlinux_device_config device=<name> --branch <b> --out
+  <file>`, the transform's registered name and not the query's: `render` reads
+  `.infrahub.yml`'s `jinja2_transforms` entry, runs the tree's `device_config.gql` against
+  the branch and renders the tree's `.j2` locally (infrahub-sdk 1.23.2,
+  `ctl/cli_commands.py`). `--out` writes the bytes; without it `rich` prints them. The
+  query's `ip_addresses { edges { node { address { value } } } }` inside `... on
+  InterfacePhysical` answers on 1.11.2 (`InterfaceLayer3`'s relationship, inherited, needs
+  no further fragment: its peer `IpamIPAddress` is one node). On two throwaway
+  `fylgja-test-t034-*` branches, seeded by this tree's `SeedThreeNode` and `SeedMixed`
+  (whose artifacts the imported template rendered, so every stored artifact is the old
+  template's), each render differs from its stored artifact by the address lines alone:
+  `n1` (and `n2` with `10.2.…`, `s1` as `n1`) gains, after each probe-ready port's
+  `subinterface 0 admin-state enable`, `set / interface ethernet-1/10 subinterface 0 ipv4
+  admin-state enable`, `set / interface ethernet-1/10 subinterface 0 ipv4 address
+  10.1.10.1/24`, and the same two for `ethernet-1/11` with `10.1.11.1/24`; `e1` gains `ip
+  routing` after `hostname e1`, and `no switchport`, `ip address 10.2.10.1/24` under
+  `Ethernet10` and `no switchport`, `ip address 10.2.11.1/24` under `Ethernet11`, after
+  `no shutdown`. A second address written on `e1:Ethernet10` (`10.2.10.5/24`) and on
+  `n1:ethernet-1/10` renders after the first, in value order, `ip address 10.2.10.5/24
+  secondary` on EOS (a plain second `ip address` replaces the first there) and a plain
+  `… ipv4 address 10.1.10.5/24` on SR Linux. EOS's interface lines render unindented, as
+  they always have: each follows a `-%}` that strips the next line's leading spaces, and
+  the stored artifacts read the same. On `fylgja-fixture` (seeded before 016, no address),
+  the renders of `n1`, `n2` and `n3` equal their stored artifacts byte for byte, MD5
+  `597f6263…`, `5ac21560…` and `e93df964…`, each its artifact's checksum. Both branches
+  deleted; `Branch` then lists `main` and `fylgja-fixture`, `main`'s hash `8a4f3bee…`
+  unmoved. The lines on the images stay §4.4's, the live session's. *(Infrahub 1.11.2,
+  infrahub-sdk 1.23.2, 2026-10-29)*

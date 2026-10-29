@@ -1145,7 +1145,7 @@ while any change of intent, the `at`,
 the scope or the probes moves it. Two limits, stated and not tested: a rebase re-stamps a branch's
 content, so a stage resolved after it reads differently, or empty, and gets another id;
 and an artifact Infrahub re-rendered to different bytes for unchanged data, never seen,
-would move it. The *fixture branch*'s is `576933ec…`.
+would move it. The *fixture branch*'s is `0940db93…`.
 
 **Snapshot store** — From 018 ([D-061](decisions.md#d-061)): `snapshots/<snapshot_id>.json`
 under the *state root*, beside the *bundle store*: every snapshot taken or sent, by

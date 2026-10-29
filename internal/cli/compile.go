@@ -38,7 +38,7 @@ func newTwinCompileCmd(opts *options) *cobra.Command {
 			"before anything is deployed.\n" +
 			"\n" +
 			"A snapshot is what intent read --out writes. A bare CTM is wrapped by hand as\n" +
-			"{\"snapshot_version\": \"1\", \"ctm\": <the CTM>, \"probes\": []}: the server\n" +
+			"{\"snapshot_version\": \"2\", \"ctm\": <the CTM>, \"probes\": []}: the server\n" +
 			"computes the snapshot_id and fills the observed_at from the CTM.",
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {

@@ -30,7 +30,7 @@ func wrappedFixture(name string) string {
 }
 
 // wrappedCTM wraps the bare CTM file at path by hand, as contracts/cli.md tells a hand user
-// to (018): {"snapshot_version": "1", "ctm": <the CTM>, "probes": []}, leaving out the
+// to (016): {"snapshot_version": "2", "ctm": <the CTM>, "probes": []}, leaving out the
 // snapshot_id the server computes and the observed_at it fills from the CTM. The CTM is
 // wrapped as its bytes, so a CTM the server refuses is sent as it is. The snapshot is
 // written to a temporary file named as the CTM, whose path it returns.
@@ -41,7 +41,7 @@ func wrappedCTM(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	wrapped := filepath.Join(t.TempDir(), filepath.Base(path))
-	if err := os.WriteFile(wrapped, []byte(`{"snapshot_version": "1", "ctm": `+string(raw)+`, "probes": []}`), 0o644); err != nil {
+	if err := os.WriteFile(wrapped, []byte(`{"snapshot_version": "2", "ctm": `+string(raw)+`, "probes": []}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return wrapped
@@ -479,7 +479,7 @@ func TestCompileTakesNoCTM(t *testing.T) {
 		}
 	})
 	for _, want := range []string{"--snapshot string", "the snapshot file to compile (required)",
-		`{"snapshot_version": "1", "ctm": <the CTM>, "probes": []}`} {
+		`{"snapshot_version": "2", "ctm": <the CTM>, "probes": []}`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the help does not say %q:\n%s", want, text)
 		}

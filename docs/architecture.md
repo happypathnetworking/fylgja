@@ -1561,7 +1561,7 @@ for a twin `twin provision` built or an earlier build's following rebuild made, 
 `snapshot none (record <version>)` for a record of `8` or earlier, naming its version.
 Every twin built from intent or a snapshot and not diverged is of the kind `snapshot`
 ([D-062](decisions.md#d-062)), and its kind line names the snapshot and what it was read
-from: `kind: snapshot 576933ec… (branch fylgja-fixture, read at …)` with no `at`, `(branch
+from: `kind: snapshot 0940db93… (branch fylgja-fixture, read at …)` with no `at`, `(branch
 … at …)` with one, then the stage it names and the step that took it there; a record naming
 none reads `snapshot none`, with the note that `twin step` refuses it and `twin destroy`
 clears it. A twin from a bundle is `from a bundle`. `pinned`, `frozen` and `following`,
@@ -1607,7 +1607,7 @@ the nodes landed and not landed, where it is, and `fylgja twin destroy clears it
 in flight is named on the kind line, with the stage or the snapshot it is stepping
 towards. A step's sides are named alike everywhere: a stage `<branch>/<label>` in the step's
 line and `stage <branch>/<label>` elsewhere, a snapshot by its id's first eight characters,
-`snapshot 576933ec…`, everywhere. From M12 the step line
+`snapshot 0940db93…`, everywhere. From M12 the step line
 ends with how its wait ended (`; settled after 2.4s`, `; wait expired after 120.0s (3
 failing)`, `; wait not run`), and a step at `observe` is listed under `in flight:` alone,
 since its record is already written. `twin step` prints `step observe: settled after 2.4s

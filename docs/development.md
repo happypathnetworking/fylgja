@@ -295,7 +295,7 @@ own, so the seed generates explicitly. `make infrahub-clean` deletes the branch.
 fixture branch is written once, by its seed, and by no test afterwards. If the seed fails
 with `graphql: None` just after a delete, run it again. Contract tests make their own
 throwaway `fylgja-test-*` branches. On this install the fixture branch's schema hash is
-`main`'s, `7c413536…`, and it compiles to `f764e1fa…`.
+`main`'s, `8a4f3bee…`, and it compiles to `c3872f5c…`.
 
 **A host from before 017 migrates `main` once** ([research
 R-14](../specs/017-dcim-reader/research.md#r-14), §5.10), with the demo window closed and

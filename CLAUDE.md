@@ -647,23 +647,33 @@ Rewritten whole at each release's close, never appended to.
     (`ff76c8c`). Tier 2 green whole on 2026-10-29 in 2,017 s once `internal/stage` and
     `internal/stages` were re-run alone, three 1m30s artifact waits having lapsed under
     the tier's own load; tier 3 `E2E-OK` at the first attempt in 2,236.6 s, probes in
-    cases 5, 8 and 9; tier 1's budget raised to 65 s. The operator's review (T050) and
-    `converge` follow; found for `converge`: the boot half (`conformance.Boot`) on a
-    probed twin reads a host's null `psp` and would expect a discovery neighbour on a
-    probe's port; the rehearsal's `verify` cell counts no burst; `probes/ping.yaml`'s
-    `acquisition` comment says a probe image is pulled; `contracts/cli.md`'s 016
-    Upgrading says `-prepare-main` loads the kind where absent, which it does on an empty
-    `main` alone; and tier 2's 1m30s artifact wait is tight under the whole tier.
+    cases 5, 8 and 9; tier 1's budget raised to 65 s. `converge`, then the operator's
+    review (T050), follow. Its first pass (T051–T060) found and fixed: the boot half
+    (`conformance.Boot`), which panicked on a host's null `psp`, reads a probed twin's
+    devices alone, a synthesized link's neighbour skipped in verify's words (T051); the
+    rehearsal's `verify` cell counts the burst, a stage failed on it reading `1 failed`
+    (T052); `-prepare-main` loads the stage and probe kinds before it loads or refuses
+    the library, so a `main` holding the library gains a kind it lacks (T053); tier 2's
+    artifact wait is 180 s, `testsupport.ArtifactWait`, every checksum wait sharing it
+    (T054); the records naming the fixture's former ids, and `twin compile`'s hand wrap
+    written as a `2` (T057); and `README.md`'s walk-through at the re-seeded fixture's
+    counts and hash, its probe section filled from case 5 (T058). `probes/ping.yaml`'s
+    `acquisition` comment, also found, was T040's (`3f6b82e`).
 - **Next**: F-025 the NetBox reader, Release 0.3's fifth and last spec; it has no brief
   yet.
 - **Open, the operator's**: 016's command log (`make command-log`, once this session is
   closed; specify through Run 28 are published); 016's review, merge and push (T050);
+  016's T055, the spec's edge case on a twin an earlier build left (its bundle `5` cannot
+  be stepped from: amend the edge case, or ask for a step across bundle versions), and
+  T059, `plan.md`'s Structure Decision on `internal/probe`'s imports, each changing a
+  feature artifact;
   file 014's upstream
   request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read
   Arista's own checksum for the cEOS tar at the next download.
-- **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
+- **Open, for a session**: 016's T056, live: the boot half on a probed twin, then in case
+  5 of `scripts/e2e.sh`; the fixture tool's `-propose` waits its 6 minutes for an
   artifact validator a branch with no change from `main` never gets (D-054's window);
   bound with `timeout` there, as the release's demo did.

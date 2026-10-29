@@ -585,3 +585,28 @@ made.
   for each of `from` and `to` that is not an id, under its path, a path both name sent once;
   any other shape is `operation.failed` before anything is parsed (`diffFiles`), and the
   CLI never sends one. Nothing is dialled: every test runs with `useService(t, nil)`.
+
+### 5.5 The API's schema and the contracts' gained shapes (T012, Run 11, 2026-10-29)
+
+- **What the schema holds as the server does**: `run.read`'s and `run.interrupt`'s
+  `workflow_id` is `required` in their args, since the server answers its absence `400`
+  (§5.2), and is any string, since a workflow outside the three is the server's
+  `run.unknown`, a `200`, never the transport's; `run_id` is optional. `twin.diff`'s `from`
+  and `to` are optional on the wire, each missing one the server's `operation.failed`, as
+  `stage.plan`'s `branch` is. `state` is an enum of the six `provision.RunState` values,
+  and the `run` frame without it writes no key (`omitempty`), so every other operation's
+  `run` frame is unchanged. The `start` frame's enum keeps `fylgja-rehearse` until T034.
+- **A test that keeps the two together**: `TestOperationArgsAreTheContracts`
+  (`internal/server`) reads `$defs/args/$defs` and requires each operation's properties to
+  be `operationArgs`' names, of the kind the server decodes; run against the schema before
+  this run it names the three operations and four `detach`es missing.
+- **The answers through a real server**: `internal/cli`'s answer test holds every frame of
+  its cases to `$defs/frame`; it gains a detached create (`start`, `run`, `document`) and an
+  ended `run.read` (`run` with `state: completed`, the events, the document, no `start`),
+  the second failing against the schema before this run. A running read is not among them,
+  since the harness's cases each end with a document; its `run` frame is the same shape.
+- **The contracts' text** quotes the sentences the code writes (`run.detached`,
+  `run.cancel.requested`, `run.ended`, `run.flags.conflict`, `diffFiles`' two, the
+  `workflow_id` `400`) and the text the tests assert (quickstart §3's running read, the
+  goldens' diff); `api.md`'s and `cli.md`'s rows for the operations the orchestrator takes
+  are T036's.

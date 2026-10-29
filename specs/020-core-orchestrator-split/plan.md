@@ -19,7 +19,7 @@ operations and five arguments that read Infrahub, its `INFRAHUB_*` and default s
 the bridge listener and the rehearse workflow; it gains `detach` on its four runs,
 `run.read` and `run.interrupt` by identity over the history reads it already makes, and
 `twin.diff`, the pure step between two snapshots; `twin.json` moves to `12`, naming no
-stage. The **orchestrator**, a Python project on **Prefect 3.9.0** under `orchestrator/`
+stage. The **orchestrator**, a Python project on **Prefect 3.8.8** under `orchestrator/`
 with its own venv, `pytest` and `ruff`, holds the Infrahub adapter (a port of the Go
 reader on `infrahub-sdk` 1.23.2 to the same snapshot id, verified reproducible in
 Python), six flows served by one runner against a Prefect server of its own with basic
@@ -34,8 +34,9 @@ timeout and a cancellation (research §1). The route ports, compares, then remov
 ## Technical Context
 
 **Language/Version**: Go 1.26 (the core); Python 3.14.4 (the orchestrator, the checks).
-**Primary Dependencies**: Temporal Go SDK 1.49 (core); Prefect 3.9.0, infrahub-sdk 1.23.2,
-httpx 0.28, pydantic 2.14 (orchestrator); the checks httpx and the SDK the task worker
+**Primary Dependencies**: Temporal Go SDK 1.49 (core); Prefect 3.8.8 with FastAPI 0.150.0
+pinned beside it (3.9.0 and the SDK need disjoint `whenever` ranges, research §5.7),
+infrahub-sdk 1.23.2, httpx 0.28, pydantic 2.14 (orchestrator); the checks httpx and the SDK the task worker
 image carries. **Storage**: files (the core's state root; the orchestrator's root), Temporal
 history, Prefect's SQLite under `local/orchestrator/prefect`. **Testing**: `go test`;
 `pytest` 9.2 (`-m contract` for tier 2); `scripts/e2e.sh`. **Target Platform**: the lab

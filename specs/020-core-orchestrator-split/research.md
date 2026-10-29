@@ -153,8 +153,11 @@ whose persistence would need a result store the container cannot read.
 
 ## 2. Decisions
 
-- **R-01 The platform is Prefect 3.9.0, pinned, on Python 3.14, with a server of the
-  orchestrator's own.** Verified in §1.1-1.5. The server runs `prefect server start
+- **R-01 The platform is Prefect 3.8.8, pinned, on Python 3.14, with a server of the
+  orchestrator's own.** Verified in §1.1-1.5 on 3.9.0; moved to 3.8.8 by the operator on
+  2026-10-29 (T013), since 3.9.0 and `infrahub-sdk==1.23.2` need disjoint `whenever`
+  ranges, with `fastapi==0.150.0` pinned beside it, on which §1.2 holds (§5.7); §1.3-1.5
+  are re-verified on 3.8.8 where T025 and T026 first lean on them. The server runs `prefect server start
   --host <bridge address> --port 4200 --no-ui` with `PREFECT_HOME=local/orchestrator/prefect`
   (SQLite, the open-source default) and `PREFECT_SERVER_API_AUTH_STRING` from
   `local/.env`'s new `FYLGJA_ORCHESTRATOR_AUTH` (`<user>:<password>`, made by the bring-up
@@ -671,3 +674,24 @@ made.
   its last path, the planner's join leaving the last entry unterminated for `read -d ''`;
   in this tree a `__pycache__/` under `.claude/skills/`, and in `SeedWorktree`'s repository
   `orchestrator/.venv`.
+
+### 5.8 The orchestrator's venv and `make test`'s budget (T013, T014, Run 12 resumed, 2026-10-29)
+
+- **The venv on the operator's pin** (§5.7's option 1): `make orchestrator-venv` on Python
+  3.14.4 made `orchestrator/.venv` in 60 s from an empty venv: `prefect` 3.8.8, `fastapi`
+  0.150.0, `infrahub-sdk` 1.23.2, `whenever` 0.9.5, `pydantic` 2.14.2, `httpx` 0.28.1,
+  `PyYAML` 6.0.3, `pytest` 9.2.0, `ruff` 0.17.3; `pip check` clean. The package's
+  `fylgja_orchestrator.egg-info/` under `src/` is ignored by `.gitignore`'s `*.egg-info/`.
+- **The gates on it**: `pytest -q orchestrator -m 'not contract'` six passed (1.9-2.3 s by
+  `pytest`, 4.2 s wall with the interpreter's start); `-m contract` two passed against this
+  host's Infrahub in 0.13 s, writing nothing; `ruff check --config
+  orchestrator/pyproject.toml orchestrator infrahub/checks` clean.
+- **`make test`, uncached** (`go clean -testcache`), Go then `pytest`: 61.4 s and 60.3 s
+  wall at a load of 2.1-3.5, `internal/cli` 42.4 s and 41.8 s of it: under the 65 s budget,
+  with the Python share about 4 s, under the 8 s at which the flows import Prefect lazily
+  (tasks.md's budget line). T047 decides whether the budget moves once the port's tests land.
+- **CI** (T014): `actions/setup-python@v6` at `'3.14'` and `make orchestrator-venv` in the
+  lint, unit and contract jobs and in `release.yml` before `make test`; the lint job keeps
+  golangci-lint on its action and runs `make lint-python` (ruff alone, the half of `make
+  lint` the action does not run). Not yet run on GitHub's runner: the operator pushes, and
+  the first pull request or push after it is its check.

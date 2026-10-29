@@ -1,0 +1,35 @@
+proposed change "fylgja-test-golden-41263" (18e3127c-025b-f488-33be-c5158cf576c3) on branch fylgja-test-golden-41263 → main, draft (5 stages), scope tag:fylgja
+fylgja-test-golden-41263/branch-point: refused (scope.empty)
+  rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-29T18:09:04.039194Z
+step fylgja-test-golden-41263/branch-point → fylgja-test-golden-41263/seeded (— → ce705cdb…): not computed (fylgja-test-golden-41263/branch-point was refused)
+fylgja-test-golden-41263/seeded: branch fylgja-test-golden-41263 at 2026-10-29T18:11:38.471611+00:00 (written), "seeded"
+  snapshot_id 78232019fdb8bb0413b7a122a443c1e70f8719b5e2e7658a5c2e1e27fd877478
+  bundle_id ce705cdb14ccd7d56109a1708e5a1d00f703018df96c1440baeddc4d8c1b13b8
+  read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+step fylgja-test-golden-41263/seeded → fylgja-test-golden-41263/third-link (ce705cdb… → 61665b99…):
+  nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
+  links: +n1:e1-3 — n3:e1-3
+  artifacts: n1 device-config 0b214ab6… → c4e86b90…; n3 device-config 64199f06… → d7218a55…
+fylgja-test-golden-41263/third-link: branch fylgja-test-golden-41263 at 2026-10-29T18:11:50.425111+00:00 (written), "third link"
+  snapshot_id 5cbbe59387fa465c80cd3bd83687c8cb978333c0c8f0baba8ee50a35255b2559
+  bundle_id 61665b99bb406d2b6c3aefc1f6624ca4bd6c57ea44f13e65c904733ed5a159e9
+  read: 3 devices (nokia_srlinux 3), 17 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+step fylgja-test-golden-41263/third-link → fylgja-test-golden-41263/bad-port (61665b99… → 0b8af687…):
+  nodes: ~n1 (mapping)
+  links: unchanged
+  artifacts: n1 device-config c4e86b90… → 52e8a7ff…
+fylgja-test-golden-41263/bad-port: branch fylgja-test-golden-41263 at 2026-10-29T18:12:11.745240+00:00 (written), "a port SR Linux refuses"
+  snapshot_id cc81016f65b5d964622510eae026276e1eaf91e2f09a22ac911014b76050ef26
+  bundle_id 0b8af687b3e91282898e33c3e14eed1139cecf0957496677b2ac9d8cd1d730bc
+  read: 3 devices (nokia_srlinux 3), 18 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  warning artifact.interface.unrepresented [step read] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  warning artifact.interface.unrepresented [step compile] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  info omit.interface.unmappable [step compile] n1:ethernet-1/99: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node
+step fylgja-test-golden-41263/bad-port → fylgja-test-golden-41263/head (0b8af687… → 4215a6c2…): unchanged; the ids differ by provenance alone
+fylgja-test-golden-41263/head: branch fylgja-test-golden-41263 at 2026-10-29T18:12:10.636975+00:00 (head)
+  snapshot_id 8b986a1036a37a2ba19c5a8f6a7884d56d18d77c95717d24482791227df1ef0f
+  bundle_id 4215a6c2e3e7e1e64b6331e2d6406f1cf45d905db7e8c449ea076e8ea51fd9b5
+  read: 3 devices (nokia_srlinux 3), 18 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  warning artifact.interface.unrepresented [step read] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  warning artifact.interface.unrepresented [step compile] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  info omit.interface.unmappable [step compile] n1:ethernet-1/99: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node

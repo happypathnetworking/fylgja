@@ -1,0 +1,91 @@
+{
+  "findings_version": "1",
+  "operation": "stage.list",
+  "status": "ok",
+  "subject": {
+    "scope": "tag:fylgja"
+  },
+  "stages": {
+    "branch": "fylgja-test-golden-41263",
+    "rows": [
+      {
+        "ref": "fylgja-test-golden-41263/branch-point",
+        "branch": "main",
+        "label": "branch-point",
+        "proposed_change": {
+          "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+          "name": "fylgja-test-golden-41263",
+          "branch": "fylgja-test-golden-41263",
+          "draft": true
+        },
+        "at": "2026-10-29T18:09:04.039194Z",
+        "at_source": "branch_point",
+        "description": "",
+        "twin": false
+      },
+      {
+        "ref": "fylgja-test-golden-41263/seeded",
+        "branch": "fylgja-test-golden-41263",
+        "label": "seeded",
+        "proposed_change": {
+          "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+          "name": "fylgja-test-golden-41263",
+          "branch": "fylgja-test-golden-41263",
+          "draft": true
+        },
+        "at": "2026-10-29T18:11:38.471611+00:00",
+        "at_source": "written",
+        "description": "seeded",
+        "twin": false
+      },
+      {
+        "ref": "fylgja-test-golden-41263/third-link",
+        "branch": "fylgja-test-golden-41263",
+        "label": "third-link",
+        "proposed_change": {
+          "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+          "name": "fylgja-test-golden-41263",
+          "branch": "fylgja-test-golden-41263",
+          "draft": true
+        },
+        "at": "2026-10-29T18:11:50.425111+00:00",
+        "at_source": "written",
+        "description": "third link",
+        "twin": false
+      },
+      {
+        "ref": "fylgja-test-golden-41263/bad-port",
+        "branch": "fylgja-test-golden-41263",
+        "label": "bad-port",
+        "proposed_change": {
+          "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+          "name": "fylgja-test-golden-41263",
+          "branch": "fylgja-test-golden-41263",
+          "draft": true
+        },
+        "at": "2026-10-29T18:12:11.745240+00:00",
+        "at_source": "written",
+        "description": "a port SR Linux refuses",
+        "twin": false
+      },
+      {
+        "ref": "fylgja-test-golden-41263/head",
+        "branch": "fylgja-test-golden-41263",
+        "label": "head",
+        "proposed_change": {
+          "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+          "name": "fylgja-test-golden-41263",
+          "branch": "fylgja-test-golden-41263",
+          "draft": true
+        },
+        "at": "2026-10-29T18:12:10.636975+00:00",
+        "at_source": "head",
+        "description": "",
+        "twin": false
+      }
+    ],
+    "orphans": [],
+    "record": null
+  },
+  "findings": []
+}

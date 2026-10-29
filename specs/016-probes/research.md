@@ -587,3 +587,31 @@ Appended by the runs.
   deleted; `Branch` then lists `main` and `fylgja-fixture`, `main`'s hash `8a4f3bee…`
   unmoved. The lines on the images stay §4.4's, the live session's. *(Infrahub 1.11.2,
   infrahub-sdk 1.23.2, 2026-10-29)*
+- **R-19 The fixture's CTM follows the seed in its artifacts too** (Run 20, T035): R-19's
+  "the fixture's CTM moves for the ports alone" does not hold. The reader reads no address,
+  but the template renders every non-management physical port, cabled or not, so a seeded
+  device's artifact gains each probe-ready port's lines under the imported template
+  already, and its addresses once T034's template is imported. `TestMixedSeedReads`, run
+  alone against a branch this tree's `SeedMixed` seeded, read `mixed.json`'s devices,
+  interfaces (`ethernet-1/10`, `-1/11` on `s1`, `Ethernet10`, `Ethernet11` on `e1` and
+  `e2`, uncabled, `mgmt_only` false, enabled) and links exactly, and differed in the three
+  artifacts alone: `interface Ethernet10` / `no shutdown` and the same for `Ethernet11` on
+  each EOS device, and `set / interface ethernet-1/10 admin-state enable`, its
+  `subinterface 0 admin-state enable` and `network-instance default interface
+  ethernet-1/10.0` (and `-1/11`) on `s1`. Since the goldens move only once more and the
+  fixture is re-seeded after the import (T041, T042), the test CTMs carry the tree
+  template's renders: `.venv/bin/infrahubctl render srlinux_device_config device=<d>
+  --branch <b> --out <file>` on two throwaway branches seeded by the fixture tool
+  (`fylgja-test-t035-3n`, `-mx`), each render's marker replaced by the fixture's
+  (`FYLGJA-MARKER-fixture`, `FYLGJA-MARKER-mixed-fixture`) and its checksum the MD5 of the
+  bytes. Each device gains ten lines (SR Linux: the two ports' five each, the `ipv4` pair
+  among them) or nine (EOS: `ip routing` and the two ports' four each); `n1`–`n3` 1,327
+  bytes each (`28881d3d…`, `092ca9f6…`, `95a3a917…`), `s1` 1,331 (`fdf83f15…`), `e1` 472
+  (`b1431710…`), `e2` 476 (`e74b3db4…`); EOS's `Management1` comment moves from line 10
+  to line 19, as the mixed compile's two warnings say. Both branches deleted; `Branch`
+  then lists `main` and `fylgja-fixture`, `FylgjaProbe`, `FylgjaStage` and
+  `CoreProposedChange` count 0. Until the import, `TestMixedSeedReads` fails on these
+  lines, its seed's artifacts rendered by the imported template; until the re-seed,
+  `TestFixtureReadsToTheThreeNodeCTM` fails on the interfaces and artifacts, as
+  `TestReadCountsTheFixture` does on the count. *(Infrahub 1.11.2, infrahub-sdk 1.23.2,
+  2026-10-29)*

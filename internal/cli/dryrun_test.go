@@ -246,7 +246,7 @@ func TestProvisionDryRunTextReport(t *testing.T) {
 // lossy golden holds nine lossy mappings over three shared ports
 // (internal/compiler's TestLossyRecordIsComplete).
 func TestDryRunCountsTheLossyRecord(t *testing.T) {
-	const lossyID = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
+	const lossyID = "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31"
 	useStateRoot(t)
 	useService(t, nil)
 	dryRunEnv(t)

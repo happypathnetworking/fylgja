@@ -35,9 +35,9 @@ func TestWrappedFixturesCompileToTheGoldens(t *testing.T) {
 		name, id string
 		reg      *psp.Registry
 	}{
-		{"three-node", "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386", shipped},
-		{"lossy", "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03", lossy},
-		{"mixed", "ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec", shipped},
+		{"three-node", "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a", shipped},
+		{"lossy", "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31", lossy},
+		{"mixed", "7b994ecf500d86431f82ca5c08eee4e32ac77b1b6625d1c7ad3f582edb8c81b9", shipped},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, err := snapshot.Load(repoPath("testdata", "snapshot", c.name+".json"))

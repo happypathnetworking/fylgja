@@ -1,5 +1,5 @@
 {
-  "bundle_version": "5",
+  "bundle_version": "6",
   "provenance": {
     "branch": "lossy-fixture",
     "at": "2026-09-19T12:00:00Z",
@@ -274,6 +274,7 @@
       "reason": "port eth1 is held by cabled Ethernet1/1 (rule front); this interface maps to it under rule linecard and is not represented"
     }
   ],
+  "probes": [],
   "fidelity": {
     "basis": "asserted",
     "production_forwarding": {
@@ -450,6 +451,7 @@
         "source": "DcimPlatform",
         "reason": "the library's platform carries no version"
       }
-    ]
+    ],
+    "synthesized": []
   }
 }

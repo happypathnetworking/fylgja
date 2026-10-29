@@ -584,7 +584,7 @@ func TestDiffRefusesABundleFromFormat3(t *testing.T) {
 	now := golden(t, "three-node", idB)
 
 	_, err = Diff(old, now)
-	want := "the from bundle " + idA + `: manifest.json: is bundle version "3"; this build compares "5"`
+	want := "the from bundle " + idA + `: manifest.json: is bundle version "3"; this build compares "6"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("Diff = %v, want %q", err, want)
 	}

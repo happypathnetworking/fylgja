@@ -22,7 +22,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
-const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
+const fixtureBundleID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
 
 // fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json):
 // what a create of the fake Infrahub's fixture branch takes and files before its run (018).
@@ -41,7 +41,7 @@ func useFixtureRead(t *testing.T) lab.Paths {
 // branch takes and compiles to: the fixture's intent, its envelope naming no at.
 const (
 	headSnapshotID = "856af9ad8f6e5d13d2d99e3af7d21d86c2cc9645c45d548a2df0494a11aad617"
-	headBundleID   = "951b7d2145f65a6d906b786dab9e05b12d172b36ce85229f671f7c334a37444e"
+	headBundleID   = "dd9b53b7c560ab586bd9a25bc9b55dfa6777fff5bb65d6e3004122bb70438506"
 )
 
 // storedLines are the two lines a create prints before its run's start, the snapshot's

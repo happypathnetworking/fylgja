@@ -29,12 +29,13 @@ func loadFixture(t *testing.T, path string) *ctm.CTM {
 // that names its ports as production gains nothing from the profile.
 // The lossy one is the design case's, baselined once and reviewed. The mixed
 // one is M7's two shipped platforms in one bundle, baselined once likewise.
-// A bundle format moves all three, once and reviewed: M7's "3", and M12's "4", which
-// wrote enabled on every mapping row.
+// A bundle format moves all three, once and reviewed: M7's "3", M12's "4", which
+// wrote enabled on every mapping row, and 016's "6", which wrote the version, probes: []
+// and fidelity.synthesized: [] in each manifest and nothing else.
 const (
-	goldenThreeNodeID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
-	goldenLossyID     = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
-	goldenMixedID     = "ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec"
+	goldenThreeNodeID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+	goldenLossyID     = "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31"
+	goldenMixedID     = "7b994ecf500d86431f82ca5c08eee4e32ac77b1b6625d1c7ad3f582edb8c81b9"
 )
 
 // compileFixture compiles a fixture and fails on any rejection: the fixtures under

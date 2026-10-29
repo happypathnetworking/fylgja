@@ -1,5 +1,5 @@
 {
-  "bundle_version": "5",
+  "bundle_version": "6",
   "provenance": {
     "branch": "fylgja-fixture",
     "at": "2026-09-08T12:00:00Z",
@@ -195,6 +195,7 @@
     }
   ],
   "omissions": [],
+  "probes": [],
   "fidelity": {
     "basis": "asserted",
     "production_forwarding": {
@@ -226,6 +227,7 @@
         "source": "DcimPlatform",
         "reason": "the library's platform carries no version"
       }
-    ]
+    ],
+    "synthesized": []
   }
 }

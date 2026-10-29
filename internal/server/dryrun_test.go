@@ -74,7 +74,7 @@ func TestDryRunSaysNothingOfFollowing(t *testing.T) {
 // counts the read's own counts, and the lossy record's from the bundle the read compiled to.
 // Its command half, the provision dry run, runs in internal/cli.
 func TestDryRunCountsTheLossyRecord(t *testing.T) {
-	const lossyID = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
+	const lossyID = "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31"
 	paths := useStateRoot(t)
 	useService(t, nil)
 	dryRunEnv(t)

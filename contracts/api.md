@@ -1,12 +1,12 @@
-# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed; 016's probes
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
 ([findings.schema.json](findings.schema.json) and the blocks beside it), as 014 moved them
 ("014: the stage surface", at the end) and 015 added to them ("015: the rehearsal", after
 it), and 017 moved them again ("017: the scope and the DCIM reader"), and 018 added the
-snapshot ("018: snapshots"), and 019 removed following from them ("019: following removed",
-last). The addresses, the statuses, the frame kinds and the
+snapshot ("018: snapshots"), and 019 removed following from them ("019: following removed"),
+and 016 added probes to them ("016: probes", last). The addresses, the statuses, the frame kinds and the
 document are the contract; a sentence is contract only where it is quoted.
 
 ## Transport
@@ -50,17 +50,17 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot` | the snapshot, when `snapshot` is a path | | from `start` |
+| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot`, `probes` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start` |
 | `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run` | the bundle's regular files | | from `start` |
-| `twin.step` | `/v1/twin/step` | `stage`, `snapshot`, `allow_restart`, `dry_run`, `wait` | the snapshot, when `snapshot` is a path | | from `start` |
+| `twin.step` | `/v1/twin/step` | `stage`, `snapshot`, `probes`, `allow_restart`, `dry_run`, `wait` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start` |
 | `twin.destroy` | `/v1/twin/destroy` | | | | no |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
-| `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope` | | | from `start` |
+| `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope`, `probes` | the probe file, when `probes` is given | | from `start` |
 | `twin.compile` | `/v1/twin/compile` | `snapshot`, `out` | the snapshot | the bundle | no |
 | `stage.list` | `/v1/stage/list` | `branch`, `scope` | | | no |
-| `stage.plan` | `/v1/stage/plan` | `branch`, `scope` | | | no |
-| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope` | | the snapshot | no |
+| `stage.plan` | `/v1/stage/plan` | `branch`, `scope`, `probes` | the probe file, when `probes` is given | | no |
+| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope`, `probes` | the probe file, when `probes` is given | the snapshot | no |
 | `schema.check` | `/v1/schema/check` | `branch` | | | no |
 | `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
 
@@ -74,7 +74,8 @@ runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.pla
 `intent.read` answers with a snapshot where it answered with the CTM, and `twin.create`
 takes the argument `snapshot`, with the snapshot's file when it is a path. Moved at 019:
 `twin.create` takes neither `interval` nor `no_follow`, and `twin.step` takes `snapshot` as
-`twin.create` does.
+`twin.create` does. Added at 016: the argument `probes` on `intent.read`, `twin.create`,
+`twin.step`, `stage.plan` and `twin.rehearse`, with the probe file it names.
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
 one that was, whatever its value (`"stage": ""` is `--stage=`). Every guard is the
@@ -487,3 +488,62 @@ Every operation, the transport, the token, the frames, the statuses and the file
   `pinned`, `frozen` and `following`, which become `snapshot`; the verify block's twin
   gains `snapshot_id`; the identifiers retired and moved are cli.md's.
 - The checks `fylgja-step` and `fylgja-twin` send nothing new and read nothing removed.
+
+## 016: probes
+
+A probe is a declaration outside intent, carried by the snapshot and compiled into
+synthesized hosts ([D-064](../docs/decisions.md#d-064); [cli.md](cli.md), "016: probes",
+says what each command does). The API's version stays `1`: a client that never sends
+`probes` is served with the probes declared in `FylgjaProbe` on the default branch, or
+none. Every operation, the transport, the token, the frames, the statuses and the files are
+as 019 left them, but for these.
+
+| | Operation | `args` | Files in | Files out |
+|---|---|---|---|---|
+| argument added | `intent.read` | `probes` | the probe file `probes` names | the snapshot, version `2` |
+| argument added | `twin.create` | `probes` | one file, beside `snapshot` **or** `probes`, never both | |
+| argument added | `twin.step` | `probes` | as `twin.create` | |
+| argument added | `stage.plan` | `probes` | the probe file `probes` names | |
+| argument added | `twin.rehearse` | `probes` | the probe file `probes` names | |
+
+- **`probes`** is `--probes` as given: the path of a probe declaration
+  ([probes.schema.json](probes.schema.json), version `1`), and the request carries that
+  one file under that path, as it carries a snapshot under `snapshot`'s. The request's
+  files are held to it before the answer begins, after the files' own rules: a request
+  naming `probes` with no file, two, or one under another path, and a request of
+  `intent.read`, `stage.plan` or `twin.rehearse` carrying a file without `probes`, is `400`,
+  the request is not one (`the request is not one: stage.plan carries 1 file where it takes
+  a probe file beside its argument "probes" alone`; `… carries 0 files where it takes the
+  probe file its argument "probes" names, under that path, alone`; `… carries its probe
+  file under another path than its argument "probes" gives`), naming the argument and
+  never a file's content. No client's command sends such a request.
+- **Beside `snapshot`** on `twin.create` and `twin.step` it is `snapshot.flags.conflict` at
+  `--probes`, exit 2 at `start`, after the guards 018 and 019 give, before any connection
+  and before the request's files are held to their shape: the client then reads and sends
+  no file, and the conflict answers whatever either path holds. A snapshot carries its
+  own list.
+- **The server reads one list per request**, once, after the guards, the scope and the
+  packages, before any stage resolves or any branch is read: the file, parsed as a
+  declaration and held to its rules with the formats the probe packages declare, each
+  refusal at `start` naming the file; else `FylgjaProbe` on the default branch, unpinned
+  (the kind and its ten attributes checked against `GET /api/schema`, then its objects
+  read in name order), each refusal at `resolve`, the kind absent `probe.kind.absent`, an
+  Infrahub that cannot be asked `operation.failed` at `resolve`; else `[]`. Every snapshot
+  the request takes carries that list: each stage of a `stage.plan` and of a
+  `twin.rehearse` the same one. `twin.step` reads it for a stage target alone; a snapshot
+  target's list is the snapshot's. The identifiers are cli.md's.
+- **`intent.read`**'s `files` frame holds `snapshot.json`, a snapshot `2` with the list; a
+  snapshot `1` sent on `twin.compile`, `twin.create` or `twin.step` is read as a `2` with
+  no probes, under the same id.
+- **The documents** stay `findings_version` `1`: the step enum gains `flows`;
+  `dry_run.nodes[]` admits a probe's host; the `step` block gains `loss`
+  ([step.schema.json](step.schema.json)), the `verify` block `counts.burst` and a host node
+  with its `bursts` ([verify.schema.json](verify.schema.json)), and `rehearsal.stages[]`
+  `loss` ([rehearsal.schema.json](rehearsal.schema.json)); the `markdown` frame's table
+  gains the column `loss` and its caveat a sentence. Every loss figure is labelled
+  container timing and none is asserted.
+- **The files**: a snapshot is `2`, a bundle `6`; `twin.provision` refuses a bundle `5`
+  (`bundle.version.unsupported`). A probe file holds addresses and names, never a
+  credential; the flows' and bursts' output never crosses, but as the figures the
+  documents carry.
+- **The checks** `fylgja-step` and `fylgja-twin` send no `probes`: theirs are the kind's.

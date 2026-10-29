@@ -652,7 +652,8 @@ type stepPackages struct {
 // package's fidelity.link_change, which the host check's plan does not carry. Each side
 // names its snapshot (018; R-13): the from side the record's, and the to side the target's;
 // the run copies both into the record it writes. The to side names the target's stage, none
-// for a snapshot (019).
+// for a snapshot (019). The flows are the probes both bundles carry, and the probes either
+// carries alone are named (flowsOf; 016).
 func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, target stepTarget, toPath string, s step.Step, diff []byte,
 	plan wire.CheckHostResult, lifecycle wire.ReconcilePlan, reg *psp.Registry, version string) (provision.StepInput, stepPackages, error) {
 	var packages stepPackages
@@ -666,9 +667,16 @@ func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, target step
 		packages.target = append(packages.target, provision.NodePackage{Node: n.Name, ID: n.PSPID, Mode: n.Push.Mode,
 			LinkChange: linkChange})
 	}
-	var m compiler.Manifest
+	var m, to compiler.Manifest
 	if err := json.Unmarshal(from.Files[compiler.ManifestFile], &m); err != nil {
 		return provision.StepInput{}, packages, fmt.Errorf("reading bundle %s's manifest: %w", rec.BundleID, err)
+	}
+	if err := json.Unmarshal(target.bundle.Files[compiler.ManifestFile], &to); err != nil {
+		return provision.StepInput{}, packages, fmt.Errorf("reading bundle %s's manifest: %w", target.bundle.ID, err)
+	}
+	flows, added, dropped, err := flowsOf(m, to, plan.Nodes)
+	if err != nil {
+		return provision.StepInput{}, packages, err
 	}
 	for _, n := range m.Nodes {
 		if p, ok := reg.LookupID(n.PSP.ID); ok {
@@ -698,7 +706,53 @@ func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, target step
 		Declared:     declared,
 		WaitS:        f.waitS,
 		Version:      version,
+		Flows:        flows,
+		Added:        added,
+		Dropped:      dropped,
 	}, packages, nil
+}
+
+// flowsOf is the step's flows from the two bundles' manifests (016, research R-21): one
+// per probe both carry, in name order, run in its a host's container towards its b host's,
+// the far address b's without its prefix length, and the flow the host check rendered for
+// the a host from the target's probe package; then the probes the target alone carries
+// (added: hosts the reconcile creates, with no transient figure) and those the twin's bundle
+// alone carries (dropped: hosts the reconcile deletes, with no flow started), each in name
+// order. Each is nil when it has none, so a probe-less step's input is the one 019 started.
+// A host the host check did not plan is an error: it plans every host of the target.
+func flowsOf(from, to compiler.Manifest, nodes []wire.NodePlan) (flows []wire.FlowPlan, added, dropped []string, err error) {
+	held := map[string]bool{}
+	for _, p := range from.Probes {
+		held[p.Name] = true
+	}
+	hosts := map[string]*wire.ProbePlan{}
+	for _, n := range nodes {
+		if n.Host != nil {
+			hosts[n.Name] = n.Host
+		}
+	}
+	carried := map[string]bool{}
+	for _, p := range to.Probes {
+		carried[p.Name] = true
+		if !held[p.Name] {
+			added = append(added, p.Name)
+			continue
+		}
+		a, b := p.Hosts[0], p.Hosts[1]
+		host, ok := hosts[a.Node]
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("probe %s: the host check planned no host %s", p.Name, a.Node)
+		}
+		far, _, _ := strings.Cut(b.Address, "/")
+		flows = append(flows, wire.FlowPlan{Probe: p.Name, From: lab.Container(a.Node), To: lab.Container(b.Node), Far: far,
+			Flow: host.Flow})
+	}
+	for _, p := range from.Probes {
+		if !carried[p.Name] {
+			dropped = append(dropped, p.Name)
+		}
+	}
+	return flows, added, dropped, nil
 }
 
 // stepWait is --wait's budget in seconds, verify.DefaultBudget's when the flag is left out,
@@ -873,10 +927,35 @@ func pushLine(pushes []step.NodePush, nodes []wire.NodePlan) string {
 // line and its timings comes how the wait after the record ended, when it ran.
 func stepClosing(in provision.StepInput, res provision.StepResult) string {
 	line := m11Closing(in, res)
-	if line == "" || res.Wait == nil {
+	if line == "" {
 		return line
 	}
-	return line + "; " + waitClause(*res.Wait)
+	if res.Wait != nil {
+		line += "; " + waitClause(*res.Wait)
+	}
+	if res.Loss != nil && len(res.Loss.Probes) > 0 {
+		line += "; " + lossClause(*res.Loss)
+	}
+	return line
+}
+
+// lossClause is what the step's flows lost, on the closing line (016, contracts/cli.md):
+// "loss n1-loop 0/312", lost over sent per probe, or how a flow with no figure ended.
+func lossClause(l wire.Loss) string {
+	var parts []string
+	for _, p := range l.Probes {
+		switch p.Outcome {
+		case wire.FlowMeasured:
+			parts = append(parts, fmt.Sprintf("%s %d/%d", p.Probe, p.Lost, p.Sent))
+		case wire.FlowInterrupted:
+			parts = append(parts, fmt.Sprintf("%s %d/%d interrupted", p.Probe, p.Lost, p.Sent))
+		case wire.FlowNotStarted:
+			parts = append(parts, p.Probe+" not started")
+		default:
+			parts = append(parts, p.Probe+" not read")
+		}
+	}
+	return "loss " + strings.Join(parts, ", ")
 }
 
 // waitClause is how the step's wait ended, in the words the warning verify.wait.unsettled

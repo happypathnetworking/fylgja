@@ -2431,6 +2431,83 @@ func TestStepRunReportsTheWait(t *testing.T) {
 	}
 }
 
+// The run prints how each flow started after step stage: and what each lost after step
+// observe:, labelled container timing, and the closing line ends with the loss, lost over
+// sent per probe (016, contracts/cli.md, twin step). The document carries the run's loss;
+// the dry run's, which starts nothing, carries loss null. A twin whose bundles carry no
+// probe starts its run with no flow, nothing added and nothing dropped.
+func TestStepRunReportsTheLoss(t *testing.T) {
+	stepHost(t, "plan-link-added.json", nil)
+	dry := runStepCmd(t, "--dry-run", "--allow-restart")
+	raw, err := json.Marshal(dry.doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"loss":null`) {
+		t.Errorf("the dry run's document %s, want step.loss null", raw)
+	}
+
+	stepHost(t, "plan-link-added.json", nil)
+	done := func(step string, d time.Duration, detail string) provision.Event {
+		return provision.Event{WorkflowID: provision.WorkflowStep, Step: step, End: true, Outcome: provision.EventDone,
+			Duration: d, Detail: detail}
+	}
+	var events []provision.Event
+	for _, e := range stepEvents() {
+		events = append(events, e)
+		if e.Step == "stage" {
+			events = append(events, done("flows", 400*time.Millisecond, "n1-loop started"))
+		}
+	}
+	events = append(events, done("observe", 2600*time.Millisecond, "settled after 2.4s (2 reads)"),
+		done("loss", 5100*time.Millisecond, "n1-loop 0/312 lost, longest gap 0.0s (container timing)"))
+	reconcile := 3.9
+	e1Took, s1Took := 1.6, 2.4
+	loss := &wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "n1-loop",
+		From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: wire.FlowMeasured, Sent: 312}},
+		Added: []string{}, Dropped: []string{}}
+	svc := &fakeService{runID: stepRunID, events: events, stepResult: provision.StepResult{Outcome: provision.StepStepped,
+		Findings: findings.List{},
+		PushPlan: []wire.StepPush{{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: wire.PushLanded, TookS: &e1Took},
+			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded, TookS: &s1Took}},
+		Timings: wire.StepTimings{ReconcileS: &reconcile, Readiness: map[string]float64{"e1": 54.8},
+			Push: map[string]float64{"e1": 1.6, "s1": 2.4}, WholeS: 71.2},
+		Record: &wire.TwinRecord{State: wire.StateReady},
+		Wait:   &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 2.4, Failing: []wire.StepFinding{}},
+		Loss:   loss, StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}}
+	useService(t, svc)
+	useInterrupts(t)
+	out := runStepCmd(t, "--allow-restart")
+	if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK {
+		t.Fatalf("exit %d status %s, want 0, ok: the loss changes neither; findings %+v", out.code, out.doc.Status, out.doc.Findings)
+	}
+	if !strings.Contains(out.stdout, "\nstep stage: done in 0.2s\nstep flows: n1-loop started\nstep reconcile: ") {
+		t.Errorf("stdout:\n%s\nwant step flows: right after step stage:", out.stdout)
+	}
+	tail := []string{"step observe: settled after 2.4s (2 reads)",
+		"step loss: n1-loop 0/312 lost, longest gap 0.0s (container timing)",
+		"stepped to stage change-1/linked (bundle " + short(out.doc.BundleID) + ") in 71.2s: reconcile 3.9s; readiness e1 54.8s; " +
+			"push e1 1.6s, s1 2.4s; settled after 2.4s; loss n1-loop 0/312"}
+	if !strings.HasSuffix(out.stdout, "\n"+strings.Join(tail, "\n")+"\n") {
+		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, strings.Join(tail, "\n"))
+	}
+	want := &findings.StepLoss{Basis: "container", Probes: []findings.StepProbeLoss{{Probe: "n1-loop",
+		From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: "measured", Sent: 312}}, Added: []string{}, Dropped: []string{}}
+	if got := out.doc.Step.Loss; !reflect.DeepEqual(got, want) {
+		t.Errorf("step.loss %+v, want the run's %+v", got, want)
+	}
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	if len(svc.stepped) == 0 {
+		t.Fatal("no step run started")
+	}
+	for _, in := range svc.stepped {
+		if in.Flows != nil || in.Added != nil || in.Dropped != nil {
+			t.Errorf("a probe-less twin's step started with flows %+v, added %q, dropped %q; want none", in.Flows, in.Added, in.Dropped)
+		}
+	}
+}
+
 // US2's step scenarios through the harness (014, T036), on stepInfrahub's proposed change:
 // the target with none given, a step back, a stage foreign to the twin's proposed change, a
 // step from the branch point to the head, a target that is the twin's own stage under

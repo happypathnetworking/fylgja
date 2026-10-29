@@ -987,6 +987,18 @@ func drop018Snapshots(doc map[string]any) {
 	}
 }
 
+// drop016NullLoss removes the step block's loss when it is null, as the dry run and a run
+// closed before its flows were read write it (016). Every contract before 016's forbids the
+// key, and from 016 it is always written. A loss that is set is left, so an earlier contract
+// still refuses a document carrying one.
+func drop016NullLoss(doc map[string]any) {
+	if step, ok := doc["step"].(map[string]any); ok {
+		if v, ok := step["loss"]; ok && v == nil {
+			delete(step, "loss")
+		}
+	}
+}
+
 // dropM6DryRunCounts removes M6's two dry_run counts. M2's, M4's and M5's contracts
 // predate them, and from M6 a dry run always carries them (M6 contracts/cli.md).
 func dropM6DryRunCounts(doc map[string]any) {

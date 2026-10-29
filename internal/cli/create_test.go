@@ -697,15 +697,50 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 // against 018's frozen copy.
 //
 // 016 moves the step, verify, rehearsal and findings contracts on: a document of this build
-// is 019's as built, so it is also validated against 019's frozen copy.
+// is 019's as built, a null step loss taken out (withoutNullLoss), so it is also validated
+// against 019's frozen copy; one whose step carries a loss is 016's alone, and is read
+// against no earlier copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	if carriesLoss(doc) {
+		return
+	}
 	validateWithShow(t, contract019, "019", doc)
 	validateWithShow(t, contract018, "018", doc)
 	if !namesSnapshot(t, doc) {
 		validateWithShow(t, contract017, "017", doc)
 	}
+}
+
+// carriesLoss says whether doc's step block carries a loss its flows read (016): such a
+// document is 016's, which no earlier contract accepts.
+func carriesLoss(doc *findings.Document) bool {
+	return doc.Step != nil && doc.Step.Loss != nil
+}
+
+// withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
+// is null, as the dry run and a run closed before its flows write it (016): every contract
+// before 016's forbids the key, and from 016 it is always written.
+func withoutNullLoss(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	step, ok := generic["step"].(map[string]any)
+	if !ok {
+		return b
+	}
+	if v, ok := step["loss"]; !ok || v != nil {
+		return b
+	}
+	delete(step, "loss")
+	out, err := json.Marshal(generic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // contract017 is the feature argument that names 017's copies of the findings contract and
@@ -831,6 +866,9 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 		}
 	default:
 		b = asEarlierContract(t, doc)
+	}
+	if feature != currentContract {
+		b = withoutNullLoss(t, b)
 	}
 	if err := validateAgainst(findingsContract(t, feature), b); err != nil {
 		t.Errorf("document does not satisfy %s's findings contract:\n%v\n%s", milestone, err, b)

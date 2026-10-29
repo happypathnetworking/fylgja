@@ -41,6 +41,7 @@ func as017(t *testing.T, doc *Document) []byte {
 	return mutated(t, doc, func(doc map[string]any) {
 		restore018Kind(doc)
 		drop018Snapshots(doc)
+		drop016NullLoss(doc)
 	})
 }
 
@@ -142,14 +143,15 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 	}
 }
 
-// Every document this package builds is 019's, as built: 019's copies stay as 019 left them
-// when 016 moves the findings, step, verify and rehearsal contracts on, and the claim is that
-// the older contract still accepts these documents.
+// Every document this package builds is 019's, its step block's null loss taken out
+// (drop016NullLoss): 019's copies stay as 019 left them when 016 moves the findings, step,
+// verify and rehearsal contracts on, and the claim is that the older contract still accepts
+// these documents. A step document whose loss is set is 016's alone (TestStepLossDocuments).
 func TestA019DocumentIsUnchanged(t *testing.T) {
 	v019 := compileFeatureFindingsSchema(t, contract019, currentResources...)
 	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
 		t.Run(c.label, func(t *testing.T) {
-			mustValidateBytes(t, v019, mustMarshal(t, c.doc), c.label+" against 019's contract")
+			mustValidateBytes(t, v019, mutated(t, c.doc, drop016NullLoss), c.label+" against 019's contract")
 		})
 	}
 }

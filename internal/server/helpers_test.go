@@ -275,11 +275,17 @@ func validateM6Document(t *testing.T, doc *findings.Document) {
 // so it is also validated against 017's frozen copy, the null snapshot ids taken out
 // (as017Contract). 019 removes following: a document of this build is 018's too, as built,
 // so it is also validated against 018's frozen copy. 016 moves the step, verify, rehearsal
-// and findings contracts on: a document of this build is 019's as built, so it is also
-// validated against 019's frozen copy.
+// and findings contracts on: a document of this build is 019's as built, a null step loss
+// taken out (withoutNullLoss), so it is also validated against 019's frozen copy; one whose
+// step carries a loss is 016's alone, and is read against no earlier copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	// A step document carrying a loss its flows read is 016's, which no earlier contract
+	// accepts.
+	if doc.Step != nil && doc.Step.Loss != nil {
+		return
+	}
 	validateWithShow(t, contract019, "019", doc)
 	validateWithShow(t, contract018, "018", doc)
 	if !namesSnapshot(t, doc) {
@@ -336,6 +342,30 @@ func dropNullSnapshots(generic map[string]any) {
 	}
 }
 
+// withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
+// is null, as the dry run and a run closed before its flows write it (016): every contract
+// before 016's forbids the key, and from 016 it is always written.
+func withoutNullLoss(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	step, ok := generic["step"].(map[string]any)
+	if !ok {
+		return b
+	}
+	if v, ok := step["loss"]; !ok || v != nil {
+		return b
+	}
+	delete(step, "loss")
+	out, err := json.Marshal(generic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 // as017Contract is doc as 017's contract reads it, marshalled: the null snapshot ids taken
 // out, and nothing else.
 func as017Contract(t *testing.T, doc *findings.Document) []byte {
@@ -365,6 +395,9 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 	}
 	if feature == contract017 {
 		b = as017Contract(t, doc)
+	}
+	if feature != currentContract {
+		b = withoutNullLoss(t, b)
 	}
 	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
 	if err != nil {

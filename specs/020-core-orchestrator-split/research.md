@@ -472,3 +472,49 @@ made.
   `Branch` `main` and `fylgja-fixture` alone, hash `8a4f3bee…`, `fylgja` at `842c893`, as
   T001 found them; `clab inspect --all` `{}`, no `local/twin`, no running workflow, no
   Schedule. Nothing under `testdata/` changed.
+
+### 5.2 A run read and interrupted by its identity (T007, Run 7, 2026-10-29)
+
+- **The describe, on the dev server** (Temporal CLI 1.9.1, Server 1.32.0, read only): a run
+  id the workflow holds no run under answers NotFound (`workflow execution not found for
+  workflow ID "fylgja-provision" and run ID "…"`), a run id of no run's shape answers
+  InvalidArgument (`Invalid RunId.`), a workflow id never run NotFound (`workflow not found
+  for ID: …`), and no run id the latest run, `COMPLETED`. `Describe` reads NotFound and
+  InvalidArgument alike as `*UnknownRunError`, `run.unknown`; any other failure is the
+  service unreachable, `run.service.unreachable`.
+- **What the Service gained beyond `Describe`**: the task's `Follow` and
+  `Result`/`ResultOfStep` serve an ended run, whose history ends at its close so `Follow`
+  returns without waiting; three more were needed and are Service methods beside them.
+  `History` is `Follow` without its long poll (one `follow(…, wait)` under both), since
+  `Follow` on a running run waits for its close and a running read must end at the events
+  so far. `InputOfStep` reads the step's input from its history's first event, as
+  `towards` does, because `StepDocument` is built from the input beside the result.
+  `ResultOfDestroy` reads a destroy's result, which no method read: `StartDestroy` read it
+  from its own handle. `RunState` is a struct (workflow id, run id, state) rather than the
+  state alone, so a read that names no run learns the latest run's id for its
+  `subject.run_id` and its history reads.
+- **The recorded runs all close `completed`**: each of the seven histories ends
+  `WORKFLOW_EXECUTION_COMPLETED` with a result, a cancelled run included, since the
+  workflows answer a cancellation with a result. So a read's state says how the workflow
+  service closed the run, and the document how the run ended: `cancel-during-host-check`
+  `error`, the three other cancelled provisions `failed`, `step-cancelled` and
+  `step-diverged` `diverged`, `step-wait-cancelled` `ok` (stepped, its wait cancelled). A
+  run closed without a result (failed, terminated, timed out at the service) reads as the
+  operation failing at the step its history reached.
+- **Decided in the run, from R-04 and data-model §1**: `workflow_id` is required on both
+  operations, its absence the transport's `400` as `twin.provision`'s bundle is, since the
+  CLI's `--workflow` always gives it; a workflow id outside the three (`fylgja-rehearse`
+  among them) is `run.unknown` naming it, before anything is dialled. US4's scenario 6 says
+  a read of a destroy has "no `run` frame"; R-04, data-model §1 and contracts/README.md give
+  every `run.read` answer the `run` frame with its `state`, and the read follows them: what
+  the scenario holds is that the events and the document are the destroy's own, not those of
+  a run the destroy cancelled first, which a read by identity never reads. The `out` lines
+  begin `run <workflow_id> <run_id>: <state>`, then the events' lines and, once ended, the
+  stream's own closing lines (the twin's, the step's, the destroy's cleanup).
+- **The client**: `api.Client.RunRead` and `RunInterrupt`; `Answer.Next` is `io.EOF`, not
+  `*Cut`, where a `run.read` whose `run` frame said `running` ends at a whole line.
+- **Left to T012**: `contracts/api.schema.json`'s `$defs/run` holds `additionalProperties:
+  false` without `state`, so the read's `run` frame is held to it by no test yet; the event
+  and document frames are. The CLI's answer test covers both operations through answers
+  of the document alone (an unknown read, an ended interrupt) for that reason, and its
+  command walk leaves out `run.read` and `run.interrupt` until T009 adds the commands.

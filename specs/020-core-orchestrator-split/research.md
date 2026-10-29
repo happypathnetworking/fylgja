@@ -418,3 +418,57 @@ VI, VIII, IX and XI read the amended text.`
 ## 5. Verified at implement
 
 Appended by the runs.
+
+### 5.1 The goldens captured (T003, Run 3, 2026-10-29)
+
+On the worker and the server restarted from this tree at `96d38d8` (the same code as 016's
+`195af3a`: no Go, `go.mod`, `contracts/`, `probes/` or `psp/` change between), both
+binaries live, every login and `INFRAHUB_*` name in their environments, `free -m` 17,122 MiB
+available before and 17,241 MiB after, no tier running. Saved under
+`orchestrator/tests/golden/`, whose `README.md` names every id below and how each file was
+made.
+
+- **The branch and the change**: `fylgja-test-golden-41263`, seeded with the three-node
+  fixture in 55.4 s; the draft `18e3127c-025b-f488-33be-c5158cf576c3` opened by `-propose`
+  in 80.7 s, its five validators concluded, `fylgja-step` and `fylgja-twin` `success`
+  (the twin skipped as a draft). Three stages: `seeded` (1.6 s), `-add-link` (2.1 s, n1's
+  and n3's checksums moved 9.1 s after), `third-link` (0.7 s), then the third stage on a
+  further change, 015's push-refused `bad-port`: `-add-interface n1:ethernet-1/99
+  -generate` (4.6 s, n1's checksum moved 7.8 s after), `bad-port` (0.6 s). The task line
+  leaves the further change open. A refused push makes the rehearsal cover every verdict
+  (refused, baseline, passed, failed, not reached) and the reproduce lines FR-023 names.
+- **The reads**: `stage list` 3.8 s (`--json`) and 4.3 s, exit 0, five rows; `stage plan`
+  14.7 s and 15.0 s, exit 1, the branch point refused `scope.empty` as tier 3's case 9
+  expects of it, `bad-port` and `head` each warned `artifact.interface.unrepresented`;
+  `twin create --stage …/seeded` 66.0 s, bundle `ce705cdb…`; `stage list` with its
+  `← twin` row 4.8 s and 4.4 s, the record's stage `seeded`; `twin destroy` 2.6 s.
+- **The rehearsal**: asked once through the API under `render: "markdown"`, whose last
+  frame carries the document, its text and the markdown (`contracts/api.md`), about 95 s
+  wall (18:15:10Z to 18:16:45Z). Run `fylgja-rehearse 01a188df-b883-70f8-8999-bc18b484dc1f`
+  ended `nonconforming`, 74.5 s of the 2,580 s deadline: `bad-port` diverged at the push
+  (`push.refused` on n1), `head` not reached, the twin destroyed. Every stage's snapshot and
+  bundle id agrees with the plan's. Its markdown, 3,486 bytes, is `Markdown`'s shortened
+  form, since the whole form is 4,271 bytes. The task names the posted thread, which
+  only a check posts, and a check's re-run would have been a second rehearsal whose
+  answer is not kept. So this run's markdown was posted by the check's own `post_comment`
+  (`infrahub/checks/fylgja_api.py`), and the `CoreThreadComment` read back by GraphQL
+  equals it byte for byte.
+- **Rendered from the JSON** by a throwaway test in `internal/rehearsal`, deleted after:
+  `StageLines` and `Closing` equal the tail of the `out` frames; `WriteText` equals the
+  frame's `text`; `Markdown(document, plan.json's steps)` equals the frame's markdown; and
+  `WriteJSON` of the decoded document equals the frame's document re-indented, which is
+  `--json`'s output. So the markdown is a function of `rehearsal.json` and `plan.json`'s
+  `steps` alone, which is what T022's renderer takes. `rehearsal.full.md` is `Markdown`'s
+  whole form for the same inputs.
+- **The substitution the renderer's test makes**: none for a renderer fed these documents,
+  which must give these bytes but for `fylgja-cli` in the reproduce lines
+  (`rehearsal.reproduce`, `rehearsal.txt`'s indented lines, the markdowns' fenced block). A
+  live run's branch, change, `at`s, ids, run ids and timings are its own. The one edit to
+  the captured bytes is the state root, read `<state-root>` in `rehearsal.json` and
+  `rehearsal.out.txt`, a path under the user's home that no renderer writes.
+- **After**: `fylgja-fixture -branch … -delete` (10.8 s) removed the three stages, the
+  proposed change with its thread and validators, and the branch; `CoreProposedChange`,
+  `FylgjaStage`, `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` 0 on `main`,
+  `Branch` `main` and `fylgja-fixture` alone, hash `8a4f3bee…`, `fylgja` at `842c893`, as
+  T001 found them; `clab inspect --all` `{}`, no `local/twin`, no running workflow, no
+  Schedule. Nothing under `testdata/` changed.

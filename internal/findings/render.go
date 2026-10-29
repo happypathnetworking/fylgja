@@ -774,23 +774,30 @@ type ShowRun struct {
 // milestone's copy is kept under testdata/contracts/, and the current contract is
 // contracts/findings.schema.json. No field of any block carries a byte of artifact content.
 type Document struct {
-	FindingsVersion string        `json:"findings_version"`
-	Operation       string        `json:"operation"`
-	Status          Status        `json:"status"`
-	Subject         *Subject      `json:"subject,omitempty"`
-	SnapshotID      string        `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
-	BundleID        string        `json:"bundle_id,omitempty"`
-	Verified        *Verified     `json:"verified,omitempty"`
-	Twin            *TwinBlock    `json:"twin,omitempty"`
-	Cleanup         *CleanupBlock `json:"cleanup,omitempty"`
-	DryRun          *DryRunBlock  `json:"dry_run,omitempty"`
-	Show            *ShowBlock    `json:"show,omitempty"`
+	FindingsVersion string   `json:"findings_version"`
+	Operation       string   `json:"operation"`
+	Status          Status   `json:"status"`
+	Subject         *Subject `json:"subject,omitempty"`
+	SnapshotID      string   `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
+	BundleID        string   `json:"bundle_id,omitempty"`
+	// SnapshotFrom, SnapshotTo, BundleFrom and BundleTo are twin.diff's two sides (020): each
+	// snapshot once resolved, and the bundle it compiled to once filed.
+	SnapshotFrom string        `json:"snapshot_from,omitempty"`
+	SnapshotTo   string        `json:"snapshot_to,omitempty"`
+	BundleFrom   string        `json:"bundle_from,omitempty"`
+	BundleTo     string        `json:"bundle_to,omitempty"`
+	Verified     *Verified     `json:"verified,omitempty"`
+	Twin         *TwinBlock    `json:"twin,omitempty"`
+	Cleanup      *CleanupBlock `json:"cleanup,omitempty"`
+	DryRun       *DryRunBlock  `json:"dry_run,omitempty"`
+	Show         *ShowBlock    `json:"show,omitempty"`
 	// Stage is the reference --stage resolved to (014), present once it resolved.
 	Stage *StageBlock `json:"stage,omitempty"`
 	// Stages is stage list's block, Plan stage plan's (014).
 	Stages *StagesBlock `json:"stages,omitempty"`
 	Plan   *PlanBlock   `json:"plan,omitempty"`
-	// Step is twin step's block, on the dry run and the run (M11).
+	// Step is twin step's block, on the dry run and the run (M11), and twin.diff's, the pair
+	// alone (020; StepBlock.Pair).
 	Step *StepBlock `json:"step,omitempty"`
 	// Verify is twin verify's block (M12),
 	// present once the staged bundle was read and its assertions derived.
@@ -954,12 +961,25 @@ type StepBlock struct {
 	// Loss is what the step's probe flows lost (016), written always: null on the dry run,
 	// before the run closed and when the run ended before its flows were read.
 	Loss *StepLoss `json:"loss"`
+	// Pair, when set, is twin.diff's block (020): the step between two snapshots' bundles as
+	// internal/step marshals a pair (stages.schema.json, $defs/step), which is written alone,
+	// in place of every field above. twin.diff touches no lab, so it has no side's record, no
+	// containerlab plan and no push plan to write.
+	Pair json.RawMessage `json:"-"`
+}
+
+// DiffBlock is twin.diff's step block (020): pair, as internal/step marshals it.
+func DiffBlock(pair json.RawMessage) *StepBlock {
+	return &StepBlock{Pair: pair}
 }
 
 // MarshalJSON writes an empty push plan, and a run's empty pushes and awaited nodes, as []
 // rather than null. StepRunBlock has no MarshalJSON of its own on purpose: embedded, it
 // would be promoted to this one's alias and marshal the run fields alone.
 func (b StepBlock) MarshalJSON() ([]byte, error) {
+	if b.Pair != nil {
+		return b.Pair, nil
+	}
 	type plain StepBlock
 	if b.PushPlan == nil {
 		b.PushPlan = []StepPushPlanEntry{}
@@ -975,6 +995,24 @@ func (b StepBlock) MarshalJSON() ([]byte, error) {
 		b.StepRunBlock = &run
 	}
 	return json.Marshal(plain(b))
+}
+
+// UnmarshalJSON reads twin step's block, or twin.diff's pair (020), which has no diff of its
+// own and is kept as it came, in Pair.
+func (b *StepBlock) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	if _, ok := keys["diff"]; !ok {
+		*b = StepBlock{Pair: append(json.RawMessage(nil), data...)}
+		return nil
+	}
+	type plain StepBlock
+	return json.Unmarshal(data, (*plain)(b))
 }
 
 // StepLoss is the step document's loss (contracts/step.schema.json, $defs/loss), as

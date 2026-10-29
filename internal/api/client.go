@@ -271,15 +271,26 @@ func (c *Client) RunInterrupt(ctx context.Context, workflowID, runID, render str
 // runRequest is run.read's and run.interrupt's request: the workflow always, the run only
 // when one is named.
 func runRequest(workflowID, runID, render string) Request {
-	quoted := func(s string) json.RawMessage {
-		b, _ := json.Marshal(s) // a string always marshals
-		return b
-	}
 	args := map[string]json.RawMessage{"workflow_id": quoted(workflowID)}
 	if runID != "" {
 		args["run_id"] = quoted(runID)
 	}
 	return Request{Render: render, Args: args}
+}
+
+// TwinDiff asks twin.diff for the step between the snapshots from and to (020), each a
+// snapshot id or the path of a snapshot file, which files carries under that path, once for a
+// path both name. Its answer is the document alone: nothing is started.
+func (c *Client) TwinDiff(ctx context.Context, from, to string, files []File, render string,
+	onHeaders func(build string)) (*Answer, error) {
+	req := Request{Render: render, Args: map[string]json.RawMessage{"from": quoted(from), "to": quoted(to)}, Files: files}
+	return c.Do(ctx, findings.OpTwinDiff, req, "", onHeaders)
+}
+
+// quoted is a string argument's value on the wire.
+func quoted(s string) json.RawMessage {
+	b, _ := json.Marshal(s) // a string always marshals
+	return b
 }
 
 // errNotTheAPI is an answer from something at the address that is not the API.

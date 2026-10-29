@@ -526,6 +526,27 @@ func answerCases() []answerCase {
 			return answerWant{args: map[string]any{"workflow_id": provision.WorkflowStep},
 				kinds: []string{api.KindDocument}, status: findings.StatusRejected}
 		}},
+		// 020: the step between two snapshot files, each compiled and filed, nothing started.
+		{"twin diff (TestTwinDiffPrintsTheStepBetweenTwoSnapshots)", findings.OpTwinDiff, func(t *testing.T) answerWant {
+			useStateRoot(t)
+			useService(t, nil)
+			from, to := wrappedFixture("three-node"), wrappedFixture("three-node-probed")
+			var files []api.File
+			for _, path := range []string{from, to} {
+				file, err := readSnapshot(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				files = append(files, file)
+			}
+			return answerWant{args: map[string]any{"from": from, "to": to}, files: files, kinds: []string{api.KindDocument},
+				status: findings.StatusOK,
+				cli: func(t *testing.T) string {
+					return cliStdout(t, func() error {
+						return runDiff(context.Background(), &options{}, &diffFlags{from: from, to: to})
+					})
+				}}
+		}},
 	}
 }
 

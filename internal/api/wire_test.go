@@ -92,7 +92,7 @@ func documentBytes(t *testing.T, doc *findings.Document) json.RawMessage {
 	return b.Bytes()
 }
 
-// The thirteen operations are the newest findings contract's, every one there is, and each
+// The sixteen operations are the newest findings contract's, every one there is, and each
 // is POST /v1/<noun>/<verb>.
 func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	raw, err := os.ReadFile(contracts("findings.schema.json"))
@@ -109,19 +109,7 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	if err := json.Unmarshal(raw, &schema); err != nil {
 		t.Fatal(err)
 	}
-	// 020's twin.diff is in the findings contract (T005) before the server serves it: it
-	// joins Operations at T010 and leaves this list as it does, as run.read and
-	// run.interrupt left it at T007.
-	notYetServed := []string{"twin.diff"}
-	for _, op := range notYetServed {
-		if slices.Contains(Operations, op) {
-			t.Errorf("Operations serves %s; drop it from notYetServed", op)
-		}
-	}
-	enum := slices.DeleteFunc(schema.Properties.Operation.Enum, func(op string) bool {
-		return slices.Contains(notYetServed, op)
-	})
-	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(enum))
+	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(schema.Properties.Operation.Enum))
 	if !slices.Equal(got, want) {
 		t.Errorf("Operations = %v, the contract's enum %v", got, want)
 	}
@@ -131,6 +119,7 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 		"twin.compile": "/v1/twin/compile", "stage.list": "/v1/stage/list", "stage.plan": "/v1/stage/plan",
 		"intent.read": "/v1/intent/read", "schema.check": "/v1/schema/check", "psp.validate": "/v1/psp/validate",
 		"twin.rehearse": "/v1/twin/rehearse", "run.read": "/v1/run/read", "run.interrupt": "/v1/run/interrupt",
+		"twin.diff": "/v1/twin/diff",
 	} {
 		if got := Path(op); got != path {
 			t.Errorf("Path(%s) = %s, want %s", op, got, path)

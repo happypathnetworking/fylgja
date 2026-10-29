@@ -116,7 +116,7 @@ func New(token string) *Server {
 	}
 }
 
-// operation is one of the fifteen: its name, as the findings document names it and its path
+// operation is one of the sixteen: its name, as the findings document names it and its path
 // spells it; the handler, M12's command; and whether it takes the operator's interrupt
 // from its start frame.
 type operation struct {
@@ -125,7 +125,7 @@ type operation struct {
 	takesStream bool
 }
 
-// operations is the table of the fifteen, each with its handler (handlers.go).
+// operations is the table of the sixteen, each with its handler (handlers.go).
 func operations() []operation {
 	ops := make([]operation, 0, len(api.Operations))
 	for _, name := range api.Operations {
@@ -162,7 +162,7 @@ const (
 	outcomeRunning = "running"
 )
 
-// The names the log gives a request that is not one of the fifteen.
+// The names the log gives a request that is not one of the sixteen.
 const (
 	logInterrupt = "interrupt"
 	logUnknown   = "unknown"
@@ -426,7 +426,7 @@ func (s *Server) logRequest(op, outcome string, began time.Time, level slog.Leve
 		"operation", op, "outcome", outcome, "duration", time.Since(began).Round(time.Millisecond))
 }
 
-// logName is the operation a path names, for the log alone: one of the fifteen, the
+// logName is the operation a path names, for the log alone: one of the sixteen, the
 // interrupt, or unknown. No part of the path itself is logged.
 func logName(path string) string {
 	for _, op := range api.Operations {

@@ -1608,7 +1608,7 @@ func withDryRunArtifacts(doc *Document, checksum string) *Document {
 // each held to the current contract with the status and exit the data model gives it: a
 // detached start is ok, an unknown or ended identity and a detach beside a dry run are
 // refusals (exit 1), an interrupt asked is ok; twin.diff's document carries no rule of its
-// own (T010 adds its fields).
+// own (TestATwinDiffDocumentCarriesItsSidesAndItsPair holds its fields).
 func TestTheRunRulesRenderValidDocuments(t *testing.T) {
 	schema := compileCurrentFindingsSchema(t)
 	const runID = "0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b"
@@ -1644,5 +1644,51 @@ func TestTheRunRulesRenderValidDocuments(t *testing.T) {
 				t.Errorf("exit = %d (status %s), want %d", got, c.doc.Status, c.exit)
 			}
 		})
+	}
+}
+
+// twin.diff's document (020, R-05) names its two sides and carries the step between their
+// bundles as its step block, the pair as internal/step marshals it (stages.schema.json's
+// $defs/step) and nothing of twin step's block, which the current contract holds; read back,
+// the block is the pair as written, and written again it is the same bytes.
+func TestATwinDiffDocumentCarriesItsSidesAndItsPair(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	const a, b = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+		"c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
+	pair := `{"from":"snapshot b9db37f8…","to":"snapshot b9db37f8…","from_bundle_id":"` + b + `","to_bundle_id":"` + b +
+		`","computed":true,"unchanged":true,"nodes":{"added":[],"removed":[],"changed":[]},` +
+		`"links":{"added":[],"removed":[]},"artifacts":{"changed":[]}}`
+	doc := NewDocument(OpTwinDiff, nil, nil)
+	doc.SnapshotFrom, doc.SnapshotTo, doc.BundleFrom, doc.BundleTo = a, a, b, b
+	doc.Step = DiffBlock(json.RawMessage(pair))
+	mustValidate(t, schema, doc, "twin diff")
+
+	written, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read Document
+	if err := json.Unmarshal(written, &read); err != nil {
+		t.Fatal(err)
+	}
+	if read.Step == nil || string(read.Step.Pair) != pair || read.SnapshotFrom != a || read.BundleTo != b {
+		t.Fatalf("read back %+v, step %+v; want the sides and the pair as written", read, read.Step)
+	}
+	again, err := json.Marshal(&read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again) != string(written) {
+		t.Errorf("written again:\n%s\nwant:\n%s", again, written)
+	}
+
+	// Twin step's block is read as one still: its diff is what tells the two apart.
+	var step StepBlock
+	if err := json.Unmarshal([]byte(`{"from":{"stage":null,"bundle_id":"`+b+`","at":""},"to":{"stage":null,"bundle_id":"`+b+
+		`","at":""},"diff":`+pair+`,"reconcile":{},"push_plan":[],"allow_restart":false,"loss":null}`), &step); err != nil {
+		t.Fatal(err)
+	}
+	if step.Pair != nil || step.From.BundleID != b || string(step.Diff) != pair {
+		t.Errorf("twin step's block read as %+v; want its sides and its diff", step)
 	}
 }

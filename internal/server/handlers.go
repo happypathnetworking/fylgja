@@ -47,6 +47,8 @@ var operationArgs = map[string]map[string]string{
 	// 020: a run by its identity, its workflow's latest run when run_id is absent.
 	findings.OpRunRead:      {"workflow_id": argString, "run_id": argString},
 	findings.OpRunInterrupt: {"workflow_id": argString, "run_id": argString},
+	// 020: the step between two snapshots, each an id or the path of a file the request carries.
+	findings.OpTwinDiff: {"from": argString, "to": argString},
 }
 
 // args are one request's arguments, read strictly: checkArgs has refused a name the
@@ -131,7 +133,7 @@ func (c *call) detachable(a args) *options {
 	return o
 }
 
-// handlers are the fifteen operations' runs: each fills the flags M12's command filled from
+// handlers are the sixteen operations' runs: each fills the flags M12's command filled from
 // the request's arguments, a key's presence standing for cobra's Changed, and calls M12's
 // logic, which keeps its guards, their order, their identifiers and their words.
 var handlers = map[string]func(*call) error{
@@ -217,6 +219,10 @@ var handlers = map[string]func(*call) error{
 		a := args(c.req.Args)
 		return runInterruptByIdentity(c.ctx, c.options(), a.string("workflow_id"), a.string("run_id"))
 	},
+	findings.OpTwinDiff: func(c *call) error {
+		a := args(c.req.Args)
+		return runTwinDiff(c.ctx, c.options(), &diffFlags{from: a.string("from"), to: a.string("to")}, c.req.Files)
+	},
 }
 
 // checkRequest refuses an argument op does not take, a value of another kind, an argument
@@ -261,8 +267,10 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 // to that shape itself (snapshotFiles), as twin compile holds its snapshot, so a request
 // carrying another is its operation.failed and not the transport's. From 016 the five that
 // take probes take its one file, which probesFiles holds to that shape before the answer.
+// From 020 twin.diff takes a snapshot file for each of from and to that is a path, which it
+// holds to that shape itself (diffFiles).
 var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate, findings.OpTwinCreate,
-	findings.OpTwinStep, findings.OpIntentRead, findings.OpStagePlan, findings.OpTwinRehearse}
+	findings.OpTwinStep, findings.OpIntentRead, findings.OpStagePlan, findings.OpTwinRehearse, findings.OpTwinDiff}
 
 // checkFiles refuses files on an operation that takes none.
 func checkFiles(op string, n int) error {

@@ -78,11 +78,11 @@ const (
 	MaxStreamLength = 128
 )
 
-// Operations are the fifteen, named as the findings document names them. Each is POST
+// Operations are the sixteen, named as the findings document names them. Each is POST
 // Path(op). There is no other: no health check, no listing of
 // runs, no fetch of a bundle. 015 adds twin.rehearse, which takes the branch and an
 // interrupt from its start; 020 run.read and run.interrupt, which reach a run by its
-// identity.
+// identity, and twin.diff, the step between two snapshots.
 var Operations = []string{
 	findings.OpTwinCreate,
 	findings.OpTwinProvision,
@@ -99,6 +99,7 @@ var Operations = []string{
 	findings.OpTwinRehearse,
 	findings.OpRunRead,
 	findings.OpRunInterrupt,
+	findings.OpTwinDiff,
 }
 
 // Path is an operation's path: its noun and its verb under the version,
@@ -131,7 +132,8 @@ type Request struct {
 	// present one a flag given, whatever its value. Each handler decodes them strictly.
 	Args map[string]json.RawMessage `json:"args,omitempty"`
 	// Files are the operator's files, on twin.create (its one snapshot file, beside a
-	// --snapshot that is a path), twin.compile, twin.provision and psp.validate.
+	// --snapshot that is a path), twin.compile, twin.provision and psp.validate, and on
+	// twin.diff each snapshot file its from and to name (020).
 	Files []File `json:"files,omitempty"`
 }
 

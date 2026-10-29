@@ -14,7 +14,7 @@ func newTwinCmd(opts *options) *cobra.Command {
 		Use:   "twin",
 		Short: "Build and inspect twins",
 	}
-	cmd.AddCommand(newTwinCompileCmd(opts), newTwinCreateCmd(opts), newTwinProvisionCmd(opts), newTwinDestroyCmd(opts), newTwinShowCmd(opts), newTwinStepCmd(opts), newTwinVerifyCmd(opts), newTwinRehearseCmd(opts))
+	cmd.AddCommand(newTwinCompileCmd(opts), newTwinCreateCmd(opts), newTwinProvisionCmd(opts), newTwinDestroyCmd(opts), newTwinShowCmd(opts), newTwinStepCmd(opts), newTwinVerifyCmd(opts), newTwinRehearseCmd(opts), newTwinDiffCmd(opts))
 	return cmd
 }
 

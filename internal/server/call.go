@@ -109,6 +109,11 @@ func (c *call) runFrame(workflowID, runID string) {
 	_ = c.frames.write(api.Frame{Run: &api.RunRef{WorkflowID: workflowID, RunID: runID}})
 }
 
+// runStateFrame names the run run.read reads, with its state (020).
+func (c *call) runStateFrame(s provision.RunState) {
+	_ = c.frames.write(api.Frame{Run: &api.RunRef{WorkflowID: s.WorkflowID, RunID: s.RunID, State: s.State}})
+}
+
 // eventFrame is one progress event of a run, as the run's history gave it to the
 // follow.
 // It is sent whatever the rendering: with none, a run's answer is its run, its

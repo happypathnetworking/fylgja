@@ -78,10 +78,11 @@ const (
 	MaxStreamLength = 128
 )
 
-// Operations are the thirteen, named as the findings document names them. Each is POST
+// Operations are the fifteen, named as the findings document names them. Each is POST
 // Path(op). There is no other: no health check, no listing of
 // runs, no fetch of a bundle. 015 adds twin.rehearse, which takes the branch and an
-// interrupt from its start.
+// interrupt from its start; 020 run.read and run.interrupt, which reach a run by its
+// identity.
 var Operations = []string{
 	findings.OpTwinCreate,
 	findings.OpTwinProvision,
@@ -96,6 +97,8 @@ var Operations = []string{
 	findings.OpSchemaCheck,
 	findings.OpPSPValidate,
 	findings.OpTwinRehearse,
+	findings.OpRunRead,
+	findings.OpRunInterrupt,
 }
 
 // Path is an operation's path: its noun and its verb under the version,
@@ -441,11 +444,17 @@ func (f Frame) Kind() string {
 }
 
 // RunRef is a run's identity. A start frame carries the workflow id alone, since the run
-// has none yet.
+// has none yet. On run.read alone it carries the run's state (020): running, completed,
+// failed, cancelled, terminated or timed_out.
 type RunRef struct {
 	WorkflowID string `json:"workflow_id"`
 	RunID      string `json:"run_id,omitempty"`
+	State      string `json:"state,omitempty"`
 }
+
+// StateRunning is the state of a run that has not closed, as run.read's run frame names it:
+// that answer ends after its events, by EOF, with no document (020).
+const StateRunning = "running"
 
 // Event is M2's progress event as JSON: one step boundary of a run, or one notice
 // about a run, read from the run's history.

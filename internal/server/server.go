@@ -116,7 +116,7 @@ func New(token string) *Server {
 	}
 }
 
-// operation is one of the thirteen: its name, as the findings document names it and its path
+// operation is one of the fifteen: its name, as the findings document names it and its path
 // spells it; the handler, M12's command; and whether it takes the operator's interrupt
 // from its start frame.
 type operation struct {
@@ -125,7 +125,7 @@ type operation struct {
 	takesStream bool
 }
 
-// operations is the table of the thirteen, each with its handler (handlers.go).
+// operations is the table of the fifteen, each with its handler (handlers.go).
 func operations() []operation {
 	ops := make([]operation, 0, len(api.Operations))
 	for _, name := range api.Operations {
@@ -157,9 +157,12 @@ const (
 	outcomePanic          = "panic"
 	outcomeDelivered      = "delivered"
 	outcomeStreamEnded    = "stream_ended"
+	// outcomeRunning is a run.read of a run that has not closed, whose answer ends with no
+	// document (020).
+	outcomeRunning = "running"
 )
 
-// The names the log gives a request that is not one of the thirteen.
+// The names the log gives a request that is not one of the fifteen.
 const (
 	logInterrupt = "interrupt"
 	logUnknown   = "unknown"
@@ -351,7 +354,16 @@ func (s *Server) answer(c *call, op operation, began time.Time) (outcome string,
 			panic(http.ErrAbortHandler)
 		}
 	}()
-	doc := documentOf(op.name, op.run(c))
+	err := op.run(c)
+	if errors.Is(err, errRunning) {
+		// run.read of a running run: its events are its answer, which ends by EOF.
+		c.console.flush()
+		if c.ctx.Err() != nil {
+			return outcomeClientGone, slog.LevelWarn
+		}
+		return outcomeRunning, slog.LevelInfo
+	}
+	doc := documentOf(op.name, err)
 	if c.ctx.Err() != nil {
 		return outcomeClientGone, slog.LevelWarn
 	}
@@ -414,7 +426,7 @@ func (s *Server) logRequest(op, outcome string, began time.Time, level slog.Leve
 		"operation", op, "outcome", outcome, "duration", time.Since(began).Round(time.Millisecond))
 }
 
-// logName is the operation a path names, for the log alone: one of the thirteen, the
+// logName is the operation a path names, for the log alone: one of the fifteen, the
 // interrupt, or unknown. No part of the path itself is logged.
 func logName(path string) string {
 	for _, op := range api.Operations {

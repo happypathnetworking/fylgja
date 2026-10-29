@@ -135,6 +135,31 @@ type DestroyRun struct {
 	Result   DestroyResult
 }
 
+// The states of a run, as run.read names them (020, R-04): the workflow service's statuses
+// of an execution, in contracts/api.md's words. A run the operator interrupted closes
+// completed, its result saying it was cancelled: the workflows answer a cancellation with a
+// result rather than failing.
+const (
+	RunRunning    = "running"
+	RunCompleted  = "completed"
+	RunFailed     = "failed"
+	RunCancelled  = "cancelled"
+	RunTerminated = "terminated"
+	RunTimedOut   = "timed_out"
+)
+
+// RunState is a run the workflow service holds, as Describe found it: its identity, the
+// workflow's latest run's when the request named none, and its state, one of the Run*
+// states.
+type RunState struct {
+	WorkflowID string
+	RunID      string
+	State      string
+}
+
+// Running is whether the run has not closed.
+func (s RunState) Running() bool { return s.State == RunRunning }
+
 // StepInput starts a step run: everything the CLI
 // resolved, read, compiled and decided before any connection, so the run reads only the
 // host. Paths are absolute and no bytes cross the queue beyond M10's step between the two

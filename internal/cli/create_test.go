@@ -100,6 +100,9 @@ type fakeService struct {
 	readOnly testing.TB
 	// stepResult answers ResultOfStep beside resultErr (M11).
 	stepResult provision.StepResult
+	// described answers Describe, which answers no run under the identity asked when it is
+	// nil (020).
+	described *provision.RunState
 	// rehearseRun answers StartRehearse beside startErr, rehearseEvents answer Follow of the
 	// rehearsal's run, its children's events among them, and rehearseResult answers
 	// ResultOfRehearse beside resultErr (015).
@@ -286,6 +289,39 @@ func (f *fakeService) ResultOfRehearse(ctx context.Context, _ string) (provision
 		}
 	}
 	return f.rehearseResult, f.resultErr
+}
+
+// Describe answers run.read's and run.interrupt's describe (020): the run described when
+// one is set, under the identity asked, and otherwise no run under it, read first as
+// InFlight reads.
+func (f *fakeService) Describe(ctx context.Context, workflowID, runID string) (provision.RunState, error) {
+	if err := f.read(ctx, "Describe"); err != nil {
+		return provision.RunState{}, err
+	}
+	if f.described == nil {
+		return provision.RunState{}, &provision.UnknownRunError{WorkflowID: workflowID, RunID: runID}
+	}
+	return *f.described, nil
+}
+
+// History replays the run's events as Follow does: the fake's history is whole (020).
+func (f *fakeService) History(ctx context.Context, workflowID, runID string, onEvent func(provision.Event)) error {
+	return f.Follow(ctx, workflowID, runID, onEvent)
+}
+
+// InputOfStep answers the step the fake last started, or none (020).
+func (f *fakeService) InputOfStep(context.Context, string) (provision.StepInput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.stepped) == 0 {
+		return provision.StepInput{}, nil
+	}
+	return f.stepped[len(f.stepped)-1], nil
+}
+
+// ResultOfDestroy answers the destroy run's result beside destroyErr (020).
+func (f *fakeService) ResultOfDestroy(context.Context, string) (provision.DestroyResult, error) {
+	return f.destroyRun.Result, f.destroyErr
 }
 
 func (f *fakeService) Close() {
@@ -1130,8 +1166,18 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	for _, path := range commands {
 		ops = append(ops, strings.Join(path, "."))
 	}
-	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(api.Operations))) {
-		t.Fatalf("the walk found %v; want the API's operations %v", ops, api.Operations)
+	// 020's run.read and run.interrupt are served (T007) before the client has their
+	// commands: fylgja run read and fylgja run interrupt join the tree at T009, each leaving
+	// this list as it does.
+	notYetCommands := []string{findings.OpRunRead, findings.OpRunInterrupt}
+	for _, op := range notYetCommands {
+		if slices.Contains(ops, op) {
+			t.Errorf("the client has a command for %s; drop it from notYetCommands", op)
+		}
+	}
+	served := slices.DeleteFunc(slices.Clone(api.Operations), func(op string) bool { return slices.Contains(notYetCommands, op) })
+	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(served))) {
+		t.Fatalf("the walk found %v; want the API's operations %v", ops, served)
 	}
 
 	for _, path := range commands {

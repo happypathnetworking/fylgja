@@ -368,10 +368,14 @@ func TestARefusedTokenReadsNoneOfTheBody(t *testing.T) {
 }
 
 // leastRequest is the least request op takes: none, but for twin.provision's bundle
-// directory, which is required.
+// directory and the workflow run.read and run.interrupt name a run of (020), which are
+// required.
 func leastRequest(op string) string {
-	if op == findings.OpTwinProvision {
+	switch op {
+	case findings.OpTwinProvision:
 		return `{"args":{"bundle":"b"}}`
+	case findings.OpRunRead, findings.OpRunInterrupt:
+		return `{"args":{"workflow_id":"fylgja-provision"}}`
 	}
 	return `{}`
 }
@@ -479,6 +483,13 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpSchemaCheck, `{"args":{"branch":"b","scope":"tag:fylgja"}}`, `schema.check takes no argument "scope"`},
 		{findings.OpIntentRead, `{"args":{"scope":true}}`, `intent.read's argument "scope" is not a string`},
 		{findings.OpStageList, `{"args":{"scope":null}}`, `stage.list's argument "scope" is not a string`},
+		// 020: a run by its identity names its workflow always, each a string, and takes
+		// nothing a run's start takes.
+		{findings.OpRunRead, `{"args":{"run_id":"r1"}}`, `run.read takes the workflow its run is of as its argument "workflow_id"`},
+		{findings.OpRunInterrupt, `{}`, `run.interrupt takes the workflow its run is of as its argument "workflow_id"`},
+		{findings.OpRunRead, `{"args":{"workflow_id":"fylgja-step","run_id":1}}`, `run.read's argument "run_id" is not a string`},
+		{findings.OpRunInterrupt, `{"args":{"workflow_id":"fylgja-step","detach":true}}`, `run.interrupt takes no argument "detach"`},
+		{findings.OpRunRead, `{"args":{"workflow_id":"fylgja-step"},"files":[{"path":"a","data":""}]}`, `run.read takes no files`},
 	} {
 		resp, body := post(t, nil, srv.URL+api.Path(c.op), testToken, c.body, nil)
 		var p api.Problem
@@ -491,12 +502,16 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		t.Errorf("%d operations ran", n)
 	}
 	waitForLog(t, log, "operation=twin.show", "outcome=unreadable", "level=WARN")
-	// Every operation but twin.provision, whose bundle directory is required, takes a request
-	// with no arguments; a bundle given as empty is one given, as M12's cobra took "".
+	// Every operation but twin.provision, whose bundle directory is required, and run.read
+	// and run.interrupt, whose workflow is (020), takes a request with no arguments; a bundle
+	// or a workflow given as empty is one given, as M12's cobra took "".
 	for _, op := range api.Operations {
 		body := `{"args":{}}`
-		if op == findings.OpTwinProvision {
+		switch op {
+		case findings.OpTwinProvision:
 			body = `{"args":{"bundle":""}}`
+		case findings.OpRunRead, findings.OpRunInterrupt:
+			body = `{"args":{"workflow_id":""}}`
 		}
 		resp, _ := post(t, nil, srv.URL+api.Path(op), testToken, body, nil)
 		if resp.StatusCode != http.StatusOK {

@@ -512,6 +512,20 @@ func answerCases() []answerCase {
 			useService(t, nil)
 			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusError}
 		}},
+		// 020: a run by its identity. The read of a run the service does not hold, and the
+		// interrupt of one that has closed, each refused after the describe alone; a read's
+		// run frame and events are internal/server's run_test.go's.
+		{"run read, unknown (TestARunNoneHasIsUnknown)", findings.OpRunRead, func(t *testing.T) answerWant {
+			useService(t, &fakeService{readOnly: t})
+			return answerWant{args: map[string]any{"workflow_id": provision.WorkflowProvision, "run_id": "r-gone"},
+				kinds: []string{api.KindDocument}, status: findings.StatusRejected}
+		}},
+		{"run interrupt, ended (TestRunInterruptByIdentity)", findings.OpRunInterrupt, func(t *testing.T) answerWant {
+			useService(t, &fakeService{readOnly: t, described: &provision.RunState{WorkflowID: provision.WorkflowStep,
+				RunID: "r-s", State: provision.RunCompleted}})
+			return answerWant{args: map[string]any{"workflow_id": provision.WorkflowStep},
+				kinds: []string{api.KindDocument}, status: findings.StatusRejected}
+		}},
 	}
 }
 

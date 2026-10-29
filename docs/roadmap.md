@@ -74,9 +74,14 @@ cut along, in five specs, in this order:
    ([brief](../specs/016-probes/brief.md), rewritten on 2026-10-28 against 017, 018 and
    019): a node declared outside intent, the explicit-instruction input to the core.
    **Built** on 2026-10-29, under [D-064](decisions.md#d-064) and Constitution 2.3.0.
-5. **[F-025](#f-025)**, a reader of NetBox with its branching plugin, producing snapshots
-   and taking a stage as a snapshot, **the next spec**: the reader seam against a second
-   source of truth.
+5. **[F-027](#f-027)**, the split of the core and the orchestrator, **the next spec**,
+   added on 2026-10-29 and placed before F-025 by the operator: the production shape's two
+   deployables, with the readers, the stages, the rehearsal and the reports on the
+   orchestrator's side; its description, platform and estimate are left to its brainstorm.
+6. **[F-025](#f-025)**, a reader of NetBox with its branching plugin, producing snapshots
+   and taking a stage as a snapshot, after the split: the reader seam against a second
+   source of truth, built as the orchestrator's second adapter, in Python. Probed live on
+   2026-10-29 ([verified facts](verified-facts.md#netbox-474-with-netbox-branching-122)).
 
 A contract bump defines a release: 0.2 moved the twin record, the API and the CLI for
 stages while the contract stayed 0.2, and 0.3 retired the generics at F-011, after which
@@ -158,7 +163,7 @@ know what they are exploring toward.
 ## Backlog
 
 [Release 0.3](#release-03) takes [F-011](#f-011), [F-024](#f-024), [F-026](#f-026),
-[F-014](#f-014) and [F-025](#f-025), in that order; then observing, then object storage and remote hosts, a
+[F-014](#f-014), [F-027](#f-027) and [F-025](#f-025), in that order; then observing, then object storage and remote hosts, a
 third platform, Ixia-c and a WebUI. [Release 0.2](#release-02) built
 [F-023](archive/v0.2-built.md#f-023), [F-007](archive/v0.2-built.md#f-007) and
 [F-008](archive/v0.2-built.md#f-008) out of this order first ([the
@@ -167,12 +172,13 @@ archive](archive/v0.2-built.md)); the rest keep it. Read-only production data st
 first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed,
 [F-010](#f-010) is folded into [F-011](#f-011), and [F-022](#f-022) is superseded by
 [F-025](#f-025). [F-024](#f-024) and [F-025](#f-025) were added on 2026-10-25 and take
-the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the next.
+the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the next;
+[F-027](#f-027) was added on 2026-10-29 and takes the next.
 
 [F-011](#f-011), [F-024](#f-024), [F-026](#f-026) and [F-014](#f-014) are built, as
 `017-dcim-reader`, `018-snapshots`, `019-following-removed` and `016-probes`; none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
-[F-017](#f-017) to [F-021](#f-021), [F-024](#f-024), [F-025](#f-025) and [F-026](#f-026)
-are each one spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
+[F-017](#f-017) to [F-021](#f-021), [F-024](#f-024), [F-025](#f-025), [F-026](#f-026) and
+[F-027](#f-027) are each one spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
 [F-016](#f-016) are chores or records, with no spec.
 
 | # | Feature | What it bundles | Needs | Hours | Why here |
@@ -182,7 +188,8 @@ are each one spec, with one contract boundary and one new kind of infrastructure
 | F-024 | **Snapshots** | the CTM, which carries each node's configuration, wrapped in one content-addressed document with a slot for the probe declarations; the core's one input, taken by the server and stored beside the bundles; `twin create` and `twin compile` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. Its [brief](../specs/018-snapshots/brief.md) written 2026-10-27. Built as `018-snapshots` on 2026-10-27. |
 | F-026 | **Following removed from the core** | D-012's following, D-026 and D-027 superseded; the reconcile workflow, its Schedule, `--interval` and `--no-follow` gone; a twin frozen at its snapshot; any twin with a snapshot stepping to a stage or a snapshot, `twin step --snapshot`; walking as stepping | [F-024](#f-024) | 3–5 | A snapshot-fed core does not read a branch on a timer; the production shape's orchestrator may bring following back as take, compare, step. Added 2026-10-27; its [brief](../specs/019-following-removed/brief.md) written the same day. Built as `019-following-removed` on 2026-10-28, in about 6.2 hours of sessions against R-25's 8–11. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
-| F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; a reader producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot; a twin of a NetBox branch | [F-024](#f-024), a NetBox instance | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. |
+| F-027 | **The split: the core and the orchestrator** | the production shape's two deployables: a core that builds, steps, destroys, shows and verifies a twin from a snapshot, and an orchestrator owning the readers, the stages and their resolution, the rehearsal and the reports, driving the core through the API; Constitution I kept for the core and freed for the orchestrator | [F-014](#f-014) | — | Added 2026-10-29 and placed before F-025 by the operator, so the NetBox reader is built as the orchestrator's second adapter. Its description, platform and estimate are its brainstorm's. |
+| F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; an adapter outside the core, in Python, producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot the adapter holds; a twin of a NetBox branch | [F-027](#f-027), a NetBox instance (installed under `local/netbox/`, stopped) | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. Probed live on 2026-10-29. |
 | F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask. Left 0.3 on 2026-10-25: it bolts on later and touches no core. |
 | F-013 | **Observation** | markers with bundle id and stage; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
 | F-014 | **Probes** | a probe declaration, in a file and in a Fylgja-owned kind; synthesized `ping` hosts and no other synthesized node; loss across a step; a probe package format | [F-024](#f-024), stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. `ping` only, by the operator's choice on 2026-10-25. Built as `016-probes` on 2026-10-29, in about 9.1 hours of sessions against R-29's 14–20. |
@@ -196,7 +203,7 @@ are each one spec, with one contract boundary and one new kind of infrastructure
 
 | Phase | Features | Hours |
 |---|---|---|
-| Release 0.3 | F-011, F-024, F-026, F-014, F-025 | 25–39 |
+| Release 0.3 | F-011, F-024, F-026, F-014, F-027, F-025 | 25–39, plus F-027's once briefed |
 | Observing | F-012, F-013, F-015, F-016 | 12–21 |
 | Scale and surface | F-017–F-021 | 37–66 |
 | **All** | | **74–126** |
@@ -331,25 +338,57 @@ ports from the virtual, a cable with two terminations is a link, and a multi-ter
 cable, a LAG and a platform without a vendor and NOS are the refusals to expect.
 
 <a id="f-025"></a>
-**F-025. The NetBox reader.** Added on 2026-10-25, the fourth spec of
-[Release 0.3](#release-03). NetBox Labs' branching plugin is generally available,
-source-available and installable on the community edition, and an official change-request
-layer gates a merge on approvals, so [D-001](decisions.md#d-001)'s premise that NetBox
-lacks branching no longer holds; the entry is superseded in that part, and NetBox becomes
-a second source of truth read directly, through a reader producing [F-024](#f-024)'s
-snapshots. What NetBox cannot do: a pinned `at`, since it has no point-in-time read, so a
-stage is the snapshot Fylgja takes when the operator marks it, held by Fylgja and not by
-NetBox, and the branch point is current `main`, the merge target, at the first read;
-stored artifacts with checksums, since `render-config` renders on demand and stores
+**F-025. The NetBox reader.** Added on 2026-10-25, the last spec of
+[Release 0.3](#release-03), placed after [F-027](#f-027) on 2026-10-29. NetBox Labs'
+branching plugin is generally available, source-available and installable on the
+community edition, so [D-001](decisions.md#d-001)'s premise that NetBox lacks branching no
+longer holds; the entry is superseded in that part, and NetBox becomes a second source of
+truth read directly, through a reader producing [F-024](#f-024)'s snapshots. The
+change-request layer that gates a merge on approvals, NetBox Changes, is a Pro and Premium
+feature; on the community edition the merge gate is the plugin's own `protect_main` and
+permissions. **Its shape, settled by the operator on 2026-10-29**: an adapter outside the
+core, in Python, the orchestrator's direction, which reads a branch by the plugin's
+header, maps NetBox's model onto the CTM by one documented mapping, takes each device's
+configuration from `render-config` and writes a snapshot file; the core takes it by `twin
+create --snapshot` and `twin step --snapshot` and never learns NetBox exists; built after
+the split as the orchestrator's second adapter, since built first it would invent the
+orchestrator's toolchain, flow shape, stage store and rehearsal. What NetBox cannot do: a
+pinned `at`, since it has no point-in-time read and a merged branch cannot be read again,
+so a stage is the snapshot the adapter takes when the operator marks it, held by Fylgja
+and not by NetBox, and the branch point is current `main`, the merge target, at the first
+read; stored artifacts with checksums, since `render-config` renders on demand and stores
 nothing, so there is no staleness rule; and checks inside its pipeline, so a check becomes
-an event rule or custom script calling the API, its report a journal entry, and a merge
-block the change-request layer's. What it adds: event rules and webhooks, which an
-orchestrator bringing following back ([F-026](#f-026)) would follow by push; planned and staged device
-status; the device-type library's real port inventories for the lossy mapping; cable
-paths computed through patch panels; config contexts; and a plugin as the natural UI.
-First research: whether `render-config` honours the branch header, and what the branching
-plugin's GraphQL answers under it. Needs NetBox with the branching plugin on the
-development host, about 2 GiB, and a decision entry before it is specified.
+an event rule or custom script calling the API, its report a journal entry on the branch,
+and a merge block the plugin's. What it adds: event rules and webhooks, which an
+orchestrator bringing following back ([F-026](#f-026)) would follow by push; planned and
+staged device status; the device-type library's real port inventories for the lossy
+mapping; cable paths computed through patch panels; config contexts; and a plugin as the
+natural UI. **Probed live on 2026-10-29** ([verified
+facts](verified-facts.md#netbox-474-with-netbox-branching-122)), with a throwaway Python
+adapter and NetBox 4.7.4 with the plugin 1.2.2 under netbox-docker on the development
+host: `render-config` and GraphQL both honour the branch header, the adapter's snapshot
+built a three-node twin and stepped it to the branch's, with the port it shut read
+`disable` on the node, and the snapshot id reproduces outside Go. The install stays under
+`local/netbox/`, stopped, about 1.3 GiB when running. The decision entries the order owed
+before it are [F-027](#f-027)'s.
+
+<a id="f-027"></a>
+**F-027. The split: the core and the orchestrator.** Added on 2026-10-29 by the operator
+as the next spec, before [F-025](#f-025). It takes [the production
+shape](#the-production-shape) from a direction to a decision: a core that builds, steps,
+destroys, shows and verifies a twin from a snapshot, and an orchestrator that owns the
+readers, the stages and their resolution, the rehearsal and the reports posted back to the
+source, driving the core through the API alone; Constitution I kept for the core and freed
+for the orchestrator by a decision entry; and the API's shape for long operations, the
+orchestrator's first demand. Its description, its platform (Prefect leads, Temporal and
+Kestra beside it), its exit criteria and its estimate are left to its brainstorm and
+brief. Why before F-025: the NetBox reader is a Python adapter, so it is orchestrator
+code, and built first it would invent what the split decides. What F-025's spike gives
+it: a source that cannot replay time read as snapshot files, a stage as the snapshot the
+orchestrator holds, the CTM envelope's three Infrahub-shaped places (`schema_hash`, `at`,
+the artifact's stored checksum), the snapshot id reproducible outside Go, and a journal
+entry on a NetBox branch as a report's home where the community edition has no change
+request.
 
 <a id="f-012"></a>
 **F-012. The agent surface: `fylgja-rehearsing-changes`.** OpsMill ships Claude skills and
@@ -580,10 +619,12 @@ status line. It is a second client of the same API.
   second, on [D-045](decisions.md#d-045)'s pattern for the kind; what a probe package is
   beside a platform package; and the declaration carrying its own gateway address.
   Taken as [D-064](decisions.md#d-064), with Constitution 2.3.0.
-- Before [F-025](#f-025): [D-001](decisions.md#d-001) superseded in the part that says
-  NetBox lacks branching; and a stage as a snapshot Fylgja holds where the source of
-  truth cannot replay time, beside D-045's mark where it can. (A push-based follow for
-  this reader was planned here until [F-026](#f-026) took following out of the core.)
+- At [F-027](#f-027), before [F-025](#f-025) (moved here from F-025 on 2026-10-29):
+  Constitution I kept for the core and freed for the orchestrator, the production shape's
+  entry; [D-001](decisions.md#d-001) superseded in the part that says NetBox lacks
+  branching; and a stage as a snapshot Fylgja holds where the source of truth cannot
+  replay time, beside D-045's mark where it can. (A push-based follow for the NetBox
+  reader was planned here until [F-026](#f-026) took following out of the core.)
 - Before [F-018](#f-018): the remote hosts' runtime, the decision log's [open
   question](decisions.md#open-questions).
 - At [F-021](#f-021): whether the WebUI keeps Constitution I through server-rendered

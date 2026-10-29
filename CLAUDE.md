@@ -670,8 +670,14 @@ Rewritten whole at each release's close, never appended to.
     read by `probe.Parse` as `probes 1` with an empty list, held by
     `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061,
     `1dd98b6`).
-- **Next**: F-025 the NetBox reader, Release 0.3's fifth and last spec; it has no brief
-  yet.
+- **Next**: F-027, the split of the core and the orchestrator, placed before F-025 by the
+  operator on 2026-10-29; then F-025 the NetBox reader, Release 0.3's last spec, an
+  adapter outside the core in Python, the orchestrator's second. Neither has a brief yet.
+  NetBox was probed live on 2026-10-29 (`docs/verified-facts.md`, "NetBox 4.7.4 with
+  netbox-branching 1.2.2"): NetBox 4.7.4 with the plugin 1.2.2 is installed under
+  `local/netbox/` as the Compose project `fylgja-netbox` on loopback 8800, stopped with
+  its volumes kept (its `main` carries the spike's merged change), and its token and admin
+  password are in `local/netbox-spike/.env`, beside the throwaway adapter.
 - **Open, the operator's**: 016's command log (`make command-log`, once this session is
   closed; specify through Run 28 are published); 016's review, merge and push (T050);
   file 014's upstream

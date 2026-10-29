@@ -862,6 +862,111 @@ registration `fylgja`.
 
 ---
 
+## NetBox 4.7.4 with netbox-branching 1.2.2
+
+Verified on the development host on 10-29, before F-025 was briefed, by a throwaway spike:
+netbox-docker 5.1.1 (`docker.io/netboxcommunity/netbox:v4.7.4-5.1.1`, `postgres:18-alpine`,
+`valkey/valkey:9.1-alpine` twice) as the Compose project `fylgja-netbox` under
+`local/netbox/`, on loopback port 8800 (8000 is Infrahub's), with a one-layer image adding
+`netboxlabs-netbox-branching==1.2.2` by `uv pip install` (`uv` is at `/usr/local/bin` in
+the image, the venv at `/opt/netbox/venv`), and `configuration/plugins.py` carrying
+`PLUGINS`, `DATABASES` in the plugin's `DynamicSchemaDict`, `DATABASE_ROUTERS` and
+`EVENTS_PIPELINE` as NetBox Labs' netbox-docker page gives them; and a Python adapter of
+about 170 lines that read a branch, mapped it onto CTM 2 and wrote snapshot 2 files, which
+the core took unchanged. The adapter and the install files are not in this repository.
+
+**Running it**
+
+- **The first start takes about 11 minutes**, nearly all of it `manage.py migrate`;
+  Compose marks the `netbox` container unhealthy after its 90 s start period and never
+  starts `netbox-worker`, whose dependency failed, so a second `up -d` once `netbox` is
+  healthy starts it. The worker is needed: a branch is provisioned by an RQ job. The
+  plugin image built in 4 s. *(10-29)*
+- **The stack idles at about 1.3 GiB**: `netbox` 1.03 GiB, `netbox-worker` 173 MiB,
+  `postgres` 89 MiB, the two valkeys 4 MiB each; the host's `free -m` lost 1.2 GiB of
+  available memory with it up. *(10-29)*
+- **API tokens are v2**: a token is presented as `Authorization: Bearer nbt_<key>.<token>`,
+  the 12-character `key` and 40-character `token` that `POST /api/users/tokens/provision/`
+  (username and password) returns once, `version 2`; `Authorization: Token <token>` is
+  parsed as a v1 token and refused `Invalid v1 token`. v1 tokens are deprecated since 4.6
+  and go in 5.0. netbox-docker 5.1.1's entrypoint ignores `SUPERUSER_API_TOKEN` ("No API
+  token was created…", with the variable in the container's environment). *(10-29)*
+- **`/api/status/`** names `netbox-version 4.7.4`, `django-version 6.1.2`,
+  `python-version 3.14.4` and `plugins {netbox_branching: 1.2.2}`. *(10-29)*
+
+**Branches**
+
+- **A branch is selected by `X-NetBox-Branch: <schema_id>` on REST and GraphQL requests
+  alike**, and on GraphQL by `?_branch=<schema_id>` too; the `schema_id` is eight
+  lower-case alphanumerics (`p9d46y7z`), read from the branch's own representation. A
+  header naming no branch is `400 Invalid branch identifier`; one naming a branch that is
+  `new`, `merged` or `archived` is `400 Selected branch is not ready.`, for `render-config`
+  as for any read, so a merged branch cannot be read again. *(10-29)*
+- **`POST /api/plugins/branching/branches/ {name}`** answers `status {value: new}`, then
+  `ready` once the worker has provisioned it, 5.7 s on this host (a `provisioned` row in
+  `branch-events`); `merge` with `commit: true` is a 2.2 s job that leaves the branch
+  `merged`, `main` carrying its changes and a `merged` event; `archive` refuses an unmerged
+  branch ("Only merged branches can be archived") and `revert` an archived one ("Only
+  merged branches can be reverted"); `sync` with `commit: false` enqueues a `Sync branch`
+  job. The plugin's API root lists `branch-events`, `branchable-models`, `branches` and
+  `changes`; there is no `changediffs`. *(10-29)*
+- **`render-config` honours the header**: with `n1 ethernet-1/2` set `enabled: false` on
+  the branch, `POST /api/dcim/devices/1/render-config/` with `Accept: text/plain` renders
+  `admin-state disable` under the header and `enable` without it, in about 0.5 s;
+  `Accept: application/json` answers `{configtemplate, content}`; a template edited under
+  the header is what the branch renders, `main` rendering its own. The template is
+  resolved device, then role, then platform. *(10-29)*
+- **GraphQL answers the mapping's fields under the header**:
+  `device_list(filters: {tags: {name: {exact: "fylgja"}}})` with `name`, `platform {name
+  manufacturer {name}}` and `interfaces {name type mgmt_only enabled cable {id}
+  ip_addresses {address} connected_endpoints {... on InterfaceType {name device {name}}}}`,
+  and `cable_list {id status terminations {cable_end termination {__typename ... on
+  InterfaceType {id name device {name}}}}}` (`CableTerminationTerminationType` is a
+  union); three devices and every cable in about 0.45 s. *(10-29)*
+- **Branch-aware models** (`/api/plugins/branching/branchable-models/`, a bare list of
+  120) include `extras.configtemplate`, `extras.configcontext`, `extras.journalentry`,
+  `extras.tag` and `extras.taggeditem`; `extras.eventrule` and `extras.webhook` are
+  exempt, so a webhook posted under the header lands on `main`, while a journal entry
+  posted under it lives in the branch alone (200 there, 404 on `main`). A journal entry
+  attaches to the Branch object itself (`assigned_object_type: netbox_branching.branch`,
+  201). `OPTIONS /api/extras/event-rules/` lists no `branch_*` event types among its
+  choices, though the plugin documents five. *(10-29)*
+- **A branch's state has a marker but no earlier reading**:
+  `/api/plugins/branching/changes/?branch_id=` rows carry `action`, `object_type`,
+  `object_id`, `original_data`, `modified_data`, `current_data` (`main`'s value now),
+  `diff` and `conflicts`, and `/api/core/object-changes/` under the header is the branch's
+  own changelog, with monotonic ids; nothing reads the branch as it was at an earlier
+  change. *(10-29)*
+- **NetBox Changes (`netbox_changes`), the change-request layer, is a Pro and Premium
+  feature** (NetBox Labs' v1.0 post, May 2026), not installable on the community edition;
+  there the merge gate is the plugin's `protect_main` and permissions. Read, not run.
+  *(10-29)*
+
+**Through the core**
+
+- **An adapter's snapshot builds and steps a twin unchanged**: the file, with no
+  `snapshot_id`, passed `twin compile --snapshot` and `twin create --dry-run --snapshot`
+  (verdict clear), `twin create --snapshot` built the three-node SR Linux twin in 43–44 s
+  (deploy 39–40 s, pushes 3.0–3.1 s), `twin show` reads `read by netbox-dcim from
+  netbox@4.7.4`, kind `snapshot`, and `twin verify` held 15 assertions over 3 nodes. The
+  adapter wrote `mapping {reader: netbox-dcim, model: netbox, version: 4.7.4}`, no `at`,
+  `schema_hash` the SHA-256 of the GraphQL introspection result, `mgmt_only` and `enabled`
+  exact (no approximation rows) and one fidelity row, `omitted platform.version
+  dcim.Platform`; a read with three `render-config` calls took 2.2 s. *(10-29)*
+- **`twin step --snapshot <branch file> --wait 2m`** from that twin found nodes and links
+  unchanged and one artifact moved, pushed `n1` in 3.3–3.4 s and settled in 2.9–3.4 s,
+  8–9 s end to end; `verify` then skipped the disabled port and its link's two ends and
+  failed none, and gNMI read `n1`'s `admin-state` `enable` before and `disable` after.
+  A twin's node addresses are reassigned at each create: read them from `twin show`.
+  *(10-29)*
+- **The snapshot id reproduces outside Go**: SHA-256 of the hashed body as
+  `json.MarshalIndent(body, "", "  ")` plus a trailing newline, keys in the contract's
+  order and the lists sorted as `ctm.Normalize` sorts them; Python's `json.dumps(body,
+  indent=2) + "\n"` gave `1a29d9dc…` and `6a4a91ff…`, the ids the server filed; the
+  compact and sorted-key forms do not. *(10-29)*
+
+---
+
 ## containerlab 0.79.0
 
 - `clab deploy` creates `clab-<lab>/` beside the topology file, or under

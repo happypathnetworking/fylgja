@@ -698,3 +698,15 @@ Appended by the runs.
   count holds, before a rewrite lands (`GenerateArtifacts`' comment), so a read straight
   after it took `n1`'s old artifact once: the hand scenario waits for the checksum to
   move (about 10 s here). *(2026-10-29)*
+- **§4.6 The tiers' times** (Run 28, T044, T045): tier 2 whole 2,017 s, against 019's
+  2,009 s plus about a minute (Performance Goals), `internal/stages` 1,712.9 s, 87 s under
+  its `-timeout 30m` (019: 109 s), then `internal/checks` 295.4 s; three artifact waits of
+  1m30s lapsed under the tier's own load, each with one artifact `Pending`, and passed
+  with their packages re-run alone (`internal/stage` 214.7 s, `internal/stages` 872.8 s),
+  where 019's close lost one. Tier 3 `E2E-OK` at the first attempt in 2,236.6 s, about
+  37.3 minutes against R-25's 34; case 9's rehearsals 82.7 s of 2,130 s and, failing at
+  `probe-port-down` on the burst, 209.4 s of 2,850 s (R-16's deadlines hold with room);
+  the losses measured on the container's basis, `n1-loop 0/45` and `0/52` across case 5's
+  steps, `e1-loop 369/403` and `321/356` across case 8's restart of `e1` and back, `n1-loop
+  641/656` across case 9's port down. *(Infrahub 1.11.2, containerlab 0.79.0, SR Linux
+  24.7.1, cEOS 4.32.0.2F, alpine 3.24.2, 2026-10-29)*

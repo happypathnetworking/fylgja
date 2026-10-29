@@ -154,6 +154,15 @@ func (c *call) activities(reg *psp.Registry, probes *probe.Registry, paths lab.P
 	}
 }
 
+// burster is the server's burst runner (016): the server's own when one is set, else docker
+// exec through the runner containerlab is driven through, logging to the request's logger.
+func (c *call) burster() verify.Burster {
+	if c.s.Burster != nil {
+		return c.s.Burster
+	}
+	return lab.DockerBurster{Runner: c.s.Runner, Log: c.log}
+}
+
 // reader is the server's node reader, logging to the request's logger when it has none of
 // its own.
 func (c *call) reader() verify.Reader {

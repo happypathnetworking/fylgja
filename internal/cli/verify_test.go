@@ -109,7 +109,13 @@ func healthyNodes(t *testing.T, m compiler.Manifest, ips map[string]string) *fak
 	t.Helper()
 	f := &fakeNodes{nodes: map[string]fakeNode{}, answers: map[string][]verify.Answer{}, errs: map[string]error{},
 		probes: map[string]wire.Probe{}, reads: map[string]int{}}
+	hosts := map[string]bool{}
 	for _, n := range m.Nodes {
+		// A probe's host (016) is not read: it bursts.
+		if n.Probe != nil {
+			hosts[n.Name] = true
+			continue
+		}
 		port := "57400"
 		if n.PSP.ID == "arista_eos" {
 			port = "6030"
@@ -132,6 +138,9 @@ func healthyNodes(t *testing.T, m compiler.Manifest, ips map[string]string) *fak
 		a, b := rows[end{l.A.Node, l.A.Port}], rows[end{l.B.Node, l.B.Port}]
 		for _, p := range [][2]compiler.MappingRow{{a, b}, {b, a}} {
 			near, far := p[0], p[1]
+			if hosts[near.Device] {
+				continue
+			}
 			f.enabled(near.Device, verify.NodeName(near), "")
 			f.neighbours(near.Device, verify.NodeName(near), [2]string{far.Device, verify.NodeName(far)})
 		}
@@ -208,6 +217,9 @@ var verifyNodeOrder = map[string][]string{
 	"three-node": {"n1", "n2", "n3"},
 	"mixed":      {"e1", "e2", "s1"},
 	"lossy":      {"c1", "c2", "s1"},
+	// 016: the three-node twin with probe n1-loop's two hosts, as inspect-three-probed.json
+	// reports them.
+	"three-node-probed": {"n1", "n2", "n3", "n1-loop-a", "n1-loop-b"},
 }
 
 // verifyTwinHost is a host running a golden's twin, as verifyHost builds it.
@@ -263,7 +275,14 @@ func verifyHost(t *testing.T, golden string, edit func(map[string]any), change f
 	for i, name := range verifyNodeOrder[golden] {
 		ips[name] = fmt.Sprintf("172.20.20.%d", i+2)
 		for _, n := range m.Nodes {
-			if n.Name == name {
+			switch {
+			case n.Name != name:
+			case n.Probe != nil:
+				f.Nodes = append(f.Nodes, wire.TwinNode{Name: name, Container: "clab-fylgja-" + name, Image: n.Image,
+					Probe: &wire.TwinProbe{Name: n.Probe.Name, Endpoint: n.Probe.Endpoint, Format: n.Probe.Format,
+						Package: wire.PSPRef{ID: n.Probe.Package.ID, Source: n.Probe.Package.Source}},
+					MgmtIPv4: ips[name], ReadyAfterS: 2})
+			default:
 				f.Nodes = append(f.Nodes, wire.TwinNode{Name: name, Container: "clab-fylgja-" + name, Image: n.Image,
 					PSP: &wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}, MgmtIPv4: ips[name], ReadyAfterS: 9})
 			}
@@ -290,7 +309,11 @@ func verifyHost(t *testing.T, golden string, edit func(map[string]any), change f
 // is a node containerlab does not report.
 func goldenInspect(t *testing.T, golden string, edit func([]map[string]any) []map[string]any) []byte {
 	t.Helper()
-	inspect, err := os.ReadFile(repoPath("internal", "lab", "testdata", "inspect-three.json"))
+	file := "inspect-three.json"
+	if golden == "three-node-probed" {
+		file = "inspect-three-probed.json"
+	}
+	inspect, err := os.ReadFile(repoPath("internal", "lab", "testdata", file))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1739,4 +1762,121 @@ func TestVerifyASnapshotTwin(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fakeBurster answers each probe's burst (016) with received of 5 replies, or err, and
+// records the containers it ran in.
+type fakeBurster struct {
+	received int
+	err      error
+
+	mu    sync.Mutex
+	calls []string
+}
+
+func (f *fakeBurster) Burst(_ context.Context, container string, command []string) (int, int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, container+" "+strings.Join(command, " "))
+	if f.err != nil {
+		return 0, 0, f.err
+	}
+	return 5, f.received, nil
+}
+
+// useBurster makes the server run its bursts by f.
+func useBurster(t *testing.T, f *fakeBurster) {
+	t.Helper()
+	saved := verifyBurster
+	t.Cleanup(func() { verifyBurster = saved })
+	verifyBurster = f
+}
+
+// A probed twin (016, R-15): the devices read as ever, n1's ports to the hosts held to their
+// state, both ends of each host's link skipped, the hosts not dialled, and the probe's burst
+// run in its first host on each run of the command, held when every reply came: each host's
+// line names its format and address, the first its burst, and the counts line its bursts.
+// One that loses a reply ends the command nonconforming, exit 5, under verify.burst; one the
+// server cannot run leaves the host unread, exit 1. Every document satisfies the contract.
+func TestVerifyAProbedTwin(t *testing.T) {
+	burst := "clab-fylgja-n1-loop-a ping -c 5 -i 0.2 -W 2 10.1.11.2"
+	t.Run("held", func(t *testing.T) {
+		h := verifyHost(t, "three-node-probed", nil, nil)
+		b := &fakeBurster{received: 5}
+		useBurster(t, b)
+		out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+		if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK || len(out.doc.Findings) != 0 {
+			t.Fatalf("exit %d, status %s, findings %+v; want 0, ok, none\n%s", out.code, out.doc.Status, out.doc.Findings, out.stdout)
+		}
+		s := short(h.staged)
+		want := lines(
+			"twin: branch fylgja-fixture (snapshot none, bundle "+s+"), ready; 5 nodes",
+			"staged: bundle "+s+"; 22 assertions over 5 nodes, 4 skipped",
+			"n1 (172.20.20.2:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/10, ethernet-1/11, ethernet-1/2 enabled; "+
+				"neighbours n2 ethernet-1/1, n3 ethernet-1/2; record: holds "+s,
+			"n1-loop-a (ping host, 172.20.20.5): burst n1-loop 5 of 5 replies from n1-loop-b at 10.1.11.2 held; record: holds "+s,
+			"n1-loop-b (ping host, 172.20.20.6): the far end of probe n1-loop's burst; record: holds "+s,
+			"n2 (172.20.20.3:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds "+s,
+			"n3 (172.20.20.4:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2; record: holds "+s,
+			"skipped: link n1-loop-a:eth1|n1:ethernet-1/10 at both ends (synthesized: n1-loop-a speaks no discovery protocol); "+
+				"link n1-loop-b:eth1|n1:ethernet-1/11 at both ends (synthesized: n1-loop-b speaks no discovery protocol)",
+			"in flight: none",
+			"held: 3 host names, 8 ports, 6 link ends, 5 record claims (the record's, not read); burst 1 held; failed: none; unread: none",
+		)
+		if out.stdout != want {
+			t.Errorf("stdout:\n%s\nwant:\n%s", out.stdout, want)
+		}
+		for _, c := range out.calls {
+			if strings.HasPrefix(c, "172.20.20.5") || strings.HasPrefix(c, "172.20.20.6") {
+				t.Errorf("a host was dialled: %s", c)
+			}
+		}
+		if len(b.calls) != 2 || b.calls[0] != burst || b.calls[1] != burst {
+			t.Errorf("bursts %q, want %q once a run", b.calls, burst)
+		}
+		v := out.doc.Verify
+		if v == nil || v.Counts.Burst.Held != 1 || v.Counts.Burst.Failed != 0 || v.Counts.Burst.Unread == nil || *v.Counts.Burst.Unread != 0 {
+			t.Fatalf("block %+v, want the burst counted held", v)
+		}
+		var hostA *findings.VerifyNode
+		for i := range v.Nodes {
+			if v.Nodes[i].Node == "n1-loop-a" {
+				hostA = &v.Nodes[i]
+			}
+		}
+		if hostA == nil || hostA.PSP != nil || hostA.HostName != nil || hostA.Probe == nil || len(hostA.Bursts) != 1 ||
+			hostA.Bursts[0].Outcome != "held" || hostA.Addr == nil || *hostA.Addr != "172.20.20.5" {
+			t.Errorf("n1-loop-a %+v, want a host with its burst held", hostA)
+		}
+	})
+	t.Run("4 of 5", func(t *testing.T) {
+		h := verifyHost(t, "three-node-probed", nil, nil)
+		useBurster(t, &fakeBurster{received: 4})
+		out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+		want := findings.Finding{Severity: findings.Rejection, Step: findings.StepObserve, Rule: findings.RuleVerifyBurst,
+			Object: "n1-loop", Message: "probe n1-loop: 4 of 5 replies from n1-loop-b at 10.1.11.2"}
+		if out.code != 5 || out.doc.Status != findings.StatusNonconforming || len(out.doc.Findings) != 1 || out.doc.Findings[0] != want {
+			t.Errorf("exit %d, status %s, findings %+v; want 5, nonconforming, %+v", out.code, out.doc.Status, out.doc.Findings, want)
+		}
+		for _, l := range []string{
+			"n1-loop-a (ping host, 172.20.20.5): burst n1-loop 4 of 5 replies from n1-loop-b at 10.1.11.2 (verify.burst); record: holds ",
+			"; burst 0 held; failed: 1 burst; unread: none",
+		} {
+			if !strings.Contains(out.stdout, l) {
+				t.Errorf("stdout does not carry %q:\n%s", l, out.stdout)
+			}
+		}
+	})
+	t.Run("the burst cannot run", func(t *testing.T) {
+		h := verifyHost(t, "three-node-probed", nil, nil)
+		useBurster(t, &fakeBurster{err: errors.New("docker exec exited 1: Error response from daemon: container is not running")})
+		out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+		if out.code != findings.ExitError || out.doc.Status != findings.StatusError || len(out.doc.Findings) != 1 ||
+			out.doc.Findings[0].Rule != findings.RuleOperationFailed || out.doc.Findings[0].Object != "n1-loop-a" {
+			t.Errorf("exit %d, status %s, findings %+v; want 1, error, n1-loop-a's operation.failed", out.code, out.doc.Status, out.doc.Findings)
+		}
+		if !strings.Contains(out.stdout, "n1-loop-a (ping host, 172.20.20.5): not read: probe n1-loop: the burst from n1-loop-a") {
+			t.Errorf("stdout:\n%s", out.stdout)
+		}
+	})
 }

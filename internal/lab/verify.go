@@ -43,9 +43,12 @@ import (
 //     same in.From. The end of the window is not retried, since VerifyOptions sets
 //     the schedule-to-close equal to the start-to-close, and the run says the wait could not
 //     complete, with the timeout's finding, and the record's wait stays null.
-//   - The result counts the wait's last read by kind (015, research R-07), for a
-//     rehearsal's report; the record keeps no counts, so a retry that returns the wait the
-//     record holds carries none.
+//   - Each read runs every probe's burst (016, R-15) by the burster, with the probe
+//     packages the worker loaded: a burst that lost a reply fails the read under
+//     verify.burst, and the wait reads again, as it does for any assertion that fails.
+//   - The result counts the wait's last read by kind (015, research R-07), the bursts among
+//     them (016), for a rehearsal's report; the record keeps no counts, so a retry that
+//     returns the wait the record holds carries none.
 func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.VerifyResult, error) {
 	stop := heartbeat(ctx)
 	defer stop()
@@ -105,8 +108,12 @@ func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.
 	if now == nil {
 		now = time.Now
 	}
+	burster := a.Burster
+	if burster == nil {
+		burster = DockerBurster{Runner: a.Clab.Runner, Log: a.logger()}
+	}
 	vin := verify.Input{Manifest: m, StagedID: stagedID, Record: rec, Lab: labNodes, Packages: a.Registry,
-		Reader: reader, Getenv: a.getenv(), Now: now}
+		Reader: reader, Probes: a.Probes, Burster: burster, Getenv: a.getenv(), Now: now}
 	w := verify.Wait(ctx, vin, assertions, verify.WaitOptions{Budget: time.Duration(in.BudgetS) * time.Second, From: from,
 		Sleep: a.waitSleep, Now: now, Lab: inspect})
 	if w.Outcome == verify.WaitCancelled && !temporal.IsCanceledError(context.Cause(ctx)) {
@@ -140,8 +147,8 @@ func counts(w verify.WaitResult) *wire.VerifyCounts {
 }
 
 // failing is what still fails at the wait's last read, as the record keeps it: each failed or
-// absent assertion and each unread node's operation.failed, by identifier, object and
-// message.
+// absent assertion, a failed burst's verify.burst among them (016), and each unread node's
+// operation.failed, by identifier, object and message.
 // The record's claims are never waited on, so verify.record.holds is
 // not among them, and a wait that settled has nothing else: it is empty, never null.
 func failing(w verify.WaitResult) []wire.StepFinding {

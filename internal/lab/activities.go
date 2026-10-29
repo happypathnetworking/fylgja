@@ -67,6 +67,9 @@ type Activities struct {
 	// Reader reads a booted node for the step's wait;
 	// nil is GNMIReader over Log. Tier 1 fakes it, as it fakes Prober.
 	Reader verify.Reader
+	// Burster runs a probe's burst in the step's wait (016); nil is DockerBurster over the
+	// Clab's Runner. Tier 1 records the Runner, or fakes it, as it fakes Reader.
+	Burster verify.Burster
 
 	// waitSleep and waitNow are VerifyTwin's pause between two reads and its clock; nil is
 	// a timer under the activity's context and time.Now. Only tier 1 sets them, so a wait

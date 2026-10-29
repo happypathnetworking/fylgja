@@ -68,8 +68,9 @@ var (
 	dialService = func(ctx context.Context) (provision.Service, error) {
 		return provision.Dial(ctx, nil)
 	}
-	dryRunRunner      lab.Runner    = lab.ExecRunner{}
-	verifyReader      verify.Reader = lab.GNMIReader{}
+	dryRunRunner      lab.Runner     = lab.ExecRunner{}
+	verifyReader      verify.Reader  = lab.GNMIReader{}
+	verifyBurster     verify.Burster // nil: the server's DockerBurster over dryRunRunner (016)
 	verifySleep       func(ctx context.Context, d time.Duration) error
 	verifyNow         func() time.Time
 	showServiceBudget = provision.ShowServiceBudget
@@ -175,6 +176,7 @@ func handSeams() {
 	s.Dial = func(ctx context.Context, _ *slog.Logger) (provision.Service, error) { return dial(ctx) }
 	s.Runner = dryRunRunner
 	s.Reader = verifyReader
+	s.Burster = verifyBurster
 	s.Sleep, s.Now = verifySleep, verifyNow
 	s.ServiceBudget = showServiceBudget
 	s.RehearsalCeiling = rehearsalCeiling

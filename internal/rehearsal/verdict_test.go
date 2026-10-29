@@ -113,3 +113,36 @@ func TestStop(t *testing.T) {
 		}
 	}
 }
+
+// A stage whose wait expired with a probe's burst failed (016, SC-002) is failed by the
+// gate's existing rule, a failing finding the baseline did not have, with nothing in
+// Classify that knows the burst: alone, beside a finding the baseline had, beside one it did
+// not, and on a step that diverged at its flows. Every burst-failed case fails the stage.
+func TestABurstFailedFailsTheStage(t *testing.T) {
+	burst := wire.StepFinding{Rule: findings.RuleVerifyBurst, Object: "n1-loop",
+		Message: "probe n1-loop: 0 of 5 replies from n1-loop-b at 10.1.11.2"}
+	baseline := []wire.StepFinding{neighborN1}
+	for _, c := range []struct {
+		name     string
+		step     *StepOutcome
+		wait     *wire.StepWait
+		baseline []wire.StepFinding
+		added    []wire.StepFinding
+	}{
+		{"the burst alone", stepped(wire.StepStepped), waitOf(wire.WaitExpired, burst), nil, []wire.StepFinding{burst}},
+		{"the burst against a baseline that had none", stepped(wire.StepStepped), waitOf(wire.WaitExpired, burst), baseline,
+			[]wire.StepFinding{burst}},
+		{"beside a finding the baseline had", stepped(wire.StepStepped), waitOf(wire.WaitExpired, neighborN1, burst), baseline,
+			[]wire.StepFinding{burst}},
+		{"beside a finding the baseline did not have", stepped(wire.StepStepped), waitOf(wire.WaitExpired, neighborN3, burst),
+			baseline, []wire.StepFinding{neighborN3, burst}},
+		{"on an unchanged step", stepped(wire.StepUnchanged), waitOf(wire.WaitExpired, burst), nil, []wire.StepFinding{burst}},
+		{"diverged at its flows", &StepOutcome{Outcome: wire.StepDiverged, Phase: findings.StepFlows, Step: findings.StepFlows},
+			waitOf(wire.WaitExpired, burst), nil, []wire.StepFinding{burst}},
+	} {
+		got, added := Classify(c.step, c.wait, c.baseline, false)
+		if got != VerdictFailed || !reflect.DeepEqual(added, c.added) {
+			t.Errorf("%s: Classify = %s, %v; want %s, %v", c.name, got, added, VerdictFailed, c.added)
+		}
+	}
+}

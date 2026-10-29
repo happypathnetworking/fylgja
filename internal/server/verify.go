@@ -38,6 +38,8 @@ type verifyFlags struct {
 // packages; the host as twin show inspects it; the runs in flight, best-effort; the twin,
 // refused when there is none; the staged bundle; the packages and logins its nodes need,
 // every refusal in one pass; the assertions; then one read, or the wait, and the report.
+// Each read runs every probe's burst (016) inside the probe's first host, by docker exec
+// through the runner the host is inspected by, with the probe packages the request loaded.
 // No interrupt is taken: an interrupt ends the client by the signal, and the request's work
 // with it, writing nothing.
 func runTwinVerify(ctx context.Context, opts *options, f *verifyFlags) error {
@@ -130,7 +132,7 @@ func runTwinVerify(ctx context.Context, opts *options, f *verifyFlags) error {
 		plural(len(m.Nodes), "node"), countOutcome(assertions, verify.Skipped))
 
 	in := verify.Input{Manifest: m, StagedID: stagedID, Record: *rec, Lab: host.Lab.Nodes, Packages: reg,
-		Reader: opts.c.reader(), Getenv: opts.getenv}
+		Reader: opts.c.reader(), Probes: acts.Probes, Burster: opts.c.burster(), Getenv: opts.getenv}
 	var (
 		report verify.Report
 		wait   *findings.VerifyWait
@@ -256,7 +258,8 @@ func stagedManifest(dir string) (compiler.Manifest, error) {
 // verifyPackages refuses, in one pass, what would stop a node being read:
 // a package no longer loaded, one with no conformance facet or a readiness probe that is
 // not gNMI, and a readiness login unset, worded as the host check words it. Each at step
-// observe.
+// observe. A host (016) has no support package and no login, and nothing of its probe
+// package is refused here: one not loaded leaves its burst unread, which the read reports.
 func verifyPackages(m compiler.Manifest, reg *psp.Registry, getenv func(string) (string, bool)) findings.List {
 	var (
 		out      findings.List
@@ -266,6 +269,9 @@ func verifyPackages(m compiler.Manifest, reg *psp.Registry, getenv func(string) 
 		probeFor []wire.NodePlan
 	)
 	for _, n := range m.Nodes {
+		if n.Probe != nil {
+			continue
+		}
 		p, ok := reg.LookupID(n.PSP.ID)
 		if !ok {
 			missing[n.PSP.ID] = append(missing[n.PSP.ID], n.Name)
@@ -378,7 +384,8 @@ func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, to
 	for _, k := range []struct {
 		n    int
 		noun string
-	}{{c.HostName.Failed, "host name"}, {c.PortEnabled.Failed, "port"}, {c.Neighbor.Failed, "link end"}, {c.Record.Failed, "record claim"}} {
+	}{{c.HostName.Failed, "host name"}, {c.PortEnabled.Failed, "port"}, {c.Neighbor.Failed, "link end"}, {c.Burst.Failed, "burst"},
+		{c.Record.Failed, "record claim"}} {
 		if k.n > 0 {
 			failed = append(failed, plural(k.n, k.noun))
 		}
@@ -387,9 +394,15 @@ func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, to
 	for _, e := range r.Unread {
 		unreadNodes = append(unreadNodes, e.Node)
 	}
-	opts.note("held: %s, %s, %s, %s (the record's, not read); failed: %s; unread: %s",
+	// A twin with probes (016) counts its bursts after the record's claims; one with none
+	// prints what it printed before.
+	bursts := ""
+	if slices.ContainsFunc(r.Assertions, func(a verify.Assertion) bool { return a.Kind == verify.KindBurst }) {
+		bursts = fmt.Sprintf("; burst %d held", c.Burst.Held)
+	}
+	opts.note("held: %s, %s, %s, %s (the record's, not read)%s; failed: %s; unread: %s",
 		plural(c.HostName.Held, "host name"), plural(c.PortEnabled.Held, "port"), plural(c.Neighbor.Held, "link end"),
-		plural(c.Record.Held, "record claim"), orNone(strings.Join(failed, ", ")), orNone(strings.Join(unreadNodes, ", ")))
+		plural(c.Record.Held, "record claim"), bursts, orNone(strings.Join(failed, ", ")), orNone(strings.Join(unreadNodes, ", ")))
 }
 
 // nodeLine is one node's line: its address and package, then each assertion in its held
@@ -401,12 +414,25 @@ func nodeLine(n verify.NodeRead, as []verify.Assertion, claim *verify.Claim, e *
 		addr = "no address"
 	}
 	head := fmt.Sprintf("%s (%s, %s)", n.Node, addr, n.PSP)
+	if n.Probe != nil {
+		// A host (016) names its probe's format first, then its address alone, which is not
+		// dialled (contracts/commands.md).
+		head = fmt.Sprintf("%s (%s host, %s)", n.Node, n.Probe.Format, addr)
+	}
 	if e != nil {
 		return fmt.Sprintf("%s: not read: %s (%s)", head, e.Error, findings.RuleOperationFailed)
 	}
-	var hostName, enabled, ports, neighbours, seen []string
+	var hostName, enabled, ports, neighbours, seen, bursts []string
 	for _, a := range as {
 		switch a.Kind {
+		case verify.KindBurst:
+			burst := fmt.Sprintf("burst %s %d of %d replies from %s at %s", a.Probe, a.Received, a.Count, a.FarNode, a.FarAddress)
+			switch a.Outcome {
+			case verify.Held:
+				bursts = append(bursts, burst+" held")
+			case verify.Failed:
+				bursts = append(bursts, fmt.Sprintf("%s (%s)", burst, findings.RuleVerifyBurst))
+			}
 		case verify.KindHostName:
 			switch a.Outcome {
 			case verify.Held:
@@ -451,6 +477,10 @@ func nodeLine(n verify.NodeRead, as []verify.Assertion, claim *verify.Claim, e *
 		parts = append(parts, "neighbours "+strings.Join(neighbours, ", "))
 	}
 	parts = append(parts, seen...)
+	parts = append(parts, bursts...)
+	if n.Probe != nil && len(bursts) == 0 {
+		parts = append(parts, fmt.Sprintf("the far end of probe %s's burst", n.Probe.Name))
+	}
 	switch {
 	case claim == nil:
 	case claim.Outcome == verify.Held:
@@ -486,7 +516,10 @@ func skippedText(skips []findings.VerifySkip) string {
 			continue
 		}
 		done[id] = true
-		parts = append(parts, fmt.Sprintf("link %s at both ends (%s)", id, strings.TrimPrefix(s.Reason, "link "+id+" is not asserted: ")))
+		// A disabled port's link reads "(intent disables …)", a host's "(synthesized: …)" (016).
+		reason := strings.TrimPrefix(s.Reason, "link "+id+" is not asserted: ")
+		reason = strings.TrimPrefix(reason, "link "+id+" is ")
+		parts = append(parts, fmt.Sprintf("link %s at both ends (%s)", id, reason))
 	}
 	return orNone(strings.Join(parts, "; "))
 }

@@ -70,7 +70,7 @@ either image, and the kind's load on `main`, each owed at implement (§4).
 Settled by this plan where the spec left the point to it, each recorded in the spec's
 Clarifications (R-30): where the hosts enter the compile; a snapshot `1` read as a `2`;
 the kind's flat shape; the `flows` phase and the per-probe outcomes; a host the target
-drops read first, then torn down; two hosts with one address refused; the burst's name
+drops torn down with no flow, listed `dropped`; two hosts with one address refused; the burst's name
 `burst` and its rule `verify.burst`; the host check's presence rule for a probe image; and
 **two** probe-ready ports per fixture device with tier 3's probe on one device, in place
 of FR-024's one and US1's "through the two devices". One decision entry, D-064, and a

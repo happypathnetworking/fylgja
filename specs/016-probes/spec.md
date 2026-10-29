@@ -102,8 +102,8 @@ any read of a node's running configuration are out of this feature.
     directory alone.
   - The kind is flat, eight text attributes for the two endpoints (R-07); a flow that
     fails to start is an entry of the loss list, not a phase, and the phase `flows` names
-    the activities' own failure (R-13); a host the target drops is read first, then torn
-    down (R-21); two hosts with one address are refused when the declaration is read
+    the activities' own failure (R-13); a host the target drops is torn down by the
+    reconcile with no flow started, and listed under the loss block's `dropped` (R-21); two hosts with one address are refused when the declaration is read
     (R-20); the assertion kind is `burst`, its rule `verify.burst` (R-15); a probe image
     is verified present whatever its acquisition (R-12); the probe package's override is
     the PSP override directory's `probes/` subdirectory (R-08).
@@ -118,6 +118,11 @@ any read of a node's running configuration are out of this feature.
   the registry's decoder and schema imports beside `findings` and the standard library,
   which the declaration and the ping reading alone are held to; splitting the registry
   into a package of its own was not chosen.
+- **A probe the target drops** (the operator, T065): its hosts are torn down by the
+  reconcile with no flow started, and it is listed under the loss block's `dropped` with
+  no figure, as R-21's body, the data model, the contract and the code have it; the
+  summaries that said "read first, then torn down" now say so. Reading its flow before
+  the teardown was not chosen.
 
 ## User Scenarios & Testing *(mandatory)*
 

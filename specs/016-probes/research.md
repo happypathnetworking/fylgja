@@ -330,7 +330,7 @@ container and a plain one share a running lab, is owed (§4.1). *(2026-10-28)*
   (`probe.address.duplicate`, naming both probes): two hosts on one address cannot be told
   apart by a ping, and the check needs no CTM. An address outside its interface's prefix is
   not refused, as decided. Serves FR-003.
-- **R-21 A host the target drops** is read first, then torn down: `StartFlows` starts the
+- **R-21 A host the target drops** is torn down with no flow: `StartFlows` starts the
   flows of the probes both snapshots carry, `ReadFlows` reads them after the wait, and a
   host only the twin's snapshot carries is a node the reconcile deletes, with no flow
   started and no figure, listed under the loss block's `dropped`. A host only the target
@@ -382,7 +382,7 @@ container and a plain one share a running lab, is owed (§4.1). *(2026-10-28)*
   question asked): the demo probe lies across one device and each fixture device gains two
   probe-ready ports (R-18, R-19), which amends FR-024 and US1's scenarios 1 and 4; a
   snapshot `1` is read as a `2` (R-05); the kind is flat (R-07); the phase `flows` and the
-  per-probe outcomes (R-13); a dropped host is read first (R-21); two hosts with one
+  per-probe outcomes (R-13); a dropped host is torn down with no flow (R-21); two hosts with one
   address are refused (R-20); the kind `burst` and the rule `verify.burst` (R-15); a probe
   image is verified present whatever its acquisition (R-12). The operator may overturn any
   at `analyze`; the first is the one the plan flags as a choice the brief did not make.

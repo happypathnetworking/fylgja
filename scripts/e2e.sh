@@ -38,8 +38,10 @@
 #   4. create --at T again: case 2's snapshot and bundle_id; destroy
 #   5. a throwaway branch seeded; its dry run with the probe file n1-loop (016) lists the
 #      probe's two hosts among the nodes; create from it with that file, under --scope
-#      tag:fylgja named (017), its snapshot carrying the probe and the twin its two hosts,
-#      and twin show names the snapshot it was built from; twin verify holds the probe's
+#      tag:fylgja named (017), its snapshot carrying the probe and the twin its two hosts;
+#      the boot half reads its three devices, skips n1's two probe ports' neighbours on the
+#      probe's synthesized links and names the two hosts it does not read (016), and twin
+#      show names the snapshot it was built from; twin verify holds the probe's
 #      burst; an artifact-only change (n1:ethernet-1/2 disabled, then generated) leaves the
 #      twin frozen (019): over five minutes and a half no run starts, and twin.json, the
 #      containers and twin show's kind line do not move; a step to a snapshot of the changed
@@ -96,8 +98,8 @@
 # after every rebuild, since case 1's refusal is worded by the worker and the steps of cases
 # 5, 7 and 8 run on it), Docker, containerlab, the SR Linux image, the imported cEOS image
 # (never pulled; docs/development.md says how to import it), the probe package's image
-# (probes/ping.yaml's, alpine:3.24.2, which no command pulls: docker pull it), go (cases 1
-# and 6 run the boot half as go test; cases 5 to 9 seed their branches with
+# (probes/ping.yaml's, alpine:3.24.2, which no command pulls: docker pull it), go (cases 1,
+# 5 and 6 run the boot half as go test; cases 5 to 9 seed their branches with
 # cmd/fylgja-fixture), and Infrahub with fylgja-fixture seeded and the kind FylgjaProbe on
 # main holding no probe, since every read with no probe file carries what it holds (016)
 # (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja", the scope every case's
@@ -1254,6 +1256,26 @@ expect "$OUT/create-5.json" 'has("following") | not'
 expect "$TWIN/twin.json" '.provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"
   and [.nodes[] | select(.probe != null) | .name] == ["n1-loop-a", "n1-loop-b"]'
 expect "$OUT/probes-snapshot-5.json" '.probes == ["n1-loop"]'
+
+# The conformance suite's boot half on this probed twin (016): it reads the three devices as
+# case 1's, but for n1's two probe ports' neighbours, skipped with verify's reason since the
+# probe's links are synthesized and a host speaks no discovery protocol, and names the two
+# hosts it does not read, having no package to read them by. It changes nothing.
+start=$(now_ns)
+go test -count=1 -tags e2e ./internal/conformance -run '^TestBootHalf$' -v > "$OUT/boot-half-5.out" 2>&1 ||
+  fail "case 5: the conformance suite's boot half failed; see $OUT/boot-half-5.out"
+BOOT_HALF5_TOOK=$(since "$start")
+grep -qF 'boot half: 3 nodes [n1 n2 n3] of run ' "$OUT/boot-half-5.out" ||
+  fail "case 5: the boot half read other nodes than n1, n2 and n3; see $OUT/boot-half-5.out"
+grep -qF 'boot half: 2 probe hosts not read, having no package to read them by: [n1-loop-a n1-loop-b]' "$OUT/boot-half-5.out" ||
+  fail "case 5: the boot half names no hosts n1-loop-a and n1-loop-b not read; see $OUT/boot-half-5.out"
+for end in a:10 b:11; do
+  grep -qF "skipped: link n1-loop-${end%%:*}:eth1|n1:ethernet-1/${end#*:} is synthesized: n1-loop-${end%%:*} speaks no discovery protocol" "$OUT/boot-half-5.out" ||
+    fail "case 5: the boot half skipped no neighbour of n1:ethernet-1/${end#*:} on its synthesized link; see $OUT/boot-half-5.out"
+done
+grep -qE '^ +boot_e2e_test\.go:[0-9]+: node n1 \(.*\): booted; .*; 2 skipped on synthesized links; ' "$OUT/boot-half-5.out" ||
+  fail "case 5: n1's boot-half line counts no 2 skipped on synthesized links; see $OUT/boot-half-5.out"
+echo "e2e: case 5: boot half passed in ${BOOT_HALF5_TOOK}s, n1-loop-a and n1-loop-b not read"
 
 # twin verify holds the probe's burst, from its first host to its second's address (016):
 # the document by node, and the text's host line and counts line. The probe's two links are
@@ -2523,6 +2545,7 @@ if ran 6; then line+=", ${VERIFY6_TOOK}s (case 6)"; fi
 if ran 8; then line+="; case 8 settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"; fi
 echo "$line"
 line="e2e: wall time $(since "$RUN_START")s, boot half ${BOOT_HALF_TOOK}s (case 1)"
+if ran 5; then line+=", ${BOOT_HALF5_TOOK}s (case 5)"; fi
 if ran 6; then line+=" and ${BOOT_HALF6_TOOK}s (case 6)"; fi
 echo "$line"
 if [ "${#SKIPPED[@]}" -eq 0 ]; then

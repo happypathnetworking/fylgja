@@ -836,7 +836,8 @@ boot half needs a twin that ended
 saying so. On a probed twin it reads the devices alone: a probe's host has no package to
 read it by, and a device's end of a synthesized link is not held to a neighbour, since the
 host speaks no discovery protocol; each such end is a note in verify's words, counted on
-the device's line, and the hosts are named as not read. `scripts/e2e.sh` runs it in cases 1 and 6; by hand, run it against a twin made
+the device's line, and the hosts are named as not read. `scripts/e2e.sh` runs it in cases 1, 5 (a
+probed twin) and 6; by hand, run it against a twin made
 with `twin create`. The `-run` is anchored, because `TestBootHalf` alone also
 matches `TestBootHalfFaked` and the other tier-1 tests of the half, whose faked nodes'
 lines would sit beside the real ones. A new shipped package gets its README row only from

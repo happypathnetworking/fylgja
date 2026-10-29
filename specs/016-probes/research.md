@@ -710,3 +710,20 @@ Appended by the runs.
   steps, `e1-loop 369/403` and `321/356` across case 8's restart of `e1` and back, `n1-loop
   641/656` across case 9's port down. *(Infrahub 1.11.2, containerlab 0.79.0, SR Linux
   24.7.1, cEOS 4.32.0.2F, alpine 3.24.2, 2026-10-29)*
+- **The boot half on a probed twin, live** (convergence pass 1, T056, after T051): the
+  worker and the server restarted from `086b07d`; `fylgja-test-t056-3187697` seeded (56.3
+  s) and a twin created from it with `--probes testdata/probes/n1-loop.json` in 50.8 s,
+  five nodes, snapshot `25794c5f…`, bundle `99830b6c…`, `n1-loop-a` and `n1-loop-b`
+  ready in 0.1 s and 0.2 s. `FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e
+  ./internal/conformance -run '^TestBootHalf$' -v` passed in 12.4 s wall (8.3 s the
+  test's own): `boot half: 3 nodes [n1 n2 n3]`, then `2 probe hosts not read, having no
+  package to read them by: [n1-loop-a n1-loop-b]`; `n1`'s two notes, `neighbor at
+  /system/lldp/interface[name=ethernet-1/10]/neighbor: skipped: link
+  n1-loop-a:eth1|n1:ethernet-1/10 is synthesized: n1-loop-a speaks no discovery protocol`
+  and its `ethernet-1/11` twin naming `n1-loop-b`; `n1`'s line `4 cabled ports enabled and
+  discovering; 2 neighbours as the bundle's links name them; 2 skipped on synthesized
+  links`, the probe ports' state read as every cabled port's; `n2`'s and `n3`'s lines a
+  three-node twin's (`2 cabled ports …; 2 neighbours …`); every check of the three devices
+  held, none failed. Destroyed (5 containers) and the branch deleted. `scripts/e2e.sh`'s
+  case 5 then runs it after its create, holding those three readings by `grep`.
+  *(SR Linux 24.7.1, containerlab 0.79.0, alpine 3.24.2, 2026-10-29)*

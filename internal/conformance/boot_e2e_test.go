@@ -18,7 +18,8 @@ import (
 // $FYLGJA_PSP_DIR), each node read by gNMI with the login its package names. One subtest
 // per node per check; each node's success line is logged, and each report's notes. On a
 // probed twin it reads the devices alone, and names the hosts it did not read. It boots,
-// pushes and changes nothing: scripts/e2e.sh runs it in case 1, on a twin that run made.
+// pushes and changes nothing: scripts/e2e.sh runs it in cases 1, 5 (a probed twin) and 6,
+// each on a twin that run made.
 //
 //	FYLGJA_STATE_ROOT=<absolute root> go test -count=1 -tags e2e ./internal/conformance -run '^TestBootHalf$' -v
 func TestBootHalf(t *testing.T) {

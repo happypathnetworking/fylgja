@@ -722,3 +722,26 @@ check's image refusal each as the artifacts say.
   - **Note (convergence pass 3, 2026-10-29, headless)**: done. `CLAUDE.md`'s Build and test line says `-update` regenerates the four goldens; `TestLoadFilesReadsEveryGolden`'s table gains `three-node-probed` at `5222063b`, its comment saying the four load whole, three-node-probed's synthesized hosts among them, and the subtest passes, `IDOfDir` and `ID(LoadFiles)` agreeing on the golden's id; `internal/bundle` unchanged. `docs/architecture.md`'s "three goldens" stays, as the task says; the other counts of three are 018's own records, true when written.
 - [X] T064 [pin] [US7] `CLAUDE.md`'s State, the 016 entry (lines 636–666): its record of `converge` names the first pass's fixes (T051–T054, T057, T058), the live task (T056) and the operator's two settlements (T055, T059), and nothing of the second pass, whose one fix changed what the code does: an empty `--probes` file, or one of JSON's whitespace alone, declares no probes, read by `probe.Parse` as `probes 1` with an empty list, held by `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061, `1dd98b6`). Add one clause after the settlements' sentence naming it as the second pass's, with no other change to the entry. per FR-028 (partial)
   - **Note (convergence pass 3, 2026-10-29, headless)**: done. The 016 entry gains one sentence after the settlements': the second pass's one fix, an empty `--probes` file or one of JSON's whitespace alone declaring no probes, read by `probe.Parse` as `probes 1` with an empty list, held by `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061, `1dd98b6`); nothing else in the entry moved.
+
+---
+
+## Phase 18: Convergence
+
+**Purpose**: what `converge`'s fourth pass (2026-10-29, loop pass 4) found between the spec,
+the plan and the tree, after pass 3's T063–T064: one settlement whose summary in the spec
+and the plan says the opposite of its own body, the data model, the contract and the code.
+Tags as the pass's prompt defines them. On `1bfa99e`, `make build` is static, tier 1 green
+in 48.0 s uncached (the 65 s budget), lint, `go vet -tags contract,fixture,e2e` and `make
+linkcheck` (2,354 links, 0 broken) clean; every requirement, scenario, edge case, plan
+decision and constitution gate re-checked holds: the five commands' `--probes` and the
+server's `probesFiles`, `readProbes` (the file, else the kind held to the declaration's rules
+with the packages' formats, else `[]`; `probe.kind.absent` with its remedy), `PlaceProbes`'s
+seven refusals in one pass with nothing placed, the lossy package's shared port on a probe's
+port (`lossy_test.go`), the burst derived per probe in name order, the `loss` column and the
+caveat, the dry run's null loss and the empty loss block, `ReadFlows` on every record a
+started step follows, the host check's image refusal with its acquisition's remedy, the
+kind's ten attributes and its uniqueness constraint, the counts (4 workflows, 17 activities,
+7 replays, 72 frozen copies, 4 goldens), and the documents FR-028 names, the C4 model
+redrawn with its SVGs in the same commit.
+
+- [ ] T065 [operator] [US2] Settle what a step does with a probe the target drops. `spec.md:105` (Clarifications, the plan session) and `plan.md:73` (Summary) record R-21 as "a host the target drops is read first, then torn down", and `research.md:333`'s heading and `:385` say the same; but R-21's own body, `data-model.md` §8 (`Dropped`), `contracts/cli.md:1653` ("one only the twin carries is `dropped`, its hosts torn down as a node intent removes is") and the code (`internal/server/step.go`'s `flowsOf` plans a flow for the probes both manifests carry alone and lists the twin's own under `Dropped`; `internal/provision/workflow_step.go` starts those flows and no other) start no flow for it, so nothing of it is read before the reconcile deletes its hosts, and the loss block lists it under `dropped` with no figure. Either amend the three sentences to say what the body, the contract and the code do (a dropped probe's hosts are torn down with no flow started and no figure, listed under `dropped`), which answers the edge case's "whether its flow is read first" with no; or ask for its flow to be started and read before the teardown, a new `[behaviour]` task that moves the step's phases, `StepInput.Flows`, the loss block's `dropped` and the contract's text. The operator's, since it changes `spec.md` and `plan.md`; the code is unchanged until the second is chosen. per FR-017, US2/AC4, spec Edge Cases "A step whose target drops a probe the twin has" (contradicts)

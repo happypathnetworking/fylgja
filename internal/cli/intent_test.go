@@ -276,7 +276,7 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := block.Line() + "\n" +
-				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
+				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
 				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", scope tag:fylgja, schema fixture); " +
 				"snapshot " + taken.ID + ", stored at " + filepath.Join(paths.Snapshots, taken.ID+".json") + "\n"
 			if out != want {

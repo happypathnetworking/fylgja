@@ -346,15 +346,11 @@ func TestArtifactOmittedWarningCarriesTheOmissionsReason(t *testing.T) {
 	}
 }
 
-// probedCTM is the three-node fixture with ethernet-1/10 and ethernet-1/11 on each device,
-// uncabled, the ports a probe takes (research R-19).
+// probedCTM is the three-node fixture, which carries ethernet-1/10 and ethernet-1/11 on
+// each device, uncabled, the ports a probe takes (research R-19), as the seed writes them.
 func probedCTM(t *testing.T) *ctm.CTM {
 	t.Helper()
-	c := loadCTM(t, "testdata", "ctm", "three-node.json")
-	for i := range c.Devices {
-		c.Devices[i].Interfaces = append(c.Devices[i].Interfaces, ctm.Interface{Name: "ethernet-1/10"}, ctm.Interface{Name: "ethernet-1/11"})
-	}
-	return c
+	return loadCTM(t, "testdata", "ctm", "three-node.json")
 }
 
 // probeAt is a probe of the two endpoints given, each "device:interface".

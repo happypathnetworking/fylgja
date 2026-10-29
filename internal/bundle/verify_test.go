@@ -15,7 +15,7 @@ import (
 )
 
 // goldenThreeNode is the fixture bundle's directory and the identity it hashes to.
-const goldenThreeNodeID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+const goldenThreeNodeID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 func goldenThreeNode() string {
 	return filepath.Join("..", "..", "testdata", "golden", "three-node")
@@ -172,7 +172,7 @@ func TestVerifyRefusals(t *testing.T) {
 		editManifest(t, dir, func(m map[string]any) {
 			m["nodes"].([]any)[0].(map[string]any)["artifact"].(map[string]any)["checksum"] = strings.Repeat("0", 32)
 		})
-		wantInvalid(t, dir, "n1", "configs/n1.device-config", "hashes to 597f6263eb7e0b539679b3956270876f",
+		wantInvalid(t, dir, "n1", "configs/n1.device-config", "hashes to 28881d3d0d61d3fe5acf1f1ee0e31a60",
 			"not the checksum 00000000000000000000000000000000")
 	})
 	t.Run("an artifact file whose length is not its entry's size", func(t *testing.T) {
@@ -180,7 +180,7 @@ func TestVerifyRefusals(t *testing.T) {
 		editManifest(t, dir, func(m map[string]any) {
 			m["nodes"].([]any)[2].(map[string]any)["artifact"].(map[string]any)["size"] = 706
 		})
-		wantInvalid(t, dir, "n3", "configs/n3.device-config", "is 707 bytes", "not the size 706")
+		wantInvalid(t, dir, "n3", "configs/n3.device-config", "is 1327 bytes", "not the size 706")
 	})
 	// A "3" manifest promises a bootstrap entry for every node (manifest.schema.json
 	// requires `bootstrap`). On a node whose bootstrap reaches it

@@ -17,12 +17,12 @@ import (
 )
 
 // testBundleID is the fixture bundle's identity.
-const testBundleID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+const testBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 // testSnapshotID and testObservedAt are the snapshot a compiled input names and the read
 // it was taken from.
 const (
-	testSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	testSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 	testObservedAt = "2026-09-15T14:22:12.000000Z"
 )
 

@@ -811,9 +811,9 @@ func TestRecord7ReadsWithNoScope(t *testing.T) {
 // testdata/snapshot/ holds them. A record names an id and reads nothing behind it, so any
 // identity serves; these are real ones.
 const (
-	threeNodeSnapshot = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	threeNodeSnapshot = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 	lossySnapshot     = "91f06cd67de31f6c986bc47019e79870b02403a2970d50b6b4497df64c17f10c"
-	mixedSnapshot     = "37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
+	mixedSnapshot     = "f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff"
 )
 
 // A create's record names the snapshot as twin.json 9 began to (018) and 10 still does: the
@@ -1600,12 +1600,12 @@ func TestRecordTwin(t *testing.T) {
 	}
 	ready := []wire.ReadinessResult{{Node: "n3", ReadyAfterS: 1.102}, {Node: "n1", ReadyAfterS: 0.761}, {Node: "n2", ReadyAfterS: 0.897}}
 	pushed := []wire.PushResult{
-		{Node: "n2", PushedInS: 0.62, Checksum: "5ac21560015ad6bb1e881358115d0b7a", Size: 707},
-		{Node: "n1", PushedInS: 0.7, Checksum: "597f6263eb7e0b539679b3956270876f", Size: 707},
-		{Node: "n3", PushedInS: 0.65, Checksum: "e93df96400ddbada7daa1a0777d9d3e3", Size: 707},
+		{Node: "n2", PushedInS: 0.62, Checksum: "092ca9f62fe2887add0ae679de0a7076", Size: 1327},
+		{Node: "n1", PushedInS: 0.7, Checksum: "28881d3d0d61d3fe5acf1f1ee0e31a60", Size: 1327},
+		{Node: "n3", PushedInS: 0.65, Checksum: "95a3a91788e63626cdb9b4ecdf56eb58", Size: 1327},
 	}
 	artifact := func(checksum string) *wire.TwinArtifact {
-		return &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: checksum, Size: 707}
+		return &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: checksum, Size: 1327}
 	}
 	// The golden manifest's provenance block, which the plan carries and the record copies,
 	// its scope and mapping included (twin.json 8).
@@ -1700,11 +1700,11 @@ func TestRecordTwin(t *testing.T) {
 		holds := goldenID
 		want := []wire.TwinNode{
 			{Name: "n1", Container: "clab-fylgja-n1", Image: image, PSP: &srlinux, MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.761,
-				Artifact: artifact("597f6263eb7e0b539679b3956270876f"), PushedInS: 0.7, Holds: &holds},
+				Artifact: artifact("28881d3d0d61d3fe5acf1f1ee0e31a60"), PushedInS: 0.7, Holds: &holds},
 			{Name: "n2", Container: "clab-fylgja-n2", Image: image, PSP: &srlinux, MgmtIPv4: "172.20.20.3", ReadyAfterS: 0.897,
-				Artifact: artifact("5ac21560015ad6bb1e881358115d0b7a"), PushedInS: 0.62, Holds: &holds},
+				Artifact: artifact("092ca9f62fe2887add0ae679de0a7076"), PushedInS: 0.62, Holds: &holds},
 			{Name: "n3", Container: "clab-fylgja-n3", Image: image, PSP: &srlinux, MgmtIPv4: "172.20.20.4", ReadyAfterS: 1.102,
-				Artifact: artifact("e93df96400ddbada7daa1a0777d9d3e3"), PushedInS: 0.65, Holds: &holds},
+				Artifact: artifact("95a3a91788e63626cdb9b4ecdf56eb58"), PushedInS: 0.65, Holds: &holds},
 		}
 		if !reflect.DeepEqual(rec.Nodes, want) {
 			t.Errorf("nodes:\n got %+v\nwant %+v", rec.Nodes, want)

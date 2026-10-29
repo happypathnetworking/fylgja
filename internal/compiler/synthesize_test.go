@@ -42,18 +42,19 @@ func declared(t *testing.T, name string) []probe.Probe {
 	return d.Probes
 }
 
-// probedThreeNode is the three-node fixture with two probe-ready ports on each device,
-// ethernet-1/10 and ethernet-1/11, uncabled and not mgmt_only, as the fixture's seed will
-// write them (research R-19), normalized.
+// probedThreeNode is the three-node fixture, whose devices each carry the two probe-ready
+// ports the fixture's seed writes, ethernet-1/10 and ethernet-1/11, uncabled and not
+// mgmt_only (research R-19), since the test CTMs followed the seed (T035).
 func probedThreeNode(t *testing.T) *ctm.CTM {
 	t.Helper()
 	c := loadFixture(t, "testdata/ctm/three-node.json")
-	for i := range c.Devices {
+	for _, d := range c.Devices {
 		for _, name := range []string{"ethernet-1/10", "ethernet-1/11"} {
-			c.Devices[i].Interfaces = append(c.Devices[i].Interfaces, ctm.Interface{Name: name})
+			if d.Interface(name) == nil {
+				t.Fatalf("three-node's %s has no probe-ready port %s", d.Name, name)
+			}
 		}
 	}
-	ctm.Normalize(c)
 	return c
 }
 

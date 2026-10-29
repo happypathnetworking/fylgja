@@ -124,9 +124,10 @@ func TestSnapshotSatisfiesTheContract(t *testing.T) {
 }
 
 // 019's copy of the contract, the snapshot 1 every build before 016 wrote, loads and accepts
-// the snapshots filed as 1 under the module root's testdata/snapshot/ and a take's stored
-// form as 018 wrote it, and refuses a probe and another version, 2 among them, as it did
-// when 019 left it: a 1 is read as a 2 (R-05), and its contract is unmoved.
+// the wrapped fixtures under the module root's testdata/snapshot/ with their version line
+// set back to 1, as 018 filed them, and a take's stored form the same, and refuses a probe
+// and another version, 2 among them, as it did when 019 left it: a 1 is read as a 2
+// (R-05), and its contract is unmoved.
 func TestSnapshot1FrozenCopy(t *testing.T) {
 	schema := snapshotSchemaOf(t, contract019)
 	for _, name := range []string{"three-node", "lossy", "mixed"} {
@@ -135,8 +136,8 @@ func TestSnapshot1FrozenCopy(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := validate(t, schema, b); err != nil {
-				t.Errorf("testdata/snapshot/%s.json does not satisfy 019's snapshot.schema.json:\n%v", name, err)
+			if err := validate(t, schema, asVersion1(t, b)); err != nil {
+				t.Errorf("testdata/snapshot/%s.json as a 1 does not satisfy 019's snapshot.schema.json:\n%v", name, err)
 			}
 			stored, err := Marshal(Take(fixture(t, name), nil))
 			if err != nil {

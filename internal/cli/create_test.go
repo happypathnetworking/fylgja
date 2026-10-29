@@ -22,11 +22,11 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
-const fixtureBundleID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+const fixtureBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 // fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json):
 // what a create of the fake Infrahub's fixture branch takes and files before its run (018).
-const fixtureSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+const fixtureSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 
 // useFixtureRead serves the fixture branch from a fake Infrahub and points the state root
 // at a fresh directory: a create reads, takes, compiles and files on the server before it
@@ -40,8 +40,8 @@ func useFixtureRead(t *testing.T) lab.Paths {
 // headSnapshotID and headBundleID are what an unpinned read of the fake Infrahub's fixture
 // branch takes and compiles to: the fixture's intent, its envelope naming no at.
 const (
-	headSnapshotID = "856af9ad8f6e5d13d2d99e3af7d21d86c2cc9645c45d548a2df0494a11aad617"
-	headBundleID   = "dd9b53b7c560ab586bd9a25bc9b55dfa6777fff5bb65d6e3004122bb70438506"
+	headSnapshotID = "0d37e2ec3186bb59f58ee414a5ff34bd3e3833637c9684dfb4e6b337805a61f1"
+	headBundleID   = "16141134f94cef43492b5e80dc986a19c446f647a3ed660a5b615dc525848fe0"
 )
 
 // storedLines are the two lines a create prints before its run's start, the snapshot's
@@ -53,13 +53,14 @@ func storedLines(paths lab.Paths, snapshotID, bundleID string) []string {
 	}
 }
 
-// fixtureArtifacts are the fixture bundle's artifact checksums, by node: what 017's
-// template renders for the fylgja-fixture branch, 707 bytes each, predicted at T016
-// (research §5.1) and checked against a render at T060.
+// fixtureArtifacts are the fixture bundle's artifact checksums, by node: what 016's
+// template renders for the seed's fixture, its probe-ready ports addressed, 1327 bytes
+// each, rendered on a throwaway branch at 016's T035 (707 bytes each under 017's template
+// and seed, predicted at 017's T016 and checked against a render at T060).
 var fixtureArtifacts = map[string]string{
-	"n1": "597f6263eb7e0b539679b3956270876f",
-	"n2": "5ac21560015ad6bb1e881358115d0b7a",
-	"n3": "e93df96400ddbada7daa1a0777d9d3e3",
+	"n1": "28881d3d0d61d3fe5acf1f1ee0e31a60",
+	"n2": "092ca9f62fe2887add0ae679de0a7076",
+	"n3": "95a3a91788e63626cdb9b4ecdf56eb58",
 }
 
 // fakeService stands in for the workflow service: it starts nothing and answers with a
@@ -325,7 +326,7 @@ func readyResult() provision.ProvisionResult {
 			Name: name, Container: "clab-fylgja-" + name, Image: "ghcr.io/nokia/srlinux:24.7.1",
 			PSP:      &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: "172.20.20." + string(rune('2'+i)), ReadyAfterS: 0.9,
-			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 707},
+			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 1327},
 			PushedInS: 0.7,
 		})
 	}

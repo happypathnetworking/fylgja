@@ -489,16 +489,17 @@ func TestUnmarshalFillsTheOuterPart(t *testing.T) {
 }
 
 // A 1 on disk reads as a 2 with no probes and the same id, since the version is not hashed:
-// the three wrapped fixtures, filed as 1 by 018, and each take's stored form with its
-// version line set back to 1 (R-05; US7 scenario 1).
+// the three wrapped fixtures with their version line set back to 1, as 018 filed them, and
+// each take's stored form the same (R-05; US7 scenario 1).
 func TestAVersion1ReadsAsA2(t *testing.T) {
 	for _, f := range wrappedFixtures {
 		t.Run(f.name, func(t *testing.T) {
 			path := wrappedPath(f.name)
-			data, err := os.ReadFile(path)
+			filed, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatal(err)
 			}
+			data := asVersion1(t, filed)
 			var declared struct {
 				Version string `json:"snapshot_version"`
 			}

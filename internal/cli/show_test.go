@@ -113,7 +113,7 @@ func twinOf(t *testing.T, change func(*lab.RecordFields)) wire.TwinRecord {
 	for _, n := range []string{"n1", "n2", "n3"} {
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n,
 			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
-			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 707},
+			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 1327},
 			PushedInS: 0.7})
 	}
 	if change != nil {
@@ -257,9 +257,9 @@ func lines(l ...string) string { return strings.Join(l, "\n") + "\n" }
 // and the artifact twin.json records for it, by name and checksum (M5
 // contracts/cli.md, twin show).
 const threeNodes = "twin: lab fylgja present (3 nodes); twin directory present\n" +
-	"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config 597f6263eb7e0b539679b3956270876f\n" +
-	"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config 5ac21560015ad6bb1e881358115d0b7a\n" +
-	"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config e93df96400ddbada7daa1a0777d9d3e3\n"
+	"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config 28881d3d0d61d3fe5acf1f1ee0e31a60\n" +
+	"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config 092ca9f62fe2887add0ae679de0a7076\n" +
+	"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config 95a3a91788e63626cdb9b4ecdf56eb58\n"
 
 // threeBareNodes is the twin line with no twin.json to name what the nodes were pushed.
 const threeBareNodes = "twin: lab fylgja present (3 nodes); twin directory present\n" +
@@ -1983,8 +1983,8 @@ func TestShowNamesTheStepsStagesAsRecorded(t *testing.T) {
 // says none with its version. The JSON record carries the id, or null for both kinds of
 // none, and a step's sides carry each side's when the record's step names it.
 func TestShowRecordNamesItsSnapshot(t *testing.T) {
-	const fromSnapshot, toSnapshot = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6",
-		"37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
+	const fromSnapshot, toSnapshot = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+		"f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff"
 	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), "
 	named := twinOf(t, func(f *lab.RecordFields) {
 		f.Provenance.At = stepFromAt

@@ -115,8 +115,8 @@ func TestReadAsksForNothingOutsideItsScope(t *testing.T) {
 	if c.Device("cs1") != nil || c.Device("o1") != nil {
 		t.Error("a device outside the scope was read")
 	}
-	if n1 := c.Device("n1"); n1.Interface("lo0") != nil || n1.Interface("irb0") != nil || len(n1.Interfaces) != 3 {
-		t.Errorf("n1's interfaces %+v; want its three ports alone", n1.Interfaces)
+	if n1 := c.Device("n1"); n1.Interface("lo0") != nil || n1.Interface("irb0") != nil || len(n1.Interfaces) != 5 {
+		t.Errorf("n1's interfaces %+v; want its five ports alone", n1.Interfaces)
 	}
 	ports := f.graphql("Ports")
 	if len(ports) != 1 || slices.Contains(ports[0].Variables["devices"].([]any), any("id-cs1")) ||

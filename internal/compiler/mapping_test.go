@@ -113,8 +113,8 @@ func TestEveryInterfaceIsAPort(t *testing.T) {
 	if err := json.Unmarshal(files[ManifestFile], &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Mapping) != 11 {
-		t.Errorf("%d rows, want one per interface (11)", len(m.Mapping))
+	if len(m.Mapping) != 17 {
+		t.Errorf("%d rows, want one per interface (17)", len(m.Mapping))
 	}
 	for _, r := range m.Mapping {
 		in := c.Device(r.Device).Interface(r.Interface)

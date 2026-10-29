@@ -194,7 +194,7 @@ func followingDocuments() []earlierDocument {
 // snapshotID and stepSnapshotID are two snapshots' ids: the first the fixture's
 // (testdata/snapshot/three-node.json), the second any other.
 var (
-	snapshotID     = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	snapshotID     = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 	stepSnapshotID = strings.Repeat("5e", 32)
 )
 

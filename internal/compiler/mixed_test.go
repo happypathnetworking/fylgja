@@ -265,7 +265,7 @@ func TestMixedWarnsOnlyAboutTheManagementNames(t *testing.T) {
 	if list.Rejected() || files == nil {
 		t.Fatalf("the mixed fixture was refused: %v", list)
 	}
-	const message = "artifact device-config names interface Management1 at line 10, " +
+	const message = "artifact device-config names interface Management1 at line 19, " +
 		"which the node calls Management0; the line is pushed as production wrote it"
 	var got []string
 	for _, f := range list {

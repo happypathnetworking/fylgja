@@ -240,7 +240,7 @@ func TestProvisionWithNoBundleSchedulesNothing(t *testing.T) {
 // names, the read's observed_at and the input's source, as data.
 func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 	const observed = "2026-10-27T09:31:02.118842Z"
-	const snapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	const snapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 	bundlePath := "/state/bundles/" + testBundleID
 	for _, c := range []struct {
 		name string

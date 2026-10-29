@@ -44,7 +44,7 @@ var (
 	// Each side's snapshot (018): the lossy and mixed fixtures' wrapped ids, any identity
 	// serving.
 	stepFromSnapshot = "91f06cd67de31f6c986bc47019e79870b02403a2970d50b6b4497df64c17f10c"
-	stepToSnapshot   = "37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
+	stepToSnapshot   = "f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff"
 	// stageCabled and stageLive are two stages of proposed change pc-1 on branch change-1
 	// (014): the step goes from change-1/cabled to change-1/live.
 	stageCabled = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",

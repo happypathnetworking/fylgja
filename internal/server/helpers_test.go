@@ -28,7 +28,7 @@ import (
 // changed only where the seam it set is now a field of the server the helper is called
 // through.
 
-const fixtureBundleID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+const fixtureBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
 // reader read the schema library's DCIM (017).

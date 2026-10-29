@@ -16,7 +16,7 @@ import (
 )
 
 // fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json).
-const fixtureSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+const fixtureSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 
 // loadCTM is a fixture CTM under testdata/ctm/, as a read returns one, observed at
 // observedAt.
@@ -171,7 +171,10 @@ func fileRefusals(t *testing.T) []fileRefusal {
 			return []api.File{{Path: "snap.json", Data: raw}}
 		}(), findings.ExitRejected, findings.RuleSnapshotVersionUnsupported, "snap.json",
 			`the snapshot declares no snapshot_version; this build reads "1" and "2", and nothing converts one`, false},
-		{"a probe", fixtureFile(t, func(d map[string]any) { d["probes"] = []any{map[string]any{}} }), findings.ExitRejected,
+		{"a probe in a 1", fixtureFile(t, func(d map[string]any) {
+			d["snapshot_version"] = "1"
+			d["probes"] = []any{map[string]any{}}
+		}), findings.ExitRejected,
 			findings.RuleSnapshotInvalid, "probes", "probes holds 1 entry", true},
 		{"an inner CTM of version 1", fixtureFile(t, func(d map[string]any) { ctmOf(d)["ctm_version"] = "1" }), findings.ExitRejected,
 			findings.RuleCTMVersionUnsupported, "snap.json", `the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`, false},

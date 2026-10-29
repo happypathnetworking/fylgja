@@ -395,11 +395,11 @@ func TestShowSnapshotTwin(t *testing.T) {
 		notes  []string
 	}{
 		{"with an at", at, threeNodes + record(at) + "  intent read at " + showObserved + "\n" + provisioned +
-			lines("kind: snapshot 6a8a77fc… (branch fylgja-fixture at "+at+")", "in flight: none"),
+			lines("kind: snapshot b9db37f8… (branch fylgja-fixture at "+at+")", "in flight: none"),
 			findings.ShowKindSnapshot, nil},
 		{"without", "", threeNodes + record("") +
 			"  intent read at " + showObserved + "; reproducing it with --at that instant is best-effort\n" + provisioned +
-			lines("kind: snapshot 6a8a77fc… (branch fylgja-fixture, read at "+showObserved+")", "in flight: none"),
+			lines("kind: snapshot b9db37f8… (branch fylgja-fixture, read at "+showObserved+")", "in flight: none"),
 			findings.ShowKindSnapshot, []string{bestEffortNote}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -27,7 +27,7 @@ import (
 )
 
 // goldenID is the fixture bundle's identity.
-const goldenID = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+const goldenID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 func goldenBundle() string {
 	return filepath.Join("..", "..", "testdata", "golden", "three-node")

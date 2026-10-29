@@ -321,8 +321,9 @@ func TestAProbedManifestSatisfiesContract(t *testing.T) {
 // A probe-less compile is bundle 5's in everything but bundle_version, probes and
 // fidelity.synthesized (SC-003, R-11): each golden's manifest as the last build of 5 wrote
 // it, frozen under testdata/bundle5/, against the compile made bundle 5 by asBundle5.
-// Frozen while the fixtures stand; the fixture's probe-ready ports (T035) move three-node
-// and mixed, and this with them.
+// Frozen while the fixtures stand: the fixtures' probe-ready ports (T035) moved three-node's
+// and mixed's by the six mapping rows their compile gained and each node's artifact entry,
+// and nothing else.
 func TestAProbelessCompileIsItsBundle5ButForTheVersion(t *testing.T) {
 	for _, c := range []struct{ name, fixture string }{
 		{"three-node", "three-node.json"}, {"lossy", "lossy.json"}, {"mixed", "mixed.json"},

@@ -760,9 +760,9 @@ to be written on your disk, filing nothing:
 ```console
 $ bin/fylgja twin compile --snapshot testdata/snapshot/mixed.json --out /tmp/mixed
 wrote bundle to /tmp/mixed (3 nodes, 3 links)
-snapshot_id 37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf
-bundle_id ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec
-warning artifact.interface.unrepresented e1:Management1: artifact device-config names interface Management1 at line 10, which the node calls Management0; the line is pushed as production wrote it
+snapshot_id f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff
+bundle_id 44ac283f65333103a5f4c6557e648c7c0bccd9e023f1babf55b1541577f33834
+warning artifact.interface.unrepresented e1:Management1: artifact device-config names interface Management1 at line 19, which the node calls Management0; the line is pushed as production wrote it
 …
 $ sed -n '/links:/,$p' /tmp/mixed/topology.clab.yml
   links:

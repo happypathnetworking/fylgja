@@ -31,16 +31,16 @@ func TestReadSummaryCountsTheLossyRecord(t *testing.T) {
 		// omitted is how many cable rows the read's fidelity list gains.
 		omitted int
 	}{
-		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports (branch fylgja-fixture, at 2026-09-08T12:00:00Z, scope tag:fylgja, schema fixture)", 0},
 		{"lossy.json", repoPath("testdata", "psp", "lossy"), "wrote snapshot.json: 3 devices (chassisos 2, nokia_srlinux 1), " +
 			"16 interfaces, 3 links, 3 artifacts, 9 lossy mappings, 3 shared ports " +
 			"(branch lossy-fixture, at 2026-09-19T12:00:00Z, scope tag:fylgja, schema fixture)", 0},
-		{"mixed.json", "", "wrote snapshot.json: 3 devices (arista_eos 2, nokia_srlinux 1), 9 interfaces, 3 links, 3 artifacts, " +
+		{"mixed.json", "", "wrote snapshot.json: 3 devices (arista_eos 2, nokia_srlinux 1), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports (branch mixed-fixture, at 2026-09-20T12:00:00Z, scope tag:fylgja, schema fixture)", 0},
-		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports; 1 cable omitted (branch fylgja-fixture, at 2026-09-08T12:00:00Z, scope tag:fylgja, schema fixture)", 1},
-		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports; 2 cables omitted (branch fylgja-fixture, at 2026-09-08T12:00:00Z, scope tag:fylgja, schema fixture)", 2},
 	} {
 		t.Run(fmt.Sprintf("%s/%d omitted", c.fixture, c.omitted), func(t *testing.T) {

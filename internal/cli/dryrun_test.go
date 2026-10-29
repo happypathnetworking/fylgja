@@ -173,7 +173,7 @@ func TestProvisionDryRunOnAClearHost(t *testing.T) {
 			t.Errorf("node %+v, want the SR Linux image, package and budget", n)
 		}
 		// What would be pushed, as the manifest names it.
-		want := findings.DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n.Name], Size: 707}
+		want := findings.DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n.Name], Size: 1327}
 		if n.Artifact == nil || *n.Artifact != want {
 			t.Errorf("node %s artifact %+v, want %+v", n.Name, n.Artifact, want)
 		}
@@ -228,9 +228,9 @@ func TestProvisionDryRunTextReport(t *testing.T) {
 		"dry run: no lab, container, twin directory or run is created",
 		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID),
 		"nodes:",
-		"  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n1"] + " (707 bytes)",
-		"  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n2"] + " (707 bytes)",
-		"  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n3"] + " (707 bytes)",
+		"  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n1"] + " (1327 bytes)",
+		"  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n2"] + " (1327 bytes)",
+		"  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n3"] + " (1327 bytes)",
 		"mapping: 0 lossy mappings, 0 shared ports",
 		"memory: sum 6144 MiB; host budget unset",
 		"host: lab fylgja absent; twin directory absent",
@@ -509,7 +509,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	for i, want := range []string{
 		`stage fylgja-fixture/cabled: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "the leaf cabled"`,
 		"dry run: no lab, container, twin directory or run is created",
-		"read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
+		"read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
 		// The snapshot above the bundle, each filed with its store path (018).
 		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json"),

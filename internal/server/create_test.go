@@ -64,7 +64,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	lines := strings.Split(out, "\n")
 	want := []string{
 		"dry run: no lab, container, twin directory or run is created",
-		"read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
+		"read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
 		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json"),
 		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID),

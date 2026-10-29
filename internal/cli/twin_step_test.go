@@ -654,7 +654,7 @@ func stepDryRunLines(h *stepHostFixture, toID string) []string {
 		"step change-1/sealed → change-1/linked (" + short(h.fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config 6b31a6de… → fb3cbaf9…; s1 device-config 5e2a65f4… → 22ada947…",
+		"  artifacts: e1 device-config b1431710… → cbc8c75d…; s1 device-config fdf83f15… → 8e15691e…",
 		"reconcile: restart e1 (added link; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 		// M12: the step's wait after its record, at the default budget.
@@ -1840,7 +1840,7 @@ func TestStepRuns(t *testing.T) {
 				Record: &wire.TwinRecord{State: wire.StateDiverged},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -1864,7 +1864,7 @@ func TestStepRuns(t *testing.T) {
 				Wait:   &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 1.9, Failing: []wire.StepFinding{}},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -2648,7 +2648,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: -e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config fb3cbaf9… → 6b31a6de…; s1 device-config 22ada947… → 5e2a65f4…",
+		"  artifacts: e1 device-config cbc8c75d… → b1431710…; s1 device-config 8e15691e… → fdf83f15…",
 		"reconcile: restart e1 (deleted endpoint; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 	}
@@ -4131,7 +4131,7 @@ func TestStepToASnapshotCloses(t *testing.T) {
 			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded}},
 		Timings: wire.StepTimings{WholeS: 71.2}, Record: &wire.TwinRecord{State: wire.StateDiverged},
 		Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-			Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"}}}
+			Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"}}}
 	for _, c := range []struct {
 		name    string
 		change  func(*lab.RecordFields)

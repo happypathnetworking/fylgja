@@ -255,7 +255,7 @@ func TestDiffNodeAdded(t *testing.T) {
 		LinksAdded: []LinkRef{{ID: "n1:ethernet-1/3|n4:ethernet-1/1",
 			A: NodePort{Node: "n1", Port: "e1-3"}, B: NodePort{Node: "n4", Port: "e1-1"}}},
 		ArtifactsChanged: []ArtifactChange{{Node: "n1", Name: "device-config",
-			From: "597f6263eb7e0b539679b3956270876f", To: "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"}},
+			From: "28881d3d0d61d3fe5acf1f1ee0e31a60", To: "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"}},
 		ArtifactsAdded: []ArtifactRef{{Node: "n4", Name: "device-config"}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -267,7 +267,7 @@ func TestDiffNodeAdded(t *testing.T) {
 		"step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):",
 		"  nodes: +n4; ~n1 (bootstrap, mapping)",
 		"  links: +n1:e1-3 — n4:e1-1",
-		"  artifacts: n1 device-config 597f6263… → 9a0177b2…; n4 device-config added",
+		"  artifacts: n1 device-config 28881d3d… → 9a0177b2…; n4 device-config added",
 	}, "\n")
 	if text != wantText {
 		t.Errorf("text:\n%s\nwant:\n%s", text, wantText)
@@ -282,7 +282,7 @@ func TestDiffNodeAdded(t *testing.T) {
 		"step change-1/third-link → change-1/seeded (9c2d01e7… → 35aea06f…):",
 		"  nodes: -n4; ~n1 (bootstrap, mapping)",
 		"  links: -n1:e1-3 — n4:e1-1",
-		"  artifacts: n1 device-config 9a0177b2… → 597f6263…; n4 device-config removed",
+		"  artifacts: n1 device-config 9a0177b2… → 28881d3d…; n4 device-config removed",
 	}, "\n") {
 		t.Errorf("reversed text:\n%s", text)
 	}
@@ -305,7 +305,7 @@ func TestPairTextOrder(t *testing.T) {
 		"step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):",
 		"  nodes: -n1; ~n2 (bootstrap)",
 		"  links: unchanged",
-		"  artifacts: n1 device-config removed; n3 device-config e93df964… → 9a0177b2…",
+		"  artifacts: n1 device-config removed; n3 device-config 95a3a917… → 9a0177b2…",
 	}, "\n")
 	if got := Between("change-1/seeded", "change-1/third-link", s).Text(); got != want {
 		t.Errorf("text:\n%s\nwant:\n%s", got, want)
@@ -508,7 +508,7 @@ func TestPairJSONSatisfiesTheContract(t *testing.T) {
 		})
 	}
 	raw, _ := json.Marshal(Between("change-1/seeded", "change-1/third-link", changed))
-	for _, whole := range []string{idA, idB, "597f6263eb7e0b539679b3956270876f", "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"} {
+	for _, whole := range []string{idA, idB, "28881d3d0d61d3fe5acf1f1ee0e31a60", "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"} {
 		if !strings.Contains(string(raw), `"`+whole+`"`) {
 			t.Errorf("the JSON does not carry %s whole: %s", whole, raw)
 		}

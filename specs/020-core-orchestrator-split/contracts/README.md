@@ -46,7 +46,7 @@ create` and `twin step`. `fylgja serve` reads no `INFRAHUB_*` and no
   `rehearsal.report.unposted`, `platform.unreachable`.
 - **The documents**: the `stages`, `plan` and `rehearsal` blocks and the markdown report,
   unchanged but for `fylgja-cli` in the reproduce lines; `rehearsal.schema.json` and
-  `stages.schema.json` move here.
+  `stages.schema.json` are described here, their files and `$id`s unmoved in `contracts/`.
 - **The adapter**: `python -m fylgja_orchestrator.adapters.infrahub read|stages|schema-check`,
   the snapshot `2` file byte for byte the Go reader's; environment `INFRAHUB_ADDRESS`,
   `INFRAHUB_API_TOKEN`, `FYLGJA_DEFAULT_SCOPE`, `FYLGJA_PSP_DIR`.

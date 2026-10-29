@@ -253,10 +253,10 @@ whose persistence would need a result store the container cannot read.
   `dry_run` to `twin.create` with the snapshot file, and the CLI prints the `out` lines.
 - **R-09 The orchestrator's state** (FR-021): `FYLGJA_ORCHESTRATOR_ROOT` (default
   `local/orchestrator`) holds `snapshots/<id>.json`, filed once, never overwritten, and
-  `twin.json`: `{record_version: "1", stage: {branch, label, at}, snapshot_id,
-  flow_run_id, flow, written_at}`, written by the create, step and rehearse flows, read
-  beside `twin.show` and trusted only while `twin.show`'s `snapshot.id` equals
-  `snapshot_id`; distrusted, `stage list` prints `record.twin.stale` (info) and no twin
+  `twin.json`: `{record_version: "1", stage: {branch, label, at}, proposed_change: {id,
+  branch}, snapshot_id, flow_run_id, flow, written_at}`, written by the create, step and
+  rehearse flows, read beside `twin.show` and trusted only while `twin.show`'s
+  `show.record.snapshot_id` equals `snapshot_id`; distrusted, `stage list` prints `record.twin.stale` (info) and no twin
   row, `twin step` without `--stage` is refused `step.target.required` (error). The
   reclaim: `twin.show` names a twin at the record's snapshot, and `GET
   /api/flow_runs/{flow_run_id}` is a `twin-rehearse` run whose state is terminal
@@ -284,8 +284,10 @@ whose persistence would need a result store the container cannot read.
   status and posts nothing.
 - **R-13 The documents move**: `rehearsal`, `stages` and `plan` blocks, their text and
   the markdown, rendered by `fylgja_orchestrator.documents` from the Go renderers'
-  goldens, `fylgja-cli` in the reproduce lines; `contracts/orchestrator.md` holds them
-  with `rehearsal.schema.json` and `stages.schema.json` moved under it; the checks'
+  goldens, `fylgja-cli` in the reproduce lines; `contracts/orchestrator.md` describes them
+  and `api.md` stops, `rehearsal.schema.json` and `stages.schema.json` staying where they
+  are in `contracts/` with their `$id`s (D-055) and the frozen copies' glob unmoved, the
+  move one of ownership (settled at `analyze`); the checks'
   contract moves to `contracts/checks.md`. The findings document's `operation` keeps the
   names (`twin.rehearse`, `stage.list`, `stage.plan`, `intent.read`, `schema.check`) as
   the orchestrator's operations, so the checks' conclusions read unchanged.

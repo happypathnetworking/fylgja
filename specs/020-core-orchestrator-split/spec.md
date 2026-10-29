@@ -246,7 +246,8 @@ oracle.
 **Independent Test**: in tier 2, the adapter's read of `fylgja-fixture` files `0940db93…`,
 its stage list and schema check answer what the server's did, each ported contract test
 green and each compared with the Go reader's answer before the Go reader goes; a create
-from the fixture and a stage plan of a throwaway proposed change through the flows. In
+from the fixture as the core's dry run and a stage plan of a throwaway proposed change
+through the flows. In
 tier 3, cases 1 to 8 through `fylgja-cli` for every command that names a branch or a stage,
 case 3's dry run among them, and through `fylgja` for the rest.
 
@@ -415,7 +416,7 @@ snapshot.
 The orchestrator lives in this repository under one directory with its own toolchain, its
 tests and its lint; CI's unit job runs its tests beside Go's and its lint job its linter
 beside golangci-lint and ShellCheck; the bring-up script gains a part that installs it and
-starts its platform's server and worker detached, so the development host runs five
+starts its platform's server and its runner detached, so the development host runs five
 processes; `make` gains its targets. Tier 1 holds the Go tests, the boundary tests and the
 Python tests of the flows' pure parts against goldens captured from the Go implementation
 before it is removed; tier 2 holds the adapter's contract tests, ported from the Go
@@ -459,7 +460,7 @@ the release notes.
    Release 0.3's total has moved by that estimate, and item 5 links to this feature.
 6. **Given** the bring-up script run on the development host, **When** it ends, **Then**
    the workflow service, the core's worker and server, and the orchestrator's platform
-   server and worker run detached, and each task worker of Infrahub reaches the
+   server and its runner run detached, and each task worker of Infrahub reaches the
    orchestrator's platform on the bridge and the core's server not at all.
 
 ---
@@ -698,7 +699,7 @@ the release notes.
 - **FR-026**: CI's unit job MUST run the orchestrator's tests beside `go test`, and its
   lint job the Python linter beside golangci-lint and ShellCheck; the bring-up script MUST
   gain a part that installs the orchestrator's environment and its platform and starts the
-  platform's server and worker detached as the three processes are, so the development
+  platform's server and its runner detached as the three processes are, so the development
   host runs five; `make` MUST gain the orchestrator's targets.
 - **FR-027**: Tier 1 MUST hold the Go tests less the removed packages' share, the boundary
   tests (FR-001), the long-operation shape's replay (FR-009, FR-010), the step between two
@@ -710,8 +711,8 @@ the release notes.
   reader's with each Go test's assertions carried over against the same fixture and
   throwaway `fylgja-test-*` branches, each run against the Go reader's answers before it is
   removed; the orchestrator's flows against the real Infrahub and a core server started
-  with no Infrahub credential (a create from the fixture, a stage plan of a throwaway
-  proposed change, a rehearsal refused before any run on a stale mark, and the composition
+  with no Infrahub credential (a create from the fixture as the core's dry run, since no
+  twin boots while the tier runs, a stage plan of a throwaway proposed change, a rehearsal refused before any run on a stale mark, and the composition
   `TestRehearseComposedByTheFixtureTool` exercises); and `TestChecksInsideInfrahub`
   reaching the orchestrator's platform on the bridge, skipping, saying why, where the task
   workers reach none. Nothing of the core's tiers MUST move that the split does not move.
@@ -733,8 +734,8 @@ the release notes.
 - **FR-031**: `docs/architecture.md` (§1, §2, §4.1, §4.4, §4.6, a section for the
   orchestrator, §5, §6) and the C4 model (redrawn with the orchestrator, its platform, the
   adapter and the checks' new reach, `make diagrams` run), `docs/glossary.md` (Core,
-  Orchestrator, Adapter, Tool and Flow (orchestrator) added, the last told apart from
-  016's Flow; Client, Server, Rehearsal, Stage and Check (Infrahub) reworded),
+  Orchestrator, Adapter, Tool, Flow (orchestrator) and Runner added, Flow told apart from
+  016's and Runner from the core's worker and Infrahub's task workers; Client, Server, Rehearsal, Stage and Check (Infrahub) reworded),
   `docs/development.md`, `SECURITY.md`, `README.md`'s walk-throughs, `CLAUDE.md`,
   `docs/verified-facts.md` (Prefect's facts) and `docs/brief.md` MUST say what is now true.
 - **FR-032**: The route's first documents task MUST reconcile the roadmap: F-027's row

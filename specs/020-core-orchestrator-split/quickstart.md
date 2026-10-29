@@ -104,8 +104,9 @@ Proves SC-002, SC-008's first half, US1 scenarios 5 and 8, US3, US5 scenario 4, 
 
 ## 8. Tier 3
 
-`make test-e2e` with the worker, the Prefect server and the runner running, the bridge
-server from this tree, both checks imported on `main`, no twin up: nine cases, cases 1 to
+`make test-e2e` with the worker, the Prefect server and the runner running, the core's
+server on loopback from this tree, the platform on the bridge, both checks imported on
+`main`, no twin up: nine cases, cases 1 to
 8 through `fylgja-cli` for every branch or stage, case 9 through `fylgja-twin`, the
 orchestrator and the core; ends `E2E-OK` in about 37 minutes (measured at implement);
 `free -m` before, the host rested after. Proves SC-001, SC-008, US1 scenarios 1-4, 6-7.

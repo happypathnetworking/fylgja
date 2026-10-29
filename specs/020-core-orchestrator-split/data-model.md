@@ -88,7 +88,7 @@ exit by status; `--json`). Its findings document is the core's `findings 1`, ren
 ## 6. The orchestrator's documents (`orchestrator/src/fylgja_orchestrator/documents/`, `contracts/orchestrator.md`)
 
 `findings.py` (the document, `findings 1`, its text form as `internal/findings` renders
-it), `stages.py` (the `stages` block, `stages.schema.json` moved here), `plan.py` (the
+it), `stages.py` (the `stages` block, `stages.schema.json` owned here, its file unmoved in `contracts/`), `plan.py` (the
 `plan` block), `rehearsal.py` (the `rehearsal` block, the verdict rules of
 `rehearsal.Classify`, `NewFindings`, `Stop`, `Build`; the text; the markdown with
 `CommentMax` 4,092; `Reproduce` writing `fylgja-cli twin create --stage … --scope …`,
@@ -116,7 +116,7 @@ report's cut (`rehearsal.deadline.cut`).
 `FYLGJA_ORCHESTRATOR_ROOT/snapshots/<id>.json` (filed once by `os.link`, as the core's
 store) and `FYLGJA_ORCHESTRATOR_ROOT/twin.json`: `{"record_version": "1", "stage":
 {"branch", "label", "at"}, "proposed_change": {"id", "branch"}, "snapshot_id",
-"flow_run_id", "flow", "written_at"}`. Trusted while `twin.show`'s `snapshot_id` equals
+"flow_run_id", "flow", "written_at"}`. Trusted while `twin.show`'s `show.record.snapshot_id` equals
 `snapshot_id`; else `record.twin.stale`. The reclaim reads `flow_run_id` from `GET
 /api/flow_runs/{id}` (R-09).
 
@@ -161,8 +161,9 @@ loses the bridge `--listen`; the part `orchestrator` starts `prefect server` and
 
 - `contracts/api.md`, `api.schema.json`, `cli.md` (the lost commands, `--detach`, `fylgja
   run read|interrupt`, `twin diff`), `twin.schema.json` (`12`), `findings.schema.json`
-  (the enums), `step.schema.json` unchanged; new `contracts/orchestrator.md` with
-  `rehearsal.schema.json` and `stages.schema.json` moved beside it; `contracts/checks.md`
+  (the enums), `step.schema.json` unchanged; new `contracts/orchestrator.md` describing
+  `rehearsal.schema.json` and `stages.schema.json`, their files and `$id`s unmoved in
+  `contracts/`; `contracts/checks.md`
   moved from 015; the frozen copies of 016's shapes (api, twin, findings) under the three
   packages' `testdata/contracts/016-probes/`.
 - `docs/architecture.md` §1, §2, §4.1, §4.4, §4.6, a new §4.7 the orchestrator, §5, §6;

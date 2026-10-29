@@ -24,22 +24,26 @@ AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontCol
 System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
   Container_Boundary("Fylgja.fylgjaworkerrun_boundary", "fylgja worker run", $tags="Container") {
     Component(Fylgja.fylgjaworkerrun.provision, "provision", $techn="internal/provision", $descr="The four workflows, the rehearsal running the provision, step and destroy as its children, and the worker's registration. The provision, step and rehearsal take a snapshot id and a bundle id the server compiled; none reads a source of truth.", $tags="Component", $link="")
-    Component(Fylgja.fylgjaworkerrun.lab, "lab", $techn="internal/lab", $descr="The host-bound activities: deploy, readiness, push, reconcile, record, the wait.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.lab, "lab", $techn="internal/lab", $descr="The host-bound activities: deploy, readiness, push, reconcile, record, the wait, and a step's flows, started before its first change and read after its wait.", $tags="Component", $link="")
     Component(Fylgja.fylgjaworkerrun.verify, "verify", $techn="internal/verify", $descr="The readers and the wait.", $tags="Component", $link="")
     Component(Fylgja.fylgjaworkerrun.labwire, "lab/wire", $techn="internal/lab/wire", $descr="Activity names and the payloads crossing the task queue.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.probe, "probe", $techn="internal/probe", $descr="The probe packages a host's plan is read from, and the pure reading of a ping's output.", $tags="Component", $link="")
     Component(Fylgja.fylgjaworkerrun.rehearsal, "rehearsal", $techn="internal/rehearsal", $descr="A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown.", $tags="Component", $link="")
   }
 
 }
 
+Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.labwire, "Schedules activities by name", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.lab, "Registers the host-bound activities", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.rehearsal, "Classifies each stage", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.verify, "Takes the wait's default budget for the deadline", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.labwire, "Takes and returns the payloads", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.verify, "VerifyTwin waits", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.verify, Fylgja.fylgjaworkerrun.labwire, "Reads the record's types", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.verify, Fylgja.fylgjaworkerrun.probe, "Renders each burst from its package", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.probe, "Plans each host from its package; renders and reads its flow and its burst", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.probe, "Names the probe packages in the start-up report", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.rehearsal, Fylgja.fylgjaworkerrun.labwire, "Compares the waits' findings; sums the node plans' budgets", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.labwire, "Schedules activities by name", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.lab, "Registers the host-bound activities", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

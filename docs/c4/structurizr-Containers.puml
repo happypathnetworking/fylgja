@@ -25,40 +25,44 @@ AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle
 AddBoundaryTag("Software System", $bgColor="#ffffff", $borderColor="#0b4884", $fontColor="#0b4884", $shadowing="", $borderStyle="solid")
 
 Person(Operator, "Operator", $descr="Owns the lab host and Infrahub; drives the twin through the CLI.", $tags="Person", $link="")
-System(Infrahub, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, in OpsMill's schema library's DCIM, which this repository vendors at 26336e9 (schema/dcim/), beside Fylgja's one kind, the stage (schema/fylgja-stage.yaml); renders each device's configuration artifact.", $tags="Software System,External", $link="")
+System(Infrahub, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, in OpsMill's schema library's DCIM, which this repository vendors at 26336e9 (schema/dcim/), beside Fylgja's two kinds, the stage and the probe (schema/fylgja-stage.yaml, schema/fylgja-probe.yaml), both on the default branch; renders each device's configuration artifact.", $tags="Software System,External", $link="")
 
 System_Boundary("Walkingtwin_boundary", "Walking twin", $tags="Software System") {
   Container(Walkingtwin.NOSnode, "NOS node", $techn="Container", $descr="One device of the twin, clab-fylgja-<node>: SR Linux or EOS, probed and read over gNMI and pushed its artifact.", $tags="Container", $link="")
+  Container(Walkingtwin.Probehost, "Probe host", $techn="Container", $descr="One end of a probe, clab-fylgja-<probe>-a or -b: a container of the probe package's image (linux, alpine:3.24.2 for ping) on an uncabled port of a device, addressed and routed by its exec lines; runs the step's flow and verify's burst, read by docker exec.", $tags="Container", $link="")
 }
 
 System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
-  Container(Fylgja.fylgjaserve, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
-  Container(Fylgja.fylgjaworkerrun, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities.", $tags="Container", $link="")
+  Container(Fylgja.fylgjaclient, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered.", $tags="Container", $link="")
+  Container(Fylgja.fylgjaserve, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub and a request's probes, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's.", $tags="Container", $link="")
+  Container(Fylgja.fylgjaworkerrun, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's.", $tags="Container", $link="")
   Container(Fylgja.Workflowservice, "Workflow service", $techn="Temporal", $descr="Durable execution: run history.", $tags="Container", $link="")
   ContainerDb(Fylgja.Bundlestore, "Bundle store", $techn="Files", $descr="<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned.", $tags="Container,Files", $link="")
   ContainerDb(Fylgja.Snapshotstore, "Snapshot store", $techn="Files", $descr="<state root>/snapshots/<snapshot_id>.json: every snapshot taken, each kept as first filed.", $tags="Container,Files", $link="")
   ContainerDb(Fylgja.Twindirectory, "Twin directory", $techn="Files", $descr="<state root>/twin/: the staged bundle, containerlab's directory, twin.json.", $tags="Container,Files", $link="")
   Container(Fylgja.containerlab, "containerlab", $techn="CLI", $descr="Deploys, reconciles, inspects and destroys lab fylgja.", $tags="Container", $link="")
-  Container(Fylgja.fylgjaclient, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered.", $tags="Container", $link="")
 }
 
 Rel(Operator, Infrahub, "Edits intent; opens proposed changes and marks stages", $techn="", $tags="Relationship", $link="")
 Rel(Operator, Fylgja.fylgjaclient, "Runs commands", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaclient, Fylgja.fylgjaserve, "POST /v1/<noun>/<verb>; bearer token", $techn="HTTP, NDJSON", $tags="Relationship", $link="")
 Rel(Infrahub, Fylgja.fylgjaserve, "Runs fylgja-step and fylgja-twin in its task worker, which ask for the stage plan and the rehearsal", $techn="HTTP, bearer token, plaintext", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve, Infrahub, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve, Infrahub, "Reads intent, artifacts and probes", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.Workflowservice, "Starts, follows, cancels runs", $techn="gRPC", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.Bundlestore, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.Snapshotstore, "Files and reads snapshots", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.Twindirectory, "Reads the record and the staged bundle", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.containerlab, "Inspects; dry runs", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Walkingtwin.NOSnode, "Reads for verify", $techn="gNMI", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve, Walkingtwin.Probehost, "Runs each probe's burst for verify", $techn="docker exec", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun, Fylgja.Workflowservice, "Polls task queue fylgja", $techn="gRPC", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun, Fylgja.Bundlestore, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun, Fylgja.Twindirectory, "Stages, records", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun, Fylgja.containerlab, "Deploys, reconciles, destroys", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun, Walkingtwin.NOSnode, "Probes; pushes the artifact; waits", $techn="gNMI; JSON-RPC or eAPI", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun, Walkingtwin.Probehost, "Awaits its address; starts and reads a step's flow; runs the burst in the wait", $techn="docker exec", $tags="Relationship", $link="")
 Rel(Fylgja.containerlab, Walkingtwin.NOSnode, "Creates and cables", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.containerlab, Walkingtwin.Probehost, "Creates, cables to its device's port and addresses", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

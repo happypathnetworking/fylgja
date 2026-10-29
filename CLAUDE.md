@@ -648,8 +648,8 @@ Rewritten whole at each release's close, never appended to.
     (`ff76c8c`). Tier 2 green whole on 2026-10-29 in 2,017 s once `internal/stage` and
     `internal/stages` were re-run alone, three 1m30s artifact waits having lapsed under
     the tier's own load; tier 3 `E2E-OK` at the first attempt in 2,236.6 s, probes in
-    cases 5, 8 and 9; tier 1's budget raised to 65 s. `converge`, then the operator's
-    review (T050), follow. Its first pass (T051–T060) found and fixed: the boot half
+    cases 5, 8 and 9; tier 1's budget raised to 65 s. `converge` ran five passes, the
+    fifth adding nothing. Its first pass (T051–T060) found and fixed: the boot half
     (`conformance.Boot`), which panicked on a host's null `psp`, reads a probed twin's
     devices alone, a synthesized link's neighbour skipped in verify's words (T051); the
     rehearsal's `verify` cell counts the burst, a stage failed on it reading `1 failed`
@@ -669,7 +669,14 @@ Rewritten whole at each release's close, never appended to.
     does: an empty `--probes` file, or one of JSON's whitespace alone, declares no probes,
     read by `probe.Parse` as `probes 1` with an empty list, held by
     `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061,
-    `1dd98b6`).
+    `1dd98b6`). Its third pass added a test that loads every golden whole,
+    three-node-probed among them (T063, `b93caf6`); its fourth, one the operator settled
+    by amending the summaries (`89a5b44`): a probe the step's target drops has its hosts
+    torn down by the reconcile with no flow started, listed under the loss block's
+    `dropped`, as R-21's body, the data model, `contracts/cli.md` and `flowsOf` have it
+    (T065). Reviewed by the operator (T050), merged into `main` at `195af3a` and pushed;
+    CI green on it (run `40894683064`, re-run once after the contract job lost a pull of
+    Infrahub's image).
 - **Next**: F-027, the split of the core and the orchestrator, placed before F-025 by the
   operator on 2026-10-29; then F-025 the NetBox reader, Release 0.3's last spec, an
   adapter outside the core in Python, the orchestrator's second. Neither has a brief yet.
@@ -678,9 +685,7 @@ Rewritten whole at each release's close, never appended to.
   `local/netbox/` as the Compose project `fylgja-netbox` on loopback 8800, stopped with
   its volumes kept (its `main` carries the spike's merged change), and its token and admin
   password are in `local/netbox-spike/.env`, beside the throwaway adapter.
-- **Open, the operator's**: 016's command log (`make command-log`, once this session is
-  closed; specify through Run 28 are published); 016's review, merge and push (T050);
-  file 014's upstream
+- **Open, the operator's**: file 014's upstream
   request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left

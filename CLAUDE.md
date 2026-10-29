@@ -479,7 +479,7 @@ reach none, as in CI) · `make lint` (runs with build
 tags `contract,fixture,e2e`) · `make linkcheck` (`scripts/linkcheck.py`: every relative
 link and anchor in the tracked Markdown resolves in a public clone; a hand tool, not a CI
 step) ·
-`go test ./internal/compiler -update` regenerates the three goldens — review the diff,
+`go test ./internal/compiler -update` regenerates the four goldens — review the diff,
 and commit a re-baseline on its own · the conformance suite's pure half is part of
 `make test`; its boot half is `FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e
 ./internal/conformance -run '^TestBootHalf$' -v` against a ready twin · `make

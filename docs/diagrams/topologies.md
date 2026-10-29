@@ -5,7 +5,7 @@ its `topology.clab.yml` and its `bundle_id`. Regenerate it with `make diagrams`;
 never edit it by hand. Each node is labelled with its containerlab kind, and each link
 with its two endpoints as the topology names them.
 
-## three-node — `43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386`
+## three-node — `c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672`
 
 ```mermaid
 graph LR
@@ -17,7 +17,7 @@ graph LR
     n_n2 ---|"n2:e1-2 — n3:e1-1"| n_n3
 ```
 
-## lossy — `4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03`
+## lossy — `10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31`
 
 ```mermaid
 graph LR
@@ -29,7 +29,7 @@ graph LR
     n_c2 ---|"c2:eth1 — s1:e1-2-1"| n_s1
 ```
 
-## mixed — `ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec`
+## mixed — `44ac283f65333103a5f4c6557e648c7c0bccd9e023f1babf55b1541577f33834`
 
 ```mermaid
 graph LR
@@ -39,4 +39,20 @@ graph LR
     n_e1 ---|"e1:eth1 — s1:e1-1"| n_s1
     n_e1 ---|"e1:eth2_1 — e2:eth1"| n_e2
     n_e2 ---|"e2:eth3_1_1 — s1:e1-2"| n_s1
+```
+
+## three-node-probed — `5222063bac574cf7ba031a0cb7a04dc0ae8b40cca84403215bf5356c50dfcde9`
+
+```mermaid
+graph LR
+    n_n1["n1 (nokia_srlinux)"]
+    n_n1_loop_a["n1-loop-a (linux)"]
+    n_n1_loop_b["n1-loop-b (linux)"]
+    n_n2["n2 (nokia_srlinux)"]
+    n_n3["n3 (nokia_srlinux)"]
+    n_n1_loop_a ---|"n1-loop-a:eth1 — n1:e1-10"| n_n1
+    n_n1_loop_b ---|"n1-loop-b:eth1 — n1:e1-11"| n_n1
+    n_n1 ---|"n1:e1-1 — n2:e1-1"| n_n2
+    n_n1 ---|"n1:e1-2 — n3:e1-2"| n_n3
+    n_n2 ---|"n2:e1-2 — n3:e1-1"| n_n3
 ```

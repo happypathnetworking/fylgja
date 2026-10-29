@@ -27,13 +27,13 @@ Deployment_Node(Lab.Operatorsmachine, "Operator's machine", $type="", $descr="FY
   Container(Lab.Operatorsmachine.fylgjaclient_1, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered.", $tags="Container", $link="")
 }
 
-Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, containerlab, the NOS images", $tags="Element", $link="") {
+Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, containerlab, the NOS images and the probe packages' images", $tags="Element", $link="") {
   Deployment_Node(Lab.Labhost.fylgjaserve, "fylgja serve", $type="process", $descr="127.0.0.1:7650, and 172.17.0.1:7650 on docker0, the Docker bridge, in plaintext; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins", $tags="Element", $link="") {
-    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
+    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub and a request's probes, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's.", $tags="Container", $link="")
   }
 
   Deployment_Node(Lab.Labhost.fylgjaworkerrun, "fylgja worker run", $type="process", $descr="both node logins; no API token", $tags="Element", $link="") {
-    Container(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities.", $tags="Container", $link="")
+    Container(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's.", $tags="Container", $link="")
   }
 
   Deployment_Node(Lab.Labhost.temporalserverstartdev, "temporal server start-dev", $type="process", $descr=":7233; UI :8233", $tags="Element", $link="") {
@@ -48,8 +48,9 @@ Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, conta
 
   Container(Lab.Labhost.containerlab_1, "containerlab", $techn="CLI", $descr="Deploys, reconciles, inspects and destroys lab fylgja.", $tags="Container", $link="")
   Deployment_Node(Lab.Labhost.Docker, "Docker", $type="", $descr="privileged containers", $tags="Element", $link="") {
-    Deployment_Node(Lab.Labhost.Docker.Labfylgja, "Lab fylgja", $type="", $descr="clab-fylgja-<node>; gNMI :57400 (TLS) or :6030; JSON-RPC or eAPI :443", $tags="Element", $link="") {
+    Deployment_Node(Lab.Labhost.Docker.Labfylgja, "Lab fylgja", $type="", $descr="clab-fylgja-<node>; gNMI :57400 (TLS) or :6030; JSON-RPC or eAPI :443; each probe's hosts, clab-fylgja-<probe>-a and -b, reached by docker exec", $tags="Element", $link="") {
       Container(Lab.Labhost.Docker.Labfylgja.NOSnode_1, "NOS node", $techn="Container", $descr="One device of the twin, clab-fylgja-<node>: SR Linux or EOS, probed and read over gNMI and pushed its artifact.", $tags="Container", $link="")
+      Container(Lab.Labhost.Docker.Labfylgja.Probehost_1, "Probe host", $techn="Container", $descr="One end of a probe, clab-fylgja-<probe>-a or -b: a container of the probe package's image (linux, alpine:3.24.2 for ping) on an uncabled port of a device, addressed and routed by its exec lines; runs the step's flow and verify's burst, read by docker exec.", $tags="Container", $link="")
     }
 
   }
@@ -57,7 +58,7 @@ Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, conta
 }
 
 Deployment_Node(Lab.Infrahubhost, "Infrahub host", $type="", $descr="Docker Compose, project fylgja-infrahub; the lab host, for its task workers to reach the API on the bridge", $tags="Element", $link="") {
-  Container(Lab.Infrahubhost.Infrahubserver_1, "Infrahub server", $techn="Python; Infrahub 1.11.2; GraphQL, REST", $descr="Infrahub's API at :8000: intent in the schema library's DCIM and artifacts on branches, proposed changes, stages and their comments.", $tags="Container,External", $link="")
+  Container(Lab.Infrahubhost.Infrahubserver_1, "Infrahub server", $techn="Python; Infrahub 1.11.2; GraphQL, REST", $descr="Infrahub's API at :8000: intent in the schema library's DCIM and artifacts on branches, proposed changes, stages and their comments, and the probes.", $tags="Container,External", $link="")
   Deployment_Node(Lab.Infrahubhost.taskworker, "task-worker (x2)", $type="container", $descr="host.docker.internal:7650, docker0's address by the Compose override's host-gateway entry; FYLGJA_API_ADDRESS and FYLGJA_API_TOKEN from the override", $tags="Element", $link="") {
     Container(Lab.Infrahubhost.taskworker.Taskworker_1, "Task worker", $techn="Python; Infrahub 1.11.2", $descr="Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as one comment in a new thread on the proposed change, which its overview shows.", $tags="Container,External", $link="")
   }
@@ -77,7 +78,10 @@ Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.containerlab_1, "
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Reads for verify", $techn="gNMI", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Probes; pushes the artifact; waits", $techn="gNMI; JSON-RPC or eAPI", $tags="Relationship", $link="")
 Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Creates and cables", $techn="", $tags="Relationship", $link="")
-Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Docker.Labfylgja.Probehost_1, "Runs each probe's burst for verify", $techn="docker exec", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Docker.Labfylgja.Probehost_1, "Awaits its address; starts and reads a step's flow; runs the burst in the wait", $techn="docker exec", $tags="Relationship", $link="")
+Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.Probehost_1, "Creates, cables to its device's port and addresses", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent, artifacts and probes", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja-step asks for the stage plan; fylgja-twin for the rehearsal, in markdown", $techn="HTTP over the Docker bridge, bearer token, plaintext", $tags="Relationship", $link="")
 Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Infrahubhost.Infrahubserver_1, "Reads the proposed change; posts fylgja-twin's comment in a new thread; concludes each check", $techn="GraphQL", $tags="Relationship", $link="")
 

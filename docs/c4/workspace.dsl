@@ -6,19 +6,20 @@ workspace "Fylgja" "A walking twin of network intent." {
     model {
         operator = person "Operator" "Owns the lab host and Infrahub; drives the twin through the CLI."
 
-        infrahub = softwareSystem "Infrahub" "The network source of truth. Holds intent on branches, versioned in time, in OpsMill's schema library's DCIM, which this repository vendors at 26336e9 (schema/dcim/), beside Fylgja's one kind, the stage (schema/fylgja-stage.yaml); renders each device's configuration artifact." "External" {
-            iserver = container "Infrahub server" "Infrahub's API at :8000: intent in the schema library's DCIM and artifacts on branches, proposed changes, stages and their comments." "Python; Infrahub 1.11.2; GraphQL, REST" "External"
+        infrahub = softwareSystem "Infrahub" "The network source of truth. Holds intent on branches, versioned in time, in OpsMill's schema library's DCIM, which this repository vendors at 26336e9 (schema/dcim/), beside Fylgja's two kinds, the stage and the probe (schema/fylgja-stage.yaml, schema/fylgja-probe.yaml), both on the default branch; renders each device's configuration artifact." "External" {
+            iserver = container "Infrahub server" "Infrahub's API at :8000: intent in the schema library's DCIM and artifacts on branches, proposed changes, stages and their comments, and the probes." "Python; Infrahub 1.11.2; GraphQL, REST" "External"
             taskWorker = container "Task worker" "Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as one comment in a new thread on the proposed change, which its overview shows." "Python; Infrahub 1.11.2" "External"
         }
-        artifacts = softwareSystem "Artifacts repository" "This repository, registered in Infrahub read-only: the artifacts template (.infrahub.yml, infrahub/templates/) that renders each device's configuration from the schema library's kinds (the DcimDevice by name, its DcimPlatform and manufacturer, its InterfacePhysical ports and their DcimCables), and beside it the two checks (infrahub/checks/) that ask Fylgja for a proposed change's plan and its rehearsal." "External"
+        artifacts = softwareSystem "Artifacts repository" "This repository, registered in Infrahub read-only: the artifacts template (.infrahub.yml, infrahub/templates/) that renders each device's configuration from the schema library's kinds (the DcimDevice by name, its DcimPlatform and manufacturer, its InterfacePhysical ports, their addresses and their DcimCables), and beside it the two checks (infrahub/checks/) that ask Fylgja for a proposed change's plan and its rehearsal." "External"
 
-        twin = softwareSystem "Walking twin" "Lab fylgja: a running containerlab topology of real network operating system images, built from one branch at one time." {
+        twin = softwareSystem "Walking twin" "Lab fylgja: a running containerlab topology of real network operating system images, built from one snapshot, and two synthesized hosts for each probe it declares." {
             node = container "NOS node" "One device of the twin, clab-fylgja-<node>: SR Linux or EOS, probed and read over gNMI and pushed its artifact." "Container"
+            host = container "Probe host" "One end of a probe, clab-fylgja-<probe>-a or -b: a container of the probe package's image (linux, alpine:3.24.2 for ping) on an uncabled port of a device, addressed and routed by its exec lines; runs the step's flow and verify's burst, read by docker exec." "Container"
         }
 
         fylgja = softwareSystem "Fylgja" "Reads intent from Infrahub, compiles it into a deterministic bundle, boots it as a twin and pushes each device's production configuration." {
             cli = container "fylgja (client)" "Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered." "Go, one static binary"
-            server = container "fylgja serve" "The API's server, on the lab host. Reads Infrahub, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin." "Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge" {
+            server = container "fylgja serve" "The API's server, on the lab host. Reads Infrahub and a request's probes, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's." "Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge" {
                 handlers = component "server" "The handlers: each command's logic behind POST /v1/<noun>/<verb>." "internal/server"
                 api = component "api" "The wire: paths, frames, requests, problems, bounds. The client's side links it too." "internal/api"
                 stage = component "stage" "The read and compile pipelines, the server's alone." "internal/stage"
@@ -34,13 +35,15 @@ workspace "Fylgja" "A walking twin of network intent." {
                 bundle = component "bundle" "The bundle format, canonical hashing, the store." "internal/bundle"
                 snapshot = component "snapshot" "The snapshot: the document, its id, its validation, the store." "internal/snapshot"
                 psp = component "psp" "Platform support packages: loading and validation." "internal/psp"
+                probe = component "probe" "The probe declaration and its rules, the probe packages (loading, validation, their templates rendered) and the pure reading of a ping's output." "internal/probe"
                 findings = component "findings" "Findings, rules, the findings document, exit codes. The client's side links it too." "internal/findings"
             }
-            worker = container "fylgja worker run" "The lab-host worker: runs the workflows and the host-bound activities." "Go, the same binary" {
+            worker = container "fylgja worker run" "The lab-host worker: runs the workflows and the host-bound activities. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's." "Go, the same binary" {
                 workflows = component "provision" "The four workflows, the rehearsal running the provision, step and destroy as its children, and the worker's registration. The provision, step and rehearsal take a snapshot id and a bundle id the server compiled; none reads a source of truth." "internal/provision"
-                wlab = component "lab" "The host-bound activities: deploy, readiness, push, reconcile, record, the wait." "internal/lab"
+                wlab = component "lab" "The host-bound activities: deploy, readiness, push, reconcile, record, the wait, and a step's flows, started before its first change and read after its wait." "internal/lab"
                 wverify = component "verify" "The readers and the wait." "internal/verify"
                 wire = component "lab/wire" "Activity names and the payloads crossing the task queue." "internal/lab/wire"
+                wprobe = component "probe" "The probe packages a host's plan is read from, and the pure reading of a ping's output." "internal/probe"
                 wrehearsal = component "rehearsal" "A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown." "internal/rehearsal"
             }
             temporal = container "Workflow service" "Durable execution: run history." "Temporal"
@@ -52,7 +55,7 @@ workspace "Fylgja" "A walking twin of network intent." {
 
         operator -> fylgja "Runs commands"
         operator -> infrahub "Edits intent; opens proposed changes and marks stages"
-        fylgja -> infrahub "Reads intent and artifacts" "GraphQL, REST"
+        fylgja -> infrahub "Reads intent, artifacts and probes" "GraphQL, REST"
         fylgja -> twin "Boots, probes, pushes, reads"
         infrahub -> artifacts "Clones; renders the template; runs the checks"
         infrahub -> fylgja "Runs fylgja-step and fylgja-twin, which ask for the stage plan and the rehearsal" "HTTP, bearer token, plaintext"
@@ -62,24 +65,28 @@ workspace "Fylgja" "A walking twin of network intent." {
         infrahub -> fylgja.server "Runs fylgja-step and fylgja-twin in its task worker, which ask for the stage plan and the rehearsal" "HTTP, bearer token, plaintext"
         infrahub.taskWorker -> fylgja.server "fylgja-step asks for the stage plan; fylgja-twin for the rehearsal, in markdown" "HTTP over the Docker bridge, bearer token, plaintext"
         infrahub.taskWorker -> infrahub.iserver "Reads the proposed change; posts fylgja-twin's comment in a new thread; concludes each check" "GraphQL"
-        fylgja.server -> infrahub "Reads intent and artifacts" "GraphQL, REST"
-        fylgja.server -> infrahub.iserver "Reads intent and artifacts" "GraphQL, REST"
+        fylgja.server -> infrahub "Reads intent, artifacts and probes" "GraphQL, REST"
+        fylgja.server -> infrahub.iserver "Reads intent, artifacts and probes" "GraphQL, REST"
         fylgja.server -> fylgja.temporal "Starts, follows, cancels runs" "gRPC"
         fylgja.server -> fylgja.store "Files and reads bundles"
         fylgja.server -> fylgja.snapshotStore "Files and reads snapshots"
         fylgja.server -> fylgja.twindir "Reads the record and the staged bundle"
         fylgja.server -> fylgja.clab "Inspects; dry runs"
         fylgja.server -> twin.node "Reads for verify" "gNMI"
+        fylgja.server -> twin.host "Runs each probe's burst for verify" "docker exec"
         fylgja.worker -> fylgja.temporal "Polls task queue fylgja" "gRPC"
         fylgja.worker -> fylgja.store "Files and reads bundles"
         fylgja.worker -> fylgja.twindir "Stages, records"
         fylgja.worker -> fylgja.clab "Deploys, reconciles, destroys"
         fylgja.worker -> twin.node "Probes; pushes the artifact; waits" "gNMI; JSON-RPC or eAPI"
+        fylgja.worker -> twin.host "Awaits its address; starts and reads a step's flow; runs the burst in the wait" "docker exec"
         fylgja.clab -> twin.node "Creates and cables"
+        fylgja.clab -> twin.host "Creates, cables to its device's port and addresses"
 
         fylgja.server.handlers -> fylgja.server.api "Decodes requests; writes frames"
         fylgja.server.handlers -> fylgja.server.findings "Words every refusal; writes the document"
         fylgja.server.handlers -> fylgja.server.psp "Loads the packages"
+        fylgja.server.handlers -> fylgja.server.probe "Loads the probe packages; reads a request's declaration file"
         fylgja.server.handlers -> fylgja.server.stage "Reads and compiles"
         fylgja.server.handlers -> fylgja.server.stages "Resolves, lists, plans"
         fylgja.server.handlers -> fylgja.server.intent "Reads stages and stamps; checks the schema against the mapping's table"
@@ -111,7 +118,14 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.rehearsal -> fylgja.server.findings "Builds the report's block and words its findings"
         fylgja.server.rehearsal -> fylgja.server.step "Draws what each step changed"
         fylgja.server.compiler -> fylgja.server.psp "Applies the mapping profile"
+        fylgja.server.compiler -> fylgja.server.probe "Places each probe's hosts; renders them from their package"
+        fylgja.server.validate -> fylgja.server.probe "Places the probes, refusing as the compiler does"
+        fylgja.server.snapshot -> fylgja.server.probe "Holds each declaration to its rules"
         fylgja.server.intent -> fylgja.server.psp "Finds each device's package by its manufacturer and platform"
+        fylgja.server.intent -> fylgja.server.probe "Reads FylgjaProbe on the default branch as declarations"
+        fylgja.server.verify -> fylgja.server.probe "Renders each burst from its package"
+        fylgja.server.lab -> fylgja.server.probe "Plans each host from its package; reads the burst"
+        fylgja.server.lab -> twin.host "Runs each probe's burst for verify" "docker exec"
 
         fylgja.worker.workflows -> fylgja.worker.wire "Schedules activities by name"
         fylgja.worker.workflows -> fylgja.worker.wlab "Registers the host-bound activities"
@@ -120,13 +134,17 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.worker.wlab -> fylgja.worker.wire "Takes and returns the payloads"
         fylgja.worker.wlab -> fylgja.worker.wverify "VerifyTwin waits"
         fylgja.worker.wverify -> fylgja.worker.wire "Reads the record's types"
+        fylgja.worker.wverify -> fylgja.worker.wprobe "Renders each burst from its package"
+        fylgja.worker.wlab -> fylgja.worker.wprobe "Plans each host from its package; renders and reads its flow and its burst"
+        fylgja.worker.wlab -> twin.host "Awaits its address; starts and reads a step's flow; runs the burst in the wait" "docker exec"
+        fylgja.worker.workflows -> fylgja.worker.wprobe "Names the probe packages in the start-up report"
         fylgja.worker.wrehearsal -> fylgja.worker.wire "Compares the waits' findings; sums the node plans' budgets"
 
         live = deploymentEnvironment "Lab" {
             deploymentNode "Operator's machine" "FYLGJA_API_TOKEN; FYLGJA_API_ADDRESS, or an SSH tunnel to the lab host" "" {
                 containerInstance fylgja.cli
             }
-            deploymentNode "Lab host" "Ubuntu, Docker, containerlab, the NOS images" "" {
+            deploymentNode "Lab host" "Ubuntu, Docker, containerlab, the NOS images and the probe packages' images" "" {
                 deploymentNode "fylgja serve" "127.0.0.1:7650, and 172.17.0.1:7650 on docker0, the Docker bridge, in plaintext; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins" "process" {
                     containerInstance fylgja.server
                 }
@@ -143,8 +161,9 @@ workspace "Fylgja" "A walking twin of network intent." {
                 }
                 containerInstance fylgja.clab
                 deploymentNode "Docker" "privileged containers" "" {
-                    deploymentNode "Lab fylgja" "clab-fylgja-<node>; gNMI :57400 (TLS) or :6030; JSON-RPC or eAPI :443" "" {
+                    deploymentNode "Lab fylgja" "clab-fylgja-<node>; gNMI :57400 (TLS) or :6030; JSON-RPC or eAPI :443; each probe's hosts, clab-fylgja-<probe>-a and -b, reached by docker exec" "" {
                         containerInstance twin.node
+                        containerInstance twin.host
                     }
                 }
             }
@@ -166,6 +185,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         container fylgja "Containers" "Fylgja's processes and files on the lab host, and what each reaches." {
             include *
             include twin.node
+            include twin.host
             autoLayout lr
         }
         component fylgja.server "ServerComponents" "The packages the API's server runs. The client's side of the boundary is internal/cli, which links api, findings and tree alone." {

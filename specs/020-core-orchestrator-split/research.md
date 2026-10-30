@@ -1756,3 +1756,103 @@ made.
   no open change; the draft's skip reading no variable, ok, failed, the retry while held
   logged once, the retry's end, the deadline's cancellation and the document read after it,
   a run not ended, a platform lost, and `holders`.
+
+### 5.22 Tier 3's script through `fylgja-cli` (T031, Run 28, 2026-10-30)
+
+- **The shape.** `scripts/e2e.sh`: a second client function beside `fylgja`, `fylgja_cli`,
+  runs `orchestrator/.venv/bin/fylgja-cli` with `PATH`, `HOME`, the API's address and token
+  (the script's core), `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`,
+  `FYLGJA_ORCHESTRATOR_ROOT=$OUT/orchestrator` and `PREFECT_HOME=$OUT/prefect`, and nothing
+  else of the script's environment, so `local/.env`'s `PREFECT_API_URL` never reaches it and
+  every flow runs on Prefect's ephemeral server (R-16). Every command that names a branch or
+  a stage in cases 1 to 8 is `fylgja_cli`'s: the precondition's and case 3's dry runs, every
+  create from a branch or a stage, case 1's refused create, case 5's text dry run with
+  `--probes`, `compiled_id`'s `intent read` (`twin compile` stays `fylgja`'s), both plans,
+  every list, and cases 7's and 8's steps, with no target or `--stage`, their dry run and
+  their refusal included. The script's own core server is started by a subshell that execs
+  it with every `INFRAHUB_*`, `FYLGJA_DEFAULT_SCOPE`, `PREFECT_API_AUTH_STRING` and
+  `FYLGJA_ORCHESTRATOR_AUTH` unexported, so `$!` is the server; its environment is then read
+  by name, and its log, at the end, asserted to name none of the five operations that read
+  Infrahub (`no_infrahub_request`) and at least one `twin.create`. Its `default scope:` line
+  is no longer asserted; `local/.env`'s `FYLGJA_DEFAULT_SCOPE=tag:fylgja` is, at the start.
+- **Case 9's precheck** (R-16): the checks on `main` at this tree's commit, unchanged; then
+  from inside each task worker of the Compose project (`docker exec … python -c`, the
+  worker's own httpx, as `internal/checks`' `platformReached`), `GET /api/health` and the
+  authenticated `GET /api/deployments/name/twin-rehearse/main` both `200`, and
+  `POST host.docker.internal:7650/v1/twin/show` answering no status (the core on loopback
+  alone, FR-005); the platform from the host at `local/.env`'s `PREFECT_API_URL` with its auth
+  string, the deployment's id kept; the runner (`fylgja-orchestrator serve` of this venv
+  under `PREFECT_HOME=local/orchestrator/prefect`, as `scripts/bring-up.sh` finds it) started
+  after `orchestrator/src`'s last change and reading under `FYLGJA_DEFAULT_SCOPE=tag:fylgja`,
+  its `FYLGJA_API_ADDRESS` `127.0.0.1:7650`; and the operator's core there, this tree's
+  binary and build, logging to `local/server.log` and holding none of `INFRAHUB_ADDRESS`,
+  `INFRAHUB_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`, the log's size kept so that what the
+  rehearsals asked of it is read at the end (no Infrahub operation, a `twin.create`).
+- **`rehearsal_run`**: the comment's `Run \`fylgja-rehearse <id>\`` is the flow run's id
+  (the rehearse flow's `run_id` is the platform's flow run id); `GET /api/flow_runs/<id>` is
+  `COMPLETED`, of the deployment `twin-rehearse/main`, its `parameters.branch` the case's;
+  its log read as the glue reads it (`POST /api/logs/filter`, pages of 200, the logger
+  `prefect.flow_runs.fylgja`), and its `run fylgja-provision|step|destroy <id>` lines name
+  the core's runs, a provision and a destroy required, each history fetched for the greps.
+  The reproduce block asserts `fylgja-cli` on each of its five lines, as the renderer writes
+  them (T022, R-13).
+- **The greps**: `$OUT` now holds `$OUT/orchestrator` and `$OUT/prefect`; when case 9 ran,
+  `local/server.log`, `local/prefect.log`, `local/orchestrator.log` and the platform's home
+  `local/orchestrator/prefect/` are searched for every credential, and the three logs for the
+  marker; the platform's auth string is searched as its password (whatever form carries it)
+  and as the basic-auth header's base64 of the whole, under both of its names. The marker
+  grep leaves out directories named `snapshots` (the orchestrator's store under `$OUT`),
+  which hold it by design.
+- **Departures**, each forced by what the split removed:
+  - **Cases 2 and 4 read `--at T` with `fylgja-cli intent read` and create with `fylgja twin
+    create --snapshot`**: `fylgja-cli twin create` takes no `--at` (T027, §5.19) and the
+    core's create will lose its `--branch` and `--at` (T033). The twin's record is then
+    `source` `snapshot`, its provenance still naming `T` from the envelope, and case 4's
+    reproduction is still a second read at `T` giving case 2's snapshot and bundle.
+  - **Every create is `source` `snapshot`**: the core is sent the snapshot by the flow too.
+  - **Case 5's step by id needs the snapshot in the core's store**, and `intent read` now
+    files it in the orchestrator's alone (`twin compile` files nothing): the step to `5b` is
+    preceded by `fylgja twin step --snapshot <file> --dry-run`, which files it beside the twin
+    (`resolveSnapshot` before the plan), asserted clear and `twin.json` unchanged.
+  - **Cases 7 and 8 read the stage from the orchestrator's record** (`$OUT/orchestrator/twin.json`,
+    R-09) where they read `twin.json` `11`'s: `twin.json` `12`, `twin show`'s record and the
+    step's sides name no stage; the step's document names the target in its `stage` block.
+    After case 7's destroy the record is distrusted, and the list after the delete carries
+    `record.twin.stale` and no record.
+  - **The script's own core holds no `INFRAHUB_*` at all**: `local/.env` carries Compose's
+    `INFRAHUB_INITIAL_ADMIN_TOKEN` (the API token's value), `INFRAHUB_INITIAL_AGENT_TOKEN`,
+    `INFRAHUB_INITIAL_ADMIN_PASSWORD` and `INFRAHUB_SECURITY_SECRET_KEY`, which a core started
+    with only the three names unset still holds, as found live below. The operator's core is
+    held to the three names alone, as `scripts/bring-up.sh` (T030) starts it; that its
+    environment keeps the Compose secrets is left for the operator (the report's open item).
+- **Checked offline**, against `local/e2e-016-t056.outputs` (016's last whole run) and the
+  goldens: `no_infrahub_request` refuses that run's `server.log` (`intent.read 4x, stage.list
+  6x, stage.plan 4x`); the new reproduce assertion holds on that run's `comments-9b.json` with
+  `fylgja twin` made `fylgja-cli twin`, and refuses it as it was; the children's `sed` names
+  the golden `rehearsal.out.txt`'s provision, two steps and destroy. `shellcheck
+  scripts/e2e.sh scripts/bring-up.sh` clean.
+- **Checked live, no twin, nothing of the host's touched** (a throwaway core from this tree in
+  the session's scratch, its own token, both logins' published defaults, the host's dev
+  server; the script's own functions sourced from it): the core's environment holds no
+  `INFRAHUB_*`, scope or auth string once every `INFRAHUB_*` is unexported (with the three
+  alone, it held the four Compose secrets); the precondition's dry run through `fylgja_cli`
+  `ok`, `clear`, three nodes, snapshot `0940db93…`, bundle `c3872f5c…`, in 39.8 s (the
+  ephemeral server's first start in a fresh home); case 5's text dry run with `n1-loop.json`
+  on the fixture, 17.1 s, its five `nodes:` lines and both hosts' lines matching and `verdict:
+  clear` on stdout, nothing on stderr; `compiled_id`'s read and compile, 18.8 s, `0940db93…`
+  and `c3872f5c…`, the snapshot filed under the orchestrator's root; a read `--at` now and the
+  core's create dry run from that file, `clear`, the envelope's `at` the given one, the core's
+  store holding it; `stage list --branch fylgja-fixture` `ok` with no row and no record, `stage
+  plan` exit 1 `stage.unknown`; the core's log `twin.create` 3 and `twin.compile` 1, no Infrahub
+  operation; no marker in the ephemeral home (5.3 MB, `prefect.db` and its WAL) nor in the
+  outputs outside the snapshot files; no Infrahub token, API token or auth string anywhere.
+  Case 9's probe from inside both task workers answered `unset FYLGJA_ORCHESTRATOR_ADDRESS`,
+  the workers lacking the override's variables until T040, and the core-reach half answered
+  `401`, today's server still listening on the bridge: both are refusals the precheck words.
+- **Left for T043** (tier 3 itself): every twin-booting assertion; the step's dry run filing
+  `5b`'s snapshot beside a twin; the record's moves in cases 7 and 8; the platform's flow run
+  and log reads and the core's runs they name; the checks' messages as the new glue writes
+  them (`stage_lines`, `contains("rehearsal ok")`, the 9b failure text); the greps over the
+  platform's logs and home; the operator's core log read from its offset; and the wall time,
+  which grows by each `fylgja-cli` command's ephemeral start (about 17 s warm, about 30
+  commands).

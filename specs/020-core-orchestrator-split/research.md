@@ -2075,3 +2075,99 @@ made.
   `internal/cli` 21.9 s) and `make lint` (0 issues, ruff clean) green;
   `go vet -tags contract,fixture,e2e ./...` clean. No tier 2 is named: no contract-tagged
   test reaches what changed (`internal/checks`' reads a show document's `in_flight` alone).
+
+### 5.26 The packages' removal and the boundary (T035, Run 32, 2026-10-30)
+
+- **Gone whole**: `internal/intent`, `internal/stages`, `internal/stage` and
+  `internal/rehearsal`; `schema/infrahub.graphql`, `make sdl`, `make generate`, the fixture
+  tool's `-sdl` and `testsupport.SDL`, CI's `go generate ./... && git diff --exit-code` step;
+  `go.mod`'s `tool github.com/Khan/genqlient` and its require, `go mod tidy` dropping eight
+  indirect modules (`agnivade/levenshtein`, `alexflint/go-arg`, `go-scalar`,
+  `bmatcuk/doublestar`, `vektah/gqlparser`, `golang.org/x/mod`, `x/tools`, `yaml.v2`) and
+  adding none. `provision.DeadlineMechanism` and its test went with `internal/rehearsal`, as
+  §5.25 said; the 1,950 s and 2,130 s deadlines are the orchestrator's `test_deadline.py`'s.
+- **Kept, moved**: `stage.Compile` (validation, the compiler and `bundle.ID`) is
+  `server.Compile`, in `internal/server/compile.go`, its one product caller (twin compile, a
+  create, a step and `twin.diff`); `internal/cli`'s tests that compiled through it call
+  `server.Compile`, which they already reach through the harness. `snapshot.ObservedAtLayout`
+  stands alone: its holding test against `stage.ObservedAtFormat` (`layout_test.go`) went.
+- **`internal/testsupport`** keeps what the fixture tool and `internal/checks`' contract test
+  use (no other package has a contract-tagged test now): `ProbeCount`, `ArtifactsReadyAt`,
+  `StagesPresent` and `AwaitUserChecks`, used by nothing left, went with `SDL`.
+- **The retired identifiers** (data-model §11, as §5.13 settled them): 36 constants out of
+  `finding.go` and `finding_test.go`'s rule table, every one a row of the orchestrator's
+  `rules.py` not marked `core=True`; `step.target.unknown` and M2's `stage.failed` stay.
+  `TestTheOrchestratorsRulesAreRetired` holds each absent from the constants and the table
+  and present in `rules.py` (read as a file, its `_r("<id>", …)` rows, 76 of them), and the
+  two kept ones declared. The Python side's `test_the_cores_rules_are_the_cores` and
+  `test_the_retired_rules_are_data_models` now hold the same from the other side (the
+  retired declared by the core no more; the 36 by their families and singles).
+  `probe.Parse` keeps the declaration file's two ids as `internal/probe`'s unexported
+  `ruleInvalid` and `ruleVersionUnsupported`: it serves the fixture tool's `-probes` and the
+  tests' reads of `testdata/probes/`, and no document of the core's carries either (a
+  snapshot's misshapen probe is `snapshot.invalid`). The tier-1 tests that named a retired
+  rule to assert its absence (`twin_step_test.go`, `checks_contract_test.go`) name it as a
+  literal with the orchestrator's provenance.
+- **`render.go`**: the five operations' constants, and the blocks only they wrote:
+  `StagesBlock`, `StageRow`, `StageOrphan`, `StageRecord`, `StageTowards`, `PlanBlock`,
+  `PlanStage`, `ReadCounts`, `Verified`, `KindFields`, `StagesVerified`, every `Rehearsal*`,
+  `StageBlock` and `StageChange` (the stage block of a create, a read or a step), `AtSourceText`,
+  `Document`'s `verified`, `stage`, `stages`, `plan` and `rehearsal`, and `ShowRun.Child`
+  (§5.25's leftover). `ShowStage`, `StageChangeRef`, the `AtSource*` constants and the
+  show and verify records' `stage` and `rehearsal` stay: a twin record's shape, and verify
+  writes `stage` and `rehearsal` as null. `cli.writeFailure` no longer copies a stage block.
+  `rehearsal_test.go`, `stages_test.go` and `verified_test.go` went; their schema helpers,
+  `showStage`, `TestAnM7DocumentIsUnchanged`, `rehearsalTwinDocuments` and
+  `TestRecordRehearsalIsShownWhenNamed` (show and verify of a 7 record) moved to a new
+  `contracts_test.go`; `decode_test.go`, `snapshot_test.go` and `step_test.go` lost the
+  read's, schema check's, list's, plan's and rehearsal's documents and the step document's
+  stage block and `step.stage.skipped` case.
+- **One departure, from the task's text**: `contracts/findings.schema.json`'s operation enum
+  keeps the five. The orchestrator's `fylgja-cli` prints `findings 1` documents under them
+  (contracts/README.md), held to this same file by `documents/findings.py`'s `validate` and
+  `test_findings.py`'s `test_the_cases_cover_every_operation` (its `OPERATIONS` equal to the
+  enum), as R-13 settled: the operations keep their names as the orchestrator's, and the
+  `stages` and `rehearsal` schemas stay with their `$id`s, the move one of ownership. The
+  contract has a rule pattern and no rule enum, so no rule leaves it. The core's side is
+  held instead: `TestOperationConstantsMatchTheContract` reads the `Op*` constants from
+  `render.go`'s syntax tree, eleven, none of the five, and the eleven with the five are the
+  enum; `TestOperationsAreTheContractsAndTheirPaths` (`internal/api`) holds `Operations` to
+  the enum less the five, as Run 29 left it. Taking the five out of the file would refuse
+  every document the orchestrator writes; a separate orchestrator findings contract is a
+  decision no artifact takes. The `child` property of the show and verify schemas, set by
+  nothing now, is T036's with the contracts.
+- **The boundary**: `TestTheCoreLinksNoReader` in `internal/compiler/purity_test.go`: of
+  `go list -deps ./cmd/fylgja`, no package is genqlient's, names `infrahub` in its path, or
+  is one of the four; the module walk from `cmd/fylgja` reaches none of them; and none of the
+  four directories exists (held to fail: a stray empty `internal/intent` fails it).
+  `testdata/boundary/leaky` now imports `internal/server` (`server.Compile`), reaching
+  `internal/bundle` past the first import, and `docs/development.md`'s one sentence naming
+  its import says so. `TestCompilerNamesNoPlatform` walks no `stage`, `stages` or
+  `rehearsal` directory; the `internal/intent` entries left `TestCompilerIsPure`'s,
+  `TestStepIsPure`'s and `internal/psp`'s forbidden maps.
+- **The compare tests** (R-15): `orchestrator/tests/contract/test_adapter_matches_go_reader.py`
+  is gone, green last in Run 19 (§5.15: 183.8 s, every file byte-equal, the stage list equal
+  as JSON); `test_stage_plan_of_a_throwaway_change.py` lost its `go_stage_plan` fixture,
+  `comparable` and the SC-006 assertions, green last in Run 25 (§5.20: 197.7 s, the flow's
+  plan 16.0 s and the Go handler's 13.0 s); its own assertions stay. In tier 1 the copies'
+  holds to Go files that left went too: `test_queries.py`'s eleven token comparisons with
+  `queries.graphql`, `test_schema.py`'s two copy holds and `test_probes.py`'s one; the
+  copies under `orchestrator/tests/data/schema/` are now the only ones (its README says so).
+- **Comments found pointing at the four packages** were reworded where they described the
+  code (`internal/lab/env.go`, `internal/validate/artifact.go`, `infrahub_yaml_test.go`, the
+  Makefile's contract tier, `fylgja_api.py`'s comment on the branch point's three values,
+  which the infrahub-managing-checks skill was loaded for; comment only, the check unchanged);
+  the orchestrator's "ported from" docstrings are history and stand. Left for T037:
+  `docs/development.md`'s layout row for `internal/intent`, its `make sdl` and `make generate`
+  rows, `docs/architecture.md`'s genqlient lines, the glossary's `genqlient` entry; for T046,
+  `CLAUDE.md`'s `make sdl`.
+- **Tier 1**: `make build` static, `make test` green uncached in 61.1 s wall at a load of
+  2.6–2.9 (the Python half 1,120 passed in 18.3 s, 14 fewer: the eleven token comparisons and
+  the three copy holds; `internal/cli` 21.6 s, `internal/compiler` 3.2 s), `make lint` 0
+  issues and ruff clean, `go vet -tags contract,fixture,e2e ./...` clean.
+- **Tier 2, the one test this run edited**: `test_stage_plan_of_a_throwaway_change` alone,
+  no twin up, green in 235.1 s (the flow's plan 17.6 s); afterwards `Branch` lists `main` and
+  `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage`, `FylgjaProbe` and
+  `CoreChangeThread` count 0. `internal/checks`' contract test changed in four constants'
+  names only and compiles under the tag; it needs the platform on the bridge, so it was not
+  run.

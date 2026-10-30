@@ -2587,3 +2587,36 @@ made.
   minutes), and Run 37's 3,586 s the host and the hand scenarios. Against R-22's 24–36
   hours, about two thirds of the low end. This run, T048's review and `converge` are not
   counted.
+
+### 5.31 The stage and rehearsal descriptions pinned (T052, convergence pass 1, 2026-10-30)
+
+- **§5.30's reading of the `rehearsal` block was wrong.** It took `show.schema.json`'s and
+  `verify.schema.json`'s `rehearsal` as "a shape an older record still read takes", a
+  `twin.json` `7` to `11` being shown; no build of 020 fills it. The core's record type
+  (`internal/lab/wire/types.go`'s `TwinRecord`) has no stage and no rehearsal field, so a
+  record of 11 or earlier decodes without them; `twin show` sets neither
+  (`internal/server/show.go`, after the scope and mapping), its step sides carry none
+  (`showStep`'s `side`), `twin verify`'s twin block is built from snapshot, bundle, state,
+  source and nodes alone, `towards` from the bundle alone (`internal/verify/report.go`),
+  and the step block's sides from snapshot, bundle, at and branch
+  (`internal/provision/client.go`). Every stage and rehearsal key of the three blocks is
+  therefore absent (`show`, where `omitempty`) or `null` (`show`'s step sides, `verify`,
+  `step`) for every twin of this build.
+- **Pinned, descriptions alone**: `show.schema.json`'s `record.stage`, `record.rehearsal`
+  and both `record.step` sides' `stage`, and its top-level 020 sentence;
+  `verify.schema.json`'s `$defs/stage`, `twin.stage` (a description beside its `$ref`, as
+  `nodes[].probe` has) and `twin.rehearsal`, and its top-level 020 sentence; and
+  `step.schema.json`'s `$defs/stage` and a 020 sentence in its top-level description, the
+  same defect in the step block, which the task did not name: from 020 `twin step` takes a
+  snapshot alone, and the orchestrator's `twin step` document carries the stage in a
+  `stage` block of its own. Each says the key's 014 or 015 meaning in the past tense
+  ("as `twin.json` 6 to 11 recorded it"), then that from `twin.json` `12` it is absent or
+  null for every twin of this build, the shape kept for an earlier build's document,
+  pre-1.0 without a version move, citing D-065 and D-066. And `stages.schema.json`'s
+  `$defs/row.twin`, which named "the host's record" and `twin.json` 6's stage: since 020 the
+  row is the one the orchestrator's record names, marked only while that record is trusted
+  (`stage list`, `contracts/orchestrator.md`), and none with `record.twin.stale` otherwise;
+  the description says so, its earlier meaning kept as "before 020".
+- **Unmoved**: each of the four schemas' shape, compared with every string `description` stripped
+  against `HEAD`'s; the frozen copies under `internal/*/testdata/contracts/` (none of 020)
+  and `TestFrozenContractCopiesAgree`.

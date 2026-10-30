@@ -5,15 +5,15 @@
 # library's DCIM (DcimDevice, its DcimPlatform and OrganizationManufacturer, its
 # InterfacePhysical ports and their DcimCable), SR Linux or EOS by the device's platform;
 # one artifact definition generates it for every device in the group `fylgja-devices`.
-# The checks are clients of Fylgja's API, glue on Infrahub's runtime (contracts/checks.md):
-# global, with no targets and no parameters, so Infrahub's task workers run each on every
-# proposed change, draft or not, reaching the API at FYLGJA_API_ADDRESS with
-# FYLGJA_API_TOKEN from their environment (the Compose override). fylgja-step asks for the
-# stage plan; fylgja-twin skips a draft, and otherwise asks for the rehearsal and posts its
-# report as one comment in a new thread on the proposed change, which its overview shows: its
-# one write (D-049, D-053), the thread deleted only when its comment cannot be saved. Each
-# binds the query fylgja_branch through its class's `query`, never a `query:` key under its
-# definition.
+# The checks are clients of the orchestrator's platform, glue on Infrahub's runtime
+# (contracts/checks.md): global, with no targets and no parameters, so Infrahub's task
+# workers run each on every proposed change, draft or not, reaching the platform at
+# FYLGJA_ORCHESTRATOR_ADDRESS with FYLGJA_ORCHESTRATOR_AUTH from their environment (the
+# Compose override). fylgja-step triggers the flow stage-plan; fylgja-twin skips a draft, and
+# otherwise triggers the flow twin-rehearse, which posts its report as one comment in a new
+# thread on the proposed change itself. Each waits for its run, reads its document and
+# concludes from its status; neither writes to Infrahub. Each binds the query fylgja_branch
+# through its class's `query`, never a `query:` key under its definition.
 
 queries:
   - name: device_config

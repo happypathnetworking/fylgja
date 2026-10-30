@@ -18,8 +18,10 @@ import (
 // enforce (FR-021; data-model §4).
 const beforeStart = 300 * time.Second
 
-// commentSaves is what fylgja-twin does after its answer: a thread and its comment, each
-// saved by the SDK with its default timeout of 60 s.
+// commentSaves is what fylgja-twin did after its answer before 020's T029: a thread and its
+// comment, each saved by the SDK with its default timeout of 60 s. The rehearse flow posts
+// them now, and CLOSE_MARGIN_S still covers the bound: the check's reads of the run's
+// document and out lines, each bounded by 30 s, come after it.
 const commentSaves = 2 * 60 * time.Second
 
 // fylgja-twin's bounds, held against the rehearsal's (FR-006, FR-007, FR-021; R-09, R-16).

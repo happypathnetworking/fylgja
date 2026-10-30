@@ -1,0 +1,18 @@
+# Local, machine-specific state: local/.env and the core's local store
+local/
+
+# Python
+__pycache__/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Editors and OS
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.DS_Store

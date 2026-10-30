@@ -1,0 +1,73 @@
+# Nokia SR Linux, as containerlab's `nokia_srlinux` kind runs it. Platform package 1
+# (formats/platform-package-1.schema.json): it states only what the kind does not
+# already know (D-015). The kind's default login, its baseline configuration (host
+# name, linked ports enabled, LLDP, gNMI) and its interface aliases are the kind's.
+# The manufacturer and platform names a source of truth gives this platform, and the
+# rendered config's artifact name and content type, are held by the orchestrator.
+platform_package_version: "1"
+id: nokia_srlinux
+versions: ["24.7"]                    # v24.7.1-330-g38f237abfe read from the booted image
+credentials: srlinux                  # the node login's name for the credential provider; never a value
+
+interfaces:
+  # Tried in order; the first rule whose match fits a production name decides it. The
+  # node names each port by its production name, so no data rule states a node_name.
+  rules:
+    - name: ethernet
+      match: "ethernet-{slot}/{port}"
+      ranges: { slot: [1, 1], port: [1, 58] }   # /interface/name lists ethernet-1/1..ethernet-1/58 on the 7220 IXR-D2L; the node refuses port 99 ("max is 58") and slot 2
+    - name: breakout
+      match: "ethernet-{slot}/{port}/{sub}"
+      ranges: { slot: [1, 1], port: [1, 58], sub: [1, 4] }   # sub: the D2L's 4x breakout; each lane is a port of its own
+    - name: management
+      management: true
+      node_name: mgmt0
+
+# One JSON-RPC `cli` request: enter a private candidate, `load startup` (the baseline
+# containerlab left), the config, diff, commit. One atomic commit (D-027). A refused line
+# stays in the login's private candidate across requests, and `load startup` clears it.
+push:
+  delivery: json_rpc                  # POST /jsonrpc, method cli; TLS profile clab-profile, the boot-time certificate accepted unverified
+  port: 443
+  timeout_s: 30                       # 0.70s measured for an 839-byte config, three pushes 0.62-0.66s; x40 for a node stalled under memory pressure
+
+# Ready means the push transport answers an authenticated request, not that routing has
+# converged.
+readiness:
+  timeout_s: 60                       # the management plane answered 0.9s after deploy returned, three nodes; 2.4s worst seen; x25
+
+gnmi:
+  port: 57400                         # in the management namespace, at the node's management address
+  tls: true                           # the boot-time certificate accepted unverified; set the encoding (json_ietf), or the node answers Unimplemented
+
+# The paths verify and the conformance suite read. {node_name} is the port's node name.
+conformance:
+  host_name: /system/name/host-name
+  version: /system/information/version
+  port:
+    enabled: { path: "/interface[name={node_name}]/admin-state", value: enable }
+    discovering: { path: "/system/lldp/interface[name={node_name}]/admin-state", value: enable }
+    neighbor:
+      path: "/system/lldp/interface[name={node_name}]/neighbor"
+      system_name: system-name        # the far node's host name
+      port_id: port-id                # the far port as the far node names it (port-id-type INTERFACE_NAME)
+
+fidelity:
+  approximations:
+    - No linecard model
+    - No hardware QoS, TCAM or buffer behaviour
+    - Convergence timing differs from hardware
+
+runtime:
+  containerlab:
+    kind: nokia_srlinux
+    image:
+      ref: ghcr.io/nokia/srlinux:24.7.1   # the image every value here was measured on; public, so either driver may pull it
+    resources:
+      cpu: 1
+      memory_mb: 2048                 # 1641 MiB measured, three nodes, steady over a minute; x1.25. About 1.6-2 GiB per node on both containerlab drivers
+    deploy_timeout_s: 180             # 39.4s measured, three nodes, host swapping; x4.5. An image pull counts against it
+    destroy_timeout_s: 60             # 0.8-2.0s measured, one to three nodes, ready or half-deployed; x30
+    link_apply_mode: live             # a link added or removed on a port present at boot is re-cabled with no restart, and the push is kept
+    alias: true                       # the kind accepts production names as endpoints (ethernet-1/1 -> e1-1) and refuses out-of-range ones at deploy
+    hot_add_ports: true               # unverified: a new port of an existing node was not read back from that node

@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/deployment-1.schema.json",
+  "title": "Fylgja deployment 1",
+  "description": "A driver's plan: the pure, runtime-specific binding of one bundle to one twin. The reconcile loop stores it, hands it to the driver's apply, compares two of them to decide a step's lifecycle actions, and reports its fidelity.",
+  "$comment": "PURITY. plan(bundle, packages, twin name) -> deployment has no I/O, clock or environment, exactly as the compiler; it is tested by fixtures, one bundle rendered by each driver. Admission (does the demand fit) is a separate, impure check that reads the plan. FILES. The rendered artifacts (for both containerlab drivers: topology.clab.yml naming the lab after the twin, with production names where the kind has aliases and renamed ports where not; for hardware later: a device assignment) are stored beside this document under deployments/<id>/ in the state store; this document lists them by path and SHA-256. ID. The deployment id is the lowercase-hex SHA-256 of the RFC 8785 (JCS) bytes of {\"driver\", \"twin\", \"bundle_id\", \"files\"} taken from this document: fidelity and demand are derived from the same inputs and are not hashed, so rewording a package moves neither a bundle nor a deployment id, while a changed image or resource request does (it changes a rendered file). Planning the same bundle for the same twin on the same driver gives the same id, which makes apply idempotent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "deployment_version",
+    "id",
+    "driver",
+    "twin",
+    "allocation",
+    "bundle_id",
+    "files",
+    "demand",
+    "fidelity"
+  ],
+  "properties": {
+    "deployment_version": {
+      "const": "1",
+      "description": "The format's version; the reconcile loop refuses a stored deployment of any other and re-plans."
+    },
+    "id": {
+      "$ref": "bundle-1.schema.json#/$defs/id",
+      "description": "The deployment's content address; the twin record's status.deployment_id names it and the loop compares it to decide whether apply has work."
+    },
+    "driver": {
+      "$ref": "#/$defs/driver",
+      "description": "The driver that planned it; the loop hands it back to that driver's apply."
+    },
+    "twin": {
+      "$ref": "twin-record-1.schema.json#/$defs/twin_name",
+      "description": "The twin it is bound to; the plan names the isolation unit (lab, namespace) and labels every resource with it."
+    },
+    "allocation": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "What admit() reserved for this twin and recorded in its twin record by compare-and-set, passed to the pure plan as an input (D-017): containerlab {lab, mgmt_subnet}, two labs on one host needing disjoint subnets; clabernetes {namespace}; hardware {reservation, devices}. Its shape is the driver's; it is hashed into the id with the rest.",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "array",
+          "object"
+        ]
+      }
+    },
+    "bundle_id": {
+      "$ref": "bundle-1.schema.json#/$defs/id",
+      "description": "The bundle it binds; the push reads the bundle's files by it."
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+            "description": "The rendered file's path under the deployment's directory; the driver's apply reads it."
+          },
+          "sha256": {
+            "$ref": "bundle-1.schema.json#/$defs/id",
+            "description": "The rendered file's SHA-256; hashed into the id, and checked by apply before it uses the stored file."
+          }
+        }
+      },
+      "description": "The runtime artifacts the plan rendered, sorted by path; apply consumes them. On clabernetes: the Namespace (PSA privileged, labelled), the pull-secret Secret, a NetworkPolicy that admits only the twin's own pods, the c9s namespace and non-pod sources (without it a node reaches another twin's pods on the cluster's flat pod network; D-019), and the Topology."
+    },
+    "demand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodes",
+        "cpu",
+        "memory_mb"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runtime nodes the deployment creates or claims, probe hosts included; admission and show read it."
+        },
+        "cpu": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The sum of the packages' per-node cpu; admission compares it with the driver's free capacity."
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The sum of the packages' per-node memory_mb; admission compares it with the driver's free capacity."
+        }
+      },
+      "description": "What the deployment needs; admission refuses a twin that cannot fit (rule admission.capacity)."
+    },
+    "fidelity": {
+      "$ref": "#/$defs/deployment_fidelity",
+      "description": "What this twin on this runtime models, approximates, synthesizes and omits; show, the plan answer and the orchestrator's report state it."
+    }
+  },
+  "$defs": {
+    "driver": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "A driver's name as GET /v1/drivers lists it (containerlab, clabernetes; hardware later)."
+    },
+    "approximation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package",
+        "text"
+      ],
+      "properties": {
+        "package": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The platform id or probe format whose package asserts it; a client groups approximations by it."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The package's sentence, verbatim; a client shows it."
+        }
+      }
+    },
+    "omitted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "interface",
+        "omission"
+      ],
+      "properties": {
+        "device": {
+          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "description": "The device the omitted interface is on; a client names it."
+        },
+        "interface": {
+          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "description": "The omitted production interface; a client names it."
+        },
+        "omission": {
+          "enum": [
+            "out_of_range",
+            "no_rule",
+            "shared"
+          ],
+          "description": "Why: out of the rule's range, no rule matched (both from the bundle's mapping), or its renamed port is held by a cabled interface (this deployment's rename)."
+        }
+      }
+    },
+    "compile_fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approximations",
+        "omitted",
+        "synthesized"
+      ],
+      "properties": {
+        "approximations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/approximation"
+          },
+          "description": "Every loaded package's approximations for the platforms and probe formats the bundle uses; a client shows them."
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/omitted"
+          },
+          "description": "Interfaces the twin does not represent, sorted by (device, interface); a client shows them."
+        },
+        "synthesized": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Nodes the twin adds that intent does not hold (probe hosts), sorted; a client shows them."
+        }
+      },
+      "description": "The runtime-independent part of fidelity, answered by POST /v1/bundles; asserted, never measured."
+    },
+    "deployment_fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forwarding",
+        "approximations",
+        "omitted",
+        "synthesized",
+        "lossy"
+      ],
+      "properties": {
+        "forwarding": {
+          "enum": [
+            "software",
+            "hardware"
+          ],
+          "description": "How the twin's nodes forward on this runtime (containers software, a hardware pool silicon), from the driver's capabilities; a client shows it beside the approximations."
+        },
+        "approximations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/approximation"
+          },
+          "description": "As the compile's; a client shows them."
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/omitted"
+          },
+          "description": "The compile's omissions plus this deployment's shared ports, sorted; a client shows them."
+        },
+        "synthesized": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "As the compile's; a client shows them."
+        },
+        "lossy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mappings",
+            "shared_ports"
+          ],
+          "properties": {
+            "mappings": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Interfaces whose rename dropped a placeholder; a client warns when non-zero."
+            },
+            "shared_ports": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Runtime ports two or more interfaces renamed onto; a client warns when non-zero."
+            }
+          },
+          "description": "Counts of the rename's many-to-one mappings; both 0 where every kind has aliases."
+        }
+      },
+      "description": "Fidelity for this twin on this runtime; asserted, never measured."
+    }
+  }
+}

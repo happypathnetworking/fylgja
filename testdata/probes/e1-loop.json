@@ -1,0 +1,23 @@
+{
+  "probes_version": "1",
+  "probes": [
+    {
+      "name": "e1-loop",
+      "format": "ping",
+      "endpoints": [
+        {
+          "device": "e1",
+          "interface": "Ethernet10",
+          "address": "10.2.10.2/24",
+          "gateway": "10.2.10.1"
+        },
+        {
+          "device": "e1",
+          "interface": "Ethernet11",
+          "address": "10.2.11.2/24",
+          "gateway": "10.2.11.1"
+        }
+      ]
+    }
+  ]
+}

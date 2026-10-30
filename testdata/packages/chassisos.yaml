@@ -1,0 +1,86 @@
+# Synthetic platform for pure tests of a lossy rename. It describes no real NOS and never
+# boots: its only job is to name its ports as a modular chassis does, so the compiler and
+# the driver's plan can be proven on a lossy platform. Platform package 1
+# (formats/platform-package-1.schema.json).
+#
+# The naming is illustrative, EOS-style, taken from public documentation and never
+# verified against a running image. It is never shipped or deployed. cEOS itself does not
+# name its ports this way: it carries production's names one to one (psp/arista_eos.yaml).
+#
+# Every value outside interfaces and runtime.containerlab.rename is a placeholder the
+# schema accepts: nothing here is measured, and nothing dials a node of it.
+platform_package_version: "1"
+id: chassisos
+versions: ["0"]                            # placeholder: no image of it exists
+credentials: chassisos                     # placeholder: never resolved
+
+interfaces:
+  # Rules are tried in order and the first whose match fits decides. Ethernet1/1 fits
+  # front (the literal 1) and never reaches linecard; Ethernet2/1 does not fit front and
+  # falls to linecard. Both rename to eth1: a port shared across rules.
+  rules:
+    - name: front                          # one-to-one; the node's name differs
+      match: "Ethernet1/{port}"
+      ranges: { port: [1, 52] }            # Ethernet1/53 is out of range
+      node_name: "Ethernet{port}"
+    - name: linecard                       # many-to-one: the rename drops the slot
+      match: "Ethernet{slot}/{port}"
+      ranges: { slot: [2, 4], port: [1, 48] }   # Ethernet3/49 is out of range
+      node_name: "Ethernet{port}"
+    - name: breakout                       # a collapsing breakout: the lanes share the parent's port
+      match: "Ethernet{slot}/{port}/{sub}"
+      ranges: { slot: [1, 1], port: [49, 52], sub: [1, 4] }
+      node_name: "Ethernet{port}"
+    - name: management
+      management: true
+      node_name: Management0
+
+push:
+  delivery: json_rpc                       # placeholder: never made, the platform never boots
+  port: 443
+  timeout_s: 30
+
+readiness:
+  timeout_s: 60                            # placeholder
+
+gnmi:
+  port: 57400                              # placeholder
+  tls: true
+
+conformance:                               # placeholders: no boot half reads this platform
+  host_name: /system/state/hostname
+  version: /system/state/software-version
+  port:
+    enabled: { path: "/interfaces/interface[name={node_name}]/state/admin-status", value: UP }
+    discovering: { path: "/lldp/interfaces/interface[name={node_name}]/state/enabled", value: "true" }
+    neighbor:
+      path: "/lldp/interfaces/interface[name={node_name}]/neighbors/neighbor"
+      system_name: state/system-name
+      port_id: state/port-id
+
+fidelity:
+  approximations:
+    - Synthetic test platform; its port names are illustrative and nothing about it is measured
+
+runtime:
+  containerlab:
+    kind: chassisos                        # synthetic: containerlab has no such kind
+    image:
+      ref: example.invalid/chassisos:0     # synthetic: a placeholder reference no registry serves
+    resources:
+      cpu: 1
+      memory_mb: 2048                      # placeholder
+    deploy_timeout_s: 180                  # placeholder
+    destroy_timeout_s: 60                  # placeholder
+    link_apply_mode: live                  # placeholder
+    alias: false                           # no aliases, so every data rule has a rename
+    rename:
+      # The plan counts a rename that drops a placeholder as lossy, and two names on one
+      # port as shared: front keeps its one placeholder (not lossy); linecard drops the
+      # slot and breakout the slot and the lane (both lossy), so Ethernet2/1 shares eth1
+      # with Ethernet1/1 and each Ethernet1/<port>/<sub> shares eth<port> with its parent
+      # and its sibling lanes.
+      - { rule: front, port: "eth{port}" }
+      - { rule: linecard, port: "eth{port}" }
+      - { rule: breakout, port: "eth{port}" }
+    hot_add_ports: false                   # placeholder

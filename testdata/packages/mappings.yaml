@@ -1,0 +1,45 @@
+# What each shipped platform package's interface rules must decide, per package id: the
+# bounds' ends, a name each rule decides, both kinds of out-of-range name, names no rule
+# matches, and management. Platform package 1 moved these rows out of the packages
+# (formats/platform-package-1.schema.json); a test holds the compiler and the driver's
+# plan to them.
+#
+# A mapped row: production, rule, node_name (the port's name on the node), and port (the
+# containerlab endpoint the name becomes: the kind's alias for nokia_srlinux, the rename's
+# output for arista_eos, the management interface for management). An unmappable row:
+# production, unmappable (out_of_range or no_rule), and rule when one matched. lossy:
+# true marks a row whose rename drops a placeholder, as the plan computes it.
+# Every mapped arista_eos name here is one a booted node carried. chassisos is the
+# synthetic package beside this file.
+nokia_srlinux:
+  - { production: ethernet-1/1, rule: ethernet, port: e1-1, node_name: ethernet-1/1 }
+  - { production: ethernet-1/58, rule: ethernet, port: e1-58, node_name: ethernet-1/58 }
+  - { production: ethernet-1/49/1, rule: breakout, port: e1-49-1, node_name: ethernet-1/49/1 }
+  - { production: ethernet-1/59, rule: ethernet, unmappable: out_of_range }
+  - { production: ethernet-2/1, rule: ethernet, unmappable: out_of_range }
+  - { production: Ethernet99, unmappable: no_rule }
+  - { production: mgmt0, rule: management, port: mgmt0, node_name: mgmt0 }
+
+arista_eos:
+  - { production: Ethernet1, rule: ethernet, port: eth1, node_name: Ethernet1 }
+  - { production: Ethernet511, rule: ethernet, port: eth511, node_name: Ethernet511 }
+  - { production: Ethernet2/1, rule: modular, port: eth2_1, node_name: Ethernet2/1 }
+  - { production: Ethernet100/1, rule: modular, port: eth100_1, node_name: Ethernet100/1 }
+  - { production: Ethernet1/256, rule: modular, port: eth1_256, node_name: Ethernet1/256 }
+  - { production: Ethernet3/1/1, rule: breakout, port: eth3_1_1, node_name: Ethernet3/1/1 }
+  - { production: Ethernet1/1/64, rule: breakout, port: eth1_1_64, node_name: Ethernet1/1/64 }
+  - { production: Ethernet0, rule: ethernet, unmappable: out_of_range }
+  - { production: Ethernet512, rule: ethernet, unmappable: out_of_range }
+  - { production: Ethernet0/1, rule: modular, unmappable: out_of_range }
+  - { production: Port-Channel1, unmappable: no_rule }
+  - { production: Vlan100, unmappable: no_rule }
+  - { production: Management1, rule: management, port: eth0, node_name: Management0 }
+
+chassisos:
+  - { production: Ethernet1/1, rule: front, port: eth1, node_name: Ethernet1 }
+  - { production: Ethernet2/1, rule: linecard, port: eth1, node_name: Ethernet1, lossy: true }
+  - { production: Ethernet1/49/1, rule: breakout, port: eth49, node_name: Ethernet49, lossy: true }
+  - { production: Ethernet1/53, rule: front, unmappable: out_of_range }
+  - { production: Ethernet3/49, rule: linecard, unmappable: out_of_range }
+  - { production: Port-Channel1, unmappable: no_rule }
+  - { production: Management1, rule: management, port: eth0, node_name: Management0 }

@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/bundle-1.schema.json",
+  "title": "Fylgja bundle 1 manifest",
+  "description": "The manifest of a runtime-neutral bundle: what the compiler made of one blueprint and the loaded packages. A driver's plan binds it to a twin and a runtime; nothing in it belongs to one twin, so one bundle can back many twins on any driver.",
+  "$comment": "LAYOUT. A bundle is a set of regular files in the state store, addressed by its id: manifest.json, this document as RFC 8785 (JCS) bytes with no trailing newline; configs/<node>.cfg, the blueprint device's config verbatim. Nothing else: the topology, the lab name, the images and the fidelity are a driver plan's output, not the bundle's. There is no bootstrap file (D-015): each kind's baseline holds the hostname, linked ports enabled, LLDP and gNMI. Node names become file names, so the compiler rejects a device name holding '/', NUL or beginning with '.' (rule device.name.unsafe). ID. The bundle id is the lowercase-hex SHA-256 of a listing of every file: one line '<sha256 of the file's bytes, lowercase hex>  <path relative to the bundle root>\\n' (two spaces, as sha256sum writes) per file, in byte-wise path order. By hand: ( cd <bundle> && find . -type f | sed 's|^\\./||' | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1 ). The id is never written into the bundle. Since the manifest is JCS bytes, the same blueprint and packages give the same id on every machine; since fidelity and package wording are not in it, rewording a package moves no bundle id. On clabernetes the configs reach the nodes as ConfigMaps; locally they are files beside the rendered topology. ORDER. Every list is sorted as the blueprint's are; mapping by (device, interface).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bundle_version",
+    "blueprint_id",
+    "nodes",
+    "mapping",
+    "links",
+    "probes"
+  ],
+  "properties": {
+    "bundle_version": {
+      "const": "1",
+      "description": "The format's version; every driver's plan refuses any other (rule bundle.version.unsupported)."
+    },
+    "blueprint_id": {
+      "$ref": "#/$defs/id",
+      "description": "The blueprint compiled; the twin record, show and the orchestrator's reports reach the source envelope through it."
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      },
+      "description": "One per blueprint device, sorted by name; the plan renders each as a runtime node, the push sends its files, bundle diff compares them."
+    },
+    "mapping": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/row"
+      },
+      "description": "One row per blueprint interface, sorted by (device, interface); the plan renders endpoint names from it, verify reads node names from it, fidelity counts its omissions."
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "$ref": "blueprint-1.schema.json#/$defs/link"
+      },
+      "description": "The cabled links between devices, in production names, sorted; the plan wires them, verify checks each far end, bundle diff compares them."
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "$ref": "blueprint-1.schema.json#/$defs/probe"
+      },
+      "description": "The probes as placed (every endpoint checked against the mapping), sorted by name; the plan renders each probe's hosts <name>-a and <name>-b and their links, flows and verify's burst run them."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A lowercase-hex SHA-256 content address."
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^configs/[^/]+\\.cfg$",
+          "description": "The file's path in the bundle; the plan places it beside the topology or in a ConfigMap, the push reads it."
+        },
+        "sha256": {
+          "$ref": "#/$defs/id",
+          "description": "The file's SHA-256; bundle diff and the push compare it with what a node holds without reading the file."
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "platform",
+        "config"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "description": "The device's name; the plan names the runtime node by it, and the twin record's nodes key on it."
+        },
+        "platform": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The platform package's id; the plan reads its runtime section, the push, readiness and verify their platform-level sections."
+        },
+        "config": {
+          "$ref": "#/$defs/file",
+          "description": "The source-rendered configuration; the push sends it inside the replace, onto the kind's baseline."
+        }
+      }
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "interface",
+        "enabled",
+        "disposition"
+      ],
+      "properties": {
+        "device": {
+          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "description": "The device, by name; part of the row's key."
+        },
+        "interface": {
+          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "description": "The production interface name; part of the row's key, and the endpoint name the plan emits where the kind has aliases."
+        },
+        "rule": {
+          "type": "string",
+          "description": "The package rule that matched; the plan finds a rename by it, fidelity names it. Absent when no rule matched."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "The blueprint's intended admin state; verify skips a disabled port. The kind enables every linked port by default (verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30); disabling one is the source-rendered config's to do."
+        },
+        "disposition": {
+          "enum": [
+            "cabled",
+            "uncabled",
+            "management",
+            "omitted"
+          ],
+          "description": "What the twin makes of the interface: a wired port, a port with no link, the management port, or nothing; the plan, verify and fidelity branch on it."
+        },
+        "node_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the node's OS calls the port; verify renders {node_name} with it. Absent on an omitted row."
+        },
+        "omission": {
+          "enum": [
+            "out_of_range",
+            "no_rule"
+          ],
+          "description": "Why the interface is not represented; fidelity reports it. Present only on an omitted row."
+        }
+      },
+      "if": {
+        "properties": {
+          "disposition": {
+            "const": "omitted"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "omission"
+        ],
+        "not": {
+          "required": [
+            "node_name"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "node_name"
+        ],
+        "not": {
+          "required": [
+            "omission"
+          ]
+        }
+      }
+    }
+  }
+}

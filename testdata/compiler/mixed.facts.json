@@ -1,0 +1,180 @@
+{
+ "facts_version": "1",
+ "about": "Facts the Go compiler's golden bundle 'mixed' recorded, exported at the repository cut (2026-10-30). A compiler is correct on this fixture when its bundle holds the same nodes, links, mapping, probe hosts, omissions and lossy rows, whatever its format.",
+ "input": {
+  "blueprint": "testdata/blueprint/mixed.json",
+  "blueprint_id": "c0ef00e62dbff198801a3975fa618ddcb53d35342125e03e3b191744dbd836b0"
+ },
+ "nodes": [
+  {
+   "name": "e1",
+   "platform_package": "arista_eos",
+   "config": {
+    "sha256": "3872bbefc1c795955305e76ff21386551f2289423a57e44afe306be60b504e53",
+    "bytes": 472
+   }
+  },
+  {
+   "name": "e2",
+   "platform_package": "arista_eos",
+   "config": {
+    "sha256": "7ab4ef8b056ecf172b60402ae5ad6aae59950ca31c955522d057b1590445148d",
+    "bytes": 476
+   }
+  },
+  {
+   "name": "s1",
+   "platform_package": "nokia_srlinux",
+   "config": {
+    "sha256": "9700d0a8bcf9366c07cb87ecfd4c489c8b6e6f52fd4496109481c5386bdbb2df",
+    "bytes": 1331
+   }
+  }
+ ],
+ "links": [
+  [
+   "e1:Ethernet1",
+   "s1:ethernet-1/1"
+  ],
+  [
+   "e1:Ethernet2/1",
+   "e2:Ethernet1"
+  ],
+  [
+   "e2:Ethernet3/1/1",
+   "s1:ethernet-1/2"
+  ]
+ ],
+ "mapping": [
+  {
+   "device": "e1",
+   "interface": "Ethernet1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth1"
+  },
+  {
+   "device": "e1",
+   "interface": "Ethernet10",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth10"
+  },
+  {
+   "device": "e1",
+   "interface": "Ethernet11",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth11"
+  },
+  {
+   "device": "e1",
+   "interface": "Ethernet2/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth2_1"
+  },
+  {
+   "device": "e1",
+   "interface": "Management1",
+   "disposition": "management",
+   "enabled": true,
+   "mgmt_only": true,
+   "kind_port": "eth0"
+  },
+  {
+   "device": "e2",
+   "interface": "Ethernet1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth1"
+  },
+  {
+   "device": "e2",
+   "interface": "Ethernet10",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth10"
+  },
+  {
+   "device": "e2",
+   "interface": "Ethernet11",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth11"
+  },
+  {
+   "device": "e2",
+   "interface": "Ethernet3/1/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth3_1_1"
+  },
+  {
+   "device": "e2",
+   "interface": "Management1",
+   "disposition": "management",
+   "enabled": true,
+   "mgmt_only": true,
+   "kind_port": "eth0"
+  },
+  {
+   "device": "s1",
+   "interface": "ethernet-1/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "e1-1"
+  },
+  {
+   "device": "s1",
+   "interface": "ethernet-1/10",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "e1-10"
+  },
+  {
+   "device": "s1",
+   "interface": "ethernet-1/11",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "e1-11"
+  },
+  {
+   "device": "s1",
+   "interface": "ethernet-1/2",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "e1-2"
+  },
+  {
+   "device": "s1",
+   "interface": "mgmt0",
+   "disposition": "management",
+   "enabled": true,
+   "mgmt_only": true,
+   "kind_port": "mgmt0"
+  }
+ ],
+ "probes": [],
+ "omissions": [],
+ "lossy": [],
+ "counts": {
+  "nodes": 3,
+  "links": 3,
+  "lossy": 0,
+  "omitted": 0,
+  "probe_hosts": 0
+ }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/problem-1.schema.json",
+  "title": "Fylgja problem 1",
+  "description": "An RFC 9457 problem document (application/problem+json): the core's one answer for a request that is malformed, unauthorised, refused or conflicting (every 4xx), and for a server fault (5xx). Clients map it to exit 2.",
+  "$comment": "type is a problem class, not a rule, so the rule is not stored twice: about:blank or one of https://github.com/happypathnetworking/fylgja/core/problems/{invalid,unauthenticated,forbidden,not-found,conflict,unprocessable,unavailable,internal}. rule is the stable id clients match on. findings is an extension member used where one request has several faults (a malformed blueprint, an uncompilable bundle at 422 with rule bundle.rejected), so they are all reported in one pass.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "title", "status", "rule"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "format": "uri",
+      "description": "The problem class (RFC 9457 type); generic clients branch on it."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The class's short, fixed summary (RFC 9457 title); generic clients print it."
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599,
+      "description": "The HTTP status, repeated as RFC 9457 asks; clients that lost the response line read it."
+    },
+    "detail": {
+      "type": "string",
+      "description": "This occurrence's facts in one plain sentence, never a credential; the CLI prints it."
+    },
+    "instance": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "The request path that failed; the audit log and a client's error line cite it."
+    },
+    "rule": {
+      "$ref": "findings-1.schema.json#/$defs/rule",
+      "description": "The stable rule id (e.g. blueprint.unsorted, twin.conflict, auth.token.unknown); clients and tests match on it."
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "findings-1.schema.json#/$defs/finding" },
+      "description": "Each fault when there are several, each with its own rule and a JSON pointer as object; the CLI prints every one."
+    }
+  }
+}

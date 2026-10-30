@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/twin-record-1.schema.json",
+  "title": "Fylgja twin record 1",
+  "description": "One named twin in the state store, the same on every runtime, and the twin resource the API serves: what a client asked for (spec) and what the reconcile loop last saw (status), as Kubernetes shapes a resource, without Kubernetes (D-025).",
+  "$comment": "STORE. The local store keeps each record in its own file (twins/<name>.json), the object store under the same key. ONE REPRESENTATION. The API's GET /v1/twins/{name} answers this document as it is stored; clients write spec alone (PUT), never status. COMPARE-AND-SET. Every write names the revision it read and fails if the stored revision differs (412 at the API with problem rule twin.conflict, a retry inside the loop); a successful write stores revision + 1, and the API serves the revision as the ETag. A new record is written with revision 1 only where no record exists. GENERATIONS. generation increases by one on every change to spec and when deletion is requested; the loop copies it to status.observed_generation once it has acted on it, so a client sees whether status is current: the twin is what was asked for when the two are equal and the Ready condition is True. RESUMPTION. status.phase is written before the next phase begins (Constitution VIII), so a restarted core resumes from it; status.run_id names the run whose events the loop is appending. A record with deletion_requested_at set is torn down by the loop and then deleted; a restarted core resumes the teardown.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_version",
+    "name",
+    "revision",
+    "generation",
+    "spec",
+    "status"
+  ],
+  "properties": {
+    "record_version": {
+      "const": "1",
+      "description": "The format's version; the store's reader refuses any other."
+    },
+    "name": {
+      "$ref": "#/$defs/twin_name",
+      "description": "The twin's name and store key; the API path, the driver's isolation unit and every resource label carry it."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The record's write counter; every writer's compare-and-set compares it."
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Incremented by one on every change to spec and on a deletion request; the loop compares it with status.observed_generation, and a watch reports it."
+    },
+    "deletion_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When a client asked for the twin's deletion (DELETE); the loop tears it down and then deletes the record. Absent otherwise."
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "driver",
+        "allow_restart"
+      ],
+      "properties": {
+        "blueprint_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The blueprint to run, when the client named one; the loop compiles it to a bundle."
+        },
+        "bundle_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The bundle to run, when the client named one directly; the loop plans it with no compile."
+        },
+        "driver": {
+          "$ref": "deployment-1.schema.json#/$defs/driver",
+          "description": "The driver the twin runs on, fixed at creation (the server's default when the client named none); a PUT naming another is refused (twin.driver.fixed). The loop calls only it."
+        },
+        "allow_restart": {
+          "type": "boolean",
+          "description": "Whether the loop may restart or recreate nodes to reach this spec; a change that needs a restart without it is refused before anything is touched (rule step.restart.refused).",
+          "default": false
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "blueprint_id"
+          ],
+          "not": {
+            "required": [
+              "bundle_id"
+            ]
+          }
+        },
+        {
+          "required": [
+            "bundle_id"
+          ],
+          "not": {
+            "required": [
+              "blueprint_id"
+            ]
+          }
+        }
+      ],
+      "description": "What the twin should be: written by a client's PUT, by compare-and-set, never by the loop. Changing it steps the twin (D-025)."
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observed_generation",
+        "conditions",
+        "nodes"
+      ],
+      "properties": {
+        "observed_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The generation the loop last acted on; 0 before it first has. With the Ready condition, it tells a client the twin is what spec asks for."
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          },
+          "description": "Ready, Stepping and Diverged, each at most once; show, list and the orchestrator branch on them."
+        },
+        "phase": {
+          "enum": [
+            "compiled",
+            "admitted",
+            "planned",
+            "applied",
+            "ready",
+            "pushed",
+            "verified",
+            "flows",
+            "destroyed"
+          ],
+          "description": "The last phase the loop completed toward the current generation; a restarted core resumes after it."
+        },
+        "run_id": {
+          "$ref": "#/$defs/run_id",
+          "description": "The run the loop is executing for the current generation; absent when idle. The loop appends events to it after a restart."
+        },
+        "blueprint_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The blueprint of the bundle the twin runs; show and the orchestrator read it."
+        },
+        "bundle_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The bundle the twin runs; verify reads its expectations from it, a step diffs from it."
+        },
+        "deployment_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The driver's plan applied; a step compares the new plan with it, show reports its fidelity."
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "description": "Every runtime node the twin holds, probe hosts included, sorted by name; the push, readiness, verify and flows reach nodes through it."
+        },
+        "last_step": {
+          "$ref": "#/$defs/last_step",
+          "description": "The latest step's outcome; show and the orchestrator's report read it."
+        }
+      },
+      "description": "What the reconcile loop last saw: written only by the loop, by compare-and-set; clients read and watch it."
+    }
+  },
+  "$defs": {
+    "twin_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$",
+      "description": "A DNS-1123 label of at most 40 characters, so a driver can name a lab or a namespace after it with a prefix."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "A run's id, a ULID, so runs sort by start."
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "status"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Ready",
+            "Stepping",
+            "Diverged"
+          ],
+          "description": "Ready: every node holds the bundle and answers. Stepping: a step is in flight. Diverged: a step failed after touching the twin and nothing was torn down. Clients branch on it."
+        },
+        "status": {
+          "enum": [
+            "True",
+            "False",
+            "Unknown"
+          ],
+          "description": "Whether the condition holds; clients branch on it."
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$",
+          "description": "The stable rule id that set it (e.g. readiness.timeout); a client looks up its wording."
+        },
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When status last changed; clients show how long a condition has held."
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "handle"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The bundle's node name, or a probe host's <probe>-a/-b; joins the record to the manifest."
+        },
+        "handle": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The driver's own handle for the node (container name, namespace/pod, device id); the driver's inspect, exec and destroy use it."
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The node's management address from the driver's endpoints(); the push, readiness, verify and flows dial it. Absent until known."
+        },
+        "access": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The host through which a client outside the runtime reaches address; absent when address is directly reachable. On clabernetes each node's LoadBalancer IP is its address, so it is absent there (D-020); a bastion or ingress, should one return, would set it. The thin CLI and the orchestrator read it."
+        },
+        "holds": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The bundle whose config the node was last pushed; verify asserts it equals bundle_id, the step's push decides from it. Absent for a probe host and before the first push. Valid only for the recorded incarnation."
+        },
+        "incarnation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The driver's identity of the node's current instance: the container's StartedAt locally, the pod uid on clabernetes. A step or a runtime event can replace a node and lose its push (locally, cEOS restarted on a link change; on clabernetes, pods replaced on restart, recreate and any change to the node's spec; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30), so the loop treats holds as void whenever inspect reports a different incarnation, and re-pushes."
+        }
+      }
+    },
+    "last_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "from",
+        "to",
+        "phase",
+        "run_id"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "running",
+            "stepped",
+            "unchanged",
+            "diverged",
+            "cancelled"
+          ],
+          "description": "How the step ended, or running; show and the orchestrator read it."
+        },
+        "from": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The bundle stepped from; show and the report read it."
+        },
+        "to": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The bundle stepped to; show and the report read it."
+        },
+        "phase": {
+          "enum": [
+            "compiled",
+            "admitted",
+            "planned",
+            "applied",
+            "ready",
+            "pushed",
+            "verified",
+            "flows"
+          ],
+          "description": "The last phase the step completed; a diverged step's report names where it stopped."
+        },
+        "run_id": {
+          "$ref": "#/$defs/run_id",
+          "description": "The step's run; its verdict (findings, wait and loss) and events are read through it, so they are not copied here."
+        }
+      }
+    }
+  }
+}

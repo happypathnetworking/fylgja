@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# The pure tier and lint gate every change. The live tier and the driver conformance suite
+# boot twins, so they run on a host that can (CONTRIBUTING.md).
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: make venv
+      - run: make lint
+      - run: make test
+      - run: make linkcheck

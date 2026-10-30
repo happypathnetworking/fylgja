@@ -1,0 +1,279 @@
+{
+ "facts_version": "1",
+ "about": "Facts the Go compiler's golden bundle 'lossy' recorded, exported at the repository cut (2026-10-30). A compiler is correct on this fixture when its bundle holds the same nodes, links, mapping, probe hosts, omissions and lossy rows, whatever its format.",
+ "input": {
+  "blueprint": "testdata/blueprint/lossy.json",
+  "blueprint_id": "f745853e5befa7ca0c2b7dc5ed80a989ef9559bb458cc902c5bb41b095ba6c85"
+ },
+ "nodes": [
+  {
+   "name": "c1",
+   "platform_package": "chassisos",
+   "config": {
+    "sha256": "80f1d1daeedf3694be4820a755dacd80f23b96fe5d7927406a7cf6a9f0b3ccd9",
+    "bytes": 245
+   }
+  },
+  {
+   "name": "c2",
+   "platform_package": "chassisos",
+   "config": {
+    "sha256": "357f27aa2327e254dee89bb4156f8aa3808d53b35e502a0834b7abbd8703b3d8",
+    "bytes": 247
+   }
+  },
+  {
+   "name": "s1",
+   "platform_package": "nokia_srlinux",
+   "config": {
+    "sha256": "b52d9a3d09dfa753a34776181c45cc0d2e942894671538ee5b1b83b9e7b41919",
+    "bytes": 343
+   }
+  }
+ ],
+ "links": [
+  [
+   "c1:Ethernet1/1",
+   "s1:ethernet-1/1"
+  ],
+  [
+   "c1:Ethernet1/49/1",
+   "c2:Ethernet1/49/1"
+  ],
+  [
+   "c2:Ethernet2/1",
+   "s1:ethernet-1/2/1"
+  ]
+ ],
+ "mapping": [
+  {
+   "device": "c1",
+   "interface": "Ethernet1/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth1"
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet1/49/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth49"
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet1/49/2",
+   "disposition": "omitted",
+   "enabled": true,
+   "mgmt_only": false
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet1/53",
+   "disposition": "omitted",
+   "enabled": true,
+   "mgmt_only": false
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet2/1",
+   "disposition": "omitted",
+   "enabled": true,
+   "mgmt_only": false
+  },
+  {
+   "device": "c1",
+   "interface": "Management1",
+   "disposition": "management",
+   "enabled": true,
+   "mgmt_only": true,
+   "kind_port": "eth0"
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/2",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth2"
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/49/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth49"
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/50",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth50"
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/50/1",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth50"
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/50/2",
+   "disposition": "configured-not-cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth50"
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet2/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "eth1"
+  },
+  {
+   "device": "c2",
+   "interface": "Management1",
+   "disposition": "management",
+   "enabled": true,
+   "mgmt_only": true,
+   "kind_port": "eth0"
+  },
+  {
+   "device": "s1",
+   "interface": "ethernet-1/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "e1-1"
+  },
+  {
+   "device": "s1",
+   "interface": "ethernet-1/2/1",
+   "disposition": "cabled",
+   "enabled": true,
+   "mgmt_only": false,
+   "kind_port": "e1-2-1"
+  },
+  {
+   "device": "s1",
+   "interface": "mgmt0",
+   "disposition": "management",
+   "enabled": true,
+   "mgmt_only": true,
+   "kind_port": "mgmt0"
+  }
+ ],
+ "probes": [],
+ "omissions": [
+  {
+   "rule": "omit.interface.shared",
+   "object": "c1:Ethernet1/49/2"
+  },
+  {
+   "rule": "omit.interface.unmappable",
+   "object": "c1:Ethernet1/53"
+  },
+  {
+   "rule": "omit.interface.shared",
+   "object": "c1:Ethernet2/1"
+  }
+ ],
+ "lossy": [
+  {
+   "device": "c1",
+   "interface": "Ethernet1/1",
+   "rule": "front",
+   "lossy": false,
+   "shares": [
+    "Ethernet2/1"
+   ]
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet1/49/1",
+   "rule": "breakout",
+   "lossy": true,
+   "shares": [
+    "Ethernet1/49/2"
+   ]
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet1/49/2",
+   "rule": "breakout",
+   "lossy": true,
+   "shares": [
+    "Ethernet1/49/1"
+   ]
+  },
+  {
+   "device": "c1",
+   "interface": "Ethernet2/1",
+   "rule": "linecard",
+   "lossy": true,
+   "shares": [
+    "Ethernet1/1"
+   ]
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/49/1",
+   "rule": "breakout",
+   "lossy": true,
+   "shares": []
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/50",
+   "rule": "front",
+   "lossy": false,
+   "shares": [
+    "Ethernet1/50/1",
+    "Ethernet1/50/2"
+   ]
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/50/1",
+   "rule": "breakout",
+   "lossy": true,
+   "shares": [
+    "Ethernet1/50",
+    "Ethernet1/50/2"
+   ]
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet1/50/2",
+   "rule": "breakout",
+   "lossy": true,
+   "shares": [
+    "Ethernet1/50",
+    "Ethernet1/50/1"
+   ]
+  },
+  {
+   "device": "c2",
+   "interface": "Ethernet2/1",
+   "rule": "linecard",
+   "lossy": true,
+   "shares": []
+  }
+ ],
+ "counts": {
+  "nodes": 3,
+  "links": 3,
+  "lossy": 7,
+  "omitted": 3,
+  "probe_hosts": 0
+ }
+}

@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/blueprint-1.schema.json",
+  "title": "Fylgja blueprint 1",
+  "description": "The core's one input: the network as a source rendered it, and the probes declared beside it. A reader (the orchestrator's) writes it; the core files it by id, compiles it, and returns it unchanged.",
+  "$comment": "ID. The blueprint id is the lowercase-hex SHA-256 of the UTF-8 bytes of the RFC 8785 (JCS) canonical form of the object {\"network\": <network>, \"probes\": <probes>}, and nothing else: blueprint_version and source are not hashed, so the same topology read from two branches, at two times or by two readers has one id. The hashed body holds strings and booleans only, so JCS's number rules never apply. The id is not stored in the document: it is the store's key and the answer to POST /v1/blueprints. ORDER. Every list in the hashed body must arrive sorted and unique by its key, compared by Unicode code point: devices by name; each device's interfaces by name; links by (a.device, a.interface, b.device, b.interface), and within a link a sorts before b; probes by name. A probe's two endpoints are not sorted: the first is a, the second b. The core rejects an unsorted or duplicated list (problem rule blueprint.unsorted, blueprint.duplicate, with a JSON pointer) and never sorts on the client's behalf. CROSS-FIELD RULES the schema cannot state, held by the core at POST /v1/blueprints: each link endpoint names an interface of a device in network.devices; no interface terminates two links; no link ends on an mgmt_only interface; a probe's gateway lies inside its address's prefix; no two probe endpoints share a host address. The placement rules (an endpoint's interface known, uncabled, not mgmt_only, not taken) and whether a probe format or a platform is one a loaded package declares are the compiler's.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["blueprint_version", "network", "probes"],
+  "properties": {
+    "blueprint_version": {
+      "const": "1",
+      "description": "The format's version; the core's decoder refuses any other (problem rule blueprint.version.unsupported). Not hashed."
+    },
+    "network": {
+      "$ref": "#/$defs/network",
+      "description": "The intent the compiler compiles into a bundle. Hashed."
+    },
+    "probes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/probe" },
+      "description": "The probe declarations the compiler places as synthesized host pairs; [] for none. Sorted by name. Hashed."
+    },
+    "source": {
+      "type": "object",
+      "description": "Where the blueprint came from (source, branch, at, scope, mapping, schema hash, observed_at, the reader's fidelity rows), as the reader chose to write it. The core stores and returns it, never validates, reads or hashes it; the orchestrator's reports read it."
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "description": "A device or interface name exactly as the source spells it."
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["devices", "links"],
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/device" },
+          "description": "Every device in scope; the compiler makes one twin node of each. Sorted by name, unique."
+        },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/link" },
+          "description": "Every cable with two ends in scope; the compiler wires each, a driver's plan renders each, and bundle diff compares them. Sorted, unique."
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "platform", "interfaces", "config"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name",
+          "description": "The device's name; the compiler names the twin node by it, and the kind sets the hostname from it (verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30)."
+        },
+        "platform": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The platform package's id the reader resolved the device to; the compiler loads that package (rule platform.unsupported when none is loaded)."
+        },
+        "interfaces": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/interface" },
+          "description": "The device's physical ports; the compiler maps each through the package's interface rules. Sorted by name, unique within the device."
+        },
+        "config": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The configuration the source rendered for this device, verbatim UTF-8 text; the compiler writes it into the bundle and the push sends it (rule config.missing when empty)."
+        }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "mgmt_only", "enabled"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name",
+          "description": "The production interface name; the compiler matches it against the package's rules and the driver's plan emits it as the endpoint name where the kind has aliases."
+        },
+        "mgmt_only": {
+          "type": "boolean",
+          "description": "The out-of-band management port, never cabled; the compiler maps it by the package's management rule."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "The port's intended admin state; verify skips a disabled port's assertions; the kind enables every linked port by default, so disabling one is the rendered config's to do."
+        }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "interface"],
+      "properties": {
+        "device": {
+          "$ref": "#/$defs/name",
+          "description": "The device at this end, by name; the compiler resolves it against network.devices."
+        },
+        "interface": {
+          "$ref": "#/$defs/name",
+          "description": "The interface at this end, by its production name; the compiler resolves it against the device's interfaces."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b"],
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/endpoint",
+          "description": "The end that sorts first by (device, interface); the compiler and the driver's plan wire it."
+        },
+        "b": {
+          "$ref": "#/$defs/endpoint",
+          "description": "The end that sorts second; the compiler and the driver's plan wire it."
+        }
+      }
+    },
+    "ipv4_prefix": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$",
+      "description": "An IPv4 address with its prefix length, as 10.1.10.2/24."
+    },
+    "ipv4_address": {
+      "type": "string",
+      "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$",
+      "description": "An IPv4 address with no prefix length."
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "format", "endpoints"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,23}$",
+          "description": "Unique among the probes; the compiler names the hosts <name>-a and <name>-b, and loss and burst findings name the probe by it."
+        },
+        "format": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_]*$",
+          "description": "The probe package that runs the hosts; the compiler checks it against the loaded probe packages (rule probe.format.unknown), not against an enum."
+        },
+        "endpoints": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/probe_endpoint" },
+          "description": "Host a, then host b; the compiler places each on its port and the flows ping from each to the other."
+        }
+      }
+    },
+    "probe_endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "interface", "address", "gateway"],
+      "properties": {
+        "device": {
+          "$ref": "#/$defs/name",
+          "description": "The device the host is cabled to; the compiler resolves it (rule probe.device.unknown)."
+        },
+        "interface": {
+          "$ref": "#/$defs/name",
+          "description": "The device's uncabled, non-management port the host is cabled to; the compiler places the synthesized link on it."
+        },
+        "address": {
+          "$ref": "#/$defs/ipv4_prefix",
+          "description": "The host's IPv4 address and prefix; the driver's plan renders it into the host's address command, and the far host's flow targets it."
+        },
+        "gateway": {
+          "$ref": "#/$defs/ipv4_address",
+          "description": "The device-side address the host routes the far host through; the driver's plan renders it into the host's route command."
+        }
+      }
+    }
+  }
+}

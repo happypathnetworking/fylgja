@@ -1,0 +1,848 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: fylgja-core API
+  version: "1"
+  summary: The core's resource API, its only boundary.
+  description: >-
+    Every client (the thin CLI, the orchestrator, a UI, an agent) reaches the core through this API
+    alone. A twin is a resource in Kubernetes's shape, without Kubernetes (D-025): a client PUTs its
+    spec, the core's reconcile loop works toward it, and the client reads or watches its status.
+    Every change of spec starts a run, linked from the status, read by id and by an event cursor, and
+    cancelled by id. Verdicts are findings-1 documents; anything malformed or refused at the door is an RFC 9457
+    problem-1 document. The API answers JSON only; clients render. Twins are independent: each has
+    at most one run at a time.
+  license:
+    name: see repository
+servers:
+  - url: http://127.0.0.1:7650
+    description: Local development; TLS terminates at the ingress in production.
+security:
+  - bearer: []
+tags:
+  - name: blueprints
+  - name: bundles
+  - name: packages
+  - name: drivers
+  - name: twins
+  - name: runs
+  - name: meta
+
+paths:
+  /v1/version:
+    get:
+      tags: [meta]
+      operationId: getVersion
+      summary: The API version, the build and the format versions this core speaks.
+      security: []
+      responses:
+        "200":
+          description: The server's versions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Version" }
+
+  /v1/blueprints:
+    post:
+      tags: [blueprints]
+      operationId: putBlueprint
+      summary: File a blueprint; answers its id. Idempotent, since the id is the content's.
+      description: An unsorted list is refused, never sorted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "blueprint-1.schema.json" }
+      responses:
+        "201":
+          description: Filed for the first time.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "200":
+          description: Already filed under this id; nothing written.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/blueprints/{blueprint_id}:
+    parameters:
+      - $ref: "#/components/parameters/BlueprintId"
+    get:
+      tags: [blueprints]
+      operationId: getBlueprint
+      summary: Read a filed blueprint, its source envelope included.
+      responses:
+        "200":
+          description: The blueprint as filed.
+          content:
+            application/json:
+              schema: { $ref: "blueprint-1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/bundles:
+    post:
+      tags: [bundles]
+      operationId: buildBundle
+      summary: Compile a filed blueprint with the loaded packages; answers the bundle's id, manifest, fidelity and findings.
+      description: Idempotent. An uncompilable blueprint is 422 with every fault in findings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [blueprint_id]
+              properties:
+                blueprint_id:
+                  $ref: "bundle-1.schema.json#/$defs/id"
+                  description: The filed blueprint to compile; the compiler reads it from the store.
+      responses:
+        "201":
+          description: Built and filed.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompileResult" }
+        "200":
+          description: Already filed under this id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompileResult" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+
+  /v1/bundles/{bundle_id}:
+    parameters:
+      - $ref: "#/components/parameters/BundleId"
+    get:
+      tags: [bundles]
+      operationId: getBundle
+      summary: Read a filed bundle's manifest.
+      responses:
+        "200":
+          description: The manifest, with its id.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, manifest]
+                properties:
+                  id:
+                    $ref: "bundle-1.schema.json#/$defs/id"
+                    description: The bundle's id; clients cite it.
+                  manifest:
+                    $ref: "bundle-1.schema.json"
+                    description: The bundle's manifest; clients show it and diff it.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/bundles/{bundle_id}/diff/{to_bundle_id}:
+    parameters:
+      - $ref: "#/components/parameters/BundleId"
+      - name: to_bundle_id
+        in: path
+        required: true
+        description: The bundle stepped to.
+        schema: { $ref: "bundle-1.schema.json#/$defs/id" }
+    get:
+      tags: [bundles]
+      operationId: diffBundles
+      summary: What a step from one bundle to another changes, runtime-independent; nothing is built.
+      description: The lifecycle actions a step takes are the driver's, from comparing deployments (PUT /v1/twins/{name}?dry_run=true).
+      responses:
+        "200":
+          description: The diff.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BundleDiff" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/packages:validate:
+    post:
+      tags: [packages]
+      operationId: validatePackage
+      summary: Hold one platform or probe package to its schema and cross-field rules; nothing is loaded.
+      description: A package that fails is a verdict (status rejected), not a problem.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [package]
+              properties:
+                package:
+                  description: The package, parsed from its YAML by the client; the validator reads it.
+                  oneOf:
+                    - $ref: "platform-package-1.schema.json"
+                    - $ref: "probe-package-1.schema.json"
+      responses:
+        "200":
+          description: The verdict, operation packages.validate, status ok or rejected.
+          content:
+            application/json:
+              schema: { $ref: "findings-1.schema.json" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/drivers:
+    get:
+      tags: [drivers]
+      operationId: listDrivers
+      summary: The drivers this core serves, their capabilities and which is the default.
+      responses:
+        "200":
+          description: Every driver.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [drivers]
+                properties:
+                  drivers:
+                    type: array
+                    items: { $ref: "#/components/schemas/Driver" }
+                    description: Sorted by name; clients choose a driver and branch on capabilities.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/twins:
+    get:
+      tags: [twins]
+      operationId: listTwins
+      summary: Every twin's record, or a watch of every twin.
+      parameters:
+        - $ref: "#/components/parameters/Watch"
+        - $ref: "#/components/parameters/SinceRevision"
+      responses:
+        "200":
+          description: >-
+            As JSON, the records sorted by name. As text/event-stream with watch=true, one WatchEvent per
+            change to any twin, in the order the store wrote them, after since_revision when given.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [twins]
+                properties:
+                  twins:
+                    type: array
+                    items: { $ref: "twin-record-1.schema.json" }
+                    description: Every twin record; the CLI's list and the orchestrator read it.
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE messages, each event named ADDED, MODIFIED or DELETED and each data line one WatchEvent as JSON.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/twins/{name}:
+    parameters:
+      - $ref: "#/components/parameters/TwinName"
+    get:
+      tags: [twins]
+      operationId: getTwin
+      summary: One twin's record, or a watch of it.
+      parameters:
+        - $ref: "#/components/parameters/Watch"
+        - $ref: "#/components/parameters/SinceRevision"
+      responses:
+        "200":
+          description: >-
+            As JSON, the record. As text/event-stream with watch=true, one WatchEvent per write to the
+            record, the whole object each time, ending with DELETED once the twin is gone. A client that
+            reconnects with the last revision it saw misses nothing.
+          headers:
+            ETag:
+              description: The record's revision, quoted; a PUT or DELETE sends it back as If-Match.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "twin-record-1.schema.json" }
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE messages, each event named ADDED, MODIFIED or DELETED and each data line one WatchEvent as JSON.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [twins]
+      operationId: applyTwin
+      summary: Create a twin, or step it, by writing its spec.
+      description: >-
+        Writes spec by compare-and-set and answers the record. A new spec increments generation, and the
+        reconcile loop starts a run toward it: a create when the twin is new, otherwise a step, which re-cables
+        live, restarts or recreates nodes as the driver's plan says, refusing a restart without allow_restart.
+        Writing the spec the twin already has changes nothing and answers 200. With dry_run=true it writes
+        nothing: it compiles the blueprint, runs admission and the driver's pure plan, and answers what would
+        happen. Admission refusal is the run's verdict, status rejected, and also shown by a dry run.
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          description: The revision the client read, quoted; the write fails 412 if the record has moved since.
+          schema: { type: string }
+        - name: If-None-Match
+          in: header
+          required: false
+          description: "\"*\" to create only: the write fails 412 if the twin exists."
+          schema: { type: string, enum: ["*"] }
+        - name: dry_run
+          in: query
+          required: false
+          description: Plan only; nothing is written and no run starts.
+          schema: { type: boolean, default: false }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TwinApply" }
+      responses:
+        "201":
+          description: Created; the record, generation 1, status not yet observed.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "twin-record-1.schema.json" }
+        "200":
+          description: >-
+            The spec written (or already in place): the record. With dry_run=true, the Plan instead.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "twin-record-1.schema.json"
+                  - $ref: "#/components/schemas/Plan"
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+    delete:
+      tags: [twins]
+      operationId: deleteTwin
+      summary: Ask for a twin's deletion; cancels a run in flight first.
+      description: >-
+        Sets deletion_requested_at and increments generation; the loop tears the twin down and then deletes the
+        record, which a watch reports as DELETED. The record stays readable until then. A restarted core
+        resumes the teardown.
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          description: The revision the client read, quoted; the request fails 412 if the record has moved since.
+          schema: { type: string }
+      responses:
+        "202":
+          description: Deletion requested; the record, its Ready condition False.
+          content:
+            application/json:
+              schema: { $ref: "twin-record-1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+
+  /v1/twins/{name}/verifications:
+    parameters:
+      - $ref: "#/components/parameters/TwinName"
+    post:
+      tags: [twins]
+      operationId: verifyTwin
+      summary: Read every node once and judge it against the bundle it should hold.
+      description: Synchronous and bounded by the platforms' gNMI reads; changes nothing. A step's wait runs verify inside the step's run.
+      responses:
+        "200":
+          description: The verdict, operation verify, status ok or nonconforming, with counts.
+          content:
+            application/json:
+              schema: { $ref: "findings-1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/runs:
+    get:
+      tags: [runs]
+      operationId: listRuns
+      summary: Runs, newest first.
+      parameters:
+        - name: twin
+          in: query
+          required: false
+          description: Only this twin's runs.
+          schema: { $ref: "twin-record-1.schema.json#/$defs/twin_name" }
+      responses:
+        "200":
+          description: The runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items: { $ref: "#/components/schemas/Run" }
+                    description: Newest first; the CLI's run list and the orchestrator read it.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/runs/{run_id}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      tags: [runs]
+      operationId: getRun
+      summary: One run, its verdict once it has ended.
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/runs/{run_id}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      tags: [runs]
+      operationId: getRunEvents
+      summary: A run's events after a cursor, as JSON or as server-sent events; no replay beyond the store.
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Answer only events with seq greater than this; 0 or absent for all.
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: >-
+            The events so far. As text/event-stream, each event is one SSE message whose id is its seq and
+            whose data is one Event; the stream ends when the run ends, and Last-Event-ID resumes it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE messages, each data line one Event as JSON.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/runs/{run_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    post:
+      tags: [runs]
+      operationId: cancelRun
+      summary: Ask a run to cancel; it cleans up and ends.
+      responses:
+        "202":
+          description: Cancellation requested; the run, state cancelling. Read it to see how it ends.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: >-
+        A per-client token, each mapped to a principal (from Secrets, or a local file of token hashes in
+        development); several may be valid at once for rotation. A missing or unknown token is 401
+        (auth.token.missing, auth.token.unknown); a known principal not allowed the call is 403
+        (auth.forbidden). Every request's principal is written to the audit log and to the runs it starts.
+
+  parameters:
+    TwinName:
+      name: name
+      in: path
+      required: true
+      description: The twin's name.
+      schema: { $ref: "twin-record-1.schema.json#/$defs/twin_name" }
+    Watch:
+      name: watch
+      in: query
+      required: false
+      description: With Accept text/event-stream, stream changes instead of answering once.
+      schema: { type: boolean, default: false }
+    SinceRevision:
+      name: since_revision
+      in: query
+      required: false
+      description: Watch only changes after this revision; a reconnecting client sends the last it saw.
+      schema: { type: integer, minimum: 0 }
+    BlueprintId:
+      name: blueprint_id
+      in: path
+      required: true
+      description: A blueprint id.
+      schema: { $ref: "bundle-1.schema.json#/$defs/id" }
+    BundleId:
+      name: bundle_id
+      in: path
+      required: true
+      description: A bundle id.
+      schema: { $ref: "bundle-1.schema.json#/$defs/id" }
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      description: A run id.
+      schema: { $ref: "twin-record-1.schema.json#/$defs/run_id" }
+
+  headers:
+    Location:
+      description: The created resource or the started run.
+      schema: { type: string, format: uri-reference }
+
+    ETag:
+      description: The twin record's revision, quoted.
+      schema: { type: string }
+  responses:
+    Invalid:
+      description: Malformed (blueprint.unsorted, request.invalid, ...).
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    Unauthenticated:
+      description: No token, or one no principal holds.
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    Forbidden:
+      description: The principal may not make this call.
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    NotFound:
+      description: No such blueprint, bundle, twin or run.
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    Conflict:
+      description: The request contradicts the twin's state (twin.driver.fixed, twin.deleting) or the run has already ended (run.ended).
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    PreconditionFailed:
+      description: The record moved since the client read it, or the twin exists under If-None-Match (twin.conflict, twin.exists).
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    Unprocessable:
+      description: Well-formed but not compilable (bundle.rejected), every fault in findings.
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+
+  schemas:
+    Version:
+      type: object
+      additionalProperties: false
+      required: [api, build, formats]
+      properties:
+        api:
+          const: "1"
+          description: The API's version; the client library refuses a server of another.
+        build:
+          type: string
+          minLength: 1
+          description: The core's build (version and commit); the CLI's --version and bug reports show it.
+        formats:
+          type: object
+          additionalProperties: false
+          required: [blueprint, bundle, deployment, twin_record, findings, problem, platform_package, probe_package]
+          properties:
+            blueprint: { const: "1", description: "The blueprint version the core reads; the orchestrator writes it." }
+            bundle: { const: "1", description: "The bundle version the core writes; clients read manifests of it." }
+            deployment: { const: "1", description: "The deployment version the plan answers; clients read it." }
+            twin_record: { const: "1", description: "The record version GET /v1/twins answers; clients read it." }
+            findings: { const: "1", description: "The verdict version; clients read it." }
+            problem: { const: "1", description: "The problem version; clients read it." }
+            platform_package: { const: "1", description: "The platform package version the loader and validator read." }
+            probe_package: { const: "1", description: "The probe package version the loader and validator read." }
+          description: Each format's current version; the client library checks them before it talks.
+
+    Created:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id:
+          $ref: "bundle-1.schema.json#/$defs/id"
+          description: The filed document's content address; clients pass it on.
+
+    CompileResult:
+      type: object
+      additionalProperties: false
+      required: [id, manifest, fidelity, findings]
+      properties:
+        id:
+          $ref: "bundle-1.schema.json#/$defs/id"
+          description: The bundle's id; clients pass it to PUT, plan or steps.
+        manifest:
+          $ref: "bundle-1.schema.json"
+          description: The bundle's manifest; clients show it.
+        fidelity:
+          $ref: "deployment-1.schema.json#/$defs/compile_fidelity"
+          description: The runtime-independent fidelity, computed and never filed; clients show it.
+        findings:
+          type: array
+          items: { $ref: "findings-1.schema.json#/$defs/finding" }
+          description: The compile's warnings and infos (errors are a 422); clients show them.
+
+    TwinApply:
+      type: object
+      additionalProperties: false
+      required: [spec]
+      properties:
+        spec:
+          $ref: "twin-record-1.schema.json#/properties/spec"
+          description: What the twin should be; written to the record's spec. Unknown fields are refused.
+
+    Plan:
+      type: object
+      additionalProperties: false
+      required: [deployment, verdict]
+      properties:
+        deployment:
+          $ref: "deployment-1.schema.json"
+          description: What applying the spec would deploy, with its fidelity; clients show it.
+        verdict:
+          $ref: "findings-1.schema.json"
+          description: Admission's and the step comparison's findings (operation plan); rejected when admission refuses or a step would need allow_restart.
+
+    WatchEvent:
+      type: object
+      additionalProperties: false
+      required: [type, object]
+      properties:
+        type:
+          enum: [ADDED, MODIFIED, DELETED]
+          description: What happened to the record; the SSE event name repeats it.
+        object:
+          $ref: "twin-record-1.schema.json"
+          description: The whole record after the change (its last state for DELETED); its revision is the watch's cursor.
+
+    Driver:
+      type: object
+      additionalProperties: false
+      required: [name, default, capabilities]
+      properties:
+        name:
+          $ref: "deployment-1.schema.json#/$defs/driver"
+          description: The driver's name; PUT /v1/twins/{name} takes it.
+        default:
+          type: boolean
+          description: Whether a twin naming no driver runs on it; the CLI shows it.
+        capabilities:
+          type: object
+          additionalProperties: false
+          required: [nodes, relink, forwarding, access]
+          properties:
+            nodes:
+              enum: [provisions, claims]
+              description: Whether the driver creates nodes or claims existing ones; code above the seam branches on it.
+            relink:
+              type: boolean
+              description: Whether links can change on a running twin; the step comparison branches on it.
+            forwarding:
+              enum: [software, hardware]
+              description: How nodes forward on this runtime; each deployment's fidelity copies it.
+            access:
+              enum: [direct, proxied]
+              description: Whether node addresses are reachable directly or through a twin record node's access host; clients branch on it.
+
+    BundleDiff:
+      type: object
+      additionalProperties: false
+      required: [from, to, unchanged, nodes, links, probes]
+      properties:
+        from:
+          $ref: "bundle-1.schema.json#/$defs/id"
+          description: The bundle stepped from; clients cite it.
+        to:
+          $ref: "bundle-1.schema.json#/$defs/id"
+          description: The bundle stepped to; clients cite it.
+        unchanged:
+          type: boolean
+          description: Every list below empty; the orchestrator skips a step on it.
+        nodes:
+          type: object
+          additionalProperties: false
+          required: [added, removed, changed]
+          properties:
+            added:
+              type: array
+              items: { type: string }
+              description: Nodes only in to; the step's plan creates them.
+            removed:
+              type: array
+              items: { type: string }
+              description: Nodes only in from; the step's plan removes them.
+            changed:
+              type: array
+              description: Nodes in both that differ; the step pushes or recreates them.
+              items:
+                type: object
+                additionalProperties: false
+                required: [node, reasons]
+                properties:
+                  node:
+                    type: string
+                    description: The node's name; clients show it.
+                  reasons:
+                    type: array
+                    minItems: 1
+                    items: { enum: [platform, mapping, config] }
+                    description: Sorted; platform recreates, mapping may re-cable, config re-pushes. The step's plan and the report read them.
+          description: Node changes; the step and the report read them.
+        links:
+          type: object
+          additionalProperties: false
+          required: [added, removed]
+          properties:
+            added:
+              type: array
+              items: { $ref: "blueprint-1.schema.json#/$defs/link" }
+              description: Links only in to; the step's plan wires them.
+            removed:
+              type: array
+              items: { $ref: "blueprint-1.schema.json#/$defs/link" }
+              description: Links only in from; the step's plan unwires them.
+          description: Link changes; the step and the report read them.
+        probes:
+          type: object
+          additionalProperties: false
+          required: [added, removed]
+          properties:
+            added:
+              type: array
+              items: { type: string }
+              description: Probes only in to, by name; their flows start after the step.
+            removed:
+              type: array
+              items: { type: string }
+              description: Probes only in from, by name; reported as dropped in the step's loss.
+          description: Probe changes; flows and the report read them.
+
+    Run:
+      type: object
+      additionalProperties: false
+      required: [id, twin, operation, state, principal, created_at]
+      properties:
+        id:
+          $ref: "twin-record-1.schema.json#/$defs/run_id"
+          description: The run's id; every runs path takes it.
+        twin:
+          $ref: "twin-record-1.schema.json#/$defs/twin_name"
+          description: The twin the run acts on; clients link to it.
+        operation:
+          enum: [create, step, destroy]
+          description: What the run does; clients render by it.
+        state:
+          enum: [queued, running, cancelling, ended]
+          description: Where the run is; ended means verdict is present. Clients poll until ended.
+        principal:
+          type: string
+          minLength: 1
+          description: Who asked for it (Constitution X); the audit log and show name it.
+        created_at:
+          type: string
+          format: date-time
+          description: When the request was accepted; clients sort and show it.
+        ended_at:
+          type: string
+          format: date-time
+          description: When the run ended; present once ended. Clients show it.
+        verdict:
+          $ref: "findings-1.schema.json"
+          description: The run's verdict (status, findings, a step's counts, wait and loss); present once ended.
+
+    Event:
+      type: object
+      additionalProperties: false
+      required: [seq, at, phase, outcome]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+          description: The event's position in its run, from 1 with no gaps; the after cursor and SSE ids use it.
+        at:
+          type: string
+          format: date-time
+          description: When it happened; clients show elapsed time from it (timings are events now).
+        phase:
+          enum: [compile, admit, plan, apply, ready, push, verify, flows, destroy, cancel]
+          description: The phase the event belongs to; clients show progress by it.
+        outcome:
+          enum: [started, done, failed, timed_out, cancelled, skipped]
+          description: The phase's (or a node's) transition; clients show it.
+        node:
+          type: string
+          description: The node it concerns, when per node (a node's readiness or push); clients show it.
+        duration_s:
+          type: number
+          minimum: 0
+          description: Seconds since the matching started event, on an end; metrics and clients read it.
+        rule:
+          $ref: "findings-1.schema.json#/$defs/rule"
+          description: On failed or timed_out, the finding's rule; clients show it, the verdict holds the finding.
+
+    EventPage:
+      type: object
+      additionalProperties: false
+      required: [events, next, ended]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+          description: Events with seq greater than after, in order; clients print them.
+        next:
+          type: integer
+          minimum: 0
+          description: The cursor to pass as after next time (the last seq here, or after when none); clients loop on it.
+        ended:
+          type: boolean
+          description: Whether the run has ended and no event will follow; clients stop polling on it.

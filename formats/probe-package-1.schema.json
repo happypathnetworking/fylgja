@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/probe-package-1.schema.json",
+  "title": "Fylgja probe package 1",
+  "description": "How one probe format's hosts are run: written as YAML (probes/<format>.yaml), read by the compiler (the format exists), the drivers' plan (the host's image and set-up commands), the reconcile loop (readiness), flows and verify's burst.",
+  "$comment": "Commands are argument vectors, never shell lines; placeholders: {interface} the host's data port, {address} its address with prefix, {far_address} the far host's address without prefix, {gateway}, {interval}, {count}, {wait}. Format 1 is IPv4 only: the declaration accepts IPv4 addresses alone, so no family field is needed. Runtime-specific parts live under runtime.containerlab, as a platform package's do.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["probe_package_version", "format", "host", "readiness", "flow", "burst", "fidelity", "runtime"],
+  "properties": {
+    "probe_package_version": {
+      "const": "1",
+      "description": "The format's version; the package loader refuses any other (rule package.version.unsupported)."
+    },
+    "format": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_]*$",
+      "description": "The probe format this package runs; a blueprint probe's format names it, and the compiler refuses one no loaded package declares (rule probe.format.unknown)."
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interface", "address", "route"],
+      "properties": {
+        "interface": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The host's one data port; the plan cables it to the device's port and renders {interface} with it."
+        },
+        "address": {
+          "$ref": "#/$defs/command",
+          "description": "The command that puts the host's address on its port; the plan renders it into the host's start-up commands."
+        },
+        "route": {
+          "$ref": "#/$defs/command",
+          "description": "The command that routes the far host through the gateway; the plan renders it into the host's start-up commands."
+        }
+      },
+      "description": "How a host is set up when its container starts; read by the drivers' plan."
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "expect", "timeout_s"],
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/command",
+          "description": "Run inside the host by the reconcile loop's ready phase, through the driver's exec."
+        },
+        "expect": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rendered, the text the ready phase waits to see in the command's output."
+        },
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bound on the host becoming ready; the ready phase fails with readiness.timeout after it."
+        }
+      },
+      "description": "When a host counts as ready; read by the reconcile loop."
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interval_s", "command", "start_timeout_s", "read_timeout_s"],
+      "properties": {
+        "interval_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Seconds between packets; flows render {interval} with it and the step's loss report states it."
+        },
+        "command": {
+          "$ref": "#/$defs/command",
+          "description": "The long-running flow, started in each host after a step's stage and interrupted after its wait; flows read its counters as the step's loss."
+        },
+        "start_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bound on starting a flow; flows record flow.start.failed after it."
+        },
+        "read_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bound on stopping and reading a flow; flows record flow.read.failed after it."
+        }
+      },
+      "description": "The continuous flow a step measures loss with; read by flows."
+    },
+    "burst": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "wait_s", "command"],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Packets per burst; verify renders {count} and holds the burst when every one is answered."
+        },
+        "wait_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Seconds to wait for each reply; verify renders {wait} with it."
+        },
+        "command": {
+          "$ref": "#/$defs/command",
+          "description": "The bounded burst verify runs in each host toward the far host (rule verify.burst when not held)."
+        }
+      },
+      "description": "Verify's burst assertion; read by verify."
+    },
+    "fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approximations"],
+      "properties": {
+        "approximations": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "How a probe's measurements differ from production traffic, asserted; the compile result's and each deployment's fidelity list them."
+        }
+      },
+      "description": "What the package asserts of its own fidelity."
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerlab"],
+      "properties": {
+        "containerlab": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "resources", "deploy_timeout_s", "destroy_timeout_s"],
+          "properties": {
+            "image": {
+              "$ref": "platform-package-1.schema.json#/$defs/image",
+              "description": "The host image and how it is acquired; read by the plan and by the local driver's presence check."
+            },
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["cpu", "memory_mb"],
+              "properties": {
+                "cpu": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "CPUs one host needs; a pod request on clabernetes, admission budget locally."
+                },
+                "memory_mb": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Memory one host holds; a pod request on clabernetes, admission budget locally."
+                }
+              },
+              "description": "Per host; the plan sums them into the deployment's demand."
+            },
+            "deploy_timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Bound on bringing a host up; the apply phase fails with apply.timeout after it."
+            },
+            "destroy_timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Bound on removing a host; the destroy phase leaves the twin unclean after it."
+            }
+          },
+          "description": "Read by both containerlab drivers; the host's kind is always linux."
+        }
+      },
+      "description": "Per-runtime sections, each read only by that runtime's drivers."
+    }
+  },
+  "$defs": {
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "An argument vector with placeholders, run without a shell."
+    }
+  }
+}

@@ -1,0 +1,91 @@
+# Arista EOS, as containerlab's `ceos` kind runs the cEOS image. Platform package 1
+# (formats/platform-package-1.schema.json): it states only what the kind does not
+# already know (D-015). The kind's default login and its baseline configuration (host
+# name, every Ethernet port up, LLDP on every port, gNMI) are the kind's. Every value
+# below was measured or read from a booted node, and what was measured is named beside
+# it. The manufacturer and platform names a source of truth gives this platform, and
+# the rendered config's artifact name and content type, are held by the orchestrator.
+platform_package_version: "1"
+id: arista_eos
+versions: ["4.32"]                    # gNMI and `show version` both read 4.32.0.2F-41889544.43202F (engineering build)
+credentials: eos                      # the node login's name for the credential provider; never a value
+
+interfaces:
+  # Tried in order; the first rule whose match fits a production name decides it. The
+  # node names each Linux port by replacing `eth` with `Ethernet` and `_` with `/`, so
+  # a production name of any of the three shapes is carried unchanged by the node and
+  # becomes a port of its own; no data rule states a node_name.
+  rules:
+    - name: ethernet
+      match: "Ethernet{port}"
+      ranges: { port: [1, 511] }              # eth511 booted and eth512 did not, with no error anywhere: 511 is the node's ceiling for the plain form. 0 is below the range because eth0 is the management interface
+    - name: modular
+      match: "Ethernet{slot}/{port}"
+      ranges: { slot: [1, 100], port: [1, 256] }   # slot 100 and port 256 under a slot both booted; the node reported no ceiling for either, so each bound is the highest verified
+    - name: breakout
+      match: "Ethernet{slot}/{port}/{sub}"
+      ranges: { slot: [1, 100], port: [1, 256], sub: [1, 64] }   # sub 64 booted
+    - name: management
+      management: true
+      node_name: Management0                  # `Ma0` in the CLI; containerlab's eth0
+
+# `rollback clean-config`, `copy startup-config session-config` (the baseline containerlab
+# left), the config, `show session-config diffs`, commit: one configuration session, one
+# atomic commit, sent with format text (D-027). A refused line leaves the session pending
+# and the running configuration untouched. `!` comment lines are accepted in a session;
+# `#` is refused at token 0.
+push:
+  delivery: eapi                      # POST /command-api, method runCmds; `management api http-commands` serves 443 with a certificate generated at boot, accepted unverified; HTTP on 80 is shut
+  port: 443
+  timeout_s: 30                       # 0.63s measured for a fourteen-command request; x47 for a node stalled under memory pressure
+
+# Ready means the push transport answers an authenticated request, not that routing has
+# converged. This node answers gNMI before eAPI listens: on a three-node mixed lab, gNMI
+# opened at deploy+11.1s and eAPI at +12.1s and +13.6s.
+readiness:
+  timeout_s: 90                       # 9.3s to gNMI after the deploy returned, three nodes, the host swapping; x10
+
+gnmi:
+  port: 6030                          # `management api gnmi`, transport grpc default
+  tls: false                          # plaintext: that transport has no SSL profile, and a TLS dial is refused at the handshake. cEOS refuses a gNMI Set
+
+# The paths verify and the conformance suite read. {node_name} is the port's node name.
+conformance:
+  host_name: /system/state/hostname
+  version: /system/state/software-version
+  port:
+    enabled: { path: "/interfaces/interface[name={node_name}]/state/admin-status", value: UP }
+    discovering:
+      path: "/lldp/interfaces/interface[name={node_name}]/state/enabled"
+      value: "true"
+      absent: "true"                  # the leaf is not reported while LLDP runs, since it holds its default; `false` appears once LLDP is turned off on the port
+    neighbor:
+      path: "/lldp/interfaces/interface[name={node_name}]/neighbors/neighbor"
+      system_name: state/system-name  # the far node's host name, one container below the entry
+      port_id: state/port-id          # the far port as the far node names it (port-id-type INTERFACE_NAME)
+
+fidelity:
+  approximations:
+    - Ethernet{slot}/{port} is carried as a port of its own, where a fixed-configuration switch has it as a breakout lane of Ethernet{slot}; intent carries no breakout structure to tell the two apart
+    - No linecard model; the port set is fixed at container start and read once, so a port added later does not appear
+    - No hardware QoS, TCAM or buffer behaviour
+    - Convergence timing differs from hardware
+
+runtime:
+  containerlab:
+    kind: ceos
+    image:
+      ref: ceos:4.32.0.2F             # obtained from Arista with an account and imported under this tag
+      pull_secret: arista-ceos        # account-gated: the local driver requires the image present and never pulls it; clabernetes pulls it with this secret
+    resources:
+      cpu: 1
+      memory_mb: 1536                 # 889-1541 MiB measured over four labs, steady across readings minutes apart; the highest reading
+    deploy_timeout_s: 300             # 95.5s measured, three mixed nodes, the host swapping and the kind's post-deploy holding the deploy open; x3
+    destroy_timeout_s: 60             # 1.47s for one node, 2.08s for the three-node mixed lab; x28
+    link_apply_mode: live             # a link added or removed on a port present at boot is re-cabled with no restart, and the push is kept
+    alias: false                      # the kind has no aliases: only ethN reaches EOS as EthernetN. Its name pattern is unanchored at the start, so a wrong name such as Ethernet1 is accepted and wires a port EOS never sees
+    rename:
+      - { rule: ethernet, port: "eth{port}" }
+      - { rule: modular, port: "eth{slot}_{port}" }
+      - { rule: breakout, port: "eth{slot}_{port}_{sub}" }   # each lane is a port of its own, so nothing is dropped
+    hot_add_ports: false              # a port added after boot comes up in Linux, EOS never lists it, and a push naming it is accepted silently: such a step replaces the node and re-pushes

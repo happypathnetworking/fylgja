@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/findings-1.schema.json",
+  "title": "Fylgja verdict 1",
+  "description": "A domain verdict: what a compile, a package validation, a plan, a run (create, step, destroy) or a verification concluded, with every finding that led there. Anything malformed or refused at the door is a problem document (problem-1), never a verdict.",
+  "$comment": "EXIT CODES, on the thin CLI only: ok -> 0; rejected, failed, nonconforming -> 1 (a negative verdict); unclean, diverged -> 3 (the twin is left dirty); a problem document or a transport failure -> 2. STATUS. ok: done as asked. rejected: refused on its merits before the runtime was touched (a compile, a package, admission). failed: failed after the runtime was touched, and cleanup completed. unclean: failed, and something remains (the run's findings name it). diverged: a step failed or was cancelled after touching the twin, and nothing was torn down. nonconforming: verify read every node and intent is not met. RULES. One stable dotted id per rule; the rule catalogue, written with the code that files the rules, is user documentation under docs/.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings_version", "operation", "status", "subject", "findings"],
+  "properties": {
+    "findings_version": {
+      "const": "1",
+      "description": "The format's version; clients refuse any other."
+    },
+    "operation": {
+      "enum": ["compile", "packages.validate", "plan", "create", "step", "destroy", "verify"],
+      "description": "What reached the verdict; the CLI chooses its rendering by it."
+    },
+    "status": {
+      "enum": ["ok", "rejected", "failed", "unclean", "diverged", "nonconforming"],
+      "description": "The verdict; the CLI maps it to an exit code and the orchestrator branches on it."
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "twin": {
+          "$ref": "twin-record-1.schema.json#/$defs/twin_name",
+          "description": "The twin the verdict is about; clients link to it."
+        },
+        "run_id": {
+          "$ref": "twin-record-1.schema.json#/$defs/run_id",
+          "description": "The run the verdict ends; clients read its events by it."
+        },
+        "blueprint_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The blueprint compiled or run; clients and the orchestrator's report cite it."
+        },
+        "bundle_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The bundle built, run or verified against; clients and the report cite it."
+        },
+        "deployment_id": {
+          "$ref": "bundle-1.schema.json#/$defs/id",
+          "description": "The deployment planned or applied; clients cite it."
+        }
+      },
+      "description": "What the verdict is about; only the ids that apply are present."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" },
+      "description": "Every finding, sorted by (severity, rule, object); clients render each, the orchestrator's report quotes them."
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["held", "failed", "skipped"],
+      "properties": {
+        "held": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Assertions that held; the CLI and the report's verify cell show it."
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Assertions that failed, each also a finding; the CLI and the report show it."
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Assertions not made (a disabled port, a synthesized link's neighbour), each an info finding; the CLI and the report show it."
+        }
+      },
+      "description": "Verify's assertion counts, bursts included; present on verify and on a step whose wait verified."
+    },
+    "wait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "budget_s", "after_s"],
+      "properties": {
+        "outcome": {
+          "enum": ["settled", "expired", "cancelled"],
+          "description": "Whether verify held within the budget; the step's status and the report read it."
+        },
+        "budget_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The wait's bound; the report states it."
+        },
+        "after_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds from the push to the wait's end; the report states it."
+        }
+      },
+      "description": "A step's wait for verify to hold; present on step only."
+    },
+    "loss": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/loss" },
+      "description": "Each probe's flow across the step, sorted by (probe, from); reported, never asserted. Present on step only, [] with no probes."
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+      "description": "A stable dotted rule id (e.g. probe.interface.cabled)."
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "severity", "message"],
+      "properties": {
+        "rule": {
+          "$ref": "#/$defs/rule",
+          "description": "The rule; clients and tests match on it, never on message."
+        },
+        "severity": {
+          "enum": ["error", "warning", "info"],
+          "description": "error makes the verdict negative; clients colour and filter by it."
+        },
+        "object": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the finding is about (n1, n1:ethernet-1/1, n1-loop, a JSON pointer); clients group by it."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One plain sentence of the fault's facts, never markup or a credential; clients print it."
+        }
+      }
+    },
+    "loss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe", "from", "outcome"],
+      "properties": {
+        "probe": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The probe's name; the report's loss column keys on it."
+        },
+        "from": {
+          "enum": ["a", "b"],
+          "description": "The host the flow ran from; the report shows each direction."
+        },
+        "outcome": {
+          "enum": ["measured", "not_started", "not_read", "interrupted", "dropped"],
+          "description": "Whether counters were read; dropped when the step's target removed the probe. The report reads it."
+        },
+        "sent": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Packets sent; present when measured. The report shows it."
+        },
+        "lost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Packets unanswered; present when measured. The report shows it."
+        },
+        "longest_gap_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The longest run of unanswered packets in seconds; present when measured. The report shows it."
+        }
+      },
+      "if": { "properties": { "outcome": { "const": "measured" } } },
+      "then": { "required": ["sent", "lost", "longest_gap_s"] }
+    }
+  }
+}

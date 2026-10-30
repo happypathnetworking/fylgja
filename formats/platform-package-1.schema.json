@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/platform-package-1.schema.json",
+  "title": "Fylgja platform package 1",
+  "description": "What Fylgja must know of one network operating system that the runtime's kind does not already know. Written as YAML (packages/<id>.yaml), read by the compiler, the drivers' plan, the push, readiness, verify and the conformance suite.",
+  "$comment": "PLATFORM-LEVEL sections (id, versions, interfaces, push, readiness, gnmi, conformance, fidelity) are shared by every driver; what differs by runtime lives under runtime.<runtime>, and only runtime.containerlab exists now (both containerlab drivers read it; runtime.hardware arrives with that driver). A package states nothing a kind already provides: interface aliases, default logins and default configuration are the kind's. CROSS-FIELD RULES the core holds when it loads a package (POST /v1/packages:validate reports all of them in one pass): interface rule names unique (package.rule.name); exactly one management rule (package.management.rule); a template uses only placeholders its match captures (package.patterns.placeholders); every runtime.containerlab.rename entry names a data rule, and every data rule has one when alias is false (package.rename.coverage); a ranges key is a placeholder of match. FIXED, not fields: the push is a replace with an explicit commit, the startup format is cli, the scheme is https, the gNMI encoding is json_ietf, and readiness is an authenticated request to the push transport. LOSSINESS is never declared: the driver's plan computes it from the rename rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "platform_package_version",
+    "id",
+    "versions",
+    "credentials",
+    "interfaces",
+    "push",
+    "readiness",
+    "gnmi",
+    "conformance",
+    "fidelity",
+    "runtime"
+  ],
+  "properties": {
+    "platform_package_version": {
+      "const": "1",
+      "description": "The format's version; the package loader refuses any other (rule package.version.unsupported)."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "The platform's identity; a blueprint device's platform names it, the compiler loads by it, and the bundle's nodes and mapping record it."
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Software versions the package was measured on, as prefixes; the conformance suite checks a booted node's version leaf against them."
+    },
+    "credentials": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The name the credential provider resolves to this platform's node login (environment locally, a Secret on a cluster); the push, readiness, verify and the conformance suite ask the provider for it. Never a value."
+    },
+    "interfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rule"
+          },
+          "description": "Ordered; the first rule whose match fits a production name decides it. The compiler uses them to decide which names the platform has (in range, out of range, no rule) and each port's node name."
+        }
+      },
+      "description": "How production interface names relate to the platform's ports; read by the compiler and by the driver's plan through rule names."
+    },
+    "push": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delivery",
+        "port",
+        "timeout_s"
+      ],
+      "properties": {
+        "delivery": {
+          "enum": [
+            "json_rpc",
+            "eapi"
+          ],
+          "description": "The push mechanism (SR Linux JSON-RPC cli, EOS eAPI runCmds in a configuration session); the push selects its client by it. Always a replace with an explicit, atomic commit."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The HTTPS port the push and readiness dial at the node's management address."
+        },
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Measured bound on one push request; the push gives up and records push.timeout after it."
+        }
+      },
+      "description": "How the configuration reaches a booted node; read by the push and by readiness."
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeout_s"
+      ],
+      "properties": {
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Measured bound, from apply's end, on the push transport answering an authenticated request; the reconcile loop's ready phase fails with readiness.timeout after it."
+        }
+      },
+      "description": "A node is ready when its push transport answers; read by the reconcile loop's ready phase."
+    },
+    "gnmi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "port",
+        "tls"
+      ],
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The gNMI port verify and the conformance suite dial at the node's management address."
+        },
+        "tls": {
+          "type": "boolean",
+          "description": "Whether verify and the conformance suite dial gNMI over TLS (the boot-time certificate accepted unverified) or plaintext."
+        }
+      },
+      "description": "How a node's state is read; encoding is always json_ietf."
+    },
+    "conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_name",
+        "version",
+        "port"
+      ],
+      "properties": {
+        "host_name": {
+          "$ref": "#/$defs/path",
+          "description": "The leaf holding the node's host name; verify asserts it equals the node's name."
+        },
+        "version": {
+          "$ref": "#/$defs/path",
+          "description": "The leaf holding the software version; the conformance suite matches it against versions."
+        },
+        "port": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "discovering",
+            "neighbor"
+          ],
+          "properties": {
+            "enabled": {
+              "$ref": "#/$defs/value_at",
+              "description": "The leaf and value saying a port is admin-enabled; verify asserts it on each enabled cabled port."
+            },
+            "discovering": {
+              "$ref": "#/$defs/value_at",
+              "description": "The leaf and value saying LLDP runs on a port; verify asserts it before reading neighbours."
+            },
+            "neighbor": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "system_name",
+                "port_id"
+              ],
+              "properties": {
+                "path": {
+                  "$ref": "#/$defs/path",
+                  "description": "The list of a port's LLDP neighbours; verify reads it to check each link's far end."
+                },
+                "system_name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The far node's host name, relative to a neighbour entry; verify compares it with the link's far node."
+                },
+                "port_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The far port as the far node names it, relative to a neighbour entry; verify compares it with the far port's node name."
+                }
+              },
+              "description": "Where verify reads a port's neighbour."
+            }
+          },
+          "description": "Per-port reads; {node_name} renders the port's node name."
+        }
+      },
+      "description": "The gNMI paths verify and the conformance suite read on a booted node."
+    },
+    "fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approximations"
+      ],
+      "properties": {
+        "approximations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "How a twin of this platform differs from production, asserted; the compile result's and each deployment's fidelity list them."
+        }
+      },
+      "description": "What the package asserts about its own fidelity; forwarding is the deployment's."
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "containerlab"
+      ],
+      "properties": {
+        "containerlab": {
+          "$ref": "#/$defs/containerlab",
+          "description": "The section the local containerlab driver and the clabernetes driver both read."
+        }
+      },
+      "description": "Per-runtime sections, each read only by that runtime's drivers' plan and admission."
+    }
+  },
+  "$defs": {
+    "pattern": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A naming template: {name} captures one path segment ([^/]+), everything else is literal."
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "An absolute gNMI path; {node_name} renders a port's node name."
+    },
+    "value_at": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "value"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path",
+          "description": "The leaf verify reads."
+        },
+        "value": {
+          "type": "string",
+          "description": "What the leaf must read for verify's assertion to hold."
+        },
+        "absent": {
+          "type": "string",
+          "description": "The value verify takes an unreported leaf to mean (cEOS reports nothing while LLDP runs); without it nothing read fails."
+        }
+      }
+    },
+    "range": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Inclusive [low, high] for one captured placeholder."
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "description": "Unique in the package; the bundle's mapping rows, findings and a rename entry name the rule by it."
+        },
+        "match": {
+          "$ref": "#/$defs/pattern",
+          "description": "The production names this data rule decides; the compiler matches it. Absent on the management rule."
+        },
+        "ranges": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/range"
+          },
+          "description": "Per captured placeholder, the values the platform has; the compiler omits a name outside them (omission out_of_range)."
+        },
+        "node_name": {
+          "$ref": "#/$defs/pattern",
+          "description": "What the node's OS calls the port, from captured values, when it differs from the production name; the compiler records it per mapping row for verify's {node_name}. On the management rule, a literal."
+        },
+        "management": {
+          "const": true,
+          "description": "Marks the one rule the compiler applies to the mgmt_only interface."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "management"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "match"
+                ]
+              },
+              {
+                "required": [
+                  "ranges"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "match"
+          ],
+          "not": {
+            "required": [
+              "management"
+            ]
+          }
+        }
+      ]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The image reference every measured value here was taken on; the driver's plan writes it into the rendered topology."
+        },
+        "pull_secret": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Present for a gated image (cEOS): the credential provider's name for the registry pull secret clabernetes attaches; the local driver then requires the image present and never pulls it. Absent: a public image either driver may pull."
+        }
+      }
+    },
+    "rename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule",
+        "port"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "description": "The data rule (interfaces.rules[].name) this rename applies to; the plan looks it up by the mapping row's rule."
+        },
+        "port": {
+          "$ref": "#/$defs/pattern",
+          "description": "The kind's endpoint name from the rule's captured values; the driver's plan renders it, and counts a rename that drops a placeholder as lossy and two names on one port as shared."
+        }
+      }
+    },
+    "containerlab": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "image",
+        "resources",
+        "deploy_timeout_s",
+        "destroy_timeout_s",
+        "link_apply_mode",
+        "alias",
+        "hot_add_ports"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The containerlab kind; the plan of both containerlab drivers writes it into the topology."
+        },
+        "image": {
+          "$ref": "#/$defs/image",
+          "description": "The node image and how it is acquired; read by the plan and by the local driver's presence check."
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cpu",
+            "memory_mb"
+          ],
+          "properties": {
+            "cpu": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "CPUs one node needs; clabernetes sets it as the pod's request, the local driver counts it against its admission budget."
+            },
+            "memory_mb": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Measured memory one node holds, with margin; clabernetes sets it as the pod's request, the local driver counts it against its admission budget. clabernetes 0.10.1 otherwise requests 512 Mi per node, a third of a node's use (measured 2026-10-30)."
+            }
+          },
+          "description": "Per node; the plan sums them into the deployment's demand."
+        },
+        "deploy_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Measured bound on bringing this kind's nodes up, an image pull included; the apply phase fails with apply.timeout after it."
+        },
+        "destroy_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Measured bound on removing this kind's nodes; the destroy phase records destroy.timeout and leaves the twin unclean after it."
+        },
+        "alias": {
+          "type": "boolean",
+          "description": "true when the kind accepts production interface names as endpoint aliases, so the plan emits them unchanged; false when it needs rename. Verified 2026-10-30: nokia_srlinux true (ethernet-L/P[/C] accepted, out-of-range names refused in post-deploy); ceos false in containerlab 0.79-0.82, whose pattern eth[1-9][\\w.]*$|et[1-9][\\w.]*$ is unanchored at the start, so a wrong name ending in et<digit> (\"Ethernet1\") is accepted and wires a port EOS never sees: the plan emits only rename output for such a kind, and conformance checks every link's port appears in the NOS."
+        },
+        "rename": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rename"
+          },
+          "description": "For a kind with no aliases, one endpoint template per data rule; the plan renders each production name through it. Absent when alias is true."
+        },
+        "link_apply_mode": {
+          "enum": [
+            "live",
+            "restart"
+          ],
+          "description": "The containerlab link-apply-mode both containerlab drivers write on every node of this kind at create (containerlab 0.79 and clabernetes 0.10.1 both take it; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30). Never changed on a running twin: on clabernetes a changed mode alters the pod spec and replaces every pod, losing every push. live: a link added or removed on a port the node had at boot re-cables with no restart and the push kept, for SR Linux and for cEOS 4.32 alike. restart: the node's pod or container is restarted and re-pushed."
+        },
+        "hot_add_ports": {
+          "type": "boolean",
+          "description": "Whether a port the node did not have at boot appears in the NOS when a link to it is added live. cEOS 4.32: false (verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30: the Linux port comes up, EOS never lists it, and a push naming it is accepted silently), so a step that adds such a port must replace the node and re-push, which needs allow_restart. SR Linux 24.7.1: true [unverified: adding a node on a new port of an existing node was measured without checking the existing node's view of that port]."
+        }
+      },
+      "if": {
+        "properties": {
+          "alias": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "rename"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "rename"
+          ]
+        }
+      },
+      "description": "Read by both containerlab drivers (local and clabernetes)."
+    }
+  }
+}

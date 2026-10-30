@@ -1649,3 +1649,110 @@ made.
 - **The gates**: `make build` static; `make test` green, 1,075 Python tests, 79.8 s wall
   uncached at a load of 3.3 (110.4 s before `platform` skipped first, against the 90 s
   budget); `make lint` 0 issues, ruff clean.
+
+### 5.21 The checks as the platform's clients (T029, Run 26, 2026-10-30)
+
+- **The shape.** `infrahub/checks/fylgja_api.py`: `variables()` reads
+  `FYLGJA_ORCHESTRATOR_ADDRESS` and `FYLGJA_ORCHESTRATOR_AUTH` (`user:password`, split at its
+  first colon, refused naming the variable when it has none or carries a control character);
+  `Platform(address, auth)` with `trigger`, `wait`, `document`, `lines` and `cancel`; and
+  `run(platform, flow, parameters, deadline, close_by)`, the one call each check makes:
+  trigger, wait to the end or the deadline, cancel past it, wait on to `close_by`, then the
+  document and the out lines, returned as a `Ran`. A fault before the run exists is the
+  check's as 015's were (`Unset`, `Unreachable`, `CredentialRefused`, `NoDeployment`,
+  `Unexpected`); one once it exists is `Lost`, the run left going on; a cancellation by
+  Infrahub while the run has not ended cancels it with a blocking call and goes on, as 015's
+  interrupt did. `findings_text` is WriteText's text of the document's findings (held to
+  `Document.text()` over the three goldens), which 015's text frame carried. `post_comment`,
+  the `/v1/` paths, the frames and the stream are gone. `fylgja_step.py` and
+  `fylgja_twin.py` keep their conclusions, the branch point's excuse, the retry while held
+  and the margins (`CLOSE_MARGIN_S` 120, `DEADLINE_MARGIN_S` 240, `timeout` 300 and 4,260
+  unmoved); `fylgja-twin` writes nothing. `contracts/checks.md` is written from 015's with the
+  new reach; `.infrahub.yml`'s comment says it.
+- **Verified live on a throwaway Prefect 3.8.8 platform** (`127.0.0.1:4297`, basic auth made
+  for it, `PREFECT_HOME` in the session's scratch, up in 27 s; a runner serving stand-in flows
+  that call the orchestrator's own `out_line` and `publish` from this tree; all stopped after):
+  - `GET /api/deployments/name/<flow>/main` answers the deployment (`id`) within 4 s of the
+    runner's start, `404` for one not served, `401` without the credential;
+    `create_flow_run` `201`; `GET /api/flow_runs/<unknown>` `404`.
+  - `POST /api/artifacts/filter` with `{"artifacts": {"flow_run_id": {"any_": […]}, "type":
+    {"any_": ["fylgja-findings"]}}, "sort": "CREATED_DESC", "limit": 1}` answers the run's
+    artifact, `data` the document as a JSON string. §1.4's shorthand, the filter at the top
+    level, also answered, but with one artifact on the server it could not show whether it
+    filtered at all; the nested form, Prefect's schema's, is the one used.
+  - **The run's log**: `POST /api/logs/filter {"logs": {"flow_run_id": {"any_": […]}},
+    "sort": "TIMESTAMP_ASC", "limit", "offset"}` answers the run's records with `name`,
+    `level`, `message`. Prefect's own lines (`Downloading flow code…`, `Beginning flow run…`,
+    `Finished in state Completed()`) and the flow's `get_run_logger()` lines share the name
+    `prefect.flow_runs`, so a flow's out lines could not be told apart; a child of the run's
+    logger, `get_run_logger().getChild("fylgja")`, reaches the API with the run's id under the
+    name `prefect.flow_runs.fylgja`. So `common.out_line` now logs there (`OUT_SUFFIX`), and
+    the glue keeps that name's records alone (`OUT_LOGGER`). The records landed about 1 s after
+    the run read `COMPLETED`; the glue reads until two reads 1 s apart agree, at most five.
+    250 out lines came back whole across two pages of 200.
+  - **The cancellation, without `force`**: `set_state CANCELLING` without `force` answers
+    `ABORT` (`Run is already in terminal state COMPLETED.`) for an ended run, which stays
+    `COMPLETED`; `REJECT` for a scheduled one, which the platform ends `CANCELLED` at once;
+    `ACCEPT` for a running one, `CANCELLED` 3.7 s later. **With `force`, an ended `COMPLETED`
+    run is moved to `CANCELLING` and left there** (`201 ACCEPT`): T029's text and §1.3 name
+    `force`, and the glue sends none, since the check's deadline can pass between the run's end
+    and the request. A stand-in run cancelled 20 s in read `CANCELLED: Flow run was cancelled
+    successfully.` about 6 s later, its document filed from the flow's `finally` and its 250
+    lines read.
+  - The glue itself, against it: a run ended and read in 6.4 s from the trigger; a wrong
+    credential `refused this check's credential (FYLGJA_ORCHESTRATOR_AUTH)`, a closed port
+    `cannot be reached: All connection attempts failed`, neither carrying the credential.
+- **Departures**, each beside T029's text:
+  - `lines(flow_run_id)` beside the four the task names, so that the message keeps 015's
+    plan and rehearsal text (FR-024: "with 015's conclusions and messages"), which the
+    document does not carry, and `common.out_line` logs under the child above for it.
+  - `cancel` sends no `force` (above).
+  - The message begins with the run's identity, `flow run <id> of <flow>/main: <state>`, so
+    the operator finds the run on the platform.
+  - `fylgja-twin`'s "deadline passed before the run's start" sentence (015's T093) goes: the
+    check cannot tell a flow's plan from its run, and a cancelled flow files its document,
+    which says what was cut. A run that filed no document (`CRASHED`, or cancelled while
+    scheduled) is its own failure, naming the run and its state.
+- **The Go precheck** (`internal/checks`' `platformReached`): `docker exec` into each of the
+  Compose project's `task-worker`s runs a probe on the worker's Python (httpx): the two
+  variables, `GET /api/health` with no credential and `GET
+  /api/deployments/name/twin-rehearse/main` with it, printing statuses and never a value but
+  the address; anything but `200`/`200` is why the test skips, after the draft's skip is
+  proved, as the test skipped for a server it could not reach. It replaces
+  `thisTreesServer`, the core's bridge server's binary compared with this tree's: the core
+  leaves the bridge (R-18), and the deployment's answer says the runner serves the flows.
+- **`internal/rehearsal`'s two source-reading tests** (`TestTheChecksPassNoScopeAndFailAnError`,
+  `TestTheTwinCheckOutlastsItsRehearsal`), tier 1 until T035 deletes the package: the first
+  reads each check's one `run(platform, FLOW_…, {"branch": self.branch_name}` and the flow's
+  name from `fylgja_api.py`; the second is unchanged, its constants kept. The Python test
+  holds the twin check's own deadline to the flow's `timeout_seconds` and its budgets to the
+  flow's.
+- **Tier 2, `TestChecksInsideInfrahub`, live** (twice, 170.3 s and 151.2 s, no twin up): the
+  task workers carry 019's `FYLGJA_API_ADDRESS` and not yet the override's new two (T030's
+  override, T040's `up -d`), so the precheck said `FYLGJA_ORCHESTRATOR_ADDRESS is not set in
+  fylgja-infrahub-task-worker-2's environment`; the tree's checks were imported under the
+  test's registration (8–22 s), a branch seeded (23–27 s) and a draft opened (pipeline
+  84–88 s); `fylgja-test-twin` skipped the draft, success, triggering nothing, and
+  `fylgja-test-step` concluded failure with the new glue's `FYLGJA_ORCHESTRATOR_ADDRESS is not
+  set in this task worker's environment: the check cannot reach the orchestrator's platform,
+  and nothing was sent`, which says the new modules import and run on the worker's Python
+  3.14.7; then the test skipped, saying why and what the operator does. Afterwards `Branch`
+  lists `main` and `fylgja-fixture`, `CoreReadOnlyRepository` `fylgja` alone with its two
+  check definitions, and `CoreProposedChange` and `CoreChangeThread` count 0. The test whole,
+  the plan's text and the flow's posted report through the checks, waits on T039 and T040.
+- **Tests** (`orchestrator/tests/unit/test_checks_glue.py`, 59): the glue imported by its path
+  alone and naming no Prefect; its names held to the flows' (`ARTIFACT_TYPE`, `OUT_SUFFIX`,
+  `stage_plan.FLOW`, `twin_rehearse.FLOW`) and the twin check's deadline and budgets to the
+  rehearse flow's (`TIMEOUT_S`, `ALLOWANCE_S`, `DESTROY_S`, the wait after a cancellation over
+  `GRACE_S`); the variables; `trigger`'s requests, basic auth, one retry on `503` at either
+  request and no third, a deployment not served, a refused credential, nothing answering;
+  `wait`'s four ended states, its deadline, a failed read asked again and one last, a run not
+  held; `document`'s parse, none filed and data no document; `lines`' logger, pages and
+  settling; `cancel`'s body without `force`, its three delivered answers and its failures,
+  never raised; `run` ended, cancelled at the deadline and waited on, not ended by `close_by`,
+  lost, and cancelled by Infrahub; `findings_text` against the goldens; and both checks over
+  a stub platform with the SDK's `InfrahubCheck`: the plan's text and the branch point's
+  excuse, a stale mark, an error status, no document, the step's own deadline, no deployment,
+  no open change; the draft's skip reading no variable, ok, failed, the retry while held
+  logged once, the retry's end, the deadline's cancellation and the document read after it,
+  a run not ended, a platform lost, and `holders`.

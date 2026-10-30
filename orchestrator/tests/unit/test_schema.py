@@ -122,6 +122,14 @@ def test_the_copy_is_the_core_s_recorded_answer():
     ).read_bytes()
 
 
+def test_the_cable_absent_copy_is_the_core_s_change():
+    # Tier 2's change to a throwaway branch's schema (test_read_conformance.py), loaded
+    # through the fixture tool's -load-schema-file.
+    assert (DATA / "dcim-cable-absent.yaml").read_bytes() == (
+        REPO / "internal" / "intent" / "testdata" / "dcim-cable-absent.yaml"
+    ).read_bytes()
+
+
 def test_the_table_is_the_core_s():
     assert [(k.kind, k.fields()) for k in mapping.TABLES] == [
         ("DcimDevice", ["name", "tags", "platform", "interfaces", "artifacts"]),

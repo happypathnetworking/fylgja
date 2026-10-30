@@ -21,6 +21,10 @@ held to (020's T016).
 `schema/schema-26336e9.json` is a copy of `internal/intent/testdata/`'s recorded
 `GET /api/schema` answer for the schema library at `26336e9` (a test holds the copy to its
 original); each conformance case changes it in the test, as the Go test does.
+`schema/dcim-cable-absent.yaml` is a copy of `internal/intent/testdata/`'s schema change, the
+library's `DcimCable` removed by `state: absent` (a test holds the copy to its original),
+which tier 2 loads on a throwaway branch through the fixture tool's `-load-schema-file`
+(`tests/contract/test_read_conformance.py`, 020's T020).
 
 `probes/` holds copies of `testdata/probes/`'s declarations, `invalid/` beside them (a test
 holds each copy to its original and the set to the original's), which `test_probes.py`

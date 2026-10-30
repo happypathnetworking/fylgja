@@ -29,6 +29,7 @@ from pathlib import Path
 import httpx
 
 from .adapters.infrahub import snapshot as snapshots
+from .adapters.infrahub import stages as stage_rules
 from .core import CoreFailure
 from .documents.findings import INFO, REJECTION, Document, Finding
 
@@ -255,6 +256,11 @@ class Store:
             Path(tmp).unlink(missing_ok=True)
             raise
 
+    def clear_record(self) -> None:
+        """Removes the record: the twin the orchestrator last drove names no stage (a create
+        from a branch), so no record describes it. Nothing when there is none."""
+        self.record_path.unlink(missing_ok=True)
+
 
 # The trust.
 
@@ -304,6 +310,38 @@ def target_required(record: Record | None, show) -> Finding | None:
         why = f"{_distrust(record, show)}, so the record is not trusted"
     return Finding(REJECTION, RULE_STEP_TARGET_REQUIRED, "--stage",
                    f"{why}, and there is no stage to take the next of; give --stage <branch>/<label>", STEP_START)
+
+
+def shown_record(show) -> dict:
+    """twin.show's record block, {} when no twin is recorded."""
+    if isinstance(show, Document):
+        show = show.blocks.get("show")
+    record = show.get("record") if isinstance(show, dict) else None
+    return record if isinstance(record, dict) else {}
+
+
+def view(record: Record, show, ch: "stage_rules.Change | None" = None) -> "stage_rules.RecordView":
+    """The record as the stages' rules read it (`stages.RecordView`): its stage and proposed
+    change, the branch and at it resolved to, the scope and state twin.show's record names.
+    The record carries no at's source: a derived stage's follows from its label, and a
+    mark's is the mark's as `ch`, the record's proposed change as the flow found it, lists
+    it, "" for a mark since deleted. The core's record names no stage, so a diverged twin's
+    target is not known."""
+    shown = shown_record(show)
+    label = record.stage.label
+    if label == stage_rules.LABEL_BRANCH_POINT:
+        at_source = stage_rules.AT_BRANCH_POINT
+    elif label == stage_rules.LABEL_HEAD:
+        at_source = stage_rules.AT_HEAD
+    else:
+        at_source = ""
+        if ch is not None and ch.proposed_change.id == record.proposed_change.id:
+            st = ch.first(label)
+            at_source = st.at_source if st is not None else ""
+    return stage_rules.RecordView(
+        stage_rules.RecordChange(record.proposed_change.id, record.proposed_change.branch), label,
+        record.stage.branch, record.stage.at, at_source, shown.get("scope") or "",
+        shown.get("state") or "ready")
 
 
 # The reclaim.

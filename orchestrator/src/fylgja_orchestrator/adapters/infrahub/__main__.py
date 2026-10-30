@@ -68,11 +68,13 @@ WHOLE_REFERENCE = "a stage is a whole pinned reference (branch and at)"
 
 @dataclass
 class Answer:
-    """A command's answer: the document, and the success lines stdout carries in text, which
-    --json suppresses, as the server's `note` did."""
+    """A command's answer: the document, the success lines stdout carries in text, which
+    --json suppresses, as the server's `note` did, and the snapshot a clean read took and
+    wrote, which the intent-read flow files in the orchestrator's store."""
 
     doc: Document
     notes: list[str] = field(default_factory=list)
+    snapshot: dict | None = None
 
 
 @dataclass
@@ -274,7 +276,7 @@ def read(branch: str = "", at: str = "", stage: str | None = None, scope: str | 
     notes.append(f"wrote {out}: {_counts(taken['ctm'])} ({named}); snapshot {taken['snapshot_id']}")
     doc = new_document(op, subject, found)
     doc.set("snapshot_id", taken["snapshot_id"])
-    return Answer(_with_stage(doc, block, warnings), notes)
+    return Answer(_with_stage(doc, block, warnings), notes, taken)
 
 
 def stage_list(branch: str | None = None, scope: str | None = None, env: Env | None = None,

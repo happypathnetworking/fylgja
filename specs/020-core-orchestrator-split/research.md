@@ -1560,3 +1560,92 @@ made.
   42.8 s of it. No tier-2 test is this task's (T028's); the host's worker and server were not
   touched, and Infrahub only read. `contracts/orchestrator.md`'s text is T036's, the C4 redraw
   and `docs/development.md`'s T037's.
+
+### 5.20 Tier 2, the flows (T028, Run 25, 2026-10-30)
+
+- **The harness** (`orchestrator/tests/contract/conftest.py`). `platform`, a session fixture:
+  `prefect_test_harness` with a 180 s start-up bound, under a `PREFECT_HOME` of the
+  session's own, skipping without Infrahub itself (a session fixture sets up before the
+  autouse skip). **§4's first item, for the harness**: a flow called in this process with no
+  `PREFECT_API_URL` is a run the harness records, `COMPLETED`, its document the run's
+  artifact `fylgja-findings`, read back through Prefect's client equal to the document the
+  call returned; the harness's first start in a fresh home took 26.9–28.3 s in five starts,
+  under its 30 s default but close to it, hence 180, `fylgja-cli`'s ephemeral bound. Each test
+  points the process at a core server of its own (`use_core`: `FYLGJA_API_ADDRESS` and
+  `_TOKEN`, an orchestrator root under the test's directory, the fixture's scope, no
+  platform); `serving()` now asserts the core's environment holds no `INFRAHUB_*` and takes
+  extra variables; the core reaches the host's Temporal dev server on `:7233`, its default,
+  for `twin.show`'s runs in flight. `Flows.run` keeps a flow's out lines and its markdown sink;
+  `Core.operations()` reads the core's log, one line a request, as `(operation, outcome)`, so
+  a test says what the core was asked. Infrahub's own reads beside: `threads_of`,
+  `check_definitions`, `user_validators` and `await_user_checks` (Go's `AwaitUserChecks`).
+- **The four files**, each run alone:
+  - `test_flows_create_from_fixture.py`: `twin-create --branch fylgja-fixture --dry-run`
+    files snapshot `0940db93…` under the orchestrator's root and no record; the core, asked
+    one `twin.create`, compiles bundle `c3872f5c…` (SC-002) and refuses the host for the
+    SR Linux logins it lacks alone; no twin directory.
+  - `test_rehearse_refused_on_a_stale_mark.py` (Go's `TestRehearseRefusesBeforeAnyRun`):
+    rejected, exit 1, `stage.artifact.stale` on n1, n2 and n3 first, the block's stages the
+    branch point, `seeded`, `description-stale` (refused, the three devices) and the head, no
+    run, destroy or baseline, the text's `…/description-stale: refused (stage.artifact.stale)`;
+    the core asked `twin.compile` alone; the report posted as the proposed change's one thread,
+    its comment the markdown whole (the sink, a printed line, drops its last newline).
+  - `test_stage_plan_of_a_throwaway_change.py`: the golden's composition (§5.1): `seeded`,
+    `-add-link` and `third-link`, `-add-interface n1:ethernet-1/99` and `-generate` and
+    `bad-port`. The plan block's steps equal `bin/fylgja stage plan --json`'s through the
+    host's server whole (SC-006), the status and exit equal, and each stage equal but for the
+    `read`'s lossy two (§5.17) and the departure below; the core asked `twin.compile` and
+    `twin.diff` alone. The host's address and token are taken by a fixture before the test
+    points the process at its own core. The comparison goes at T035.
+  - `test_rehearse_composed_by_the_fixture_tool.py` (Go's `TestRehearseComposedByTheFixtureTool`):
+    each flag's line as Go asserted it (`-propose`, `-ready`, `-add-interface`, `-generate`,
+    `-delete`'s `deleted 0 stages, 1 proposed change, branch …`), the port read active,
+    uncabled and not management, n1's checksum alone moved. **The task's three, as read
+    here**: no flow refuses a draft as such (the check skips one, T029's), so **the draft's
+    refusal** is its rehearsal through a core with no login, refused before any run at the
+    host check (`host.probe.login_unset`), the head the one compiled stage, not reached,
+    `rehearsal.steps.none` warned, the core asked `twin.compile`, `twin.show` and a rejected
+    `twin.create` dry run, and the report posted; **the ready change's plan** is `stage-plan`
+    once the creation's user checks have concluded (14 s, both `success`) and `-ready` and the
+    port are written: the head compiled with `artifact.interface.unrepresented` on
+    `n1:ethernet-1/99` naming `omit.interface.unmappable`, where Go asked `intent.read` and
+    `twin.compile`; and **the host held**, which no twin or run of the core's may do in
+    tier 2, is a twin directory under a second core's state root (the host check's
+    `TwinDirPresent`), the four logins' names set to a placeholder, since the host check reads
+    only that they are, so `host.twin.present` is the one rejection beside the passed-over
+    branch point: refused, and not posted, the thread count still one. `-run-checks user` is
+    not run where main holds a check definition, as Go's; on this host it holds `fylgja-step`
+    and `fylgja-twin`. The thread goes with the proposed change.
+- **A defect, found live and fixed**: `Core.compile` sent `out` only when given, and the core
+  refuses a compile without one (`--out is required`, `operation.failed` at compile), so every
+  stage a plan or a rehearsal compiled failed, and the rehearsal ended `error`: the flows'
+  unit tests stub the core, and §5.17's and §5.19's live plans reached no compile (the
+  fixture's `stage.unknown`). `out` is now always sent, `COMPILE_OUT = "bundle"`, a name the
+  core echoes in its subject and a line, the bundle's files answering under their own paths;
+  `test_core.py` holds the argument.
+- **A departure, found live and recorded, nothing changed**: the Go reader ran the package's
+  rules at read as well (`stage.Read`'s `validate.Validate` with the registry), so a port the
+  mapping omits was warned `artifact.interface.unrepresented` at read and again at compile;
+  the adapter's read ends at the intrinsic rules (§5.11, T017), the package's being the
+  core's, so the flow's plan and rehearsal file it once, at compile, beside
+  `omit.interface.unmappable`. The goldens `plan.*` carry both lines, which the unit tests
+  replay with the read's findings stubbed; a live plan of such a stage prints the compile's
+  line alone, as the plan test's comparison allows. Whether SC-007's byte-for-byte reaches a
+  live plan of such a stage, which would need the compiler's artifact-name check run by the
+  adapter at read, is the operator's to say; T028 takes §5.11 as written.
+- **Found and fixed in the harness**: `platform` set up before the autouse skip, so
+  `test_layout`'s skip case, which runs the contract directory with no `INFRAHUB_*`, started
+  the harness for nothing: 36.0 s of `make test`'s Python, 2.2 s once `platform` skips first.
+- **Live, each file alone, no twin up**, at a load of 1.9–3.4: `test_flows_create_from_fixture`
+  40.9 s wall (the harness 28.1 s, the flow 4.2–7.2 s); `test_rehearse_refused_on_a_stale_mark`
+  170.3 s (seeding 31 s, `-propose` 83 s, the rehearsal 12.1 s);
+  `test_stage_plan_of_a_throwaway_change` 197.7 s (seeding 22 s, `-propose` 62 s, the flow's
+  plan 16.0 s and the Go handler's 13.0 s through the host's server);
+  `test_rehearse_composed_by_the_fixture_tool` 174.6 s (seeding 23 s, the draft's rehearsal
+  10.2 s, the held host's 10.2 s): 583.5 s in all. Afterwards `Branch` lists `main` and
+  `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage`, `FylgjaProbe`,
+  `CoreChangeThread` and `CoreUserValidator` count 0 on `main`. The host's server filed the Go
+  plan's snapshots into the host's store, as T021's compare did; its worker was not touched.
+- **The gates**: `make build` static; `make test` green, 1,075 Python tests, 79.8 s wall
+  uncached at a load of 3.3 (110.4 s before `platform` skipped first, against the 90 s
+  budget); `make lint` 0 issues, ruff clean.

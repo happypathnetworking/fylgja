@@ -41,7 +41,7 @@ image carries. **Storage**: files (the core's state root; the orchestrator's roo
 history, Prefect's SQLite under `local/orchestrator/prefect`. **Testing**: `go test`;
 `pytest` 9.2 (`-m contract` for tier 2); `scripts/e2e.sh`. **Target Platform**: the lab
 host, Ubuntu 26.04. **Project Type**: a CLI/server/worker binary plus a Python flow
-project and a CLI. **Performance Goals**: tier 1 ≤ 65 s; tier 2 and 3 measured (R-15,
+project and a CLI. **Performance Goals**: tier 1 ≤ 90 s (raised from 65 s on 2026-10-29); tier 2 and 3 measured (R-15,
 R-16); `fylgja-twin` inside 4,260 s. **Constraints**: the goldens, the fixture's ids, CTM
 `2`, snapshot `2`, bundle `6` unmoved; no token on the bridge; no database. **Scale/Scope**:
 about 25,600 Go lines leave or move (11,300 tests); about 8,000 Python lines arrive;

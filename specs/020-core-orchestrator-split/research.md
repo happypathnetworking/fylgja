@@ -943,3 +943,91 @@ made.
   `internal/intent/stages_test.go`'s); five mutations of the rules each failed a test.
   Tier 1: 611 tests in 5.2 s (157 new); `make test` uncached 64.5 s at a load of 1.2-2.0,
   `internal/cli` 41.7 s of it; `make lint` clean.
+
+### 5.13 The adapter's commands, the findings document, the rules and the stages text (T019, Run 17, 2026-10-29)
+
+- **The document.** `documents/findings.py` gains `Document` (the operation, the status, the
+  subject by `Subject`'s ten fields, the ids and blocks by `Document`'s seventeen keys, each
+  in the struct's order and left out when empty, and the findings), `new_document`,
+  `error_document` (the server's `fail` and `failAt`), `rule_error_document`, `render` (JSON
+  to stdout alone, text findings to stderr), the operations, statuses and exit codes, and
+  `Location`. The text is `WriteText`'s and `TextLines`'; the JSON is `MarshalIndent`'s by
+  `go_json`: `json.dumps` with `indent=2`, Go's HTML-safe escapes and Go's floats
+  (`floatEncoder`: shortest digits, plain from 1e-6 to below 1e21 with no `.0`, else an
+  exponent cleaned to `1e-7`), through the pure-Python encoder, since the C one writes a
+  float by `float.__repr__` whatever it is given. `validate` holds a document to
+  `contracts/findings.schema.json` with every schema of the `$id` prefix added, on
+  jsonschema, which Prefect's dependencies carry, imported there alone. `Findings.count_of`
+  is `List.Count`; `list.count` keeps its meaning.
+- **Held to Go.** Thirty documents under `tests/data/findings/`, one or more of each of the
+  sixteen operations, transcribed from `finding_test.go`'s `m2Documents`,
+  `TestEveryOperationRendersAValidDocument`, `TestTextRenderingPutsRejectionsFirstAndSummaryLast`,
+  `TestTheRunRulesRenderValidDocuments` and `TestATwinDiffDocumentCarriesItsSidesAndItsPair`,
+  with a location, an escape and a step case. A throwaway Go test (deleted after) decoded
+  each into `findings.Document`: all thirty are the current contract's, `WriteText` equals
+  each case's text and `WriteJSON` equals the Python rendering byte for byte (one case, the
+  M2 dry run, gained M5's node artifact, which the current contract requires). The four
+  documents of `tests/golden/` (stage list's two, stage plan's, the rehearsal's, whose
+  floats, nulls and empty lists are all there) decode and write again to their bytes, and
+  `plan.stderr.txt` and `rehearsal.stderr.txt` are their text, but for the README's one hand
+  edit, `<state-root>`, which Go would have escaped.
+- **The rules.** `documents/rules.py`: 74 rules (34 the core keeps), each with its id, severity, exit, steps,
+  wording (`finding.go`'s comment, shortened) and whether the core keeps the id. The
+  orchestrator's own are `record.twin.stale`, `step.target.required`,
+  `rehearsal.report.unposted` and `platform.unreachable`; `api.unreachable` and
+  `api.token.refused` are listed as the core's (its client's words, which the orchestrator's
+  client of the core files), so the task's "new five" are these four and the API's two,
+  none of them yet filed. The retired families are data-model §11's: every `scope.*`,
+  `schema.*`, `rehearsal.*`, `probes.*` and `stage.*` rule but M2's `stage.failed`, with
+  `intent.at.precision`, `probe.kind.absent`, `snapshot.flags.conflict`,
+  `step.target.current` and `step.stage.skipped`. **One departure**: `step.target.unknown`
+  is marked kept by the core, since `finding.go`'s 020 comment files it for `twin step`
+  without `--snapshot`, though data-model §11 lists it among the retired; R-19's "the
+  stage forms" reconciles the two, and T035's `TestTheOrchestratorsRulesAreRetired` should
+  leave the id in the core. Tests: every id against the contract's pattern (read from the
+  schema), distinct, each rule whole (severity, exit 0 exactly for a non-rejection, steps
+  of the enum), every `RULE_*` of the adapter's modules in the table, the kept ones in
+  `finding.go` today, the four never there, and a document of each rule valid.
+- **The stages text.** `documents/stages.py` renders from the block alone: `list_lines`
+  (`printList` and `heading`, the widths by bytes as Go's `len` and the padding by code
+  points as `%-*s`, so a non-ASCII branch pads as Go's does), `line` and `resolution`
+  (`StageBlock.Line` and `Resolution`), `heading` with the plan's destination and scope for
+  T022. `stages.txt` and `stages-with-twin.txt` come back byte for byte from their JSON.
+- **The commands.** `adapters/infrahub/__main__.py`: `read`, `stages` and `schema-check`,
+  each a function (`read`, `stage_list`, `schema_check`) returning the document and the
+  success lines, which `fylgja-cli`'s flows can call, and `main` printing them as the Go
+  client did (the lines to stdout in text, the findings to stderr, the document alone under
+  `--json`) and exiting by the status. The order and words are `runRead`'s, `runStageList`'s
+  and `runCheck`'s: the guards (`--branch or --stage is required`, `--out is required`,
+  `stage.ref.invalid`, `stage.flags.conflict`, `intent.at.precision`), the scope, the
+  packages, the credentials, the probes (the file, else the kind on the default branch), the
+  stage's resolution with its findings at no step (intent read's operations carry none) and
+  `intent.at.precision` there still status error, the read, the write; the resolved stage
+  and its warnings on every document after the resolution. `stages`' `--branch` is optional,
+  as `stage list`'s; `--json` is on all three. The start-up line goes to stderr on `read` and
+  `stages`, which read under a scope, and not on `schema-check`, which reads none.
+  `client.env_credentials` takes the environment it reads, so a command reads one mapping.
+  **Three departures**, each where the core's words named the core's server: `scope.unset`
+  reads `no --scope was given and there is no default: name one with --scope tag:<name>, or
+  set FYLGJA_DEFAULT_SCOPE where the adapter runs`; an invalid `FYLGJA_DEFAULT_SCOPE` is
+  `scope.invalid` naming the variable's value, where the server refused to start; and the
+  success line ends `; snapshot <id>` with no `stored at`, the store being the
+  orchestrator's record's (T024), and lacks the core's `lossy mappings` and `shared ports`,
+  which are its compiler's survey (`compiler.Survey`), not a reader's: T025's `intent-read`
+  flow, which prints the line, takes them from the core's compile or drops them. A missing
+  `INFRAHUB_*` is `operation.failed` about the operation before anything is read, where the
+  server's kind read filed it at resolve about `FylgjaProbe`. A snapshot that cannot be
+  written is `operation.failed`, `writing snapshot: <path>: <reason>`, as the client's.
+- **Live, read-only, on this host's Infrahub**: `read --branch fylgja-fixture --scope
+  tag:fylgja` took 4.0 s and filed `0940db93…`, byte for byte `local/snapshots/0940db93….json`
+  (the Go server's) but for the two `observed_at` lines; `schema-check --branch
+  fylgja-fixture` equals the Go server's `fylgja schema check` byte for byte, `--json` and
+  text; `stages --json` equals `fylgja stage list --json` (no open proposed change); nothing
+  written to Infrahub.
+- **Tests**: `test_findings.py` (64) and `test_cli_adapter.py` (35: each command's exit,
+  stdout, stderr and document on recorded answers, the fixture's read through the fake, the
+  kind's probes, the golden listing's text and JSON byte for byte through the real reader,
+  sixteen guards refused before any request, the token in no output). Tier 1: 710 tests in
+  7.5 s (99 new). `make test` uncached 68.0 s and 67.0 s at a load of 2.1–4.7, `internal/cli`
+  43.2 and 42.2 s of it, over the 65 s budget: by the operator's answer (T047's note) the
+  budget is 90 s, moved in `CLAUDE.md` and `docs/development.md`. `make lint` clean.

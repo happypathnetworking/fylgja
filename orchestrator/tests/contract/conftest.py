@@ -21,17 +21,19 @@ import subprocess
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import httpx
 import pytest
 
-from fylgja_orchestrator.adapters.infrahub import packages
+from fylgja_orchestrator.adapters.infrahub import packages, stages
 from fylgja_orchestrator.adapters.infrahub import read as reading
-from fylgja_orchestrator.adapters.infrahub.client import Client, Config, from_env
-from fylgja_orchestrator.documents.findings import Findings
+from fylgja_orchestrator.adapters.infrahub import stage_reader as sr
+from fylgja_orchestrator.adapters.infrahub.client import Client, Config, default_from_env, from_env
+from fylgja_orchestrator.documents.findings import REJECTION, Findings
 
 ENV = ("INFRAHUB_ADDRESS", "INFRAHUB_API_TOKEN")
 REPO = Path(__file__).resolve().parents[3]
@@ -42,6 +44,9 @@ TEST_PREFIX = "fylgja-test-py-"
 SEED_TIMEOUT_S = 900
 """A seed's bound: the schema's 90 s wait twice and the artifacts' 180 s, with a margin."""
 LISTEN_WAIT_S = 15
+ARTIFACT_WAIT_S = 180
+"""`testsupport.ArtifactWait`: how long a checksum is awaited to move after a generate."""
+ARTIFACT_NAME = "device-config"
 
 
 def require_infrahub():
@@ -74,6 +79,28 @@ def branch_exists(name: str) -> bool:
     """Whether Infrahub lists the branch, read on main; it writes nothing."""
     data = Client(from_env("main")).graphql(f"query {{ Branch(name: {json.dumps(name)}) {{ name }} }}")
     return any(b.get("name") == name for b in data.get("Branch") or [])
+
+
+def graphql(branch: str, query: str) -> dict:
+    """One read of a branch's GraphQL, `main` the default branch's; it writes nothing."""
+    return Client(from_env(branch)).graphql(query)
+
+
+def proposed_changes_of(branch: str) -> dict[str, list[str]]:
+    """Every proposed change whose source the branch is, whatever its state, each with its
+    stages' ids, read on main: what a throwaway's deletion must leave none of."""
+    data = graphql("main", "query { CoreProposedChange(source_branch__value: %s) { edges { node { id "
+                   "fylgja_stages { edges { node { id } } } } } } }" % json.dumps(branch))
+    return {e["node"]["id"]: [s["node"]["id"] for s in e["node"]["fylgja_stages"]["edges"]]
+            for e in data["CoreProposedChange"]["edges"]}
+
+
+def stages_present(ids: list[str]) -> list[str]:
+    """Which of the stages are still read on main."""
+    if not ids:
+        return []
+    data = graphql("main", "query { FylgjaStage(ids: %s) { edges { node { id } } } }" % json.dumps(ids))
+    return [e["node"]["id"] for e in data["FylgjaStage"]["edges"]]
 
 
 def probe_count() -> int:
@@ -111,6 +138,34 @@ class FixtureTool:
     def delete(self, branch: str) -> str:
         return self.run("-delete", "-branch", branch)
 
+    def propose(self, branch: str) -> str:
+        """A draft proposed change from the branch into main, its pipeline awaited: its id."""
+        started = time.monotonic()
+        out = self.run("-branch", branch, "-propose")
+        m = re.search(r"^proposed change (\S+) opened on ", out, re.M)
+        if not m:
+            raise RuntimeError(f"-propose printed no id: {out!r}")
+        print(f"proposed change {m.group(1)} on {branch}, its pipeline concluded after "
+              f"{time.monotonic() - started:.0f}s")
+        return m.group(1)
+
+    def mark(self, branch: str, label: str, at: str = "", description: str = "") -> tuple[str, str]:
+        """One stage marked on the branch's open proposed change, through the default branch's
+        GraphQL: its id, and its at, the label's write stamp verbatim unless one is given."""
+        args = ["-branch", branch, "-stage", label]
+        if at:
+            args += ["-at", at]
+        if description:
+            args += ["-description", description]
+        out = self.run(*args)
+        m = re.search(r"\(stage id (\S+)\) at (\S+) \((written|given)\)$", out.strip())
+        if not m:
+            raise RuntimeError(f"-stage printed no id and at: {out!r}")
+        return m.group(1), m.group(2)
+
+    def update_stage(self, branch: str, label: str, field: str, value: str) -> str:
+        return self.run("-branch", branch, "-update-stage", f"{label}:{field}={value}")
+
     @contextmanager
     def throwaway(self, label: str, *, mixed: bool = False, schema_only: bool = False):
         """A branch seeded with the three-node fixture (the mixed one, or the schema alone),
@@ -122,10 +177,19 @@ class FixtureTool:
             print(f"branch {name} seeded in {time.monotonic() - started:.0f}s")
             yield name
         finally:
+            # What hangs on the branch is collected before the deletion, by id, so the check
+            # after it is of the test's own objects (the Go tests' testBranch).
+            made = proposed_changes_of(name)
+            marks = [m for ids in made.values() for m in ids]
             if branch_exists(name):
-                self.delete(name)
+                print(self.delete(name).strip())
             if branch_exists(name):
                 raise RuntimeError(f"branch {name} still exists after its delete")
+            left = proposed_changes_of(name)
+            if left:
+                raise RuntimeError(f"the proposed changes {sorted(left)} on {name} are still read after its delete")
+            if stages_present(marks):
+                raise RuntimeError(f"the stages {stages_present(marks)} made on {name} are still read after its delete")
 
 
 @pytest.fixture(scope="session")
@@ -151,6 +215,7 @@ class Core:
     binary: Path
     address: str
     token: str
+    state: Path
 
     def run(self, *args: str, timeout: float = 120) -> tuple[int, dict]:
         """One `fylgja` command with --json: its exit and its document."""
@@ -167,19 +232,23 @@ class Core:
     def compile(self, snapshot: Path, out: Path) -> tuple[int, dict]:
         return self.run("twin", "compile", "--snapshot", str(snapshot), "--out", str(out))
 
+    def diff(self, a: Path, b: Path) -> tuple[int, dict]:
+        """`twin diff` of two snapshot files: the step between their bundles (T010)."""
+        return self.run("twin", "diff", "--from", str(a), "--to", str(b))
 
-@pytest.fixture(scope="session")
-def core(tmp_path_factory):
-    """`bin/fylgja serve` on 127.0.0.1:0 with a token of its own, a temporary state root and
-    no INFRAHUB_*: the compile needs neither Infrahub nor the workflow service, and files
-    nothing."""
+
+@contextmanager
+def serving(root: Path):
+    """`bin/fylgja serve` on 127.0.0.1:0 with a token of its own, its state root under root and
+    no INFRAHUB_*: the compile needs neither Infrahub nor the workflow service."""
     binary = REPO / "bin" / "fylgja"
     if not binary.is_file():
         pytest.skip(f"the core's half needs {binary}: make build")
-    root = tmp_path_factory.mktemp("core")
+    root.mkdir(parents=True, exist_ok=True)
     token = secrets.token_hex(16)
+    state = root / "state"
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
-           "FYLGJA_STATE_ROOT": str(root / "state"), "FYLGJA_API_TOKEN": token}
+           "FYLGJA_STATE_ROOT": str(state), "FYLGJA_API_TOKEN": token}
     log = root / "server.log"
     with open(log, "w") as out:
         server = subprocess.Popen([str(binary), "serve", "--listen", "127.0.0.1:0"], env=env, cwd=root, stdout=out,
@@ -195,10 +264,24 @@ def core(tmp_path_factory):
                 raise RuntimeError(f"the core's server did not listen: {log.read_text()}")
             else:
                 time.sleep(0.1)
-        yield Core(binary, address, token)
+        yield Core(binary, address, token, state)
     finally:
         server.terminate()
         server.wait(timeout=10)
+
+
+@pytest.fixture(scope="session")
+def core(tmp_path_factory):
+    """A core server for the session, which files nothing of the host's."""
+    with serving(tmp_path_factory.mktemp("core")) as c:
+        yield c
+
+
+@pytest.fixture
+def own_core(tmp_path):
+    """A core server of the test's own, whose stores hold only what the test files."""
+    with serving(tmp_path / "core") as c:
+        yield c
 
 
 def read_under(branch: str, at: str = "", scope: str = SCOPE, address: str = ""):
@@ -269,3 +352,217 @@ def proxy():
     finally:
         server.shutdown()
         server.server_close()
+
+
+# The stages' harness (T021): Infrahub's own state read beside the product's, and the
+# stage plan's outcomes made of the adapter's resolution and take and the core's compile and
+# diff, since the plan itself is the orchestrator's flow's.
+
+
+def artifacts_ready_at(branch: str) -> datetime:
+    """When the branch's last artifact was rendered: the latest checksum stamp among them,
+    every artifact Ready (`testsupport.ArtifactsReadyAt`)."""
+    edges = graphql(branch, "query { CoreArtifact { edges { node { status { value } checksum { updated_at } } } } }"
+                    )["CoreArtifact"]["edges"]
+    assert edges, f"branch {branch} holds no artifact"
+    stamps = []
+    for edge in edges:
+        node = edge["node"]
+        assert node["status"]["value"] == "Ready", f"branch {branch} holds an artifact {node['status']['value']}"
+        stamps.append(datetime.fromisoformat(node["checksum"]["updated_at"]))
+    return max(stamps)
+
+
+def artifacts_of(branch: str, ready_only: bool = False) -> dict[str, dict]:
+    """Each device's device-config artifact as Infrahub lists it now: its checksum, storage id
+    and status, read through the library's device and Infrahub's target interface as the read
+    does; with ready_only, the Ready ones alone (the Go tests' `checksums`)."""
+    data = graphql(branch, """query { DcimDevice { edges { node { name { value }
+        ... on CoreArtifactTarget { artifacts { edges { node { status { value } checksum { value } storage_id { value }
+            definition { node { ... on CoreArtifactDefinition { artifact_name { value } } } } } } } } } } } }""")
+    out = {}
+    for d in data["DcimDevice"]["edges"]:
+        for a in d["node"]["artifacts"]["edges"]:
+            n = a["node"]
+            if n["definition"]["node"]["artifact_name"]["value"] != ARTIFACT_NAME:
+                continue
+            if ready_only and n["status"]["value"] != "Ready":
+                continue
+            out[d["node"]["name"]["value"]] = {"checksum": n["checksum"]["value"],
+                                              "storage_id": n["storage_id"]["value"], "status": n["status"]["value"]}
+    return out
+
+
+def checksums(branch: str) -> dict[str, str]:
+    """Each device's Ready device-config checksum, as Infrahub lists it now."""
+    return {d: a["checksum"] for d, a in artifacts_of(branch, ready_only=True).items()}
+
+
+def await_moved(branch: str, before: dict[str, str], *devices: str, wait: float = ARTIFACT_WAIT_S) -> dict[str, str]:
+    """Polls until each named device's artifact is Ready with a checksum other than before's,
+    as scripts/e2e.sh's await_checksums_moved does."""
+    deadline = time.monotonic() + wait
+    while True:
+        now = checksums(branch)
+        if all(now.get(d) and now[d] != before.get(d) for d in devices):
+            return now
+        if time.monotonic() > deadline:
+            raise AssertionError(f"the artifacts of {devices} on {branch} did not move from {before} within {wait}s: "
+                                 f"{now}")
+        time.sleep(1)
+
+
+def await_joined(branch: str, device: str = "n1", port: str = "ethernet-1/3") -> None:
+    """Polls until the new port is stamped later than the branch's latest checksum: Infrahub's
+    task workers add what a generation read for the first time to the template query's groups
+    a few seconds after it, which moves the node's stamp past the generation (D-058). Its
+    absence after a minute is D-058's revisit."""
+    generated = artifacts_ready_at(branch)
+    query = ('query { InterfacePhysical(device__name__value: %s, name__value: %s) '
+             '{ edges { node_metadata { updated_at } } } }' % (json.dumps(device), json.dumps(port)))
+    deadline = time.monotonic() + 60
+    while True:
+        edges = graphql(branch, query)["InterfacePhysical"]["edges"]
+        if len(edges) == 1:
+            at = datetime.fromisoformat(edges[0]["node_metadata"]["updated_at"])
+            if at > generated:
+                print(f"the query groups took in {device}:{port} at {at.isoformat()}, "
+                      f"{(at - generated).total_seconds():.1f}s after the latest checksum")
+                return
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{device}:{port} on {branch} is not stamped after the latest checksum "
+                                 f"{generated.isoformat()} a minute on: Infrahub no longer restamps a generation's "
+                                 "new members (D-058's revisit)")
+        time.sleep(0.5)
+
+
+def branch_origin(branch: str) -> tuple[str, str]:
+    """A branch's branched_from and created_at, read on main, verbatim."""
+    [b] = graphql("main", "query { Branch(name: %s) { branched_from created_at } }" % json.dumps(branch))["Branch"]
+    return b["branched_from"], b["created_at"]
+
+
+def stage_reader() -> sr.StageReader:
+    """The product's reader of the default branch, on the process's INFRAHUB_*."""
+    return sr.StageReader(default_from_env())
+
+
+def stamper() -> stages.Stamper:
+    """The stamper the adapter's commands build: an intent client per (branch, at)."""
+    return stages.stamper_of(default_from_env())
+
+
+def resolve(ref: stages.Ref, scope: str = SCOPE):
+    """One reference resolved by the adapter's nine steps, under the clock now."""
+    return stages.resolve(stage_reader(), stamper(), packages.load(), ref, scope, datetime.now(UTC))
+
+
+def find(branch: str, scope: str = SCOPE) -> stages.Change:
+    ch, found = stages.find(stage_reader(), stamper(), branch, scope)
+    assert ch is not None and not list(found), f"finding {branch}'s proposed change: {list(found)}"
+    return ch
+
+
+def refused(what: str, found, rule: str, *objects: str) -> list[str]:
+    """Asserts the findings' rejections are each of rule at step resolve, on exactly objects in
+    that order, and returns their messages (the Go tests' `refused`)."""
+    got, messages = [], []
+    for f in found:
+        if f.severity != REJECTION:
+            continue
+        assert (f.rule, f.step) == (rule, stages.STEP_RESOLVE), (
+            f"{what}: {f.rule} at step {f.step!r} on {f.object} ({f.message}); want {rule} at resolve")
+        got.append(f.object)
+        messages.append(f.message)
+    assert got == list(objects), f"{what}: {rule} names {got}, want {list(objects)}"
+    return messages
+
+
+@dataclass
+class Planned:
+    """One stage as far as the plan got: its place in the listing, refused (the first
+    rejection's rule) or compiled; the snapshot file the take wrote and the bundle the core
+    compiled it to; and every finding."""
+
+    stage: stages.Stage
+    status: str
+    rule: str = ""
+    found: list = field(default_factory=list)
+    resolved: stages.Resolved | None = None
+    snapshot: dict | None = None
+    path: Path | None = None
+    bundle_id: str = ""
+    counts: reading.Counts | None = None
+
+    @property
+    def outcome(self) -> tuple[str, str, str]:
+        return (self.stage.label, self.status, self.rule)
+
+
+PLAN_REFUSED = "refused"
+PLAN_COMPILED = "compiled"
+
+
+@dataclass
+class Plan:
+    """A stage plan of a proposed change made of the adapter's halves and the core's: each
+    stage resolved and taken by the adapter, compiled by a core server, and each pair of
+    consecutive compiled stages diffed by it. `steps` holds the `twin diff` step block of each
+    pair, None where either side was refused."""
+
+    change: stages.Change | None
+    found: list
+    stages: list[Planned]
+    steps: list[dict | None]
+
+    @property
+    def outcomes(self) -> list[tuple[str, str, str]]:
+        return [p.outcome for p in self.stages]
+
+
+def plan_of(branch: str, core: "Core", out: Path, scope: str = SCOPE) -> Plan:
+    """`stage plan` as the Go tests' planOf ran it: find the proposed change, then each of its
+    stages in order resolved (steps 4–9), read at its at and taken, the take written under
+    `out`, and compiled by the core, the first rejection of each ending it; then the step
+    between each two consecutive compiled stages."""
+    started = time.monotonic()
+    reader, stamp, registry = stage_reader(), stamper(), packages.load()
+    ch, found = stages.find(reader, stamp, branch, scope)
+    if ch is None:
+        return Plan(None, list(found), [], [])
+    default = default_from_env()
+    out.mkdir(parents=True, exist_ok=True)
+    planned = []
+    for i, st in enumerate(ch.stages):
+        res, got = stages.resolve_from(reader, stamp, registry, ch, st.ref, datetime.now(UTC))
+        if res is None:
+            first = next(f for f in got if f.severity == REJECTION)
+            planned.append(Planned(st, PLAN_REFUSED, first.rule, list(got)))
+            continue
+        client = Client(Config(address=default.config.address, token=default.config.token, branch=res.branch,
+                               at=res.at))
+        path = out / f"{i}-{st.label}.json"
+        taken, read_found = reading.read_snapshot(client, scope, registry, [], None, path)
+        all_found = list(got) + list(read_found)
+        if taken is None:
+            first = next(f for f in read_found if f.severity == REJECTION)
+            planned.append(Planned(st, PLAN_REFUSED, first.rule, all_found, res))
+            continue
+        code, doc = core.compile(path, out / f"{i}-{st.label}.bundle")
+        if code != 0:
+            first = next(f for f in doc["findings"] if f["severity"] == REJECTION)
+            planned.append(Planned(st, PLAN_REFUSED, first["rule"], all_found + doc["findings"], res, taken, path))
+            continue
+        planned.append(Planned(st, PLAN_COMPILED, "", all_found, res, taken, path, doc["bundle_id"],
+                               reading.summarize(taken["ctm"])))
+    steps = []
+    for a, b in zip(planned, planned[1:], strict=False):
+        if a.status != PLAN_COMPILED or b.status != PLAN_COMPILED:
+            steps.append(None)
+            continue
+        code, doc = core.diff(a.path, b.path)
+        assert code == 0, f"twin diff {a.stage.ref} → {b.stage.ref}: {doc}"
+        steps.append(doc["step"])
+    print(f"planned {branch} in {time.monotonic() - started:.1f}s: {len(planned)} stage(s), "
+          f"{sum(s is not None for s in steps)} step(s)")
+    return Plan(ch, list(found), planned, steps)

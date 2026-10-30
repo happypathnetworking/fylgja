@@ -27,7 +27,7 @@ from fylgja_orchestrator.adapters.infrahub import read as reading
 from fylgja_orchestrator.adapters.infrahub.client import Client, Config, ClientError, from_env
 from fylgja_orchestrator.documents.findings import INFO, REJECTION, Finding
 
-from .conftest import FIXTURE_BRANCH, REPO, SCOPE, read_under
+from .conftest import FIXTURE_BRANCH, REPO, SCOPE, artifacts_ready_at, read_under
 
 pytestmark = pytest.mark.contract
 
@@ -159,21 +159,6 @@ def test_an_unpinned_read_records_observed_at_and_no_at():
     conformance, _ = schema.check_conformance(Client(from_env(FIXTURE_BRANCH)))
     assert e["schema_hash"] and e["schema_hash"] == conformance.schema_hash
     assert e["mapping"] == LIBRARY_MAPPING
-
-
-def artifacts_ready_at(branch: str) -> datetime:
-    """When the branch's last artifact was rendered: the latest checksum stamp among them,
-    every artifact Ready (`testsupport.ArtifactsReadyAt`)."""
-    data = Client(from_env(branch)).graphql(
-        "query { CoreArtifact { edges { node { status { value } checksum { updated_at } } } } }")
-    edges = data["CoreArtifact"]["edges"]
-    assert edges, f"branch {branch} holds no artifact"
-    stamps = []
-    for edge in edges:
-        node = edge["node"]
-        assert node["status"]["value"] == "Ready", f"branch {branch} holds an artifact {node['status']['value']}"
-        stamps.append(datetime.fromisoformat(node["checksum"]["updated_at"]))
-    return max(stamps)
 
 
 def test_a_pinned_read_sends_and_records_its_at_verbatim(proxy):

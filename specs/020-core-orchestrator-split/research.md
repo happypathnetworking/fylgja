@@ -2527,3 +2527,63 @@ made.
   `commits/` read for the new commit; then `make test-e2e` again, from a commit the running
   binaries carry. The other road, the precheck comparing code rather than bytes as the copy
   did, changes 015's rule and is the operator's to choose.
+
+### 5.30 The records and the closing gates (T044–T047, Run 39, 2026-10-30)
+
+- **The records.** `docs/verified-facts.md` gains a "Prefect 3.8.8" section (the install
+  and its pins, the server's basic auth and `/api/health`, the `503` at start, deployments,
+  runs, the cancellation with and without `force`, the default run order, the artifact's
+  `data`, the run's log and its child logger, the timeout and the cancellation's fixed 30 s
+  grace, the ephemeral server and `prefect_test_harness`, the runner's poll and the flow's
+  overhead), each fact marked 3.9.0 or 3.8.8 as it was verified; under Infrahub 1.11.2 "The
+  embedded Prefect" (§1.1, and §5.28's recreated task worker with no checkout) and "The
+  adapter (020)", where the SDK's `at` fact, the snapshot id in Python and Go's bytes moved
+  from elsewhere beside the adapter's read time; under the host its five processes, the
+  memory with them, and the tiers' times. The roadmap marks F-027 built and records what the
+  production shape decided; `CLAUDE.md` is rewritten for two deployables, its State whole.
+  The heading is "Prefect 3.8.8", not T044's "3.9.0", as T013's note asked.
+- **The gates, on the records' tree**: `make build` static; `make test` uncached
+  (`go clean -testcache`) **55.9 s** wall at a load of 2.1, `internal/cli` 21.9 s, 1,120
+  Python tests in 18.3 s: under SC-009's 65 s, and the 90 s the operator's answer set at
+  Run 17 stands; `make lint` 0 issues and ruff clean; `go vet -tags contract,fixture,e2e
+  ./...` clean; `make linkcheck` 127 files, 2,801 links, 0 broken; `git diff --stat main --
+  testdata/golden testdata/snapshot testdata/ctm schema/dcim infrahub/templates
+  infrahub/queries` empty (FR-033).
+- **SC-011's grep** finds more than the decision log, the archive and the release notes, and
+  each hit is one of three kinds, none a current claim of the removed shape: a record of
+  what was before 020, written as such ("from 015 until 020", "gone", "removes";
+  `docs/architecture.md`, `docs/development.md`, `docs/glossary.md`, `contracts/cli.md`'s
+  and `contracts/api.md`'s 015 sections and their 020 sections naming what left, the
+  schemas' per-feature descriptions); a shape an older record still read takes
+  (`contracts/show.schema.json`'s and `verify.schema.json`'s `rehearsal` block, a
+  `twin.json` `7` to `11` being shown); or the rehearse flow's report, which names its flow
+  run `fylgja-rehearse <id>` by design (§5.18, the goldens; `README.md`'s sample report,
+  `contracts/rehearsal.schema.json`, `docs/architecture.md`, `docs/development.md`, the
+  C4 deployment view's SVG), and `docs/recording/session.cast`, 0.2's recording. `CLAUDE.md`
+  and `SECURITY.md` have none. Nothing was changed for it: the grep's expectation, not the
+  tree, is what the report's run label contradicts.
+- **The credential greps**, in one process holding the values in memory (`local/.env`'s
+  API token, Infrahub's, the Compose secrets, the auth string, its password and its
+  base64, and both logins; a file of the patterns is not written): none of the long values
+  in `local/server.log`, `local/worker.log`, `local/orchestrator.log`, `local/prefect.log`
+  or the four files under `local/orchestrator/prefect/`. Over the tree's 957 tracked and
+  unignored files, only the SR Linux password, which is the image's published default, in
+  four lines: Go's and the orchestrator's leak-marker lists
+  (`internal/findings/finding_test.go`, `orchestrator/tests/unit/rehearsal_examples.py`),
+  and the documented defaults in `scripts/bring-up.sh` and `scripts/e2e.sh`. The logins'
+  values and the EOS password, five characters each, match word-bounded across 241 files
+  as ordinary words (`admin-state` among them) and in `local/worker.log`'s two lines of
+  2026-10-27 that §5.29 read, containerlab's own.
+- **The processes, read and not restarted**: the worker (`3346322`) and the server
+  (`3346327`, `--listen 127.0.0.1:7650` alone) started at 15:36:45 on `a6f3fe3`'s build
+  (§5.29); both read `(deleted)`, since this run's `make build` replaced `bin/fylgja`, whose
+  final build carries this run's last commit. The restart from it is a live session's or
+  the operator's. The Prefect server listens on `172.17.0.1:4200`, the runner runs, and the
+  dev server listens on `127.0.0.1:7233`.
+- **The measured effort against R-22**: `specs/020-core-orchestrator-split/commands/runs.jsonl`,
+  published through Run 38, holds 46 sessions from `specify` (2026-10-29 16:52 UTC) to Run
+  38's end (2026-10-30 15:37 UTC), **57,910 s active (16.1 h)** and 58,811 s wall, the six
+  laned pairs counting each session; Run 38's 6,874 s holds both tiers' 5,491 s (92
+  minutes), and Run 37's 3,586 s the host and the hand scenarios. Against R-22's 24–36
+  hours, about two thirds of the low end. This run, T048's review and `converge` are not
+  counted.

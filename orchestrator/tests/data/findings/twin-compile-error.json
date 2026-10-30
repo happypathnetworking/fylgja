@@ -1,0 +1,21 @@
+{
+  "about": "TestEveryOperationRendersAValidDocument: twin compile error",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.compile",
+    "status": "error",
+    "subject": {
+      "out": "/tmp/b"
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "operation.failed",
+        "object": "twin.compile",
+        "message": "--out is required"
+      }
+    ]
+  },
+  "text": "rejection operation.failed twin.compile: --out is required\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 2
+}

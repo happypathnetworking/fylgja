@@ -1,0 +1,19 @@
+{
+  "about": "stage list's --branch refused at start (branchGuard)",
+  "document": {
+    "findings_version": "1",
+    "operation": "stage.list",
+    "status": "error",
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "stage.ref.invalid",
+        "object": "a b",
+        "message": "--branch \"a b\" is not a branch: expected a branch with no \"/\" and no whitespace",
+        "step": "start"
+      }
+    ]
+  },
+  "text": "rejection stage.ref.invalid [step start] a b: --branch \"a b\" is not a branch: expected a branch with no \"/\" and no whitespace\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 2
+}

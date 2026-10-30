@@ -1,0 +1,27 @@
+{
+  "about": "TestEveryOperationRendersAValidDocument: psp validate with location",
+  "document": {
+    "findings_version": "1",
+    "operation": "psp.validate",
+    "status": "ok",
+    "subject": {
+      "files": [
+        "psp/x.yaml"
+      ]
+    },
+    "findings": [
+      {
+        "severity": "warning",
+        "rule": "psp.resources.implausible",
+        "object": "nokia_srlinux",
+        "message": "resources look implausible",
+        "location": {
+          "file": "psp/x.yaml",
+          "line": 12
+        }
+      }
+    ]
+  },
+  "text": "warning psp.resources.implausible psp/x.yaml:12 (nokia_srlinux): resources look implausible\n1 finding(s): 0 rejection, 1 warning, 0 info\n",
+  "exit": 0
+}

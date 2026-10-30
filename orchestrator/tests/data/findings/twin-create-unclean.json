@@ -1,0 +1,30 @@
+{
+  "about": "m2Documents: create unclean",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.create",
+    "status": "unclean",
+    "subject": {
+      "branch": "fylgja-fixture",
+      "run_id": "run-3"
+    },
+    "cleanup": {
+      "teardown": "failed",
+      "unstage": "done",
+      "remaining": [
+        "lab fylgja"
+      ]
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "cleanup.incomplete",
+        "object": "lab fylgja",
+        "message": "lab fylgja is still present; clear it with clab destroy --name fylgja --cleanup",
+        "step": "teardown"
+      }
+    ]
+  },
+  "text": "rejection cleanup.incomplete [step teardown] lab fylgja: lab fylgja is still present; clear it with clab destroy --name fylgja --cleanup\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 4
+}

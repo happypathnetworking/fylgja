@@ -1,0 +1,17 @@
+{
+  "about": "018 and 017: intent read's success, its snapshot and its scope",
+  "document": {
+    "findings_version": "1",
+    "operation": "intent.read",
+    "status": "ok",
+    "subject": {
+      "branch": "fylgja-fixture",
+      "out": "snap.json",
+      "scope": "tag:fylgja"
+    },
+    "snapshot_id": "0940db93e2ad1244a097824ececdaa6979500b1ddeeef15ca3cd612da68656ef",
+    "findings": []
+  },
+  "text": "",
+  "exit": 0
+}

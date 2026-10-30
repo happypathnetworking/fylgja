@@ -1,0 +1,23 @@
+{
+  "about": "TestEveryOperationRendersAValidDocument: intent read rejected",
+  "document": {
+    "findings_version": "1",
+    "operation": "intent.read",
+    "status": "rejected",
+    "subject": {
+      "branch": "fylgja-fixture",
+      "at": "2026-09-14T12:00:00.000000Z",
+      "ctm": "ctm.json"
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "interface.rule.unmatched",
+        "object": "n1:Ethernet99",
+        "message": "no rule of the nokia_srlinux profile matches this production name (tried: ethernet, mgmt); the profile or the intent must be fixed"
+      }
+    ]
+  },
+  "text": "rejection interface.rule.unmatched n1:Ethernet99: no rule of the nokia_srlinux profile matches this production name (tried: ethernet, mgmt); the profile or the intent must be fixed\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 1
+}

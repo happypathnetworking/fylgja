@@ -1,0 +1,21 @@
+{
+  "about": "TestTheRunRulesRenderValidDocuments: run interrupt requested",
+  "document": {
+    "findings_version": "1",
+    "operation": "run.interrupt",
+    "status": "ok",
+    "subject": {
+      "run_id": "0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b"
+    },
+    "findings": [
+      {
+        "severity": "info",
+        "rule": "run.cancel.requested",
+        "object": "fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b",
+        "message": "cancellation of run fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b was requested"
+      }
+    ]
+  },
+  "text": "info run.cancel.requested fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b: cancellation of run fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b was requested\n1 finding(s): 0 rejection, 0 warning, 1 info\n",
+  "exit": 0
+}

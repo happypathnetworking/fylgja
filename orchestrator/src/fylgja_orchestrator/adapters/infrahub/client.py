@@ -127,11 +127,12 @@ class Config:
         return f"(branch {self.branch}, at {self.at})"
 
 
-def env_credentials() -> tuple[str, str]:
-    """The address, its trailing slashes trimmed, and the credential; ConfigError when
-    either is unset."""
-    address = os.environ.get(ENV_ADDRESS, "").rstrip("/")
-    token = os.environ.get(ENV_TOKEN, "")
+def env_credentials(environ=None) -> tuple[str, str]:
+    """The address, its trailing slashes trimmed, and the credential, from `environ` (the
+    process's when None); ConfigError when either is unset."""
+    environ = os.environ if environ is None else environ
+    address = environ.get(ENV_ADDRESS, "").rstrip("/")
+    token = environ.get(ENV_TOKEN, "")
     if not address:
         raise ConfigError(f"{ENV_ADDRESS} is not set")
     if not token:

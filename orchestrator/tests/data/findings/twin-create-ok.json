@@ -1,0 +1,29 @@
+{
+  "about": "m2Documents: create ok",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.create",
+    "status": "ok",
+    "subject": {
+      "branch": "fylgja-fixture",
+      "run_id": "run-1"
+    },
+    "bundle_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    "twin": {
+      "lab": "fylgja",
+      "dir": "/abs/local/twin",
+      "run_id": "run-1",
+      "observed_at": "2026-09-15T14:22:12.000000Z",
+      "nodes": [
+        {
+          "name": "n1",
+          "mgmt_ipv4": "172.20.20.2",
+          "ready_after_s": 0.9
+        }
+      ]
+    },
+    "findings": []
+  },
+  "text": "",
+  "exit": 0
+}

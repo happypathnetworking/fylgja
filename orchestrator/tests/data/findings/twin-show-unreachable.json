@@ -1,0 +1,18 @@
+{
+  "about": "M4: twin show could not reach the workflow service",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.show",
+    "status": "ok",
+    "findings": [
+      {
+        "severity": "warning",
+        "rule": "show.service.unreachable",
+        "object": "localhost:7233",
+        "message": "the workflow service did not answer at localhost:7233; whether a run is in flight is unknown"
+      }
+    ]
+  },
+  "text": "warning show.service.unreachable localhost:7233: the workflow service did not answer at localhost:7233; whether a run is in flight is unknown\n1 finding(s): 0 rejection, 1 warning, 0 info\n",
+  "exit": 0
+}

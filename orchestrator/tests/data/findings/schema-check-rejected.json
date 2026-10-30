@@ -1,0 +1,21 @@
+{
+  "about": "TestEveryOperationRendersAValidDocument: schema check rejected",
+  "document": {
+    "findings_version": "1",
+    "operation": "schema.check",
+    "status": "rejected",
+    "subject": {
+      "branch": "fylgja-fixture"
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "schema.kind.missing",
+        "object": "DcimCable",
+        "message": "the branch's schema has no kind DcimCable; the mapping reads it as opsmill/schema-library@26336e9 has it"
+      }
+    ]
+  },
+  "text": "rejection schema.kind.missing DcimCable: the branch's schema has no kind DcimCable; the mapping reads it as opsmill/schema-library@26336e9 has it\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 1
+}

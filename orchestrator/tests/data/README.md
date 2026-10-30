@@ -50,3 +50,10 @@ adapter on 2026-10-29, with the Go server's `stage list --json` and each stage's
 in its `stage plan --json` of the same moment; each request is kept once, and every branch
 schema answer is `schema/schema-26336e9.json` under the hash the branch answered, as
 `test_recorded.py` serves it. Node ids and timestamps, no credential and no address.
+
+`findings/` holds one document of each of the sixteen operations, and more where a shape
+asks, transcribed by hand from `internal/findings`' Go tests (each case's `about` names
+its test), with the text `WriteText` prints for it and its exit (020's T019). A throwaway Go
+test held all thirty to the current contract, to `WriteText` and to `WriteJSON`, byte for
+byte, before it was deleted (research §5.13); `test_findings.py` holds the Python renderer
+to them.

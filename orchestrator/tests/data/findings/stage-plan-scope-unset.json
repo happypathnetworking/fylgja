@@ -1,0 +1,19 @@
+{
+  "about": "scope.unset at start (scopeOf)",
+  "document": {
+    "findings_version": "1",
+    "operation": "stage.plan",
+    "status": "error",
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "scope.unset",
+        "object": "FYLGJA_DEFAULT_SCOPE",
+        "message": "no --scope was given and the server has no default: name one with --scope tag:<name>, or set FYLGJA_DEFAULT_SCOPE where fylgja serve starts",
+        "step": "start"
+      }
+    ]
+  },
+  "text": "rejection scope.unset [step start] FYLGJA_DEFAULT_SCOPE: no --scope was given and the server has no default: name one with --scope tag:<name>, or set FYLGJA_DEFAULT_SCOPE where fylgja serve starts\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 2
+}

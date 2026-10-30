@@ -1,0 +1,26 @@
+{
+  "about": "a finding at a file with no line and no object",
+  "document": {
+    "findings_version": "1",
+    "operation": "psp.validate",
+    "status": "rejected",
+    "subject": {
+      "files": [
+        "psp/y.yaml"
+      ]
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "psp.schema",
+        "object": "",
+        "message": "not a package",
+        "location": {
+          "file": "psp/y.yaml"
+        }
+      }
+    ]
+  },
+  "text": "rejection psp.schema psp/y.yaml: not a package\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 1
+}

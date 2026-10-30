@@ -30,7 +30,7 @@ func TestM1DocumentsStillSatisfyM1Schema(t *testing.T) {
 		{"twin compile ok", compileDoc(wrappedFixture("three-node")), true},
 		{"twin compile rejected", compileDoc(wrappedCTM(t, repoPath("testdata", "ctm", "defects", "five.json"))), true},
 		{"twin compile error", compileDoc(""), false},
-		{"intent read error", findings.ErrorDocument(findings.OpIntentRead, &findings.Subject{Branch: "fylgja-fixture"}, "unreachable"), false},
+		{"psp validate error", findings.ErrorDocument(findings.OpPSPValidate, &findings.Subject{Files: []string{"psp/x.yaml"}}, "unreadable"), false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := namesSnapshot(t, c.doc); got != c.snapshot {

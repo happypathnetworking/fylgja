@@ -15,7 +15,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
-	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
@@ -130,7 +129,7 @@ func (d *diff) compile(ctx context.Context, opts *options, paths lab.Paths, side
 		opts.note("%s", bundleStoredLine(side.bundle.ID, bundle.NewDirStore(paths.Bundles).Path(side.bundle.ID)))
 		return nil
 	}
-	files, id, compiled := stage.Compile(side.snapshot.CTM, side.snapshot.Probes, reg, packages)
+	files, id, compiled := Compile(side.snapshot.CTM, side.snapshot.Probes, reg, packages)
 	compiled = compiled.AtStep(findings.StepCompile)
 	if compiled.Rejected() {
 		return d.carried(finish(op, nil, compiled))

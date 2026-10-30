@@ -23,7 +23,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -243,7 +242,7 @@ func verifyHost(t *testing.T, golden string, edit func(map[string]any), change f
 	mixedDryRunEnv(t)
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", sentinel)
 	t.Setenv("FYLGJA_EOS_PASSWORD", sentinel)
-	t.Setenv(intent.EnvToken, sentinel)
+	t.Setenv("INFRAHUB_API_TOKEN", sentinel)
 	t.Setenv(lab.EnvTemporalAddress, "")
 	t.Setenv(lab.EnvPSPDir, "")
 

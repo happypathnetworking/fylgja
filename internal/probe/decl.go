@@ -26,6 +26,17 @@ import (
 // exists.
 const Version = "1"
 
+// The declaration file's two rules. The core read a --probes file until 020, which moved
+// the file to the orchestrator's adapter (T032, T033) and retired both from the core's
+// findings (T035): orchestrator/src/fylgja_orchestrator/documents/rules.py files them.
+// Parse keeps them for the fixture tool's -probes, which writes a file's probes to the
+// kind, and for the tests that read testdata/probes/; no document of the core's carries
+// either, since the snapshot files a probe's fault of shape as snapshot.invalid.
+const (
+	ruleInvalid            = "probes.invalid"
+	ruleVersionUnsupported = "probes.version.unsupported"
+)
+
 // NamePattern is what a probe's name must match: short and lowercase, since it names two
 // containers (<name>-a, <name>-b) and appears in every report. schema/fylgja-probe.yaml's
 // name regex and contracts/probes.schema.json's pattern say the same.
@@ -35,7 +46,8 @@ var NamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,23}$`)
 // and the suffixes of the two hosts.
 var Ends = [2]string{"a", "b"}
 
-// Declaration is the file an operator writes and --probes sends (contracts/probes.schema.json).
+// Declaration is the file an operator writes (contracts/probes.schema.json), which the
+// orchestrator's --probes sends to its adapter from 020.
 // The snapshot carries Probes alone.
 type Declaration struct {
 	Version string  `json:"probes_version"`
@@ -85,37 +97,37 @@ func Parse(data []byte, path string) (*Declaration, findings.List) {
 	var list findings.List
 	var outer map[string]json.RawMessage
 	if err := json.Unmarshal(data, &outer); err != nil || outer == nil {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, path,
+		list.Add(findings.Rejection, ruleInvalid, path,
 			"the probe declaration is not a JSON object")
 		return nil, list
 	}
 
 	raw, present := outer["probes_version"]
 	if !present || isNull(raw) {
-		list.Add(findings.Rejection, findings.RuleProbesVersionUnsupported, path,
+		list.Add(findings.Rejection, ruleVersionUnsupported, path,
 			"the probe declaration names no probes_version; this build reads probes "+Version)
 		return nil, list
 	}
 	var version string
 	if err := json.Unmarshal(raw, &version); err != nil || version != Version {
 		// A value that is not a string is named as its JSON text, so 1 and "1" differ.
-		list.Add(findings.Rejection, findings.RuleProbesVersionUnsupported, path, fmt.Sprintf(
+		list.Add(findings.Rejection, ruleVersionUnsupported, path, fmt.Sprintf(
 			"the probe declaration is probes_version %s; this build reads probes %q", bytes.TrimSpace(raw), Version))
 		return nil, list
 	}
 
 	for _, k := range unknownKeys(outer, documentKeys) {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, path, fmt.Sprintf(
+		list.Add(findings.Rejection, ruleInvalid, path, fmt.Sprintf(
 			"the probe declaration carries the key %q, which probes %s does not hold: it holds probes_version and probes", k, Version))
 	}
 	var elements []json.RawMessage
 	rawProbes, present := outer["probes"]
 	switch {
 	case !present || isNull(rawProbes):
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, path,
+		list.Add(findings.Rejection, ruleInvalid, path,
 			"the probe declaration has no probes list; write probes: [] to declare none")
 	case json.Unmarshal(rawProbes, &elements) != nil:
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, path,
+		list.Add(findings.Rejection, ruleInvalid, path,
 			"the probe declaration's probes is not a list")
 	}
 	d := &Declaration{Version: Version, Probes: make([]Probe, 0, len(elements))}
@@ -152,12 +164,12 @@ func DecodeProbe(raw json.RawMessage, at string) (Probe, findings.List) {
 	}
 	var ends []json.RawMessage
 	if err := json.Unmarshal(rawEnds, &ends); err != nil || isNull(rawEnds) {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, at+".endpoints",
+		list.Add(findings.Rejection, ruleInvalid, at+".endpoints",
 			"endpoints is not a list: a probe has exactly two endpoints")
 		return p, list
 	}
 	if len(ends) != 2 {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, at+".endpoints", fmt.Sprintf(
+		list.Add(findings.Rejection, ruleInvalid, at+".endpoints", fmt.Sprintf(
 			"endpoints holds %d; a probe has exactly two, a and b", len(ends)))
 		return p, list
 	}
@@ -182,16 +194,16 @@ func DecodeProbe(raw json.RawMessage, at string) (Probe, findings.List) {
 func object(raw json.RawMessage, at string, keys []string, what string, list *findings.List) (map[string]json.RawMessage, bool) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, at, at+" is not a JSON object: it is "+what)
+		list.Add(findings.Rejection, ruleInvalid, at, at+" is not a JSON object: it is "+what)
 		return nil, false
 	}
 	for _, k := range unknownKeys(fields, keys) {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, at+"."+k, fmt.Sprintf(
+		list.Add(findings.Rejection, ruleInvalid, at+"."+k, fmt.Sprintf(
 			"%s carries the key %q, which it does not hold: it holds %s", what, k, strings.Join(keys, ", ")))
 	}
 	for _, k := range keys {
 		if _, present := fields[k]; !present {
-			list.Add(findings.Rejection, findings.RuleProbesInvalid, at+"."+k, fmt.Sprintf(
+			list.Add(findings.Rejection, ruleInvalid, at+"."+k, fmt.Sprintf(
 				"%s has no %s, which it requires", what, k))
 		}
 	}
@@ -207,7 +219,7 @@ func str(fields map[string]json.RawMessage, key, at string, list *findings.List)
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil || isNull(raw) {
-		list.Add(findings.Rejection, findings.RuleProbesInvalid, at+"."+key, fmt.Sprintf(
+		list.Add(findings.Rejection, ruleInvalid, at+"."+key, fmt.Sprintf(
 			"%s is %s, not a string", key, bytes.TrimSpace(raw)))
 	}
 	return s

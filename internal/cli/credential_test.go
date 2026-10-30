@@ -17,7 +17,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -30,8 +29,8 @@ import (
 const sentinel = "fylgja-secret-sentinel-4f2a9c"
 
 // unreachable is an address where nothing listens, so the failure is a transport
-// error carrying a request dump — the shape most likely to quote a header back
-// (internal/intent/errors.go, redact).
+// error carrying a request dump — the shape most likely to quote a header back (the Go
+// reader's redact did until 020, T035).
 const unreachable = "http://127.0.0.1:1"
 
 // shown collects every byte a command would put in front of an operator: the JSON
@@ -215,8 +214,8 @@ func readinessTimeoutRun() (provision.ProvisionResult, []provision.Event) {
 // and neither may the command's own output, even though `twin compile` never reads
 // the network and never needs a token.
 func TestBundleCarriesNoCredential(t *testing.T) {
-	t.Setenv(intent.EnvAddress, unreachable)
-	t.Setenv(intent.EnvToken, sentinel)
+	t.Setenv("INFRAHUB_ADDRESS", unreachable)
+	t.Setenv("INFRAHUB_API_TOKEN", sentinel)
 
 	out := filepath.Join(t.TempDir(), "bundle")
 	served := markServed()

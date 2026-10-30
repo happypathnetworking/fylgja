@@ -6,13 +6,38 @@ import (
 	"sort"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
+	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
-	"github.com/happypathnetworking/fylgja/internal/stage"
+	"github.com/happypathnetworking/fylgja/internal/validate"
 )
+
+// Compile turns a snapshot's body, its CTM and its probes, into a bundle's files and
+// identity: the one pipeline twin compile, a create, a step and twin diff run, so each
+// reports exactly what the others would, under the same identifiers (Constitution V).
+// Validation runs first and its rejections stop everything, so a bundle is never built from
+// intent that could not be built faithfully. On a rejection files is nil and id empty. The
+// id is computed from the bytes before anything is written, so it describes what was
+// compiled. probes is the probe registry, which may be nil where decls is empty (016).
+// Nothing here writes a file: callers decide where a bundle goes. It was internal/stage's
+// until 020, which removed the read beside it (T035).
+//
+// A CTM of another version never reaches it: ctm.Unmarshal refuses one, naming both
+// versions, and twin compile files that as ctm.version.unsupported at the file (017).
+func Compile(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (files map[string][]byte, id string, list findings.List) {
+	if list := validate.Validate(c, decls, reg, probes); list.Rejected() {
+		return nil, "", list
+	}
+	files, list = compiler.Compile(c, decls, reg, probes)
+	if list.Rejected() {
+		return nil, "", list
+	}
+	return files, bundle.ID(files), list
+}
 
 type compileFlags struct {
 	// snapshotPath is --snapshot as given, the path the snapshot file crosses under (018: in
@@ -76,10 +101,10 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 	}
 
 	// Validation, compilation and the identity, on the pipeline a create runs before its
-	// run (internal/stage). Rejections stop everything: a bundle is never written from
+	// run (Compile). Rejections stop everything: a bundle is never written from
 	// intent that could not be built faithfully. The id is computed from the
 	// bytes before they are written, so what is printed describes what was compiled.
-	bundled, id, list := stage.Compile(c, s.Probes, reg, packages)
+	bundled, id, list := Compile(c, s.Probes, reg, packages)
 	if list.Rejected() {
 		return finish(findings.OpCompile, subject, list)
 	}

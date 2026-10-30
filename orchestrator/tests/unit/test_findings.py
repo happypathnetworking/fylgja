@@ -239,27 +239,29 @@ def _core_rules():
 
 def test_the_cores_rules_are_the_cores():
     """A rule the core keeps is one it declares; the orchestrator's own four it never did; and
-    the retired rules carry the core's identifiers until the Go reader goes (T035)."""
+    the retired rules it declares no more since the Go reader went (T035), as its
+    `TestTheOrchestratorsRulesAreRetired` holds from the other side."""
     core = _core_rules()
     assert {r.id for r in rules.RULES if r.core} <= core
     assert set(rules.ORCHESTRATOR_OWN) <= set(rules.BY_ID)
     assert not set(rules.ORCHESTRATOR_OWN) & core
     retired = {r.id for r in rules.RULES if not r.core} - set(rules.ORCHESTRATOR_OWN)
-    assert retired <= core, sorted(retired - core)
+    assert not retired & core, sorted(retired & core)
 
 
 def test_the_retired_rules_are_data_models():
     """data-model §11's retired families are the orchestrator's: every scope.*, stage.* but
-    M2's stage.failed, rehearsal.*, schema.* and probes.* rule the core declares, with
-    intent.at.precision, probe.kind.absent, snapshot.flags.conflict, step.target.current and
-    step.stage.skipped."""
-    core = _core_rules()
+    M2's stage.failed, rehearsal.*, schema.* and probes.* rule, with intent.at.precision,
+    probe.kind.absent, snapshot.flags.conflict, step.target.current and step.stage.skipped;
+    and the core declares none of them but stage.failed (T035)."""
+    owned = {r.id for r in rules.RULES if not r.core} - set(rules.ORCHESTRATOR_OWN)
     families = ("scope.", "stage.", "rehearsal.", "schema.", "probes.")
-    want = {r for r in core if r.startswith(families) and r != "stage.failed"}
-    want |= {"intent.at.precision", "probe.kind.absent", "snapshot.flags.conflict", "step.target.current",
-             "step.stage.skipped"}
-    owned = {r.id for r in rules.RULES if not r.core}
-    assert want == owned - set(rules.ORCHESTRATOR_OWN)
+    singles = {"intent.at.precision", "probe.kind.absent", "snapshot.flags.conflict", "step.target.current",
+               "step.stage.skipped"}
+    assert {r for r in owned if not r.startswith(families)} == singles
+    assert len(owned) == 36
+    core = _core_rules()
+    assert {r for r in core if r.startswith(families)} == {"stage.failed"}
 
 
 def test_a_rules_document_validates():

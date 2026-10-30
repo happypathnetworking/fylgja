@@ -34,8 +34,8 @@ func wrappedPath(name string) string {
 // with no probes: 018 filed them as 1, and they moved to 2 when the fixtures followed the
 // seed's probe-ready ports (T035), which moved two of the ids; lossy's held, since the
 // version is not hashed (R-05). It loads strictly; its inner CTM is that file as
-// ctm.Marshal writes it; and its snapshot_id is its body's hash. internal/stage compiles
-// each to its golden.
+// ctm.Marshal writes it; and its snapshot_id is its body's hash. The compiler compiles each
+// to its golden.
 func TestWrappedFixtures(t *testing.T) {
 	for _, f := range wrappedFixtures {
 		t.Run(f.name, func(t *testing.T) {

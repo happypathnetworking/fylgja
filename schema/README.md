@@ -19,7 +19,6 @@ See architecture [§4.1](../docs/architecture.md#41-intent-reader),
 | `dcim/README.md` | [The note](dcim/README.md): the commit, each file's full SHA-256, the licence, and how the files are loaded. |
 | `fylgja-stage.yaml` | The stage kind: a marked moment of a proposed change, which the operator writes and Fylgja only reads, and its extension of Infrahub's `CoreProposedChange` (`fylgja_stages`). Loaded on the default branch ([D-028](../docs/decisions.md#d-028)); needed only by `--stage`, `stage list` and `stage plan` ([D-045](../docs/decisions.md#d-045)). |
 | `fylgja-probe.yaml` | The probe kind `FylgjaProbe`: a probe's declaration, two synthesized hosts on two uncabled ports, which the operator writes and Fylgja only reads ([below](#probes-declaring-one)). Branch-agnostic, loaded on the default branch beside the stage kind; read by every request that takes probes and sends no `--probes` file, so a request that reads intent is refused without it unless it sends one ([D-064](../docs/decisions.md#d-064)). |
-| `infrahub.graphql` | The default branch's SDL, fetched from a running Infrahub by `make sdl` and committed, the typed client's input (`make generate`). Never edited by hand. |
 
 The six files keep the library's names and bytes: nothing edits or formats them, not even
 `infrahubctl schema format`, and a tier-1 test holds each embedded file's SHA-256 to the

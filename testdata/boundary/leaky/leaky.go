@@ -6,11 +6,11 @@ package leaky
 
 import (
 	"github.com/happypathnetworking/fylgja/internal/api"
-	"github.com/happypathnetworking/fylgja/internal/stage"
+	"github.com/happypathnetworking/fylgja/internal/server"
 )
 
-// Compile would read and compile in the client's own process.
-var Compile = stage.Compile
+// Compile would compile in the client's own process.
+var Compile = server.Compile
 
 // Address is what a client that kept to the API would have read.
 const Address = api.DefaultAddress

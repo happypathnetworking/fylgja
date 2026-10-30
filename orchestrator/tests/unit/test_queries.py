@@ -1,18 +1,12 @@
 """The eleven queries against `internal/intent`'s readonly_test.go: every one a query, its
 roots the mapping's or a named one of Fylgja's or Infrahub's own, its fragments on the
-mapping's kinds or two of Infrahub's, and the scope's tag read by its filter alone. And,
-while the Go reader stands, each held to `internal/intent/queries.graphql` token by token
-(the comparison is removed with the Go reader, T035)."""
+mapping's kinds or two of Infrahub's, and the scope's tag read by its filter alone. Each was
+held to `internal/intent/queries.graphql` token by token while the Go reader stood; the
+comparison went with it (T035)."""
 
 import re
 
-import pytest
-
 from fylgja_orchestrator.adapters.infrahub import queries
-
-from .dcim import REPO
-
-GO_QUERIES = REPO / "internal" / "intent" / "queries.graphql"
 
 _TOKEN = re.compile(r"\.\.\.|[_A-Za-z][_0-9A-Za-z]*|\$[_A-Za-z][_0-9A-Za-z]*|\"[^\"]*\"|[{}()\[\]:!,=@]|-?\d+")
 
@@ -71,17 +65,6 @@ def test_the_eleven_are_every_operation_and_each_names_its_own():
         toks = defs[name]
         spread = {toks[k + 1] for k, t in enumerate(toks) if t == "..." and toks[k + 1] != "on"}
         assert {d for d in defs if defs[d][0] == "fragment"} == spread, f"{name} carries a fragment it does not spread"
-
-
-@pytest.mark.skipif(not GO_QUERIES.exists(), reason="the Go reader's queries.graphql is gone (T035)")
-@pytest.mark.parametrize("name", sorted(queries.ALL))
-def test_each_query_is_the_go_readers(name):
-    """Token for token, but `__typename`, which genqlient added itself to every abstract
-    selection and the adapter writes where it reads it."""
-    go = definitions(GO_QUERIES.read_text())
-    for definition, toks in definitions(queries.ALL[name]).items():
-        want = [t for t in go[definition] if t != "__typename"]
-        assert [t for t in toks if t != "__typename"] == want, f"{name}'s {definition} differs from queries.graphql"
 
 
 def test_the_event_query_reads_the_events_type():

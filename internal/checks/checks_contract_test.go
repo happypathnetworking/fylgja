@@ -21,7 +21,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/stages"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
 
@@ -49,6 +48,16 @@ const (
 	checksumWait  = 90 * time.Second
 	// eventWait bounds Infrahub's event log's lag behind a write: a few seconds (D-048).
 	eventWait = time.Minute
+)
+
+// What the checks' messages carry, as the orchestrator words it (020): the stage list's two
+// labels it makes and two of its rules (orchestrator/src/fylgja_orchestrator/documents/
+// rules.py), which the core no longer declares since its reader and stages left it (T035).
+const (
+	labelBranchPoint       = "branch-point"
+	labelHead              = "head"
+	ruleScopeEmpty         = "scope.empty"
+	ruleStageArtifactStale = "stage.artifact.stale"
 )
 
 // unreached are the glue's sentences for a task worker that reaches no platform
@@ -163,7 +172,7 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if !strings.Contains(step.Message, "(4 stages)") {
 		t.Errorf("%s's message does not name four stages:\n%s", TestStepCheck, step.Message)
 	}
-	for _, label := range []string{stages.LabelBranchPoint, "seeded", "third-link", stages.LabelHead} {
+	for _, label := range []string{labelBranchPoint, "seeded", "third-link", labelHead} {
 		if !strings.Contains(step.Message, branch+"/"+label+":") {
 			t.Errorf("%s's message has no line for stage %s/%s:\n%s", TestStepCheck, branch, label, step.Message)
 		}
@@ -171,8 +180,8 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if n := len(regexp.MustCompile(`(?m)^step `).FindAllString(step.Message, -1)); n != 3 {
 		t.Errorf("%s's message has %d step lines, want 3:\n%s", TestStepCheck, n, step.Message)
 	}
-	if !strings.Contains(step.Message, findings.RuleScopeEmpty) {
-		t.Errorf("%s's message does not carry the branch point's %s:\n%s", TestStepCheck, findings.RuleScopeEmpty, step.Message)
+	if !strings.Contains(step.Message, ruleScopeEmpty) {
+		t.Errorf("%s's message does not carry the branch point's %s:\n%s", TestStepCheck, ruleScopeEmpty, step.Message)
 	}
 
 	// 6. A mark made stale: an intent change with no generate, then a mark.
@@ -187,9 +196,9 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if step.Conclusion != "failure" {
 		t.Errorf("with a stale mark %s concluded %q, want failure:\n%s", TestStepCheck, step.Conclusion, step.Message)
 	}
-	stale := regexp.MustCompile(`(?m)^.*` + regexp.QuoteMeta(findings.RuleStageArtifactStale) + `.* n1: .*$`)
+	stale := regexp.MustCompile(`(?m)^.*` + regexp.QuoteMeta(ruleStageArtifactStale) + `.* n1: .*$`)
 	if !stale.MatchString(step.Message) {
-		t.Errorf("%s's message names no %s on n1:\n%s", TestStepCheck, findings.RuleStageArtifactStale, step.Message)
+		t.Errorf("%s's message names no %s on n1:\n%s", TestStepCheck, ruleStageArtifactStale, step.Message)
 	}
 
 	// A draft gets no comment, at its creation or at a re-run.
@@ -227,9 +236,9 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	reached(t, *twin)
 	t.Logf("%s on the proposed change marked ready: %s after %.0fs, message %d characters",
 		twin.Name, twin.Conclusion, time.Since(started).Seconds(), len(twin.Message))
-	if twin.Conclusion != "failure" || !strings.Contains(twin.Message, findings.RuleStageArtifactStale) {
+	if twin.Conclusion != "failure" || !strings.Contains(twin.Message, ruleStageArtifactStale) {
 		t.Errorf("with a stale mark %s concluded %q, want failure naming %s:\n%s",
-			TestTwinCheck, twin.Conclusion, findings.RuleStageArtifactStale, twin.Message)
+			TestTwinCheck, twin.Conclusion, ruleStageArtifactStale, twin.Message)
 	}
 	posted(t, c, id, left)
 	noTwin(t)
@@ -260,7 +269,7 @@ func posted(t *testing.T, c *testsupport.Client, id string, left leftovers) {
 		left.add(kindThread, cm.Thread)
 		left.add(kindComment, cm.ID)
 		carriesNoCredential(t, "comment "+cm.ID, cm.Text)
-		for _, want := range []string{"Status **rejected**", findings.RuleStageArtifactStale} {
+		for _, want := range []string{"Status **rejected**", ruleStageArtifactStale} {
 			if !strings.Contains(cm.Text, want) {
 				t.Errorf("comment %s does not carry %q:\n%s", cm.ID, want, cm.Text)
 			}

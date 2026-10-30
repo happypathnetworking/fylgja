@@ -93,8 +93,9 @@ func documentBytes(t *testing.T, doc *findings.Document) json.RawMessage {
 }
 
 // The eleven operations are the newest findings contract's but the five 020 moved to the
-// orchestrator (D-065), which that contract's enum names until the core's findings lose them
-// (T035), and each is POST /v1/<noun>/<verb>. None of the five is one.
+// orchestrator (D-065), which that contract's enum keeps, since the orchestrator's documents
+// are findings 1 held to it (research R-13), and the core's findings declare none of
+// (T035); each of the eleven is POST /v1/<noun>/<verb>. None of the five is one.
 func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	raw, err := os.ReadFile(contracts("findings.schema.json"))
 	if err != nil {

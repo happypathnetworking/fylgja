@@ -13,7 +13,7 @@ PKGS := ./...
 VERSION ?= 0.1.0-dev
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build test test-contract test-e2e lint lint-python linkcheck sdl generate diagrams clean \
+.PHONY: all build test test-contract test-e2e lint lint-python linkcheck diagrams clean \
         temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log \
         orchestrator-venv prefect-server orchestrator-serve
 
@@ -37,7 +37,9 @@ test:
 # Infrahub answers. The packages run beside each other against one Infrahub, which works
 # their branches, proposed changes and rebases in turn, so a package takes up to three
 # times as long as it does alone: internal/stages, about four and a half minutes alone,
-# outlasts go test's default ten-minute timeout here (014's research §8.10).
+# outlasted go test's default ten-minute timeout here (014's research §8.10) until 020
+# removed it with the reader (T035), which left internal/checks the Go tier's one package
+# with contract tests; the rest run their tier-1 tests again under the tag.
 # internal/checks runs after the rest, alone. Its registration on main makes every proposed
 # change opened while it lives run its two checks, the other packages' with them, and its
 # waits are those of an Infrahub with nothing else to do: beside the rest, its draft's
@@ -84,17 +86,6 @@ command-log:
 # hook (scripts/tests/). A hand tool; not a CI step.
 test-scripts:
 	python3 -I -m unittest discover -s scripts/tests -p 'test_*.py'
-
-# Fetches the GraphQL SDL from a live Infrahub. The SDL is committed
-# so the build never needs Infrahub; only regeneration does. From the default branch:
-# the stage kind and its extension of CoreProposedChange live there (014), and a branch
-# created before the kind was loaded does not carry them. The file's header is kept by hand.
-sdl:
-	go run -tags fixture ./cmd/fylgja-fixture -branch main -sdl schema/infrahub.graphql
-
-# Regenerates the typed client from the committed SDL.
-generate:
-	cd internal/intent && go run github.com/Khan/genqlient
 
 STRUCTURIZR_IMAGE := structurizr/structurizr@sha256:721136283c2f9cf1ba69037bc9de136c579d66fdcb2d771cb60546ec68def1a5
 PLANTUML_IMAGE    := plantuml/plantuml@sha256:d08610df482510844382caa4e016ba2bf7e3231f630f02ee12f250f3416c62b1

@@ -410,7 +410,7 @@ Constitution XI). `TestClientReachesTheCoreThroughTheAPIAlone`
 package, to a fixed point, and fails unless the set reached is exactly `internal/api`,
 `internal/findings` and `internal/tree`, or when `internal/api` or `internal/tree` imports
 anything of the module but `internal/findings`, or `internal/findings` anything at all. A
-second case walks `testdata/boundary/leaky`, whose one file imports `internal/stage`, and
+second case walks `testdata/boundary/leaky`, whose one file imports `internal/server`, and
 passes only when the walk names it. So the package that holds the client's commands does
 not link the core, and no flag or variable can make it run the core. Test files are not
 walked: test code may call the core directly. A helper the client needs from the core is a

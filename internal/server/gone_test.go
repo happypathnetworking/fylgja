@@ -12,9 +12,9 @@ import (
 )
 
 // lostOperations are the five operations 020 removes from the core (D-065; FR-002), which
-// read Infrahub and are the orchestrator's.
-var lostOperations = []string{findings.OpTwinRehearse, findings.OpStageList, findings.OpStagePlan, findings.OpIntentRead,
-	findings.OpSchemaCheck}
+// read Infrahub and are the orchestrator's: named here as the API named them, since the
+// findings document has no constant of them from T035.
+var lostOperations = []string{"twin.rehearse", "stage.list", "stage.plan", "intent.read", "schema.check"}
 
 // lostArguments are the five arguments 020 removes from twin.create and twin.step (FR-002),
 // each of which named intent the server read.

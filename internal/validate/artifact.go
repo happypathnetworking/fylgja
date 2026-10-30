@@ -13,7 +13,7 @@ import (
 // checkArtifacts refuses a CTM that cannot be built into a configured twin.
 //
 // The read decides which artifact is a device's configuration and verifies what
-// Infrahub served (internal/intent). Those questions need Infrahub, so they cannot live
+// Infrahub served (the orchestrator's adapter from 020, D-065). Those questions need Infrahub, so they cannot live
 // here. What can live here is what survives into the CTM, and must therefore hold of
 // any CTM whatever wrote it: every device carries an artifact of the name its package
 // gives its configuration, and every artifact's content is the content its checksum
@@ -110,7 +110,7 @@ func artifactMisnamedMessage(device, carried, pspID, expected string) string {
 
 // contentTypeUnsupportedMessage names the artifact's type and the types its package
 // accepts, worded as the read words artifact.content_type.unsupported for an artifact
-// Infrahub serves (internal/intent), so an operator reads one sentence for one fault
+// Infrahub serves (the orchestrator's adapter), so an operator reads one sentence for one fault
 // whichever command found it.
 func contentTypeUnsupportedMessage(device, artifact, checksum, contentType, pspID string, accepted []string) string {
 	return fmt.Sprintf("device %s: artifact %s (checksum %s) is %s; the %s package accepts %s",

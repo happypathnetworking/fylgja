@@ -16,7 +16,6 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -203,7 +202,7 @@ func showWith(t *testing.T, paths lab.Paths, recording string, svc *fakeService)
 // showDialled is showWith with dialService already set by the caller.
 func showDialled(t *testing.T, paths lab.Paths, recording string) showOutput {
 	t.Helper()
-	t.Setenv(intent.EnvToken, sentinel)
+	t.Setenv("INFRAHUB_API_TOKEN", sentinel)
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", sentinel)
 	t.Setenv(lab.EnvTemporalAddress, "")
 	useClab(t, recording)

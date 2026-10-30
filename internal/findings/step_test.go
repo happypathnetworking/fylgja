@@ -6,8 +6,9 @@ import (
 	"testing"
 )
 
-// The step's documents and the two M11 extensions of the stage list's block and the show
-// record, as the contracts spell them, on stage sides since 014.
+// The step's documents and the M11 extension of the show record, as the contracts spell them,
+// on stage sides since 014. The stage list's extension, the stage block a step resolved and
+// step.stage.skipped left the core with the stages at 020 (T035).
 
 var (
 	stepFromID = strings.Repeat("34", 32)
@@ -43,20 +44,17 @@ func stepBlock() *StepBlock {
 }
 
 // stepDocuments are twin step's documents: the dry run refused, a stepped run, a diverged
-// one, an unchanged one whose run pushed and awaited nobody, and one from the branch point
-// to the head that skips the marks between (014's step.stage.skipped).
+// one, and an unchanged one whose run pushed and awaited nobody.
 func stepDocuments() []labelledDocument {
 	subject := func() *Subject {
 		return &Subject{Stage: "change-1/live", Branch: "change-1", At: "2026-10-16T17:30:00.000000+00:00"}
 	}
-	resolved := liveBlock()
 
 	var restart List
 	restart.AddStep(Rejection, StepCompare, RuleStepRestartRequired, "e1",
 		"containerlab would restart e1 (added link; package arista_eos declares restart): it loses its running state and its push until the step pushes it again; give --allow-restart to proceed, or --dry-run to see the step")
 	dry := NewDocument(OpTwinStep, subject(), restart)
 	dry.BundleID = stepToID
-	dry.Stage = resolved
 	dry.Step = stepBlock()
 	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{{Name: "e1", Image: "ceos:4.32.0.2F", PSP: ptr("arista_eos"), MemoryMB: 2048,
 		Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 900}}},
@@ -66,7 +64,6 @@ func stepDocuments() []labelledDocument {
 	ranSubject.RunID = stepRunID
 	stepped := NewDocument(OpTwinStep, ranSubject, nil)
 	stepped.BundleID = stepToID
-	stepped.Stage = resolved
 	stepped.Step = stepBlock()
 	stepped.Step.AllowRestart = true
 	stepped.Step.StepRunBlock = &StepRunBlock{Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID},
@@ -86,7 +83,6 @@ func stepDocuments() []labelledDocument {
 	diverged := NewDocument(OpTwinStep, ranSubject, stopped)
 	diverged.Status = StatusDiverged
 	diverged.BundleID = stepToID
-	diverged.Stage = resolved
 	diverged.Step = stepBlock()
 	diverged.Step.AllowRestart = true
 	// A created node, which no package declaration covers.
@@ -102,7 +98,6 @@ func stepDocuments() []labelledDocument {
 
 	unchanged := NewDocument(OpTwinStep, ranSubject, nil)
 	unchanged.BundleID = stepToID
-	unchanged.Stage = resolved
 	unchanged.Step = &StepBlock{From: stepBlock().From, To: stepBlock().To, Diff: json.RawMessage(`{"from":"change-1/cabled","to":"change-1/live","from_bundle_id":"` +
 		stepFromID + `","to_bundle_id":"` + stepToID + `","computed":true,"unchanged":true,` +
 		`"nodes":{"added":[],"removed":[],"changed":[]},"links":{"added":[],"removed":[]},"artifacts":{"changed":[]}}`),
@@ -110,30 +105,11 @@ func stepDocuments() []labelledDocument {
 			Timings: StepTimingsBlock{WholeS: 1.8}, StartedAt: "2026-10-02T09:20:00Z", EndedAt: "2026-10-02T09:20:01.8Z"}}
 	unchanged.Step.Reconcile.Skipped = true
 
-	// The step across the marks: from the branch point, read on main, to the head, the two
-	// stages derived from the branch, warned that it skips the two marks between.
-	var skips List
-	skips.AddStep(Warning, StepResolve, RuleStepStageSkipped, "change-1/head",
-		"the step from change-1/branch-point to change-1/head skips stages cabled, live; the step is between the two bundles either way")
-	head := headBlock()
-	skipped := NewDocument(OpTwinStep, &Subject{Stage: head.Ref, Branch: head.Branch, At: head.At, RunID: stepRunID}, skips)
-	skipped.BundleID = stepToID
-	skipped.Stage = head
-	skipped.Step = stepBlock()
-	skipped.Step.From = StepSideBlock{Stage: showStage("branch-point", "", AtSourceBranchPoint), BundleID: stepFromID,
-		At: "2026-10-16T17:20:19.944651+00:00"}
-	skipped.Step.To = StepSideBlock{Stage: showStage("head", "", AtSourceHead), BundleID: stepToID,
-		At: head.At, Branch: head.Branch}
-	skipped.Step.Diff = json.RawMessage(strings.Replace(string(stepDiff),
-		`"from":"change-1/cabled","to":"change-1/live"`, `"from":"change-1/branch-point","to":"change-1/head"`, 1))
-	skipped.Step.StepRunBlock = stepped.Step.StepRunBlock
-
 	return []labelledDocument{
 		{"step dry run, refused", dry},
 		{"step run, stepped", stepped},
 		{"step run, diverged", diverged},
 		{"step run, unchanged", unchanged},
-		{"step run, from the branch point to the head, skipping the marks", skipped},
 	}
 }
 
@@ -180,32 +156,14 @@ func showStepDocuments() []labelledDocument {
 	}
 }
 
-// listStepDocuments are stage list beside a diverged record and beside a ready one.
-func listStepDocuments() []labelledDocument {
-	branch := "change-1"
-	cabled := cabledBlock()
-	list := func(state string, towards *StageTowards) *Document {
-		doc := NewDocument(OpStageList, nil, nil)
-		doc.Stages = &StagesBlock{Branch: &branch, Rows: []StageRow{stageRow(cabled, true)},
-			Record: &StageRecord{Ref: cabled.Ref, ProposedChange: StageChangeRef{ID: "pc-1", Branch: "change-1"},
-				Label: cabled.Label, Branch: cabled.Branch, At: cabled.At, AtSource: cabled.AtSource, State: state, Towards: towards}}
-		return doc
-	}
-	return []labelledDocument{
-		{"list beside a diverged record", list("diverged", &StageTowards{Ref: "change-1/live"})},
-		{"list beside a ready record", list("ready", nil)},
-	}
-}
-
-// The step's documents, twin show's of a stepped and a diverged record, and stage list's
-// beside one satisfy the newest contracts, every nullable key written. The newest are the
-// module root's contracts/: M11's, extended additively by M12, with stage sides since 014.
+// The step's documents and twin show's of a stepped and a diverged record satisfy the newest
+// contracts, every nullable key written. The newest are the module root's contracts/: M11's,
+// extended additively by M12, with stage sides since 014.
 func TestStepDocumentsSatisfySchema(t *testing.T) {
 	schema := compileCurrentFindingsSchema(t)
 	var all []labelledDocument
 	all = append(all, stepDocuments()...)
 	all = append(all, showStepDocuments()...)
-	all = append(all, listStepDocuments()...)
 	for _, c := range all {
 		t.Run(c.label, func(t *testing.T) {
 			mustValidate(t, schema, c.doc, c.label)
@@ -213,7 +171,7 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 		})
 	}
 
-	steps, shows, lists := stepDocuments(), showStepDocuments(), listStepDocuments()
+	steps, shows := stepDocuments(), showStepDocuments()
 	for _, c := range []struct {
 		doc  *Document
 		keys []string
@@ -222,7 +180,6 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 		// The dry run's block has no run fields; every list is written, declared null for none.
 		{steps[0].doc, []string{`"step":{"from":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled",`,
 			`"to":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live",`, `"subject":{"branch":"change-1",`,
-			`"stage":{"ref":"change-1/live","branch":"change-1","label":"live",`,
 			`"branch":"change-1"}`, `"reconcile":{"added":[],"deleted":[],"recreated":[],"restarted":["e1"],`,
 			`"declared":"restart","reported":"restart"`, `"push_plan":[{"node":"e1","reasons":["artifact","restarted"]}`,
 			`"allow_restart":false`, `"status":"rejected"`}, []string{`"run"`, `"outcome"`, `"pushed"`, `"timings"`}},
@@ -231,15 +188,10 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 		{steps[2].doc, []string{`"status":"diverged"`, `"phase":"push"`, `"outcome":"refused","rule":"push.refused"`,
 			`{"node":"s2","declared":null,"reported":"create"}`}, nil},
 		{steps[3].doc, []string{`"push_plan":[]`, `"pushed":[]`, `"ready_after":[]`, `"nodes":[]`, `"skipped":true`, `"timings":{"whole_s":1.8}`}, nil},
-		{steps[4].doc, []string{`"from":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"branch-point","description":"","at_source":"branch_point"}`,
-			`"to":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"head","description":"","at_source":"head"}`,
-			`"diff":{"from":"change-1/branch-point","to":"change-1/head",`, `"rule":"step.stage.skipped"`, `"status":"ok"`}, nil},
 		{shows[0].doc, []string{`"state":"ready"`, `"step":{"outcome":"stepped",`, `"restarted":["e1"]`}, []string{`"phase"`}},
 		{shows[1].doc, []string{`"kind":"diverged"`, `"state":"diverged"`, `"phase":"push"`, `"restarted":[]`,
 			`"to":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"head","description":"","at_source":"head"}`}, nil},
 		{shows[2].doc, []string{`"state":"ready"`}, []string{`"step"`}},
-		{lists[0].doc, []string{`"twin":true`, `"state":"diverged","towards":{"ref":"change-1/live"}`}, nil},
-		{lists[1].doc, []string{`"state":"ready","towards":null`}, nil},
 	} {
 		b := string(mustMarshal(t, c.doc))
 		if !containsAll(b, c.keys) {
@@ -253,9 +205,8 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 	}
 
 	// The blocks are the contract's, so a misshapen one is refused: a step block with no
-	// reconcile node's declaration, a show step with no restarted list, a list record whose
-	// towards names no stage, a list record with no state, and a side's stage with an
-	// at_source outside the enum.
+	// reconcile node's declaration, a show step with no restarted list, and a side's stage with
+	// an at_source outside the enum.
 	bad := stepDocuments()[0].doc
 	raw := strings.Replace(string(mustMarshal(t, bad)), `"declared":"restart",`, ``, 1)
 	if err := schema.Validate(mustAny(t, []byte(raw))); err == nil {
@@ -264,14 +215,6 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 	shown := strings.Replace(string(mustMarshal(t, showStepDocuments()[0].doc)), `"restarted":["e1"],`, ``, 1)
 	if err := schema.Validate(mustAny(t, []byte(shown))); err == nil {
 		t.Error("a show step with no restarted list satisfied the show schema")
-	}
-	listed := strings.Replace(string(mustMarshal(t, listStepDocuments()[0].doc)), `{"ref":"change-1/live"}`, `{}`, 1)
-	if err := schema.Validate(mustAny(t, []byte(listed))); err == nil {
-		t.Error("a towards with no ref satisfied the stages schema")
-	}
-	stateless := strings.Replace(string(mustMarshal(t, listStepDocuments()[1].doc)), `"state":"ready",`, ``, 1)
-	if err := schema.Validate(mustAny(t, []byte(stateless))); err == nil {
-		t.Error("a list record with no state satisfied the stages schema")
 	}
 	guessed := stepDocuments()[0].doc
 	guessed.Step.To.Stage.AtSource = "guessed"

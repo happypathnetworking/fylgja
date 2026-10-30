@@ -1,6 +1,7 @@
 """Conformance against the core's (`internal/intent`'s conformance_test.go), on the recorded
 `GET /api/schema` answer for the library at 26336e9 (tests/data/schema/, copied from
-internal/intent/testdata/), each case a change to it a branch's schema could have."""
+internal/intent/testdata/ and held to it until the Go reader went, T035), each case a change
+to it a branch's schema could have."""
 
 from pathlib import Path
 
@@ -10,7 +11,6 @@ from fylgja_orchestrator.adapters.infrahub import mapping, schema
 from fylgja_orchestrator.documents.findings import REJECTION
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "schema"
-REPO = Path(__file__).resolve().parents[3]
 
 READS_IT = "; the mapping reads it as opsmill/schema-library@26336e9 has it"
 
@@ -114,20 +114,6 @@ def interface_physical_gone(doc):
 
 def check(client):
     return schema.check_conformance(client)
-
-
-def test_the_copy_is_the_core_s_recorded_answer():
-    assert (DATA / "schema-26336e9.json").read_bytes() == (
-        REPO / "internal" / "intent" / "testdata" / "schema-26336e9.json"
-    ).read_bytes()
-
-
-def test_the_cable_absent_copy_is_the_core_s_change():
-    # Tier 2's change to a throwaway branch's schema (test_read_conformance.py), loaded
-    # through the fixture tool's -load-schema-file.
-    assert (DATA / "dcim-cable-absent.yaml").read_bytes() == (
-        REPO / "internal" / "intent" / "testdata" / "dcim-cable-absent.yaml"
-    ).read_bytes()
 
 
 def test_the_table_is_the_core_s():

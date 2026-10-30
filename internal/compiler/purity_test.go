@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -55,7 +56,6 @@ func TestCompilerIsPure(t *testing.T) {
 		"time":      "wall-clock time makes output non-deterministic",
 		"math/rand": "randomness makes output non-deterministic",
 		"os/exec":   "process execution",
-		"github.com/happypathnetworking/fylgja/internal/intent": "intent performs I/O",
 		"github.com/happypathnetworking/fylgja/internal/bundle": "bundle writes files",
 	}
 	for file, imports := range directImports(t, ".") {
@@ -89,7 +89,7 @@ var platformNames = regexp.MustCompile(`(?i)\b(srlinux|nokia|eos|chassisos|arist
 var probeNames = regexp.MustCompile(`(?i)\b(linux|alpine)\b|"ping"`)
 
 // No source under the compiler, the profile engine, the lab-host driver, the workflows,
-// the stage pipelines, the bundle store or validation names a platform (Constitution
+// the bundle store or validation names a platform (Constitution
 // II). A platform is data: the rules, the budgets, the
 // probe and the push all come from its package, and the code that applies them branches
 // on what a format value says, never on whose package it is — which is what makes a
@@ -104,16 +104,12 @@ func TestCompilerNamesNoPlatform(t *testing.T) {
 		filepath.Join("..", "psp"),
 		filepath.Join("..", "lab"),
 		filepath.Join("..", "provision"),
-		filepath.Join("..", "stage"),
 		filepath.Join("..", "bundle"),
 		filepath.Join("..", "validate"),
 		// M10: the step. Named here because the walk is of named
 		// directories, not of internal/ whole, and a missing directory
 		// fails it.
 		filepath.Join("..", "step"),
-		// 014: a proposed change's stages, whose staleness rule names each device's
-		// artifact by its package's config.artifact_name, never by a constant.
-		filepath.Join("..", "stages"),
 		// M12: the readers of a booted node, moved out of the suite, and verify's core
 		// (D-031, D-037). Reading is one mechanism
 		// keyed by a package's conformance facet, so nothing in it names whose package it
@@ -126,9 +122,8 @@ func TestCompilerNamesNoPlatform(t *testing.T) {
 		filepath.Join("..", "server"),
 		filepath.Join("..", "cli"),
 		filepath.Join("..", "tree"),
-		// 015: the rehearsal's rules, whose deadline sums each node's budgets from its
-		// package's plan, never a constant per platform.
-		filepath.Join("..", "rehearsal"),
+		// 014's stages, internal/stage's pipelines and 015's rehearsal left the tree at 020
+		// (T035) with the reader; the orchestrator holds its own code to this rule.
 	} {
 		err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
@@ -263,7 +258,7 @@ func reach(t *testing.T, root, start string) map[string]bool {
 // command run the core, because the package that holds the commands does not link it.
 //
 // Test files are not walked: tests call the core, under D-040's exception. The second case
-// runs the same walk over testdata/boundary/leaky, a client that imports internal/stage,
+// runs the same walk over testdata/boundary/leaky, a client that imports internal/server,
 // and passes only when the walk names it.
 func TestClientReachesTheCoreThroughTheAPIAlone(t *testing.T) {
 	root := filepath.Join("..", "..")
@@ -300,12 +295,55 @@ func TestClientReachesTheCoreThroughTheAPIAlone(t *testing.T) {
 		t.Errorf("testdata/boundary imports %v: the walk counted a sub-package's imports", imps)
 	}
 
-	// internal/bundle is reached through internal/stage alone, so the walk is held to follow
+	// internal/bundle is reached through internal/server alone, so the walk is held to follow
 	// an import past the first.
 	leaky := reach(t, root, filepath.Join(root, "testdata", "boundary", "leaky"))
-	for _, p := range []string{"internal/stage", "internal/bundle"} {
+	for _, p := range []string{"internal/server", "internal/bundle"} {
 		if !leaky[p] {
 			t.Errorf("the walk from testdata/boundary/leaky does not name %s: it reached %v", p, leaky)
+		}
+	}
+}
+
+// readerPackages are the four packages 020 removed from the core with the reader (D-065;
+// FR-001, T035): the Infrahub reader, a proposed change's stages, the read and compile
+// pipelines, and the rehearsal's rules. Each is the orchestrator's, in Python.
+var readerPackages = []string{"internal/intent", "internal/stages", "internal/stage", "internal/rehearsal"}
+
+// The core links no reader (Constitution III as 3.0.0 words it; SC-003): of every package
+// the fylgja binary links, as the go tool lists them, none is genqlient's, none names
+// infrahub anywhere in its path, and none is one of the four reader packages; the walk of
+// the module's own imports from cmd/fylgja agrees; and none of the four directories exists,
+// so nothing can import one back. A test file is the go tool's to leave out (-deps lists
+// what the binary links): tests may still reach Infrahub, under the contract tag.
+func TestTheCoreLinksNoReader(t *testing.T) {
+	root := filepath.Join("..", "..")
+	out, err := exec.Command("go", "list", "-deps", filepath.Join(root, "cmd", "fylgja")).Output()
+	if err != nil {
+		t.Fatalf("go list -deps ./cmd/fylgja: %v", err)
+	}
+	deps := strings.Fields(string(out))
+	if !slices.Contains(deps, module+"internal/server") {
+		t.Fatalf("go list -deps named %d packages and not internal/server: the walk read the wrong place", len(deps))
+	}
+	for _, dep := range deps {
+		switch rest, ours := strings.CutPrefix(dep, module); {
+		case strings.HasPrefix(dep, "github.com/Khan/genqlient"):
+			t.Errorf("cmd/fylgja links %s: genqlient left with the reader", dep)
+		case strings.Contains(strings.ToLower(dep), "infrahub"):
+			t.Errorf("cmd/fylgja links %s, which names infrahub", dep)
+		case ours && slices.Contains(readerPackages, rest):
+			t.Errorf("cmd/fylgja links %s, a reader package", dep)
+		}
+	}
+	for p := range reach(t, root, filepath.Join(root, "cmd", "fylgja")) {
+		if slices.Contains(readerPackages, p) {
+			t.Errorf("the walk from cmd/fylgja reaches %s, a reader package", p)
+		}
+	}
+	for _, p := range readerPackages {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))); !os.IsNotExist(err) {
+			t.Errorf("%s exists (%v); 020 removed it with the reader", p, err)
 		}
 	}
 }

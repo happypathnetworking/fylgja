@@ -30,8 +30,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/server"
 	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
-	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -164,7 +164,7 @@ var stepOf = map[string]string{
 // node, and nowhere else (Constitution VIII).
 //
 // A create is driven end to end without infrastructure: the fixture CTM compiled by
-// stage.Compile and filed in the bundle store, as the server compiles and files a create's
+// server.Compile and filed in the bundle store, as the server compiles and files a create's
 // read, then the Provision workflow on the Temporal test suite, started with that bundle
 // and the snapshot's id as the server starts it, with the worker's own activities wherever
 // they need no host — CheckHost (over a recorded containerlab), StageBundle,
@@ -205,7 +205,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, compiledID, list := stage.Compile(read, nil, reg, nil)
+	files, compiledID, list := server.Compile(read, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the fixture does not compile: %v", list)
 	}

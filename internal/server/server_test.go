@@ -1364,11 +1364,6 @@ func TestShowNamesARehearsalsTwin(t *testing.T) {
 		if out != c.inFlight+"\n" {
 			t.Errorf("%s: %q, want %q", c.name, out, c.inFlight)
 		}
-		for _, r := range block.InFlight {
-			if r.Child != nil {
-				t.Errorf("%s: run %s carries a child %+v", c.name, r.WorkflowID, r.Child)
-			}
-		}
 		switch r := block.Record; {
 		case c.host.Twin == nil && r != nil:
 			t.Errorf("%s: a record %+v", c.name, r)

@@ -29,10 +29,11 @@ and held to Go's rules by the same test: the words the orchestrator's `validate.
 held to (020's T016).
 
 `schema/schema-26336e9.json` is a copy of `internal/intent/testdata/`'s recorded
-`GET /api/schema` answer for the schema library at `26336e9` (a test holds the copy to its
-original); each conformance case changes it in the test, as the Go test does.
-`schema/dcim-cable-absent.yaml` is a copy of `internal/intent/testdata/`'s schema change, the
-library's `DcimCable` removed by `state: absent` (a test holds the copy to its original),
+`GET /api/schema` answer for the schema library at `26336e9` (a test held the copy to its
+original until the Go reader went, T035); each conformance case changes it in the test, as
+the Go test did. `schema/dcim-cable-absent.yaml` is a copy of `internal/intent/testdata/`'s
+schema change, the library's `DcimCable` removed by `state: absent` (held to its original
+until T035),
 which tier 2 loads on a throwaway branch through the fixture tool's `-load-schema-file`
 (`tests/contract/test_read_conformance.py`, 020's T020).
 
@@ -40,7 +41,7 @@ which tier 2 loads on a throwaway branch through the fixture tool's `-load-schem
 holds each copy to its original and the set to the original's), which `test_probes.py`
 reads as the Go tests of `internal/probe` and `internal/server` read them.
 `schema/schema-fylgja-probe.json` is a copy of `internal/intent/testdata/`'s recorded
-`FylgjaProbe` node (a test holds the copy to its original), added to the default branch's
+`FylgjaProbe` node (held to its original until T035), added to the default branch's
 schema in the test, less the attributes a case drops, as the Go test does.
 
 `graphql/fylgja-fixture/` is this host's Infrahub 1.11.2 answering the adapter for the

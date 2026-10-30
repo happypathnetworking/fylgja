@@ -29,8 +29,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/server"
 	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
-	intentstage "github.com/happypathnetworking/fylgja/internal/stage"
 )
 
 // The targets twin step walks to in tier 1 are the stages 014's proposed change pc-1 had on
@@ -321,7 +321,7 @@ func compiledLabel(t *testing.T, label string) compiledStage {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, id, list := intentstage.Compile(c, nil, reg, nil)
+	files, id, list := server.Compile(c, nil, reg, nil)
 	if list.Rejected() || id == "" {
 		t.Fatalf("%s did not compile: %+v", label, list)
 	}
@@ -691,9 +691,6 @@ func TestStepDryRun(t *testing.T) {
 					t.Errorf("step.push_plan %+v, want %+v", st.PushPlan, pushPlan)
 				}
 			}
-			if doc.Stage != nil {
-				t.Errorf("stage block %+v; a step to a snapshot names none (020)", doc.Stage)
-			}
 			if sub := doc.Subject; sub == nil || sub.Snapshot != stageID(t, "linked") || sub.Branch != "change-1" ||
 				sub.At != stepWrittenAt || sub.RunID != "" {
 				t.Errorf("subject %+v; want linked's snapshot, of change-1 at its at, and no run", sub)
@@ -906,17 +903,25 @@ func TestStepDryRunRefusals(t *testing.T) {
 	}
 }
 
+// The two stage rules a step filed until 020, the orchestrator's since T035 (its
+// documents/rules.py): a step of the core's names neither.
+const (
+	stepStageSkipped = "step.stage.skipped"
+	stageTwinMoved   = "stage.twin.moved"
+)
+
 // A warning leaves the exit as it is: a package whose declared link change containerlab's
 // plan contradicts. A step past stages of a proposed change warns of none since twin.json 12,
-// whose record names no stage to count them from (020, research R-06).
+// whose record names no stage to count them from (020, research R-06); the rule,
+// step.stage.skipped, is the orchestrator's since T035, and the core files no finding of it.
 func TestStepWarnings(t *testing.T) {
 	t.Run("no stage skipped", func(t *testing.T) {
 		stepHost(t, "plan-nothing.json", nil)
 		out := runStepCmd(t, "--snapshot", stageID(t, "again"), "--dry-run")
 		if out.code != findings.ExitOK || slices.ContainsFunc(out.doc.Findings, func(f findings.Finding) bool {
-			return f.Rule == findings.RuleStepStageSkipped
+			return f.Rule == stepStageSkipped
 		}) {
-			t.Errorf("exit %d, findings %+v; want 0 and no %s", out.code, out.doc.Findings, findings.RuleStepStageSkipped)
+			t.Errorf("exit %d, findings %+v; want 0 and no %s", out.code, out.doc.Findings, stepStageSkipped)
 		}
 		for _, line := range []string{"reconcile: nothing to apply\n", "push: nobody\n", "verdict: clear\n",
 			": unchanged; the ids differ by provenance alone\n"} {
@@ -2241,7 +2246,7 @@ func TestStepBackToAnEarlierSnapshot(t *testing.T) {
 	if out.code != findings.ExitOK || out.stdout != want || out.doc.BundleID != sealedID {
 		t.Errorf("exit %d, bundle_id %s, stdout:\n%s\nwant 0, sealed's %s, and:\n%s", out.code, out.doc.BundleID, out.stdout, sealedID, want)
 	}
-	if carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) || carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
+	if carriesRule(out.doc.Findings, stepStageSkipped) || carriesRule(out.doc.Findings, stageTwinMoved) {
 		t.Errorf("findings %+v; a record that names no stage skips none and sees none move", out.doc.Findings)
 	}
 	reg, err := psp.Load("")
@@ -2286,7 +2291,7 @@ func TestStepBackToAnEarlierSnapshot(t *testing.T) {
 		"step push s1: done in 2.4s",
 		"step record: done in 0.1s",
 		"stepped to "+side(snapshotOf(t, sealedID), sealedID)+" in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s")...)
-	if out.code != findings.ExitOK || out.stdout != want || carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
+	if out.code != findings.ExitOK || out.stdout != want || carriesRule(out.doc.Findings, stageTwinMoved) {
 		t.Errorf("exit %d, findings %+v, stdout:\n%s\nwant 0, no stage.twin.moved, and:\n%s", out.code, out.doc.Findings,
 			out.stdout, want)
 	}
@@ -2669,11 +2674,11 @@ func TestStepToASnapshot(t *testing.T) {
 					}
 				}
 				doc := out.doc
-				if doc.SnapshotID != target.ID || doc.BundleID != toID || doc.Stage != nil || doc.Subject.Snapshot != arg ||
+				if doc.SnapshotID != target.ID || doc.BundleID != toID || doc.Subject.Snapshot != arg ||
 					doc.Subject.Branch != env.Branch || doc.Subject.At != env.At || doc.Subject.Stage != "" ||
 					doc.Subject.Scope != "tag:fylgja" {
-					t.Errorf("document names snapshot %s, bundle %s, stage %+v, subject %+v; want the target's, no stage, "+
-						"the snapshot as given", doc.SnapshotID, doc.BundleID, doc.Stage, doc.Subject)
+					t.Errorf("document names snapshot %s, bundle %s, subject %+v; want the target's, no stage, "+
+						"the snapshot as given", doc.SnapshotID, doc.BundleID, doc.Subject)
 				}
 				if st := doc.Step; st == nil || st.From.Stage != nil || st.To.Stage != nil ||
 					st.To.SnapshotID != target.ID || st.From.SnapshotID != h.fromSnapshot {
@@ -2914,9 +2919,9 @@ func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 			"snapshot "+short(linked)+" names scope tag:fylgja and mapping "+dcim)
 		for _, args := range [][]string{{"--allow-restart"}, {"--dry-run"}} {
 			out := runStepCmd(t, append([]string{"--snapshot", linked}, args...)...)
-			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil || out.doc.Stage != nil {
-				t.Errorf("%v: exit %d, refusal %+v, step %+v, stage %+v\nwant 1, %+v, and no step or stage", args,
-					out.code, got, out.doc.Step, out.doc.Stage, want)
+			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
+				t.Errorf("%v: exit %d, refusal %+v, step %+v\nwant 1, %+v, and no step", args,
+					out.code, got, out.doc.Step, want)
 			}
 		}
 		if len(h.svc.stepped) != 0 || len(h.clab.asked("clab", "deploy")) != 0 {

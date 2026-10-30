@@ -455,7 +455,9 @@ func TestAFrameOverTheClientsBoundIsRefused(t *testing.T) {
 // A frame of a kind this build does not know is returned with no kind, for the caller to
 // pass over.
 // A request for the markdown rendering says so, and its document frame comes back with the
-// markdown beside the text, as the server wrote them (015).
+// markdown beside the text, as the server wrote them (015). The operation is the one
+// that asked for it until 020, twin.rehearse, which the orchestrator now serves: the client
+// sends any operation's path the caller names.
 func TestAMarkdownRequestReturnsTheDocumentsMarkdown(t *testing.T) {
 	got := make(chan Request, 1)
 	address := served(t, func(w http.ResponseWriter, r *http.Request) {
@@ -470,7 +472,7 @@ func TestAMarkdownRequestReturnsTheDocumentsMarkdown(t *testing.T) {
 		doc.Text, doc.Markdown = "no findings\n", "## Fylgja rehearsed\n"
 		_, _ = io.WriteString(w, frameLine(t, doc))
 	})
-	ans, err := clientFor(t, address).Do(context.Background(), findings.OpTwinRehearse,
+	ans, err := clientFor(t, address).Do(context.Background(), "twin.rehearse",
 		Request{Render: RenderMarkdown, Args: map[string]json.RawMessage{"branch": json.RawMessage(`"change-1"`)}},
 		"00112233445566778899aabbccddeeff", nil)
 	if err != nil {

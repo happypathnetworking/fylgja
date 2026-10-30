@@ -14,7 +14,7 @@ import (
 // package's FYLGJA_SRLINUX_USERNAME and _PASSWORD) are declared by each package's
 // readiness.login and read by the names it gives, so a platform's login is data and not
 // a constant in code (Constitution II). INFRAHUB_ADDRESS and INFRAHUB_API_TOKEN belong to
-// internal/intent, which reads them where the request is made.
+// the orchestrator's adapter from 020 (D-065): the core reads neither.
 const (
 	EnvTemporalAddress   = "FYLGJA_TEMPORAL_ADDRESS"
 	EnvTemporalNamespace = "FYLGJA_TEMPORAL_NAMESPACE"

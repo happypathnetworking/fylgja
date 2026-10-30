@@ -17,7 +17,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -38,7 +37,6 @@ func main() {
 	remove := flag.Bool("delete", false,
 		"delete the branch instead, a "+testsupport.TestBranchPrefix+"* one or "+testsupport.FixtureBranch+
 			": every stage of every proposed change whose source it is, those proposed changes, then the branch")
-	sdl := flag.String("sdl", "", "write the branch's GraphQL SDL to this path and exit")
 	addLink := flag.Bool("add-link", false,
 		"add the InterfacePhysical ports n1:ethernet-1/3 and n3:ethernet-1/3 and the DcimCable between them "+
 			"to a seeded throwaway branch and exit")
@@ -266,13 +264,6 @@ func main() {
 		return
 	}
 
-	if *sdl != "" {
-		if err := writeSDL(*branch, *sdl); err != nil {
-			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
-			os.Exit(1)
-		}
-		return
-	}
 	if err := run(*branch, *schemaDir, *schemaOnly, *remove, *mixed); err != nil {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 		os.Exit(1)
@@ -510,27 +501,6 @@ func prepareMain(schemaDir, name, location, ref string, wait time.Duration) erro
 		return err
 	}
 	fmt.Printf("import complete after %.0fs: query, transform and definition on main\n", took.Seconds())
-	return nil
-}
-
-// writeSDL fetches the branch's GraphQL schema. genqlient generates the typed client
-// from it, so it is committed: the build must never need a live Infrahub (D-017).
-func writeSDL(branch, path string) error {
-	c, err := testsupport.NewClient()
-	if err != nil {
-		return err
-	}
-	sdl, err := c.SDL(branch)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, sdl, 0o644); err != nil {
-		return err
-	}
-	fmt.Printf("wrote %d bytes of SDL from %s to %s\n", len(sdl), branch, path)
 	return nil
 }
 

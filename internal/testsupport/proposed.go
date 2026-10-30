@@ -434,40 +434,6 @@ func (c *Client) StagesOf(id string) ([]StageRow, error) {
 	return out, nil
 }
 
-// StagesPresent returns which of ids still read as stages on the default branch, where
-// the branch-agnostic kind lives, whatever proposed change they name or none. It writes
-// nothing, so it needs no guard: a test asks it of the ids it made.
-func (c *Client) StagesPresent(ids []string) ([]string, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	quoted := make([]string, len(ids))
-	for i, id := range ids {
-		quoted[i] = fmt.Sprintf("%q", id)
-	}
-	raw, err := c.GraphQL("main", fmt.Sprintf(`{ FylgjaStage(ids: [%s]) { edges { node { id } } } }`, strings.Join(quoted, ", ")))
-	if err != nil {
-		return nil, fmt.Errorf("reading stages by id: %w", err)
-	}
-	var r struct {
-		S struct {
-			Edges []struct {
-				Node struct {
-					ID string `json:"id"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"FylgjaStage"`
-	}
-	if err := json_Unmarshal(raw, &r); err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, e := range r.S.Edges {
-		out = append(out, e.Node.ID)
-	}
-	return out, nil
-}
-
 // DeleteStagesOf deletes a proposed change's stages and returns how many. It comes before
 // the proposed change's own delete, which Infrahub refuses while a stage names it, the
 // relationship being required (research §8.8).
@@ -656,43 +622,6 @@ func (c *Client) RunUserChecks(id string, timeout time.Duration) ([]UserCheckRow
 		if vs, err := c.userValidators(id); err != nil {
 			last = err.Error()
 		} else if pending := rerunPending(defs, started, vs); len(pending) == 0 {
-			return userCheckRows(vs), nil
-		} else {
-			last = strings.Join(pending, ", ")
-		}
-		if !time.Now().Add(userPollEvery).Before(deadline) {
-			return nil, fmt.Errorf("proposed change %s: user checks not concluded within %s (last saw %s)", id, timeout, last)
-		}
-		time.Sleep(userPollEvery)
-	}
-}
-
-// AwaitUserChecks waits, sending nothing, until each check definition Infrahub runs on a
-// proposed change's source branch (checkDefinitionsOn) has a validator reading completed,
-// then returns the checks as UserChecksOf reads them. It awaits the run already begun, as a
-// creation's: Infrahub starts the user checks after the rest of the pipeline, so a caller
-// that changes the proposed change straight after OpenProposedChange can be read by a check
-// that has not started yet (015's research §5.6). A branch that sees no definition returns at
-// once. At the bound the failure names each definition not started or in its state. A read
-// that fails is read again until the bound, as RunUserChecks does.
-func (c *Client) AwaitUserChecks(id string, timeout time.Duration) ([]UserCheckRow, error) {
-	branch, err := c.testProposedChange(id)
-	if err != nil {
-		return nil, err
-	}
-	defs, err := c.checkDefinitionsOn(branch)
-	if err != nil {
-		return nil, err
-	}
-	if len(defs) == 0 {
-		return c.UserChecksOf(id)
-	}
-	deadline := time.Now().Add(timeout)
-	var last string
-	for {
-		if vs, err := c.userValidators(id); err != nil {
-			last = err.Error()
-		} else if pending := rerunPending(defs, nil, vs); len(pending) == 0 {
 			return userCheckRows(vs), nil
 		} else {
 			last = strings.Join(pending, ", ")

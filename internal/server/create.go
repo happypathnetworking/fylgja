@@ -12,7 +12,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
-	"github.com/happypathnetworking/fylgja/internal/stage"
 )
 
 type createFlags struct {
@@ -142,7 +141,7 @@ func (cr *compiledRead) compileAndFile(ctx context.Context, opts *options, op st
 	if err != nil {
 		return cr.refused(opts, loadFailureAt(op, subject, findings.StepCompile, err))
 	}
-	files, id, compiled := stage.Compile(c, decls, reg, packages)
+	files, id, compiled := Compile(c, decls, reg, packages)
 	compiled = compiled.AtStep(findings.StepCompile)
 	list = append(list, compiled...)
 	if compiled.Rejected() {

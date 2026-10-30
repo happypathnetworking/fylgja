@@ -22,7 +22,6 @@ func TestStepIsPure(t *testing.T) {
 		"time":      "wall-clock time makes output non-deterministic",
 		"math/rand": "randomness makes output non-deterministic",
 		"os/exec":   "process execution",
-		"github.com/happypathnetworking/fylgja/internal/intent": "intent performs I/O",
 		"github.com/happypathnetworking/fylgja/internal/bundle": "bundle writes files",
 	}
 	seen := 0

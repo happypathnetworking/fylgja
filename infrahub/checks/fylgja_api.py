@@ -78,8 +78,9 @@ CLOSE_MARGIN_S = 120
 # FR-015, R-20), is not a refusal of the change, and the other stages decide. It reads the
 # finding's rule and step and the stage's at_source and nothing else, as the orchestrator's
 # passed_over does: fylgja-step passes it over in the plan, and fylgja-twin in a refusal that
-# says the host is held. The three values are findings.RuleScopeEmpty, findings.StepRead and
-# stages.AtBranchPoint (internal/rehearsal's TestTheChecksExcuseTheBranchPointAsTheServerDoes).
+# says the host is held. The three values are the orchestrator's rule scope.empty, the
+# findings contract's step read and the stage's at_source branch_point, held by
+# test_checks_glue.py (internal/rehearsal's Go test did until 020's T035).
 RULE_SCOPE_EMPTY = "scope.empty"
 STEP_READ = "read"
 AT_BRANCH_POINT = "branch_point"

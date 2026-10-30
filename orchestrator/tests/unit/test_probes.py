@@ -2,8 +2,9 @@
 the kind's reader (`internal/intent/probes_test.go`) and the request's one list
 (`internal/server/probes_test.go`'s `readProbes` cases; the API's plumbing, `probesFiles`
 and `probesOf`, stays in the core). Each test is named after the Go test it carries over.
-The declarations are copies of `testdata/probes/`, the kind's schema a copy of
-`internal/intent/testdata/schema-fylgja-probe.json`, each held to its original."""
+The declarations are copies of `testdata/probes/`, each held to its original; the kind's
+schema was a copy of `internal/intent/testdata/schema-fylgja-probe.json`, held to it until the
+Go reader went (T035), and is now the only one."""
 
 import copy
 import json
@@ -61,11 +62,6 @@ def test_every_declaration_is_copied():
 def test_each_copy_is_the_repositorys_declaration(name):
     # A declaration that moves under testdata/probes/ is copied again.
     assert (PROBES / name).read_bytes() == (REPO / "testdata" / "probes" / name).read_bytes()
-
-
-def test_the_probe_kinds_schema_is_the_recorded_one():
-    original = REPO / "internal" / "intent" / "testdata" / "schema-fylgja-probe.json"
-    assert PROBE_SCHEMA.read_bytes() == original.read_bytes()
 
 
 def fixture(name: str) -> bytes:

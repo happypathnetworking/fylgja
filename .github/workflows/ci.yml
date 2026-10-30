@@ -66,10 +66,6 @@ jobs:
         with:
           go-version-file: go.mod
       - run: scripts/bring-up.sh --part infrahub
-      # The committed client against the committed SDL: genqlient reads
-      # schema/infrahub.graphql, so this step needs no Infrahub (make sdl is what fetches
-      # the SDL from a live one). Tier 2 is the client's check against the live schema.
-      - run: go generate ./... && git diff --exit-code
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'

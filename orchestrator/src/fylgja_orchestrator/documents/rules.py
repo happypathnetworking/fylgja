@@ -9,9 +9,9 @@ adapter files the core's own rules for what the core would have refused alike (t
 intrinsic rules, the read's artifact and platform rules, a probe declaration's, a
 snapshot's), and the orchestrator owns the rest, the core's retired rules with their wording
 and the four of its own (`record.twin.stale`, `step.target.required`,
-`rehearsal.report.unposted`, `platform.unreachable`). `api.unreachable` and
-`api.token.refused` are the core's client's, which the orchestrator's client of the core
-files in the core's words.
+`rehearsal.report.unposted`, `platform.unreachable`). The four `api.*` rules are the
+core's client's, which the orchestrator's client of the core (`core.py`) files in the
+core's words.
 """
 
 from dataclasses import dataclass
@@ -196,6 +196,10 @@ RULES: tuple[Rule, ...] = (
        "ended before its document; status error", core=True),
     _r("api.token.refused", REJECTION, 2, "", "FYLGJA_API_TOKEN when it is unset or unsendable, else the address that "
        "answered 401; status error", core=True),
+    _r("api.version.unknown", REJECTION, 2, "", "the address; it answered 404 naming the versions it serves, none of "
+       "them this client's; status error", core=True),
+    _r("api.transfer.too_large", REJECTION, 2, "", "the operation; a request over the server's bound (413), or a frame "
+       "of the answer over the client's; status error", core=True),
 )
 
 BY_ID: dict[str, Rule] = {r.id: r for r in RULES}

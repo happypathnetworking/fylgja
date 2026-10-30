@@ -1,0 +1,11 @@
+{"start":{"workflow_id":"fylgja-destroy"}}
+{"event":{"notice":"cancelling provisioning run p1; waiting for its cleanup"}}
+{"out":"cancelling provisioning run p1; waiting for its cleanup\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"teardown","finding_step":"teardown","end":false}}
+{"out":"step teardown: begins\n"}
+{"event":{"notice":"provisioning run p1 closed: cancelled"}}
+{"out":"provisioning run p1 closed: cancelled\n"}
+{"event":{"notice":"run fylgja-destroy 01a10000-0000-7000-8000-000000000dd1"}}
+{"out":"run fylgja-destroy 01a10000-0000-7000-8000-000000000dd1\n"}
+{"run":{"workflow_id":"fylgja-destroy","run_id":"01a10000-0000-7000-8000-000000000dd1"}}
+{"document":{"findings_version":"1","operation":"twin.destroy","status":"ok","subject":{"run_id":"01a10000-0000-7000-8000-000000000dd1"},"findings":[{"severity":"info","rule":"run.detached","object":"fylgja-destroy 01a10000-0000-7000-8000-000000000dd1","message":"run fylgja-destroy 01a10000-0000-7000-8000-000000000dd1 started; read it with fylgja run read","step":"start"}]},"text":"info run.detached [step start] fylgja-destroy 01a10000-0000-7000-8000-000000000dd1: run fylgja-destroy 01a10000-0000-7000-8000-000000000dd1 started; read it with fylgja run read\n1 finding(s): 0 rejection, 0 warning, 1 info\n"}

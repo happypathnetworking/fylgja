@@ -376,6 +376,9 @@ def _step_reached(r: StageResult) -> str:
     return STEP_START
 
 
+step_reached = _step_reached
+
+
 def stage_findings(ref: str, wait: dict | None) -> Findings:
     """A stage's wait's failing assertions as warnings, each object prefixed with the
     stage's reference (`StageFindings`)."""
@@ -721,6 +724,11 @@ def _loss_figures(loss: dict | None, brief: bool) -> list[str]:
 def _wait_text(w: dict) -> str:
     reads = "read" if w["reads"] == 1 else "reads"
     return f"{w['outcome']} after {w['after_s']:.1f}s ({w['reads']} {reads})"
+
+
+wait_text = _wait_text
+"""How a wait ended, as a stage's line and the baseline's verify line say it:
+`settled after 4.4s (1 read)`."""
 
 
 def counts_text(c: dict) -> str:

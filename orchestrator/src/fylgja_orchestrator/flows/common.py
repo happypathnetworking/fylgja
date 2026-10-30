@@ -12,15 +12,19 @@ functions that ask it for the current run, so `fylgja_orchestrator.flows` import
 import contextvars
 import os
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from ..adapters.infrahub import __main__ as tool
+from ..adapters.infrahub import comment
 from ..adapters.infrahub import snapshot as snapshots
 from ..adapters.infrahub.session import Session
 from ..core import Answer, Core, CoreFailure, File
+from ..documents.deadline import load_budgets
 from ..documents.findings import Document, Findings, error_document
-from ..record import ChangeRef, RecordError, StageRef, Store, new_record, shown_snapshot
+from ..record import ChangeRef, RecordError, StageRef, Store, new_record, read_flow_run, shown_snapshot
 
 ARTIFACT_TYPE = "fylgja-findings"
 """The type of the artifact every flow's run carries its document under (research §1.4)."""
@@ -50,8 +54,10 @@ def out_line(line: str) -> None:
 @dataclass
 class Deps:
     """What a flow's body reads through: the core's client, the orchestrator's store, the
-    adapter's environment and how it opens a session, its three commands, the out sink and
-    the run's id ("" when the body runs with no run). Tests replace any of them."""
+    adapter's environment and how it opens a session, its three commands, the out sink, the
+    run's id ("" when the body runs with no run) and the clock; and the rehearsal's: a flow
+    run's state on the platform, the report's post on its proposed change, the packages'
+    budgets and the monotonic clock its deadline is kept on. Tests replace any of them."""
 
     core: Core
     store: Store
@@ -61,6 +67,11 @@ class Deps:
     read: Callable = tool.read
     schema_check: Callable = tool.schema_check
     flow_run_id: str = ""
+    now: Callable[[], datetime] = lambda: datetime.now(UTC)
+    flow_run: Callable = read_flow_run
+    post: Callable = comment.post
+    budgets: Callable = load_budgets
+    clock: Callable[[], float] = time.monotonic
 
     @classmethod
     def from_env(cls) -> "Deps":

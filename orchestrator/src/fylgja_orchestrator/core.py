@@ -367,11 +367,13 @@ class Core:
         return self.call(operation, {**(args or {}), "detach": True}, files, RENDER_TEXT, on_out)
 
     def read(self, workflow_id: str, run_id: str = "", render: bool = True,
-             on_out: Callable[[str], None] | None = None) -> Answer:
+             on_out: Callable[[str], None] | None = None, stop: Callable[[], bool] | None = None) -> Answer:
         """Reads a run by its identity every `poll_s` until its answer carries its document:
         the run's own, operation run.read, or run.unknown's. Each read replays the run's
         lines from its start, so `on_out` takes only the lines no earlier read gave it, and
-        never the line naming the run's state, which every read writes first."""
+        never the line naming the run's state, which every read writes first. `stop`, when
+        given, is asked before each wait: once it answers true, the running answer is
+        returned, its document None, and the run goes on."""
         printed = 0
         while True:
             answer = self.call(OP_RUN_READ, _identity(workflow_id, run_id), render=RENDER_TEXT if render else "")
@@ -383,7 +385,7 @@ class Core:
                 for line in answer.out[printed:]:
                     on_out(line)
             printed = max(printed, len(answer.out))
-            if answer.document is not None:
+            if answer.document is not None or (stop is not None and stop()):
                 return answer
             self._sleep(self.poll_s)
 

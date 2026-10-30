@@ -141,6 +141,11 @@ class Session:
         at), or its refusal at resolve. Raises one of ERRORS when Infrahub cannot be read."""
         return stages.find(self.reader, self.stamper, branch, self.scope)
 
+    def stage_list(self, branch: str) -> tuple[stages.ListResult, Findings]:
+        """The open proposed change's stages on branch as `stage list` lists them, under the
+        session's scope, no record marked. Raises one of ERRORS when Infrahub cannot be read."""
+        return stages.list_stages(self.reader, self.stamper, branch, self.scope)
+
     def take(self, branch: str, at: str, scope: str, observed_at: str | None = None) -> tuple[dict | None, Findings]:
         """A branch read at at, unpinned when it is "", under scope, and taken as a snapshot
         `2` with the request's probes (`stage.Read` then the take); None when the read

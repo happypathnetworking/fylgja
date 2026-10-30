@@ -19,6 +19,8 @@ was refused has no manifest, and counts none (research §5.17).
 """
 
 import json
+from dataclasses import dataclass, field
+from datetime import datetime
 
 from prefect import flow
 
@@ -57,41 +59,73 @@ def lossy_counts(manifest: bytes) -> tuple[int, int]:
 
 
 class _Compiled:
-    """A stage the core compiled: the snapshot file it was sent and its bundle's manifest."""
+    """A stage the core compiled: the snapshot file it was sent, its id, its bundle's manifest
+    and the stage it resolved to (the record's, should a flow create or step to it)."""
 
-    def __init__(self, file, manifest: bytes):
+    def __init__(self, file, manifest: bytes, snapshot_id: str = "", resolved=None):
         self.file, self.manifest = file, manifest
+        self.snapshot_id, self.resolved = snapshot_id, resolved
+
+
+@dataclass
+class Planned:
+    """A plan as far as it went (`plannedStages`): the scope every stage was planned under, the
+    subject the command's document carries, the session it was read through, when the stages
+    began to be resolved, the result, and each compiled stage by its reference."""
+
+    scope: str
+    subject: dict
+    session: object
+    began: datetime
+    res: PlanResult
+    compiled: dict = field(default_factory=dict)
 
 
 def run(deps: Deps, branch: str = "", scope: str | None = None, probes_path: str | None = None) -> Document:
     """The flow's body. `scope` and `probes_path` are None when not given."""
-    op = OP_STAGE_PLAN
+    planned, refused = plan(deps, OP_STAGE_PLAN, branch, scope, probes_path, {}, printing=True)
+    if refused is not None:
+        return refused
+    return planned.res.document(planned.scope)
+
+
+def plan(deps: Deps, op: str, branch: str, scope: str | None, probes_path: str | None, subject: dict,
+         printing: bool = False) -> tuple["Planned | None", Document | None]:
+    """The proposed change's plan under op (`planStages`), or the document op ends with: the
+    guards (--branch, its form), the scope, named in subject, then the session, then the open
+    proposed change on the branch and each of its stages built, compiled and stepped from the
+    one before. A plan refused before its proposed change was found is a Planned whose result
+    names none. With `printing`, the heading and each stage are printed as `stage plan` prints
+    them, each step before the stage it leads to."""
     if not branch:
-        return error_document(op, None, "--branch is required")
+        return None, error_document(op, None, "--branch is required")
     try:
         stages.check_branch(branch)
     except stages.RefError as e:
-        return rule_error_document(op, None, stages.RULE_STAGE_REF_INVALID, branch, str(e), STEP_START)
-    scope, refused = tool.scope_of(op, None, scope, deps.env())
+        return None, rule_error_document(op, None, stages.RULE_STAGE_REF_INVALID, branch, str(e), STEP_START)
+    scope, refused = tool.scope_of(op, subject or None, scope, deps.env())
     if refused is not None:
-        return refused
-    subject = {"scope": scope}
+        return None, refused
+    subject = {**subject, "scope": scope}
     session, refused = deps.session(op, subject, scope, probes_path)
     if refused is not None:
-        return refused
+        return None, refused
 
+    began = deps.now()
     try:
         ch, found = session.find(branch)
     except ERRORS as e:
-        return error_document(op, subject, str(e), STEP_RESOLVE, op)
+        return None, error_document(op, subject, str(e), STEP_RESOLVE, op)
     res = PlanResult(branch)
+    planned = Planned(scope, subject, session, began, res)
     if ch is None:
         res.findings = Findings(found)
-        return res.document(scope)
+        return planned, None
     pc = ch.proposed_change
     res.proposed_change, res.destination = pc.block(), pc.destination
     labels = ch.labels()
-    deps.out(stages_text.heading(res.proposed_change, len(labels), pc.destination, scope))
+    if printing:
+        deps.out(stages_text.heading(res.proposed_change, len(labels), pc.destination, scope))
 
     before = None
     for i, label in enumerate(labels):
@@ -99,28 +133,31 @@ def run(deps: Deps, branch: str = "", scope: str | None = None, probes_path: str
         try:
             ps, compiled = plan_stage(deps, session, ch, ref, MOVED_ALWAYS if i == 0 else MOVED_NEVER)
         except CoreFailure as e:
-            return core_failed(op, subject, e, res.findings)
+            return None, core_failed(op, subject, e, res.findings)
         step = None
         if before is not None and compiled is not None:
             try:
                 answer = deps.core.diff(before.file.path, compiled.file.path, [before.file, compiled.file])
             except CoreFailure as e:
-                return core_failed(op, subject, e, res.findings + ps.findings)
+                return None, core_failed(op, subject, e, res.findings + ps.findings)
             if answer.status != STATUS_OK:
                 # Two bundles the compile just produced always step; one that does not is a
                 # defect, not a finding (`pairOf`).
                 why = "; ".join(f.message for f in answer.findings if f.severity == REJECTION) or answer.status
-                return error_document(op, subject, f"the step {res.stages[-1].ref} → {ps.ref}: {why}",
-                                      STEP_RESOLVE, op)
+                return None, error_document(op, subject, f"the step {res.stages[-1].ref} → {ps.ref}: {why}",
+                                            STEP_RESOLVE, op)
             step = step_of_diff(answer.blocks, before.manifest, compiled.manifest)
         pair = res.add(ps, step)
-        if pair is not None:
-            for line in pair.text().split("\n"):
+        if printing:
+            if pair is not None:
+                for line in pair.text().split("\n"):
+                    deps.out(line)
+            for line in ps.lines():
                 deps.out(line)
-        for line in ps.lines():
-            deps.out(line)
+        if compiled is not None:
+            planned.compiled[ps.ref] = compiled
         before = compiled
-    return res.document(scope)
+    return planned, None
 
 
 def plan_stage(deps: Deps, session, ch, ref: stages.Ref, moved: str) -> tuple[PlanStage, "_Compiled | None"]:
@@ -162,7 +199,7 @@ def plan_stage(deps: Deps, session, ch, ref: stages.Ref, moved: str) -> tuple[Pl
     ps.findings.extend(compiled)
     ps.bundle_id = doc.blocks.get("bundle_id") or ""
     ps.status = PLAN_COMPILED
-    return ps, _Compiled(file, manifest)
+    return ps, _Compiled(file, manifest, snapshot_id, built.resolved)
 
 
 @flow(name=FLOW, log_prints=False)

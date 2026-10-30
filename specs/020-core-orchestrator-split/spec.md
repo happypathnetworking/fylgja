@@ -75,8 +75,9 @@ of this feature.
   unknown run identity the plan's); security, in that the core's token never crosses the
   bridge, the task workers hold the orchestrator's credential alone, and the adapter holds
   no node login and never the API's token (Clear); performance, tier 1's 65 s budget kept
-  and tier 2's wall time and `fylgja-twin`'s `timeout` against the flow's overhead (the
-  plan's, by the brief); the external dependencies, Prefect's open-source boundary and
+  (raised to 90 s by the operator on 2026-10-29, research §5.13) and tier 2's wall time
+  and `fylgja-twin`'s `timeout` against the flow's overhead (the plan's, by the brief);
+  the external dependencies, Prefect's open-source boundary and
   how a task worker triggers and waits for a deployment on the bridge, each verified on the
   development host by the plan before it is relied on (the plan's, by the brief); the
   formats and versions, what moves (`twin.json`, the API's documents) and what does not
@@ -356,7 +357,8 @@ stage plan whose steps equal today's plan's for the same proposed change.
 
 1. **Given** the three-node and three-node-probed goldens' snapshots, **When** a client asks
    the step between them, **Then** the answer names the two hosts `<probe>-a` and
-   `<probe>-b` and their links as added, and no device changed.
+   `<probe>-b` and their links as added, and `n1` changed by its bootstrap alone, the two
+   ports the hosts take enabled, with no artifact moved.
 2. **Given** one snapshot twice, **When** a client asks the step, **Then** it is
    `unchanged`, as a step to a stage of the same bundle is today.
 3. **Given** a snapshot whose compile is refused, **When** a client asks the step, **Then**
@@ -708,7 +710,8 @@ the release notes.
   snapshots on the goldens (FR-011), the record round-trips (FR-007), the worker's three
   workflows (FR-008) and the Python tests of the flows' pure parts, the verdict, the
   report, the deadline and the renderers against the captured goldens (FR-023); `make test`
-  MUST stay inside its 65 s budget with the Python tests beside it.
+  MUST stay inside its 90 s budget (raised from 65 s on 2026-10-29) with the Python tests
+  beside it.
 - **FR-028**: Tier 2 MUST hold the adapter's contract tests, ported to Python from the Go
   reader's with each Go test's assertions carried over against the same fixture and
   throwaway `fylgja-test-*` branches, each run against the Go reader's answers before it is
@@ -809,15 +812,17 @@ the release notes.
 - **SC-006**: The step between the three-node and three-node-probed goldens names the two
   hosts and their links; a stage plan's steps through `fylgja-cli` equal today's for the
   same proposed change.
-- **SC-007**: The `stages`, `plan` and `rehearsal` documents' text and markdown from the
-  orchestrator match the goldens captured from the Go implementation byte for byte but for
-  `fylgja-cli` in the reproduce lines that name an orchestrator command; each stage's
-  verdict matches.
+- **SC-007**: The orchestrator's renderers, given the documents captured from the Go
+  implementation, write the `stages`, `plan` and `rehearsal` text and markdown byte for
+  byte as the goldens hold them but for `fylgja-cli` in the reproduce lines that name an
+  orchestrator command; each stage's verdict matches. A live plan files a port the mapping
+  omits once, at compile, where the Go reader filed it at read too (research §5.20).
 - **SC-008**: Tier 2 passes whole, `TestChecksInsideInfrahub` green through the
   orchestrator's platform on the bridge; tier 3 passes nine cases, `E2E-OK`; the credential
   greps over the orchestrator's logs and its platform's find nothing.
-- **SC-009**: Tier 1 stays inside its 65 s budget with the Python tests beside it; CI's
-  three jobs are green with the Python tests and linter in them.
+- **SC-009**: Tier 1 stays inside its 90 s budget with the Python tests beside it (67.0–68.0
+  s at its peak in Run 17, 55.9 s uncached at the close); CI's three jobs are green with
+  the Python tests and linter in them.
 - **SC-010**: The development host runs five processes after the bring-up script, and
   each Infrahub task worker reaches the orchestrator's platform on the bridge and the
   core's server not at all.

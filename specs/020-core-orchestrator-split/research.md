@@ -1031,3 +1031,68 @@ made.
   7.5 s (99 new). `make test` uncached 68.0 s and 67.0 s at a load of 2.1–4.7, `internal/cli`
   43.2 and 42.2 s of it, over the 65 s budget: by the operator's answer (T047's note) the
   budget is 90 s, moved in `CLAUDE.md` and `docs/development.md`. `make lint` clean.
+
+### 5.14 Tier 2, the reader's ported tests (T020, Run 18, 2026-10-30)
+
+- **The harness** (`orchestrator/tests/contract/conftest.py`). Every write is the Go fixture
+  tool's, built once per session from this tree (`go build -tags fixture` of
+  `./cmd/fylgja-fixture`, which `go run` would compile per call) and run as a subprocess from
+  the repository's root with the process's `INFRAHUB_*`; a failure raises with its stderr,
+  the token redacted. `FixtureTool.throwaway(label)` seeds `fylgja-test-py-<pid>-<label>`
+  (the three-node fixture, `-mixed` or `-schema-only`) and deletes it with `-delete` however
+  the block ends, then reads `Branch` to hold it gone. `read_under` is the Go tests'
+  `readUnder`: the adapter's `read.read` (conformance, the fetch, the intrinsic rules) under
+  a scope, the ReadError when the read could not run. `proxy` is the Go test's recording
+  reverse proxy, a `ThreadingHTTPServer` forwarding to the real Infrahub with `httpx` and
+  keeping each request's method, path and body. `core` is a core server of the test's own,
+  `bin/fylgja serve --listen 127.0.0.1:0` with a token it makes, a temporary state root and
+  no `INFRAHUB_*`, its address read from its listen line, as `scripts/e2e.sh` reads it:
+  `twin compile --snapshot` dials nothing and files nothing, so the core's half needs neither
+  Infrahub nor the workflow service, and the host's server is never asked.
+- **The fixture tool's four new flags**, each where a Go test's seeding had none: `-add-device
+  <name>:<port>[,…]` (`testsupport.AddDevice` with no tag, platform or group; prints the id,
+  which the read names an end outside the scope by), `-add-cable <label>=<dev>:<port>,…`
+  (`AddCable`, any number of ends), `-set-platform <dev>=<manufacturer>/<platform>`, `<dev>=`
+  taking it away (`SetDevicePlatform`), and `-load-schema-file <path>` (`LoadSchemaFile`,
+  which refuses `main`). Each refuses `fylgja-fixture`, a branch outside `fylgja-test-`, a
+  second of them and a value not of its form before any request; none renders.
+  `docs/development.md` and the glossary name them. `-add-interface`, `-mixed`,
+  `-schema-only`, `-probes` and `-delete-probes` already existed.
+- **The five files**, each Go test carried over by name: `test_read_fixture.py` (twelve:
+  `read_contract_test.go`'s eleven, the first split into the snapshot and the counts as
+  Go's two); `test_read_conformance.py` (three); `test_read_defects.py` (one);
+  `test_read_probes.py` (two, on one module-scoped seeded branch, since neither changes it);
+  `test_schema_check.py` (three). `internal/intent/testdata/dcim-cable-absent.yaml` is copied
+  under `orchestrator/tests/data/schema/`, held to its original by `test_schema.py`, since
+  the Go file leaves with the reader (T035).
+- **What the port asserts beyond Go's, or otherwise**:
+  - The fixture's read is the command's (`adapter.read`), which reads the kind, so it holds
+    the snapshot id `0940db93…` (SC-002) beside the CTM equal to `three-node.json` but for
+    the envelope, as dicts and as the marshalled take.
+  - The pinned read goes through the proxy, and every GraphQL request's query string is
+    `at=<the at>` exactly, where Go read `cfg.endpoint()`.
+  - **The defects are held to the side whose rule each is** (research §5.11: the adapter
+    runs the intrinsic rules, the core the package's). The Go reader named all three in one
+    pass; the adapter cannot, since its intrinsic rule refuses the read and no snapshot
+    reaches the core. So one branch, in two steps: c-far and `n3:console` seeded, the
+    adapter's read is clean and writes its snapshot, and the core's compile of it is
+    `rejected`, exit 1, with `interface.unmappable.linked` on `n2:ethernet-1/99` and
+    `interface.rule.unmatched` on `n3:console` in one pass and no bundle; then c-loop, and
+    the read is refused `link.endpoints.same_device` on `n1:ethernet-1/5|n1:ethernet-1/6`
+    alone, no file written. Both documents validate against `findings.schema.json`.
+  - The kind's case reads through the command four times; the probe-file case runs `main`
+    with `--json` through the proxy, no GraphQL body naming `FylgjaProbe`, then the core's
+    `twin compile` of the file places n1-loop's hosts on n1's `ethernet-1/10` and
+    `ethernet-1/11` and lists them under `fidelity.synthesized`: Go's `twin create --snapshot
+    --dry-run` less the host check, which is the core's alone.
+  - The schema check's three cases run `main`, text and `--json`, in a scratch working
+    directory that stays empty; through the proxy the check asks `/api/schema` and no
+    GraphQL, the stage kind's verification included.
+- **Live, on this host's Infrahub 1.11.2**, every case green at its first run; then each
+  file run alone, no twin up, at a load of 2.6–4.1: `test_read_fixture`
+  110.6 s wall (twelve; its two seeded cases 35 s and 38 s of seeding), `test_read_conformance`
+  83.0 s (the `DcimCable` removal's rebuild 44.7–51.5 s), `test_read_defects` 57.5 s,
+  `test_read_probes` 61.9 s, `test_schema_check` 50.5 s: 363.5 s in all, against the Go
+  packages' cases of the same tests inside `internal/intent`'s, `internal/server`'s and
+  `internal/cli`'s runs. Afterwards `Branch` lists `main` and `fylgja-fixture` alone, and
+  `FylgjaProbe`, `CoreProposedChange` and `FylgjaStage` count 0.

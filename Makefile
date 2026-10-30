@@ -90,7 +90,7 @@ test-scripts:
 STRUCTURIZR_IMAGE := structurizr/structurizr@sha256:721136283c2f9cf1ba69037bc9de136c579d66fdcb2d771cb60546ec68def1a5
 PLANTUML_IMAGE    := plantuml/plantuml@sha256:d08610df482510844382caa4e016ba2bf7e3231f630f02ee12f250f3416c62b1
 
-# Validates the C4 model and regenerates every committed diagram: the five views as
+# Validates the C4 model and regenerates every committed diagram: the six views as
 # C4-PlantUML and SVG under docs/c4/, the import graph in docs/development.md and the
 # fixture topologies in docs/diagrams/topologies.md. Needs Docker and go; no test tier
 # needs it. A second run changes nothing.

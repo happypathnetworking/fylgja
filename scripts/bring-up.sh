@@ -1,14 +1,15 @@
 #!/bin/bash
-# The bring-up script: takes a fresh Ubuntu 26.04 host to tiers 1 and 2 passing and the
-# dev server, the worker and the API's server running, with both platforms when the cEOS
-# tar is at hand and SR Linux alone when it is not. CI's contract job runs its Infrahub
-# part alone. Tooling beside scripts/e2e.sh; nothing Fylgja ships
-# (specs/013-launch/contracts/bring-up-script.md).
+# The bring-up script: takes a fresh Ubuntu 26.04 host to tiers 1 and 2 passing and five
+# processes running, the orchestrator's platform and runner and the dev server, the worker
+# and the API's server, with both platforms when the cEOS tar is at hand and SR Linux alone
+# when it is not. CI's contract job runs its Infrahub part alone. Tooling beside
+# scripts/e2e.sh; nothing Fylgja ships (specs/013-launch/contracts/bring-up-script.md).
 #
 #   scripts/bring-up.sh [--ceos-tar PATH] [--part NAME]... [--help]
 #
 # Run from a clone, by the user who will run Fylgja (not root). --part is repeatable and
-# takes toolchain, lab, infrahub or fylgja; absent, all four run, in that order.
+# takes toolchain, lab, infrahub, orchestrator or fylgja; absent, all five run, in that
+# order.
 #
 # The preamble changes nothing until local/.env, and refuses with exit 2: a release other
 # than Ubuntu 26.04, an unknown flag, a cEOS tar whose checksum is not the recorded one,
@@ -24,9 +25,15 @@
 #              SR Linux's rsyslogd needs, the SR Linux image, the cEOS import
 #   infrahub   Infrahub 1.11.2 by its published Compose file and this repository's
 #              override, main prepared by the fixture tool, the fixture branch seeded
+#   orchestrator  orchestrator/.venv by make orchestrator-venv; the Prefect server on the
+#              Docker bridge, where Infrahub's task workers reach it (D-065), and the
+#              runner, fylgja-orchestrator serve, started detached, each verified;
+#              nothing of Infrahub's recreated
+#              (specs/020-core-orchestrator-split/research.md, R-01 and R-17)
 #   fylgja     the build; the dev server, the worker and the API's server started
-#              detached, each one's report read, the server on loopback and on the Docker
-#              bridge, where Infrahub's task workers reach it (D-050); then tiers 1 and 2
+#              detached, each one's report read, the server on loopback alone and with no
+#              Infrahub variable, since the core reads no source of truth (020's FR-005);
+#              then tiers 1 and 2
 #
 # Each item is verified, installed when missing and verified again, so a second run on a
 # set-up host installs nothing and ends the same way. Exit 0: every part run completed and
@@ -43,7 +50,9 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 ROOT=$(pwd)
 
-PARTS_ALL=(toolchain lab infrahub fylgja)
+# The orchestrator's part comes before the core's: tier 1 runs the orchestrator's tests in
+# its venv, and tier 2 its flows through its platform.
+PARTS_ALL=(toolchain lab infrahub orchestrator fylgja)
 
 # The cEOS tar the proven image was imported from (research R-12): the file Arista's portal
 # gives, and the one layer `docker import` makes of it, which is the sha256 of the
@@ -67,6 +76,19 @@ SDK_VERSION=1.23.2
 TEMPORAL_BIN="$HOME/.temporalio/bin/temporal"
 TEMPORAL_WAIT_S=60
 REPORT_WAIT_S=30
+
+# The orchestrator (020's research R-01, R-02, R-17): its venv, the Prefect server's home and port,
+# and the runner's six deployments, each a flow's `main`.
+ORCH_VENV="$ROOT/orchestrator/.venv"
+PREFECT_HOME_DIR="$ROOT/local/orchestrator/prefect"
+PLATFORM_PORT=4200
+PLATFORM_WAIT_S=120
+DEPLOYMENTS=(intent-read twin-create twin-step stage-plan twin-rehearse schema-check)
+# The names the orchestrator's part needs in local/.env; a file kept from before 020 lacks
+# them.
+ORCH_NAMES=(FYLGJA_ORCHESTRATOR_AUTH FYLGJA_ORCHESTRATOR_ROOT PREFECT_API_URL PREFECT_API_AUTH_STRING)
+# The names the core's server must not carry: it reads no source of truth (D-065).
+CORE_UNSET=(INFRAHUB_ADDRESS INFRAHUB_API_TOKEN FYLGJA_DEFAULT_SCOPE)
 
 # The lines SR Linux's rsyslogd needs in the profile Ubuntu attaches to every rsyslogd
 # (docs/verified-facts.md, The host).
@@ -152,6 +174,21 @@ gql() {
   # shellcheck disable=SC2016
   with_env bash -c 'curl -sS --fail-with-body -H @<(printf "X-INFRAHUB-KEY: %s\n" "$INFRAHUB_API_TOKEN") \
     -H "Content-Type: application/json" -d "$1" "$INFRAHUB_ADDRESS/graphql/$2"' gql "$body" "$1" | jq -e '.data'
+}
+
+# orch_unnamed: the orchestrator's names local/.env does not name, read by name alone, never
+# a value; empty when it names all four.
+orch_unnamed() {
+  local n lacks=""
+  for n in "${ORCH_NAMES[@]}"; do
+    grep -q "^$n=" "$ROOT/local/.env" 2> /dev/null || lacks+="${lacks:+, }$n"
+  done
+  echo "$lacks"
+}
+
+# orch_names_hint: what to add to a kept local/.env that lacks the orchestrator's names.
+orch_names_hint() {
+  echo "add FYLGJA_ORCHESTRATOR_AUTH and PREFECT_API_AUTH_STRING, one value 'fylgja:<password>' (for example \`head -c 24 /dev/urandom | base64 | tr '+/' '-_'\`), PREFECT_API_URL='http://<the Docker bridge address>:$PLATFORM_PORT/api' and FYLGJA_ORCHESTRATOR_ROOT='$ROOT/local/orchestrator' to it, as .env.example says"
 }
 
 compose() {
@@ -345,6 +382,13 @@ if [ -n "$(ss -ltnH 'sport = :8000' 2> /dev/null)" ]; then
   esac
 fi
 
+# docker_bridge: the host's Docker bridge address, where host-gateway resolves inside
+# Infrahub's task workers (D-050), or nothing when Docker does not answer this user.
+docker_bridge() {
+  local format='{{(index .IPAM.Config 0).Gateway}}'
+  docker network inspect bridge -f "$format" 2> /dev/null || sudo -n docker network inspect bridge -f "$format" 2> /dev/null || true
+}
+
 # (6) local/.env: scaffolded from .env.example's names when absent (data-model §2), every
 # value made here and written there alone, mode 0600; kept byte for byte when present.
 env_value() {
@@ -353,8 +397,16 @@ env_value() {
     FYLGJA_API_TOKEN) head -c 24 /dev/urandom | base64 ;;
     INFRAHUB_ADDRESS) echo http://localhost:8000 ;;
     INFRAHUB_API_TOKEN | INFRAHUB_INITIAL_ADMIN_TOKEN) echo "$ADMIN_TOKEN" ;;
-    # The fixture's tag (017): the scope a request that names none is read under.
+    # The fixture's tag (017): the scope a read that names none is read under.
     FYLGJA_DEFAULT_SCOPE) echo tag:fylgja ;;
+    FYLGJA_ORCHESTRATOR_ROOT) echo "$ROOT/local/orchestrator" ;;
+    # The platform listens on the bridge (020's research R-01). On a host whose Docker the lab part
+    # has yet to install, Docker's default bridge address; the orchestrator's part holds the
+    # file to the bridge it finds.
+    PREFECT_API_URL) echo "http://${PLATFORM_BRIDGE:-172.17.0.1}:$PLATFORM_PORT/api" ;;
+    # One <user>:<password> for the platform's clients on the host and the checks in the
+    # task workers.
+    FYLGJA_ORCHESTRATOR_AUTH | PREFECT_API_AUTH_STRING) echo "$ORCH_AUTH" ;;
     # Empty on purpose: the embedded packages. A directory that does not exist would refuse
     # the roles' start.
     FYLGJA_PSP_DIR) echo "" ;;
@@ -379,12 +431,16 @@ env_value() {
 ENV_LINE="local/.env: kept"
 if [ ! -e local/.env ]; then
   ENV_NAMES=$(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' .env.example)
-  ADMIN_TOKEN=x
+  ADMIN_TOKEN=x ORCH_AUTH=x
   for name in $ENV_NAMES; do
     env_value "$name" > /dev/null || refuse ".env.example names $name, which the script does not know how to fill"
   done
   mkdir -p local
   ADMIN_TOKEN=$(cat /proc/sys/kernel/random/uuid)
+  # base64's alphabet less + and /, so the value needs no quoting in a URL, a header or
+  # Compose's interpolation, and no colon past the user's.
+  ORCH_AUTH="fylgja:$(head -c 24 /dev/urandom | base64 | tr '+/' '-_')"
+  PLATFORM_BRIDGE=$(docker_bridge)
   (
     umask 077
     tmp=$(mktemp local/.env.XXXXXX)
@@ -399,13 +455,20 @@ if [ ! -e local/.env ]; then
     chmod 0600 "$tmp"
     mv "$tmp" local/.env
   )
-  unset ADMIN_TOKEN
+  unset ADMIN_TOKEN ORCH_AUTH
   ENV_LINE="local/.env: scaffolded from .env.example (mode 0600)"
-elif ! grep -q '^FYLGJA_DEFAULT_SCOPE=' local/.env; then
-  # A file kept from before 017 names no default scope. The server starts without one, so
-  # this is a note and not a refusal; the file is the operator's, kept byte for byte, and
-  # read here by name alone, never a value.
-  ENV_LINE="local/.env: kept; it names no FYLGJA_DEFAULT_SCOPE, so the server starts with no default scope and refuses a request that names none, the checks' among them: add FYLGJA_DEFAULT_SCOPE='tag:fylgja' to it"
+else
+  # A file kept from before 017 names no default scope, and one from before 020 none of the
+  # orchestrator's names. Each is a note and not a refusal: the file is the operator's, kept
+  # byte for byte, and read here by name alone, never a value. The orchestrator's part
+  # fails on the names it lacks.
+  ENV_NOTES=()
+  grep -q '^FYLGJA_DEFAULT_SCOPE=' local/.env ||
+    ENV_NOTES+=("it names no FYLGJA_DEFAULT_SCOPE, so the orchestrator reads with no default scope and refuses a read that names none, the checks' among them: add FYLGJA_DEFAULT_SCOPE='tag:fylgja' to it")
+  ORCH_LACKS=$(orch_unnamed)
+  [ -z "$ORCH_LACKS" ] ||
+    ENV_NOTES+=("it names no $ORCH_LACKS, so the orchestrator's part cannot start its platform: $(orch_names_hint)")
+  for note in "${ENV_NOTES[@]}"; do ENV_LINE+="; $note"; done
 fi
 
 # (7) The first report.
@@ -695,7 +758,7 @@ seed() {
 }
 
 # workers_carry_override: whether every running task worker carries the override's two
-# variables, read by name alone through docker inspect's template, never a value (T111). The
+# variables, the orchestrator's address and auth string (D-065), read by name alone through docker inspect's template, never a value (T111). The
 # file in local/infrahub/ equal to the tree's says nothing of the running containers: a run
 # whose up -d failed or was interrupted, or an Infrahub recreated without the override, leaves
 # the task workers without them, and both checks failing for want of them.
@@ -705,8 +768,8 @@ workers_carry_override() {
   [ -n "$ids" ] || return 1
   for id in $ids; do
     names=$(docker inspect -f '{{range .Config.Env}}{{index (split . "=") 0}}{{println}}{{end}}' "$id") || return 1
-    grep -qx FYLGJA_API_ADDRESS <<< "$names" || return 1
-    grep -qx FYLGJA_API_TOKEN <<< "$names" || return 1
+    grep -qx FYLGJA_ORCHESTRATOR_ADDRESS <<< "$names" || return 1
+    grep -qx FYLGJA_ORCHESTRATOR_AUTH <<< "$names" || return 1
   done
 }
 
@@ -753,7 +816,7 @@ part_infrahub() {
     item infrahub compose present "(project $COMPOSE_PROJECT, $(wc -l <<< "$running") services running)"
   elif [ "$override" = present ] && [ -n "$running" ] && [ "$running" = "$wanted" ]; then
     compose up -d --quiet-pull
-    item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services up; the task workers lacked FYLGJA_API_ADDRESS or FYLGJA_API_TOKEN and were recreated)"
+    item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services up; the task workers lacked FYLGJA_ORCHESTRATOR_ADDRESS or FYLGJA_ORCHESTRATOR_AUTH and were recreated)"
   elif [ -n "$running" ] && [ "$running" = "$wanted" ]; then
     compose up -d --quiet-pull
     item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services up; those the override moved recreated)"
@@ -812,30 +875,231 @@ part_infrahub() {
   fi
 }
 
-# --- fylgja -------------------------------------------------------------------------------
+# --- orchestrator -------------------------------------------------------------------------
 
-TIER1_S="" TIER2_S="" BRIDGE_ADDR=""
+BRIDGE_ADDR="" PLATFORM_URL="" PREFECT_VERSION="" PLATFORM_STARTED=0
+RUNNER_LOG="$ROOT/local/orchestrator.log"
 declare -A ROLE_PID=()
 
 # bridge_address: BRIDGE_ADDR is the host's Docker bridge address, where host-gateway
-# resolves inside Infrahub's task workers and the server listens beside loopback (D-050).
-# A host with no bridge network fails the server's item, naming it.
+# resolves inside Infrahub's task workers and the orchestrator's platform listens (D-050,
+# 020's research R-01). A host with no bridge network fails the platform's item, naming it.
 bridge_address() {
-  BRIDGE_ADDR=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2> /dev/null) || BRIDGE_ADDR=""
+  BRIDGE_ADDR=$(docker_bridge)
   [ -n "$BRIDGE_ADDR" ] ||
-    fail fylgja server "this host has no Docker network bridge with a gateway address (docker network inspect bridge): Infrahub's task workers reach the API's server there"
+    fail orchestrator platform "this host has no Docker network bridge with a gateway address (docker network inspect bridge): Infrahub's task workers reach the orchestrator's platform there"
 }
 
-# scope_named: local/.env names FYLGJA_DEFAULT_SCOPE, read by name alone, never its value,
-# so the server's report must name a default scope.
-scope_named() { grep -q '^FYLGJA_DEFAULT_SCOPE=' "$ROOT/local/.env" 2> /dev/null; }
+# platform_get PATH: the platform's answer at PATH under PREFECT_API_URL, its basic-auth
+# string sent as a header file, so it is in no process's arguments. Loads local/.env in a
+# subshell of its own.
+platform_get() {
+  # shellcheck disable=SC2016
+  with_env bash -c 'curl -sS --fail-with-body --max-time 10 \
+    -H @<(printf "Authorization: Basic %s\n" "$(printf %s "$PREFECT_API_AUTH_STRING" | base64 -w0)") \
+    "${PREFECT_API_URL%/}$1"' get "$1"
+}
+
+# platform_serving: the platform answers its health, which Prefect serves to anyone, and
+# its release to local/.env's auth string, as the venv's Prefect: a server started with
+# another auth string, or from another venv, does not pass.
+platform_serving() {
+  curl -sS --fail --max-time 10 "$PLATFORM_URL/health" > /dev/null 2>&1 &&
+    [ "$(platform_get /admin/version 2> /dev/null | jq -r . 2> /dev/null)" = "$PREFECT_VERSION" ]
+}
+
+# deployments_named: the runner's start-up line's list, each flow's deployment main.
+deployments_named() {
+  local d named=""
+  for d in "${DEPLOYMENTS[@]}"; do named+="${named:+, }$d/main"; done
+  echo "$named"
+}
+
+# deployments_read: the platform answers each of the six deployments to local/.env's auth
+# string, as a check reads one before it starts a run.
+deployments_read() {
+  local d
+  for d in "${DEPLOYMENTS[@]}"; do
+    platform_get "/deployments/name/$d/main" > /dev/null 2>&1 || return 1
+  done
+}
+
+# runner_ready FROM: the runner's start-up line in its log, from byte FROM, names the six
+# deployments on the platform at PLATFORM_URL, and the platform answers each.
+runner_ready() {
+  local text
+  text=$(tail -c "+$(( $1 + 1 ))" "$RUNNER_LOG" 2> /dev/null | tr -d '\0') || return 1
+  grep -qxF "fylgja-orchestrator: serving $(deployments_named) on the platform at $PLATFORM_URL" <<< "$text" &&
+    deployments_read
+}
+
+# venv_pid SCRIPT WORD...: the pid of this tree's orchestrator/.venv/bin/SCRIPT run with the
+# words WORD... first and PREFECT_HOME at PREFECT_HOME_DIR, as this script and make
+# prefect-server and make orchestrator-serve start it, if one runs. The script runs under the
+# venv's interpreter, so its path is the process's first argument; pgrep -f alone would also
+# match a shell that runs it. A Prefect server or a runner a test started, under a home of
+# its own, is not this host's and is left alone.
+venv_pid() {
+  local script="$ORCH_VENV/bin/$1" pid home
+  local -a args
+  shift
+  for pid in $(pgrep -f -- "$script" || true); do
+    mapfile -d '' -t args < "/proc/$pid/cmdline" 2> /dev/null || continue
+    if [ "${args[1]:-}" != "$script" ] || [ "${args[*]:2:$#}" != "$*" ]; then continue; fi
+    home=$(tr '\0' '\n' < "/proc/$pid/environ" 2> /dev/null | sed -n 's/^PREFECT_HOME=//p')
+    [ "$home" = "$PREFECT_HOME_DIR" ] || continue
+    echo "$pid"
+    return 0
+  done
+  return 1
+}
+
+# arg_values PID FLAG: each value the process's arguments give FLAG, as FLAG VALUE or
+# FLAG=VALUE, one a line, read as tier 3's case 9 reads them.
+arg_values() {
+  local -a args
+  local i
+  mapfile -d '' -t args < "/proc/$1/cmdline" 2> /dev/null || return 1
+  for (( i = 1; i < ${#args[@]}; i++ )); do
+    case ${args[i]} in
+      "$2="*) echo "${args[i]#"$2"=}" ;;
+      "$2") echo "${args[i + 1]:-}" ;;
+    esac
+  done
+}
+
+# stop_pid PART ITEM PID: PID ended, the run failing if it outlives 30 s.
+stop_pid() {
+  kill "$3"
+  wait_for "$1" "$2" "pid $3 to exit" 30 "" bash -c "! kill -0 $3"
+}
+
+# ensure_platform: the Prefect server, started detached with its home under local/ and the
+# auth string local/.env carries, on the bridge alone (020's research R-01): uvicorn takes one
+# host, and the host's processes reach the bridge as the task workers do. One that runs from
+# this venv is kept when it listens there, writes to local/prefect.log and answers as this
+# venv's release to the file's auth string; else it is restarted.
+ensure_platform() {
+  local log="$ROOT/local/prefect.log" pid why
+  if pid=$(venv_pid prefect server start); then
+    if [ "$(arg_values "$pid" --host)" != "$BRIDGE_ADDR" ] || [ "$(arg_values "$pid" --port)" != "$PLATFORM_PORT" ]; then
+      why="does not listen on $BRIDGE_ADDR:$PLATFORM_PORT (its --host and --port)"
+    elif [ "$(readlink "/proc/$pid/fd/1" 2> /dev/null)" != "$log" ]; then
+      why="writes its output elsewhere than local/prefect.log"
+    elif ! platform_serving; then
+      why="does not answer at $PLATFORM_URL as Prefect $PREFECT_VERSION to local/.env's auth string"
+    else
+      ROLE_PID[platform]=$pid
+      item orchestrator platform present "(pid $pid, Prefect $PREFECT_VERSION at $PLATFORM_URL)"
+      return
+    fi
+    say "orchestrator: platform: pid $pid $why; restarting it"
+    stop_pid orchestrator platform "$pid"
+  fi
+  [ -z "$(ss -ltnH "sport = :$PLATFORM_PORT" 2> /dev/null)" ] ||
+    fail orchestrator platform "port $PLATFORM_PORT is held by a process that is not this tree's Prefect server under local/orchestrator/prefect; stop it and run again"
+  mkdir -p "$PREFECT_HOME_DIR"
+  touch "$log"
+  # shellcheck disable=SC2016
+  with_env bash -c 'PREFECT_HOME="$1" PREFECT_SERVER_API_AUTH_STRING="$PREFECT_API_AUTH_STRING" \
+    setsid nohup "$2" server start --host "$3" --port "$4" --no-ui >> "$5" 2>&1 < /dev/null &' \
+    start "$PREFECT_HOME_DIR" "$ORCH_VENV/bin/prefect" "$BRIDGE_ADDR" "$PLATFORM_PORT" "$log"
+  PLATFORM_STARTED=1
+  wait_for orchestrator platform "Prefect $PREFECT_VERSION answering at $PLATFORM_URL" "$PLATFORM_WAIT_S" \
+    "local/prefect.log" platform_serving
+  pid=$(venv_pid prefect server start) || fail orchestrator platform "it answered, then exited (local/prefect.log)"
+  ROLE_PID[platform]=$pid
+  item orchestrator platform installed "(pid $pid, Prefect $PREFECT_VERSION at $PLATFORM_URL, local/prefect.log)"
+}
+
+# ensure_runner: fylgja-orchestrator serve, started detached as make orchestrator-serve
+# starts it, from a shell that loaded local/.env. One that runs from this venv is kept when
+# the platform was not started by this run, it writes to local/orchestrator.log, no file of
+# the orchestrator's source is newer than it (the package is installed editable, so a
+# running runner holds the code it started with), and its start-up line and the six
+# deployments read; else it is restarted.
+ensure_runner() {
+  local pid why from started
+  if pid=$(venv_pid fylgja-orchestrator serve); then
+    started=$(ps -o etimes= -p "$pid" | tr -d ' ')
+    started=$(( $(date +%s) - ${started:-0} ))
+    if (( PLATFORM_STARTED )); then
+      why="served the platform before this run started it"
+    elif [ "$(readlink "/proc/$pid/fd/1" 2> /dev/null)" != "$RUNNER_LOG" ]; then
+      why="writes its output elsewhere than local/orchestrator.log, so that log's start-up line is not its own"
+    elif [ -n "$(find "$ROOT/orchestrator/src" -name '*.py' -newermt "@$started" -print -quit 2> /dev/null)" ]; then
+      why="started before the orchestrator's source last changed"
+    elif ! runner_ready "$(last_report_offset "$RUNNER_LOG" '^fylgja-orchestrator: serving ')"; then
+      why="has not reported serving the six deployments at $PLATFORM_URL, or the platform does not answer them"
+    else
+      ROLE_PID[runner]=$pid
+      item orchestrator runner present "(pid $pid, ${#DEPLOYMENTS[@]} deployments)"
+      return
+    fi
+    say "orchestrator: runner: pid $pid $why; restarting it"
+    stop_pid orchestrator runner "$pid"
+  fi
+  touch "$RUNNER_LOG"
+  from=$(wc -c < "$RUNNER_LOG")
+  # shellcheck disable=SC2016
+  with_env bash -c 'PREFECT_HOME="$1" setsid nohup "$2" serve >> "$3" 2>&1 < /dev/null &' \
+    start "$PREFECT_HOME_DIR" "$ORCH_VENV/bin/fylgja-orchestrator" "$RUNNER_LOG"
+  wait_for orchestrator runner "its start-up line naming the six deployments at $PLATFORM_URL, and each read" \
+    "$PLATFORM_WAIT_S" "local/orchestrator.log" runner_ready "$from"
+  pid=$(venv_pid fylgja-orchestrator serve) || fail orchestrator runner "it reported, then exited (local/orchestrator.log)"
+  ROLE_PID[runner]=$pid
+  item orchestrator runner installed "(pid $pid, ${#DEPLOYMENTS[@]} deployments, local/orchestrator.log)"
+}
+
+part_orchestrator() {
+  local c before after lacks
+  for c in docker make python3 curl jq; do
+    command -v "$c" > /dev/null || fail orchestrator "$c" "$c is not on the PATH: run the toolchain and lab parts"
+  done
+
+  # make orchestrator-venv reinstalls nothing current; the venv's packages before and after
+  # tell present from installed.
+  before=$("$ORCH_VENV/bin/pip" freeze 2> /dev/null | sha256sum) || before=""
+  make orchestrator-venv > "$ROOT/local/bring-up-orchestrator-venv.log" 2>&1 ||
+    { tail -20 "$ROOT/local/bring-up-orchestrator-venv.log" >&2; fail orchestrator venv "make orchestrator-venv failed (local/bring-up-orchestrator-venv.log)"; }
+  for c in prefect fylgja-orchestrator fylgja-cli pytest ruff; do
+    [ -x "$ORCH_VENV/bin/$c" ] || fail orchestrator venv "orchestrator/.venv/bin/$c is absent after make orchestrator-venv"
+  done
+  PREFECT_VERSION=$("$ORCH_VENV/bin/python" -I -c 'import importlib.metadata as m; print(m.version("prefect"))') ||
+    fail orchestrator venv "orchestrator/.venv holds no prefect after make orchestrator-venv"
+  after=$("$ORCH_VENV/bin/pip" freeze 2> /dev/null | sha256sum)
+  if [ "$before" = "$after" ]; then
+    item orchestrator venv present "(orchestrator/.venv, Prefect $PREFECT_VERSION, $("$ORCH_VENV/bin/python" --version))"
+  else
+    item orchestrator venv installed "(orchestrator/.venv, Prefect $PREFECT_VERSION, $("$ORCH_VENV/bin/python" --version))"
+  fi
+
+  # local/.env's names, read by name, and its values compared in a subshell of their own,
+  # never printed.
+  lacks=$(orch_unnamed)
+  [ -z "$lacks" ] || fail orchestrator env "local/.env names no $lacks: $(orch_names_hint)"
+  # shellcheck disable=SC2016
+  with_env bash -c '[ "$FYLGJA_ORCHESTRATOR_AUTH" = "$PREFECT_API_AUTH_STRING" ] && [[ $PREFECT_API_AUTH_STRING == ?*:?* ]]' ||
+    fail orchestrator env "local/.env's FYLGJA_ORCHESTRATOR_AUTH and PREFECT_API_AUTH_STRING are not one value <user>:<password>: the checks in Infrahub's task workers send the first, and the platform compares the second"
+  bridge_address
+  PLATFORM_URL="http://$BRIDGE_ADDR:$PLATFORM_PORT/api"
+  # shellcheck disable=SC2016
+  with_env bash -c '[ "${PREFECT_API_URL%/}" = "$1" ]' check "$PLATFORM_URL" ||
+    fail orchestrator env "local/.env's PREFECT_API_URL is not $PLATFORM_URL, where the platform listens on this host's Docker bridge (020's research R-01): edit it"
+  item orchestrator env present "(local/.env names ${ORCH_NAMES[*]})"
+
+  ensure_platform
+  ensure_runner
+}
+
+# --- fylgja -------------------------------------------------------------------------------
+
+TIER1_S="" TIER2_S=""
 
 # report_wants ROLE: what the role's start-up report must name, for the run's lines.
 report_wants() {
   if [ "$1" = serve ]; then
-    local scope=""
-    scope_named && scope=", the default scope local/.env names (tag:<name>),"
-    echo "127.0.0.1:7650 and $BRIDGE_ADDR:7650$scope and ${PLATFORMS[*]} with their logins set"
+    echo "127.0.0.1:7650 and ${PLATFORMS[*]} with their logins set"
   else
     echo "${PLATFORMS[*]} with their logins set"
   fi
@@ -858,24 +1122,14 @@ fylgja_pid() {
 }
 
 # report_ok ROLE LOG FROM: the role's start-up report in LOG, from byte FROM, names every
-# package the host can run with its login set, and the server's names both its listen
-# addresses and the bridge's unencrypted line, so a server on loopback alone is restarted,
-# and, when local/.env names FYLGJA_DEFAULT_SCOPE, a default scope tag:<name>, so a server
-# started before the file named one, its report saying "default scope: unset", is
-# restarted rather than left to refuse tier 2's scopeless checks scope.unset.
+# package the host can run with its login set, and the server's names its loopback address.
 # A log can hold NUL bytes (local/worker.log has a run of them), which bash cannot keep in a
 # variable: they are dropped before it reads the text.
 report_ok() {
-  local role=$1 log=$2 from=$3 text pkg bridge_re
+  local role=$1 log=$2 from=$3 text pkg
   text=$(tail -c "+$(( from + 1 ))" "$log" 2> /dev/null | tr -d '\0') || return 1
   if [ "$role" = serve ]; then
-    bridge_re=${BRIDGE_ADDR//./\\.}
     grep -q "^fylgja serve: listening on 127\.0\.0\.1:7650 (API version 1, build " <<< "$text" || return 1
-    grep -q "^fylgja serve: listening on $bridge_re:7650 (API version 1, build " <<< "$text" || return 1
-    grep -q "^fylgja serve: $bridge_re:7650 is not a loopback address: the API's token is sent unencrypted on it$" <<< "$text" || return 1
-    if scope_named; then
-      grep -q "^fylgja serve: default scope: tag:" <<< "$text" || return 1
-    fi
   else
     grep -q "^fylgja worker: serving task queue " <<< "$text" || return 1
   fi
@@ -898,53 +1152,53 @@ last_report_offset() {
   head -n $(( line - 1 )) "$1" | wc -c
 }
 
-# listens_on PID ADDRESS: the process's arguments listen on ADDRESS, as --listen ADDRESS or
-# --listen=ADDRESS, read as tier 3's case 9 reads them.
-listens_on() {
-  local -a args
-  local i
-  mapfile -d '' -t args < "/proc/$1/cmdline" 2> /dev/null || return 1
-  for (( i = 1; i < ${#args[@]}; i++ )); do
-    if [ "${args[i]}" = "--listen=$2" ] || { [ "${args[i]}" = --listen ] && [ "${args[i + 1]:-}" = "$2" ]; }; then
-      return 0
-    fi
-  done
-  return 1
-}
-
 # as_started ROLE PID LOG OUT: the process runs as start_role starts it, or it prints how it
 # does not. OUT, its standard output, must be LOG, so that LOG's last start-up report is its
 # own: make serve and make worker print theirs to their own terminal, and an earlier
-# process's report in LOG would pass for it. A server's arguments must also listen on
-# loopback and on the bridge, so one on loopback alone (make serve) is restarted.
+# process's report in LOG would pass for it. A server's arguments must listen on loopback
+# alone (020's FR-005 and R-18), so one an earlier run started on the bridge as well is restarted, and
+# its environment must carry none of CORE_UNSET's names, read by name alone, so one started
+# with Infrahub's variables is restarted with none (D-065).
 as_started() {
-  local role=$1 pid=$2 log=$3 out=$4 addr
+  local role=$1 pid=$2 log=$3 out=$4 listens name
   if [ "$out" != "$log" ]; then
     echo "writes its output to $out, not local/$(basename "$log"), so that log's report is not its own"
     return 1
   fi
   [ "$role" = serve ] || return 0
-  for addr in 127.0.0.1:7650 "$BRIDGE_ADDR:7650"; do
-    listens_on "$pid" "$addr" || { echo "has no --listen $addr among its arguments"; return 1; }
+  listens=$(arg_values "$pid" --listen | paste -sd' ')
+  if [ "$listens" != 127.0.0.1:7650 ]; then
+    echo "listens on ${listens:-its default}, not on --listen 127.0.0.1:7650 alone"
+    return 1
+  fi
+  for name in "${CORE_UNSET[@]}"; do
+    if tr '\0' '\n' < "/proc/$pid/environ" 2> /dev/null | cut -d= -f1 | grep -qx "$name"; then
+      echo "carries $name in its environment, which the core never reads"
+      return 1
+    fi
   done
 }
 
 # start_role ROLE LOG: started detached, as CLAUDE.md starts it, from a shell that loaded
 # local/.env; the dev server's CLI on the PATH it hands on. The server listens on loopback
-# first and on the bridge after it.
+# alone, and starts with CORE_UNSET's names taken from the environment the file gave it;
+# the worker's environment is the file's whole, as before.
 start_role() {
-  local role=$1 log=$2
-  local -a cmd=(bin/fylgja serve --listen 127.0.0.1:7650 --listen "$BRIDGE_ADDR:7650")
-  [ "$role" = worker ] && cmd=(bin/fylgja worker run)
+  local role=$1 log=$2 name
+  local -a cmd=(bin/fylgja serve --listen 127.0.0.1:7650) unset=()
+  if [ "$role" = worker ]; then
+    cmd=(bin/fylgja worker run)
+  else
+    for name in "${CORE_UNSET[@]}"; do unset+=(-u "$name"); done
+  fi
   # shellcheck disable=SC2016
-  with_env bash -c 'PATH="$(dirname "$1"):$PATH" setsid nohup env FYLGJA_STATE_ROOT="$2" "${@:4}" >> "$3" 2>&1 < /dev/null &' \
-    start "$TEMPORAL_BIN" "$ROOT/local" "$log" "${cmd[@]}"
+  with_env bash -c 'PATH="$(dirname "$1"):$PATH" setsid nohup env "${@:4}" >> "$3" 2>&1 < /dev/null &' \
+    start "$TEMPORAL_BIN" "$ROOT/local" "$log" "${unset[@]}" "FYLGJA_STATE_ROOT=$ROOT/local" "${cmd[@]}"
 }
 
 ensure_role() {
   local role=$1 log="$ROOT/local/$2.log" name=$2 pid exe out why from pattern
-  # The report's first line: the server's names loopback, listened on first, so a report's
-  # second listen line is not taken for its start.
+  # The report's first line: the server's names loopback.
   pattern="^fylgja serve: listening on 127\.0\.0\.1:7650 (API version "
   [ "$role" = worker ] && pattern="^fylgja worker: serving task queue "
   if pid=$(fylgja_pid "$role"); then
@@ -1017,8 +1271,9 @@ part_fylgja() {
     item fylgja build installed "(bin/fylgja $(bin/fylgja --version), static)"
   fi
 
-  # The three processes come before the tiers, so that tier 2 reaches this build's server on
-  # the bridge (TestChecksInsideInfrahub), never a replaced binary or none at all.
+  # The three processes come before the tiers, so that tier 2's flows reach this build's
+  # server, never a replaced binary or none at all; the orchestrator's part, run before this
+  # one, has the platform and the runner up for them and for TestChecksInsideInfrahub.
   if temporal_serving; then
     item fylgja temporal present "(SERVING at localhost:7233)"
   else
@@ -1029,7 +1284,6 @@ part_fylgja() {
   TEMPORAL_PID=$(pgrep -f -o 'temporal server start-dev' || echo unknown)
 
   ensure_role worker worker
-  bridge_address
   ensure_role serve server
 
   timed_tier TIER1_S "tier 1" "$ROOT/local/bring-up-tier1.log" make test
@@ -1059,9 +1313,21 @@ if runs fylgja; then
   else
     say "tier 3: not run; make test-e2e runs it (about 26 minutes, needs both images; about 17 with PLATFORMS=nokia_srlinux)"
   fi
+fi
+# The five processes: the orchestrator's two, then the core's three.
+STOPS=()
+if runs orchestrator; then
+  say "running: platform (pid ${ROLE_PID[platform]}, local/prefect.log, Prefect $PREFECT_VERSION at $PLATFORM_URL, its auth string crossing the bridge in the clear)"
+  say "running: runner (pid ${ROLE_PID[runner]}, local/orchestrator.log; deployments $(deployments_named))"
+  STOPS+=("pkill -f '$ORCH_VENV/bin/fylgja-orchestrator serve'" "pkill -f '$ORCH_VENV/bin/prefect server start'")
+fi
+if runs fylgja; then
   say "running: temporal (pid $TEMPORAL_PID, local/temporal.log)"
   say "running: worker (pid ${ROLE_PID[worker]}, local/worker.log; packages ${PLATFORMS[*]})"
-  say "running: server (pid ${ROLE_PID[serve]}, local/server.log, 127.0.0.1:7650 and $BRIDGE_ADDR:7650, the token crossing the bridge in the clear; packages ${PLATFORMS[*]})"
-  say "to stop them: pkill -x fylgja; pkill -f 'temporal server start-dev'"
+  say "running: server (pid ${ROLE_PID[serve]}, local/server.log, 127.0.0.1:7650 alone, with no Infrahub variable; packages ${PLATFORMS[*]})"
+  STOPS+=("pkill -x fylgja" "pkill -f 'temporal server start-dev'")
+fi
+if (( ${#STOPS[@]} )); then
+  say "to stop them: $(printf '%s; ' "${STOPS[@]}" | sed 's/; $//')"
 fi
 say "DONE in $(( SECONDS - RUN_START ))s"

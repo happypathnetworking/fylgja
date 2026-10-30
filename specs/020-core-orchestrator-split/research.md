@@ -1468,3 +1468,95 @@ made.
 - **The gates**: `make build` static; `make test` green, 1,022 Python tests in 17.0 s (71 new),
   80.1 s wall uncached at a load of 1.7–2.2, `internal/cli` 42.8 s of it; `make lint` 0 issues,
   ruff clean. No tier-2 test is this task's (T028's); no twin, worker or server was touched.
+
+### 5.19 `fylgja-cli` and the runner (T027, Run 24, 2026-10-30)
+
+- **The shape.** `cli.py`: argparse, noun-verb, the seven commands of FR-020 with T027's
+  flags, `--json` on the root and on every command (cobra's persistent flag), `--version`.
+  Each command's flags are its flow's parameters (data-model §7), a flag not given `None`
+  and an empty one given `""`, which the flows refuse as the core's server did. The six
+  flow functions run in this process (R-08): on the platform `PREFECT_API_URL` names, asked
+  first with `GET /version` under `PREFECT_API_AUTH_STRING` (`record.check_platform`;
+  `/health` answers without the credential, §1.2), else on Prefect's ephemeral server under
+  `PREFECT_HOME` (R-16). `stage list` runs no flow, since R-08 names six: it is a plain body,
+  `flows/stage_list.py`, recorded nowhere and asking no platform. What is printed is the
+  core's CLI's: the out lines on stdout as they arrive through `common.OUT`, then the
+  document's text on stderr, or under `--json` the document alone on stdout (the out lines
+  dropped, as a `render: json` answer carried none), or under `--markdown` the report on
+  stdout through the rehearse flow's `MARKDOWN` sink and the out lines and the findings on
+  stderr; the exit is the document's status's. `common.FILED`, a list `publish` also hands
+  each document to, lets the command print the rehearse flow's document after the timeout
+  or cancellation it raises once the document is filed.
+- **Prefect's two settings, given defaults before Prefect is imported** (`cli.prepare`, only
+  in the console script's own process, kept when the environment sets them):
+  `PREFECT_LOGGING_HANDLERS_CONSOLE_LEVEL=CRITICAL`, since `prefect.flow_runs` propagates to
+  the root logger's console handler (Prefect 3.8.8's `logging.yml`), which would print every
+  out line again on stderr, the run's log carrying them (§5.17); and
+  `PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS=180` (§5.17's 20 s lapse).
+- **The runner**, `serve.py`: `fylgja-orchestrator serve` refuses with no `PREFECT_API_URL`
+  (a runner on an ephemeral server serves no one) and with a platform that does not answer
+  its credential, each a line on stderr and exit 2; then the six flows' deployments `main`,
+  its start-up line `fylgja-orchestrator: serving intent-read/main, twin-create/main,
+  twin-step/main, stage-plan/main, twin-rehearse/main, schema-check/main on the platform at
+  <PREFECT_API_URL>`, never the credential, and Prefect's `serve` with its starting table
+  off. **Two facts found live**: `to_deployment`'s default entrypoint is the module's file
+  path, which the runner loads as a script, so the first run started through the deployment
+  `CRASHED` in 7 s with `ScriptError: … ImportError('attempted relative import beyond
+  top-level package')`; each deployment's entrypoint is now its module path
+  (`EntrypointType.MODULE_PATH`, `fylgja_orchestrator.flows.schema_check.schema_check`), and
+  the same run then `COMPLETED` 7 s after `create_flow_run`, its artifact
+  `fylgja-schema-check-<run id>` of type `fylgja-findings`. And `serve`'s default
+  `pause_on_shutdown` pauses every deployment as the runner stops, which held a runner whose
+  platform had already stopped until SIGKILL; the deployments carry no schedule, so it is
+  off.
+- **Departures**, each where the core's CLI did what the orchestrator does not:
+  - `stage list` reads the record first and asks `twin show` only when there is one, after the
+    guards (`--branch`'s form, the scope), as the core refused them before any dial; trusted,
+    the record's stage marks its row; distrusted, `record.twin.stale` is the document's first
+    finding and no row is marked; a core that cannot be asked is the command's own failure
+    (`api.unreachable`, exit 2), as `twin step`'s is (§5.17).
+  - The record carries no at's source (T024's note), so `list_stages` takes a mark's from the
+    listing (`stages.py`): without it the twin's row in `stages-with-twin.json` had no
+    `at_source`. A record naming a mark since deleted still has none.
+  - A flow that ends with no document (Prefect's own failure, an ephemeral server that does not
+    start, an interrupt) is `operation.failed` naming the flow and saying that any run of the
+    core's it started goes on and `fylgja twin show` names it: every run is detached (R-08),
+    so the core's CLI's first interrupt, which cancelled the run, has no counterpart here.
+  - A flag a command does not know is the command's own document (`operation.failed`, exit 2),
+    under `--json` its JSON, as cobra's `unknown flag` was; an unknown noun or verb is a line on
+    stderr, exit 2; a noun alone, or nothing, prints its help, exit 0, as a cobra command with
+    no run of its own did. `--markdown` beside `--json` is refused as cobra's flag group was,
+    worded here.
+  - `twin create` takes no `--at`, as T027's line and the flow's parameters have it.
+- **Live, read-only, no twin, nothing of the host's touched**: `fylgja-cli schema check
+  --branch fylgja-fixture` with no `PREFECT_API_URL` and `PREFECT_HOME` in the session's
+  scratch: 40.4 s on a fresh home (the ephemeral server's first start), 16.8 s warm, exit 0,
+  the two lines on stdout and nothing on stderr; under `--json` the document alone; both
+  runs `COMPLETED` in the home's database with their artifacts. A throwaway platform
+  (`prefect server start --host 127.0.0.1 --port 4298`, basic auth made for it, up in about
+  32 s): a wrong credential `platform.unreachable … answered 401 Unauthorized`, a closed port
+  `… did not answer: [Errno 111] Connection refused`, each exit 2 before any flow; the right
+  one 7.5 s, exit 0, no credential in either stream. The runner on it as above. Then
+  `fylgja-cli twin create --branch fylgja-fixture --dry-run` on that platform through a
+  throwaway core built from this tree (`127.0.0.1:7698`, a scratch state root, a token made
+  for it, no node logins): 8.0 s, snapshot `0940db93…` and bundle `c3872f5c…` (SC-002),
+  refused at the host check only for the logins the throwaway core lacks
+  (`host.probe.login_unset`, exit 1), the snapshot filed under the orchestrator's scratch
+  root and no record written. All three processes stopped after, ports free.
+- **Tests** (`tests/unit/test_cli.py`, 53): each command's flags as its flow's parameters
+  (11 cases) with the flows stubbed, an empty flag sent as given, `--json` on the root or the
+  command, every command's runner the flow of its name; text, `--json` and `--markdown`
+  streams, the exit of each of the seven statuses, `--markdown` beside `--json`, a document
+  filed before the flow raised, a flow ending with none (an error, an interrupt), the sinks
+  put back; an unknown command, a command's flag refused (text and JSON, valid under the
+  contract), the help; the platform unreachable before any flow, `stage list` asking none,
+  `check_platform`'s request, its 401 and no platform; `prepare`; `stage list`'s twin row
+  from a record naming no at's source, `stages-with-twin.json` and `.txt` byte for byte, a
+  distrusted record (`record.twin.stale`, the listing `stages.json`'s), no record asking no
+  core, the core unreachable, the guards before a corrupt record; the runner's refusals, its
+  six deployments by module path and its start-up line.
+- **The gates**: `make build` static; `make lint` 0 issues, ruff clean; `make test` green,
+  1,075 Python tests (53 new), 79.7 s wall uncached at a load of 2.0–3.2, `internal/cli`
+  42.8 s of it. No tier-2 test is this task's (T028's); the host's worker and server were not
+  touched, and Infrahub only read. `contracts/orchestrator.md`'s text is T036's, the C4 redraw
+  and `docs/development.md`'s T037's.

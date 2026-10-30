@@ -26,6 +26,7 @@ from fylgja_orchestrator.adapters.infrahub import (
     stamps,
     validate,
 )
+from fylgja_orchestrator import core, record
 from fylgja_orchestrator.adapters.infrahub import __main__ as adapter
 from fylgja_orchestrator.documents import findings, rules
 from fylgja_orchestrator.documents.findings import (
@@ -224,7 +225,7 @@ def test_every_rule_the_adapter_files_is_in_the_table():
     """Each identifier a module of the adapter or the documents names is listed, so a rule is
     added to the table before any module files it."""
     filed = _declared_rules(client, packages, probes, read, schema, snapshot, stage_reader, stages, stamps, validate,
-                            adapter, findings)
+                            adapter, findings, core, record)
     # snapshot.py raises its refusals by identifier, as the core files them.
     filed |= {"snapshot.invalid", "snapshot.version.unsupported", "snapshot.id.mismatch"}
     assert filed <= set(rules.BY_ID), sorted(filed - set(rules.BY_ID))

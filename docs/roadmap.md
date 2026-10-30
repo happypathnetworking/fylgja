@@ -50,8 +50,9 @@ each, as [v0.1's](archive/v0.1-built.md) does M1 to M14.
 Fylgja into a production system.** The production shape, discussed and tabled the same
 day, is a core that builds, updates and destroys a twin from one input, under an
 orchestrator that owns stages, rehearsals and whatever reads a report, and may call other
-tools along the way. 0.3 does not build that split; it proves the seams the split will
-cut along, in five specs, in this order:
+tools along the way. 0.3 set out to prove the seams the split will cut along, and since
+[F-027](#f-027) was added on 2026-10-29 it builds the split itself, in six specs, in this
+order:
 
 1. **[F-011](#f-011)**, the Infrahub reader reading the schema library's DCIM directly,
    the CTM becoming the contract in place of the generics, as `017-dcim-reader`
@@ -74,18 +75,21 @@ cut along, in five specs, in this order:
    ([brief](../specs/016-probes/brief.md), rewritten on 2026-10-28 against 017, 018 and
    019): a node declared outside intent, the explicit-instruction input to the core.
    **Built** on 2026-10-29, under [D-064](decisions.md#d-064) and Constitution 2.3.0.
-5. **[F-027](#f-027)**, the split of the core and the orchestrator, **the next spec**,
-   as `020-core-orchestrator-split` ([spec](../specs/020-core-orchestrator-split/spec.md),
+5. **[F-027](#f-027)**, the split of the core and the orchestrator, as
+   `020-core-orchestrator-split` ([spec](../specs/020-core-orchestrator-split/spec.md),
    [brief](../specs/020-core-orchestrator-split/brief.md), written 2026-10-29), added on
    2026-10-29 and placed before F-025 by the operator: the production shape's two
    deployables, with the readers, the stages, the rehearsal and the reports on the
    orchestrator's side, a Python project on Prefect 3.8.8 whose first adapter is the
-   Infrahub reader ported to Python, and the core narrowed to the snapshot; under
-   [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066).
+   Infrahub reader ported to Python, and the core narrowed to the snapshot. **Built** on
+   2026-10-30, under [D-065](decisions.md#d-065), [D-066](decisions.md#d-066) and
+   Constitution 3.0.0.
 6. **[F-025](#f-025)**, a reader of NetBox with its branching plugin, producing snapshots
-   and taking a stage as a snapshot, after the split: the reader seam against a second
-   source of truth, built as the orchestrator's second adapter, in Python. Probed live on
-   2026-10-29 ([verified facts](verified-facts.md#netbox-474-with-netbox-branching-122)).
+   and taking a stage as a snapshot, **the next spec**: the reader seam against a second
+   source of truth, built as the orchestrator's second adapter, in Python, on F-027's
+   adapter contract (a tool that reads one source under a scope and writes a snapshot `2`
+   file, its probes from a file, which every flow takes). Probed live on 2026-10-29
+   ([verified facts](verified-facts.md#netbox-474-with-netbox-branching-122)).
 
 A contract bump defines a release: 0.2 moved the twin record, the API and the CLI for
 stages while the contract stayed 0.2, and 0.3 retired the generics at F-011, after which
@@ -115,14 +119,35 @@ whose upgrade needs a step adds it here:
    template's commit on `main` so the probe-ready ports' addresses render; and `docker pull
    alpine:3.24.2`, since a run never pulls a probe image ([F-014](#f-014),
    `contracts/cli.md`'s 016 Upgrading).
+4. Destroy any twin an earlier build left up before upgrading: its `twin.json` `11` or
+   earlier is shown and destroyed, never stepped from ([F-027](#f-027)).
+5. Run five processes where there were three ([F-027](#f-027)): `make orchestrator-venv`;
+   `FYLGJA_ORCHESTRATOR_AUTH`, `FYLGJA_ORCHESTRATOR_ROOT`, `PREFECT_API_URL` and
+   `PREFECT_API_AUTH_STRING` appended to `local/.env`, its other bytes kept
+   (`scripts/bring-up.sh --part orchestrator` makes them); the orchestrator's Prefect server
+   started on the Docker bridge's `4200` and its runner, `fylgja-orchestrator serve`, beside
+   it; and the core's server restarted on loopback alone, with no `INFRAHUB_*` name and no
+   `FYLGJA_DEFAULT_SCOPE` in its environment. Every command naming a branch, a stage or a
+   rehearsal is `fylgja-cli`'s from this build; `fylgja` answers them `unknown command` or
+   `unknown flag`.
+6. Give the checks their new reach ([F-027](#f-027)): the checks' commit imported on
+   `main`, the override copied beside Infrahub's Compose file and the task workers
+   recreated by `up -d`, so they carry `FYLGJA_ORCHESTRATOR_ADDRESS` and
+   `FYLGJA_ORCHESTRATOR_AUTH` in place of `FYLGJA_API_*` and reach the orchestrator's
+   platform, never the core. Open no proposed change between the import and the recreate.
+   A recreated task worker has no checkout, so the first proposed change's user checks can
+   stay `in_progress` until its artifact check has cloned the registration on both workers;
+   re-run its user checks then ([verified facts](verified-facts.md#infrahub-1112)).
 
 <a id="the-production-shape"></a>
 ## The production shape
 
-**A direction, not a decision.** Discussed with the operator on 2026-10-25 and tabled while
-[Release 0.3](#release-03) proves the seams; nothing here binds a plan, and each part
-becomes a decision entry when a feature takes it up. It is recorded so that 0.3's specs
-know what they are exploring toward.
+**Decided at [F-027](#f-027)**, built as `020-core-orchestrator-split` on 2026-10-30
+under [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066), with Constitution 3.0.0.
+Discussed with the operator on 2026-10-25 as a direction and tabled while [Release
+0.3](#release-03) proved the seams; each part below says what the split decided, and what
+it left open is marked so. It was recorded so that 0.3's specs knew what they were
+exploring toward, and stays as the record of what they reached.
 
 - **Two components.** A **core** that builds, updates and destroys a twin from one input,
   the snapshot ([F-024](#f-024)), and exposes it through the API: create from a snapshot,
@@ -133,11 +158,22 @@ know what they are exploring toward.
   journal entries posted back to the source, and whatever a customer adds to a flow, a
   health check or a configuration tool among them. The orchestrator drives the core
   through the API alone, never by starting its workflows, so either side can be replaced.
+  **Decided** ([D-065](decisions.md#d-065)): the core is the `fylgja` binary, which builds,
+  steps, destroys, shows and verifies a twin from a snapshot, compiles one and answers the
+  step between two, its server holding no Infrahub credential and listening on loopback
+  alone; the orchestrator is the Python project under `orchestrator/`, its Infrahub
+  adapter the Go reader ported to `infrahub-sdk`, its flows reading, creating, stepping,
+  planning, rehearsing and checking a schema, its record of the twin it drove a file, and
+  `fylgja-cli` its CLI. **Left open**: the explicit mutation of a node or a link, the
+  core's next operation; and the follow, which returns as a flow (take, compare, step) on a
+  timer or on Infrahub's webhook ([ideas](ideas.md)).
 - **Temporal stays in the core**, where mid-flight durability matters, and is not the
-  orchestrator's integration surface.
+  orchestrator's integration surface. **Decided** ([D-065](decisions.md#d-065)): the worker
+  serves provision, step and destroy, and the rehearsal is a flow.
 - **Constitution I is kept for the core and freed for the orchestrator** by a decision
   entry: a core service and an orchestrator are two deployables, and the orchestrator will
-  call tools written in anything.
+  call tools written in anything. **Decided**: [D-065](decisions.md#d-065), and Principle I
+  of Constitution 3.0.0, "Go, End to End, for the Core".
 - **The orchestrator's platform.** Go is not a requirement there. The intended direction
   is **Prefect**: the ecosystem's language (Infrahub's SDK, NetBox's client, Nornir,
   NAPALM), the technology Infrahub's own checks and generators run on, flows as code for an
@@ -151,18 +187,29 @@ know what they are exploring toward.
   edit. To verify before choosing: the open-source Prefect server's current feature
   boundary (events and automations) and whether Infrahub's embedded Prefect is a separate
   server to run beside, as assumed. Argo Workflows is noted for the case where
-  [F-018](#f-018) lands on clabernetes and a cluster arrives anyway.
+  [F-018](#f-018) lands on clabernetes and a cluster arrives anyway. **Decided**
+  ([D-065](decisions.md#d-065)): Prefect, at 3.8.8 since 3.9.0 does not co-install with
+  `infrahub-sdk` 1.23.2; Temporal and Kestra rejected. Infrahub's embedded Prefect is a
+  separate server on its Compose network, so the orchestrator runs its own on the host's
+  bridge, with basic authentication, and the checks reach it there over plain HTTP
+  ([verified facts](verified-facts.md#prefect-388)).
 - **The API's shape for long operations** changes whichever platform is chosen: start,
   an operation id, then poll or a callback, beside the stream Fylgja's own clients hold
   open today. It is the orchestrator's first demand of the core and is independent of the
-  platform.
+  platform. **Decided** ([D-065](decisions.md#d-065)): a long operation may end its answer
+  at the run's identity, and `run.read` and `run.interrupt` read and interrupt a run by it,
+  built from the run's history, so the server keeps nothing between two requests; the
+  stream stays for the core's own CLI.
 - **Open**: whether the orchestrator is a product Fylgja ships, with its own flows and
   integrations, or a documented contract that a customer's own system drives, with Fylgja
   shipping reference flows. The platform choice above leans to the first while keeping the
   second possible, since every flow drives the core through the API anyone else would use.
+  **Still open** after F-027, the platform chosen leaning to the first.
 - **What 0.3 proves of it**: [F-011](#f-011), a reader as an adapter; [F-024](#f-024),
   the snapshot as the core's input; [F-014](#f-014), a declaration outside intent as an
-  input; [F-025](#f-025), a second adapter, for a source that cannot replay time.
+  input; [F-027](#f-027), the split itself; [F-025](#f-025), a second adapter, for a source
+  that cannot replay time, where a stage is the snapshot the orchestrator holds
+  ([D-066](decisions.md#d-066)).
 
 ## Backlog
 
@@ -179,8 +226,10 @@ first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed,
 the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the next;
 [F-027](#f-027) was added on 2026-10-29 and takes the next.
 
-[F-011](#f-011), [F-024](#f-024), [F-026](#f-026) and [F-014](#f-014) are built, as
-`017-dcim-reader`, `018-snapshots`, `019-following-removed` and `016-probes`; none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
+[F-011](#f-011), [F-024](#f-024), [F-026](#f-026), [F-014](#f-014) and [F-027](#f-027) are
+built, as `017-dcim-reader`, `018-snapshots`, `019-following-removed`, `016-probes` and
+`020-core-orchestrator-split`; of the rest, [F-025](#f-025) builds on
+[D-066](decisions.md#d-066), and none other has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
 [F-017](#f-017) to [F-021](#f-021), [F-024](#f-024), [F-025](#f-025), [F-026](#f-026) and
 [F-027](#f-027) are each one spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
 [F-016](#f-016) are chores or records, with no spec.
@@ -192,7 +241,7 @@ the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the nex
 | F-024 | **Snapshots** | the CTM, which carries each node's configuration, wrapped in one content-addressed document with a slot for the probe declarations; the core's one input, taken by the server and stored beside the bundles; `twin create` and `twin compile` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. Its [brief](../specs/018-snapshots/brief.md) written 2026-10-27. Built as `018-snapshots` on 2026-10-27. |
 | F-026 | **Following removed from the core** | D-012's following, D-026 and D-027 superseded; the reconcile workflow, its Schedule, `--interval` and `--no-follow` gone; a twin frozen at its snapshot; any twin with a snapshot stepping to a stage or a snapshot, `twin step --snapshot`; walking as stepping | [F-024](#f-024) | 3–5 | A snapshot-fed core does not read a branch on a timer; the production shape's orchestrator may bring following back as take, compare, step. Added 2026-10-27; its [brief](../specs/019-following-removed/brief.md) written the same day. Built as `019-following-removed` on 2026-10-28, in about 6.2 hours of sessions against R-25's 8–11. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
-| F-027 | **The split: the core and the orchestrator** | the production shape's two deployables: a core narrowed to the snapshot, which builds, steps, destroys, shows and verifies a twin from one, and an orchestrator in Python on Prefect 3.8.8 owning the readers, the stages and their resolution, the rehearsal and the reports, driving the core through the API; the Infrahub reader ported to Python as its first adapter; Constitution I kept for the core and freed for the orchestrator | [F-014](#f-014) | 24–36 | Added 2026-10-29 and placed before F-025 by the operator, so the NetBox reader is built as the orchestrator's second adapter. Its [brief](../specs/020-core-orchestrator-split/brief.md) written 2026-10-29; specified as `020-core-orchestrator-split`, under [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066), its estimate [R-22](../specs/020-core-orchestrator-split/research.md#2-decisions)'s. |
+| F-027 | **The split: the core and the orchestrator** | the production shape's two deployables: a core narrowed to the snapshot, which builds, steps, destroys, shows and verifies a twin from one, and an orchestrator in Python on Prefect 3.8.8 owning the readers, the stages and their resolution, the rehearsal and the reports, driving the core through the API; the Infrahub reader ported to Python as its first adapter; Constitution I kept for the core and freed for the orchestrator | [F-014](#f-014) | 24–36 | Added 2026-10-29 and placed before F-025 by the operator, so the NetBox reader is built as the orchestrator's second adapter. Its [brief](../specs/020-core-orchestrator-split/brief.md) written 2026-10-29; specified as `020-core-orchestrator-split`, under [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066), its estimate [R-22](../specs/020-core-orchestrator-split/research.md#2-decisions)'s. Built as `020-core-orchestrator-split` on 2026-10-30, in about 16.1 hours of sessions against R-22's 24–36. |
 | F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; an adapter outside the core, in Python, producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot the adapter holds; a twin of a NetBox branch | [F-027](#f-027), a NetBox instance (installed under `local/netbox/`, stopped) | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. Probed live on 2026-10-29. |
 | F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask. Left 0.3 on 2026-10-25: it bolts on later and touches no core. |
 | F-013 | **Observation** | markers with bundle id and stage; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
@@ -397,7 +446,26 @@ it: a source that cannot replay time read as snapshot files, a stage as the snap
 orchestrator holds, the CTM envelope's three Infrahub-shaped places (`schema_hash`, `at`,
 the artifact's stored checksum), the snapshot id reproducible outside Go, and a journal
 entry on a NetBox branch as a report's home where the community edition has no change
-request.
+request. **Built** on 2026-10-30 as `020-core-orchestrator-split`, under
+[D-065](decisions.md#d-065), [D-066](decisions.md#d-066) and Constitution 3.0.0: the core
+is the `fylgja` binary, which knows no branch, stage or source of truth, its server on
+loopback alone with no Infrahub credential, its worker three workflows; `run.read` and
+`run.interrupt` read and interrupt a run by its identity, a create, step or destroy may end
+its answer there, and `twin.diff` answers the step between two snapshots; `twin.json` `12`;
+the orchestrator under `orchestrator/`, Python 3.14.4 on Prefect 3.8.8, with the Infrahub
+adapter ported to `infrahub-sdk` and held to the Go reader byte for byte before the reader
+went, six flows (`intent-read`, `twin-create`, `twin-step`, `stage-plan`, `twin-rehearse`,
+`schema-check`), its record `1` and `fylgja-cli`; the plan, rehearsal and stages documents
+and the markdown report the orchestrator's, held to goldens captured from the Go build;
+the checks the platform's clients, reaching its Prefect server on the bridge and the core
+not at all; five processes on the host. The CTM, snapshot, bundle, probes and PSP formats,
+the API's and findings' versions and the four goldens are unmoved. Tier 2 whole in 2,692.6 s,
+green once one Python test's defect was fixed and its four tests re-run together, and tier
+3's nine cases `E2E-OK` in 2,798.6 s (by a copy of its script whose
+case-9 precheck compared the checks' syntax trees, the operator's choice). The measured
+effort: the command log's 46 sessions, `specify` to Run 38, sum 57,910 active seconds,
+about 16.1 hours with both tiers' 92 minutes among them, against
+[R-22](../specs/020-core-orchestrator-split/research.md#2-decisions)'s 24–36.
 
 <a id="f-012"></a>
 **F-012. The agent surface: `fylgja-rehearsing-changes`.** OpsMill ships Claude skills and
@@ -628,12 +696,14 @@ status line. It is a second client of the same API.
   second, on [D-045](decisions.md#d-045)'s pattern for the kind; what a probe package is
   beside a platform package; and the declaration carrying its own gateway address.
   Taken as [D-064](decisions.md#d-064), with Constitution 2.3.0.
-- At [F-027](#f-027), before [F-025](#f-025) (moved here from F-025 on 2026-10-29):
+- ~~At [F-027](#f-027), before [F-025](#f-025)~~ (moved here from F-025 on 2026-10-29):
   Constitution I kept for the core and freed for the orchestrator, the production shape's
   entry; [D-001](decisions.md#d-001) superseded in the part that says NetBox lacks
   branching; and a stage as a snapshot Fylgja holds where the source of truth cannot
   replay time, beside D-045's mark where it can. (A push-based follow for the NetBox
-  reader was planned here until [F-026](#f-026) took following out of the core.)
+  reader was planned here until [F-026](#f-026) took following out of the core.) Taken as
+  [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066) on 2026-10-29, with
+  Constitution 3.0.0, and built by 020.
 - Before [F-018](#f-018): the remote hosts' runtime, the decision log's [open
   question](decisions.md#open-questions).
 - At [F-021](#f-021): whether the WebUI keeps Constitution I through server-rendered

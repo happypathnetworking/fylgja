@@ -1,7 +1,8 @@
 """The rehearsal's verdicts, block, text and markdown held to the Go implementation: the
 goldens captured from the running build (`tests/golden/rehearsal.json`, `.txt`,
-`.stderr.txt`, `.md` and `.full.md`) rendered byte for byte but for `fylgja-cli` in the
-reproduce lines (FR-023, SC-007), and the block rebuilt from the run it reports; then every
+`.stderr.txt`, `.md` and `.full.md`), their reproduce lines re-baselined to name each
+command's own client, rendered byte for byte (FR-023, SC-007), and the block rebuilt from
+the run it reports; then every
 case of `internal/rehearsal`'s `verdict_test.go`, `report_test.go` and `markdown_test.go`,
 each carried over under its Go name in snake case."""
 
@@ -72,14 +73,6 @@ GOLDEN = Path(__file__).resolve().parents[1] / "golden"
 # The goldens.
 
 
-def _cli_lines(text: str, indent: str = "") -> str:
-    """The golden's text with `fylgja-cli` where the Go server's reproduce lines named
-    `fylgja`: whole lines alone, so a finding's message that names the core's command keeps
-    it."""
-    old, new = indent + "fylgja twin ", indent + "fylgja-cli twin "
-    return "".join(new + line[len(old):] if line.startswith(old) else line for line in text.splitlines(True))
-
-
 def golden_document() -> Document:
     doc = Document.from_dict(json.loads((GOLDEN / "rehearsal.json").read_text()))
     doc.blocks["rehearsal"]["reproduce"] = r.reproduce(doc.blocks["rehearsal"], doc.subject["scope"])
@@ -92,32 +85,34 @@ def golden_steps() -> list:
 
 def test_the_golden_reproduce_lines():
     block = json.loads((GOLDEN / "rehearsal.json").read_text())["rehearsal"]
-    want = [line.replace("fylgja twin ", "fylgja-cli twin ", 1) for line in block["reproduce"]]
-    assert r.reproduce(block, "tag:fylgja") == want
+    assert r.reproduce(block, "tag:fylgja") == block["reproduce"]
+    # Each command's own client: the orchestrator's for the create and the steps, the
+    # core's for the verify and the destroy, which fylgja-cli has no command for.
+    assert [line.split(" ", 1)[0] for line in block["reproduce"]] == ["fylgja-cli"] * 3 + ["fylgja"] * 2
 
 
 def test_the_golden_document():
     # The README's one hand edit, <state-root>, is the destroy's report carried through,
     # which Go's encoder writes escaped.
     raw = (GOLDEN / "rehearsal.json").read_text().replace("<state-root>", "\\u003cstate-root\\u003e")
-    assert golden_document().json() == raw.replace('"fylgja twin ', '"fylgja-cli twin ')
+    assert golden_document().json() == raw
     findings.validate(golden_document().to_dict())
 
 
 def test_the_golden_markdown():
     md = r.markdown(golden_document(), golden_steps())
-    assert md == _cli_lines((GOLDEN / "rehearsal.md").read_text())
+    assert md == (GOLDEN / "rehearsal.md").read_text()
     assert len(md.encode()) <= r.COMMENT_MAX
     # The whole form, which the shortened one is because it is over a comment.
     pairs_ = [Pair.from_dict(s) for s in golden_steps()]
     full = r._join(r._parts(golden_document(), pairs_, False))
-    assert full == _cli_lines((GOLDEN / "rehearsal.full.md").read_text())
+    assert full == (GOLDEN / "rehearsal.full.md").read_text()
     assert len(full.encode()) > r.COMMENT_MAX
 
 
 def test_the_golden_text():
     doc = golden_document()
-    assert r.text(doc) == _cli_lines((GOLDEN / "rehearsal.txt").read_text(), "  ")
+    assert r.text(doc) == (GOLDEN / "rehearsal.txt").read_text()
     assert doc.text() == (GOLDEN / "rehearsal.stderr.txt").read_text()
     out = (GOLDEN / "rehearsal.out.txt").read_text()
     assert out.endswith((GOLDEN / "rehearsal.txt").read_text())
@@ -414,7 +409,7 @@ def test_reproduce():
     assert new_finding_run().block()["reproduce"] == [
         "fylgja-cli twin create --stage change-1/seeded --scope tag:fylgja",
         "fylgja-cli twin step --stage change-1/third-link --allow-restart",
-        "fylgja-cli twin verify", "fylgja-cli twin destroy"]
+        "fylgja twin verify", "fylgja twin destroy"]
 
     # The create names the scope every stage was read under, always; each step takes none.
     edge = new_finding_run()
@@ -422,7 +417,7 @@ def test_reproduce():
     assert edge.block()["reproduce"] == [
         "fylgja-cli twin create --stage change-1/seeded --scope tag:edge",
         "fylgja-cli twin step --stage change-1/third-link --allow-restart",
-        "fylgja-cli twin verify", "fylgja-cli twin destroy"]
+        "fylgja twin verify", "fylgja twin destroy"]
 
     # The failure at the third rehearsed stage, after the refused branch point.
     third = failed_run()
@@ -439,7 +434,7 @@ def test_reproduce():
         "fylgja-cli twin step --stage change-1/third-link --allow-restart",
         "fylgja-cli twin step --stage change-1/live --allow-restart",
         "fylgja-cli twin step --stage change-1/bad-port --allow-restart",
-        "fylgja-cli twin verify", "fylgja-cli twin destroy"]
+        "fylgja twin verify", "fylgja twin destroy"]
 
 
 def _sharing_cases():
@@ -472,16 +467,16 @@ def _sharing_cases():
     return [
         ("a mark at the baseline's at", sharing, [
             create, "fylgja-cli twin step --stage change-1/third-link --allow-restart",
-            "fylgja-cli twin verify", "fylgja-cli twin destroy"]),
+            "fylgja twin verify", "fylgja twin destroy"]),
         ("two marks sharing an at before the failed stage", pair_of, [
             create, "fylgja-cli twin step --stage change-1/third-link --allow-restart",
             "fylgja-cli twin step --stage change-1/bad-port --allow-restart",
-            "fylgja-cli twin verify", "fylgja-cli twin destroy"]),
+            "fylgja twin verify", "fylgja twin destroy"]),
         ("a failed stage at the at of the stage before it", failed_copy, [
             create, "fylgja-cli twin step --stage change-1/third-link --allow-restart",
-            "fylgja-cli twin verify", "fylgja-cli twin destroy"]),
+            "fylgja twin verify", "fylgja twin destroy"]),
         ("a failed stage at the baseline's at", failed_at_baseline, [
-            create, "fylgja-cli twin verify --wait", "fylgja-cli twin destroy"]),
+            create, "fylgja twin verify --wait", "fylgja twin destroy"]),
     ]
 
 
@@ -509,7 +504,7 @@ def test_reproduce_quotes_a_word_a_shell_reads(ref, want):
 REPRODUCE_FAILED = ("\n  fylgja-cli twin create --stage change-1/seeded --scope tag:fylgja"
                     "\n  fylgja-cli twin step --stage change-1/third-link --allow-restart"
                     "\n  fylgja-cli twin step --stage change-1/bad-port --allow-restart"
-                    "\n  fylgja-cli twin verify\n  fylgja-cli twin destroy")
+                    "\n  fylgja twin verify\n  fylgja twin destroy")
 
 
 @pytest.mark.parametrize("e,lines,closing", [
@@ -538,7 +533,7 @@ REPRODUCE_FAILED = ("\n  fylgja-cli twin create --stage change-1/seeded --scope 
     ], "rehearsal nonconforming: stage change-1/third-link failed: verify.neighbor n1:ethernet-1/3; the twin is "
        "destroyed; reproduce it by hand:\n  fylgja-cli twin create --stage change-1/seeded --scope tag:fylgja"
        "\n  fylgja-cli twin step --stage change-1/third-link --allow-restart"
-       "\n  fylgja-cli twin verify\n  fylgja-cli twin destroy"),
+       "\n  fylgja twin verify\n  fylgja twin destroy"),
     (cut_run(), [
         "stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
         "stage change-1/third-link: cancelled at phase readiness; error: the deadline passed",
@@ -827,8 +822,8 @@ def test_markdown():
         "fylgja-cli twin create --stage change-1/seeded --scope tag:fylgja",
         "fylgja-cli twin step --stage change-1/third-link --allow-restart",
         "fylgja-cli twin step --stage change-1/bad-port --allow-restart",
-        "fylgja-cli twin verify",
-        "fylgja-cli twin destroy",
+        "fylgja twin verify",
+        "fylgja twin destroy",
         "```",
         "",
         CAVEAT,

@@ -92,8 +92,8 @@ it), `stages.py` (the `stages` block, `stages.schema.json` owned here, its file 
 `plan` block), `rehearsal.py` (the `rehearsal` block, the verdict rules of
 `rehearsal.Classify`, `NewFindings`, `Stop`, `Build`; the text; the markdown with
 `CommentMax` 4,092; `Reproduce` writing `fylgja-cli twin create --stage … --scope …`,
-`fylgja-cli twin step --stage … --allow-restart`, `fylgja-cli twin verify`, `fylgja-cli
-twin destroy`), `deadline.py` (`Deadline`, `Fits`, `Ceiling` 3,600 over the node plans
+`fylgja-cli twin step --stage … --allow-restart`, then the core's `fylgja twin verify` and
+`fylgja twin destroy`, each command by its own client, FR-023), `deadline.py` (`Deadline`, `Fits`, `Ceiling` 3,600 over the node plans
 of each compiled bundle). Goldens under `orchestrator/tests/golden/` (R-14).
 
 ## 7. The flows (`orchestrator/src/fylgja_orchestrator/flows/`)

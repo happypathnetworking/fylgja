@@ -1,6 +1,6 @@
 """The rehearse flow (T026; data-model §7, R-09 to R-11; FR-019), its body called plain with
 the adapter and the core stubbed: the golden rehearsal replayed through the core's answers
-and held to the goldens byte for byte but for `fylgja-cli` and the stages' times; then the
+and held to the goldens byte for byte but for the stages' times; then the
 composition of 015's `TestRehearse*` cases by name (`internal/provision/workflow_rehearse_test.go`'s
 over the core's operations, `internal/server/rehearse_test.go`'s pure ones), the stop at the
 first failed stage, the reclaim's four cases, the deadline's cut and a timeout's or a
@@ -484,8 +484,8 @@ def golden_harness(tmp_path):
 
 def test_the_golden_rehearsal_is_replayed_byte_for_byte(tmp_path):
     """The golden plan built and the golden run answered: the document, the markdown posted,
-    the text and every line printed are the goldens', but for `fylgja-cli` in the reproduce
-    lines and each stage's time, which is the flow's clock's."""
+    the text and every line printed are the goldens', but for each stage's time, which is
+    the flow's clock's."""
     h, golden = golden_harness(tmp_path)
     done = h.rehearse(golden["subject"]["branch"])
     doc = done.document
@@ -495,17 +495,15 @@ def test_the_golden_rehearsal_is_replayed_byte_for_byte(tmp_path):
         assert mine["took_s"] == pytest.approx(want["took_s"], abs=1e-6) or mine["verdict"] != "baseline"
         mine["took_s"] = want["took_s"]
     raw = (GOLDEN / "rehearsal.json").read_text().replace("<state-root>", "\\u003cstate-root\\u003e")
-    assert doc.json() == raw.replace('"fylgja twin ', '"fylgja-cli twin ')
+    assert doc.json() == raw
     findings.validate(doc.to_dict())
     assert doc.exit_code == 5
 
-    from .test_rehearsal import _cli_lines
-
-    assert done.markdown == _cli_lines((GOLDEN / "rehearsal.md").read_text())
+    assert done.markdown == (GOLDEN / "rehearsal.md").read_text()
     assert h.posts == [(golden["rehearsal"]["proposed_change"]["id"], done.markdown)]
     printed = "".join(line + "\n" for line in h.lines)
-    assert printed == _cli_lines((GOLDEN / "rehearsal.out.txt").read_text(), "  ")
-    assert printed.endswith(_cli_lines((GOLDEN / "rehearsal.txt").read_text(), "  "))
+    assert printed == (GOLDEN / "rehearsal.out.txt").read_text()
+    assert printed.endswith((GOLDEN / "rehearsal.txt").read_text())
     assert doc.text() == (GOLDEN / "rehearsal.stderr.txt").read_text()
     # The deadline from the three-node bundles' packages, as the Go server summed it.
     assert block["deadline_s"] == 2580

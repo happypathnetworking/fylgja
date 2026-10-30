@@ -797,7 +797,7 @@ and its drawing. Here are the Checks tab and the thread of the rehearsal recorde
 ![The rehearsal's thread in the proposed change's Overview: every stage passed, with the table, the drawing, the stages and the caveat](docs/recording/rehearsal-thread-passing.png)
 
 The thread's markdown below is this walk-through's own rehearsal, recorded before 020 but
-for its reproduce lines, which name `fylgja-cli`. It is headed by the run, from 020 the
+for its reproduce lines, which name each command's own client. It is headed by the run, from 020 the
 rehearse flow's run on the platform, and when the stages were resolved, so a later
 rehearsal's comment, a new one, is told from it:
 
@@ -892,7 +892,8 @@ passes. A stage that **fails** stops the rehearsal there, its step diverged or i
 finding what the baseline did not have: the report says why, the stages after it read `not
 reached`, the twin is destroyed all the same, and the comment ends with the commands that
 reproduce it by hand, one `fylgja-cli twin create --stage`, a `fylgja-cli twin step --stage`
-for each stage up to the failed one, then a verify and a destroy. The rehearsal ends `nonconforming`, exit 5, and
+for each stage up to the failed one, then the core's `fylgja twin verify` and `fylgja twin
+destroy`. The rehearsal ends `nonconforming`, exit 5, and
 `fylgja-twin` fails. Tier 3's case 9 makes one with a stage that disables the port a probe's
 host is cabled to, so its burst comes back short (`verify.burst`). The recording's has a
 port n4 does not have, refused at the push; its stage is outlined red in the drawing:

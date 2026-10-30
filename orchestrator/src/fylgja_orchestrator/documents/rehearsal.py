@@ -5,10 +5,11 @@ the rehearse flow posts on the proposed change (`markdown.go`).
 
 Each renders from the document alone, the markdown with the plan's steps beside it, so the
 JSON, the text and the comment of one rehearsal cannot disagree; none names a line of
-configuration, a token or a login. The reproduce lines name `fylgja-cli`, the orchestrator's
-client, which runs them through the flows, where the core's server named its own; every
-other byte is the Go renderers', held to the goldens captured from them
-(`tests/golden/`, FR-023, SC-007).
+configuration, a token or a login. The reproduce lines name each command's own client:
+`fylgja-cli`, the orchestrator's, for the create and the steps, which it runs through the
+flows, where the core's server named its own; `fylgja`, the core's, for the verify and the
+destroy, which `fylgja-cli` has no command for. Every other byte is the Go renderers', held
+to the goldens captured from them (`tests/golden/`, FR-023, SC-007).
 
 A block's parts are the contract's shapes, as dicts in the Go structs' key order: a stage's
 findings are finding dicts, a wait is `{"outcome", "budget_s", "reads", "after_s"}` and a
@@ -34,7 +35,11 @@ from .plan import Pair, StepDiff, link_text
 from .stages import AT_GIVEN, AT_WRITTEN, at_source_text
 
 CLI = "fylgja-cli"
-"""The client the reproduce lines name: the orchestrator's, whose commands run the flows."""
+"""The client the reproduce lines name for the create and the steps: the orchestrator's,
+whose commands run the flows."""
+CORE_CLI = "fylgja"
+"""The client the reproduce lines name for the verify and the destroy: the core's, whose
+commands they are."""
 
 # The verdicts a stage comes to (rehearsal.schema.json, $defs/stage).
 VERDICT_REFUSED = "refused"
@@ -400,16 +405,16 @@ def findings_of(block: dict) -> Findings:
 def reproduce(block: dict, scope: str) -> list[str]:
     """The commands that reproduce a failed stage by hand on the same stages, in order
     (`Reproduce`, FR-015): the create from the baseline under scope, a step with
-    --allow-restart to each rehearsed stage up to and including the failed one, the verify
-    and the destroy. A rehearsed stage at the branch and at of the last stage a command
-    named is left out, since the step would refuse it; the verify waits when no step
-    precedes it. None when no stage failed."""
+    --allow-restart to each rehearsed stage up to and including the failed one, each by
+    `fylgja-cli`, then the verify and the destroy by `fylgja`. A rehearsed stage at the
+    branch and at of the last stage a command named is left out, since the step would
+    refuse it; the verify waits when no step precedes it. None when no stage failed."""
     failed = next((i for i, s in enumerate(block["stages"]) if s["verdict"] == VERDICT_FAILED), -1)
     if failed < 0:
         return []
     out: list[str] = []
     branch, at = "", ""
-    verify = f"{CLI} twin verify --wait"
+    verify = f"{CORE_CLI} twin verify --wait"
     for s in block["stages"][: failed + 1]:
         if s["role"] == ROLE_BASELINE:
             out.append(f"{CLI} twin create --stage {shell_word(s['ref'])} --scope {shell_word(scope)}")
@@ -417,11 +422,11 @@ def reproduce(block: dict, scope: str) -> list[str]:
             if s.get("at") and s.get("branch", "") == branch and s["at"] == at:
                 continue
             out.append(f"{CLI} twin step --stage {shell_word(s['ref'])} --allow-restart")
-            verify = f"{CLI} twin verify"
+            verify = f"{CORE_CLI} twin verify"
         else:
             continue
         branch, at = s.get("branch", ""), s.get("at", "")
-    return out + [verify, f"{CLI} twin destroy"]
+    return out + [verify, f"{CORE_CLI} twin destroy"]
 
 
 SHELL_SAFE = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@%+=:,-")

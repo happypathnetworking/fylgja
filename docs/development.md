@@ -847,7 +847,8 @@ cases:
    the flow run, read on the platform `COMPLETED`, of the deployment
    `twin-rehearse/main` with the case's branch; its log, read as the checks read it, names
    the core's runs, a provision and a destroy among them, whose histories are fetched for
-   the greps; and each reproduce line of the report names `fylgja-cli`.
+   the greps; and each reproduce line of the report names its own client, `fylgja-cli`
+   for the create and the steps, `fylgja` for the verify and the destroy.
 
 Every seeded device's `description` carries `FYLGJA-MARKER`, which the template writes
 into its artifact's header comment, and the script finds it, and

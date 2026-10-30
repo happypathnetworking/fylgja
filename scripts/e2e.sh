@@ -103,7 +103,8 @@
 #      n1:ethernet-1/10, the probe's first port, disabled, generated, stage
 #      probe-port-down, the checks run again: fylgja-twin failed, naming probe-port-down's
 #      burst (verify.burst), the earlier stages passed with their loss figures, a second
-#      comment in a second thread holding the fylgja-cli commands that reproduce it and the
+#      comment in a second thread holding the commands that reproduce it, each by its own
+#      client (fylgja-cli's create and steps, fylgja's verify and destroy), and the
 #      head not reached; the branch deleted, and with its proposed change the threads, their
 #      comments and the validators; the probe deleted from main. The stage probe-port-down took the place of 015's bad-port: a stage that
 #      fails stops the run, so a push refused at a fourth stage would never be reached, and
@@ -2672,9 +2673,10 @@ stage_lines 9b "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage 
   "^stage $FR/probe-port-down: stepped .*; expired after .*; loss $LOSS9; failed: verify\\.burst n1-loop\$" "^stage $FR/head: not reached\$"
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
 # The failure's comment: its table, its drawing, the five commands that reproduce it in order
-# (FR-015), each fylgja-cli's as the orchestrator renders them (020's R-13), the create naming
-# the scope every stage was read under, the runner's default (017's T104), and the caveat
-# last.
+# (FR-015), each naming its own client as the orchestrator renders them (020's R-13, FR-023):
+# the create and the steps fylgja-cli's, the verify and the destroy the core's fylgja; the
+# create naming the scope every stage was read under, the runner's default (017's T104), and
+# the caveat last.
 # shellcheck disable=SC2016 # the backticks are the markdown's fences, read literally by jq
 expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) and (map(.thread) | unique | length == 2)
   and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
@@ -2683,7 +2685,7 @@ expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) a
       + "fylgja-cli twin create --stage " + env.FR + "/seeded --scope tag:fylgja\n"
       + "fylgja-cli twin step --stage " + env.FR + "/third-link --allow-restart\n"
       + "fylgja-cli twin step --stage " + env.FR + "/probe-port-down --allow-restart\n"
-      + "fylgja-cli twin verify\nfylgja-cli twin destroy\n```\n")
+      + "fylgja twin verify\nfylgja twin destroy\n```\n")
     and endswith("\n\n" + env.CAVEAT + "\n")))'
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
 COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")

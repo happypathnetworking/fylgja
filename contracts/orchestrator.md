@@ -102,9 +102,10 @@ words named what the core no longer does (020's research §5.13, §5.17, §5.19)
   guards; trusted, the record's stage marks its row; not trusted, `record.twin.stale` is the
   document's first finding and no row is marked. A record naming a mark since deleted shows
   no at's source.
-- **The reproduce lines** of the rehearsal's report name `fylgja-cli twin create --stage …
-  --scope …`, `fylgja-cli twin step --stage … --allow-restart`, `fylgja-cli twin verify`
-  and `fylgja-cli twin destroy`.
+- **The reproduce lines** of the rehearsal's report name each command's own client:
+  `fylgja-cli twin create --stage … --scope …` and `fylgja-cli twin step --stage …
+  --allow-restart`, the orchestrator's, then `fylgja twin verify` (`--wait` when no step
+  precedes it) and `fylgja twin destroy`, the core's, which `fylgja-cli` has no command for.
 - **The report's post** is the rehearse flow's, not a check's ("The rehearse flow", below).
 
 ### Identifiers
@@ -154,8 +155,8 @@ as Go's `MarshalIndent` writes it, its text as `WriteText` renders it.
 - **The rehearsal's report**: its text, and its markdown, at most 4,092 bytes, the comment's
   bound, rendered from the document and the plan's steps by
   `fylgja_orchestrator.documents.rehearsal`, held byte for byte to the goldens captured from
-  the Go renderer under `orchestrator/tests/golden/`, but for `fylgja-cli` in the reproduce
-  lines and the stages' times.
+  the Go renderer under `orchestrator/tests/golden/`, their reproduce lines re-baselined to
+  `fylgja-cli` where they name an orchestrator command, but for the stages' times.
 - **The deadline** is 015's: each compiled stage's budget summed from the packages its
   manifest names, against the ceiling of 3,600 s (`rehearsal.deadline.unfit` over it).
 

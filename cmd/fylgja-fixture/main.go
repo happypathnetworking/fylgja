@@ -2,7 +2,8 @@
 
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
 // schema library and the stage kind onto a branch and seeds the three-node fixture
-// or the mixed one, or makes tier 3's branch changes on a throwaway branch, or opens,
+// or the mixed one, or makes tier 3's and the orchestrator's tier 2's branch changes on a
+// throwaway branch, or opens,
 // marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
 // the schema, the group and this repository's read-only registration (D-044), or opens and
 // closes a demo's window, the three-node baseline on main (D-054), or writes and deletes the
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,6 +59,19 @@ func main() {
 	addInterface := flag.String("add-interface", "",
 		"add one InterfacePhysical, active and uncabled, to a DcimDevice on a "+testsupport.TestBranchPrefix+
 			"* -branch and exit, as <device>:<name> (render it with -generate)")
+	addDevice := flag.String("add-device", "",
+		"add one DcimDevice, with no tag, no platform and no group, and its InterfacePhysical ports, to a "+
+			testsupport.TestBranchPrefix+"* -branch, print its id, and exit, as <name>:<port>[,<port>...]")
+	addCable := flag.String("add-cable", "",
+		"add one DcimCable joining any number of InterfacePhysical ports on a "+testsupport.TestBranchPrefix+
+			"* -branch and exit, as <label>=<device>:<port>,<device>:<port>[,...]; it renders nothing")
+	setPlatform := flag.String("set-platform", "",
+		"move one DcimDevice onto a DcimPlatform under its manufacturer, made where absent, on a "+
+			testsupport.TestBranchPrefix+"* -branch and exit, as <device>=<manufacturer>/<platform>; "+
+			"<device>= takes its platform away; it renders nothing")
+	loadSchemaFile := flag.String("load-schema-file", "",
+		"load one schema file onto a "+testsupport.TestBranchPrefix+"* -branch, wait until its kinds are "+
+			"exposed and the ones it removes (state: absent) are gone, and exit")
 	mixed := flag.Bool("mixed", false,
 		"seed the mixed fixture (two DcimPlatforms under their manufacturers, three DcimDevices) "+
 			"on a throwaway branch instead of the three-node one")
@@ -166,6 +181,14 @@ func main() {
 	}
 	if *addMixedLink {
 		if err := addMixedLinkTo(*branch); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *addDevice != "" || *addCable != "" || *setPlatform != "" || *loadSchemaFile != "" {
+		if err := edit(*branch, editFlags{device: *addDevice, cable: *addCable, platform: *setPlatform,
+			schemaFile: *loadSchemaFile}); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -772,6 +795,116 @@ func change(branch string, generate bool, description, port, addIface string) er
 			return err
 		}
 		fmt.Printf("artifacts rendered and Ready on %s\n", branch)
+	}
+	return nil
+}
+
+// editFlags are the reader's seeding flags as given (020, T020): the changes the Go reader's
+// contract tests made through testsupport, which the orchestrator's tier 2 makes through this
+// tool, since internal/testsupport is not ported.
+type editFlags struct {
+	device, cable, platform, schemaFile string
+}
+
+// edit applies the one seeding flag given. Each is refused, before any request, on the
+// fixture and on a branch outside the test prefix, as -add-interface is, and so is more than
+// one at once, or a value not of the flag's form.
+func edit(branch string, f editFlags) error {
+	var given []string
+	for _, g := range []struct {
+		name string
+		set  bool
+	}{{"add-device", f.device != ""}, {"add-cable", f.cable != ""}, {"set-platform", f.platform != ""},
+		{"load-schema-file", f.schemaFile != ""}} {
+		if g.set {
+			given = append(given, "-"+g.name)
+		}
+	}
+	if len(given) > 1 {
+		return fmt.Errorf("%s change a branch one at a time; give one", strings.Join(given, " and "))
+	}
+	flagName := given[0]
+	if branch == testsupport.FixtureBranch {
+		return fmt.Errorf("%s refuses branch %s: the fixture is written once and never changed; "+
+			"seed a throwaway branch and name it with -branch", flagName, branch)
+	}
+	if !strings.HasPrefix(branch, testsupport.TestBranchPrefix) {
+		return fmt.Errorf("%s refuses branch %s: every branch it changes begins %s; "+
+			"seed a throwaway branch and name it with -branch", flagName, branch, testsupport.TestBranchPrefix)
+	}
+	var device testsupport.Device
+	var label string
+	var ends []string
+	var target, manufacturer, platform string
+	switch {
+	case f.device != "":
+		name, ports, ok := strings.Cut(f.device, ":")
+		if !ok || name == "" || ports == "" || strings.ContainsAny(name, " \t/") {
+			return fmt.Errorf("-add-device takes <name>:<port>[,<port>...], got %q", f.device)
+		}
+		device = testsupport.Device{Name: name, Ports: strings.Split(ports, ",")}
+		if slices.Contains(device.Ports, "") {
+			return fmt.Errorf("-add-device takes <name>:<port>[,<port>...], got %q: a port has no name", f.device)
+		}
+	case f.cable != "":
+		var list string
+		var ok bool
+		label, list, ok = strings.Cut(f.cable, "=")
+		if !ok || label == "" || list == "" {
+			return fmt.Errorf("-add-cable takes <label>=<device>:<port>,<device>:<port>[,...], got %q", f.cable)
+		}
+		ends = strings.Split(list, ",")
+		for _, e := range ends {
+			if d, p, ok := strings.Cut(e, ":"); !ok || d == "" || p == "" {
+				return fmt.Errorf("-add-cable's end %q is not <device>:<port>", e)
+			}
+		}
+	case f.platform != "":
+		var pair string
+		var ok bool
+		target, pair, ok = strings.Cut(f.platform, "=")
+		if !ok || target == "" {
+			return fmt.Errorf("-set-platform takes <device>=<manufacturer>/<platform>, or <device>= to take it away, got %q",
+				f.platform)
+		}
+		if pair != "" {
+			if manufacturer, platform, ok = strings.Cut(pair, "/"); !ok || manufacturer == "" || platform == "" {
+				return fmt.Errorf("-set-platform takes <device>=<manufacturer>/<platform>, got %q", f.platform)
+			}
+		}
+	}
+	c, err := testsupport.NewClient()
+	if err != nil {
+		return err
+	}
+	switch {
+	case f.device != "":
+		id, err := c.AddDevice(branch, device)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("device %s added on %s: id %s, ports %s; no tag, no platform, no group\n", device.Name, branch, id,
+			strings.Join(device.Ports, ", "))
+	case f.cable != "":
+		if err := c.AddCable(branch, label, ends...); err != nil {
+			return err
+		}
+		fmt.Printf("cable %s added on %s: %s\n", label, branch, strings.Join(ends, ", "))
+	case f.platform != "":
+		if err := c.SetDevicePlatform(branch, target, manufacturer, platform); err != nil {
+			return err
+		}
+		if platform == "" {
+			fmt.Printf("device %s on %s has no platform\n", target, branch)
+		} else {
+			fmt.Printf("device %s on %s moved onto platform %s / %s\n", target, branch, manufacturer, platform)
+		}
+	default:
+		began := time.Now()
+		if err := c.LoadSchemaFile(branch, f.schemaFile); err != nil {
+			return err
+		}
+		fmt.Printf("schema file %s loaded on %s in %.1fs\n", f.schemaFile, branch, time.Since(began).Seconds())
 	}
 	return nil
 }

@@ -434,7 +434,9 @@ change*, and the fixture tool refuses to open one on it. Tests make their own th
 017 it writes the *schema library*'s kinds. It seeds and deletes branches (the fixture
 branch, the mixed one, throwaway ones), changes them as the tests need (`-add-link`,
 `-add-mixed-link`, `-disable-port`, `-set-description`, which sets every device's
-description, the change only the artifact sees), generates their artifacts and waits for
+description, the change only the artifact sees, and from 020 the reader's tier-2 changes
+the orchestrator's tests make through it, `-add-device`, `-add-cable`, `-set-platform` and
+`-load-schema-file`), generates their artifacts and waits for
 them, and gives a throwaway branch its *proposed change* and
 *marks*: `-propose` opens a draft and waits for its validators, `-stage` marks one,
 `-run-check` asks the proposed change's artifact checks, `-ready` marks it ready for

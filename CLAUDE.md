@@ -564,7 +564,7 @@ VERSION=…` stamps `--version`) · `make orchestrator-venv` (`orchestrator/.ven
 `orchestrator/pyproject.toml`'s pins, the package editable; CI's lint, unit and contract
 jobs and `release.yml` run it after `actions/setup-python` at `3.14`) · `make test` (tier
 1, no infrastructure: `go test`, then `orchestrator/.venv/bin/pytest -q orchestrator -m
-'not contract'`; under 90s wall uncached, raised from 65s on 2026-10-30 by the operator's
+'not contract'`; under 90s wall uncached, raised from 65s on 2026-10-29 by the operator's
 answer when 020's Run 17 measured 68.0s and 67.0s at a load of 2.1–4.7 with the
 orchestrator's 710 Python tests beside Go; at 020's close 55.9s at a load of 2.1, Go's
 `internal/cli` 21.9s of it and 1,120 Python tests in 18.3s, since the reader's packages

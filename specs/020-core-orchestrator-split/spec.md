@@ -448,7 +448,7 @@ the release notes.
 2. **Given** the goldens captured from the Go implementation, **When** the orchestrator's
    renderers run, **Then** the `stages`, `plan` and `rehearsal` documents' text and
    markdown match byte for byte but for `fylgja-cli` in place of `fylgja` in the reproduce
-   lines, and each stage's verdict matches.
+   lines that name an orchestrator command, and each stage's verdict matches.
 3. **Given** the constitution, **When** it is read, **Then** its version is MAJOR above
    2.3.0, its Sync Impact Report cites D-065 and D-066, I binds the core and frees the
    orchestrator, and XI names the orchestrator as a client.
@@ -666,9 +666,11 @@ the release notes.
   the core, and its platform's address; never a node login.
 - **FR-023**: The `rehearsal`, `stages` and `plan` documents and the markdown report MUST
   move from the core's contracts to the orchestrator's unchanged but for `fylgja-cli` in
-  place of `fylgja` in the reproduce lines, so that the checks and the report's readers see
-  no other change. Their text and markdown renderers MUST be held to goldens captured from
-  the Go implementation before it is removed, byte for byte but for that name.
+  place of `fylgja` in the reproduce lines that name an orchestrator command, the core's
+  commands (`twin verify`, `twin destroy`, `twin show`) keeping `fylgja`, so that the
+  checks and the report's readers see no other change. Their text and markdown renderers
+  MUST be held to goldens captured from the Go implementation before it is removed, byte
+  for byte but for that name.
 
 **The checks**
 
@@ -809,7 +811,8 @@ the release notes.
   same proposed change.
 - **SC-007**: The `stages`, `plan` and `rehearsal` documents' text and markdown from the
   orchestrator match the goldens captured from the Go implementation byte for byte but for
-  `fylgja-cli` in the reproduce lines; each stage's verdict matches.
+  `fylgja-cli` in the reproduce lines that name an orchestrator command; each stage's
+  verdict matches.
 - **SC-008**: Tier 2 passes whole, `TestChecksInsideInfrahub` green through the
   orchestrator's platform on the bridge; tier 3 passes nine cases, `E2E-OK`; the credential
   greps over the orchestrator's logs and its platform's find nothing.

@@ -1096,3 +1096,84 @@ made.
   packages' cases of the same tests inside `internal/intent`'s, `internal/server`'s and
   `internal/cli`'s runs. Afterwards `Branch` lists `main` and `fylgja-fixture` alone, and
   `FylgjaProbe`, `CoreProposedChange` and `FylgjaStage` count 0.
+
+### 5.15 Tier 2, the stages' ported tests and the compare with the Go reader (T021, Run 19, 2026-10-30)
+
+- **The plan, made of the two halves.** `stage plan` is the orchestrator's flow (T025), so
+  the Go tests' `planOf` is ported as `conftest.plan_of`: the proposed change found
+  (`stages.find`), each stage in order resolved (`resolve_from`, steps 4–9), read at its at
+  and taken by the adapter (`read.read_snapshot`, the take written under the test's
+  directory), and compiled by a core server of the test's own (`twin compile --snapshot`, no
+  `INFRAHUB_*`), the first rejection ending each stage; then each two consecutive compiled
+  stages diffed by the core's `twin diff` (T010), whose `step` block carries what the Go
+  plan's steps did (nodes changed and why, links, artifacts, `unchanged`). Each outcome is
+  `(label, refused|compiled, the first rejection's rule)`, as Go's `outcomes`. `serving()`
+  starts a core server for the session (`core`) or for one test (`own_core`, whose stores
+  hold only what the test files), and `Core.state` names its state root.
+- **The harness gains** (`conftest.py`): `FixtureTool.propose` (the id), `.mark` (the
+  stage's id and its at, written or given), `.update_stage`; `throwaway` collecting the
+  branch's proposed changes and their stages before `-delete` and holding none read after
+  it, as the Go tests' `testBranch` did; Infrahub's own reads beside the product's
+  (`artifacts_of`, `checksums`, `await_moved`, `await_joined`, `artifacts_ready_at`, moved
+  from `test_read_fixture.py`, `branch_origin`); `stage_reader`, `stamper`, `resolve`,
+  `find`; and `refused`, the Go tests' helper.
+- **The fixture tool's new flags** (`cmd/fylgja-fixture/stages.go`), each where a Go test's
+  seeding had none: `-set-serial <dev>[,…]=<serial>`, `-describe device:|platform:|
+  manufacturer:<name>=<text>` or `virtual:<dev>:<name>=<text>`, `-set-cable-status
+  <label>=<status>` (printing the cable's stamp), `-re-end-cable <dev>:<port>=<end>[,…]`,
+  `-delete-link <dev>:<port>` (printing when the delete returned), `-add-virtual-interface
+  <dev>:<name>`, `-tag-devices <dev>[,…]`, `-rebase`; each refuses `fylgja-fixture`, a branch
+  outside `fylgja-test-`, a second of them, any flag beside it but `-branch` and a value not
+  of its form, before any request. `-add-device` takes `-device-platform`, `-device-tag`,
+  `-device-management` and `-device-group`, each refused without it. Beside the proposal
+  flags, `-update-stage <label>:<field>=<value>` (label, as_of or description) and
+  `-delete-stages`. `-mixed` now refuses `fylgja-fixture` before any request, where it had
+  tried the branch's creation first (`TestSeedMixedRefusesTheFixtureBranch`'s claim).
+  `docs/development.md` and the glossary name them.
+- **The four files**, each Go test carried over by name:
+  - `test_stages.py` (five): `TestStageKindLoads` (the kind on main, the branch's hash
+    main's after its load, the mark read, the uniqueness and regex refusals, the stages
+    deleted and no orphan); `TestStagesListAndPlan` (the listing's four rows through
+    `adapter.stage_list`, the head one microsecond after the latest checksum, the plan's
+    outcomes and steps, SC-002's mark read equal to `--branch --at`'s snapshot and bundle,
+    the three edits and `twin_moved` on a `RecordView`); `TestStageRefusals` (stale, fresh,
+    the serial number cleared by the run-check and the validation read pinned, the rebase,
+    `stage.label.reserved`, `stage.at.unresolved`, the unknown label's exact words, the
+    close, an unknown branch); `TestStagesSeeEveryWriteOfADevice`;
+    `TestStagesSeeARemoval`.
+  - `test_stage_take.py` (four): `TestArtifactOnASeededBranch` (its three proofs, the
+    bundle's files from the core), `TestMixedSeedReads`, `TestSeedMixedRefusesTheFixtureBranch`,
+    `TestPinnedReadReproducesItsBundle` (bundles compared file for file).
+  - `test_snapshot_of_a_stage.py` (two): `TestStageTakenTwiceHasOneSnapshot` (the two
+    plans' ids equal, the two takes equal but for `observed_at`; the store that keeps the
+    first take is the core's, which `twin diff` files into as a step's target does, so the
+    second plan's takes keep each first entry's bytes and back-dated mtime, adding none);
+    `TestStepTargetFromASnapshot`'s read half (`read --stage --out` through the recording
+    proxy names the plan's snapshot with the mark's branch, at and scope; the core then
+    builds the target from the file and from the id, to the plan's bundle, with no request
+    to Infrahub, after the branch is gone).
+  - `test_adapter_matches_go_reader.py` (one): the same arguments to `bin/fylgja intent read`
+    through the host's server and to the adapter's `read`: `fylgja-fixture` unpinned and at
+    a pinned `at` (`….654321Z`), and a throwaway branch's `seeded`, `third-link` and `head`
+    by `--stage` and its branch with `--probes testdata/probes/n1-loop.json`; every file
+    byte-equal once its two `observed_at` lines are equalised, the snapshot ids, resolved
+    stages and findings equal; then `stage list --json` and `stages --json` equal as JSON.
+    The host's server ran T003's build (16 h up, its binary `(deleted)`), whose reader no
+    change of this feature has touched.
+- **Not carried over**: `stage.main.moved` against a real write, which needs a write on
+  main, which no test makes; on this install main holds no tagged device, so the warning is
+  never filed (asserted: the listing's findings are none), and its case is tier 1's. The Go
+  plan's text lines (`pair.Text()`), logged and not asserted, are T022's.
+- **Live, each file run alone, no twin up**, every case green at its first full run (the
+  first runs' two failures the harness's own: `serving()` making no root, and a comparison
+  marshalling an empty `observed_at`): `test_stages` 1,005.6 s wall (five);
+  `test_stage_take` 227.2 s (four); `test_snapshot_of_a_stage` 269.1 s (two);
+  `test_adapter_matches_go_reader` 183.8 s (one). 1,685.7 s in all, against
+  `internal/stages`' 1,712.9 s in the Go tier. **The read times**, Go's through the host's
+  server then the adapter's: the fixture 3.3 s and 2.8 s, pinned 2.1 s and 2.3 s, `seeded`
+  14.6 s and 8.7 s, `third-link` 7.5 s and 8.2 s, `head` 6.7 s and 7.1 s, with a probe file
+  1.5 s and 1.6 s, the stage list 4.2 s and 3.9 s: 39.8 s and 34.7 s over the seven.
+  Afterwards `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`,
+  `FylgjaStage`, `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` count 0.
+- **The gates**: `make build` static; `make test` green (711 Python tests, Go cached) in
+  19.1 s wall; `make lint` 0 issues, ruff clean.

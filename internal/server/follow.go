@@ -51,7 +51,7 @@ func runProvision(ctx context.Context, opts *options, op string, subject *findin
 	res, err := followRun(ctx, opts, svc, op, subject, provision.WorkflowProvision, runID, interrupts, interrupted,
 		func(ctx context.Context) (provision.ProvisionResult, error) {
 			return svc.Result(ctx, provision.WorkflowProvision, runID)
-		}, "run cancelled; cleanup running", nil)
+		}, "run cancelled; cleanup running")
 	if err != nil {
 		return err
 	}
@@ -208,15 +208,11 @@ func printCleanup(opts *options, c provision.CleanupResult) {
 // remains; a step run's cleanup is its record. A second interrupt stops waiting
 // and returns run.cancelled; the run carries on without us, and `fylgja twin destroy` waits
 // for it (contracts/cli.md, create step 7). interrupted says the first interrupt arrived
-// while the run was being started. print prints each event, printEvent when nil: a
-// rehearsal names the stage each of its children is for (015).
+// while the run was being started.
 func followRun[R any](ctx context.Context, opts *options, svc provision.Service, op string,
 	subject *findings.Subject, workflowID, runID string, interrupts <-chan os.Signal, interrupted bool,
-	closedAs func(context.Context) (R, error), cancelling string, print func(provision.Event)) (R, error) {
+	closedAs func(context.Context) (R, error), cancelling string) (R, error) {
 	opts.note("run %s %s", workflowID, runID)
-	if print == nil {
-		print = func(e provision.Event) { printEvent(opts, e) }
-	}
 
 	followCtx, stopFollowing := context.WithCancel(ctx)
 	defer stopFollowing()
@@ -233,7 +229,7 @@ func followRun[R any](ctx context.Context, opts *options, svc provision.Service,
 		// result, which is asked for separately.
 		_ = svc.Follow(followCtx, workflowID, runID, func(e provision.Event) {
 			opts.c.eventFrame(e)
-			print(e)
+			printEvent(opts, e)
 			followed.observe(e)
 		})
 		res, err := closedAs(followCtx)
@@ -319,8 +315,8 @@ func printEvent(opts *options, e provision.Event) {
 	printLabelled(opts, label, e)
 }
 
-// printLabelled writes a step's progress line under label: printEvent's "step <name>", or
-// the rehearsal's "stage <ref>: verify" for its baseline's wait (015).
+// printLabelled writes a step's progress line under label: printEvent's "step <name>", or a
+// cleanup step's own name.
 func printLabelled(opts *options, label string, e provision.Event) {
 	secs := e.Duration.Seconds()
 	switch {

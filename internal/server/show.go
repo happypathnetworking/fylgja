@@ -134,9 +134,6 @@ type showText struct {
 	record string
 	// step is the record block's line for a record that has stepped, or "".
 	step string
-	// towards is the side each run in flight is for, by run id (towardsOf), which the in
-	// flight: line names beside a rehearsal's child (015).
-	towards map[string]string
 	// hosts is each node the record names as a probe's host, by name, with its probe (016):
 	// its line names its format and its probe where a device's names its package and its
 	// artifact. The show block carries no probe, so it is the text's alone.
@@ -210,7 +207,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		block.Record.Step = showStep(rec.Step, waitRecorded(rec))
 	}
 
-	text := showText{towards: towardsOf(reads.inFlight), hosts: hosts}
+	text := showText{hosts: hosts}
 	if rec != nil {
 		text.record = recordLine(rec)
 	}
@@ -277,14 +274,6 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	if rec != nil && host.Lab.Present && !recordSteps(rec) {
 		s := fmt.Sprintf(oldRecordNote, rec.TwinVersion)
 		text.details = append(text.details, s)
-		note(s)
-	}
-	// A rehearsal in flight holds the host from its start to its destroy's end, whatever its
-	// children have reached, and is named after the kind with where it is (015).
-	if r := rehearsalInFlight(reads.inFlight); r != nil {
-		text.hostHeld = true
-		s := rehearsalAt(*r)
-		text.kind += "; " + s
 		note(s)
 	}
 	// A step run that has touched the host is named after the kind, as M4 named a rebuild
@@ -727,52 +716,43 @@ func printShow(opts *options, block findings.ShowBlock, text showText) {
 		opts.note("  %s", d)
 	}
 
-	printInFlight(opts, block.Service, block.InFlight, text.towards)
+	printInFlight(opts, block.Service, block.InFlight)
 }
 
-// showRuns are the runs in flight as the show block carries them; a rehearsal carries its
-// child's.
+// showRuns are the runs in flight as the show block carries them. None carries a child from
+// 020: no workflow the worker serves starts one.
 func showRuns(runs []provision.RunInFlight) []findings.ShowRun {
 	var out []findings.ShowRun
 	for _, r := range runs {
-		run := findings.ShowRun{WorkflowID: r.WorkflowID, RunID: r.RunID, Step: r.Step}
-		if c := r.Child; c != nil {
-			run.Child = &findings.ShowRun{WorkflowID: c.WorkflowID, RunID: c.RunID, Step: c.Step}
-		}
-		out = append(out, run)
+		out = append(out, findings.ShowRun{WorkflowID: r.WorkflowID, RunID: r.RunID, Step: r.Step})
 	}
 	return out
 }
 
 // printInFlight writes the in flight: line, or lines (contracts/cli.md, twin show): unknown
 // when the service did not answer, none, the one run, or each run under it. twin verify
-// prints it as twin show does. towards is the side each run is for, by run id.
-func printInFlight(opts *options, service string, runs []findings.ShowRun, towards map[string]string) {
+// prints it as twin show does.
+func printInFlight(opts *options, service string, runs []findings.ShowRun) {
 	switch {
 	case service == findings.ShowServiceUnreachable:
 		opts.note("in flight: unknown")
 	case len(runs) == 0:
 		opts.note("in flight: none")
 	case len(runs) == 1:
-		opts.note("in flight: %s", runInFlight(runs[0], towards))
+		opts.note("in flight: %s", runInFlight(runs[0]))
 	default:
 		opts.note("in flight:")
 		for _, r := range runs {
-			opts.note("  %s", runInFlight(r, towards))
+			opts.note("  %s", runInFlight(r))
 		}
 	}
 }
 
-// provisionAtHost is the operator's provisioning run in flight at a step that has touched the
-// host (stage through record, the push among them since M5, or its cleanup), or a
-// rehearsal's building its baseline (015), or nil. A rehearsal's child is never listed as the
-// operator's run (provision.Client.InFlight).
+// provisionAtHost is the provisioning run in flight at a step that has touched the host
+// (stage through record, the push among them since M5, or its cleanup), or nil.
 func provisionAtHost(runs []findings.ShowRun) *findings.ShowRun {
-	for i, r := range runs {
+	for i := range runs {
 		run := &runs[i]
-		if r.WorkflowID == provision.WorkflowRehearse && r.Child != nil {
-			run = r.Child
-		}
 		if run.WorkflowID != provision.WorkflowProvision {
 			continue
 		}
@@ -785,73 +765,10 @@ func provisionAtHost(runs []findings.ShowRun) *findings.ShowRun {
 	return nil
 }
 
-// rehearsalInFlight is the rehearsal in flight, or nil.
-func rehearsalInFlight(runs []provision.RunInFlight) *provision.RunInFlight {
-	for i, r := range runs {
-		if r.WorkflowID == provision.WorkflowRehearse {
-			return &runs[i]
-		}
-	}
-	return nil
-}
-
-// rehearsalAt is where a rehearsal in flight is, as twin show's kind line ends with it
-// (contracts/rehearse-command.md): the side its child is for and the step that child is
-// at, its destroy, or, between two children, the rehearsal's own step; the twin's record
-// names no stage from 020.
+// runInFlight names a run in flight and its step:
 //
-//	rehearsal run fylgja-rehearse 01a1… is at snapshot 9c2d01e7…, step push
-func rehearsalAt(r provision.RunInFlight) string {
-	s := fmt.Sprintf("rehearsal run %s %s", r.WorkflowID, r.RunID)
-	switch c := r.Child; {
-	case c != nil && c.WorkflowID == provision.WorkflowDestroy:
-		return fmt.Sprintf("%s is destroying the twin, step %s", s, c.Step)
-	case c != nil && c.Towards != "":
-		return fmt.Sprintf("%s is at %s, step %s", s, c.Towards, c.Step)
-	case c != nil:
-		return fmt.Sprintf("%s is at step %s", s, c.Step)
-	}
-	return fmt.Sprintf("%s is at step %s", s, r.Step)
-}
-
-// towardsOf is the side each run in flight is for, by run id, a rehearsal's child's
-// included: the side a step run steps towards, and the baseline a rehearsal's
-// provisioning child builds (provision.RunInFlight.Towards).
-func towardsOf(runs []provision.RunInFlight) map[string]string {
-	out := map[string]string{}
-	for _, r := range runs {
-		if r.Towards != "" {
-			out[r.RunID] = r.Towards
-		}
-		if c := r.Child; c != nil && c.Towards != "" {
-			out[c.RunID] = c.Towards
-		}
-	}
-	return out
-}
-
-// runInFlight names a run in flight and its step; a rehearsal carries its child's with the
-// side that child is for (015):
-//
-//	run fylgja-rehearse 01a1… at step step (run fylgja-step 03c3… at step push), stepping towards stage change-1/third-link
-func runInFlight(r findings.ShowRun, towards map[string]string) string {
-	if r.WorkflowID == provision.WorkflowRehearse {
-		s := fmt.Sprintf("run %s %s at step %s", r.WorkflowID, r.RunID, r.Step)
-		c := r.Child
-		if c == nil {
-			return s
-		}
-		s += fmt.Sprintf(" (run %s %s at step %s)", c.WorkflowID, c.RunID, c.Step)
-		switch side := towards[c.RunID]; {
-		case c.WorkflowID == provision.WorkflowDestroy:
-			s += ", destroying the twin"
-		case side != "" && c.WorkflowID == provision.WorkflowStep:
-			s += ", stepping towards " + side
-		case side != "":
-			s += ", creating the twin at " + side
-		}
-		return s
-	}
+//	run fylgja-step 03c3… at step push
+func runInFlight(r findings.ShowRun) string {
 	return fmt.Sprintf("run %s %s at step %s", r.WorkflowID, r.RunID, r.Step)
 }
 

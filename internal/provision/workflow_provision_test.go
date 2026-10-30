@@ -106,7 +106,7 @@ func TestAnInputRecordedBefore020RecordsNoStage(t *testing.T) {
 	}
 	fields["stage"] = map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"},
 		"label": "seeded", "description": "the devices, no links", "at_source": "given"}
-	fields["rehearsal"] = map[string]any{"workflow_id": wire.RehearseWorkflowID, "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
+	fields["rehearsal"] = map[string]any{"workflow_id": "fylgja-rehearse", "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
 	if b, err = json.Marshal(fields); err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +160,7 @@ func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 		}
 	}
 	for label, v := range map[string]any{
-		"StepInput":     StepInput{From: wire.StepSide{BundleID: testBundleID}, To: wire.StepSide{BundleID: testBundleID}},
-		"RehearseStage": RehearseStage{Ref: "change-1/seeded", BundleID: testBundleID},
+		"StepInput": StepInput{From: wire.StepSide{BundleID: testBundleID}, To: wire.StepSide{BundleID: testBundleID}},
 	} {
 		b, err := json.Marshal(v)
 		if err != nil {

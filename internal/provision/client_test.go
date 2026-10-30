@@ -80,13 +80,11 @@ func withWorker(mc *mocks.Client) {
 		&workflowservice.DescribeTaskQueueResponse{Pollers: []*taskqueuepb.PollerInfo{{Identity: "worker@lab"}}}, nil)
 }
 
-// noStepRun answers that no step run and no rehearsal is in flight: a create asks for both
-// before it starts (015), and InFlight lists both.
+// noStepRun answers that no step run is in flight: a create asks before it starts, and
+// InFlight lists one.
 func noStepRun(mc *mocks.Client) {
-	for _, workflowID := range []string{WorkflowStep, WorkflowRehearse} {
-		mc.On("DescribeWorkflowExecution", mock.Anything, workflowID, "").
-			Return(nil, serviceerror.NewNotFound("workflow execution not found"))
-	}
+	mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "").
+		Return(nil, serviceerror.NewNotFound("workflow execution not found"))
 }
 
 // firstTaskTaken answers every history read with a run whose first task a worker took.
@@ -630,9 +628,6 @@ func TestStepNames(t *testing.T) {
 	}{
 		{WorkflowStep, wire.ActInspectTwin, "inspect", findings.StepInspect},
 		{WorkflowProvision, wire.ActCheckHost, "host check", findings.StepHostCheck},
-		// 015: a rehearsal's children are its own steps.
-		{WorkflowRehearse, "Destroy", "destroy", findings.StepDestroy},
-		{WorkflowRehearse, "Provision", "provision", findings.StepProvision},
 		{WorkflowProvision, wire.ActDestroyLab, "cleanup teardown", findings.StepTeardown},
 		{WorkflowDestroy, wire.ActDestroyLab, "teardown", findings.StepTeardown},
 		// M5: the push is a step of a provisioning run.
@@ -653,7 +648,8 @@ func TestStepNames(t *testing.T) {
 	}
 }
 
-// childInitiated and childStarted are a rehearsal's child run in its history.
+// childInitiated, childStarted and childCompleted are a child run in its parent's history, as
+// an earlier build's rehearsal left one (015).
 func childInitiated(id int64, workflowType string) *historypb.HistoryEvent {
 	return &historypb.HistoryEvent{EventId: id, EventType: enumspb.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED,
 		Attributes: &historypb.HistoryEvent_StartChildWorkflowExecutionInitiatedEventAttributes{
@@ -729,16 +725,14 @@ func TestShowReadsUnreachable(t *testing.T) {
 	}
 }
 
-// A step is refused beside a rehearsal, provisioning, destroy or step run in flight, naming
-// the run, exit 1, with nothing started for the first three and the last refused by the
-// fixed id (contracts/cli.md, run.in_flight; 015 adds the rehearsal).
+// A step is refused beside a provisioning, destroy or step run in flight, naming the run,
+// exit 1, with nothing started for the first two and the last refused by the fixed id
+// (contracts/cli.md, run.in_flight).
 func TestStartStepRefusedBesideARunInFlight(t *testing.T) {
 	for _, c := range []struct {
 		name, workflowID, runID, message string
 		byID                             bool
 	}{
-		{"a rehearsal", WorkflowRehearse, "run-r",
-			"rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", false},
 		{"a provisioning run", WorkflowProvision, "run-p",
 			"provisioning run run-p is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", false},
 		{"a destroy run", WorkflowDestroy, "run-d", "destroy run run-d is already in flight; wait for it to finish", false},
@@ -815,7 +809,6 @@ func TestStartStepStarts(t *testing.T) {
 func TestStartProvisionRefusedBesideAStep(t *testing.T) {
 	mc := &mocks.Client{}
 	withWorker(mc)
-	mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowRehearse, "").Return(nil, serviceerror.NewNotFound("not found"))
 	mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "").Return(running(WorkflowStep, "run-s"), nil)
 
 	_, err := (&Client{Client: mc}).StartProvision(context.Background(), ProvisionInput{Source: wire.SourceIntent, Branch: "b"})
@@ -1247,379 +1240,6 @@ func TestStepDocumentCarriesTheWaitCounts(t *testing.T) {
 			}
 			if !strings.Contains(b, `"wait_counts":`+string(want)) {
 				t.Errorf("document %s\nwant it to carry wait_counts %s", b, want)
-			}
-		})
-	}
-}
-
-// A create beside a rehearsal is refused before any run starts, naming the rehearsal, not
-// the step or provision it may be running as its child (015, R-12).
-func TestStartProvisionRefusedBesideARehearsal(t *testing.T) {
-	mc := &mocks.Client{}
-	withWorker(mc)
-	mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowRehearse, "").Return(running(WorkflowRehearse, "run-r"), nil)
-	mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "").Return(running(WorkflowStep, "run-s"), nil)
-
-	_, err := (&Client{Client: mc}).StartProvision(context.Background(), ProvisionInput{Source: wire.SourceIntent, Branch: "b"})
-	var refused *StartError
-	if !errors.As(err, &refused) {
-		t.Fatalf("error = %v, want a *StartError", err)
-	}
-	want := "rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"
-	if f := refused.Finding; f.Rule != findings.RuleRunInFlight || f.Object != WorkflowRehearse || f.Step != findings.StepStart ||
-		f.Message != want || refused.Status != findings.StatusRejected {
-		t.Errorf("refusal %+v\nwant run.in_flight (exit 1) on fylgja-rehearse at start: %q", refused, want)
-	}
-	mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-}
-
-// rehearseInput is a rehearsal's input as the server builds it: the branch point refused, the
-// baseline and one rehearsed stage.
-func rehearseInput() RehearseInput {
-	provisionIn := ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: stepFromAt, BundleID: stepFrom,
-		BundlePath: "/state/bundles/" + stepFrom}
-	stepIn := stepInput()
-	return RehearseInput{
-		ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1", Draft: false},
-		ResolvedAt:     "2026-10-17T14:02:11.000000Z",
-		DeadlineS:      1980,
-		CeilingS:       3600,
-		Stages: []RehearseStage{
-			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Role: "refused",
-				Refused: &RehearseRefusal{Rule: findings.RuleScopeEmpty, Message: "scope tag:fylgja selects no device on branch main"}},
-			{Ref: "change-1/cabled", Label: "cabled", AtSource: "written", Branch: "change-1", At: stepFromAt, BundleID: stepFrom,
-				BundlePath: provisionIn.BundlePath, Role: "baseline", Provision: &provisionIn, WaitS: 120},
-			{Ref: "change-1/live", Label: "live", AtSource: "given", Branch: "change-1", At: stepToAt, BundleID: stepTo,
-				BundlePath: stepIn.ToBundlePath, Role: "rehearsed", Diff: stepIn.Diff, Step: &stepIn, WaitS: 120},
-		},
-		Version: "0.1.0-test",
-	}
-}
-
-// StartRehearse starts the one rehearsal run under its pinned options, with the server's
-// input whole, and returns once a worker has taken it (015).
-func TestStartRehearseStarts(t *testing.T) {
-	mc := &mocks.Client{}
-	withWorker(mc)
-	mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").
-		Return(nil, serviceerror.NewNotFound("workflow execution not found"))
-	firstTaskTaken(mc)
-	run := &mocks.WorkflowRun{}
-	run.On("GetRunID").Return("run-r")
-	var captured client.StartWorkflowOptions
-	var given RehearseInput
-	mc.On("ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		captured, given = args.Get(1).(client.StartWorkflowOptions), args.Get(3).(RehearseInput)
-	}).Return(run, nil)
-
-	in := rehearseInput()
-	runID, err := (&Client{Client: mc}).StartRehearse(context.Background(), in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if runID != "run-r" || captured.ID != WorkflowRehearse || captured.TaskQueue != TaskQueue ||
-		!captured.WorkflowExecutionErrorWhenAlreadyStarted {
-		t.Errorf("run %q, options %+v; want run-r under fylgja-rehearse, fylgja, WorkflowExecutionErrorWhenAlreadyStarted", runID, captured)
-	}
-	if !reflect.DeepEqual(given, in) {
-		t.Errorf("started with %+v\nwant the server's input %+v", given, in)
-	}
-	mc.AssertNotCalled(t, "TerminateWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-}
-
-// A rehearsal is refused beside a provisioning, destroy or step run in flight, naming the
-// run, exit 1, with nothing started, and beside another rehearsal by the fixed id; with no
-// worker polling, nothing is started (015, R-12).
-func TestStartRehearseRefused(t *testing.T) {
-	for _, c := range []struct {
-		name, workflowID, runID, message string
-		byID                             bool
-	}{
-		{"a provisioning run", WorkflowProvision, "run-p",
-			"provisioning run run-p is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", false},
-		{"a destroy run", WorkflowDestroy, "run-d", "destroy run run-d is already in flight; wait for it to finish", false},
-		{"a step run", WorkflowStep, "run-s",
-			"step run run-s is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", false},
-		{"a rehearsal", WorkflowRehearse, "run-r",
-			"rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", true},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			mc := &mocks.Client{}
-			withWorker(mc)
-			mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(
-				func(_ context.Context, workflowID, _ string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
-					if workflowID == c.workflowID && !c.byID {
-						return running(workflowID, c.runID), nil
-					}
-					return nil, serviceerror.NewNotFound("workflow execution not found")
-				})
-			if c.byID {
-				mc.On("ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil,
-					serviceerror.NewWorkflowExecutionAlreadyStarted("Workflow execution is already running.", "request-1", c.runID))
-			}
-
-			_, err := (&Client{Client: mc}).StartRehearse(context.Background(), rehearseInput())
-			var refused *StartError
-			if !errors.As(err, &refused) {
-				t.Fatalf("error = %v, want a *StartError", err)
-			}
-			if f := refused.Finding; f.Rule != findings.RuleRunInFlight || f.Object != c.workflowID || f.Step != findings.StepStart ||
-				f.Message != c.message || refused.Status != findings.StatusRejected {
-				t.Errorf("refusal %+v\nwant run.in_flight (exit 1) on %s at start: %q", refused, c.workflowID, c.message)
-			}
-			if !c.byID {
-				mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-			}
-		})
-	}
-
-	t.Run("no worker", func(t *testing.T) {
-		mc := &mocks.Client{}
-		mc.On("DescribeTaskQueue", mock.Anything, TaskQueue, enumspb.TASK_QUEUE_TYPE_WORKFLOW).Return(
-			&workflowservice.DescribeTaskQueueResponse{}, nil)
-		_, err := (&Client{Client: mc, Address: "localhost:7233"}).StartRehearse(context.Background(), rehearseInput())
-		wantWorkerAbsent(t, err, "no worker is polling task queue fylgja at localhost:7233")
-		mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	})
-}
-
-// ResultOfRehearse reads the rehearsal's run by its fixed id and the run id it was given.
-func TestResultOfRehearse(t *testing.T) {
-	mc := &mocks.Client{}
-	run := &mocks.WorkflowRun{}
-	want := RehearseResult{Outcome: "ok", Reached: "change-1/live", Findings: findings.List{}}
-	run.On("Get", mock.Anything, mock.Anything).Run(func(args mock.Arguments) { *args.Get(1).(*RehearseResult) = want }).Return(nil)
-	mc.On("GetWorkflow", mock.Anything, WorkflowRehearse, "run-r").Return(run)
-
-	got, err := (&Client{Client: mc}).ResultOfRehearse(context.Background(), "run-r")
-	if err != nil || !reflect.DeepEqual(got, want) {
-		t.Errorf("result %+v, %v; want %+v", got, err, want)
-	}
-}
-
-// twin destroy cancels a rehearsal in flight before anything else, follows it to its end,
-// its own destroy child included, names it, and only then looks for a provisioning or step
-// run and starts its own destroy, which finds nothing the rehearsal's left (015, R-12). A
-// rehearsal terminated rather than closed gives no result, and the destroy names it closed
-// without one and goes on.
-func TestDestroyCancelsInFlightRehearsal(t *testing.T) {
-	terminated := &temporal.WorkflowExecutionError{}
-	for _, c := range []struct {
-		name   string
-		closed RehearseResult
-		getErr error
-		notice string
-	}{
-		{"closed", RehearseResult{Outcome: "cancelled"}, nil, "rehearsal run run-r closed: cancelled"},
-		{"terminated", RehearseResult{}, terminated, "rehearsal run run-r closed without a result: " + terminated.Error()},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			s := scriptDestroy("", "", "run-d", nothingToRemove())
-			s.runs[WorkflowRehearse] = running(WorkflowRehearse, "run-r")
-			s.mc.On("CancelWorkflow", mock.Anything, WorkflowRehearse, "run-r").Run(func(mock.Arguments) { s.note("cancel rehearsal") }).Return(nil)
-			rehearsing := &mocks.WorkflowRun{}
-			rehearsing.On("Get", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-				*args.Get(1).(*RehearseResult) = c.closed
-				s.mu.Lock()
-				delete(s.runs, WorkflowRehearse)
-				s.mu.Unlock()
-				s.note("rehearsal closed")
-			}).Return(c.getErr)
-			s.mc.On("GetWorkflow", mock.Anything, WorkflowRehearse, "run-r").Return(rehearsing)
-
-			var notices []string
-			run, err := (&Client{Client: s.mc}).StartDestroy(context.Background(), func(e Event) {
-				if e.Notice != "" {
-					notices = append(notices, e.Notice)
-				}
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if run.RunID != "run-d" || run.Attached {
-				t.Errorf("run %+v, want a fresh run-d", run)
-			}
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			if want := []string{"cancel rehearsal", "rehearsal closed", "start destroy"}; !slices.Equal(s.seq, want) {
-				t.Errorf("calls in order %v, want %v", s.seq, want)
-			}
-			for _, want := range []string{"cancelling rehearsal run run-r; waiting for its destroy", c.notice} {
-				if !slices.Contains(notices, want) {
-					t.Errorf("notices %v, want %q", notices, want)
-				}
-			}
-			if i, j := slices.Index(notices, "cancelling rehearsal run run-r; waiting for its destroy"), slices.Index(notices, "run fylgja-destroy run-d"); i < 0 || j < i {
-				t.Errorf("notices %v, want the rehearsal cancelled before the destroy run is named", notices)
-			}
-		})
-	}
-}
-
-// The reclaim's destroy start (015, T091, FR-007) refuses beside a step run, a rehearsal
-// or a provisioning run in flight, naming the run, exit 1: nothing is cancelled and no
-// destroy run is started. The rehearsal is asked first, since the other two may be its
-// children. With none in flight it starts the destroy run, or attaches to one in flight, as
-// StartDestroy does.
-func TestReclaimRefusesARunInFlight(t *testing.T) {
-	for _, c := range []struct {
-		name    string
-		running map[string]string
-		object  string
-		message string
-	}{
-		{"a step run", map[string]string{WorkflowStep: "run-s"}, WorkflowStep,
-			"step run run-s is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
-		{"a rehearsal", map[string]string{WorkflowRehearse: "run-r"}, WorkflowRehearse,
-			"rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
-		{"a provisioning run", map[string]string{WorkflowProvision: "run-p"}, WorkflowProvision,
-			"provisioning run run-p is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
-		{"a rehearsal and its step child", map[string]string{WorkflowRehearse: "run-r", WorkflowStep: "run-s"}, WorkflowRehearse,
-			"rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			s := scriptDestroy("", "", "run-d", nothingToRemove())
-			for workflowID, runID := range c.running {
-				s.runs[workflowID] = running(workflowID, runID)
-			}
-			var notices []string
-
-			run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), func(e Event) {
-				if e.Notice != "" {
-					notices = append(notices, e.Notice)
-				}
-			})
-			var refused *StartError
-			if !errors.As(err, &refused) {
-				t.Fatalf("error = %v, want a *StartError", err)
-			}
-			f := refused.Finding
-			if f.Rule != findings.RuleRunInFlight || f.Object != c.object || f.Step != findings.StepStart || f.Message != c.message {
-				t.Errorf("finding %+v\nwant run.in_flight on %s at start: %q", f, c.object, c.message)
-			}
-			doc := refused.Document(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"})
-			if doc.Status.ExitCode() != findings.ExitRejected {
-				t.Errorf("exit %d, want %d", doc.Status.ExitCode(), findings.ExitRejected)
-			}
-			if run.RunID != "" || len(notices) != 0 {
-				t.Errorf("run %+v, notices %v; want nothing done", run, notices)
-			}
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			if len(s.seq) != 0 {
-				t.Errorf("calls in order %v, want none", s.seq)
-			}
-			s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
-			s.mc.AssertNotCalled(t, "ScheduleClient")
-			s.mc.AssertNotCalled(t, "ListWorkflow", mock.Anything, mock.Anything)
-			s.mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything)
-		})
-	}
-
-	t.Run("none: the destroy run started", func(t *testing.T) {
-		s := scriptDestroy("", "", "run-d", nothingToRemove())
-		run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if run.RunID != "run-d" || run.Attached {
-			t.Errorf("run %+v, want a fresh run-d", run)
-		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if want := []string{"start destroy"}; !slices.Equal(s.seq, want) {
-			t.Errorf("calls in order %v, want %v", s.seq, want)
-		}
-		s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
-	})
-
-	t.Run("a destroy in flight: attached", func(t *testing.T) {
-		s := scriptDestroy("", "run-d", "run-d", nothingToRemove())
-		run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !run.Attached || run.RunID != "run-d" {
-			t.Errorf("run %+v, want attached to run-d", run)
-		}
-		s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
-	})
-}
-
-// InFlight names a rehearsal at the child it runs and that child at its own step, and never
-// names the child again as an operator's run (015, R-12): a step child as "at step step",
-// with the side it steps towards, a provisioning child as "at step provision", naming
-// nothing, since a provisioning run's input names no stage from 020 (research R-06), not even
-// one recorded before it carrying the stage it builds, and the baseline's wait, which runs no
-// child, as observe.
-func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
-	baseline := map[string]any{"source": wire.SourceIntent, "branch": "change-1", "bundle_id": stepFrom,
-		"stage": map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"}, "label": "cabled",
-			"description": "before the change", "at_source": "written"}}
-	built := []*historypb.HistoryEvent{startedEvent(t, rehearseInput()),
-		childInitiated(10, "Provision"), childStarted(10, WorkflowProvision, "r-p"), childCompleted(10)}
-	for _, c := range []struct {
-		name     string
-		describe map[string]string // workflow id → run id in flight
-		history  []*historypb.HistoryEvent
-		children map[string][]*historypb.HistoryEvent // run id → history
-		want     RunInFlight
-		child    *RunInFlight
-	}{
-		{"at a step", map[string]string{WorkflowRehearse: "r-r", WorkflowStep: "r-s"},
-			append(slices.Clone(built), scheduledEvent(t, 12, wire.ActVerifyTwin, wire.VerifyInput{}), completedEvent(12),
-				childInitiated(20, "Step"), childStarted(20, WorkflowStep, "r-s")),
-			map[string][]*historypb.HistoryEvent{"r-s": {startedEvent(t, stepInput()),
-				scheduledEvent(t, 5, wire.ActInspectTwin), completedEvent(5),
-				scheduledEvent(t, 9, wire.ActPushConfig, wire.PushInput{Node: "s1"})}},
-			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: "step"},
-			&RunInFlight{WorkflowID: WorkflowStep, RunID: "r-s", Step: findings.StepPush, Towards: "snapshot f3980cc7…"}},
-		{"at the baseline", map[string]string{WorkflowRehearse: "r-r", WorkflowProvision: "r-p"},
-			[]*historypb.HistoryEvent{startedEvent(t, rehearseInput()), childInitiated(10, "Provision"), childStarted(10, WorkflowProvision, "r-p")},
-			map[string][]*historypb.HistoryEvent{"r-p": {startedEvent(t, baseline),
-				scheduledEvent(t, 5, wire.ActCheckHost), completedEvent(5), scheduledEvent(t, 9, wire.ActDeployLab)}},
-			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: findings.StepProvision},
-			&RunInFlight{WorkflowID: WorkflowProvision, RunID: "r-p", Step: findings.StepDeploy}},
-		{"at the baseline's wait", map[string]string{WorkflowRehearse: "r-r"},
-			append(slices.Clone(built), scheduledEvent(t, 12, wire.ActVerifyTwin, wire.VerifyInput{})),
-			nil,
-			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: findings.StepObserve}, nil},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			mc := &mocks.Client{}
-			mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(
-				func(_ context.Context, workflowID, _ string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
-					if runID, ok := c.describe[workflowID]; ok {
-						return running(workflowID, runID), nil
-					}
-					return nil, serviceerror.NewNotFound("not found")
-				})
-			history(mc, WorkflowRehearse, "r-r", c.history...)
-			for runID, events := range c.children {
-				workflowID := WorkflowStep
-				if runID == "r-p" {
-					workflowID = WorkflowProvision
-				}
-				history(mc, workflowID, runID, events...)
-			}
-
-			got, err := (&Client{Client: mc}).InFlight(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(got) != 1 {
-				t.Fatalf("in flight = %+v, want the rehearsal alone, its child named once", got)
-			}
-			gotChild := got[0].Child
-			got[0].Child = nil
-			if got[0] != c.want {
-				t.Errorf("rehearsal = %+v, want %+v", got[0], c.want)
-			}
-			switch {
-			case c.child == nil && gotChild != nil:
-				t.Errorf("child = %+v, want none", gotChild)
-			case c.child != nil && (gotChild == nil || *gotChild != *c.child):
-				t.Errorf("child = %+v, want %+v", gotChild, c.child)
 			}
 		})
 	}

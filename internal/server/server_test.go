@@ -1301,27 +1301,28 @@ func TestTheClientSpeaksToTheServer(t *testing.T) {
 	}
 }
 
-// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 12): a snapshot twin of
-// change-1, which names no stage and no rehearsal (020, research R-06), so a hand twin of the
-// same snapshot is the same record.
+// rehearsalTwin is the record a rehearsal's baseline leaves (twin.json 12): the orchestrator's
+// rehearse flow creates it through twin.create from a snapshot of change-1 (020), so it names no
+// stage and no rehearsal (research R-06), and a hand twin of the same snapshot is the same
+// record.
 func rehearsalTwin() *wire.TwinRecord {
 	snapshot := strings.Repeat("35aea06f", 8)
 	return &wire.TwinRecord{TwinVersion: lab.TwinVersion, Lab: wire.LabName, SnapshotID: &snapshot,
 		BundleID:   "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
 		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00", Scope: "tag:fylgja", Mapping: dcimMapping},
-		Source:     wire.SourceIntent,
+		Source:     wire.SourceSnapshot,
 		Run:        wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
 		State:      wire.StateReady,
 		Nodes:      []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
 }
 
-// twin show beside a rehearsal (015; contracts/rehearse-command.md): while the run is in
-// flight the kind line ends with where it is, its child's side and step, and the in flight:
-// line names the child and the side it is for; a baseline being built is the host's work,
-// never an orphan. twin.json 12 names no stage and no rehearsal (020, research R-06): the kind
-// line names the twin's snapshot alone, a stepped one's the snapshot it stepped from, between
-// two children the rehearsal's own step, and the JSON carries no record.rehearsal.
-func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
+// twin show of a rehearsal's twin: the kind line names the twin's snapshot alone, a stepped
+// one's the snapshot it stepped from, and the JSON carries no record.rehearsal (020, research
+// R-06). The rehearsal runs in the orchestrator, so the core's runs in flight are its own
+// children's alone, each named as an operator's: a step at the host holds it, and a
+// provisioning run building the baseline is the host's work, never an orphan. No run in flight
+// carries a child.
+func TestShowNamesARehearsalsTwin(t *testing.T) {
 	lab3 := lab.LabState{Present: true, Nodes: []wire.LabNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running"}}}
 	at := "2026-10-16T17:25:30.118244+00:00"
 	pinned := "snapshot 35aea06f… (branch change-1 at " + at + ")"
@@ -1338,42 +1339,35 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 		runs     []provision.RunInFlight
 		kind     string
 		inFlight string
+		held     bool
 	}{
-		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()}, nil, pinned, "in flight: none"},
+		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()}, nil, pinned, "in flight: none", false},
 		{"a rehearsal's twin stepped", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: stepped}, nil,
-			pinned + " (stepped from snapshot 576933ec… by run fylgja-step s1, ended 2026-10-19T10:02:00Z)", "in flight: none"},
+			pinned + " (stepped from snapshot 576933ec… by run fylgja-step s1, ended 2026-10-19T10:02:00Z)", "in flight: none", false},
 		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "step",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: towards}}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is at " + towards + ", step push",
-			"in flight: run fylgja-rehearse r1 at step step (run fylgja-step s1 at step push), stepping towards " + towards},
-		{"at the baseline's wait", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "observe"}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is at step observe",
-			"in flight: run fylgja-rehearse r1 at step observe"},
-		{"destroying", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "destroy",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d1", Step: "teardown"}}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is destroying the twin, step teardown",
-			"in flight: run fylgja-rehearse r1 at step destroy (run fylgja-destroy d1 at step teardown), destroying the twin"},
-		// A provisioning run names no side (020): the baseline's child is named by its step.
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: towards}},
+			pinned + "; run fylgja-step s1 is at step push, stepping towards " + towards,
+			"in flight: run fylgja-step s1 at step push", true},
 		{"building the baseline", lab.HostState{Lab: lab3, TwinDirPresent: true},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}}},
-			"none; run fylgja-provision p1 is at step deploy, and the host holds its work; " +
-				"rehearsal run fylgja-rehearse r1 is at step deploy",
-			"in flight: run fylgja-rehearse r1 at step provision (run fylgja-provision p1 at step deploy)"},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}},
+			"none; run fylgja-provision p1 is at step deploy, and the host holds its work",
+			"in flight: run fylgja-provision p1 at step deploy", true},
 	} {
 		block, text := decideShow(c.host, serviceReads{inFlight: c.runs}, "")
 		if text.kind != c.kind {
 			t.Errorf("%s: kind\n %q\nwant\n %q", c.name, text.kind, c.kind)
 		}
-		if c.runs != nil && !text.hostHeld {
-			t.Errorf("%s: a rehearsal in flight does not hold the host", c.name)
+		if text.hostHeld != c.held {
+			t.Errorf("%s: host held %v, want %v", c.name, text.hostHeld, c.held)
 		}
-		out := captureStdout(t, func() { printInFlight(testOptions(t, false), block.Service, block.InFlight, text.towards) })
+		out := captureStdout(t, func() { printInFlight(testOptions(t, false), block.Service, block.InFlight) })
 		if out != c.inFlight+"\n" {
 			t.Errorf("%s: %q, want %q", c.name, out, c.inFlight)
+		}
+		for _, r := range block.InFlight {
+			if r.Child != nil {
+				t.Errorf("%s: run %s carries a child %+v", c.name, r.WorkflowID, r.Child)
+			}
 		}
 		switch r := block.Record; {
 		case c.host.Twin == nil && r != nil:
@@ -1384,16 +1378,15 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 	}
 }
 
-// twin verify beside a rehearsal (015): its first line names the twin's branch, at, snapshot
-// and bundle, never a stage or a rehearsal (020, research R-06); a twin absent while the
-// baseline is built names the run whose work the host holds.
-func TestVerifyNamesARehearsal(t *testing.T) {
+// twin verify of a rehearsal's twin: its first line names the twin's branch, at, snapshot and
+// bundle, never a stage or a rehearsal (020, research R-06); a twin absent while the
+// baseline is built names the provisioning run whose work the host holds.
+func TestVerifyNamesARehearsalsTwin(t *testing.T) {
 	if got, want := verifyTwinLine(rehearsalTwin()), "twin: branch change-1 at 2026-10-16T17:25:30.118244+00:00 "+
 		"(snapshot 35aea06f…, bundle 5c6c1d96…), ready; 3 nodes"; got != want {
 		t.Errorf("%q, want %q", got, want)
 	}
-	runs := showRuns([]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-		Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}}})
+	runs := showRuns([]provision.RunInFlight{{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}})
 	host := lab.HostState{Lab: lab.LabState{Present: true}, TwinDirPresent: true}
 	if _, message := twinAbsent(host, lab.PathsAt("/srv"), runs); !strings.HasSuffix(message, "; run fylgja-provision p1 is at step deploy") {
 		t.Errorf("%q", message)

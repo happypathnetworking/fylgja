@@ -1057,7 +1057,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			useNoRunsInFlight(t)
 			return &stepHostFixture{paths: paths, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
-			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --branch, --stage or --snapshot)")},
+			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)")},
 		{name: "an orphan", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
 			useNoRunsInFlight(t)

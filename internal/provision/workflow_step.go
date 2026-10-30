@@ -831,7 +831,7 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 	case !host.LabPresent && !host.TwinDirPresent:
 		return refuse(findings.RuleStepTwinUnsteppable, lab,
 			"no twin: no "+lab+" and no twin directory; a twin built from a snapshot steps "+
-				"(fylgja twin create --branch, --stage or --snapshot)")
+				"(fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)")
 	case host.Twin == nil || !host.LabPresent:
 		object := lab
 		if !host.LabPresent {

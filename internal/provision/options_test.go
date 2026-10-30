@@ -212,23 +212,6 @@ func TestReadOnlyConstants(t *testing.T) {
 	}
 }
 
-// A rehearsal's children: ABANDON and WaitForCancellation change nothing visible until a
-// rehearsal is terminated or cancelled while a child runs. Every field is pinned, for the
-// destroy and the provision.
-func TestChildOptionsPinned(t *testing.T) {
-	for _, id := range []string{WorkflowDestroy, WorkflowProvision} {
-		want := workflow.ChildWorkflowOptions{
-			WorkflowID:          id,
-			TaskQueue:           "fylgja",
-			ParentClosePolicy:   enumspb.PARENT_CLOSE_POLICY_ABANDON,
-			WaitForCancellation: true,
-		}
-		if got := ChildOptions(id); !reflect.DeepEqual(got, want) {
-			t.Errorf("ChildOptions(%s) = %+v\nwant %+v", id, got, want)
-		}
-	}
-}
-
 // The step adds no budget: each
 // of its four activities runs under the option of the M2–M5 step whose work it shares, and
 // the readiness and push it reuses are M2's and M5's own. Every field is compared, so a
@@ -309,22 +292,6 @@ func TestStepStartOptionsPinned(t *testing.T) {
 	}
 	if WorkflowStep != wire.StepWorkflowID {
 		t.Errorf("WorkflowStep = %q, want the wire's %q", WorkflowStep, wire.StepWorkflowID)
-	}
-}
-
-// A second rehearsal refuses rather than attaching to the first, as a second step does
-// (015, D-051): the fixed id and WorkflowExecutionErrorWhenAlreadyStarted, whose absence is
-// silent.
-func TestRehearseStartOptionsPinned(t *testing.T) {
-	o := rehearseStartOptions()
-	if o.ID != "fylgja-rehearse" || o.TaskQueue != "fylgja" || !o.WorkflowExecutionErrorWhenAlreadyStarted ||
-		o.WorkflowIDConflictPolicy != enumspb.WORKFLOW_ID_CONFLICT_POLICY_UNSPECIFIED {
-		t.Errorf("start options = {ID:%q TaskQueue:%q WorkflowExecutionErrorWhenAlreadyStarted:%v WorkflowIDConflictPolicy:%v}, "+
-			"want fylgja-rehearse, fylgja, true, unspecified", o.ID, o.TaskQueue, o.WorkflowExecutionErrorWhenAlreadyStarted,
-			o.WorkflowIDConflictPolicy)
-	}
-	if WorkflowRehearse != wire.RehearseWorkflowID {
-		t.Errorf("WorkflowRehearse = %q, want the wire's %q", WorkflowRehearse, wire.RehearseWorkflowID)
 	}
 }
 

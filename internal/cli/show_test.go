@@ -456,7 +456,7 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 				contractProvenance(generic)
 				generic["stage"] = map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "fylgja-fixture"},
 					"label": "seeded", "description": "", "at_source": "given"}
-				generic["rehearsal"] = map[string]any{"workflow_id": wire.RehearseWorkflowID, "run_id": "r0"}
+				generic["rehearsal"] = map[string]any{"workflow_id": "fylgja-rehearse", "run_id": "r0"}
 				if raw, err = json.Marshal(generic); err != nil {
 					t.Fatal(err)
 				}
@@ -745,7 +745,7 @@ func TestShowRecordWithoutLab(t *testing.T) {
 var (
 	stage11 = map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "fylgja-fixture"},
 		"label": "cabled", "description": "the leaf cabled", "at_source": "written"}
-	rehearsal11 = map[string]any{"workflow_id": wire.RehearseWorkflowID, "run_id": "r0"}
+	rehearsal11 = map[string]any{"workflow_id": "fylgja-rehearse", "run_id": "r0"}
 )
 
 // writeAs11 gives the state root a twin directory holding rec as 016's build wrote it,

@@ -163,7 +163,7 @@ func runTwinVerify(ctx context.Context, opts *options, f *verifyFlags) error {
 	}
 	block := report.Block(verify.TwinOf(*rec, stagedID), inFlight, service, wait)
 
-	printVerify(opts, report, block, towardsOf(reads.inFlight))
+	printVerify(opts, report, block)
 	if f.waitGiven {
 		opts.note("%s", waitLine(budget, waited))
 	}
@@ -231,9 +231,8 @@ func twinAbsent(host lab.HostState, paths lab.Paths, runs []findings.ShowRun) (o
 	return object, message
 }
 
-// hostHolder is the run in flight whose work the host holds, or nil: an operator's
-// provisioning run, or a rehearsal's, from its stage through its cleanup, or a step from its
-// stage through its record.
+// hostHolder is the run in flight whose work the host holds, or nil: a provisioning run from
+// its stage through its cleanup, or a step from its stage through its record.
 func hostHolder(runs []findings.ShowRun) *findings.ShowRun {
 	if r := provisionAtHost(runs); r != nil {
 		return r
@@ -340,7 +339,7 @@ func verifyTwinLine(rec *wire.TwinRecord) string {
 
 // printVerify writes one line per node, the skips, the runs in flight, the nodes the bundle
 // does not name and the counts (contracts/cli.md), from the read the block was built from.
-func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, towards map[string]string) {
+func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock) {
 	claims := map[string]verify.Claim{}
 	for _, c := range r.Claims {
 		claims[c.Node] = c
@@ -367,7 +366,7 @@ func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, to
 		opts.note("%s", nodeLine(n, mine, claim, e))
 	}
 	opts.note("skipped: %s", skippedText(block.Skipped))
-	printInFlight(opts, block.Service, block.InFlight, towards)
+	printInFlight(opts, block.Service, block.InFlight)
 	if len(block.ExtraNodes) > 0 {
 		opts.note("not in the bundle: %s", strings.Join(block.ExtraNodes, ", "))
 	}

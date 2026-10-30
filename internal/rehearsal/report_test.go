@@ -114,7 +114,7 @@ func wait(outcome string, afterS float64, reads int, failing ...wire.StepFinding
 func took(s float64) *float64 { return &s }
 
 func run() *findings.ShowRef {
-	return &findings.ShowRef{WorkflowID: wire.RehearseWorkflowID, RunID: rehearseRun}
+	return &findings.ShowRef{WorkflowID: "fylgja-rehearse", RunID: rehearseRun}
 }
 
 func destroyed() *findings.CleanupBlock {

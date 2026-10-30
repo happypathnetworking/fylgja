@@ -126,62 +126,34 @@ func TestEveryActivityHasAFindingStep(t *testing.T) {
 	}
 }
 
-// A rehearsal's progress names its three kinds of child as its own steps, provision, step and
-// destroy, and its baseline's wait as observe with how it ended; each child is announced
-// and followed where it starts, under its own run (015, R-12). A step
-// child has no step of the findings schema's, so it carries none.
-func TestFollowFollowsARehearsalsChildren(t *testing.T) {
+// Follow never follows a child (020, research §1.6): no workflow the worker serves starts
+// one, and a history an earlier build's rehearsal left, which holds a started child, is read
+// to its close without the child's history being asked for, so no Follow can block on a
+// child its parent abandoned (015's defect, gone with the parent). The child's events are
+// neither steps nor notices.
+func TestFollowFollowsNoChild(t *testing.T) {
 	mc := &mocks.Client{}
-	settled := wire.VerifyResult{Wait: wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 3.2, Failing: []wire.StepFinding{}}}
-	histories := map[string][]*historypb.HistoryEvent{
-		WorkflowRehearse: {
-			childInitiated(11, "Provision"), childStarted(11, WorkflowProvision, "run-p"), childCompleted(11),
-			scheduledEvent(t, 14, wire.ActVerifyTwin, wire.VerifyInput{}), completedWith(t, 14, settled),
-			childInitiated(21, "Step"), childStarted(21, WorkflowStep, "run-s"), childCompleted(21),
-			childInitiated(31, "Destroy"), childStarted(31, WorkflowDestroy, "run-d"), childCompleted(31),
-			historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)},
-		WorkflowProvision: {scheduledEvent(t, 5, wire.ActDeployLab, wire.DeployInput{}),
-			historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)},
-		WorkflowStep: {scheduledEvent(t, 5, wire.ActPushConfig, wire.PushInput{Node: "n1"}),
-			historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)},
-		WorkflowDestroy: {scheduledEvent(t, 5, wire.ActDestroyLab, wire.DestroyLabInput{}),
-			historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)},
-	}
-	mc.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, true, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT).Return(
-		func(ctx context.Context, workflowID, _ string, _ bool, _ enumspb.HistoryEventFilterType) client.HistoryEventIterator {
-			return &sliceHistory{ctx: ctx, events: histories[workflowID]}
+	mc.On("GetWorkflowHistory", mock.Anything, "fylgja-rehearse", "run-r", true, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT).Return(
+		func(ctx context.Context, _, _ string, _ bool, _ enumspb.HistoryEventFilterType) client.HistoryEventIterator {
+			return &sliceHistory{ctx: ctx, events: []*historypb.HistoryEvent{
+				scheduledEvent(t, 5, wire.ActVerifyTwin, wire.VerifyInput{}), completedEvent(5),
+				childInitiated(11, "Provision"), childStarted(11, WorkflowProvision, "run-p"), childCompleted(11),
+				historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)}}
 		})
 
-	// Each child's own events name the rehearsal they are Of, so a destroy that follows the
-	// rehearsal's own destroy first tells it from its own; the rehearsal's own events and the
-	// notices name none.
-	type seen struct{ step, workflowID, findingStep, outcome, detail, notice, of string }
+	type seen struct{ step, workflowID, outcome, notice string }
 	var got []seen
-	err := (&Client{Client: mc}).Follow(context.Background(), WorkflowRehearse, "run-r", func(e Event) {
-		got = append(got, seen{e.Step, e.WorkflowID, e.FindingStep, e.Outcome, e.Detail, e.Notice, e.Of})
+	err := (&Client{Client: mc}).Follow(context.Background(), "fylgja-rehearse", "run-r", func(e Event) {
+		got = append(got, seen{e.Step, e.WorkflowID, e.Outcome, e.Notice})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []seen{
-		{"provision", WorkflowRehearse, findings.StepProvision, "", "", "", ""},
-		{"", "", "", "", "", "run fylgja-provision run-p", ""},
-		{"deploy", WorkflowProvision, findings.StepDeploy, "", "", "", WorkflowRehearse},
-		{"provision", WorkflowRehearse, findings.StepProvision, EventDone, "", "", ""},
-		{"observe", WorkflowRehearse, findings.StepObserve, "", "", "", ""},
-		{"observe", WorkflowRehearse, findings.StepObserve, EventDone, "settled after 3.2s (2 reads)", "", ""},
-		{"step", WorkflowRehearse, "", "", "", "", ""},
-		{"", "", "", "", "", "run fylgja-step run-s", ""},
-		{"push n1", WorkflowStep, findings.StepPush, "", "", "", WorkflowRehearse},
-		{"step", WorkflowRehearse, "", EventDone, "", "", ""},
-		{"destroy", WorkflowRehearse, findings.StepDestroy, "", "", "", ""},
-		{"", "", "", "", "", "run fylgja-destroy run-d", ""},
-		{"teardown", WorkflowDestroy, findings.StepTeardown, "", "", "", WorkflowRehearse},
-		{"destroy", WorkflowRehearse, findings.StepDestroy, EventDone, "", "", ""},
-	}
+	want := []seen{{"observe", "fylgja-rehearse", "", ""}, {"observe", "fylgja-rehearse", EventDone, ""}}
 	if !slices.Equal(got, want) {
 		t.Errorf("events\n  %+v\nwant\n  %+v", got, want)
 	}
+	mc.AssertNotCalled(t, "GetWorkflowHistory", mock.Anything, WorkflowProvision, mock.Anything, mock.Anything, mock.Anything)
 }
 
 // completedWith is the activity scheduled as event scheduledID completing with result.

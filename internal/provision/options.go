@@ -5,7 +5,6 @@ package provision
 import (
 	"time"
 
-	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
@@ -284,25 +283,14 @@ func flowsOptions(budgetS int) workflow.ActivityOptions {
 	return o
 }
 
-// ChildOptions run a rehearsal's provision, steps and destroy as its children, each under
-// its fixed id. ABANDON keeps a child running to its own cleanup when the rehearsal is
-// terminated; WaitForCancellation makes a cancelled rehearsal wait for the child's cleanup
-// before it closes. Their absence is silent, which is why a test pins them.
-func ChildOptions(workflowID string) workflow.ChildWorkflowOptions {
-	return workflow.ChildWorkflowOptions{
-		WorkflowID:          workflowID,
-		TaskQueue:           TaskQueue,
-		ParentClosePolicy:   enumspb.PARENT_CLOSE_POLICY_ABANDON,
-		WaitForCancellation: true,
-	}
-}
-
 // DeadlineMechanism is the mechanism constants a rehearsal's deadline sums (015, research
-// R-09): the bound of each activity its children run that no package decides, the margins
-// each package's own budget is given — a probe package's flows' among them (016) — and
-// verify's one default wait, which every stage of a
-// rehearsal waits. internal/rehearsal takes them as a value, so it imports neither this
-// package nor verify.
+// R-09): the bound of each activity its provision, steps and destroy run that no package
+// decides, the margins each package's own budget is given — a probe package's flows' among
+// them (016) — and verify's one default wait, which every stage of a rehearsal waits.
+// internal/rehearsal takes them as a value, so it imports neither this package nor verify.
+// The rehearsal runs in the orchestrator from 020, whose deadline reads these constants
+// from this file; this function serves internal/rehearsal's test of fylgja-twin's timeout
+// alone, and leaves with that package.
 func DeadlineMechanism() rehearsal.Mechanism {
 	return rehearsal.Mechanism{
 		CheckHost:       CheckHostBudget,

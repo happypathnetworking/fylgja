@@ -647,7 +647,7 @@ func runStep(ctx context.Context, opts *options, op string, subject *findings.Su
 
 	res, err := followRun(ctx, opts, svc, op, subject, provision.WorkflowStep, runID, interrupts, interrupted,
 		func(ctx context.Context) (provision.StepResult, error) { return svc.ResultOfStep(ctx, runID) },
-		"run cancelled; waiting for its record", nil)
+		"run cancelled; waiting for its record")
 	if err != nil {
 		return withFound(err, list)
 	}

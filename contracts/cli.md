@@ -1523,7 +1523,8 @@ The wordings, in shape:
   record names a snapshot steps; fylgja twin destroy clears it`; `the twin's record names
   no snapshot (an earlier build's rebuild made it); only a twin whose record names a
   snapshot steps; fylgja twin destroy clears it`. No twin ends `…; a twin built from a
-  snapshot steps (fylgja twin create --branch, --stage or --snapshot)`, and an orphan, an
+  snapshot steps (fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a
+  stage)`, and an orphan, an
   unreadable record, a lab gone and a leftover end `…; a twin built from a snapshot steps;
   fylgja twin destroy clears it`, where each said a twin built from a stage steps. A
   target held to the record: `the twin's record names scope tag:fylgja and mapping infrahub-dcim

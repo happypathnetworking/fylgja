@@ -50,11 +50,6 @@ const ProvisionWorkflowID = "fylgja-provision"
 // needs it without importing internal/provision.
 const StepWorkflowID = "fylgja-step"
 
-// RehearseWorkflowID is the rehearsal workflow's fixed identity: the fourth short workflow
-// (D-051). The record's rehearsal names it, so the lab host needs it without importing
-// internal/provision.
-const RehearseWorkflowID = "fylgja-rehearse"
-
 // A record's state. twin.json 4 writes one of the two; a
 // record of 3 or earlier reads as "" and is shown as ready.
 const (
@@ -96,8 +91,9 @@ const DefaultDestroyTimeoutS = 60
 
 // Source says how a twin came to be provisioned.
 const (
-	// SourceIntent is a twin created by twin create --branch or --stage: the server read and
-	// compiled (018), or, until 019, a following check's rebuild did.
+	// SourceIntent is a twin an earlier build created by twin create --branch or --stage: its
+	// server read and compiled (018), or, until 019, a following check's rebuild did. The
+	// core reads no source of truth from 020, so it writes none.
 	SourceIntent = "intent"
 	SourceBundle = "bundle" // twin provision: an existing bundle, no read
 	// SourceSnapshot is a twin created by twin create --snapshot from a stored or sent

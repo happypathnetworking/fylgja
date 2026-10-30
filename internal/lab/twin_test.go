@@ -180,7 +180,7 @@ func stage11() map[string]any {
 // rehearsal11 is a rehearsal run as a record of twin.json 7 to 11 names its baseline's (015):
 // what 020 no longer records (research R-06).
 func rehearsal11() map[string]any {
-	return map[string]any{"workflow_id": wire.RehearseWorkflowID, "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
+	return map[string]any{"workflow_id": "fylgja-rehearse", "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
 }
 
 // withStage is a record as a worker of twin.json 6 to 11 wrote it, in generic, a record as

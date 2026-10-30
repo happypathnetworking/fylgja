@@ -703,7 +703,7 @@ func TestStepRejectedAtEachLock(t *testing.T) {
 		{"no twin", func(h *stepHarness, _ *StepInput) {
 			h.host = wire.HostReport{}
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --branch, --stage or --snapshot)"},
+			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)"},
 		{"the target does not fit the host", func(h *stepHarness, _ *StepInput) {
 			h.plan.Findings = findings.List{
 				{Severity: findings.Rejection, Rule: findings.RuleHostLabPresent, Object: "lab fylgja", Step: findings.StepHostCheck, Message: "lab"},
@@ -1819,7 +1819,7 @@ func TestIneligibleWording(t *testing.T) {
 		object, want string
 	}{
 		{"no twin", wire.HostReport{}, "lab fylgja", "no twin: no lab fylgja and no twin directory; a twin built from a snapshot " +
-			"steps (fylgja twin create --branch, --stage or --snapshot)"},
+			"steps (fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)"},
 		{"an orphan", orphan, "lab fylgja", orphan.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
 		{"a record whose lab is gone", gone, "/state/twin", gone.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
 		{"a leftover twin directory", leftover, "/state/twin", leftover.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},

@@ -62,7 +62,7 @@ type fakeService struct {
 	// start, as a start waiting for a worker to take the run does; it then answers runID and
 	// startErr.
 	startBlocks bool
-	// destroyRun, destroyErr and destroyEvents answer StartDestroy, and StartReclaim.
+	// destroyRun, destroyErr and destroyEvents answer StartDestroy.
 	destroyRun    provision.DestroyRun
 	destroyErr    error
 	destroyEvents []provision.Event
@@ -87,12 +87,6 @@ type fakeService struct {
 	// described answers Describe, which answers no run under the identity asked when it is
 	// nil (020).
 	described *provision.RunState
-	// rehearseRun answers StartRehearse beside startErr, rehearseEvents answer Follow of the
-	// rehearsal's run, its children's events among them, and rehearseResult answers
-	// ResultOfRehearse beside resultErr (015).
-	rehearseRun    string
-	rehearseEvents []provision.Event
-	rehearseResult provision.RehearseResult
 
 	mu sync.Mutex
 	// calls logs each method that starts a run, in the order they came.
@@ -100,7 +94,6 @@ type fakeService struct {
 	reads     []string
 	started   []provision.ProvisionInput
 	stepped   []provision.StepInput
-	rehearsed []provision.RehearseInput
 	abandoned bool
 	cancels   int
 	destroys  int
@@ -152,12 +145,8 @@ func (f *fakeService) StartProvision(ctx context.Context, in provision.Provision
 	return runID, err
 }
 
-func (f *fakeService) Follow(_ context.Context, workflowID, _ string, onEvent func(provision.Event)) error {
-	events := f.events
-	if workflowID == provision.WorkflowRehearse {
-		events = f.rehearseEvents
-	}
-	for _, e := range events {
+func (f *fakeService) Follow(_ context.Context, _, _ string, onEvent func(provision.Event)) error {
+	for _, e := range f.events {
 		onEvent(e)
 	}
 	if f.afterFollow != nil {
@@ -215,20 +204,6 @@ func (f *fakeService) StartDestroyDetached(_ context.Context, onEvent func(provi
 	return provision.DestroyRun{RunID: f.destroyRun.RunID, Attached: f.destroyRun.Attached}, f.destroyErr
 }
 
-// StartReclaim answers as StartDestroy does, under its own name in calls: the rehearsal's
-// reclaim (015, T091). A test that has it refuse sets destroyErr to the refusal.
-func (f *fakeService) StartReclaim(_ context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
-	f.mutating("StartReclaim")
-	f.mu.Lock()
-	f.calls = append(f.calls, "StartReclaim")
-	f.destroys++
-	f.mu.Unlock()
-	for _, e := range f.destroyEvents {
-		onEvent(e)
-	}
-	return f.destroyRun, f.destroyErr
-}
-
 // StartStep and ResultOfStep answer with runID and startErr, and with stepResult and
 // resultErr: twin step's own tests give the fake its step answers (M11). Each holds as
 // StartProvision and Result do, under startBlocks and release.
@@ -257,36 +232,6 @@ func (f *fakeService) ResultOfStep(ctx context.Context, _ string) (provision.Ste
 		}
 	}
 	return f.stepResult, f.resultErr
-}
-
-// StartRehearse and ResultOfRehearse answer with rehearseRun and startErr, and with
-// rehearseResult and resultErr (015). Each holds as StartProvision and Result do, under
-// startBlocks and release.
-func (f *fakeService) StartRehearse(ctx context.Context, in provision.RehearseInput) (string, error) {
-	f.mutating("StartRehearse")
-	f.mu.Lock()
-	f.calls = append(f.calls, "StartRehearse")
-	f.rehearsed = append(f.rehearsed, in)
-	blocks, runID, err := f.startBlocks, f.rehearseRun, f.startErr
-	f.mu.Unlock()
-	if blocks {
-		<-ctx.Done()
-		f.mu.Lock()
-		f.abandoned = true
-		f.mu.Unlock()
-	}
-	return runID, err
-}
-
-func (f *fakeService) ResultOfRehearse(ctx context.Context, _ string) (provision.RehearseResult, error) {
-	if f.release != nil {
-		select {
-		case <-f.release:
-		case <-ctx.Done():
-			return provision.RehearseResult{}, ctx.Err()
-		}
-	}
-	return f.rehearseResult, f.resultErr
 }
 
 // Describe answers run.read's and run.interrupt's describe (020): the run described when

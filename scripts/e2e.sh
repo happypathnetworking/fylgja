@@ -1178,10 +1178,12 @@ if core_exe=$(readlink "/proc/$core_pid/exe" 2> /dev/null); then
   core_binary="this tree's $FYLGJA (pid $core_pid)"
   [ "$(readlink "/proc/$core_pid/fd/2" 2> /dev/null)" = "$CORE_LOG" ] ||
     fail "case 9 needs the core on $runner_core to log to $CORE_LOG, which the greps read, and pid $core_pid logs elsewhere; $SERVE_REMEDY"
-  # The three names the core would read a source of truth by, read by name alone, never a
-  # value, as scripts/bring-up.sh starts it without them.
+  # No Infrahub variable under any name and no default scope, read by name alone, never a
+  # value, as scripts/bring-up.sh starts it without them: Infrahub's address and token, which
+  # the core would read a source of truth by, and local/.env's Compose values, the admin
+  # token among them with the API token's value.
   held=$(tr '\0' '\n' < "/proc/$core_pid/environ" |
-    sed -n 's/^\(INFRAHUB_ADDRESS\|INFRAHUB_API_TOKEN\|FYLGJA_DEFAULT_SCOPE\)=.*/\1/p' | paste -sd ' ' -)
+    sed -n 's/^\(INFRAHUB_[A-Za-z0-9_]*\|FYLGJA_DEFAULT_SCOPE\)=.*/\1/p' | paste -sd ' ' -)
   [ -z "$held" ] ||
     fail "case 9 needs the core on $runner_core to read no source of truth (020), and pid $core_pid's environment names $held; $SERVE_REMEDY"
 else

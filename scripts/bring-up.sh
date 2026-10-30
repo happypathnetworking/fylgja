@@ -87,8 +87,10 @@ DEPLOYMENTS=(intent-read twin-create twin-step stage-plan twin-rehearse schema-c
 # The names the orchestrator's part needs in local/.env; a file kept from before 020 lacks
 # them.
 ORCH_NAMES=(FYLGJA_ORCHESTRATOR_AUTH FYLGJA_ORCHESTRATOR_ROOT PREFECT_API_URL PREFECT_API_AUTH_STRING)
-# The names the core's server must not carry: it reads no source of truth (D-065).
-CORE_UNSET=(INFRAHUB_ADDRESS INFRAHUB_API_TOKEN FYLGJA_DEFAULT_SCOPE)
+# The names the core's server must not carry, as a pattern over a name: it reads no source of
+# truth (D-065), so it holds no Infrahub variable under any name, local/.env's Compose values
+# among them (INFRAHUB_INITIAL_ADMIN_TOKEN has the API token's value), and no default scope.
+CORE_UNSET='^(INFRAHUB_[A-Za-z0-9_]*|FYLGJA_DEFAULT_SCOPE)$'
 
 # The lines SR Linux's rsyslogd needs in the profile Ubuntu attaches to every rsyslogd
 # (docs/verified-facts.md, The host).
@@ -1157,8 +1159,8 @@ last_report_offset() {
 # own: make serve and make worker print theirs to their own terminal, and an earlier
 # process's report in LOG would pass for it. A server's arguments must listen on loopback
 # alone (020's FR-005 and R-18), so one an earlier run started on the bridge as well is restarted, and
-# its environment must carry none of CORE_UNSET's names, read by name alone, so one started
-# with Infrahub's variables is restarted with none (D-065).
+# its environment must carry no name CORE_UNSET matches, read by name alone, so one started
+# with any of Infrahub's variables is restarted with none (D-065).
 as_started() {
   local role=$1 pid=$2 log=$3 out=$4 listens name
   if [ "$out" != "$log" ]; then
@@ -1171,25 +1173,25 @@ as_started() {
     echo "listens on ${listens:-its default}, not on --listen 127.0.0.1:7650 alone"
     return 1
   fi
-  for name in "${CORE_UNSET[@]}"; do
-    if tr '\0' '\n' < "/proc/$pid/environ" 2> /dev/null | cut -d= -f1 | grep -qx "$name"; then
-      echo "carries $name in its environment, which the core never reads"
-      return 1
-    fi
-  done
+  name=$(tr '\0' '\n' < "/proc/$pid/environ" 2> /dev/null | cut -d= -f1 | grep -E "$CORE_UNSET" | paste -sd' ')
+  if [ -n "$name" ]; then
+    echo "carries $name in its environment, which the core never reads"
+    return 1
+  fi
 }
 
 # start_role ROLE LOG: started detached, as CLAUDE.md starts it, from a shell that loaded
 # local/.env; the dev server's CLI on the PATH it hands on. The server listens on loopback
-# alone, and starts with CORE_UNSET's names taken from the environment the file gave it;
-# the worker's environment is the file's whole, as before.
+# alone, and starts with every name CORE_UNSET matches taken from the environment the file
+# gave it, each read from that environment; the worker's environment is the file's whole, as
+# before.
 start_role() {
   local role=$1 log=$2 name
   local -a cmd=(bin/fylgja serve --listen 127.0.0.1:7650) unset=()
   if [ "$role" = worker ]; then
     cmd=(bin/fylgja worker run)
   else
-    for name in "${CORE_UNSET[@]}"; do unset+=(-u "$name"); done
+    for name in $(with_env compgen -e | grep -E "$CORE_UNSET"); do unset+=(-u "$name"); done
   fi
   # shellcheck disable=SC2016
   with_env bash -c 'PATH="$(dirname "$1"):$PATH" setsid nohup env "${@:4}" >> "$3" 2>&1 < /dev/null &' \

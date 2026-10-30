@@ -52,10 +52,14 @@ credential with no roles, a client that needs less than everything still deferre
 Fylgja reads the process environment only.
 
 - **The core's server** reads the API's token and both node logins. It reads no
-  `INFRAHUB_*` and no scope, and the bring-up script starts it without `INFRAHUB_ADDRESS`,
-  `INFRAHUB_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`; it carries the rest of `local/.env`'s
-  variables, which it never reads, among them Infrahub's Compose values, whose
-  `INFRAHUB_INITIAL_ADMIN_TOKEN` is Infrahub's token, and the platform's auth string.
+  `INFRAHUB_*` and no scope, and it holds none: the bring-up script starts it with every
+  `INFRAHUB_*` name taken from its environment, Infrahub's Compose values among them, whose
+  `INFRAHUB_INITIAL_ADMIN_TOKEN` is Infrahub's token, and `FYLGJA_DEFAULT_SCOPE` with them,
+  and restarts one that holds any; tier 3 refuses to run against one that does. It carries
+  the rest of `local/.env`'s variables, which it never reads, the platform's auth string
+  among them. (Until 020's close the script took only Infrahub's address and token and the
+  scope, so the core held the Compose values, Infrahub's token under another name; that is
+  closed.)
 - **The core's worker** reads both node logins, never the API's token or Infrahub's, and
   carries `local/.env` whole when it is started from it, as the bring-up script starts it.
 - **A client of the core**, `fylgja` on any machine, holds the API's token alone.

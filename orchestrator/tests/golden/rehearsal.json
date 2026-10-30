@@ -373,9 +373,9 @@
       "remaining": []
     },
     "reproduce": [
-      "fylgja twin create --stage fylgja-test-golden-41263/seeded --scope tag:fylgja",
-      "fylgja twin step --stage fylgja-test-golden-41263/third-link --allow-restart",
-      "fylgja twin step --stage fylgja-test-golden-41263/bad-port --allow-restart",
+      "fylgja-cli twin create --stage fylgja-test-golden-41263/seeded --scope tag:fylgja",
+      "fylgja-cli twin step --stage fylgja-test-golden-41263/third-link --allow-restart",
+      "fylgja-cli twin step --stage fylgja-test-golden-41263/bad-port --allow-restart",
       "fylgja twin verify",
       "fylgja twin destroy"
     ]

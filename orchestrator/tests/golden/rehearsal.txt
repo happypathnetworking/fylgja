@@ -4,8 +4,8 @@ stage fylgja-test-golden-41263/third-link: stepped in 5.1s (push n1 2.9s, n3 3.2
 stage fylgja-test-golden-41263/bad-port: diverged at phase push: landed none; not landed n1 (push.refused); settled after 5.5s (1 read); 19 held, 0 failed, 0 skipped; failed
 stage fylgja-test-golden-41263/head: not reached
 rehearsal nonconforming: stage fylgja-test-golden-41263/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:
-  fylgja twin create --stage fylgja-test-golden-41263/seeded --scope tag:fylgja
-  fylgja twin step --stage fylgja-test-golden-41263/third-link --allow-restart
-  fylgja twin step --stage fylgja-test-golden-41263/bad-port --allow-restart
+  fylgja-cli twin create --stage fylgja-test-golden-41263/seeded --scope tag:fylgja
+  fylgja-cli twin step --stage fylgja-test-golden-41263/third-link --allow-restart
+  fylgja-cli twin step --stage fylgja-test-golden-41263/bad-port --allow-restart
   fylgja twin verify
   fylgja twin destroy

@@ -91,8 +91,13 @@ home, reads `<state-root>` in `rehearsal.json` (the destroy's `removed`) and
 `rehearsal.out.txt` (`removed twin directory <state-root>/twin`). No renderer writes it:
 it is the destroy's report carried through.
 
-**What the orchestrator may change** (FR-023, SC-007): `fylgja` reads `fylgja-cli` in the
-reproduce lines, which are `rehearsal.json`'s `rehearsal.reproduce`, the indented lines of
-`rehearsal.txt`'s closing line and the fenced block under **Reproduce by hand** in both
-markdowns. Nothing else may change. A renderer fed these documents must give these bytes.
-A live run's ids, times and timings are its own, and its test substitutes them.
+**What the orchestrator changed** (FR-023, SC-007): the reproduce lines that name an
+orchestrator command read `fylgja-cli` where Go's read `fylgja`: `twin create` and `twin
+step`, in `rehearsal.json`'s `rehearsal.reproduce`, the indented lines of
+`rehearsal.txt`'s and `rehearsal.out.txt`'s closing line and the fenced block under
+**Reproduce by hand** in both markdowns. The core's commands, `twin verify` and `twin
+destroy`, keep `fylgja`, since `fylgja-cli` has none of them. That is the goldens' one
+re-baseline, made by hand on 2026-10-30 by the operator's answer on 020's Run 28 (T040's
+note); before it every reproduce line read `fylgja`, as captured. Nothing else may change. A
+renderer fed these documents must give these bytes. A live run's ids, times and timings are
+its own, and its test substitutes them.

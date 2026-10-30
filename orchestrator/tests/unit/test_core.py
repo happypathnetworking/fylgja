@@ -202,7 +202,7 @@ def test_the_operations_paths_and_arguments(stub):
     got = [(r["path"], r["body"].get("args")) for r in stub.requests]
     assert got == [
         ("/v1/twin/show", None),
-        ("/v1/twin/compile", {"snapshot": "snap.json"}),
+        ("/v1/twin/compile", {"snapshot": "snap.json", "out": "bundle"}),
         ("/v1/twin/diff", {"from": "a" * 64, "to": "snap.json"}),
         ("/v1/twin/verify", {"wait": "60s"}),
         ("/v1/twin/create", {"snapshot": "s.json", "dry_run": True}),

@@ -57,6 +57,10 @@ MAX_FRAME_BYTES = 64 << 20
 MAX_PROBLEM_BYTES = 64 << 10
 """What is read of a transport fault's body, `api.MaxProblemBytes`."""
 
+COMPILE_OUT = "bundle"
+"""The `out` a compile names when its caller gives none: the core requires one (`--out is
+required`), and the plan keeps the bundle's files in memory (T028, found live)."""
+
 POLL_S = 2.0
 """How often a detached run is read (R-08)."""
 
@@ -407,13 +411,12 @@ class Core:
         """twin.show's document: the record, the host and the runs in flight under `show`."""
         return self.call(OP_TWIN_SHOW).document
 
-    def compile(self, snapshot: str, files=(), out: str = "") -> Answer:
+    def compile(self, snapshot: str, files=(), out: str = COMPILE_OUT) -> Answer:
         """twin.compile of a snapshot id, or of the path of a snapshot file `files` carries: the
-        bundle's files under `answer.files`, and the document."""
-        args = {"snapshot": snapshot}
-        if out:
-            args["out"] = out
-        return self.call(OP_COMPILE, args, files)
+        bundle's files under `answer.files`, and the document. The core refuses a compile with
+        no `out`, which it only names in the subject and a line, the files coming back under
+        their own paths; the caller keeps them, so `out` is a name and nothing is written there."""
+        return self.call(OP_COMPILE, {"snapshot": snapshot, "out": out}, files)
 
     def diff(self, from_: str, to: str, files=()) -> Document:
         """twin.diff, the step between two snapshots, each an id or the path of a file `files`

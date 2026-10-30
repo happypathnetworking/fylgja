@@ -2004,3 +2004,74 @@ made.
 - **Tier 1**: `make build`, `make test` (55.2 s wall at a load of 2.4–3.7; the Python half
   1,134 passed in 18.2 s) and `make lint` (0 issues, ruff clean) green. No tier 2 is named:
   no contract-tagged test is left in `internal/cli` or `cmd/fylgja`.
+
+### 5.25 The worker's removal (T034, Run 31, 2026-10-30)
+
+- **The code.** `internal/provision/workflow_rehearse.go` and its test are gone, and with them
+  everything that served the rehearse workflow alone: `types.go`'s `WorkflowRehearse`,
+  `RehearseInput`, `RehearseStage`, `RehearseRefusal`, `RehearseResult` and `RehearsedStage`;
+  `options.go`'s `ChildOptions`; `workflow_cleanup.go`'s `causeMessage` (lint's `unused`
+  found it); `client.go`'s `StartRehearse`, `ResultOfRehearse`, `StartReclaim`,
+  `rehearseStartOptions`, `RunInFlight.Child`, `Event.Of`, `childEvents`, the three workflow
+  type names and their `findingStep` rows, the rehearsal's `stepName` branch, and every
+  child event in `follow` and `historyStep` (which now returns the step alone); and
+  `wire.RehearseWorkflowID`. `wire.RehearsalRef` had gone at T011. `NewWorker` registers
+  `Provision`, `Destroy` and `Step`; the package's doc and `fylgja worker run`'s help say
+  three workflows; `StartupReport` is untouched (US2 scenario 6). `StartProvision` asks for a
+  step run alone, `StartStep` for a provisioning or destroy run, `startDestroy` cancels a
+  provisioning then a step run, and `InFlight` lists the three workflows' runs, a step's with
+  its target (`towards` takes the run id alone).
+- **The server's readers of a rehearsal in flight** (Run 29's "found for later") went with
+  `Child` and `Of`: `show.go`'s `rehearsalInFlight`, `rehearsalAt`, `towardsOf`, the kind
+  line's rehearsal clause and `showText.towards`; `provisionAtHost`'s child; `runInFlight`'s
+  rehearsal form and its `towards` map, so `printInFlight` and `printVerify` take none;
+  `verify.go`'s `hostHolder` wording; `destroy.go`'s filter on `e.Of`; and `followRun`'s
+  `print` argument, which only the rehearsal ever set. `findings.ShowRun.Child` and the
+  `child` property of `contracts/show.schema.json` and `contracts/verify.schema.json` stand:
+  nothing sets them now, and the findings and the contracts are T035's and T036's.
+- **Kept, and why**: `DeadlineMechanism` stays in `options.go`, so `provision` still imports
+  `internal/rehearsal`: `internal/rehearsal/check_timeout_test.go`'s
+  `TestTheTwinCheckOutlastsItsRehearsal` reads it, and the package leaves whole at T035,
+  which takes the function with it (the orchestrator's `test_deadline.py` reads the
+  constants from `options.go` and `internal/verify/wait.go` directly, never the function).
+  `StepResult.WaitCounts` stays: the step's document carries it, and the rehearse flow reads
+  it (`twin_rehearse.py`).
+- **The worker's step refusal** (Run 29's other "found for later"): `Ineligible`'s no-twin
+  refusal ended `(fylgja twin create --branch, --stage or --snapshot)`, naming two flags the
+  client lost at T033; it now ends `(fylgja twin create --snapshot, or fylgja-cli twin create
+  from a branch or a stage)`, in `workflow_step.go`, its two tests, `internal/cli`'s
+  `twin_step_test.go` and `contracts/cli.md`'s one sentence quoting it.
+- **The tests.** `TestWorkerRegistersEveryScheduledActivity` pins three workflows, each
+  refused a second registration, and the seventeen activities, and takes a first
+  registration under `Rehearse` as under `Reconcile`; `TestWorkflowFilesAreDeterministic`
+  must check `workflow_provision.go`, `workflow_step.go`, `workflow_destroy.go` and
+  `options.go`. `TestFollowFollowsARehearsalsChildren` became `TestFollowFollowsNoChild`:
+  a history an earlier build's rehearsal left, holding a started child, is followed to its
+  close with neither a step nor a notice for the child and the child's history never asked
+  for, so no follow can block on a child its parent abandoned (research §1.6, 015's defect
+  gone with the parent). Gone with the code they tested: `client_test.go`'s rehearsal start,
+  result, refusal, destroy, reclaim and in-flight tests and its rows in the step-names and
+  step-refusal tables; `client_interrupt_test.go`'s rehearse row; `options_test.go`'s
+  `TestChildOptionsPinned` and `TestRehearseStartOptionsPinned`; `step_test.go`'s
+  `rehearsingService` with `TestDestroyFollowsARehearsalsDestroyFirst` and
+  `TestACreateAndAStepBesideARehearsalNameIt`; `internal/cli`'s fake service's rehearse and
+  reclaim methods. `server_test.go`'s two rehearsal tests became `TestShowNamesARehearsalsTwin`
+  and `TestVerifyNamesARehearsalsTwin`: the twin the rehearse flow creates through
+  `twin.create` is a snapshot twin (`source` `snapshot`), and the core's runs in flight
+  beside it are its own children's, named as an operator's (a step holding the host
+  stepping towards its target, a provisioning run building the baseline as the host's work),
+  none carrying a child. The old records' fixtures write `fylgja-rehearse` as a literal.
+- **The seven histories** under `internal/provision/testdata/` replay unchanged (SC-004):
+  `TestReplayCancelDuringRecordCleansUp`, `…DuringHostCheckTouchesNothing`,
+  `…DuringPushCleansUp`, `TestReplayPushAfterCancelStillCancels`,
+  `TestReplayDivergedStepRecordsEachPush`, `TestReplayCancelledStepRecordsDiverged` and
+  `TestReplayStepWaitCancelledEndsStepped`; no history file changed.
+- **Left for later**: `docs/architecture.md` §4.4, `docs/development.md`'s tier-1 row and
+  `docs/c4/workspace.dsl`'s worker component (with its `wrehearsal` edges) still say four
+  workflows and the rehearsal's children (T037); `contracts/cli.md`'s "Moved at 019" line
+  says four (T036).
+- **Tier 1**: `make build`, `make test` (51.5 s wall at a load of 2.7–4.5; the Python half
+  1,134 passed in 18.3 s; `internal/provision` 7.1 s, `internal/server` 3.0 s,
+  `internal/cli` 21.9 s) and `make lint` (0 issues, ruff clean) green;
+  `go vet -tags contract,fixture,e2e ./...` clean. No tier 2 is named: no contract-tagged
+  test reaches what changed (`internal/checks`' reads a show document's `in_flight` alone).

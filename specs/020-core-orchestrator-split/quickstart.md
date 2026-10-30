@@ -94,7 +94,8 @@ is `200`, and `…7650/v1/twin/show` from there fails to connect. Then
 ## 7. Tier 2
 
 `make test-contract` (Go's packages, `internal/checks` alone, then `pytest -m contract`),
-about 30 minutes expected, measured at implement; needs `INFRAHUB_*`, the Prefect server
+2,692.6 s, about 45 minutes, measured at implement (T042: the Go half about 370 s,
+`pytest -m contract` 2,322.3 s; research §5.29); needs `INFRAHUB_*`, the Prefect server
 and the runner up, the core's server on loopback with no `INFRAHUB_*`. Named: the ported
 `test_read_*`, `test_stages_*`, `test_stage_*` (each a Go test's assertions),
 `test_adapter_matches_go_reader` (until the removal), `test_flows_create_from_fixture`,
@@ -110,8 +111,12 @@ Proves SC-002, SC-008's first half, US1 scenarios 5 and 8, US3, US5 scenario 4, 
 server on loopback from this tree, the platform on the bridge, both checks imported on
 `main`, no twin up: nine cases, cases 1 to
 8 through `fylgja-cli` for every branch or stage, case 9 through `fylgja-twin`, the
-orchestrator and the core; ends `E2E-OK` in about 37 minutes (measured at implement);
-`free -m` before, the host rested after. Proves SC-001, SC-008, US1 scenarios 1-4, 6-7.
+orchestrator and the core; ends `E2E-OK`, measured at implement in 2,798.6 s, about 47
+minutes, by T043's evidence run, a copy of the script whose case-9 precheck compared the
+checks' syntax trees, since `make test-e2e` itself was refused at that precheck on this
+tree (the imported `infrahub/checks/fylgja_api.py` differing by one comment; research
+§5.29); `free -m` before, the host rested after. Proves SC-001, SC-008, US1 scenarios
+1-4, 6-7.
 
 ## 9. The records at the close
 

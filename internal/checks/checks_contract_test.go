@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -25,14 +26,16 @@ import (
 )
 
 // The checks inside a real Infrahub's pipeline, never a fake (D-017), through a registration
-// of the test's own served from the Docker bridge (research R-18), against the API's server
-// Infrahub's task workers reach through the Compose override: on the development host, the
-// operator's, on the bridge (D-050). The test seeds a throwaway branch and deletes, however it
-// ends, the branch with what hangs on it, then its registration with its definitions and query.
-// Its proposed change is a draft, which fylgja-twin skips, until a stale mark stands; marked
-// ready then, its rehearsal is refused before any boot, so no twin is booted; still, boot
-// none while it runs. It reads twin show from the API's server at FYLGJA_API_ADDRESS
-// (127.0.0.1:7650 when unset) with FYLGJA_API_TOKEN, which local/.env holds.
+// of the test's own served from the Docker bridge (research R-18), against the orchestrator's
+// platform Infrahub's task workers reach through the Compose override at
+// FYLGJA_ORCHESTRATOR_ADDRESS: on the development host, the operator's Prefect server on the
+// bridge, its runner serving the flows from this tree (020's R-01, R-12). The test seeds a
+// throwaway branch and deletes, however it ends, the branch with what hangs on it, then its
+// registration with its definitions and query. Its proposed change is a draft, which
+// fylgja-twin skips, until a stale mark stands; marked ready then, its rehearsal is refused
+// before any boot, so no twin is booted; still, boot none while it runs. It reads twin show
+// from the core's server at FYLGJA_API_ADDRESS (127.0.0.1:7650 when unset) with
+// FYLGJA_API_TOKEN, which local/.env holds, the server the runner's flows ask.
 //
 //	set -a; . local/.env; set +a; go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v
 
@@ -48,32 +51,37 @@ const (
 	eventWait = time.Minute
 )
 
-// unreached are the glue's sentences for a task worker that reaches no server
+// unreached are the glue's sentences for a task worker that reaches no platform
 // (infrahub/checks/fylgja_api.py: Unreachable, Unset), as on CI's contract job, which runs
 // none: there the test proves what it can and skips.
 var unreached = []string{"cannot be reached", "is not set in this task worker's environment"}
 
-// TestChecksInsideInfrahub proves both checks as Infrahub runs them (FR-029, R-18): the tree's
-// checks, imported from a registration of the test's own, run in the pipeline of a draft
-// proposed change. fylgja-twin skips the draft at its creation and at each re-run, asks
-// nothing and posts no comment, and no twin is booted. fylgja-step, with two marks, concludes
-// success, its message the plan's text with its four stages, three steps and the branch
-// point's scope.empty; with a mark made stale it concludes failure naming
-// stage.artifact.stale and the device. Marked ready with that mark standing, fylgja-twin asks
-// for the rehearsal, which Fylgja refuses before any boot, concludes failure naming
-// stage.artifact.stale, and posts the report as a comment in a thread the proposed change's
-// overview lists (US2/AC3; research §5.9). No message and no comment carries a credential
-// (FR-035, SC-008), and once its cleanups have run main holds none of its proposed change's
-// stages, validators, threads or comments (SC-010). Where the task workers reach no server,
-// the draft's skip is proved and the test says so and skips.
+// TestChecksInsideInfrahub proves both checks as Infrahub runs them (FR-029, R-18; 020's
+// FR-024): the tree's checks, imported from a registration of the test's own, run in the
+// pipeline of a draft proposed change. fylgja-twin skips the draft at its creation and at each
+// re-run, triggers nothing, and no comment is posted and no twin booted. fylgja-step, with two
+// marks, triggers stage-plan and concludes success, its message the plan's text, its run's
+// out lines, with its four stages, three steps and the branch point's scope.empty; with a mark
+// made stale it concludes failure naming stage.artifact.stale and the device. Marked ready
+// with that mark standing, fylgja-twin triggers twin-rehearse, which the flow refuses before
+// any boot and whose report it posts as a comment in a thread the proposed change's overview
+// lists (US2/AC3; research §5.9), and concludes failure naming stage.artifact.stale. No
+// message and no comment carries a credential (FR-035, SC-008), and once its cleanups have run
+// main holds none of its proposed change's stages, validators, threads or comments (SC-010).
+// Its precheck asks the platform from inside each task worker (platformReached); where none
+// answers, the draft's skip is proved and the test says why and skips.
 func TestChecksInsideInfrahub(t *testing.T) {
 	c, err := testsupport.NewClient()
 	if err != nil {
 		t.Skipf("contract tests need a running Infrahub: %v", err)
 	}
-	bridge, err := testsupport.BridgeAddress()
-	if err != nil {
+	if _, err := testsupport.BridgeAddress(); err != nil {
 		t.Skipf("the checks are served from the Docker bridge, where Infrahub's task workers fetch them, and Docker reports none: %v", err)
+	}
+	// 1. The platform, as each task worker reaches it: why not, or "" when it answers.
+	unanswered := platformReached(t)
+	if unanswered != "" {
+		t.Logf("the orchestrator's platform does not answer the task workers (%s): the draft's skip is proved, then the test skips", unanswered)
 	}
 	left := leftovers{}
 	t.Cleanup(func() { nothingLeft(t, c, left) })
@@ -123,8 +131,11 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	skipped(t, awaitUserCheck(t, c, id, TestTwinCheck), id)
 	created := awaitUserCheck(t, c, id, TestStepCheck)
 	noCredential(t, created)
+	if unanswered != "" {
+		t.Skipf("Infrahub's task workers reach no orchestrator's platform here, as on CI's contract job, which runs none: %s; %s. "+
+			"%s concluded %s:\n%s", unanswered, platformRemedy, created.Name, created.Conclusion, created.Message)
+	}
 	reached(t, created)
-	thisTreesServer(t, bridge)
 	if created.Conclusion != "success" {
 		t.Errorf("at the draft's creation %s concluded %q, want success: the plan of the branch point and the head:\n%s",
 			TestStepCheck, created.Conclusion, created.Message)
@@ -187,14 +198,14 @@ func TestChecksInsideInfrahub(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(comments) != 0 {
-		t.Errorf("the draft %s holds %d comments, want none: %s posts only for a proposed change it rehearses",
+		t.Errorf("the draft %s holds %d comments, want none: %s triggers a rehearsal, whose flow posts, only for a proposed change it rehearses",
 			id, len(comments), TestTwinCheck)
 	}
 	noTwin(t)
 
 	// 7. Marked ready with the stale mark standing, the rehearsal is refused before any boot,
-	// and fylgja-test-twin concludes failure and posts the report it got (US2/AC3) as one
-	// comment its overview shows (research §5.9).
+	// its flow posts the report (US2/AC3) as one comment the overview shows (research §5.9),
+	// and fylgja-test-twin concludes failure from the run's document.
 	if err := c.MarkReady(id); err != nil {
 		t.Fatal(err)
 	}
@@ -224,14 +235,15 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	noTwin(t)
 }
 
-// posted holds the proposed change id to the comments fylgja-twin posted on a refused
-// rehearsal: at least one, each its thread's only comment, each the report's markdown with
-// the status rejected and the stale finding and no credential's value, its heading ending
-// with the scope it was read under, the server's default, since the check names none, and
-// the bridge server reads FYLGJA_DEFAULT_SCOPE tag:fylgja from local/.env (T119), and each thread
-// listed by the proposed change's overview once Infrahub's event log has it (research §5.9).
-// The host's own registration, whose fylgja-twin runs beside the test's, may post one more,
-// the same report. Each thread and comment it reads is kept in left, for nothingLeft.
+// posted holds the proposed change id to the comments the rehearse flow fylgja-twin triggered
+// posted on a refused rehearsal (020's R-11): at least one, each its thread's only comment,
+// each the report's markdown with the status rejected and the stale finding and no
+// credential's value, its heading ending with the scope it was read under, the runner's
+// default, since the check names none, and the runner reads FYLGJA_DEFAULT_SCOPE tag:fylgja
+// from local/.env (T119), and each thread listed by the proposed change's overview once
+// Infrahub's event log has it (research §5.9). The host's own registration, whose fylgja-twin
+// runs beside the test's, may trigger one more, the same report. Each thread and comment it
+// reads is kept in left, for nothingLeft.
 func posted(t *testing.T, c *testsupport.Client, id string, left leftovers) {
 	t.Helper()
 	comments, err := c.CommentsOf(id)
@@ -239,7 +251,8 @@ func posted(t *testing.T, c *testsupport.Client, id string, left leftovers) {
 		t.Fatal(err)
 	}
 	if len(comments) == 0 {
-		t.Fatalf("the proposed change %s, marked ready, holds no comment its overview shows: %s posts the report it got", id, TestTwinCheck)
+		t.Fatalf("the proposed change %s, marked ready, holds no comment its overview shows: the rehearse flow %s triggered posts its report",
+			id, TestTwinCheck)
 	}
 	threads := map[string]int{}
 	for _, cm := range comments {
@@ -642,84 +655,88 @@ func noTwin(t *testing.T) {
 	}
 }
 
-// reached skips the test when the check says its task worker reaches no server: CI's
-// contract job runs none, and the operator's server on the bridge is what the development
-// host's task workers reach (D-050).
+// reached skips the test when the check says its task worker reaches no platform, which the
+// precheck found answering: the platform stopped since, or the check reads its variables
+// otherwise than the precheck.
 func reached(t *testing.T, row testsupport.UserCheckRow) {
 	t.Helper()
 	for _, s := range unreached {
 		if strings.Contains(row.Message, s) {
-			t.Skipf("Infrahub's task workers reach no Fylgja server here, as on CI's contract job, which runs none; "+
-				"on the development host, start the server on the bridge (CLAUDE.md). %s concluded %s:\n%s",
-				row.Name, row.Conclusion, row.Message)
+			t.Skipf("Infrahub's task workers reach no orchestrator's platform here; %s. %s concluded %s:\n%s",
+				platformRemedy, row.Name, row.Conclusion, row.Message)
 		}
 	}
 }
 
-// thisTreesServer fails the test unless the server Infrahub's task workers reached, the
-// API's server on the bridge (D-050), runs this tree's bin/fylgja: every unstamped build has
-// the same version, so its build proves no tree. Its process is the fylgja serve whose
-// arguments listen on bridge:7650, and its /proc/<pid>/exe must be neither (deleted) nor
-// another file. One whose /proc entry this user cannot read, as a server started under sg
-// docker, is said and not compared.
-func thisTreesServer(t *testing.T, bridge string) {
+// platformRemedy is what the development host's operator does for a platform the task
+// workers do not reach (020's data-model §10, R-17).
+const platformRemedy = "on the development host, start the orchestrator's platform on the bridge and its runner from this tree " +
+	"(make prefect-server, make orchestrator-serve) and recreate the task workers with the override's " +
+	"FYLGJA_ORCHESTRATOR_ADDRESS and FYLGJA_ORCHESTRATOR_AUTH (the bring-up script's part infrahub)"
+
+// platformProbe runs inside a task worker, on its Python, which carries httpx (020's research
+// §1.1): it reads the two variables the checks read, then asks the platform's GET /api/health
+// with no credential and the deployment twin-rehearse/main with it, and prints one line
+// carrying the statuses or why it asked nothing, never a variable's value but the address.
+const platformProbe = `
+import os, httpx
+address = os.environ.get("FYLGJA_ORCHESTRATOR_ADDRESS", "")
+auth = os.environ.get("FYLGJA_ORCHESTRATOR_AUTH", "")
+if not address or not auth:
+    print("unset", "FYLGJA_ORCHESTRATOR_ADDRESS" if not address else "FYLGJA_ORCHESTRATOR_AUTH")
+    raise SystemExit
+base = (address if address.startswith(("http://", "https://")) else "http://" + address).rstrip("/") + "/api"
+user, _, password = auth.partition(":")
+try:
+    health = httpx.get(base + "/health", timeout=10, trust_env=False)
+    deployment = httpx.get(base + "/deployments/name/twin-rehearse/main", auth=(user, password), timeout=10, trust_env=False)
+    print("answered", address, health.status_code, deployment.status_code)
+except Exception as exc:
+    print("unreachable", address, type(exc).__name__)
+`
+
+// platformReached asks the orchestrator's platform from inside each of Infrahub's task
+// workers, as the checks reach it (020's T029): "" when each answers GET /api/health 200 and
+// the deployment twin-rehearse/main 200 with its credential, which says the runner serves the
+// flows; otherwise why not, for the test to say as it skips. The workers are the Compose
+// project's (COMPOSE_PROJECT_NAME, fylgja-infrahub when unset) service task-worker.
+func platformReached(t *testing.T) string {
 	t.Helper()
-	tree, err := filepath.Abs(repoPath("bin", "fylgja"))
+	project := os.Getenv("COMPOSE_PROJECT_NAME")
+	if project == "" {
+		project = "fylgja-infrahub"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "ps", "--filter", "label=com.docker.compose.project="+project,
+		"--filter", "label=com.docker.compose.service=task-worker", "--format", "{{.Names}}").Output()
 	if err != nil {
-		t.Fatal(err)
+		return fmt.Sprintf("docker lists no task worker of the project %s: %v", project, err)
 	}
-	listen := bridge + ":7650"
-	pid := bridgeServer(listen)
-	if pid == "" {
-		t.Fatalf("Infrahub's task workers reach a Fylgja server, and no fylgja serve process listens on %s by its arguments, "+
-			"so it cannot be proved this tree's %s: start it from this tree with CLAUDE.md's start line", listen, tree)
+	workers := strings.Fields(string(out))
+	if len(workers) == 0 {
+		return fmt.Sprintf("no task worker of the project %s runs", project)
 	}
-	link := filepath.Join("/proc", pid, "exe")
-	exe, err := os.Readlink(link)
-	if err != nil {
-		t.Logf("the server on %s is pid %s, whose %s cannot be read (%v), as for a server started under sg docker: "+
-			"its binary is not compared with %s", listen, pid, link, err, tree)
-		return
-	}
-	if strings.HasSuffix(exe, " (deleted)") {
-		t.Fatalf("the server on %s, pid %s, runs a replaced binary (%s): restart it from this tree's %s", listen, pid, exe, tree)
-	}
-	running, err := os.Stat(link)
-	if err != nil {
-		t.Fatalf("the server on %s, pid %s: %v", listen, pid, err)
-	}
-	built, err := os.Stat(tree)
-	if err != nil {
-		t.Fatalf("this tree's binary: %v (make build)", err)
-	}
-	if !os.SameFile(running, built) {
-		t.Fatalf("the server on %s, pid %s, runs %s, not this tree's %s: restart it from this tree", listen, pid, exe, tree)
-	}
-	t.Logf("the server on %s is pid %s, running this tree's %s", listen, pid, tree)
-}
-
-// bridgeServer is the pid of the process named fylgja whose arguments are serve with a
-// --listen of listen, or "" when none is: the server the bring-up script and CLAUDE.md's
-// start line start on the bridge.
-func bridgeServer(listen string) string {
-	dirs, _ := filepath.Glob("/proc/[0-9]*")
-	for _, dir := range dirs {
-		comm, err := os.ReadFile(filepath.Join(dir, "comm"))
-		if err != nil || strings.TrimSpace(string(comm)) != "fylgja" {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join(dir, "cmdline"))
+	for _, worker := range workers {
+		said, err := exec.CommandContext(ctx, "docker", "exec", worker, "python", "-c", platformProbe).Output()
 		if err != nil {
-			continue
+			return fmt.Sprintf("the precheck could not run in %s: %v", worker, err)
 		}
-		args := strings.Split(strings.TrimRight(string(raw), "\x00"), "\x00")
-		if len(args) < 2 || args[1] != "serve" {
-			continue
-		}
-		for i, a := range args[2:] {
-			if a == "--listen="+listen || (a == "--listen" && i+3 < len(args) && args[i+3] == listen) {
-				return filepath.Base(dir)
+		fields := strings.Fields(string(said))
+		switch {
+		case len(fields) == 2 && fields[0] == "unset":
+			return fmt.Sprintf("%s is not set in %s's environment", fields[1], worker)
+		case len(fields) == 3 && fields[0] == "unreachable":
+			return fmt.Sprintf("the platform at %s does not answer %s (%s)", fields[1], worker, fields[2])
+		case len(fields) == 4 && fields[0] == "answered":
+			if fields[2] != "200" || fields[3] != "200" {
+				return fmt.Sprintf("the platform at %s answered %s GET /api/health %s and its deployment twin-rehearse/main %s, "+
+					"want 200 and 200: a 401 is a credential not the platform's, a 404 a runner serving no flows",
+					fields[1], worker, fields[2], fields[3])
 			}
+			t.Logf("the platform at %s answers %s: its health and the deployment twin-rehearse/main", fields[1], worker)
+		default:
+			return fmt.Sprintf("the precheck in %s said %q", worker, strings.TrimSpace(string(said)))
 		}
 	}
 	return ""

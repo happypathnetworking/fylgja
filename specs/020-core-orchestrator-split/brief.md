@@ -155,7 +155,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
 4. **A pure step between two snapshots, as an operation of the core.** The stage plan and
    the report's drawing need the step between each pair of stages, which `internal/stages`'
    plan computes today by compiling each stage and diffing the pair through
-   `internal/step` ([plan.go](../../internal/stages/plan.go)). The adapter does not compile
+   `internal/step` ([plan.go](https://github.com/happypathnetworking/fylgja/blob/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/stages/plan.go)). The adapter does not compile
    ([Decided](#decided)), so the core gains one operation that compiles two snapshots and
    answers the step between them (nodes and links changed, artifacts moved), pure, on the
    goldens' code path (Constitution V); its name is the plan's, and the orchestrator's plan
@@ -607,7 +607,7 @@ Read in this order, after `CLAUDE.md`'s list.
 | [specs/018-snapshots/brief.md](../018-snapshots/brief.md), [specs/019-following-removed/brief.md](../019-following-removed/brief.md), [specs/016-probes/brief.md](../016-probes/brief.md) | the hand-offs this feature inherits |
 | [docs/verified-facts.md](../../docs/verified-facts.md), "NetBox 4.7.4 with netbox-branching 1.2.2" and Infrahub's check facts | what an adapter outside Go already proved, and what a check inside Infrahub can do |
 | [docs/ideas.md](../../docs/ideas.md), "A webhook that starts a take and a step" | what the orchestrator may bring back later |
-| [internal/server](../../internal/server), [internal/stage](../../internal/stage), [internal/stages](../../internal/stages), [internal/intent](../../internal/intent), [internal/rehearsal](../../internal/rehearsal) | what leaves the core: the handlers that read Infrahub, the read-and-take, the stages, the reader, the rehearsal's rules |
+| [internal/server](../../internal/server), [internal/stage](https://github.com/happypathnetworking/fylgja/tree/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/stage), [internal/stages](https://github.com/happypathnetworking/fylgja/tree/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/stages), [internal/intent](https://github.com/happypathnetworking/fylgja/tree/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/intent), [internal/rehearsal](https://github.com/happypathnetworking/fylgja/tree/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/rehearsal) | what leaves the core: the handlers that read Infrahub, the read-and-take, the stages, the reader, the rehearsal's rules |
 | [internal/provision](../../internal/provision), [internal/lab](../../internal/lab), [internal/step](../../internal/step), [internal/api](../../internal/api), [internal/cli](../../internal/cli) | what stays: the three workflows, the host, the pure step, the wire, the client |
 | [infrahub/checks/](../../infrahub/checks/), [.infrahub.yml](../../.infrahub.yml) | the two checks and their glue, which become the orchestrator's clients |
 | [scripts/e2e.sh](../../scripts/e2e.sh), [scripts/bring-up.sh](../../scripts/bring-up.sh), [scripts/infrahub/docker-compose.override.yml](../../scripts/infrahub/docker-compose.override.yml) | tier 3's cases, the host's parts, the task workers' reach |

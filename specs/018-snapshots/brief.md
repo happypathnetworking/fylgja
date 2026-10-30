@@ -21,7 +21,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/018-snapshots GIT_BRANCH_NAME=018-snapshots. 0.3
 - **The core's workflows still know a branch.** `twin step` and `twin rehearse` already
   read, compile and file on the server, on `stage plan`'s path, and hand the worker a
   bundle id ([server/step.go](../../internal/server/step.go),
-  [server/rehearse.go](../../internal/server/rehearse.go)). The live `twin create` does
+  [server/rehearse.go](https://github.com/happypathnetworking/fylgja/blob/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/server/rehearse.go)). The live `twin create` does
   not: its provision workflow reads the branch as an activity, `ReadIntent`, and writes a
   temporary CTM under `bundles/.reads/` for the compile
   ([provision/workflow_provision.go](../../internal/provision/workflow_provision.go)). Until
@@ -377,8 +377,8 @@ Read in this order, after `CLAUDE.md`'s list.
 | [docs/architecture.md](../../docs/architecture.md) §4.2 to §4.6 | the CTM, the compiler, the provisioner, the state root and the commands |
 | [docs/glossary.md](../../docs/glossary.md): Bundle, `bundle_id`, Bundle store, CTM | the entries the new ones sit beside |
 | [internal/ctm](../../internal/ctm) (`types.go`, `json.go`), [internal/compiler/manifest.go](../../internal/compiler/manifest.go), [internal/bundle/store.go](../../internal/bundle/store.go), [internal/findings](../../internal/findings) | the encoding, the hash precedent, the store to mirror, the rules to mirror |
-| [internal/server](../../internal/server) (`read.go`, `create.go`, `dryrun.go`, `filing.go`, `step.go`, `rehearse.go`, `compile.go`), [internal/stage/stage.go](../../internal/stage/stage.go), [internal/stages](../../internal/stages) | where the server already reads, compiles and files |
+| [internal/server](../../internal/server) (`read.go`, `create.go`, `dryrun.go`, `filing.go`, `step.go`, `rehearse.go`, `compile.go`), [internal/stage/stage.go](https://github.com/happypathnetworking/fylgja/blob/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/stage/stage.go), [internal/stages](https://github.com/happypathnetworking/fylgja/tree/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/stages) | where the server already reads, compiles and files |
 | [internal/provision](../../internal/provision) (`workflow_provision.go`, `workflow_step.go`, `activities.go`, `workflow_reconcile.go`, `types.go`) | the read that leaves the workflow, the one that stays, and the step guard that is kept |
-| [internal/rehearsal/markdown.go](../../internal/rehearsal/markdown.go) | the report's table and its size guard |
-| [internal/stage/reproducibility_contract_test.go](../../internal/stage/reproducibility_contract_test.go) | the tier-2 test the proof extends |
+| [internal/rehearsal/markdown.go](https://github.com/happypathnetworking/fylgja/blob/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/rehearsal/markdown.go) | the report's table and its size guard |
+| [internal/stage/reproducibility_contract_test.go](https://github.com/happypathnetworking/fylgja/blob/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/stage/reproducibility_contract_test.go) | the tier-2 test the proof extends |
 | [016's brief](../016-probes/brief.md) | the third spec, re-read against this one's close |

@@ -368,15 +368,11 @@ def read_flow_run(flow_run_id: str, environ: Mapping[str, str] | None = None,
     does not answer, or answers otherwise, is platform.unreachable; no sentence names the
     credential."""
     environ = os.environ if environ is None else environ
-    base = (environ.get(ENV_PLATFORM) or "").rstrip("/")
+    base, auth = platform_of(environ)
     if not base:
         raise CoreFailure(RULE_PLATFORM_UNREACHABLE, ENV_PLATFORM,
                           f"{ENV_PLATFORM} is not set, so the orchestrator's platform cannot be asked for flow run "
                           f"{flow_run_id}")
-    auth = None
-    if creds := environ.get(ENV_PLATFORM_AUTH):
-        user, _, password = creds.partition(":")
-        auth = (user, password)
     try:
         with httpx.Client(transport=transport, trust_env=False, timeout=PLATFORM_TIMEOUT_S) as http:
             resp = http.get(f"{base}/flow_runs/{flow_run_id}", auth=auth)
@@ -393,3 +389,37 @@ def read_flow_run(flow_run_id: str, environ: Mapping[str, str] | None = None,
     except ValueError:
         raise CoreFailure(RULE_PLATFORM_UNREACHABLE, base, f"the orchestrator's platform at {base} answered flow "
                           f"run {flow_run_id} with no JSON") from None
+
+
+def platform_of(environ: Mapping[str, str]) -> tuple[str, tuple[str, str] | None]:
+    """The platform's API address, PREFECT_API_URL without a trailing slash ("" when unset),
+    and PREFECT_API_AUTH_STRING's basic auth, None when unset."""
+    base = (environ.get(ENV_PLATFORM) or "").rstrip("/")
+    auth = None
+    if creds := environ.get(ENV_PLATFORM_AUTH):
+        user, _, password = creds.partition(":")
+        auth = (user, password)
+    return base, auth
+
+
+def check_platform(environ: Mapping[str, str], transport: httpx.BaseTransport | None = None) -> None:
+    """Whether the platform PREFECT_API_URL names answers this process's credential, before a
+    flow is run on it: `GET /version` under PREFECT_API_AUTH_STRING's basic auth, which the
+    server's authentication guards and `/health` does not (research §1.2). Nothing when it
+    answers 200 or when PREFECT_API_URL is unset (Prefect's ephemeral server then); else
+    platform.unreachable naming the address, never the credential."""
+    base, auth = platform_of(environ)
+    if not base:
+        return
+    try:
+        with httpx.Client(transport=transport, trust_env=False, timeout=PLATFORM_TIMEOUT_S) as http:
+            resp = http.get(f"{base}/version", auth=auth)
+    except httpx.TransportError as e:
+        raise CoreFailure(RULE_PLATFORM_UNREACHABLE, base,
+                          f"the orchestrator's platform at {base} did not answer: {e or type(e).__name__}; "
+                          f"make prefect-server starts it") from None
+    if resp.status_code != 200:
+        why = f"{resp.status_code} {resp.reason_phrase}".rstrip()
+        if resp.status_code == 401:
+            why += f"; {ENV_PLATFORM_AUTH} must be the credential the platform was started with"
+        raise CoreFailure(RULE_PLATFORM_UNREACHABLE, base, f"the orchestrator's platform at {base} answered {why}")

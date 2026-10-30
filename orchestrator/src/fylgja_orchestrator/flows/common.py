@@ -41,6 +41,12 @@ OUT: contextvars.ContextVar[Callable[[str], None]] = contextvars.ContextVar("fyl
 """Where a flow's out lines go when it runs as a flow: stdout by default, `fylgja-cli`'s
 own when it sets one (T027)."""
 
+FILED: contextvars.ContextVar[list | None] = contextvars.ContextVar("fylgja_filed", default=None)
+"""Where `publish` also puts each document it files, when `fylgja-cli` sets a list: the
+rehearse flow files its document, then raises the timeout or cancellation that reached it,
+and the command still prints the document. A list, so a run in a copied context still
+reaches it."""
+
 
 def out_line(line: str) -> None:
     """One out line: to the sink, and to the run's log when a run is current, so the
@@ -66,6 +72,7 @@ class Deps:
     open: Callable = Session.open
     read: Callable = tool.read
     schema_check: Callable = tool.schema_check
+    stage_list: Callable = tool.stage_list
     flow_run_id: str = ""
     now: Callable[[], datetime] = lambda: datetime.now(UTC)
     flow_run: Callable = read_flow_run
@@ -122,7 +129,10 @@ def artifact_key(flow: str, run_id: str) -> str:
 def publish(flow: str, doc: Document) -> Document:
     """Writes the document as the current run's artifact `fylgja-findings`, its `data` the
     JSON a check reads (research §1.4), and returns it. With no run there is nothing to file
-    it under, and it is returned alone."""
+    it under, and it is returned alone. Either way it is handed to `FILED`'s list when one is
+    set."""
+    if (filed := FILED.get()) is not None:
+        filed.append(doc)
     run = _flow_run()
     if run is None:
         return doc

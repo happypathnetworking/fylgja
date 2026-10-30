@@ -1008,6 +1008,15 @@ def list_stages(
                   f"stage {quote(o.label)} (id {o.id}) names no proposed change: it was removed from its proposed "
                   "change's fylgja_stages; delete the stage")
 
+    # The orchestrator's record carries no at's source (R-09): a derived stage's follows from
+    # its label, and a mark's is the mark's as listed, unknown for a mark since deleted.
+    if record is not None and not record.at_source and not record.derived:
+        for c in changes:
+            st = c.first(record.label) if c.proposed_change.id == record.proposed_change.id else None
+            if st is not None:
+                record = replace(record, at_source=st.at_source)
+                res.record = record
+
     # A listing of another branch says nothing of the record's: its row is not shown.
     if record is not None and (not branch or branch == record.proposed_change.branch):
         ch = None

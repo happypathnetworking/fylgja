@@ -456,8 +456,10 @@ Infrahub with `main` prepared and the fixture seeded, then the build, the three 
 started before tiers 1 and 2 so that tier 2 reaches this build's server, and left running; `--part NAME` runs one part, and `--part infrahub` is
 what CI's contract job runs; a second run installs nothing; it asks for sudo, so it is
 the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make
-build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 65s
-wall uncached, raised from 45s on 2026-10-29 when 016's close measured 53.6–60.9s in
+build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 90s
+wall uncached, raised from 65s on 2026-10-30 by the operator's answer when 020's Run 17
+measured 68.0s and 67.0s at a load of 2.1–4.7 with the orchestrator's 710 Python tests
+beside Go, `internal/cli` 42.2–43.2s of it; from 45s on 2026-10-29 when 016's close measured 53.6–60.9s in
 three runs at a load of 3–4, `internal/cli` 43.8–44.5s of it; from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
 load average of 2–5, `internal/cli` about 26s of it; 40.6s on 2026-10-27 at a load of
 1.5–2.6, `internal/cli` 36.2s of it, since 018's tests; 43.8–45.0s in three runs on

@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -57,92 +55,9 @@ func shown(t *testing.T, err error) string {
 	return buf.String()
 }
 
-// echoingServer answers every request with the given status and a body quoting the
-// credential back, the way a badly behaved proxy or a debug-mode server would. If
-// anything Fylgja prints were built from a response body, the sentinel would surface
-// through it — which is what makes these cases evidence rather than decoration.
-func echoingServer(t *testing.T, status int) string {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(`{"errors":["rejected key ` + r.Header.Get("X-INFRAHUB-KEY") + `"]}`))
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL
-}
-
-// The credential must appear in no finding and no error message — including when the
-// credential itself is what failed (Constitution X). A token that
-// leaks into an error is a token that ends up in a log, a ticket, and a pasted stack
-// trace.
-func TestCredentialNeverReachesOutput(t *testing.T) {
-	// A mode with no address gets an echoing server, built per subtest so each gets
-	// a fresh one; status 0 means "reach nothing at all".
-	for _, mode := range []struct {
-		name    string
-		address string
-		status  int
-	}{
-		{name: "unreachable address", address: unreachable},
-		{name: "rejected credential", status: http.StatusUnauthorized},
-		{name: "server error quoting the credential", status: http.StatusInternalServerError},
-	} {
-		for _, op := range []struct {
-			name string
-			run  func(t *testing.T, out string) error
-		}{
-			{"intent read", func(t *testing.T, out string) error {
-				return runRead(t.Context(), &options{}, &readFlags{branch: "any-branch", out: out})
-			}},
-			{"schema check", func(t *testing.T, _ string) error {
-				return runCheck(t.Context(), &options{}, &checkFlags{branch: "any-branch"})
-			}},
-			// A dry run reads in the CLI's own process, with the CLI's own token.
-			{"twin create --dry-run", func(t *testing.T, _ string) error {
-				paths := useStateRoot(t)
-				useService(t, nil)
-				dryRunEnv(t)
-				useClab(t, "inspect-empty.json")
-				err := runCreate(t.Context(), &options{}, &createFlags{branch: "any-branch", dryRun: true})
-				if got := entriesOf(t, paths.Bundles); len(got) != 0 {
-					t.Errorf("a dry run whose read failed filed %v", got)
-				}
-				return err
-			}},
-		} {
-			t.Run(mode.name+"/"+op.name, func(t *testing.T) {
-				address := mode.address
-				if address == "" {
-					address = echoingServer(t, mode.status)
-				}
-				t.Setenv(intent.EnvAddress, address)
-				t.Setenv(intent.EnvToken, sentinel)
-				served := markServed()
-
-				out := filepath.Join(t.TempDir(), "never.json")
-				var err error
-				stdout := captureStdout(t, func() { err = op.run(t, out) })
-				noSecretServed(t, served, sentinel)
-				if err == nil {
-					t.Fatal("expected the operation to fail")
-				}
-				if text := stdout + shown(t, err); strings.Contains(text, sentinel) {
-					t.Errorf("the credential appeared in output:\n%s", text)
-				}
-				var res *result
-				if asResult(err, &res) && res.doc.Status.ExitCode() != findings.ExitError {
-					t.Errorf("exit %d, want %d", res.doc.Status.ExitCode(), findings.ExitError)
-				}
-				if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-					t.Errorf("a failed %s left a file at %s", op.name, out)
-				}
-			})
-		}
-	}
-}
-
 // probeSentinel stands in for the readiness probe's password, as sentinel stands in for the
-// Infrahub token.
+// Infrahub token. (The Infrahub token's own cases, a read and a schema check through a
+// server reading Infrahub, went with the reader, 020: the core reads no Infrahub.)
 const probeSentinel = "fylgja-probe-password-sentinel-7c1d0e"
 
 // The probe password is held by the worker, not the CLI, and read for its presence

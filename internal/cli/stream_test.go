@@ -218,7 +218,7 @@ func TestEveryRunRequestNamesAFreshStream(t *testing.T) {
 			return runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 		}},
 		{findings.OpTwinCreate, func() error {
-			return runCreate(context.Background(), &options{}, &createFlags{stage: "change-1/cabled", stageGiven: true})
+			return runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID, dryRun: true})
 		}},
 		{findings.OpTwinProvision, func() error {
 			return runTwinProvision(context.Background(), &options{}, &provisionFlags{}, bundleDir)

@@ -24,7 +24,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/server"
@@ -34,8 +33,8 @@ import (
 // The harness. Every command these tests run
 // is one request to a server in the test's own process: TestMain starts one httptest server
 // over a server.Server, with a token made for the run, and points the client's environment
-// at it. The server reads the process environment the tests set (the state root, Infrahub's
-// variables, the logins) at each request, as fylgja serve reads its own; its log goes to a
+// at it. The server reads the process environment the tests set (the state root and the
+// logins) at each request, as fylgja serve reads its own; its log goes to a
 // buffer the tests read, never to the process's stderr, which the tests capture.
 
 // harness is the server every command reaches.
@@ -107,18 +106,14 @@ func TestMain(m *testing.M) {
 		return "", false
 	}
 	// No tier-1 test reaches the host: a test that gives no state root of its own files in
-	// a scratch one, never the operator's local/, and one that serves no fake Infrahub reads
-	// from an address nothing answers, never the operator's Infrahub, whatever the shell
-	// that ran the tests had loaded (018: every create now reads on the server).
+	// a scratch one, never the operator's local/. The server reads no source of truth (020),
+	// so the harness gives it no Infrahub, not even a placeholder.
 	state, err := os.MkdirTemp("", "fylgja-cli-state-*")
 	if err != nil {
 		panic(err)
 	}
-	for name, value := range map[string]string{lab.EnvStateRoot: state, intent.EnvAddress: unreachable,
-		intent.EnvToken: "tier-1-no-token"} {
-		if err := os.Setenv(name, value); err != nil {
-			panic(err)
-		}
+	if err := os.Setenv(lab.EnvStateRoot, state); err != nil {
+		panic(err)
 	}
 	code := m.Run()
 	harness.http.Close()

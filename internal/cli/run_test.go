@@ -19,7 +19,7 @@ func runCommandLine(t *testing.T, args ...string) (int, string, string) {
 	opts := &options{}
 	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-	root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newStageCmd(opts), newSchemaCmd(opts), newPSPCmd(opts), newRunCmd(opts))
+	root.AddCommand(newTwinCmd(opts), newPSPCmd(opts), newRunCmd(opts))
 	root.SetArgs(args)
 	var code int
 	var stdout string

@@ -10,16 +10,10 @@ import (
 )
 
 type stepFlags struct {
-	// stage is --stage as given, <branch>/<label>: the target, in place of the next stage of
-	// the twin's proposed change.
-	stage string
-	// stageGiven is whether --stage was given at all, apart from its value: an explicit empty
-	// one is a reference refused, not one left out (M4's --interval= precedent, a flag twin
-	// create had until 019).
-	stageGiven bool
 	// snapshot is --snapshot as given (019): the target, a snapshot id, sent as it is, or the
 	// path of a file the client reads and sends, as twin create's is. snapshotGiven is
-	// whether it was given at all.
+	// whether it was given at all. It is the step's one target (020): --stage and --probes
+	// are the orchestrator's fylgja-cli's, and no flags of this command.
 	snapshot      string
 	snapshotGiven bool
 	allowRestart  bool
@@ -29,10 +23,6 @@ type stepFlags struct {
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
 	// one is refused, not left out (M4's --interval= rule, a flag twin create had until 019).
 	waitGiven bool
-	// probes is --probes as given (016): the path of a probe declaration the client reads and
-	// sends for a stage target. probesGiven is whether it was given at all.
-	probes      string
-	probesGiven bool
 	// detach is --detach (020): the answer ends at the run's identity.
 	detach bool
 }
@@ -41,82 +31,62 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 	f := &stepFlags{}
 	cmd := &cobra.Command{
 		Use:   "step",
-		Short: "Take the running twin to another stage or a snapshot, without a rebuild",
-		Long: "Take the running twin to a stage of any proposed change, the one --stage names or, left\n" +
-			"out, the next stage of its own, or to a snapshot of any branch, the one --snapshot names.\n" +
-			"The API's server resolves the target, reads it, takes the snapshot of what it read,\n" +
-			"compiles it and files the snapshot and the bundle, as stage plan builds a stage;\n" +
-			"--snapshot <id|file> names one its store holds by its id, or a snapshot file sent from\n" +
-			"here, which it files, and it compiles that and files the bundle, reading no branch. The\n" +
-			"step between the two bundles is printed, the host is checked for the twin after the step,\n" +
-			"and containerlab's own plan for the lab is read. Then one run with the fixed identity\n" +
-			"fylgja-step stages the target, lets containerlab reconcile the lab, waits for every\n" +
-			"node it restarted, recreated or created, pushes every node whose configuration changed\n" +
-			"by replace, and records the twin. Nothing is torn down: a step that fails or is\n" +
-			"cancelled after its stage leaves the twin up and diverged (exit 4), and only fylgja\n" +
-			"twin destroy clears it. A plan that restarts or recreates a node needs --allow-restart.\n" +
-			"After the record the run reads the twin against the target until it conforms, at most\n" +
-			"--wait (default " + defaultBudget + "), and records how that ended; the step's outcome does not\n" +
-			"depend on it. --detach ends the command once the run has started, at its identity.",
+		Short: "Take the running twin to a snapshot, without a rebuild",
+		Long: "Take the running twin to the snapshot --snapshot <id|file> names, a snapshot of any\n" +
+			"branch: one the API's server's store holds by its id, or a snapshot file sent from\n" +
+			"here, which it files. The server compiles it and files the bundle; no source of truth\n" +
+			"is read. The step between the two bundles is printed, the host is checked for the twin\n" +
+			"after the step, and containerlab's own plan for the lab is read. Then one run with the\n" +
+			"fixed identity fylgja-step stages the target, lets containerlab reconcile the lab,\n" +
+			"waits for every node it restarted, recreated or created, pushes every node whose\n" +
+			"configuration changed by replace, and records the twin. Nothing is torn down: a step\n" +
+			"that fails or is cancelled after its stage leaves the twin up and diverged (exit 4),\n" +
+			"and only fylgja twin destroy clears it. A plan that restarts or recreates a node needs\n" +
+			"--allow-restart. After the record the run reads the twin against the target until it\n" +
+			"conforms, at most --wait (default " + defaultBudget + "), and records how that ended; the step's\n" +
+			"outcome does not depend on it. --detach ends the command once the run has started, at\n" +
+			"its identity. A step to a stage is fylgja-cli twin step's, the orchestrator's, which\n" +
+			"reads the stage and sends this server its snapshot.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			f.stageGiven = cmd.Flags().Changed("stage")
 			f.snapshotGiven = cmd.Flags().Changed("snapshot")
 			f.waitGiven = cmd.Flags().Changed("wait")
-			f.probesGiven = cmd.Flags().Changed("probes")
 			return runTwinStep(cmd.Context(), opts, f)
 		},
 	}
-	cmd.Flags().StringVar(&f.stage, "stage", "",
-		"the stage to step to, <branch>/<label>, of any proposed change; left out, the next stage of the twin's own "+
-			"proposed change, so a twin whose record names no stage needs --stage or --snapshot")
 	cmd.Flags().StringVar(&f.snapshot, "snapshot", "",
-		"the snapshot to step to, <id|file>, a snapshot of any branch: a snapshot id (64 lowercase hex characters) the "+
-			"server's store holds, or a snapshot file, which is read here and sent; no branch is read")
+		"the snapshot to step to, <id|file>, a snapshot of any branch (required): a snapshot id (64 lowercase hex "+
+			"characters) the server's store holds, or a snapshot file, which is read here and sent")
 	cmd.Flags().BoolVar(&f.allowRestart, "allow-restart", false,
 		"proceed when containerlab's plan restarts or recreates a node, which loses its running state until the step pushes it again")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
-		"resolve and read the target, take and file its snapshot, compile and file its bundle, check the host "+
-			"and read containerlab's plan; start no run (with --snapshot, nothing is read)")
+		"file a snapshot file sent, compile and file its bundle, check the host and read containerlab's plan; start no run")
 	cmd.Flags().StringVar(&f.wait, "wait", "",
 		"after the record, read the twin until it conforms, at most this long (default "+defaultBudget+"; 0 reads once)")
-	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage+"; for a stage target, and refused beside --snapshot, "+
-		"which carries its own")
 	cmd.Flags().BoolVar(&f.detach, "detach", false, detachUsage+"; refused beside --dry-run")
 	return cmd
 }
 
-// runTwinStep is twin step as one request; the server resolves and reads the target, or
-// resolves the snapshot given, compiles it and files its bundle, checks its host, reads
-// containerlab's plan and starts the run. A --snapshot is sent as twin create sends one
-// (snapshotSent; 019, research R-04), its file read only when neither --stage nor --probes is
-// also given, so the server's snapshot.flags.conflict answers first, whatever the file. A
-// --probes is otherwise sent as create sends it (016).
+// runTwinStep is twin step as one request; the server resolves the snapshot given, compiles
+// it and files its bundle, checks its host, reads containerlab's plan and starts the run. A
+// --snapshot is sent as twin create sends one (snapshotSent; 019, research R-04); left out,
+// the server refuses the step step.target.unknown (020).
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	a := given{}
-	fromStage := f.stageGiven || f.stage != ""
-	if fromStage {
-		a["stage"] = f.stage
-	}
 	a.bool("allow_restart", f.allowRestart)
 	a.bool("dry_run", f.dryRun)
 	a.bool("detach", f.detach)
 	if f.waitGiven {
 		a["wait"] = f.wait
 	}
-	a.probes(f.probes, f.probesGiven)
 	subject := &findings.Subject{Snapshot: f.snapshot}
 	var files []api.File
-	var err error
 	if f.snapshotGiven || f.snapshot != "" {
 		a["snapshot"] = f.snapshot
-		if !fromStage && !f.probesGiven {
-			if files, err = snapshotSent(findings.OpTwinStep, subject, f.snapshot); err != nil {
-				return err
-			}
+		var err error
+		if files, err = snapshotSent(findings.OpTwinStep, subject, f.snapshot); err != nil {
+			return err
 		}
-	} else if files, err = probesSent(findings.OpTwinStep, subject, f.probes, f.probesGiven); err != nil {
-		return err
 	}
 	return send(ctx, opts, findings.OpTwinStep, a, files, handlers{})
 }

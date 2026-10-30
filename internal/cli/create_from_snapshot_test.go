@@ -368,9 +368,9 @@ func TestSnapshotIDShapeIsTheCoresOwn(t *testing.T) {
 }
 
 // FR-009, FR-015: twin create's help says what the server does before the run, as twin
-// compile's says it takes a snapshot (TestCompileTakesNoCTM): it reads, takes the snapshot,
-// compiles and files, or builds from --snapshot with no read, and the run begins at the host
-// check. The help's line breaks are not pinned.
+// compile's says it takes a snapshot (TestCompileTakesNoCTM): it builds from --snapshot, files
+// a file sent and compiles it, with no read, and the run begins at the host check; a branch or
+// a stage is fylgja-cli's (020, FR-003). The help's line breaks are not pinned.
 func TestCreateHelpNamesTheServersTake(t *testing.T) {
 	help := &cobra.Command{Use: "fylgja"}
 	help.AddCommand(newTwinCmd(&options{}))
@@ -381,18 +381,21 @@ func TestCreateHelpNamesTheServersTake(t *testing.T) {
 		}
 	})), " ")
 	for _, want := range []string{
-		"Provision one twin from an Infrahub branch, a proposed change's stage or a snapshot.",
-		"The API's server resolves the stage, reads the branch, takes the snapshot of what it read, compiles it " +
-			"and files the snapshot and the bundle, before any run.",
-		"--snapshot <id|file> builds the twin from a snapshot instead",
-		"which the server files: no branch is read.",
+		"Provision one twin from a snapshot: --snapshot <id|file> names one the API's server's store holds by its id, " +
+			"or a snapshot file sent from here, which the server files.",
+		"The server compiles it and files the bundle, before any run; no source of truth is read.",
 		"one run with the fixed identity fylgja-provision, from the host check on,",
+		"A twin of a branch or a stage is fylgja-cli twin create's, the orchestrator's,",
 		"--snapshot string",
-		"read, take and file the snapshot, compile and file the bundle, and check the host; start no run " +
-			"(with --snapshot, nothing is read)",
+		"file a snapshot file sent, compile and file the bundle, and check the host; start no run",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the help does not say %q:\n%s", want, text)
+		}
+	}
+	for _, gone := range []string{"--branch", "--at", "--stage", "--scope", "--probes"} {
+		if strings.Contains(text, gone+" ") {
+			t.Errorf("the help still names %s:\n%s", gone, text)
 		}
 	}
 	if strings.Contains(text, "Read an Infrahub branch, compile it") {

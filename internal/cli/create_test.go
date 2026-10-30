@@ -1151,7 +1151,7 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	var commands [][]string
 	var walk func(cmd *cobra.Command)
 	walk = func(cmd *cobra.Command) {
-		if cmd.Runnable() && cmd != root {
+		if cmd.Runnable() && !cmd.HasSubCommands() {
 			commands = append(commands, strings.Fields(cmd.CommandPath())[1:])
 		}
 		for _, sub := range cmd.Commands() {
@@ -1163,12 +1163,10 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	for _, path := range commands {
 		ops = append(ops, strings.Join(path, "."))
 	}
-	// The API's operations, and until the client loses them (T033) the five commands 020
-	// moved to the orchestrator, whose paths the server answers 404.
-	want := append(slices.Clone(api.Operations), findings.OpTwinRehearse, findings.OpStageList, findings.OpStagePlan,
-		findings.OpIntentRead, findings.OpSchemaCheck)
-	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(want))) {
-		t.Fatalf("the walk found %v; want %v", ops, want)
+	// The API's operations alone: the five commands 020 moved to the orchestrator are gone
+	// from the client too (FR-003).
+	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(api.Operations))) {
+		t.Fatalf("the walk found %v; want %v", ops, api.Operations)
 	}
 
 	for _, path := range commands {
@@ -1183,8 +1181,7 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 				opts := &options{}
 				root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 				root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-				for _, cmd := range []*cobra.Command{newIntentCmd(opts), newTwinCmd(opts), newStageCmd(opts),
-					newSchemaCmd(opts), newPSPCmd(opts), newRunCmd(opts)} {
+				for _, cmd := range []*cobra.Command{newTwinCmd(opts), newPSPCmd(opts), newRunCmd(opts)} {
 					root.AddCommand(cmd)
 				}
 				// --json comes first: cobra stops reading flags at the unknown one.

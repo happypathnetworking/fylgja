@@ -16,12 +16,7 @@ type runFlags struct {
 }
 
 func newRunCmd(opts *options) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Read or interrupt a run by its identity",
-	}
-	cmd.AddCommand(newRunReadCmd(opts), newRunInterruptCmd(opts))
-	return cmd
+	return noun("run", "Read or interrupt a run by its identity", newRunReadCmd(opts), newRunInterruptCmd(opts))
 }
 
 // identityFlags binds --workflow and --run to f.

@@ -9,12 +9,7 @@ import (
 )
 
 func newPSPCmd(opts *options) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "psp",
-		Short: "Work with platform support packages",
-	}
-	cmd.AddCommand(newPSPValidateCmd(opts))
-	return cmd
+	return noun("psp", "Work with platform support packages", newPSPValidateCmd(opts))
 }
 
 func newPSPValidateCmd(opts *options) *cobra.Command {

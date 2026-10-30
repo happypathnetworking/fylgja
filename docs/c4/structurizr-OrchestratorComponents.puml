@@ -1,0 +1,59 @@
+@startuml
+title <size:24>Component View: Fylgja - fylgja-orchestrator</size>\n<size:24>The orchestrator's modules, run by fylgja-cli or by the runner, and what each reaches.</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Container,Files", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = "")
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
+  Container_Boundary("Fylgja.fylgjaorchestrator_boundary", "fylgja-orchestrator", $tags="Container") {
+    Component(Fylgja.fylgjaorchestrator.cli, "cli", $techn="cli.py", $descr="fylgja-cli: intent read, stage list, stage plan, twin create, twin step, twin rehearse and schema check, each but stage list its flow run in this process; prints and exits as fylgja did.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaorchestrator.serve, "serve", $techn="serve.py", $descr="The runner: the six flows' deployments main, each entrypoint its module path, served to the platform.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaorchestrator.flows, "flows", $techn="flows/", $descr="intent-read, twin-create, twin-step, stage-plan, twin-rehearse and schema-check; each files its findings document as its run's artifact and logs its out lines.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaorchestrator.adaptersinfrahub, "adapters/infrahub", $techn="adapters/infrahub/", $descr="The Infrahub adapter, ported from the Go reader to the same bytes: the schema library's DCIM at 26336e9 by the mapping, conformance, the stages, stamps and intent events, the probes, the snapshot and its id; posts the report as a thread.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaorchestrator.documents, "documents", $techn="documents/", $descr="The stages, plan and rehearsal blocks, their text and markdown, the deadline, the findings document and every rule the orchestrator files.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaorchestrator.core, "core", $techn="core.py", $descr="The core's client: POST /v1/<noun>/<verb> with the API's token; every run detached, then run.read every 2 s.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaorchestrator.record, "record", $techn="record.py", $descr="The orchestrator's store, snapshots/<id>.json, and its record, twin.json, of the twin it last drove, trusted while twin show names its snapshot.", $tags="Component", $link="")
+  }
+
+  Container(Fylgja.fylgjaserve, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650", $descr="The API's server, on the lab host, on loopback alone. Reads no source of truth: files the snapshots it is sent, compiles, checks the host, starts, follows, reads and interrupts runs, reads the twin. Loads the platform packages (psp/) and the probe packages (probes/), embedded, with the override directory's.", $tags="Container", $link="")
+  Container(Fylgja.Orchestratorsplatform, "Orchestrator's platform", $techn="Prefect 3.8.8; SQLite; HTTP on the Docker bridge, :4200", $descr="Prefect's open-source server, apart from the one Infrahub runs: the six deployments, their runs, each run's artifact fylgja-findings and its log; basic authentication.", $tags="Container", $link="")
+  ContainerDb(Fylgja.Orchestratorsstore, "Orchestrator's store", $techn="Files", $descr="<orchestrator root>/: snapshots/<snapshot_id>.json, every snapshot the adapter took, each kept as first filed; twin.json, the record of the twin it last drove.", $tags="Container,Files", $link="")
+}
+
+Rel(Fylgja.fylgjaorchestrator.cli, Fylgja.fylgjaorchestrator.flows, "Runs a flow in its own process; stage list's plain body", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.cli, Fylgja.Orchestratorsplatform, "Records the run when PREFECT_API_URL names it, else on an ephemeral server", $techn="HTTP, basic auth", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.serve, Fylgja.fylgjaorchestrator.flows, "Serves the six as deployments main", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.serve, Fylgja.Orchestratorsplatform, "Serves the deployments; takes their runs", $techn="HTTP, basic auth", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.flows, Fylgja.fylgjaorchestrator.adaptersinfrahub, "Reads, resolves and lists stages, checks the schema, takes snapshots, posts the report", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.flows, Fylgja.fylgjaorchestrator.documents, "Renders the stages, the plan and the rehearsal; words the findings document", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.flows, Fylgja.fylgjaorchestrator.core, "Compiles, diffs, creates, steps, verifies, destroys and shows through the core", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.flows, Fylgja.fylgjaorchestrator.record, "Files snapshots; follows the twin in the record; asks after a dead rehearsal's run", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.flows, Fylgja.Orchestratorsplatform, "Files the document as the run's artifact; logs the out lines", $techn="HTTP, basic auth", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.adaptersinfrahub, Fylgja.fylgjaorchestrator.documents, "Words its findings by the rules", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.core, Fylgja.fylgjaserve, "POST /v1/<noun>/<verb>: every run detached, then run.read", $techn="HTTP on loopback, bearer token", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.record, Fylgja.Orchestratorsstore, "Files and reads", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaorchestrator.record, Fylgja.Orchestratorsplatform, "Reads a flow run's state for the reclaim", $techn="HTTP, basic auth", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

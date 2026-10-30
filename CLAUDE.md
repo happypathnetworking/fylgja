@@ -1,9 +1,15 @@
 # Fylgja — working notes for Claude
 
-A walking twin of network intent: Infrahub branch (+ optional point in time) → pure
-compiler → deployable bundle → one containerlab twin, provisioned through Temporal.
-One twin at a time. No database. Every command is a request to the API's server,
-`fylgja serve`, on the lab host.
+A walking twin of network intent: Infrahub branch (+ optional point in time) → snapshot →
+pure compiler → deployable bundle → one containerlab twin, provisioned through Temporal.
+One twin at a time. No database. **Two deployables** ([D-065](docs/decisions.md#d-065)):
+the **core**, `fylgja`, which builds, steps, destroys, shows and verifies a twin from a
+snapshot and knows no branch, stage or source of truth, every command of it a request to
+the API's server, `fylgja serve`, on the lab host; and the **orchestrator**, a Python
+project on Prefect under `orchestrator/`, whose CLI `fylgja-cli` runs every command that
+names a branch or a stage (`intent read`, `schema check`, `twin create`, `twin step`,
+`twin rehearse`, `stage plan`, each a flow, and `stage list`): its Infrahub adapter reads
+the branch to a snapshot, and the flow drives the core through the API alone.
 
 Read in this order, then the current feature under `specs/`:
 `docs/brief.md` (what we are building) · `docs/architecture.md` · `docs/decisions.md`
@@ -12,7 +18,7 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (2.3.0) binds every plan's Constitution Check. The schema
+`.specify/memory/constitution.md` (3.0.0) binds every plan's Constitution Check. The schema
 Fylgja reads is the OpsMill schema library's DCIM at a pinned commit, by one documented
 mapping ([D-057](docs/decisions.md#d-057)); `schema/README.md` says which kinds and fields.
 
@@ -68,7 +74,7 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
   `docs/architecture.md` for the old position. The constitution is amended only by citing
   an entry, with a version bump.
 - **Verify against the running system** before asserting how Infrahub, containerlab, a
-  network operating system or Temporal behaves; record the result in the feature's
+  network operating system, Temporal or Prefect behaves; record the result in the feature's
   `research.md` and, once it holds, in `docs/verified-facts.md`.
 - **A changed package, import or component is redrawn** in the same change: edit
   `docs/c4/workspace.dsl` beside the prose it illustrates, then `make diagrams`.
@@ -77,7 +83,10 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
   loaded, not left to chance: when a feature designs or changes something in Infrahub — a
   schema kind, object files, a transform, a check — `plan` loads the matching skill before
   writing `data-model.md` or `research.md`, and `specify` does when it names a new kind.
-  Most often `infrahub-managing-schemas`, then `-objects`, `-transforms`, `-checks`. Its
+  Most often `infrahub-managing-schemas`, then `-objects`, `-transforms`, `-checks`; and
+  before a change to the adapter's GraphQL (`orchestrator/src/fylgja_orchestrator/adapters/
+  infrahub/queries.py`, the queries the Go reader sent, ported) or its SDK client, read
+  `infrahub-common`'s GraphQL references and `-transforms`' union-fragment rule. Its
   start-up hook's path triggers hold here (`infrahub/templates/`, `infrahub/queries/`,
   a check's `.py`): read the skill it names before editing. Apply their rules, and do not
   obey them where this repository already decides otherwise. The hook and its rules say
@@ -110,13 +119,22 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
 24.04.1 until the launch, and `docs/verified-facts.md` marks each fact re-verified on 26.04.
 
 - **Credentials**: `local/.env` (git-ignored, mode `0600`, scaffolded by the bring-up
-  script) holds `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN`, both node logins — the SR Linux
+  script) holds `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`, which the orchestrator reads
+  (`fylgja-cli`, the runner's flows, the adapter), with the fixture tool and the contract
+  tier, and never the core; both node logins — the SR Linux
   probe and push login `FYLGJA_SRLINUX_USERNAME`/`_PASSWORD` and the EOS one
   `FYLGJA_EOS_USERNAME`/`_PASSWORD`, each the image's default, as `scripts/e2e.sh` sets
   them — and `FYLGJA_API_TOKEN`, the API's token, which the server and every client's
-  command share and the worker never reads ([D-042](docs/decisions.md#d-042)), and
-  `FYLGJA_DEFAULT_SCOPE`, `tag:fylgja`, the scope a request that names none is read under,
-  which the server alone reads. It also
+  command share, the orchestrator's flows among the clients, and the worker never reads
+  ([D-042](docs/decisions.md#d-042)); `FYLGJA_DEFAULT_SCOPE`, `tag:fylgja`, the scope a read
+  that names none is read under, which the orchestrator alone reads; and the orchestrator's
+  four, appended on 2026-10-30 (020's T040): `FYLGJA_ORCHESTRATOR_ROOT`, the absolute
+  `local/orchestrator` (its record `twin.json` and its `snapshots/`), read by `fylgja-cli`
+  and the runner; `PREFECT_API_URL`, `http://172.17.0.1:4200/api`, the platform, read by
+  the same two; `PREFECT_API_AUTH_STRING`, the platform's basic auth `fylgja:<password>`,
+  which their Prefect client sends and the Prefect server is given as
+  `PREFECT_SERVER_API_AUTH_STRING`; and `FYLGJA_ORCHESTRATOR_AUTH`, the same value, which
+  Compose hands the task workers for the checks and nothing on the host reads. It also
   holds Infrahub's Compose values, which Compose reads and Fylgja never does:
   `COMPOSE_PROJECT_NAME`, `INFRAHUB_INITIAL_ADMIN_TOKEN` (equal to `INFRAHUB_API_TOKEN`),
   `INFRAHUB_INITIAL_ADMIN_PASSWORD`, `INFRAHUB_INITIAL_AGENT_TOKEN` and
@@ -132,11 +150,17 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   http://localhost:8000. The override pins the three Infrahub services to `1.11.2`, since a
   stray `VERSION` would move them, caps Neo4j at heap 1g/2g and page cache 1g, and gives
   the two task workers `extra_hosts: host.docker.internal:host-gateway`,
-  `FYLGJA_API_ADDRESS: host.docker.internal:7650` and `FYLGJA_API_TOKEN:
-  ${FYLGJA_API_TOKEN}`, which Compose reads from `local/.env`, so the file holds no value
-  ([D-050](docs/decisions.md#d-050)). A changed override reaches them only when `up -d`
-  recreates them, which the bring-up script's `infrahub` part runs whenever it copies the
-  override. Run
+  `FYLGJA_ORCHESTRATOR_ADDRESS: host.docker.internal:4200` and `FYLGJA_ORCHESTRATOR_AUTH:
+  ${FYLGJA_ORCHESTRATOR_AUTH}`, which Compose reads from `local/.env`, so the file holds no
+  value ([D-065](docs/decisions.md#d-065), in D-050's place): the checks reach the
+  orchestrator's platform on the bridge, and the core not at all (the core's port refuses
+  the connection from inside each). A changed override reaches them only when `up -d`
+  recreates them (last on 2026-10-30, 020's T040), which the bring-up script's `infrahub`
+  part runs whenever it copies the override. **A recreated task worker has no checkout**
+  (they mount no volume), and Infrahub 1.11.2's user check cannot clone a read-only
+  registration, so the first proposed change opened after a recreate can leave its user
+  validators `in_progress` until its artifact check has cloned `fylgja` on both workers;
+  then re-run its user checks (`docs/verified-facts.md`, 10-30). Run
   Compose from the repository root as the script does: `docker compose -p fylgja-infrahub
   --env-file local/.env -f local/infrahub/docker-compose.yml -f
   local/infrahub/docker-compose.override.yml <command>`. Volumes persist across `down`.
@@ -160,7 +184,10 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   `fylgja-devices`; and the registration `fylgja`, a `CoreReadOnlyRepository` at
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
   ([D-044](docs/decisions.md#d-044)), imported at `c006bf9` on 2026-10-26, at
-  `cb0a8d7` on 2026-10-27 and at `842c893` on 2026-10-29 (the template's address lines),
+  `cb0a8d7` on 2026-10-27, at `842c893` on 2026-10-29 (the template's address lines) and
+  at `504ec98` on 2026-10-30 (020's T039: the checks as the platform's clients, `a24a0ff`
+  cherry-picked onto `main` alone, so `fylgja_api.py` there lacks T035's one comment and
+  tier 3's byte-for-byte precheck refuses this tree until the file is imported again),
   whose import
   made the query `device_config` (over the library's kinds), the transform
   `srlinux_device_config` and the definition `srlinux_device_config` → artifact
@@ -169,9 +196,12 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   `fylgja-step` (`infrahub/checks/fylgja_step.py`, timeout 300) and `fylgja-twin`
   (`fylgja_twin.py`, timeout 4260), global, which Infrahub's task workers run on every
   proposed change, draft or not, at its creation and on a re-run of its user checks, as
-  clients of the API reaching the server on the bridge. `fylgja-twin` skips a draft,
-  rehearses a ready one on a twin and posts the report as a thread on it
-  ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)).
+  clients of the orchestrator's platform on the bridge (`infrahub/checks/fylgja_api.py`,
+  `contracts/checks.md`): each triggers a flow's deployment (`stage-plan/main`,
+  `twin-rehearse/main`), waits for its run and concludes from its document, the run's
+  artifact. `fylgja-twin` skips a draft and has a ready one rehearsed on a twin by the
+  `twin-rehearse` flow, which posts the report as a thread on it; the check writes nothing
+  ([D-052](docs/decisions.md#d-052), [D-065](docs/decisions.md#d-065)).
   `fylgja-fixture -prepare-main` loaded the library and the stage kind, made the group and
   registered the repository, each only when absent. It loads the stage and probe kinds
   first, wherever either is absent, then on a `main` holding any of the library's kinds
@@ -188,8 +218,7 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   and is never retried, so read both workers' `commits/` after an import
   (`docs/verified-facts.md`, 10-27); a branch then sees it only
   after `BranchRebase` or re-creation, so a branch made before a check's import never runs
-  it, and each artifact changes only once generated again. `make sdl`
-  fetches the SDL from `main`. Prefect's `git_repositories_sync` runs every minute with
+  it, and each artifact changes only once generated again. Prefect's `git_repositories_sync` runs every minute with
   one concurrency slot, so a run stuck `PENDING` blocks every import until it is
   cancelled.
 - **The fixture branch `fylgja-fixture`**: three devices in the library's kinds, re-seeded
@@ -222,8 +251,8 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   `fylgja` alone with its two check definitions, and `Branch` lists `main` and
   `fylgja-fixture` alone. **Every proposed change opened here runs both checks** at its
   creation, and once it is ready for review a re-run of its user checks rehearses it on a
-  twin through the server on the bridge: never mark one ready and re-run its checks while
-  tier 2 runs.
+  twin through the orchestrator's platform on the bridge, whose flow drives the core:
+  never mark one ready and re-run its checks while tier 2 runs.
 - **containerlab 0.79.0** (its `.deb`; `/usr/bin/containerlab` setuid root) and **Docker
   29.8.1** with Compose 5.6.0, from Docker's repository. The user is in `clab_admins` and
   `docker`: `clab` runs without sudo. A shell begun before the bring-up script added the
@@ -265,23 +294,34 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   Start it detached, as the worker is, logging to `local/temporal.log`, and restart it if
   it is down.
 - **Python**: `.venv` at the repository root (Python 3.14.4, `python3.14-venv`) holds
-  `infrahub-sdk[ctl]` 1.23.2, which connects as Admin. The repository does not ignore
-  `.venv`; a `.gitignore` of `*` inside it keeps the tree clean, so a new venv needs one
-  too.
+  `infrahub-sdk[ctl]` 1.23.2, which connects as Admin: `infrahubctl` and nothing else.
+  **`orchestrator/.venv`** (`make orchestrator-venv`, the package installed editable from
+  `orchestrator/pyproject.toml`'s pins) holds the orchestrator: Prefect 3.8.8 with `fastapi`
+  0.150.0 beside it (3.9.0 does not co-install with the SDK, and 3.8.8's server does not
+  start on the FastAPI pip would pick), `infrahub-sdk` 1.23.2, `httpx` 0.28.1, `pytest`
+  9.2.0 and `ruff` 0.17.3, and the console scripts `fylgja-cli` and `fylgja-orchestrator`.
+  The repository does not ignore either venv; a `.gitignore` of `*` inside each keeps the
+  tree clean, so a new venv needs one too.
 - **sudo** is sudo-rs 0.2.13, and a session cannot answer its prompt (`sudo -n` asks for
-  a password): a step that needs root is the operator's.
+  a password): a step that needs root is the operator's. Every part of the bring-up script
+  runs `sudo -v` first, so a session takes `--part orchestrator`'s steps by hand.
 - **Git**: this clone's `user.name`/`user.email` are set in its own config, as the
   history's author.
 - **Memory**: 32 GiB leaves tier 3 room. Still read `free -m` before tier 3. Infrahub
-  idles at about 5.2 GiB, leaving about 24 GiB available with the three processes running,
-  and its Neo4j is capped (above) because uncapped it once took the headroom a twin needs
-  and killed a tier-3 run. Infrahub grows with uptime: after 14 days its containers held
-  about 15.4 GiB (its server 7.97 GiB), leaving about 10.5 GiB, and a tier-3 attempt lost
-  a deploy to an SR Linux `sr_cli` segfault (2026-10-27). A Compose `restart` of its
-  containers brought it back to about 21.5 GiB available, keeping its volumes, both task
-  workers' repository checkouts and their reach to the server on the bridge; when `free
-  -m` reads well below the figure above, restart it before a live run. Do not boot a twin
-  while the contract tier runs, and rest the host between tier-3 runs.
+  idles at about 5.2 GiB, leaving about 24 GiB available with the core's three processes
+  running, and its Neo4j is capped (above) because uncapped it once took the headroom a
+  twin needs and killed a tier-3 run. Infrahub grows with uptime: after 14 days its
+  containers held about 15.4 GiB (its server 7.97 GiB), leaving about 10.5 GiB, and a
+  tier-3 attempt lost a deploy to an SR Linux `sr_cli` segfault (2026-10-27). A Compose
+  `restart` of its containers brought it back to about 21.5 GiB available, keeping its
+  volumes, both task workers' repository checkouts and their reach to the platform on the
+  bridge; with the five processes, 15.8 GiB became 21.2 GiB, and 18.0 GiB 19.8 GiB
+  (2026-10-30). When `free -m` reads well below about 20 GiB, restart it before a live run.
+  Do not boot a twin while the contract tier runs, and rest the host between tier-3 runs.
+
+**Five processes on the host**: Temporal's dev server, the core's worker and server, and
+the orchestrator's Prefect server and runner ([D-065](docs/decisions.md#d-065)). Each is
+yours to run.
 
 **The worker is yours to run.** Start, stop and restart `fylgja worker run` yourself
 whenever you need to — after every rebuild, before any live run, and whenever its binary
@@ -297,9 +337,9 @@ Then verify what you started, never assume it: `/proc/<pid>/exe` is not `(delete
 environment names carry both logins, and the start-up report names both platform packages and the probe package. The
 worker reads no source of truth since 019, so it needs no `INFRAHUB_*`, which it still
 inherits from `local/.env` and never reads. A rebuild does not always replace the binary,
-so read `/proc/<pid>/exe` rather than assuming either way. The worker serves four
-workflows (provision, destroy, step and the rehearsal), each started with a snapshot id
-and a bundle id, and seventeen activities (016 added the flows' start and read); a worker
+so read `/proc/<pid>/exe` rather than assuming either way. The worker serves three
+workflows (provision, destroy and step; the rehearsal is the orchestrator's flow since
+020), each started with a snapshot id and a bundle id, and seventeen activities; a worker
 on an older binary than the tree may lack one and fail a run at it. The start-up report
 names the packages, the probe package among them (`ping (embedded): image alpine:3.24.2
 (public_registry, present on this host), flow ping every 0.2s, burst 5`), never workflows
@@ -307,41 +347,79 @@ or activities. A stopped worker lingers as a poller for about
 five minutes — harmless, and not a second worker. The dev server is the same: restart it
 if it is down.
 
-**The API's server is yours to run, as the worker is.** Every command but `worker run`
-and `serve` itself is a request to `fylgja serve` ([D-040](docs/decisions.md#d-040),
-[D-041](docs/decisions.md#d-041)); `--version` and `--help` alone need no server. Start,
-stop and restart it yourself on the same occasions, detached, from a shell that has loaded
-`local/.env` (which carries `FYLGJA_API_TOKEN`; without it the server refuses to start),
-on loopback and on the host's Docker bridge, where Infrahub's task workers reach it
-([D-050](docs/decisions.md#d-050)):
+**The API's server is yours to run, as the worker is.** Every command of the core but
+`worker run` and `serve` itself is a request to `fylgja serve`
+([D-040](docs/decisions.md#d-040), [D-041](docs/decisions.md#d-041)); `--version` and
+`--help` alone need no server. Start, stop and restart it yourself on the same occasions,
+detached, from a shell that has loaded `local/.env` (which carries `FYLGJA_API_TOKEN`;
+without it the server refuses to start), **on loopback alone and with every `INFRAHUB_*`
+name and `FYLGJA_DEFAULT_SCOPE` removed from its environment**: it reads none of them, and
+`local/.env`'s Compose values include `INFRAHUB_INITIAL_ADMIN_TOKEN`, the API token's value,
+so the bring-up script removes the whole pattern (`CORE_UNSET`) and tier 3's case 9 refuses
+a core holding any:
 
 ```
-set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve --listen 127.0.0.1:7650 --listen "$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'):7650" >> local/server.log 2>&1 < /dev/null &
+set -a; . local/.env; set +a; setsid nohup env $(compgen -e | grep -E '^(INFRAHUB_[A-Za-z0-9_]*|FYLGJA_DEFAULT_SCOPE)$' | sed 's/^/-u /') FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve --listen 127.0.0.1:7650 >> local/server.log 2>&1 < /dev/null &
 ```
 
-Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries
-`INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and
-`FYLGJA_DEFAULT_SCOPE`; and its report (`local/server.log`) says `listening on
-127.0.0.1:7650 (API version 1, build …)`, then `listening on 172.17.0.1:7650 (…)` (the
-bridge's address) followed straight away by `172.17.0.1:7650 is not a loopback address:
-the API's token is sent unencrypted on it`, names `bundles:`, `snapshots:` and `twin:` in
-its state root line (the worker's names the same), says `default scope: tag:fylgja` after
-the state root, and names both platform packages with their logins set and the `ping` probe package with
-its image present. From inside each Infrahub task worker, a
-`POST` to `http://$FYLGJA_API_ADDRESS/v1/twin/show` with the container's token answers
-`200` with this build, and `401` without it
-(`specs/015-proposed-change-rehearsal/quickstart.md` §2). **Find both with `pgrep -x fylgja`**
-(`pgrep -f` also matches the shell that runs it) and tell them apart by `/proc/<pid>/cmdline`. The server
-dials nothing at start and keeps nothing between two requests, so a restart loses nothing
-but the answers it was sending, whose runs go on. It logs one line a request to
-`local/server.log`, never a token. `docker` and `containerlab` must be on the `PATH` of
-both the worker and the server, which makes every dry run; a client needs neither.
+Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries both logins,
+`FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`, and no `INFRAHUB_*` and no
+`FYLGJA_DEFAULT_SCOPE` (read the names alone from `/proc/<pid>/environ`); `ss -ltn` shows
+`7650` on `127.0.0.1` alone; and its report (`local/server.log`) says `listening on
+127.0.0.1:7650 (API version 1, build …)`, names `bundles:`, `snapshots:` and `twin:` in
+its state root line (the worker's names the same), says `the workflow service
+(localhost:7233, namespace default), Docker, containerlab and the nodes are dialled when a
+request needs them`, with no default scope line and nothing of Infrahub, and names both
+platform packages with their logins set and the `ping` probe package with its image
+present. **Find both with `pgrep -x fylgja`** (`pgrep -f` also matches the shell that runs
+it) and tell them apart by `/proc/<pid>/cmdline`. The server dials nothing at start and
+keeps nothing between two requests, so a restart loses nothing but the answers it was
+sending, whose runs go on. It logs one line a request to `local/server.log`, never a
+token. `docker` and `containerlab` must be on the `PATH` of both the worker and the server,
+which makes every dry run; a client needs neither.
 
-**A client** needs `FYLGJA_API_TOKEN`, and `FYLGJA_API_ADDRESS` when the server is off
-`127.0.0.1:7650`, and nothing else: run a client's command from a shell that holds the
-token alone, or with `local/.env` loaded, which it ignores but for the token. A client on
-another machine comes through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, with a binary
-built from this tree.
+**The orchestrator's Prefect server and its runner are yours to run, as the worker is.**
+The Prefect server is the platform the runner and Infrahub's task workers meet on, on the
+Docker bridge alone (`PREFECT_API_URL`, `http://172.17.0.1:4200/api`; uvicorn takes one
+host, and the host's processes reach the bridge as the task workers do), its home and
+SQLite database under `local/orchestrator/prefect`; the runner, `fylgja-orchestrator
+serve`, serves the six flows' deployments (`intent-read`, `twin-create`, `twin-step`,
+`stage-plan`, `twin-rehearse` and `schema-check`, each `main`) that the checks trigger.
+Start each detached, the server first, from a shell that has loaded `local/.env`:
+
+```
+set -a; . local/.env; set +a; mkdir -p local/orchestrator/prefect; PREFECT_HOME="$PWD/local/orchestrator/prefect" PREFECT_SERVER_API_AUTH_STRING="$PREFECT_API_AUTH_STRING" setsid nohup orchestrator/.venv/bin/prefect server start --host "$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')" --port 4200 --no-ui >> local/prefect.log 2>&1 < /dev/null &
+set -a; . local/.env; set +a; PREFECT_HOME="$PWD/local/orchestrator/prefect" setsid nohup orchestrator/.venv/bin/fylgja-orchestrator serve >> local/orchestrator.log 2>&1 < /dev/null &
+```
+
+Then verify each: the server's `/api/health` answers `200` (23–32 s after its start),
+`/api/admin/version` `"3.8.8"` with the auth string and `401` without; the runner's line
+in `local/orchestrator.log`, `fylgja-orchestrator: serving intent-read/main,
+twin-create/main, twin-step/main, stage-plan/main, twin-rehearse/main, schema-check/main
+on the platform at http://172.17.0.1:4200/api` (about 4 s after its start), and each
+deployment read by an authenticated `GET /api/deployments/name/<flow>/main`; neither log
+holds the auth string, its password or its base64. The runner holds the code it started
+with (the package is installed editable): restart it after any change under
+`orchestrator/src/`. From inside each task worker, the deployment
+`…/api/deployments/name/twin-rehearse/main` with `FYLGJA_ORCHESTRATOR_AUTH` answers `200`,
+and `POST http://host.docker.internal:7650/v1/twin/show` refuses to connect
+(`specs/020-core-orchestrator-split/quickstart.md` §6). Find them with `pgrep -f
+'orchestrator/.venv/bin/prefect server start'` and `pgrep -f
+'orchestrator/.venv/bin/fylgja-orchestrator serve'`. `make prefect-server` and `make
+orchestrator-serve` run each in the foreground. A cancelled flow's `finally` has Prefect's
+fixed 30 s grace before SIGKILL.
+
+**A client of the core** (`fylgja`) needs `FYLGJA_API_TOKEN`, and `FYLGJA_API_ADDRESS`
+when the server is off `127.0.0.1:7650`, and nothing else: run a client's command from a
+shell that holds the token alone, or with `local/.env` loaded, which it ignores but for the
+token. A client on another machine comes through `ssh -N -L 7650:127.0.0.1:7650 <lab
+host>`, with a binary built from this tree. **`fylgja-cli`**
+(`orchestrator/.venv/bin/fylgja-cli`) runs its flow in its own process and needs the API's
+two, `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`, `FYLGJA_DEFAULT_SCOPE` (or `--scope`)
+and `FYLGJA_ORCHESTRATOR_ROOT`; with `PREFECT_API_URL` and `PREFECT_API_AUTH_STRING` its
+runs are recorded on the platform, and without them on Prefect's ephemeral server under
+`PREFECT_HOME`, started by each command (17–40 s a start), as tier 3 runs it. Loaded
+`local/.env` gives it all of them.
 
 **Formats**: bundle `6` (a probe's two hosts, their links and the ports they take under
 the manifest's `fidelity.synthesized`; a bundle of another format is refused), CTM `2` (its version is
@@ -349,16 +427,34 @@ the contract's: contract `0.2` is retired, [D-057](docs/decisions.md#d-057)), PS
 (each package's `platform.matches`, matched exactly; both shipped packages on `mode:
 replace`), snapshot `2` (CTM `2` wrapped with its probe list, its id the hash of the body without
 the read's `observed_at`, filed under `snapshots/`, [D-061](docs/decisions.md#d-061); a `1`
-read as a `2` with no probes, under the same id), probes `1` (a declaration's file,
+read as a `2` with no probes, under the same id; the core's store and the orchestrator's
+each file one), probes `1` (a declaration's file,
 `contracts/probes.schema.json`, [D-064](docs/decisions.md#d-064)), probe package `0.1`
-(`probes/ping.yaml`, keyed by its `format`), `twin.json` `11` (a host in the record and
-`step.loss`; a pinned stage beside any source but a bundle, [D-062](docs/decisions.md#d-062);
-a `10` an earlier build left is shown and destroyed, never stepped from), findings
-`1`, the API `1` (`contracts/api.md`, the version in every path; `scope` an optional
-argument; `snapshot` on `twin.create`, `twin.compile` and `twin.step`; `probes` on
-`intent.read`, `twin.create`, `twin.step`, `stage.plan` and `twin.rehearse`; `interval` and
-`no_follow` gone, pre-1.0, without a version move). `twin compile --ctm`, the bundle's CTM
-sidecar, `--interval` and `--no-follow` are retired. The four goldens are three-node
+(`probes/ping.yaml`, keyed by its `format`), `twin.json` `12` (the core's record: its
+snapshot and bundle, no stage and no rehearsal block; a step compares the twin's snapshot's
+scope and mapping with the target's; an `11` or earlier an earlier build left is shown and
+destroyed, never stepped from), the orchestrator's record `1`
+(`$FYLGJA_ORCHESTRATOR_ROOT/twin.json`: the stage and the proposed change the twin was
+driven to, its snapshot, the flow and its run, trusted only while `twin show`'s snapshot
+is its, else `record.twin.stale`), findings `1` (the core's and the orchestrator's, the
+operation enum keeping `twin.rehearse`, `stage.list`, `stage.plan`, `intent.read` and
+`schema.check` for the orchestrator's documents), the API `1` (`contracts/api.md`, the
+version in every path; `snapshot` on `twin.create`, `twin.compile` and `twin.step`;
+`detach` on `twin.create`, `twin.provision`, `twin.step` and `twin.destroy`, a detached run
+read and interrupted by its identity through `run.read` and `run.interrupt`; `twin.diff`,
+the step between two snapshots; the five operations `twin.rehearse`, `stage.list`,
+`stage.plan`, `intent.read` and `schema.check` and the arguments `branch`, `at`, `stage`,
+`scope` and `probes` gone, pre-1.0, without a version move). **The orchestrator owns**
+(`contracts/orchestrator.md`) `fylgja-cli`'s commands and documents: the `stages` and
+`plan` blocks (`contracts/stages.schema.json`, whose `$defs/step` is also the core's
+`twin.diff` block), the `rehearsal` block (`contracts/rehearsal.schema.json`), the
+rehearsal's text and markdown report (at most 4,092 bytes, its reproduce lines naming
+`fylgja-cli` for the create and the steps and `fylgja` for the verify and the destroy) and
+the deadline, held byte for byte to goldens captured from the Go build under
+`orchestrator/tests/golden/`; and the checks' contract, `contracts/checks.md`.
+`twin compile --ctm`, the bundle's CTM sidecar, `--interval` and `--no-follow` are retired,
+and `fylgja`'s `--branch`, `--at`, `--stage`, `--scope` and `--probes` with the five
+commands. The four goldens are three-node
 **`c70589c3…`**, lossy **`10099944…`**, mixed **`44ac283f…`** and three-node-probed
 **`5222063b…`**, their wrapped fixtures under `testdata/snapshot/` compiling to each, and
 the live fixture compiles to `c3872f5c…` on this install, from snapshot `0940db93…`. The current contracts are in `contracts/`; a test of an
@@ -431,6 +527,12 @@ Re-verify on any upgrade.
   a cancellation the workflow asked for, and the RPC's error for a lost heartbeat.
 - **No twin while tier 2 runs**: the host starves, deploys lose their heartbeats, and
   Infrahub times out the tier.
+- **Prefect 3.8.8**: basic auth guards every path but `/api/health`; a flow's document
+  crosses as its run's artifact, `data` a JSON string, never its return value;
+  `flow_runs/filter`'s default order is by `uuid4` id, not time (sort `START_TIME_DESC`);
+  `set_state CANCELLING` with `force` moves an ended run to `CANCELLING` and leaves it
+  there, so send none; a cancellation's grace before SIGKILL is a fixed 30 s; the
+  ephemeral server's default 20 s start-up bound lapses on a fresh home (180 is set).
 
 ## Milestones
 
@@ -452,243 +554,174 @@ M14 — Reproducible and visible: the cut (this repository's first commit) and t
 ## Build and test
 
 `scripts/bring-up.sh` (sets a fresh Ubuntu 26.04 host up: the toolchain, the lab host,
-Infrahub with `main` prepared and the fixture seeded, then the build, the three processes,
-started before tiers 1 and 2 so that tier 2 reaches this build's server, and left running; `--part NAME` runs one part, and `--part infrahub` is
-what CI's contract job runs; a second run installs nothing; it asks for sudo, so it is
-the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make
-build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 90s
-wall uncached, raised from 65s on 2026-10-30 by the operator's answer when 020's Run 17
-measured 68.0s and 67.0s at a load of 2.1–4.7 with the orchestrator's 710 Python tests
-beside Go, `internal/cli` 42.2–43.2s of it; from 45s on 2026-10-29 when 016's close measured 53.6–60.9s in
-three runs at a load of 3–4, `internal/cli` 43.8–44.5s of it; from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
-load average of 2–5, `internal/cli` about 26s of it; 40.6s on 2026-10-27 at a load of
-1.5–2.6, `internal/cli` 36.2s of it, since 018's tests; 43.8–45.0s in three runs on
-2026-10-28 at a load of 1.1–4.9, `internal/cli` 39.2–40.5s of it, since 019's; CI's unit job on every push and pull request, beside its lint job, which
-runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
-test-contract` (tier 2, real
-Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
-job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about 34 minutes (2,017 s on 2026-10-29 with 016's `TestProbesFromTheKind` and
-`TestIntentReadFilesASnapshot2`, green once `internal/stage` and `internal/stages`, whose
-three 1m30s artifact waits lapsed under the tier's own load, were re-run alone; 2,009 s on
-2026-10-28, beside the imported checks; every artifact wait is 180 s since,
-`testsupport.ArtifactWait`, the schema waits' 90 s unmoved), `internal/stages` the
-longest package at 1,712.9 s, 87 s under the `-timeout 30m` it sets, then `internal/checks` alone in a second
-`go test` (295.4 s), whose `TestChecksInsideInfrahub`
-runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
-the server on the bridge from this tree here, and skips, saying why, where the task workers
-reach none, as in CI) · `make lint` (runs with build
-tags `contract,fixture,e2e`) · `make linkcheck` (`scripts/linkcheck.py`: every relative
-link and anchor in the tracked Markdown resolves in a public clone; a hand tool, not a CI
-step) ·
-`go test ./internal/compiler -update` regenerates the four goldens — review the diff,
-and commit a re-baseline on its own · the conformance suite's pure half is part of
-`make test`; its boot half is `FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e
-./internal/conformance -run '^TestBootHalf$' -v` against a ready twin · `make
-temporal-dev` (the file-backed dev server) · `make worker` and `make serve` (each with the
-state root made absolute; load `local/.env` first) · `make infrahub-seed` and `make
-infrahub-clean` (the fixture branch) · `make sdl` · `make diagrams` (needs Docker; no tier
-needs it) · **every command but `worker run` and `serve` needs a running server**, the
-pipeline's stage commands and `stage list` and `stage plan` included (`psp validate` and
-`twin compile` need neither Infrahub nor the workflow service, but they need the server) ·
-`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, the boot half on three of them (cases 1, 5 and 6, case 5's twin probed), `twin verify` on three of them and on the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to a snapshot by file and by id, probes in cases 5, 8 and 9 (case 5's `n1-loop` by file, case 8's `e1-loop` from the kind across `e1`'s restart, case 9's stage `probe-port-down` failing on `verify.burst`), every
-command through a server the script starts itself with a token it makes, but case 9, a
-proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the operator's
-server on the bridge; needs the dev
-server and a worker running from the repository root, Docker, containerlab, **both**
-images, `alpine:3.24.2` and Infrahub with `FylgjaProbe` on `main` holding no probe, and for case 9 the server on the bridge from this tree and both
-checks imported on `main`, each checked before any case; about 36 to 37 minutes (2,171.8 s
-on 2026-10-29 with case 5's boot half, 10.0 s of it, and 2,236.6 s the same day with 016's
-probes, 1,894.1 s on 2026-10-28 with case 5's frozen wait); `WORKER_LOG=<file>`
-adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
-the seven cases SR Linux alone runs, about 19 minutes (1,156.1 s on 2026-10-27), ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
-never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
-starts detached with its exit status in a file, and is waited on in foreground calls of
-under ten minutes.
+Infrahub with `main` prepared and the fixture seeded, the orchestrator's venv, its
+auth string and its two processes (`--part orchestrator`), then the build and the core's
+processes, started before tiers 1 and 2 so that tier 2 reaches this build's server, and
+left running: five processes; `--part NAME` runs one part, and `--part infrahub` is what
+CI's contract job runs; a second run installs nothing; it asks for sudo, so it is the
+operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make build
+VERSION=…` stamps `--version`) · `make orchestrator-venv` (`orchestrator/.venv` at
+`orchestrator/pyproject.toml`'s pins, the package editable; CI's lint, unit and contract
+jobs and `release.yml` run it after `actions/setup-python` at `3.14`) · `make test` (tier
+1, no infrastructure: `go test`, then `orchestrator/.venv/bin/pytest -q orchestrator -m
+'not contract'`; under 90s wall uncached, raised from 65s on 2026-10-30 by the operator's
+answer when 020's Run 17 measured 68.0s and 67.0s at a load of 2.1–4.7 with the
+orchestrator's 710 Python tests beside Go; at 020's close 55.9s at a load of 2.1, Go's
+`internal/cli` 21.9s of it and 1,120 Python tests in 18.3s, since the reader's packages
+left; CI's unit job on every push and pull request, beside its lint job, which runs
+golangci-lint, `make lint-python` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) ·
+`make test-contract` (tier 2, real Infrahub, never cached, in three parts that each run
+whatever the one before answers: the Go packages under the tag, `internal/checks` alone,
+then `pytest -m contract`; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's
+contract job on every push to `main`, against an Infrahub the script brings up on the
+runner, with no secret; **2,692.6 s whole on 2026-10-30**, the Go half about 370 s (the
+first `go test`'s 21 packages, `internal/cli` 21.2 s the longest, then `internal/checks`
+338.3 s, whose `TestChecksInsideInfrahub` runs the tree's checks inside Infrahub's pipeline
+under a registration of its own through the orchestrator's platform on the bridge, and
+skips, saying why, where the task workers reach none, as in CI), and `pytest -m contract`
+2,322.3 s, the Go reader's contract cases carried over with their assertions and the flows
+on `prefect_test_harness`, each against a core server the test starts with no
+`INFRAHUB_*`; every artifact wait 180 s, the schema waits 90 s) · `make lint`
+(golangci-lint with build tags `contract,fixture,e2e`, then `make lint-python`, ruff over
+`orchestrator` and `infrahub/checks`) · `make linkcheck` (`scripts/linkcheck.py`: every
+relative link and anchor in the tracked Markdown resolves in a public clone; a hand tool,
+not a CI step) · `go test ./internal/compiler -update` regenerates the four goldens —
+review the diff, and commit a re-baseline on its own; the orchestrator's goldens under
+`orchestrator/tests/golden/` are re-baselined the same way, in a commit of their own · the
+conformance suite's pure half is part of `make test`; its boot half is
+`FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e ./internal/conformance -run
+'^TestBootHalf$' -v` against a ready twin · `make temporal-dev` (the file-backed dev
+server) · `make worker` and `make serve` (each with the state root made absolute; load
+`local/.env` first) · `make prefect-server` and `make orchestrator-serve` (the platform and
+the runner in the foreground; load `local/.env` first) · `make infrahub-seed` and `make
+infrahub-clean` (the fixture branch) · `make diagrams` (needs Docker; no tier needs it) ·
+**every `fylgja` command but `worker run` and `serve` needs a running server** (`psp
+validate` and `twin compile` need neither Infrahub nor the workflow service, but they need
+the server), and `fylgja-cli`'s commands need Infrahub, and the core's server wherever
+they ask the core ·
+`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, the boot half on three
+of them (cases 1, 5 and 6, case 5's twin probed), `twin verify` on three of them and on
+the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to
+a snapshot by file and by id, probes in cases 5, 8 and 9 (case 5's `n1-loop` by file, case
+8's `e1-loop` from the kind across `e1`'s restart, case 9's stage `probe-port-down` failing
+on `verify.burst`); in cases 1 to 8 every command naming a branch or a stage through
+`fylgja-cli` on Prefect's ephemeral server under the run's own home, the rest through
+`fylgja`, against a core the script starts itself with a token it makes and no
+`INFRAHUB_*`; case 9, a proposed change rehearsed twice by `fylgja-twin` inside Infrahub,
+through the orchestrator's platform on the bridge and the operator's core on loopback; the
+core's server logs asserted to name no Infrahub operation; needs the dev server and a
+worker running from the repository root, Docker, containerlab, **both** images,
+`alpine:3.24.2`, `orchestrator/.venv` and Infrahub with `FylgjaProbe` on `main` holding no
+probe, and for case 9 the platform and the runner from this tree, the operator's core on
+loopback from this tree with no `INFRAHUB_*`, and both checks imported on `main` byte for
+byte as this tree has them, each checked before any case; about 47 minutes (2,798.6 s on
+2026-10-30, by a copy whose case-9 precheck compared the checks' syntax trees, the
+operator's choice, since `make test-e2e` refused this tree at that precheck; 562 s more
+than 016's 2,236.6 s, every `fylgja-cli` command starting its ephemeral server, 17–40 s a
+start); `WORKER_LOG=<file>` adds the worker's log to its credential greps;
+`PLATFORMS=nokia_srlinux` narrows it to the seven cases SR Linux alone runs, about 19
+minutes before 020 (1,156.1 s on 2026-10-27), ending `E2E-PARTIAL: platforms …; ran …;
+skipped …` with exit 0, never `E2E-OK`; never in CI). A command that runs longer than one
+tool call (tier 3) starts detached with its exit status in a file, and is waited on in
+foreground calls of under ten minutes.
 
 ## State
 
-Rewritten whole at each release's close, never appended to.
+Rewritten whole at each release's close, never appended to; rewritten whole at 020's.
 
 - **Release 0.1** (`v0.1.0`, 2026-10-08): M1–M7 and M10–M14 built, M8 and M9 not; the cut,
   this repository's one first commit ([D-043](docs/decisions.md#d-043)), and the launch
   (`013-launch`), as [the archive](docs/archive/v0.1-built.md) records.
 - **Release 0.2** (`v0.2.0`, closed 2026-10-21; tagged at `450c380` and published as a
   pre-release on 2026-10-22): a proposed change rehearsed on a twin before it merges
-  ([the archive](docs/archive/v0.2-built.md)).
-  - **014** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's stages
-    in place of M10's waypoints ([D-045](docs/decisions.md#d-045)–[D-048](docs/decisions.md#d-048);
-    Constitution 1.3.0); `FylgjaStage` on `main` and the waypoint kind removed
-    (`e43a1cde…`); `--stage`, `stage list`, `stage plan`; `twin.json` `6`.
-  - **015** (`015-proposed-change-rehearsal`, F-007 and F-008, 2026-10-20):
-    `twin rehearse` and the fifth workflow `fylgja-rehearse`; `fylgja-step` and
-    `fylgja-twin` in `infrahub/checks/`, imported at `3c3e79a`; the report as a thread
-    ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)); the server on the
-    Docker bridge; `twin.json` `7`.
-  - **The release's own work** (2026-10-21): the report made legible in Infrahub's view
-    (the column `new verification failures`, `48399a7`; the drawing top to bottom with a
-    failed or erred stage outlined red by a class, `88bc630`); [D-054](docs/decisions.md#d-054)'s
-    demo window and the fixture tool's `-seed-main`, `-clear-main` and `-add-fourth-node`
-    (`d828a86`); the recording (`docs/recording/session.cast` and `.gif`) and four
-    screenshots of a rehearsed proposed change, made in the window on a three-node baseline
-    and read by the operator; the write-up's Release 0.2 figures, counted from 014's and
-    015's command logs; `release.yml`'s notes with a v0.1.0 host's upgrade; and
-    `TestPinnedReadReproducesItsBundle`'s race fixed (it read the branch before n1's
-    checksum moved after `SeedFourthNode`); and, on 10-22, the release's hygiene check:
-    the recording's one home path neutralised before it went public, the roadmap's
-    audience line and 013's host details reworded, the schemas' `$id` namespace moved from
-    `fylgja.dev`, never ours, to this repository's URL ([D-055](docs/decisions.md#d-055)),
-    Spec Kit's own files untracked and installed per host by `specify init`
-    ([D-056](docs/decisions.md#d-056); `scripts/bring-up.sh` unchanged), twelve dangling
-    links fixed, and `scripts/linkcheck.py` kept as `make linkcheck`, a hand tool.
-  - **Verified at the close**: CI green on `dc7dcea` (one contract re-run, GitHub's
-    slowdown); tier 1 and lint on the final code; tier 2 whole in 1,262 s but for one race in `TestPinnedReadReproducesItsBundle`,
-    then `internal/stage` again with it fixed (228 s); tier 3 `E2E-OK` in 1,650.6 s and
-    `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,113.5 s, case 9 on the new report;
-    the demo window's facts in `docs/verified-facts.md` (10-21): a branch made before a
-    write on `main` does not see it, `stage.main.moved` against a real write, no artifact
-    validator for a branch with no change, artifacts deleted with their devices, and how
-    the view renders a comment's markdown. Infrahub left as the contract tier leaves it,
-    `main` holding no network. On 10-22, after the hygiene commits: tier 1 and lint again
-    on the final tree, `make linkcheck` clean, and the credential greps over the tree, every
-    ref's history and the recording, nothing found; tiers 2 and 3 not re-run, since the
-    code change since the close is one constant and the ids the tests register, which
-    tier 1 covers, and CI's contract job runs on `main`'s push. No golden, no contract,
-    API or findings version moved; the schemas' `$id` prefix did
-    ([D-055](docs/decisions.md#d-055)).
-- **Release 0.3**, set on 2026-10-25 as exploratory coding toward the production
-  refactor ([roadmap](docs/roadmap.md#release-03)), five specs in order: F-011, F-024
-  snapshots, F-026 following removed from the core, F-014 probes (`016-probes`, its
-  [brief](specs/016-probes/brief.md) rewritten on 2026-10-28 against 017, 018 and 019),
-  F-025 the NetBox reader; and the follow of a rehearsal terminated
-  outside Fylgja (015's research §5.2). What they explore toward is the roadmap's
-  [production shape](docs/roadmap.md#the-production-shape), a direction and not a
-  decision. F-012 and F-022 left the release.
-  - **017** (`017-dcim-reader`, F-011, closed 2026-10-27): the Infrahub reader reads the schema
-    library's DCIM at `26336e9` by one documented mapping, in place of the generics and
-    the reference schema ([D-057](docs/decisions.md#d-057); Constitution 2.0.0, then
-    2.1.0 with [D-060](docs/decisions.md#d-060)); a request's scope, `tag:<name>`, and the
-    server's `FYLGJA_DEFAULT_SCOPE`; `platform.matches` in PSP `0.7`; CTM `2`, bundle `5`,
-    `twin.json` `8`; the contract version retired; a stamp Infrahub's own account wrote
-    read as its node's creation ([D-058](docs/decisions.md#d-058)); `main` migrated
-    (`7c413536…`) and both fixtures re-seeded. Built by the attended converge loop,
-    T001–T121, its seven convergence passes all built, the last still finding work, so it
-    stopped at its cap. Tiers 2 and 3 green on 2026-10-26 (above), before the convergence
-    passes; their changes since are covered by tier 1 and by CI, whose run `40501281477` is
-    green whole, tier 2 included, on `origin`'s `main` at `7ddd157` (2026-10-27). Reviewed by
-    the operator. `infrahubctl schema format` is never run on the vendored files (017
-    research R-22).
-  - **018** (`018-snapshots`, F-024, closed 2026-10-28): the snapshot, the core's one
-    input ([D-061](docs/decisions.md#d-061); Constitution 2.2.0): CTM `2` wrapped
-    unchanged in a document of version `1` with an empty probe list, its id the hash of
-    the body without the read's `observed_at`, filed under the state root's `snapshots/`
-    by a store that never overwrites. The server takes and files one for every create,
-    dry run, plan, step, rehearsal and `intent read --out`, and starts every workflow but
-    the reconcile already compiled, with a snapshot id and a bundle id; `twin create
-    --snapshot <id|file>` builds one with no read, frozen or pinned by its envelope;
-    `twin compile --snapshot` in place of the retired `--ctm`; `twin.json` `9` and five
-    documents name the snapshot, a rebuild's none; the bundle's CTM sidecar retired;
-    bundle `5` and the goldens unmoved, and the three fixtures wrapped under
-    `testdata/snapshot/`; the fixture's snapshot `576933ec…`; sixteen contracts frozen
-    under `017-dcim-reader/` (49 copies). Built by the converge loop, T001–T063, the
-    operator's T002–T005 at `analyze` among them. Tier 2
-    green on 2026-10-27 in 1,814.4 s but for `internal/cli`, whose contract tests read
-    the tier-1 harness's placeholder Infrahub; fixed (`1c0f97c`) and green alone in
-    66.9 s. Tier 3 `E2E-OK` in 1,758.0 s on its second attempt, the first lost to an SR
-    Linux `sr_cli` segfault under load, and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in
-    1,156.1 s. Then a second attended loop, seven convergence passes, T065–T085, the
-    last still finding work, so it stopped at its cap; the operator answered two
-    questions: `rehearsal.steps.none` judges as 015 defined it, by one stage alone
-    compiled, and FR-024, US5 and the brief say so (T074), and a sent snapshot's CTM is
-    held to the CTM contract's registry-independent rules, `validate.Intrinsic`, before
-    it is filed (T082). Tier 2 green whole again on `7fdb888` in 1,913 s and tier 3
-    `E2E-OK` in about 29 minutes (2026-10-28). Reviewed by the operator (T064), and
-    merged into `main` and pushed at `0e82037`.
-  - **019** (`019-following-removed`, F-026, closed 2026-10-28): following removed from
-    the core ([D-062](docs/decisions.md#d-062), superseding D-012 in its following, D-026
-    and D-027 whole, and D-007 and D-014 in their Reconcile and Schedule; Constitution
-    2.2.0 unamended): a twin is frozen at its snapshot and nothing rebuilds it but the
-    operator. The reconcile workflow, the Schedule `fylgja-follow`, the five control
-    activities and `bundles/.reads/` gone, so the worker serves four workflows and fifteen
-    activities and reads no source of truth; `--interval` and `--no-follow` gone from the
-    client and the API; destroy and a provision stop nothing first; every rehearsal's
-    deadline 30 s shorter, `fylgja-twin`'s `timeout` unmoved; `twin show`'s kinds `none`,
-    `snapshot`, `from_bundle` and `diverged`, and `twin verify` naming the staged bundle's
-    snapshot; `twin step --snapshot <id|file>` and a step to a stage of any proposed
-    change, from any twin whose record names a snapshot, never to another scope or
-    mapping; `twin.json` `10`; seven following rules, the step `follow` and
-    `step.target.foreign` retired; two replay histories deleted, seven left; the 018
-    shapes frozen under `018-snapshots/` (56 copies); bundle `5` and the goldens unmoved.
-    Built by the attended converge loop's implement runs, T001–T055, the operator's T002
-    at `analyze`. Tier 2 green whole on 2026-10-28 in 2,009 s once `internal/intent` was
-    re-run alone (220.3 s), a seed's 1m30s artifact wait having lapsed under the tier's
-    own load; tier 3 `E2E-OK` in 1,894.1 s, its first start refused by case 9's precheck
-    because a commit's VCS stamp had replaced the bridge server's binary; `PLATFORMS=nokia_srlinux`
-    not run, by the operator's choice, since the whole run covers its cases. Reviewed by
-    the operator (T056), and merged into `main` and pushed.
+  ([the archive](docs/archive/v0.2-built.md)): **014** (F-023), a proposed change's stages
+  in place of M10's waypoints ([D-045](docs/decisions.md#d-045)–[D-048](docs/decisions.md#d-048));
+  **015** (F-007, F-008), `twin rehearse`, the checks `fylgja-step` and `fylgja-twin` and
+  the report as a thread ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053));
+  and the release's own work: the report made legible in Infrahub's view,
+  [D-054](docs/decisions.md#d-054)'s demo window and the fixture tool's `-seed-main`,
+  `-clear-main` and `-add-fourth-node`, the recording and four screenshots, the schemas'
+  `$id` namespace moved to this repository's URL ([D-055](docs/decisions.md#d-055)), Spec
+  Kit's own files installed per host ([D-056](docs/decisions.md#d-056)) and `make
+  linkcheck`. Verified at the close: CI green on `dc7dcea`, tier 2 whole, tier 3 `E2E-OK`
+  in 1,650.6 s.
+- **Release 0.3**, set on 2026-10-25 as exploratory coding toward the production refactor
+  ([roadmap](docs/roadmap.md#release-03)), six specs in order: F-011, F-024, F-026, F-014,
+  F-027 (added on 2026-10-29 and placed before F-025 by the operator) and F-025; F-012 and
+  F-022 left it. The [production shape](docs/roadmap.md#the-production-shape) it explored
+  toward is decided since 020. Five specs are built:
+  - **017** (`017-dcim-reader`, F-011, closed 2026-10-27): the reader read the schema
+    library's DCIM at `26336e9` by one documented mapping, in place of the generics
+    ([D-057](docs/decisions.md#d-057)–[D-060](docs/decisions.md#d-060); Constitution 2.0.0,
+    then 2.1.0); a request's scope `tag:<name>`; PSP `0.7`'s `platform.matches`; CTM `2`,
+    the contract version retired; `main` migrated and both fixtures re-seeded.
+    `infrahubctl schema format` is never run on the vendored files (017 research R-22).
+  - **018** (`018-snapshots`, F-024, closed 2026-10-28): the snapshot, the core's one input
+    ([D-061](docs/decisions.md#d-061); Constitution 2.2.0), content-addressed and filed
+    under the state root's `snapshots/` by a store that never overwrites; `twin create
+    --snapshot <id|file>` and `twin compile --snapshot`; the bundle's CTM sidecar retired.
+  - **019** (`019-following-removed`, F-026, closed 2026-10-28): following removed from the
+    core ([D-062](docs/decisions.md#d-062)): a twin is frozen at its snapshot, the reconcile
+    workflow and the Schedule `fylgja-follow` gone, `twin step --snapshot <id|file>`.
   - **016** (`016-probes`, F-014, closed 2026-10-29): probes, `ping` only
-    ([D-064](docs/decisions.md#d-064); Constitution 2.3.0, a probe package a blessed
-    layer): a probe is a declaration outside intent, `--probes <file>` on the five
-    commands that read intent, else `FylgjaProbe` on the default branch, else none, and
-    the snapshot `2` carries the list; the compile places each probe's two hosts,
-    `<probe>-a` and `<probe>-b`, on two uncabled device ports and records them, their
-    links and the ports they take under `fidelity.synthesized` in bundle `6`; one probe
-    package, `probes/ping.yaml` (`0.1`, `alpine:3.24.2`, never pulled), and a probe file's
-    format `probes 1`; a host's `exec` readiness; a step's flows started after the stage
-    and read after the observe as `step.loss`, reported and never asserted, and verify's
-    burst, the kind `burst` and the rule `verify.burst`, in the step's wait and in a
-    rehearsal's verdict; the report's `loss` column and caveat; `twin.json` `11`; the
-    worker's seventeen activities; the `probe.*` and `probes.*` rules, `flow.start.failed`, `flow.read.failed` and
-    `snapshot.flags.conflict` (`--probes` beside `--snapshot`); the
-    fixtures' devices two addressed, uncabled ports each and the template their address
-    lines (imported at `842c893`), so the goldens moved twice beside a fourth,
-    three-node-probed; the 019 shapes frozen under `019-following-removed/` (16 copies,
-    72 in all); `FylgjaProbe` on `main` (`8a4f3bee…`) and the fixture re-seeded
-    (`0940db93…`, `c3872f5c…`). Built by the converge loop, T001–T049, the operator's T002
-    at `analyze`, T017 (the kind's load) and T041 (the template's push and import) among
-    them. One defect found live and fixed: a step from a probed twin panicked the server
-    (`ff76c8c`). Tier 2 green whole on 2026-10-29 in 2,017 s once `internal/stage` and
-    `internal/stages` were re-run alone, three 1m30s artifact waits having lapsed under
-    the tier's own load; tier 3 `E2E-OK` at the first attempt in 2,236.6 s, probes in
-    cases 5, 8 and 9; tier 1's budget raised to 65 s. `converge` ran five passes, the
-    fifth adding nothing. Its first pass (T051–T060) found and fixed: the boot half
-    (`conformance.Boot`), which panicked on a host's null `psp`, reads a probed twin's
-    devices alone, a synthesized link's neighbour skipped in verify's words (T051); the
-    rehearsal's `verify` cell counts the burst, a stage failed on it reading `1 failed`
-    (T052); `-prepare-main` loads the stage and probe kinds before it loads or refuses
-    the library, so a `main` holding the library gains a kind it lacks (T053); tier 2's
-    artifact wait is 180 s, `testsupport.ArtifactWait`, every checksum wait sharing it
-    (T054); the records naming the fixture's former ids, and `twin compile`'s hand wrap
-    written as a `2` (T057); and `README.md`'s walk-through at the re-seeded fixture's
-    counts and hash, its probe section filled from case 5 (T058). `probes/ping.yaml`'s
-    `acquisition` comment, also found, was T040's (`3f6b82e`). Its live task (T056) ran
-    the boot half on a probed twin by hand, then in tier 3's case 5, which now runs it:
-    `E2E-OK` in 2,171.8 s on 2026-10-29, case 5's boot half 10.0 s. The pass's two others
-    the operator settled by amending the artifacts (`d3525cf`): a twin an earlier build left
-    is destroyed and created again, never stepped from (T055, `spec.md`'s edge case), and
-    `plan.md`'s Structure Decision names the registry's `gopkg.in/yaml.v3`, `jsonschema/v6`
-    and embedded `probes/` imports (T059). Its second pass's one fix changed what the code
-    does: an empty `--probes` file, or one of JSON's whitespace alone, declares no probes,
-    read by `probe.Parse` as `probes 1` with an empty list, held by
-    `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061,
-    `1dd98b6`). Its third pass added a test that loads every golden whole,
-    three-node-probed among them (T063, `b93caf6`); its fourth, one the operator settled
-    by amending the summaries (`89a5b44`): a probe the step's target drops has its hosts
-    torn down by the reconcile with no flow started, listed under the loss block's
-    `dropped`, as R-21's body, the data model, `contracts/cli.md` and `flowsOf` have it
-    (T065). Reviewed by the operator (T050), merged into `main` at `195af3a` and pushed;
-    CI green on it (run `40894683064`, re-run once after the contract job lost a pull of
-    Infrahub's image).
-- **Next**: F-027, the split of the core and the orchestrator, placed before F-025 by the
-  operator on 2026-10-29; then F-025 the NetBox reader, Release 0.3's last spec, an
-  adapter outside the core in Python, the orchestrator's second. Neither has a brief yet.
-  NetBox was probed live on 2026-10-29 (`docs/verified-facts.md`, "NetBox 4.7.4 with
-  netbox-branching 1.2.2"): NetBox 4.7.4 with the plugin 1.2.2 is installed under
-  `local/netbox/` as the Compose project `fylgja-netbox` on loopback 8800, stopped with
-  its volumes kept (its `main` carries the spike's merged change), and its token and admin
-  password are in `local/netbox-spike/.env`, beside the throwaway adapter.
-- **Open, the operator's**: file 014's upstream
-  request for named points in time
+    ([D-064](docs/decisions.md#d-064); Constitution 2.3.0): a declaration outside intent,
+    by file or from `FylgjaProbe` on `main`, carried in snapshot `2`; two synthesized hosts
+    a probe under bundle `6`'s `fidelity.synthesized`; `probes/ping.yaml` (`0.1`,
+    `alpine:3.24.2`, never pulled); a step's `step.loss` and verify's burst; the fixture
+    re-seeded (`0940db93…`, `c3872f5c…`) and the goldens moved twice beside a fourth.
+    Merged into `main` at `195af3a` and pushed; CI green on it (run `40894683064`).
+  - **020** (`020-core-orchestrator-split`, F-027, closed 2026-10-30 but for the operator's
+    review, merge and push, T048): **two deployables** ([D-065](docs/decisions.md#d-065),
+    [D-066](docs/decisions.md#d-066); Constitution 3.0.0, Principle I binding the core and
+    freeing the orchestrator). **The core narrowed to the snapshot**: `twin.rehearse`,
+    `stage.list`, `stage.plan`, `intent.read` and `schema.check` and the arguments
+    `branch`, `at`, `stage`, `scope` and `probes` gone from the API and the CLI, with the
+    Go reader and genqlient, `make sdl` and `make generate`, `internal/rehearsal` and the
+    rehearsal's workflow (so 015's defect, a client following a rehearsal terminated
+    outside Fylgja, went with it); `detach` on the long operations, `run.read` and
+    `run.interrupt` by a run's identity, and `twin.diff`, the step between two snapshots;
+    `twin.json` `12`; the worker three workflows and seventeen activities; the server on
+    loopback alone with no Infrahub credential. **The orchestrator** under `orchestrator/`,
+    Python 3.14.4 on Prefect 3.8.8 (3.9.0 does not co-install with `infrahub-sdk` 1.23.2):
+    the Infrahub adapter ported on the SDK and held to the Go reader byte for byte before
+    the reader went (research §5.15); six flows, `fylgja-cli` and the runner; its record
+    `1` and its snapshot store; the plan, stages and rehearsal documents and the markdown
+    report held to goldens captured from the Go build (T003), their reproduce lines
+    re-baselined alone (`927561b`); the checks the platform's clients, imported at
+    `504ec98` (T039); the override's two variables and the task workers recreated with
+    them; five processes on the host; CI running `make orchestrator-venv`, ruff and the
+    Python tests. **Unmoved**: CTM `2`, snapshot `2`, bundle `6`, probes `1`, PSP `0.7`,
+    the probe package `0.1`, the API `1`, findings `1`, the four goldens, the fixture's
+    `0940db93…` and `c3872f5c…`, the seven replay histories, `main` and both fixture
+    branches. Built by the converge loop, T001–T047, the operator's T002 (the amendment)
+    and T039 (the checks' push and import) among them; 46 sessions to Run 38, about 16.1
+    hours, against R-22's 24–36. **Found live**: a recreated task worker has no checkout,
+    and the first proposed change after it can leave its user validators `in_progress`
+    (Environment, Infrahub). Tier 1 55.9 s uncached at the close. Tier 2 whole 2,692.6 s on
+    2026-10-30, green once a Python helper's run order was fixed (`a6f3fe3`) and its four
+    tests re-run together. Tier 3: `make test-e2e` refused this tree at case 9's precheck,
+    since the imported `infrahub/checks/fylgja_api.py` differs by T035's one comment; a
+    copy of the script comparing the checks' syntax trees ran all nine cases `E2E-OK` in
+    2,798.6 s, which the operator took as T043's evidence (option c), the script's byte
+    rule unchanged.
+- **Next**: T048, the operator's review of 020, its merge into `main`, the push and `make
+  command-log`, then `converge`; then F-025, the NetBox reader, Release 0.3's last spec,
+  the orchestrator's second adapter on 020's adapter contract (a tool that reads one
+  source under a scope and writes a snapshot `2` file, its probes from a file), a stage as
+  the snapshot the adapter took when the operator marked it
+  ([D-066](docs/decisions.md#d-066)). It has no brief yet. NetBox was probed live on
+  2026-10-29 (`docs/verified-facts.md`, "NetBox 4.7.4 with netbox-branching 1.2.2"): NetBox
+  4.7.4 with the plugin 1.2.2 is installed under `local/netbox/` as the Compose project
+  `fylgja-netbox` on loopback 8800, stopped with its volumes kept (its `main` carries the
+  spike's merged change), and its token and admin password are in
+  `local/netbox-spike/.env`, beside the throwaway adapter, the first draft of F-025's.
+- **Open, the operator's**: the tree's `infrahub/checks/fylgja_api.py` on `origin`'s `main`
+  and imported, so that `make test-e2e`'s case-9 precheck passes this tree (or the
+  precheck changed to compare code, which changes 015's rule); whether the bring-up
+  script's `infrahub` part, which recreates the task workers when it copies a changed
+  override, should first have the registration cloned, and whether Infrahub's
+  `run_user_check` hard-coding `CoreRepository` (`infrahub/git/tasks.py:1193`) is reported
+  upstream; file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

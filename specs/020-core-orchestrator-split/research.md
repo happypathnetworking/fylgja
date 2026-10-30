@@ -1256,3 +1256,96 @@ made.
   `ORCH_VENV` pointed at it.
 - **The gates**: `make build` static; the orchestrator's tier 1 856 passed in 11.5 s (145 new);
   `make lint` 0 issues, ruff clean. No Go changed, so no Go test is this run's.
+
+### 5.17 The five flows: read, schema check, create, step and plan (T025, Run 22, 2026-10-30)
+
+- **The shape.** Each flow is a body, `run(deps, …)`, a plain function of the flow's
+  parameters and a `Deps` (the core's client, the orchestrator's store, the adapter's
+  environment, how a session is opened, the adapter's `read` and `schema_check`, the out sink,
+  the run's id), and a `@flow` of the same parameters that builds the `Deps` from the
+  process's environment, runs the body and files the document (`flows/common.py`'s
+  `publish`): the run's artifact `fylgja-findings`, key `fylgja-<flow>-<run id>`, `data` the
+  document; with no run (a plain call) nothing is filed. Out lines go to a context variable's
+  sink (stdout by default, `fylgja-cli`'s when T027 sets one) and to the run's log when a run
+  is current. `fylgja_orchestrator.flows` still imports no Prefect; each flow's module does.
+- **The adapter's half of a stage**, `adapters/infrahub/session.py`: `Session.open` (the
+  packages, a refused one at read; the credentials, unset ones `operation.failed` at resolve;
+  the request's one probe list, the file's at start or the kind's at resolve), `find`, `read`
+  (a branch read and taken, every finding at read) and `build` (Go's `build`'s Infrahub half:
+  resolved with `stage.main.moved` as `MOVED_ALWAYS`, `MOVED_NEVER` or `MOVED_RESOLVED` asks,
+  `on_resolved` told so the stage's line prints before the read; then read with an
+  `observed_at` of its own and taken, each finding at its step, a failure `operation.failed`
+  at its step naming the reference). The create, the step and the plan build every stage
+  through it.
+- **The core's runs as the flow's document** (`composed`): every run is `detach: true` then
+  `run.read` every 2 s (`run_core`), whose last answer is a `run.read` document. The flow's
+  document is the create's or the step's as the core's CLI printed it: its operation, the
+  flow's subject (`branch`, `at`, `stage`, `scope`) with the run's id, the run's status, the
+  flow's findings first (the resolution's and the read's, `step.stage.skipped`,
+  `stage.twin.moved`), then the start's but its `run.detached`, then the run's without the
+  start's repeats (`withoutRepeats`); the start's blocks, the run's over them, the stage block
+  over both. A start the core refused is its own last answer. A dry run is `core.dry_run`,
+  never detached.
+- **The record follows `twin show`** (`follow_record`): once a create's or a step's run has
+  ended, `twin show` is asked once more; when it names the snapshot the flow sent, the record
+  is written naming the stage resolved, its proposed change, the snapshot and the flow's run,
+  or, for a create from a branch, removed, since that twin names no stage (the record is "the
+  twin it last drove", FR-021). A dry run, a refusal, a twin left elsewhere (a diverged step, a
+  failed create) or a core that cannot be asked leaves it as it was. Deciding by `twin show`
+  rather than by the document's status keeps one rule for every outcome, the trust's own.
+- **Departures**, each where the core's words named what the core no longer does:
+  - `intent-read`'s summary line is the adapter's (§5.13) with `, stored at <entry>` added
+    once the flow files the snapshot under `snapshots/`: no lossy mappings or shared ports,
+    the compiler's survey, since a read compiles nothing. Dropped rather than taken from a
+    compile, which would cost a request to the core for two numbers.
+  - The plan's `read` counts take `lossy_mappings` and `shared_ports` from the compiled
+    manifest's `fidelity.lossy`, counted as `Manifest.LossyCounts` counts it, which
+    `TestSurveyAgreesWithTheManifest` holds equal to the survey; a stage whose compile the core
+    refused has no manifest and counts 0 and 0, where Go's in-process survey counted them.
+    The text prints a refused stage's counts nowhere, so only its JSON differs.
+  - The snapshot crosses as the store entry's file, under the entry's path, which the core
+    files (`twin.create`'s and `twin.step`'s `snapshot`); the document's subject is the
+    flow's, not the core's (`snapshot` the path).
+  - The create's dry run prints no `read:` line, which the core's dry run of a snapshot has
+    none of; the step's stage line prints before the core's `twin:` line, where Go printed it
+    after.
+  - `twin step`'s `--wait` is the core's to refuse (`verify.wait.invalid` at start), after the
+    target's read, where Go refused it before any read.
+  - With no scope given, the step reads under the scope `twin show`'s record names, as Go did;
+    with none recorded (no twin), under the default, and the core then refuses the host.
+  - A stage's build that cannot run names its reference, where Go's create named the
+    operation at resolve and `branch <b>` at read; a snapshot's own refusals (the take's) are
+    at read, inside the adapter's read, where Go placed them at compile.
+- **Tests** (`tests/unit/test_flows.py`, 41): the bodies called plain with the adapter and the
+  core stubbed, each stage resolved by the real rules over `test_stages`' reader and stamper
+  (`StorySession`, only the branch's read stubbed); each flow's name and parameters
+  (data-model §7); `publish` with no run; the composition; the read filed and named, refused,
+  and a store that cannot file; the check passed through; the create from a stage (its line,
+  the file sent, the document, the record), from a branch (the record removed), a twin left
+  elsewhere (kept), its dry run (the core's, no record), four guards before any read, refusals
+  at resolution and at read, the core unreachable; the step's default target and record,
+  `step.target.required` in its four distrusted cases with nothing read, a given stage under a
+  distrusted record, `stage.twin.moved` (US6 scenario 3), `step.target.current`, the twin's
+  scope and the flags passed through to its dry run, a diverged step keeping the record; and
+  **the plan rendered to the golden byte for byte** (`plan.txt` from the out lines,
+  `plan.json` and `plan.stderr.txt` from the document), its compiles and diffs the stubbed
+  core's in the golden's order, a refused compile going on, the plan through the story, and
+  `build`'s three moved modes. `prefect_test_harness` is not used: the plain bodies keep
+  `make test` in budget, Prefect's import adding about 2.5 s once.
+- **Live, read-only, no twin**: `schema-check` run as a flow on an ephemeral server
+  (`PREFECT_HOME` in the session's scratch, no `PREFECT_API_URL`): the first start in a fresh
+  home timed out at Prefect 3.8.8's default `PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS`
+  of 20; with 180 the server answered in about 10 s and the run completed in 20.6 s wall, its
+  two lines on stdout and in the run's log, its artifact `fylgja-schema-check-<run id>` of type
+  `fylgja-findings` with `data` a JSON string (§1.4 again on 3.8.8). T028 and tier 3's
+  ephemeral runs need the bound raised. Then the create's, step's and plan's bodies through a
+  throwaway core server built from this tree (`127.0.0.1:7698`, a scratch state root, a token
+  made for it, no node logins), stopped and removed after: `twin-create --branch
+  fylgja-fixture --dry-run` filed snapshot `0940db93…` and the core named bundle `c3872f5c…`
+  (SC-002) in 8.8 s, refused at the host check only for the logins the throwaway server
+  lacked (`host.probe.login_unset`); `twin-step` with no record, `step.target.required`;
+  `stage-plan --branch fylgja-fixture`, `stage.unknown`, no block. The host's own server and
+  worker were not touched.
+- **The gates**: `make build` static; `make test` green, 951 Python tests in 14.1 s (41 new),
+  73.7 s wall uncached at a load of 1.9–4.2, `internal/cli` 41.6 s of it; `make lint` 0
+  issues, ruff clean.

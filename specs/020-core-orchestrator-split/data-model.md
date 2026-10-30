@@ -170,6 +170,6 @@ loses the bridge `--listen`; the part `orchestrator` starts `prefect server` and
   `docs/c4/workspace.dsl` and `make diagrams`; `docs/glossary.md` (Core, Orchestrator,
   Adapter, Tool, Flow (orchestrator); Client, Server, Rehearsal, Stage, Check (Infrahub));
   `docs/development.md`; `SECURITY.md`; `README.md`; `CLAUDE.md`; `docs/verified-facts.md`
-  (a "Prefect 3.9.0" section, Infrahub's embedded Prefect); `docs/brief.md`; the roadmap
+  (a "Prefect 3.8.8" section, Infrahub's embedded Prefect); `docs/brief.md`; the roadmap
   (R-24); `.infrahub.yml` only in its comment on the checks; `.specify/memory/constitution.md`
   3.0.0 and `.specify/templates/plan-template.md`.

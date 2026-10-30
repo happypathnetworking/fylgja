@@ -15,9 +15,9 @@ route runs them ([template](../../docs/templates/quickstart-template.md)). Load
 
 ## 1. Tier 1
 
-`make build && make test && make lint` inside 65 s wall. What must not move: the four
-goldens (`c70589c3…`, `10099944…`, `44ac283f…`, `5222063b…`), `testdata/snapshot/*`'s ids,
-`testdata/ctm/*`. New tests: the five lost paths `404` with "no operation at this path"
+`make build && make test && make lint` inside 90 s wall (raised from 65 s on 2026-10-29).
+What must not move: the four goldens (`c70589c3…`, `10099944…`, `44ac283f…`,
+`5222063b…`), `testdata/snapshot/*`'s ids, `testdata/ctm/*`. New tests: the five lost paths `404` with "no operation at this path"
 and the five lost arguments `400` "takes no argument" (SC-003); `TestWorkerRegistersEveryScheduledActivity`
 at three workflows; `twin.json` `12` round-trips and an `11` is shown and refused a step
 (SC-004); `run.read` replays each of the seven histories (SC-005); `twin.diff` on the
@@ -115,7 +115,7 @@ orchestrator and the core; ends `E2E-OK` in about 37 minutes (measured at implem
 
 ## 9. The records at the close
 
-`docs/verified-facts.md` (§1's facts under "Prefect 3.9.0" and Infrahub's), `CLAUDE.md`'s
+`docs/verified-facts.md` (§1's facts under "Prefect 3.8.8" and Infrahub's), `CLAUDE.md`'s
 Environment and State (five processes, the override's variables, the tiers' times),
 `docs/roadmap.md` (R-24), the constitution 3.0.0; the greps: `/usr/bin/grep -rn
 'fylgja-rehearse\|bridge.*7650\|internal/intent' docs README.md contracts SECURITY.md

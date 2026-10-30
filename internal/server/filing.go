@@ -10,9 +10,9 @@ import (
 )
 
 // fileCompiled files a compiled bundle in the store under dir, as a run's compile step
-// files it: what the create, its dry run and stage plan leave behind to inspect. Moved
-// here from the dry run so they file alike. No CTM is filed beside it: the sidecar is
-// retired (018), and the input is the snapshot, filed by takeSnapshot before the compile.
+// files it: what the create, its dry run, a step and twin diff leave behind to inspect.
+// Moved here from the dry run so they file alike. No CTM is filed beside it: the sidecar is
+// retired (018), and the input is the snapshot, filed before the compile.
 //
 // A store already holding other bytes under the id is refused as bundle.id.mismatch at
 // step compile, the one finding it returns; any other failure is an error the caller

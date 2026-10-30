@@ -29,8 +29,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
-	"github.com/happypathnetworking/fylgja/internal/rehearsal"
-	"github.com/happypathnetworking/fylgja/internal/step"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -484,17 +482,16 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpTwinShow, `{"args":{"branch":"b"}}`, `twin.show takes no argument "branch"`},
 		// 014: the argument M10 named is gone with the waypoint; stage is its successor.
 		{findings.OpTwinCreate, `{"args":{"waypoint":"demo/2"}}`, `twin.create takes no argument "waypoint"`},
-		{findings.OpStageList, `{"args":{"series":"demo"}}`, `stage.list takes no argument "series"`},
 		// 018: twin.compile's ctm is renamed snapshot.
 		{findings.OpCompile, `{"args":{"ctm":"ctm.json","out":"out"}}`, `twin.compile takes no argument "ctm"`},
 		// 019: a twin follows nothing, so twin.create takes neither the interval nor no_follow.
-		{findings.OpTwinCreate, `{"args":{"branch":"b","interval":"30s"}}`, `twin.create takes no argument "interval"`},
-		{findings.OpTwinCreate, `{"args":{"branch":"b","no_follow":true}}`, `twin.create takes no argument "no_follow"`},
-		{findings.OpTwinCreate, `{"args":{"branch":true}}`, `twin.create's argument "branch" is not a string`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":"s.json","interval":"30s"}}`, `twin.create takes no argument "interval"`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":"s.json","no_follow":true}}`, `twin.create takes no argument "no_follow"`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":true}}`, `twin.create's argument "snapshot" is not a string`},
 		{findings.OpTwinCreate, `{"args":{"dry_run":"yes"}}`, `twin.create's argument "dry_run" is not a boolean`},
 		{findings.OpTwinVerify, `{"args":{"args":"x"}}`, `twin.verify's argument "args" is not an array of strings`},
 		{findings.OpPSPValidate, `{"args":{"files":null}}`, `psp.validate's argument "files" is not an array of strings`},
-		{findings.OpTwinCreate, `{"args":{"branch":null}}`, `twin.create's argument "branch" is not a string`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":null}}`, `twin.create's argument "snapshot" is not a string`},
 		// A null element is not an empty string.
 		{findings.OpPSPValidate, `{"args":{"files":["a.yaml",null]},"files":[{"path":"a.yaml","data":""}]}`,
 			`psp.validate's argument "files" is not an array of strings`},
@@ -514,19 +511,8 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 			`twin.provision takes the bundle directory as its argument "bundle"`},
 		{findings.OpTwinVerify, `{"args":{"args":["x"]}}`, `twin.verify's argument "args" is given without "wait"`},
 		{findings.OpTwinVerify, `{"args":{"args":[]}}`, `twin.verify's argument "args" is given without "wait"`},
-		// 015: twin.rehearse takes the branch alone, and a string.
-		{findings.OpTwinRehearse, `{"args":{"stage":"change-1/head"}}`, `twin.rehearse takes no argument "stage"`},
-		{findings.OpTwinRehearse, `{"args":{"branch":"change-1","dry_run":true}}`, `twin.rehearse takes no argument "dry_run"`},
-		{findings.OpTwinRehearse, `{"args":{"branch":["change-1"]}}`, `twin.rehearse's argument "branch" is not a string`},
-		// 016: twin.rehearse takes a probe file beside its probes argument alone.
-		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`,
-			`twin.rehearse carries 1 file where it takes a probe file beside its argument "probes" alone`},
-		// 017: twin.step reads under its record's scope and takes none, and an operation that
-		// reads no intent takes none either; where it is taken, it is a string.
+		// 017: twin.step reads under its record's scope and takes none.
 		{findings.OpTwinStep, `{"args":{"scope":"tag:fylgja"}}`, `twin.step takes no argument "scope"`},
-		{findings.OpSchemaCheck, `{"args":{"branch":"b","scope":"tag:fylgja"}}`, `schema.check takes no argument "scope"`},
-		{findings.OpIntentRead, `{"args":{"scope":true}}`, `intent.read's argument "scope" is not a string`},
-		{findings.OpStageList, `{"args":{"scope":null}}`, `stage.list's argument "scope" is not a string`},
 		// 020: a run by its identity names its workflow always, each a string, and takes
 		// nothing a run's start takes.
 		{findings.OpRunRead, `{"args":{"run_id":"r1"}}`, `run.read takes the workflow its run is of as its argument "workflow_id"`},
@@ -562,21 +548,10 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 			t.Errorf("%s with %s: status %d", op, body, resp.StatusCode)
 		}
 	}
-	// 017: the five operations that read intent under a scope take one, an empty one
-	// included, which is scope.invalid's to refuse and not the transport's; a client that
-	// sends none was served above.
-	for _, op := range []string{findings.OpTwinCreate, findings.OpTwinRehearse, findings.OpIntentRead,
-		findings.OpStagePlan, findings.OpStageList} {
-		for _, body := range []string{`{"args":{"scope":"tag:fylgja"}}`, `{"args":{"scope":""}}`} {
-			if resp, _ := post(t, nil, srv.URL+api.Path(op), testToken, body, nil); resp.StatusCode != http.StatusOK {
-				t.Errorf("%s with %s: status %d", op, body, resp.StatusCode)
-			}
-		}
-	}
 	// 018: twin.create takes a snapshot file, which the create holds to its one shape, beside
 	// --snapshot under its path; the transport refuses none of them.
 	for _, body := range []string{`{"args":{"snapshot":"s.json"},"files":[{"path":"s.json","data":""}]}`,
-		`{"args":{"branch":"b"},"files":[{"path":"s.json","data":""}]}`} {
+		`{"args":{"snapshot":"other.json"},"files":[{"path":"s.json","data":""}]}`, `{"files":[{"path":"s.json","data":""}]}`} {
 		if resp, _ := post(t, nil, srv.URL+api.Path(findings.OpTwinCreate), testToken, body, nil); resp.StatusCode != http.StatusOK {
 			t.Errorf("twin.create with %s: status %d", body, resp.StatusCode)
 		}
@@ -1022,7 +997,7 @@ func TestAPanicEndsTheAnswerWithoutADocument(t *testing.T) {
 		panic("a value that names " + testToken)
 	}
 	_, srv, log, _ := testServer(t, run)
-	req, _ := http.NewRequest(http.MethodPost, srv.URL+api.Path(findings.OpStagePlan), strings.NewReader(`{"render":"text"}`))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+api.Path(findings.OpTwinDiff), strings.NewReader(`{"render":"text"}`))
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1038,7 +1013,7 @@ func TestAPanicEndsTheAnswerWithoutADocument(t *testing.T) {
 			t.Errorf("a document after a panic: %s", l)
 		}
 	}
-	l := waitForLog(t, log, "operation=stage.plan", "outcome=panic", "level=ERROR")
+	l := waitForLog(t, log, "operation=twin.diff", "outcome=panic", "level=ERROR")
 	if strings.Contains(log.String(), "a value that names") {
 		t.Errorf("the log carries the panic's value: %s", l)
 	}
@@ -1158,47 +1133,6 @@ func TestTheConsoleRendersAsAsked(t *testing.T) {
 	}
 	if strings.Contains(l, "chatter") {
 		t.Errorf("the server's log carries a dependency's info line:\n%s", l)
-	}
-}
-
-// twin rehearse's document frame carries its markdown beside its text under render
-// markdown alone (015, research R-10): rehearsal.Markdown over the document and the plan's
-// steps, the comment a check posts, a refusal's before any stage was planned included. Under
-// text and json it carries none, and the frame is valid against the API's contract.
-func TestTheRehearsalsDocumentCarriesItsMarkdown(t *testing.T) {
-	steps := []step.Pair{step.NotComputed("change-1/branch-point", "change-1/seeded", "", "abcd", "change-1/branch-point was refused")}
-	planned := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"}, nil)
-	planned.Rehearsal = &findings.RehearsalBlock{ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1"},
-		ResolvedAt: "2026-10-19T10:00:00Z", DeadlineS: 1980, CeilingS: 3600, Stages: []findings.RehearsalStage{
-			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Branch: "main",
-				At: "2026-10-16T17:20:19.944651+00:00", Role: "refused", Verdict: "refused", Findings: findings.List{}},
-			{Ref: "change-1/seeded", Label: "seeded", AtSource: "written", Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00",
-				Role: "not_reached", Verdict: "not_reached", Findings: findings.List{}}}, Reproduce: []string{}}
-	refused := findings.RuleErrorDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"},
-		findings.RuleStageUnknown, "change-1", "branch change-1 is not on Infrahub")
-	for _, c := range []struct {
-		name  string
-		doc   *findings.Document
-		steps []step.Pair
-	}{{"a rehearsal planned", planned, steps}, {"a refusal before the plan", refused, nil}} {
-		_, srv, _, _ := testServer(t, func(c2 *call) error {
-			c2.steps = c.steps
-			return &result{doc: c.doc}
-		})
-		frame := apiSchema(t, "frame")
-		for _, render := range []string{api.RenderMarkdown, api.RenderText, api.RenderJSON} {
-			_, body := post(t, nil, srv.URL+api.Path(findings.OpTwinRehearse), testToken, `{"render":"`+render+`","args":{"branch":"change-1"}}`, nil)
-			ls := answerLines(t, body)
-			satisfies(t, frame, ls[len(ls)-1], c.name+" under "+render)
-			last := frameOf(t, ls[len(ls)-1])
-			want := ""
-			if render == api.RenderMarkdown {
-				want = rehearsal.Markdown(c.doc, c.steps)
-			}
-			if last.Markdown != want || render != api.RenderJSON && last.Text == "" && len(c.doc.Findings) > 0 {
-				t.Errorf("%s under %s: markdown %q, text %q; want markdown %q", c.name, render, last.Markdown, last.Text, want)
-			}
-		}
 	}
 }
 

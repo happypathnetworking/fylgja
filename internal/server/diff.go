@@ -87,8 +87,7 @@ func runTwinDiff(ctx context.Context, opts *options, f *diffFlags, files []api.F
 		}
 	}
 
-	// The step, as stage plan and twin step's dry run print it: each side named by its
-	// snapshot, since neither is a stage.
+	// The step, as twin step's dry run prints it: each side named by its snapshot.
 	s, err := step.Diff(*d.from.bundle, *d.to.bundle)
 	if err != nil {
 		// Two bundles the compile just produced always read; one that does not is a defect.

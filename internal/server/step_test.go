@@ -250,18 +250,19 @@ func TestStepRefusesARecordThatNamesNoSnapshot(t *testing.T) {
 }
 
 // A step always names its target (020, research R-06): twin.json 12 names no stage to take a
-// next one from, so a step given neither --stage nor --snapshot is refused by noTargetGiven,
-// step.target.unknown at resolve, its object --snapshot, in the words that name both; either
-// flag passes it.
+// next one from, so a step given no --snapshot is refused by noTargetGiven,
+// step.target.unknown at resolve, its object --snapshot, naming the one flag a step's target
+// is from 020 (a stage is the orchestrator's, stepped to by its snapshot); --snapshot, given
+// with a value or given empty, passes it.
 func TestStepRefusesAStepGivenNoTarget(t *testing.T) {
 	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetUnknown, Object: "--snapshot",
-		Step: findings.StepResolve, Message: "twin step names its target: give --snapshot <id|file>, or --stage <branch>/<label>"}
+		Step: findings.StepResolve, Message: "twin step names its target: give --snapshot <id|file>"}
 	if f := noTargetGiven(&stepFlags{}); f == nil || *f != want {
 		t.Errorf("no target: refused %+v, want %+v", f, want)
 	}
 	for name, f := range map[string]*stepFlags{
-		"--stage":    {stage: "change-1/linked"},
-		"--snapshot": {snapshot: fixtureSnapshotID},
+		"--snapshot=": {snapshotGiven: true},
+		"--snapshot":  {snapshot: fixtureSnapshotID},
 	} {
 		if got := noTargetGiven(f); got != nil {
 			t.Errorf("%s: refused %+v, want it to pass", name, got)

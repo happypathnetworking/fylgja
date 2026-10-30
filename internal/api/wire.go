@@ -78,11 +78,12 @@ const (
 	MaxStreamLength = 128
 )
 
-// Operations are the sixteen, named as the findings document names them. Each is POST
+// Operations are the eleven, named as the findings document names them. Each is POST
 // Path(op). There is no other: no health check, no listing of
-// runs, no fetch of a bundle. 015 adds twin.rehearse, which takes the branch and an
-// interrupt from its start; 020 run.read and run.interrupt, which reach a run by its
-// identity, and twin.diff, the step between two snapshots.
+// runs, no fetch of a bundle. 020 adds run.read and run.interrupt, which reach a run by its
+// identity, and twin.diff, the step between two snapshots; and loses twin.rehearse,
+// stage.list, stage.plan, intent.read and schema.check, which read Infrahub and are the
+// orchestrator's (D-065), so each path answers 404 as one the version has no operation at.
 var Operations = []string{
 	findings.OpTwinCreate,
 	findings.OpTwinProvision,
@@ -91,12 +92,7 @@ var Operations = []string{
 	findings.OpTwinShow,
 	findings.OpTwinVerify,
 	findings.OpCompile,
-	findings.OpStageList,
-	findings.OpStagePlan,
-	findings.OpIntentRead,
-	findings.OpSchemaCheck,
 	findings.OpPSPValidate,
-	findings.OpTwinRehearse,
 	findings.OpRunRead,
 	findings.OpRunInterrupt,
 	findings.OpTwinDiff,

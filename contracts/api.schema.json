@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/api.schema.json",
   "title": "Fylgja API, version 1",
-  "description": "M13: what crosses the API beside the documents Fylgja already versions. A request is $defs/request with the args of its operation ($defs/args). An answer is application/x-ndjson, each line one $defs/frame, the last a document frame whose document is findings.schema.json's, unchanged at findings_version 1. A transport fault's body is $defs/problem. The snapshot (the CTM before 018), the bundle and a support package cross inside $defs/file, as bytes, and are validated by their own schemas (snapshot.schema.json, manifest.schema.json, psp.schema.json), never here. No token, login, configuration line or device diff appears in any of these. 014: the operations stage.list and stage.plan replace waypoint.list and waypoint.plan, and twin.create, twin.step and intent.read take stage where they took waypoint; the version stays 1, since the API is pre-1.0 and every other operation is unchanged. 015: the operation twin.rehearse (its args the branch; an interrupt from its start, whose workflow is fylgja-rehearse), and the rendering markdown, whose document frame carries the report as markdown beside its text on twin.rehearse alone; the version stays 1, since a client of M13 ignores a new operation, a render value it does not send and a frame field it does not know. 017: twin.create, twin.rehearse, intent.read, stage.plan and stage.list take scope, tag:<name>, the devices every read of the request selects; the version stays 1, since a client that never sends it is served under the server's default scope. twin.step takes none: it reads under the scope its twin's record carries. 018: the snapshot crosses where the CTM did, in twin.compile's request, as twin.create's one file beside a snapshot that is a path, and in intent.read's files frame (snapshot.json), each validated by snapshot.schema.json; twin.create and twin.compile take snapshot, and twin.compile no longer takes ctm; the version stays 1, since a client that never sends snapshot is served as before, and the API is pre-1.0, as 014 renamed series to stage. 019: twin.create takes neither interval nor no_follow, since a twin follows nothing (D-062), and a request carrying either is refused as any argument not taken; the version stays 1, pre-1.0, as 018 removed twin.compile's ctm. twin.step takes snapshot, its target, a snapshot id or the path of the file the request carries, as twin.create's; the version stays 1, since a client that never sends it is served as before. 016: intent.read, twin.create, twin.step, stage.plan and twin.rehearse take probes, the path of a probe declaration (probes.schema.json) the request carries as its one file under that path, as twin.create's snapshot file crosses; the server reads it once at the request's start, in place of the probes declared in FylgjaProbe on the default branch, and every snapshot the request takes carries that one list; a request naming probes with no file, or a file under another path, is 400, the request is not one; beside snapshot on twin.create and twin.step it is snapshot.flags.conflict at --probes, since a snapshot carries its own list; the version stays 1, since a client that never sends it is served with the kind's probes, or none. 020: twin.create, twin.provision, twin.step and twin.destroy take detach, under which the answer ends at the run's identity, its start, its run and a document naming run.detached, and the run goes on; the operations run.read and run.interrupt (their args workflow_id and run_id) reach a run of fylgja-provision, fylgja-step or fylgja-destroy by its identity, and the run frame gains state, on run.read alone; a run.read of a run still running ends by EOF after its run and events, the one answer whose last line is not a document frame; the operation twin.diff (its args from and to, each a snapshot id or the path of a snapshot file the request carries) answers the step between two snapshots and starts nothing; the version stays 1, since a client that never sends detach is answered as before and a client ignores a field and an operation it does not know.",
+  "description": "M13: what crosses the API beside the documents Fylgja already versions. A request is $defs/request with the args of its operation ($defs/args). An answer is application/x-ndjson, each line one $defs/frame, the last a document frame whose document is findings.schema.json's, unchanged at findings_version 1. A transport fault's body is $defs/problem. The snapshot (the CTM before 018), the bundle and a support package cross inside $defs/file, as bytes, and are validated by their own schemas (snapshot.schema.json, manifest.schema.json, psp.schema.json), never here. No token, login, configuration line or device diff appears in any of these. 014: the operations stage.list and stage.plan replace waypoint.list and waypoint.plan, and twin.create, twin.step and intent.read take stage where they took waypoint; the version stays 1, since the API is pre-1.0 and every other operation is unchanged. 015: the operation twin.rehearse (its args the branch; an interrupt from its start, whose workflow is fylgja-rehearse), and the rendering markdown, whose document frame carries the report as markdown beside its text on twin.rehearse alone; the version stays 1, since a client of M13 ignores a new operation, a render value it does not send and a frame field it does not know. 017: twin.create, twin.rehearse, intent.read, stage.plan and stage.list take scope, tag:<name>, the devices every read of the request selects; the version stays 1, since a client that never sends it is served under the server's default scope. twin.step takes none: it reads under the scope its twin's record carries. 018: the snapshot crosses where the CTM did, in twin.compile's request, as twin.create's one file beside a snapshot that is a path, and in intent.read's files frame (snapshot.json), each validated by snapshot.schema.json; twin.create and twin.compile take snapshot, and twin.compile no longer takes ctm; the version stays 1, since a client that never sends snapshot is served as before, and the API is pre-1.0, as 014 renamed series to stage. 019: twin.create takes neither interval nor no_follow, since a twin follows nothing (D-062), and a request carrying either is refused as any argument not taken; the version stays 1, pre-1.0, as 018 removed twin.compile's ctm. twin.step takes snapshot, its target, a snapshot id or the path of the file the request carries, as twin.create's; the version stays 1, since a client that never sends it is served as before. 016: intent.read, twin.create, twin.step, stage.plan and twin.rehearse take probes, the path of a probe declaration (probes.schema.json) the request carries as its one file under that path, as twin.create's snapshot file crosses; the server reads it once at the request's start, in place of the probes declared in FylgjaProbe on the default branch, and every snapshot the request takes carries that one list; a request naming probes with no file, or a file under another path, is 400, the request is not one; beside snapshot on twin.create and twin.step it is snapshot.flags.conflict at --probes, since a snapshot carries its own list; the version stays 1, since a client that never sends it is served with the kind's probes, or none. 020: twin.create, twin.provision, twin.step and twin.destroy take detach, under which the answer ends at the run's identity, its start, its run and a document naming run.detached, and the run goes on; the operations run.read and run.interrupt (their args workflow_id and run_id) reach a run of fylgja-provision, fylgja-step or fylgja-destroy by its identity, and the run frame gains state, on run.read alone; a run.read of a run still running ends by EOF after its run and events, the one answer whose last line is not a document frame; the operation twin.diff (its args from and to, each a snapshot id or the path of a snapshot file the request carries) answers the step between two snapshots and starts nothing; the version stays 1, since a client that never sends detach is answered as before and a client ignores a field and an operation it does not know. 020 also removes what read Infrahub, which the orchestrator's adapter reads (D-065): the operations twin.rehearse, stage.list, stage.plan, intent.read and schema.check, each path answering 404 as one the version has no operation at, without Fylgja-Api-Versions; the arguments branch, at, stage, scope and probes of twin.create and twin.step, each refused as any argument not taken, so both take snapshot alone of what names their intent; the start frame's fylgja-rehearse, the probe file and intent.read's files frame; the version stays 1, pre-1.0, as 019 removed interval and no_follow.",
   "$defs": {
     "request": {
       "type": "object",
@@ -10,7 +10,7 @@
       "properties": {
         "render": {
           "enum": ["text", "json", "markdown"],
-          "description": "The rendering the client asks for beside the document: text is what the command printed without --json at M12; json is what it wrote to stderr under --json; markdown (015) is text's frames, and on twin.rehearse the document frame's markdown beside its text, every other operation answering it as it answers text. Absent: no out or err frame and no document text."
+          "description": "The rendering the client asks for beside the document: text is what the command printed without --json at M12; json is what it wrote to stderr under --json; markdown (015) is text's frames, every operation answering it as it answers text (twin.rehearse's document frame carried its markdown beside its text until 020 removed the operation). Absent: no out or err frame and no document text."
         },
         "args": {
           "type": "object",
@@ -19,7 +19,7 @@
         "files": {
           "type": "array",
           "items": { "$ref": "#/$defs/file" },
-          "description": "twin.create: the snapshot, under the path snapshot gives, when snapshot is a path (018). twin.step: the same, the target's snapshot (019). twin.compile: the snapshot, under the path given (018; the CTM before it). intent.read, twin.create, twin.step, stage.plan and twin.rehearse: the probe declaration, under the path probes gives (016), the one file beside it; twin.create and twin.step carry one file beside snapshot or probes, never both. twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order. twin.diff (020): the snapshot file of each of from and to that is not a snapshot id, under that path, a path both name carried once."
+          "description": "twin.create: the snapshot, under the path snapshot gives, when snapshot is a path (018). twin.step: the same, the target's snapshot (019). twin.compile: the snapshot, under the path given (018; the CTM before it). twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order. twin.diff (020): the snapshot file of each of from and to that is not a snapshot id, under that path, a path both name carried once."
         }
       }
     },
@@ -39,13 +39,8 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "branch": { "type": "string" },
-            "at": { "type": "string" },
-            "stage": { "type": "string", "description": "--stage as given, <branch>/<label> (014); present and empty is --stage=" },
             "dry_run": { "type": "boolean" },
-            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" },
-            "snapshot": { "type": "string", "description": "--snapshot as given: a snapshot id (64 lowercase hex characters) the store holds, or the path of the file the request carries" },
-            "probes": { "type": "string", "description": "--probes as given (016): the path of the probe declaration the request carries as its one file, under that path, which every take of the request carries in place of the kind's; beside snapshot, refused snapshot.flags.conflict" },
+            "snapshot": { "type": "string", "description": "--snapshot as given: a snapshot id (64 lowercase hex characters) the store holds, or the path of the file the request carries; absent, refused --snapshot is required (020)" },
             "detach": { "type": "boolean", "description": "--detach (020): the answer ends at the run's start, its run and a document naming run.detached, and the run goes on, read by run.read and interrupted by run.interrupt; beside dry_run, refused run.flags.conflict" }
           }
         },
@@ -63,9 +58,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "stage": { "type": "string", "description": "--stage as given: the target, in place of the next stage of the twin's proposed change" },
-            "snapshot": { "type": "string", "description": "--snapshot as given (019): the target, a snapshot id (64 lowercase hex characters) the store holds, or the path of the file the request carries; beside stage, refused snapshot.flags.conflict" },
-            "probes": { "type": "string", "description": "--probes as given (016): the path of the probe declaration the request carries as its one file, under that path, which every take of the request carries in place of the kind's; beside snapshot, refused snapshot.flags.conflict" },
+            "snapshot": { "type": "string", "description": "--snapshot as given (019): the target, a snapshot id (64 lowercase hex characters) the store holds, or the path of the file the request carries; absent, refused step.target.unknown (020)" },
             "allow_restart": { "type": "boolean" },
             "dry_run": { "type": "boolean" },
             "wait": { "type": "string", "description": "--wait as given; present and empty is --wait=" },
@@ -97,53 +90,10 @@
             "out": { "type": "string" }
           }
         },
-        "stage.list": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "branch": { "type": "string", "description": "--branch as given, a proposed change's source branch (014); present and empty is --branch=" },
-            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" }
-          }
-        },
-        "stage.plan": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "branch": { "type": "string", "description": "--branch as given; required, which the server refuses as --branch is required" },
-            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" },
-            "probes": { "type": "string", "description": "--probes as given (016): the path of the probe declaration the request carries as its one file, under that path, which replaces the probes declared in FylgjaProbe on the default branch; absent, the kind's are read, and none is an empty list" }
-          }
-        },
-        "intent.read": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "branch": { "type": "string" },
-            "at": { "type": "string" },
-            "stage": { "type": "string" },
-            "out": { "type": "string" },
-            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" },
-            "probes": { "type": "string", "description": "--probes as given (016): the path of the probe declaration the request carries as its one file, under that path, which replaces the probes declared in FylgjaProbe on the default branch; absent, the kind's are read, and none is an empty list" }
-          }
-        },
-        "schema.check": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": { "branch": { "type": "string" } }
-        },
         "psp.validate": {
           "type": "object",
           "additionalProperties": false,
           "properties": { "files": { "type": "array", "items": { "type": "string" } } }
-        },
-        "twin.rehearse": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "branch": { "type": "string", "description": "--branch as given, the proposed change's source branch (015); required, which the server refuses as --branch is required; present and empty is --branch=, refused stage.ref.invalid" },
-            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" },
-            "probes": { "type": "string", "description": "--probes as given (016): the path of the probe declaration the request carries as its one file, under that path, which replaces the probes declared in FylgjaProbe on the default branch; absent, the kind's are read, and none is an empty list" }
-          }
         },
         "run.read": {
           "type": "object",
@@ -197,8 +147,8 @@
               "type": "object",
               "required": ["workflow_id"],
               "additionalProperties": false,
-              "properties": { "workflow_id": { "enum": ["fylgja-provision", "fylgja-step", "fylgja-destroy", "fylgja-rehearse"] } },
-              "description": "The server begins to start this run. From here an interrupt call reaches it, on an operation that takes one: twin.destroy's start opens no stream, and its followed answer has no run frame; under detach (020) it has one, after the start. fylgja-rehearse is twin.rehearse's."
+              "properties": { "workflow_id": { "enum": ["fylgja-provision", "fylgja-step", "fylgja-destroy"] } },
+              "description": "The server begins to start this run. From here an interrupt call reaches it, on an operation that takes one: twin.destroy's start opens no stream, and its followed answer has no run frame; under detach (020) it has one, after the start. fylgja-rehearse, twin.rehearse's, left with the operation (020)."
             }
           }
         },
@@ -223,7 +173,7 @@
               "type": "array",
               "minItems": 1,
               "items": { "$ref": "#/$defs/file" },
-              "description": "intent.read: one file, snapshot.json, the snapshot (018; ctm.json, the CTM, before it). twin.compile: every file of the bundle, each under its path inside it."
+              "description": "twin.compile: every file of the bundle, each under its path inside it. (intent.read's one file, snapshot.json, left with the operation, 020.)"
             }
           }
         },
@@ -234,7 +184,7 @@
           "properties": {
             "document": { "$ref": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1" },
             "text": { "type": "string", "description": "Under render text or markdown, when the document has findings: they as text, for stderr, as M12's report printed them." },
-            "markdown": { "type": "string", "minLength": 1, "description": "015: under render markdown, on twin.rehearse alone, the report as GitHub-flavoured markdown, rendered from the document and the plan's steps; a rendering, never part of the document. Absent on every other operation and rendering." }
+            "markdown": { "type": "string", "minLength": 1, "description": "015: under render markdown, on twin.rehearse alone, the report as GitHub-flavoured markdown, rendered from the document and the plan's steps; a rendering, never part of the document. From 020, which removed twin.rehearse, absent on every operation and rendering; the orchestrator's rehearse flow renders the report." }
           }
         }
       ]

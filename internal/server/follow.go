@@ -187,16 +187,6 @@ func provisionReport(opts *options, op string, subject *findings.Subject, res pr
 	return &result{doc: doc}
 }
 
-// carriesRule reports whether list holds a finding under rule.
-func carriesRule(list findings.List, rule string) bool {
-	for _, f := range list {
-		if f.Rule == rule {
-			return true
-		}
-	}
-	return false
-}
-
 // printCleanup says what teardown and unstage removed, one line each, or that there was
 // nothing to remove. What remains is named by the cleanup.incomplete findings on stderr.
 func printCleanup(opts *options, c provision.CleanupResult) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -21,9 +20,6 @@ import (
 type options struct {
 	asJSON bool
 	pspDir string
-	// rehearsalCeiling is the longest deadline twin rehearse admits, rehearsal.Ceiling when
-	// zero (015): the server's, which a test lowers.
-	rehearsalCeiling time.Duration
 	// detach is the request's detach (020, R-03): twin create, twin provision, twin step and
 	// twin destroy answer at the run's identity rather than following it.
 	detach bool
@@ -32,11 +28,12 @@ type options struct {
 
 // options are the request's, as each M12 command resolved its own.
 func (c *call) options() *options {
-	return &options{asJSON: !textual(c.req.Render), pspDir: c.s.PSPDir, rehearsalCeiling: c.s.RehearsalCeiling, c: c}
+	return &options{asJSON: !textual(c.req.Render), pspDir: c.s.PSPDir, c: c}
 }
 
 // textual is whether a rendering prints text's out and err frames: "text", and "markdown",
-// whose answer is text's with the document's markdown beside its text (015).
+// which every operation answers as it answers text (015; from 020 no operation carries a
+// markdown rendering, which the orchestrator's rehearse flow renders).
 func textual(render string) bool {
 	return render == api.RenderText || render == api.RenderMarkdown
 }

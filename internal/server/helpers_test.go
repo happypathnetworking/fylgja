@@ -271,42 +271,9 @@ func validateM6Document(t *testing.T, doc *findings.Document) {
 	validateWithShow(t, "006-psp-lossy-mapping", "M6", doc)
 }
 
-// validateM10Document validates a document against the newest findings contract, under the
-// module root's contracts/. 018 is additive: a document that names no snapshot is 017's too,
-// so it is also validated against 017's frozen copy, the null snapshot ids taken out
-// (as017Contract). 019 removes following: a document of this build is 018's too, as built,
-// so it is also validated against 018's frozen copy. 016 moves the step, verify, rehearsal
-// and findings contracts on: a document of this build is 019's as built, a null step loss
-// taken out (withoutNullLoss), so it is also validated against 019's frozen copy; one whose
-// step carries a loss is 016's alone, and is read against no copy earlier than 016's. 020
-// moves the findings contract on: every document of this build is 016's as built, so it is
-// also validated against 016's frozen copy.
-func validateM10Document(t *testing.T, doc *findings.Document) {
-	t.Helper()
-	validateWithShow(t, currentContract, "M13", doc)
-	validateWithShow(t, contract016, "016", doc)
-	// A step document carrying a loss its flows read is 016's, which no earlier contract
-	// accepts, as is a rehearsal whose stage carries one.
-	if doc.Step != nil && doc.Step.Loss != nil {
-		return
-	}
-	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {
-		return
-	}
-	validateWithShow(t, contract019, "019", doc)
-	validateWithShow(t, contract018, "018", doc)
-	if !namesSnapshot(t, doc) {
-		validateWithShow(t, contract017, "017", doc)
-	}
-}
-
 // contract017 is the feature argument that names 017's copies of the findings contract and
 // the four blocks 018 moves, frozen under testdata/contracts/017-dcim-reader/.
 const contract017 = "017-dcim-reader"
-
-// contract018 is the feature argument that names 018's copies of the findings contract and
-// the show block, the two 019 moves, frozen under testdata/contracts/018-snapshots/.
-const contract018 = "018-snapshots"
 
 // contract019 is the feature argument that names 019's copies of the findings contract and
 // the step, verify and rehearsal blocks, the four 016 moves, frozen under
@@ -317,17 +284,6 @@ const contract019 = "019-following-removed"
 // twin.json contracts, the three 020 moves, frozen under testdata/contracts/016-probes/; its
 // blocks, which 020 does not freeze, are read from contracts/ (laterContract).
 const contract016 = "016-probes"
-
-// namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
-// 018's, which no earlier contract accepts.
-func namesSnapshot(t *testing.T, doc *findings.Document) bool {
-	t.Helper()
-	b, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.Contains(string(b), `"snapshot_id":"`) || strings.Contains(string(b), `"snapshot":"`)
-}
 
 // dropNullSnapshots removes the snapshot ids 018 writes as null where a block names none:
 // the show record's, each plan stage's and each rehearsal stage's. Every contract before

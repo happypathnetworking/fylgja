@@ -92,8 +92,9 @@ func documentBytes(t *testing.T, doc *findings.Document) json.RawMessage {
 	return b.Bytes()
 }
 
-// The sixteen operations are the newest findings contract's, every one there is, and each
-// is POST /v1/<noun>/<verb>.
+// The eleven operations are the newest findings contract's but the five 020 moved to the
+// orchestrator (D-065), which that contract's enum names until the core's findings lose them
+// (T035), and each is POST /v1/<noun>/<verb>. None of the five is one.
 func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	raw, err := os.ReadFile(contracts("findings.schema.json"))
 	if err != nil {
@@ -109,16 +110,27 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	if err := json.Unmarshal(raw, &schema); err != nil {
 		t.Fatal(err)
 	}
-	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(schema.Properties.Operation.Enum))
-	if !slices.Equal(got, want) {
-		t.Errorf("Operations = %v, the contract's enum %v", got, want)
+	orchestrators := []string{"twin.rehearse", "stage.list", "stage.plan", "intent.read", "schema.check"}
+	var want []string
+	for _, op := range schema.Properties.Operation.Enum {
+		if !slices.Contains(orchestrators, op) {
+			want = append(want, op)
+		}
+	}
+	slices.Sort(want)
+	if got := slices.Sorted(slices.Values(Operations)); !slices.Equal(got, want) {
+		t.Errorf("Operations = %v, the contract's enum without the orchestrator's %v", got, want)
+	}
+	for _, op := range orchestrators {
+		if slices.Contains(Operations, op) {
+			t.Errorf("Operations names %s, which 020 moved to the orchestrator", op)
+		}
 	}
 	for op, path := range map[string]string{
 		"twin.create": "/v1/twin/create", "twin.provision": "/v1/twin/provision", "twin.step": "/v1/twin/step",
 		"twin.destroy": "/v1/twin/destroy", "twin.show": "/v1/twin/show", "twin.verify": "/v1/twin/verify",
-		"twin.compile": "/v1/twin/compile", "stage.list": "/v1/stage/list", "stage.plan": "/v1/stage/plan",
-		"intent.read": "/v1/intent/read", "schema.check": "/v1/schema/check", "psp.validate": "/v1/psp/validate",
-		"twin.rehearse": "/v1/twin/rehearse", "run.read": "/v1/run/read", "run.interrupt": "/v1/run/interrupt",
+		"twin.compile": "/v1/twin/compile", "psp.validate": "/v1/psp/validate",
+		"run.read": "/v1/run/read", "run.interrupt": "/v1/run/interrupt",
 		"twin.diff": "/v1/twin/diff",
 	} {
 		if got := Path(op); got != path {
@@ -141,30 +153,23 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		args  map[string]json.RawMessage
 		files []File
 	}{
-		{"twin.create", map[string]json.RawMessage{"branch": str("fylgja-fixture"), "at": str("2026-09-14T12:00:00Z"),
-			"stage": str("change-1/cabled"), "dry_run": yes, "scope": str("tag:fylgja")}, nil},
 		// 018: --snapshot as a file, the one file the request carries under its path; as an id,
-		// none. The case above is an earlier client's, which never sends it.
+		// none. From 020 it is the one argument naming a create's intent.
 		{"twin.create", map[string]json.RawMessage{"snapshot": str("snap.json"), "dry_run": yes},
 			[]File{{Path: "snap.json", Data: []byte(`{"snapshot_version":"1"}`)}}},
 		{"twin.create", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32))}, nil},
 		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "dry_run": yes},
 			[]File{{Path: "manifest.json", Data: []byte("{}\n")}, {Path: "configs/n1.cli", Data: []byte("set / system name host-name n1\n")}}},
-		{"twin.step", map[string]json.RawMessage{"stage": str("change-1/head"), "allow_restart": yes, "dry_run": yes, "wait": str("20s")}, nil},
+		{"twin.step", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32)), "allow_restart": yes, "dry_run": yes,
+			"wait": str("20s")}, nil},
 		{"twin.destroy", nil, nil},
 		{"twin.show", nil, nil},
 		{"twin.verify", map[string]json.RawMessage{"wait": str("2m0s"), "args": mustJSON(t, []string{"30s"})}, nil},
 		// 018: the snapshot under the path snapshot gives, in place of the CTM under ctm's.
 		{"twin.compile", map[string]json.RawMessage{"snapshot": str("snap.json"), "out": str("out")},
 			[]File{{Path: "snap.json", Data: []byte(`{"snapshot_version":"1"}`)}}},
-		{"stage.list", map[string]json.RawMessage{"branch": str(""), "scope": str("tag:fylgja")}, nil},
-		{"stage.plan", map[string]json.RawMessage{"branch": str("change-1"), "scope": str("")}, nil},
-		{"intent.read", map[string]json.RawMessage{"branch": str("b"), "at": str("2026-09-14T12:00:00Z"), "stage": str("change-1/cabled"),
-			"out": str("snapshot.json"), "scope": str("tag:fylgja")}, nil},
-		{"schema.check", map[string]json.RawMessage{"branch": str("fylgja-fixture")}, nil},
 		{"psp.validate", map[string]json.RawMessage{"files": mustJSON(t, []string{"a.yaml", "b.yaml"})},
 			[]File{{Path: "a.yaml", Data: []byte("psp_version: \"0.6\"\n")}, {Path: "b.yaml", Data: nil}}},
-		{"twin.rehearse", map[string]json.RawMessage{"branch": str("change-1"), "scope": str("tag:fylgja")}, nil},
 		// 020: detach on the four runs, a destroy's its one argument.
 		{"twin.create", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32)), "detach": yes}, nil},
 		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "detach": yes},
@@ -213,32 +218,27 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 	// An argument an operation does not take is not its args, and neither is twin.provision
 	// without its bundle directory or twin.verify's args without wait.
 	invalid(t, apiSchema(t, "args/$defs/twin.show"), `{"branch":"b"}`, "twin.show with a branch")
-	// 014: the argument M10 named is gone from the three operations that took it, and M10's
-	// two operations have no args of their own.
-	for _, op := range []string{"twin.create", "twin.step", "intent.read"} {
+	// 014: the argument M10 named is gone from the operations that took it.
+	for _, op := range []string{"twin.create", "twin.step"} {
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"waypoint":"demo/2"}`, op+" with a waypoint")
 	}
-	invalid(t, apiSchema(t, "args/$defs/stage.list"), `{"series":"demo"}`, "stage.list with a series")
 	// 018: twin.compile's ctm is gone, renamed snapshot.
 	invalid(t, apiSchema(t, "args/$defs/twin.compile"), `{"ctm":"ctm.json","out":"out"}`, "twin.compile with a ctm")
 	// 019: a twin follows nothing, so twin.create takes neither the interval nor no_follow.
-	invalid(t, apiSchema(t, "args/$defs/twin.create"), `{"branch":"b","interval":"30s"}`, "twin.create with an interval")
-	invalid(t, apiSchema(t, "args/$defs/twin.create"), `{"branch":"b","no_follow":true}`, "twin.create with no_follow")
+	invalid(t, apiSchema(t, "args/$defs/twin.create"), `{"snapshot":"s.json","interval":"30s"}`, "twin.create with an interval")
+	invalid(t, apiSchema(t, "args/$defs/twin.create"), `{"snapshot":"s.json","no_follow":true}`, "twin.create with no_follow")
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"dry_run":true}`, "twin.provision without a bundle")
 	invalid(t, apiSchema(t, "args/$defs/twin.verify"), `{"args":["30s"]}`, "twin.verify's args without wait")
-	// 015: twin.rehearse takes the branch alone: no stage, no flag of twin step's, no dry run.
-	for _, arg := range []string{`{"stage":"change-1/head"}`, `{"allow_restart":true}`, `{"wait":"2m0s"}`, `{"dry_run":true}`} {
-		invalid(t, apiSchema(t, "args/$defs/twin.rehearse"), arg, "twin.rehearse with "+arg)
+	// 020: twin.create and twin.step take snapshot alone of what names their intent: branch,
+	// at, stage, scope and probes are no argument of either (D-065), and the five operations
+	// that read Infrahub have no args here, being no operation of the API.
+	for _, op := range []string{"twin.create", "twin.step"} {
+		valid(t, apiSchema(t, "args/$defs/"+op), []byte(`{"snapshot":"s.json"}`), op+" with a snapshot")
+		for _, name := range []string{"branch", "at", "stage", "scope", "probes"} {
+			invalid(t, apiSchema(t, "args/$defs/"+op), `{"snapshot":"s.json","`+name+`":"x"}`, op+" with "+name)
+		}
 	}
-	valid(t, apiSchema(t, "args/$defs/twin.rehearse"), []byte(`{}`), "twin.rehearse with no argument")
-	// 017: scope is an argument of the five operations that read intent under one, and an
-	// earlier client that never sends it still sends their args; twin.step reads under its
-	// record's scope and takes none, and neither does an operation that reads no intent.
-	for _, op := range []string{"twin.create", "twin.rehearse", "intent.read", "stage.plan", "stage.list"} {
-		valid(t, apiSchema(t, "args/$defs/"+op), []byte(`{"branch":"change-1"}`), op+" with no scope")
-		invalid(t, apiSchema(t, "args/$defs/"+op), `{"scope":true}`, op+" with a scope that is not a string")
-	}
-	for _, op := range []string{"twin.step", "twin.destroy", "twin.show", "twin.verify", "twin.compile", "schema.check", "psp.validate",
+	for _, op := range []string{"twin.destroy", "twin.show", "twin.verify", "twin.compile", "psp.validate",
 		"run.read", "run.interrupt", "twin.diff"} {
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"scope":"tag:fylgja"}`, op+" with a scope")
 	}
@@ -251,7 +251,7 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"detach":"yes"}`, op+" with a detach that is not a boolean")
 	}
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"bundle":"./b","detach":"yes"}`, "twin.provision with a detach that is not a boolean")
-	for _, op := range []string{"twin.show", "twin.verify", "twin.compile", "twin.rehearse", "stage.plan"} {
+	for _, op := range []string{"twin.show", "twin.verify", "twin.compile"} {
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"detach":true}`, op+" with detach")
 	}
 	for _, op := range []string{"run.read", "run.interrupt"} {
@@ -331,10 +331,6 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 	var refused findings.List
 	refused.Add(findings.Rejection, findings.RuleAPIUnreachable, "127.0.0.1:7650", "the API at 127.0.0.1:7650 cannot be reached")
 	refusedDoc := findings.NewDocument(findings.OpTwinShow, nil, refused)
-	var none findings.List
-	none.AddStep(findings.Warning, findings.StepResolve, findings.RuleRehearsalStepsNone, "change-1/seeded",
-		"one stage compiled: it is built, verified and destroyed, and no step is rehearsed")
-	rehearsed := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1", RunID: "01a1"}, none)
 	// 020's documents, as internal/server writes them.
 	var started findings.List
 	started.AddStep(findings.Info, findings.StepStart, findings.RuleRunDetached, "fylgja-provision 01a1",
@@ -370,17 +366,6 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 		{"files", Frame{Files: []File{{Path: "snapshot.json", Data: []byte("{}\n")}}}, KindFiles},
 		{"document", Frame{Document: documentBytes(t, doc)}, KindDocument},
 		{"document with text", Frame{Document: documentBytes(t, refusedDoc), Text: "rejection api.unreachable 127.0.0.1:7650: …\n"}, KindDocument},
-		// 015: the rehearsal's start, run and children's events, and its document with the
-		// markdown beside its text.
-		{"rehearsal's start", Frame{Start: &RunRef{WorkflowID: "fylgja-rehearse"}}, KindStart},
-		{"rehearsal's run", Frame{Run: &RunRef{WorkflowID: "fylgja-rehearse", RunID: "01a1"}}, KindRun},
-		{"rehearsal's child's notice", Frame{Event: &Event{WorkflowID: "fylgja-rehearse", Notice: "run fylgja-provision 02b2"}}, KindEvent},
-		{"document with markdown", Frame{Document: documentBytes(t, rehearsed),
-			Text:     "warning rehearsal.steps.none [step resolve] change-1/seeded: …\n",
-			Markdown: "## Fylgja rehearsed proposed change \"third link\" on change-1\n"}, KindDocument},
-		{"document with markdown and no findings", Frame{Document: documentBytes(t,
-			findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1", RunID: "01a1"}, nil)),
-			Markdown: "## …\n"}, KindDocument},
 		// 020: a detached answer's run, a destroy's included, and its document; run.read's
 		// document, and its refusal; run.interrupt's; twin.diff's. run.read's run frame with its
 		// state is below, in each state.
@@ -410,7 +395,8 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 	invalid(t, frame, `{"start":{"workflow_id":"fylgja-destroy","run_id":"01a1"}}`, "a start that names its run")
 	invalid(t, frame, `{"files":[]}`, "a files frame with none")
 	invalid(t, frame, `{"markdown":"## …\n"}`, "markdown with no document")
-	invalid(t, frame, `{"start":{"workflow_id":"fylgja-rehearse","run_id":"01a1"}}`, "a rehearsal's start that names its run")
+	// 020: the rehearsal left the core with twin.rehearse, so no request starts it.
+	invalid(t, frame, `{"start":{"workflow_id":"fylgja-rehearse"}}`, "a rehearsal's start")
 	// 020: run.read's run frame names one of the six states the workflow service describes; a
 	// run frame of any other operation names none, and a start, which comes before the run,
 	// never one.

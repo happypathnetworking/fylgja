@@ -130,7 +130,7 @@ func closedAddress(t *testing.T) string {
 func showCmd(opts *options) error { return runShow(context.Background(), opts) }
 
 func createCmd(opts *options) error {
-	return runCreate(context.Background(), opts, &createFlags{branch: "fylgja-fixture"})
+	return runCreate(context.Background(), opts, &createFlags{snapshot: headSnapshotID})
 }
 
 func TestTheClientsOwnFailures(t *testing.T) {

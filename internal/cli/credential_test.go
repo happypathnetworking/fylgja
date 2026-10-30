@@ -155,7 +155,7 @@ func TestProbeLoginNeverReachesOutput(t *testing.T) {
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", probeSentinel)
 
 	t.Run("create reporting a readiness timeout", func(t *testing.T) {
-		useFixtureRead(t)
+		useFixtureSnapshot(t)
 		result, events := readinessTimeoutRun()
 		useService(t, &fakeService{runID: "run-1", events: events, result: result})
 		useInterrupts(t)
@@ -163,7 +163,7 @@ func TestProbeLoginNeverReachesOutput(t *testing.T) {
 
 		var err error
 		stdout := captureStdout(t, func() {
-			err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+			err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 		})
 		noSecretServed(t, served, probeSentinel)
 		code, doc := exitOf(t, err)
@@ -336,60 +336,5 @@ func TestBundleCarriesNoCredential(t *testing.T) {
 	})
 	if walkErr != nil {
 		t.Fatal(walkErr)
-	}
-}
-
-// An unset credential is refused before the first request, not after one is rejected:
-// sending an unauthenticated read would put a request in Infrahub's log for an
-// operation that was never going to work, and the operator would read the answer as
-// "the token is wrong" rather than "there is no token".
-func TestMissingCredentialSendsNoRequest(t *testing.T) {
-	for _, op := range []struct {
-		name string
-		run  func(t *testing.T, out string) error
-	}{
-		{"intent read", func(t *testing.T, out string) error {
-			return runRead(t.Context(), &options{}, &readFlags{branch: "fylgja-fixture", out: out})
-		}},
-		{"schema check", func(t *testing.T, _ string) error {
-			return runCheck(t.Context(), &options{}, &checkFlags{branch: "fylgja-fixture"})
-		}},
-	} {
-		t.Run(op.name, func(t *testing.T) {
-			requests := 0
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				requests++
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			t.Setenv(intent.EnvAddress, srv.URL)
-			t.Setenv(intent.EnvToken, "")
-			served := markServed()
-
-			out := filepath.Join(t.TempDir(), "never.json")
-			err := op.run(t, out)
-			noSecretServed(t, served)
-
-			var res *result
-			if !asResult(err, &res) {
-				t.Fatalf("returned %v, want a findings result", err)
-			}
-			if code := res.doc.Status.ExitCode(); code != findings.ExitError {
-				t.Errorf("exit %d, want %d", code, findings.ExitError)
-			}
-			if len(res.doc.Findings) != 1 || res.doc.Findings[0].Rule != findings.RuleOperationFailed {
-				t.Fatalf("want one %s finding, got %+v", findings.RuleOperationFailed, res.doc.Findings)
-			}
-			if msg := res.doc.Findings[0].Message; !strings.Contains(msg, intent.EnvToken) {
-				t.Errorf("message does not name the variable to set: %s", msg)
-			}
-			if requests != 0 {
-				t.Errorf("%d request(s) reached Infrahub with no credential set", requests)
-			}
-			if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-				t.Error("a failed operation left a file behind")
-			}
-		})
 	}
 }

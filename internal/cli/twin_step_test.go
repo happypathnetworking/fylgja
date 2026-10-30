@@ -25,63 +25,56 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
-	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 	intentstage "github.com/happypathnetworking/fylgja/internal/stage"
-	"github.com/happypathnetworking/fylgja/internal/stages"
 )
 
-// The proposed change twin step walks in tier 1 (014): pc-1 on branch change-1, whose
-// source branch reads four intents by version (the fake's versions), so each stage reads
-// its own at. Its stages in order: the branch point (main, the fixture); sealed, the mixed
-// fixture at a given at; linked, unwritten, at its mark's writing, which adds the link
-// e1:Ethernet3 — s1:ethernet-1/3 and re-renders e1's and s1's artifacts (the fixture tool's
-// -add-mixed-link, in the fake); again, the mixed fixture at a later at, so the step from
-// sealed is unchanged but for provenance; less, e2 retired; and the head, at the branch's
-// latest stamp.
+// The targets twin step walks to in tier 1 are the stages 014's proposed change pc-1 had on
+// branch change-1, each now the snapshot of the intent its at read (020: a stage is the
+// orchestrator's, which resolves it and hands the core its snapshot, D-065), filed in the
+// store by stepHost and named by its id: sealed, the mixed fixture at a given at; linked, at
+// its mark's writing, which adds the link e1:Ethernet3 — s1:ethernet-1/3 and re-renders e1's
+// and s1's artifacts (the fixture tool's -add-mixed-link); again, the mixed fixture at a
+// later at, so the step from sealed is unchanged but for provenance; and less, e2 retired.
 const (
 	stepMixedAt   = "2026-10-16T08:30:00Z"
-	stepWrittenAt = fakeMarkedAt
+	stepWrittenAt = "2026-10-16T10:00:00.000000+00:00"
 	stepLaterAt   = "2026-10-16T11:00:00Z"
 	stepLessAt    = "2026-10-16T12:00:00Z"
-	stepRunID     = "01a1b2c3-0000-7000-8000-000000000001"
-	createRunID   = "01a1b2c3-0000-7000-8000-000000000000"
-	// stepStages is the proposed change's stages, as its refusals name them.
-	stepStages = "branch-point, sealed, linked, again, less, head"
+	// stepObservedAt is when every target's intent was read, which its snapshot carries.
+	stepObservedAt = "2026-10-16T12:30:00.000000Z"
+	stepRunID      = "01a1b2c3-0000-7000-8000-000000000001"
+	createRunID    = "01a1b2c3-0000-7000-8000-000000000000"
 	// noTargetMessage is step.target.unknown's message for a step given no target, refused
 	// before anything is read (020, research R-06).
-	noTargetMessage = "twin step names its target: give --snapshot <id|file>, or --stage <branch>/<label>"
+	noTargetMessage = "twin step names its target: give --snapshot <id|file>"
 )
 
-// stepChange is the proposed change whose stages the twin is created from and steps to.
-var stepChange = struct{ ID, Branch string }{ID: "pc-1", Branch: "change-1"}
+// stepLabels are the targets' labels, each the at its snapshot names and the intent read
+// there: the mixed fixture, the link added, or e2 retired.
+var stepLabels = map[string]struct {
+	at  string
+	ctm func(t *testing.T) *ctm.CTM
+}{
+	"sealed": {stepMixedAt, mixedOnChange1},
+	"linked": {stepWrittenAt, withMixedLink},
+	"again":  {stepLaterAt, mixedOnChange1},
+	"less":   {stepLessAt, withoutE2},
+}
 
-// stepInfrahub serves the proposed change.
-func stepInfrahub(t *testing.T) *fakeInfrahub {
+// mixedOnChange1 is the mixed fixture read from branch change-1.
+func mixedOnChange1(t *testing.T) *ctm.CTM {
 	t.Helper()
-	f := newFakeInfrahub(t)
-	mixed, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
+	c, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	mixed.Envelope.Branch = "change-1"
-	f.versions = map[string][]fakeVersion{"change-1": {
-		{Since: "2026-10-16T08:10:00.000000+00:00", CTM: mixed},
-		{Since: "2026-10-16T09:30:00.000000+00:00", CTM: withMixedLink(t)},
-		{Since: "2026-10-16T10:30:00.000000+00:00", CTM: mixed},
-		{Since: "2026-10-16T11:30:00.000000+00:00", CTM: withoutE2(t)},
-	}}
-	f.change("pc-1", "change-1",
-		mark("st-linked", "linked", "", "a link between e1 and s1"),
-		mark("st-sealed", "sealed", stepMixedAt, "the mixed fixture as sealed"),
-		mark("st-again", "again", stepLaterAt, "the fixture again"),
-		mark("st-less", "less", stepLessAt, "e2 retired"))
-	return f
+	c.Envelope.Branch = "change-1"
+	return c
 }
 
 // withMixedLink is the mixed fixture read from branch change-1 with the link
@@ -232,13 +225,10 @@ func useStepClab(t *testing.T, inspect, plan string) *stepClab {
 // stepHostFixture is a host running the mixed twin, as stepHost builds it.
 type stepHostFixture struct {
 	paths  lab.Paths
-	infra  *fakeInfrahub
 	clab   *stepClab
 	fromID string
 	// fromSnapshot is the snapshot the record names, as a create since 018 records it.
 	fromSnapshot string
-	// before is how many requests Infrahub had answered once the fixture was built.
-	before int
 	// svc is the workflow service useNoRunsInFlight installed.
 	svc *fakeService
 }
@@ -253,49 +243,52 @@ func useNoRunsInFlight(t *testing.T) *fakeService {
 	return svc
 }
 
-// stepHost is a host running the mixed twin, built from stage change-1/sealed by run
-// createRunID: the state root, the fake Infrahub, containerlab answering inspect-three.json
-// and plan, both logins set and no host budget, and a workflow service with no run in
-// flight that starts nothing (useNoRunsInFlight). The from stage's snapshot and bundle are
-// taken, built and filed through stage plan's own path, as a create files them, and twin.json
-// 9 records both; change adjusts the record before it is written.
+// stepHost is a host running the mixed twin, built from the snapshot sealed by run
+// createRunID: the state root, containerlab answering inspect-three.json and plan, both logins
+// set and no host budget, and a workflow service with no run in flight that starts nothing
+// (useNoRunsInFlight). The from snapshot and its bundle are filed, as a create files them, and
+// twin.json 12 records both; change adjusts the record before it is written. Every other
+// target's snapshot is filed beside it, its bundle not, so a step names it by its id
+// (stageID) and compiles and files its bundle itself.
 func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHostFixture {
 	t.Helper()
 	paths := useStateRoot(t)
 	svc := useNoRunsInFlight(t)
 	mixedDryRunEnv(t)
-	infra := stepInfrahub(t)
-	infra.start()
 	fromID := buildStage(t, paths, "sealed")
 	fromSnapshot := snapshotOf(t, fromID)
+	for label := range stepLabels {
+		if label != "sealed" {
+			fileStageSnapshot(t, paths, label)
+		}
+	}
 	writeTwin(t, paths, stepRecordOf(t, fromID, func(f *lab.RecordFields) {
 		f.SnapshotID = fromSnapshot
 		if change != nil {
 			change(f)
 		}
 	}))
-	return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", plan), fromID: fromID,
-		fromSnapshot: fromSnapshot, before: len(infra.requests()), svc: svc}
+	return &stepHostFixture{paths: paths, clab: useStepClab(t, "inspect-three.json", plan), fromID: fromID,
+		fromSnapshot: fromSnapshot, svc: svc}
 }
 
-// compiledStage is what stage plan's path hands its take and its filing for one label.
+// compiledStage is a target's snapshot, and the bundle it compiles to.
 type compiledStage struct {
 	snapshot *snap.Snapshot
 	files    map[string][]byte
 	id       string
 }
 
-// builtStages holds buildStage's read, take and compile by label, once for the package, and
-// the snapshot each bundle compileStage built was taken as. Every caller reads stepInfrahub's
-// proposed change as stepHost builds it, unchanged, so a label compiles to the same files
-// each time; only the filing, into each test's own stores, is done again.
+// builtStages holds each label's snapshot and compile, once for the package, and the
+// snapshot each bundle buildStage built was taken as. A label compiles to the same files each
+// time; only the filing, into each test's own stores, is done again.
 var builtStages = struct {
 	sync.Mutex
 	byLabel    map[string]compiledStage
 	snapshotOf map[string]string
 }{byLabel: map[string]compiledStage{}, snapshotOf: map[string]string{}}
 
-// snapshotOf is the snapshot id of a bundle compileStage built, as a create records it beside
+// snapshotOf is the snapshot id of a bundle buildStage built, as a create records it beside
 // the bundle.
 func snapshotOf(t *testing.T, bundleID string) string {
 	t.Helper()
@@ -303,89 +296,69 @@ func snapshotOf(t *testing.T, bundleID string) string {
 	defer builtStages.Unlock()
 	id, ok := builtStages.snapshotOf[bundleID]
 	if !ok {
-		t.Fatalf("bundle %s was not built by compileStage", bundleID)
+		t.Fatalf("bundle %s was not built by buildStage", bundleID)
 	}
 	return id
 }
 
-// stepStamper reads a branch's stamps as the server's does, but for the conformance check
-// before a branch's first, which every branch stepInfrahub serves passes.
-type stepStamper struct{}
-
-func (stepStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
-	cfg, err := intent.FromEnv(branch, at)
-	if err != nil {
-		return intent.Stamps{}, err
-	}
-	cfg.Scope = intent.ScopeTag(scope)
-	return intent.New(cfg).Stamps(ctx)
-}
-
-// buildStage finds change-1's proposed change and reads, compiles and files its stage label
-// through stage plan's path, and returns its id. The read and the compile are builtStages'
-// after the first.
-func buildStage(t *testing.T, paths lab.Paths, label string) string {
+// compiledLabel is label's snapshot, of stepLabels' intent at its at, observed when its at
+// was read, and its compile with the shipped packages; the package's after the first.
+func compiledLabel(t *testing.T, label string) compiledStage {
 	t.Helper()
 	builtStages.Lock()
 	built, ok := builtStages.byLabel[label]
 	builtStages.Unlock()
 	if ok {
-		if _, err := snap.NewDirStore(paths.Snapshots).Put(context.Background(), built.snapshot); err != nil {
-			t.Fatal(err)
-		}
-		if _, _, err := fileCompiled(context.Background(), paths.Bundles, built.files, built.id); err != nil {
-			t.Fatal(err)
-		}
-		return built.id
+		return built
 	}
-	built = compileStage(t, paths, label)
-	builtStages.Lock()
-	builtStages.byLabel[label] = built
-	builtStages.Unlock()
-	return built.id
-}
-
-// compileStage is buildStage's read, take, compile and filing, against the fake Infrahub as it
-// stands: a test that has changed stepInfrahub's proposed change builds its stages here,
-// never through builtStages.
-func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
-	t.Helper()
-	ctx := context.Background()
-	var built compiledStage
+	l, ok := stepLabels[label]
+	if !ok {
+		t.Fatalf("no target is labelled %s", label)
+	}
+	c := l.ctm(t)
+	c.Envelope.At, c.Envelope.ObservedAt = l.at, stepObservedAt
 	reg, err := psp.Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := intent.StageReaderFromEnv()
-	if err != nil {
-		t.Fatal(err)
+	files, id, list := intentstage.Compile(c, nil, reg, nil)
+	if list.Rejected() || id == "" {
+		t.Fatalf("%s did not compile: %+v", label, list)
 	}
-	ch, list, err := stages.Find(ctx, reader, stepStamper{}, "change-1", "tag:fylgja")
-	if err != nil || ch == nil {
-		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
-	}
-	take := func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
-		built.snapshot = snap.Take(c, probes)
-		_, err := snap.NewDirStore(paths.Snapshots).Put(ctx, built.snapshot)
-		return built.snapshot.ID, nil, err
-	}
-	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
-		built.files, built.id = files, id
-		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
-		return list, err
-	}
-	ref := stages.Ref{Branch: "change-1", Label: label}
-	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file, nil, nil), time.Now().UTC())
-	if s.Status != stages.PlanCompiled {
-		t.Fatalf("%s did not compile: %+v", ref, s.Findings)
-	}
-	if built.id != s.Bundle.ID || built.snapshot.ID != s.SnapshotID {
-		t.Fatalf("%s filed %s and %s and compiled to %s and %s", ref, built.snapshot.ID, built.id, s.SnapshotID, s.Bundle.ID)
-	}
+	built = compiledStage{snapshot: snap.Take(c, nil), files: files, id: id}
 	builtStages.Lock()
-	builtStages.snapshotOf[built.id] = built.snapshot.ID
+	builtStages.byLabel[label] = built
+	builtStages.snapshotOf[id] = built.snapshot.ID
 	builtStages.Unlock()
 	return built
+}
+
+// fileStageSnapshot files label's snapshot in the store under paths, and returns its id.
+func fileStageSnapshot(t *testing.T, paths lab.Paths, label string) string {
+	t.Helper()
+	built := compiledLabel(t, label)
+	if _, err := snap.NewDirStore(paths.Snapshots).Put(context.Background(), built.snapshot); err != nil {
+		t.Fatal(err)
+	}
+	return built.snapshot.ID
+}
+
+// buildStage files label's snapshot and its bundle in the stores under paths, as a create
+// files them, and returns the bundle's id.
+func buildStage(t *testing.T, paths lab.Paths, label string) string {
+	t.Helper()
+	fileStageSnapshot(t, paths, label)
+	built := compiledLabel(t, label)
+	if _, _, err := fileCompiled(context.Background(), paths.Bundles, built.files, built.id); err != nil {
+		t.Fatal(err)
+	}
+	return built.id
+}
+
+// stageID is label's snapshot id, which stepHost filed: what a step to it names.
+func stageID(t *testing.T, label string) string {
+	t.Helper()
+	return compiledLabel(t, label).snapshot.ID
 }
 
 // unscopedHost is stepHost's twin with its record rewritten as a worker of twin.json version,
@@ -447,8 +420,8 @@ func editedRecordHost(t *testing.T, edit func(map[string]any)) *stepHostFixture 
 	return h
 }
 
-// stepRecordOf is this build's twin.json of the mixed twin created from stage
-// change-1/sealed, which names no stage (020, research R-06).
+// stepRecordOf is this build's twin.json of the mixed twin created from sealed's snapshot,
+// which names no stage (020, research R-06).
 func stepRecordOf(t *testing.T, bundleID string, change func(*lab.RecordFields)) wire.TwinRecord {
 	t.Helper()
 	observed := "2026-09-21T09:00:00.000000Z"
@@ -479,16 +452,14 @@ func stepRecordOf(t *testing.T, bundleID string, change func(*lab.RecordFields))
 	return rec
 }
 
-// linkedUnlessNamed is args stepping to change-1/linked, the stage after the twin's, when
-// they name neither --stage nor --snapshot: since 020 a step always names its target, a
-// record naming no stage to take a next one from (research R-06).
-func linkedUnlessNamed(args ...string) []string {
-	if slices.ContainsFunc(args, func(a string) bool {
-		return strings.HasPrefix(a, "--stage") || strings.HasPrefix(a, "--snapshot")
-	}) {
+// linkedUnlessNamed is args stepping to linked's snapshot, when they name no --snapshot:
+// since 020 a step always names its target, a record naming no stage to take a next one from
+// (research R-06).
+func linkedUnlessNamed(t *testing.T, args ...string) []string {
+	if slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--snapshot") }) {
 		return args
 	}
-	return append([]string{"--stage", "change-1/linked"}, args...)
+	return append([]string{"--snapshot", stageID(t, "linked")}, args...)
 }
 
 // stepOutput is what twin step put in front of the operator, in text and in JSON.
@@ -571,7 +542,7 @@ func noContent(t *testing.T, label string, outputs ...string) {
 				t.Errorf("%s carries %q:\n%s", label, prefix, o)
 			}
 		}
-		if strings.Contains(o, fakeToken) {
+		if strings.Contains(o, harness.token) {
 			t.Errorf("%s carries the credential", label)
 		}
 	}
@@ -604,15 +575,18 @@ func samePlan(a, b wire.ReconcilePlan) bool {
 		slices.Equal(a.EndpointsDeleted, b.EndpointsDeleted) && maps.Equal(a.Reasons, b.Reasons)
 }
 
-// stepDryRunLines is the dry run's text for the step change-1/sealed → change-1/linked
-// under plan-link-added.json, through the push: line (contracts/cli.md), from h's twin.
-func stepDryRunLines(h *stepHostFixture, toID string) []string {
+// stepDryRunLines is the dry run's text for the step sealed → linked under
+// plan-link-added.json, through the wait: line (contracts/cli.md), from h's twin to linked's
+// snapshot, compiled to toID.
+func stepDryRunLines(t *testing.T, h *stepHostFixture, toID string) []string {
+	t.Helper()
+	to := stageID(t, "linked")
 	return []string{
 		"dry run: no lab, container, twin directory or run is changed",
 		"twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(h.fromID) + "), branch change-1 at " +
 			stepMixedAt + "; 3 nodes",
-		`stage change-1/linked: branch change-1 at ` + stepWrittenAt + ` (written), "a link between e1 and s1"`,
-		"step snapshot " + short(h.fromSnapshot) + " → change-1/linked (" + short(h.fromID) + " → " + short(toID) + "):",
+		"target: snapshot " + short(to) + " (branch change-1 at " + stepWrittenAt + ")",
+		"step snapshot " + short(h.fromSnapshot) + " → snapshot " + short(to) + " (" + short(h.fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
 		"  artifacts: e1 device-config b1431710… → cbc8c75d…; s1 device-config fdf83f15… → 8e15691e…",
@@ -629,7 +603,7 @@ var restartRequired = findings.Finding{Severity: findings.Rejection, Rule: findi
 		"it loses its running state and its push until the step pushes it again; give --allow-restart to proceed, " +
 		"or --dry-run to see the step"}
 
-// The dry run of the step change-1/sealed → change-1/linked says, line for line, what a step would do and
+// The dry run of the step sealed → linked, two snapshots, says, line for line, what a step would do and
 // that containerlab would restart e1; it refuses the step without --allow-restart and
 // clears it with the flag. Nothing on the host or in the twin directory changes: the plan is
 // read from the store's copy of the target against the twin directory's lab state, and the
@@ -646,8 +620,8 @@ func TestStepDryRun(t *testing.T) {
 		code    int
 		verdict string
 	}{
-		{"refused", []string{"--stage", "change-1/linked", "--dry-run"}, findings.ExitRejected, findings.VerdictRefused + " (" + findings.RuleStepRestartRequired + ")"},
-		{"clear", []string{"--stage", "change-1/linked", "--dry-run", "--allow-restart"}, findings.ExitOK, findings.VerdictClear},
+		{"refused", []string{"--snapshot", stageID(t, "linked"), "--dry-run"}, findings.ExitRejected, findings.VerdictRefused + " (" + findings.RuleStepRestartRequired + ")"},
+		{"clear", []string{"--snapshot", stageID(t, "linked"), "--dry-run", "--allow-restart"}, findings.ExitOK, findings.VerdictClear},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h.clab.calls = nil
@@ -656,7 +630,7 @@ func TestStepDryRun(t *testing.T) {
 				t.Fatalf("exit %d, want %d; findings %+v", out.code, c.code, out.doc.Findings)
 			}
 			toID := out.doc.BundleID
-			want := strings.Join(append(stepDryRunLines(h, toID),
+			want := strings.Join(append(stepDryRunLines(t, h, toID),
 				"memory: sum 5120 MiB; host budget unset",
 				"host: lab fylgja present; twin directory present",
 				"verdict: "+c.verdict), "\n") + "\n"
@@ -717,12 +691,12 @@ func TestStepDryRun(t *testing.T) {
 					t.Errorf("step.push_plan %+v, want %+v", st.PushPlan, pushPlan)
 				}
 			}
-			if doc.Stage == nil || doc.Stage.Ref != "change-1/linked" || doc.Stage.Branch != "change-1" ||
-				doc.Stage.AtSource != findings.AtSourceWritten || doc.Stage.ProposedChange.ID != stepChange.ID {
-				t.Errorf("stage block %+v; want change-1/linked, written, of pc-1", doc.Stage)
+			if doc.Stage != nil {
+				t.Errorf("stage block %+v; a step to a snapshot names none (020)", doc.Stage)
 			}
-			if sub := doc.Subject; sub == nil || sub.Stage != "change-1/linked" || sub.Branch != "change-1" || sub.At != stepWrittenAt || sub.RunID != "" {
-				t.Errorf("subject %+v; want change-1/linked resolved and no run", sub)
+			if sub := doc.Subject; sub == nil || sub.Snapshot != stageID(t, "linked") || sub.Branch != "change-1" ||
+				sub.At != stepWrittenAt || sub.RunID != "" {
+				t.Errorf("subject %+v; want linked's snapshot, of change-1 at its at, and no run", sub)
 			}
 
 			// containerlab's plan is the store's copy of the target, against the twin
@@ -801,7 +775,7 @@ func TestStepDryRun(t *testing.T) {
 	}
 }
 
-// divergedStepHost is stepHost's twin left diverged by a step towards change-1/linked that
+// divergedStepHost is stepHost's twin left diverged by a step towards linked's snapshot that
 // stopped at push, e1 refused and s1 landed.
 func divergedStepHost(t *testing.T) *stepHostFixture {
 	t.Helper()
@@ -850,8 +824,6 @@ func TestStepDryRunRefusals(t *testing.T) {
 		memory string
 		// plans is how often containerlab's plan was read, over the text and JSON runs.
 		plans int
-		// asked says whether Infrahub was asked anything once the host was built.
-		asked bool
 	}{
 		{name: "a diverged twin", host: divergedStepHost, rules: []string{findings.RuleStepTwinDiverged}},
 		{name: "a merge package", host: func(t *testing.T) *stepHostFixture {
@@ -862,13 +834,13 @@ func TestStepDryRunRefusals(t *testing.T) {
 			want: &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepPackageMerge, Step: findings.StepCompare,
 				Object: "nokia_srlinux", Message: "support package nokia_srlinux pushes by merge, which a step cannot use: a step " +
 					"removes what the previous artifact added, and only a replace does that; nodes s1; a create from it is unaffected"},
-			memory: "memory: sum 5120 MiB; host budget unset", plans: 2, asked: true},
+			memory: "memory: sum 5120 MiB; host budget unset", plans: 2},
 		{name: "the host's memory beside the plan's rule", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv(lab.EnvHostMemoryMB, "4096")
 			return h
 		}, rules: []string{findings.RuleHostMemoryExceeded, findings.RuleStepRestartRequired}, want: &restartRequired,
-			memory: "memory: sum 5120 MiB; host budget 4096 MiB", plans: 2, asked: true},
+			memory: "memory: sum 5120 MiB; host budget 4096 MiB", plans: 2},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := c.host(t)
@@ -876,7 +848,7 @@ func TestStepDryRunRefusals(t *testing.T) {
 			record := sha256Of(t, h.paths.TwinJSON)
 			twinDir := stateRootListing(t, h.paths.Twin)
 
-			out := runStepCmd(t, linkedUnlessNamed(append([]string{"--dry-run"}, c.args...)...)...)
+			out := runStepCmd(t, linkedUnlessNamed(t, append([]string{"--dry-run"}, c.args...)...)...)
 			if out.code != findings.ExitRejected || out.doc.Status != findings.StatusRejected {
 				t.Fatalf("exit %d, status %s; want 1, rejected; findings %+v", out.code, out.doc.Status, out.doc.Findings)
 			}
@@ -921,9 +893,6 @@ func TestStepDryRunRefusals(t *testing.T) {
 			if plans := len(h.clab.asked("clab", "deploy")); plans != c.plans {
 				t.Errorf("containerlab's plan was read %d times; want %d", plans, c.plans)
 			}
-			if asked := len(h.infra.requests()) > h.before; asked != c.asked {
-				t.Errorf("Infrahub asked after the host was built: %v, want %v", asked, c.asked)
-			}
 			if got := sha256Of(t, h.paths.TwinJSON); got != record {
 				t.Errorf("twin.json changed under a dry run")
 			}
@@ -937,63 +906,13 @@ func TestStepDryRunRefusals(t *testing.T) {
 	}
 }
 
-// Beside a rehearsal in flight a step is refused run.in_flight, naming the rehearsal's run,
-// before the host or Infrahub is read (FR-007, FR-008; T080): during the baseline's
-// provision, where the host holds a lab and no record and the step would call the
-// rehearsal's twin an orphan, and after a diverged stage, where it would refuse the twin as
-// diverged. Nothing is started, and containerlab is asked nothing.
-func TestStepBesideARehearsalNamesItBeforeAnyRead(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		host func(t *testing.T) *stepHostFixture
-		run  provision.RunInFlight
-	}{
-		{"during the baseline's provision", func(t *testing.T) *stepHostFixture {
-			paths := useStateRoot(t)
-			infra := stepInfrahub(t)
-			infra.start()
-			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", ""),
-				before: len(infra.requests())}
-		}, provision.RunInFlight{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-			Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: findings.StepDeploy}}},
-		{"after a diverged stage", divergedStepHost, provision.RunInFlight{WorkflowID: provision.WorkflowRehearse, RunID: "r1",
-			Step: "destroy", Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d1", Step: findings.StepTeardown}}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			h := c.host(t)
-			svc := &fakeService{readOnly: t, inFlight: []provision.RunInFlight{c.run}}
-			useService(t, svc)
-			h.clab.calls = nil
-
-			out := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart")
-			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleRunInFlight, Step: findings.StepStart,
-				Object:  provision.WorkflowRehearse,
-				Message: "rehearsal run r1 is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"}
-			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || len(out.doc.Findings) != 1 || got != want {
-				t.Errorf("exit %d, findings %+v; want 1 and %+v alone", out.code, out.doc.Findings, want)
-			}
-			if asked := len(h.infra.requests()) > h.before; asked {
-				t.Errorf("Infrahub was asked %+v; want nothing read", h.infra.requests()[h.before:])
-			}
-			if len(h.clab.calls) != 0 {
-				t.Errorf("containerlab or docker was asked %v; want nothing read", h.clab.calls)
-			}
-			svc.mu.Lock()
-			defer svc.mu.Unlock()
-			if len(svc.calls) != 0 {
-				t.Errorf("the service was asked %v; want nothing started", svc.calls)
-			}
-		})
-	}
-}
-
 // A warning leaves the exit as it is: a package whose declared link change containerlab's
 // plan contradicts. A step past stages of a proposed change warns of none since twin.json 12,
 // whose record names no stage to count them from (020, research R-06).
 func TestStepWarnings(t *testing.T) {
 	t.Run("no stage skipped", func(t *testing.T) {
 		stepHost(t, "plan-nothing.json", nil)
-		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run")
+		out := runStepCmd(t, "--snapshot", stageID(t, "again"), "--dry-run")
 		if out.code != findings.ExitOK || slices.ContainsFunc(out.doc.Findings, func(f findings.Finding) bool {
 			return f.Rule == findings.RuleStepStageSkipped
 		}) {
@@ -1010,7 +929,7 @@ func TestStepWarnings(t *testing.T) {
 	// does: the plan is printed as containerlab gave it.
 	t.Run("unchanged beside a drifted lab", func(t *testing.T) {
 		stepHost(t, "plan-link-added.json", nil)
-		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run", "--allow-restart")
+		out := runStepCmd(t, "--snapshot", stageID(t, "again"), "--dry-run", "--allow-restart")
 		if out.code != findings.ExitOK || !strings.Contains(out.stdout,
 			"reconcile: restart e1 (added link; arista_eos declares restart); live s1 (nokia_srlinux declares live)\npush: nobody\n") ||
 			out.doc.Step == nil || len(out.doc.Step.PushPlan) != 0 {
@@ -1022,7 +941,7 @@ func TestStepWarnings(t *testing.T) {
 		h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
 			"deleted-nodes": [], "recreated-nodes": [], "added-links": ["e1:eth3 -- s1:e1-3"], "deleted-endpoints": [],
 			"restarted-nodes": ["s1"], "node-change-reasons": {"s1": "added link"}}`)
-		out := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart")
+		out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--dry-run", "--allow-restart")
 		want := []findings.Finding{
 			{Severity: findings.Warning, Rule: findings.RuleStepRestartUndeclared, Object: "e1", Step: findings.StepCompare,
 				Message: "package arista_eos declares that a link change restarts the node, but containerlab's plan re-cables e1 live; " +
@@ -1051,19 +970,19 @@ func TestStepWarnings(t *testing.T) {
 func TestStepDryRunReconcileLifecycles(t *testing.T) {
 	for _, c := range []struct {
 		name string
-		// fromLess builds the twin from change-1/less, e2 retired, so that a step to
-		// change-1/linked adds e2.
+		// fromLess builds the twin from less's snapshot, e2 retired, so that a step to
+		// linked's adds e2.
 		fromLess bool
 		args     []string
 		plan     string
 		line     string
 	}{
-		{name: "a recreate and a delete", args: []string{"--stage", "change-1/less"},
+		{name: "a recreate and a delete", args: []string{"--snapshot", stageID(t, "less")},
 			plan: `{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [], "deleted-nodes": ["e2"],
 				"recreated-nodes": ["s1"], "started-nodes": [], "added-links": [], "deleted-endpoints": [], "restarted-nodes": [],
 				"node-change-reasons": {"s1": "config drift: Image"}}`,
 			line: "reconcile: recreate s1 (config drift: Image; nokia_srlinux declares live); delete e2"},
-		{name: "a create", fromLess: true, args: []string{"--stage", "change-1/linked"},
+		{name: "a create", fromLess: true, args: []string{"--snapshot", stageID(t, "linked")},
 			plan: `{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": ["e2"], "deleted-nodes": [],
 				"recreated-nodes": [], "started-nodes": [],
 				"added-links": ["e1:eth2_1 -- e2:eth1", "e2:eth3_1_1 -- s1:e1-2", "e1:eth3 -- s1:e1-3"], "deleted-endpoints": [],
@@ -1080,7 +999,7 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 				}))
 			}
 			h.clab.plan = []byte(c.plan)
-			out := runStepCmd(t, linkedUnlessNamed(append([]string{"--dry-run", "--allow-restart"}, c.args...)...)...)
+			out := runStepCmd(t, linkedUnlessNamed(t, append([]string{"--dry-run", "--allow-restart"}, c.args...)...)...)
 			if !strings.Contains(out.stdout, "\n"+c.line+"\n") {
 				t.Errorf("stdout does not say %q:\n%s", c.line, out.stdout)
 			}
@@ -1120,52 +1039,29 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		return "the twin's record names mapping " + named + ", which twin.json 8 cannot hold, and a step that diverges " +
 			"keeps the record's mapping in the record it writes; fylgja twin destroy clears it"
 	}
-	// refusedTarget is the stage twin's host with the record's bundle gone from the store
-	// and too little memory for the step, edited: a target refused there is refused
-	// before the from bundle is read and the host checked, either of which would refuse
-	// the step otherwise.
-	refusedTarget := func(edit func(h *stepHostFixture)) func(t *testing.T) *stepHostFixture {
-		return func(t *testing.T) *stepHostFixture {
-			h := stepHost(t, "plan-link-added.json", nil)
-			if err := os.RemoveAll(filepath.Join(h.paths.Bundles, h.fromID)); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv(lab.EnvHostMemoryMB, "4096")
-			edit(h)
-			return h
-		}
-	}
 	for _, c := range []struct {
 		name string
-		// host builds the host; nil is the stage twin of change-1/sealed under plan-link-added.
+		// host builds the host; nil is the twin of sealed's snapshot under plan-link-added.
 		host func(t *testing.T) *stepHostFixture
 		args []string
 		code int
 		// want is the one rejection; its object or message "" is filled from the host by fill.
 		want findings.Finding
 		fill func(h *stepHostFixture, f *findings.Finding)
-		// asked says whether Infrahub was asked anything once the host was built; unread,
-		// that it was asked no branch's intent, as no refusal before the read is.
-		asked, unread bool
-		// noTarget leaves args as given; otherwise a case naming neither --stage nor
-		// --snapshot steps to change-1/linked, the stage after the twin's (020: a step names
-		// its target).
+		// noTarget leaves args as given; otherwise a case naming no --snapshot steps to linked's
+		// snapshot (020: a step names its target).
 		noTarget bool
 	}{
 		{name: "no lab and no twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
 			useNoRunsInFlight(t)
-			infra := stepInfrahub(t)
-			infra.start()
-			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
+			return &stepHostFixture{paths: paths, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
 			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --branch, --stage or --snapshot)")},
 		{name: "an orphan", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
 			useNoRunsInFlight(t)
-			infra := stepInfrahub(t)
-			infra.start()
-			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", "")}
+			return &stepHostFixture{paths: paths, clab: useStepClab(t, "inspect-three.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
 			"an orphan: no twin.json records it; deployed from "+orphanAt+"; a twin built from a snapshot steps; fylgja twin destroy clears it")},
 		{name: "a record that cannot be read", host: func(t *testing.T) *stepHostFixture {
@@ -1194,12 +1090,10 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		{name: "a leftover twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
 			useNoRunsInFlight(t)
-			infra := stepInfrahub(t)
-			infra.start()
 			if err := os.MkdirAll(filepath.Join(paths.Twin, "bundle"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
+			return &stepHostFixture{paths: paths, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			"a leftover twin directory: no twin.json and no lab fylgja; a twin built from a snapshot steps; fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.paths.Twin }},
@@ -1271,7 +1165,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		{name: "a record of twin.json 11", host: func(t *testing.T) *stepHostFixture {
 			return editedRecordHost(t, func(m map[string]any) {
 				m["twin_version"] = "11"
-				m["stage"] = map[string]any{"proposed_change": map[string]any{"id": stepChange.ID, "branch": stepChange.Branch},
+				m["stage"] = map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"},
 					"label": "sealed", "description": "the mixed fixture as sealed", "at_source": "given"}
 				m["rehearsal"] = nil
 			})
@@ -1317,63 +1211,6 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			mismapped(`reader "-dcim", model ""`)),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
-		// A stage of any proposed change is a target (019, research R-07): one of a branch with
-		// none open is refused as its resolution refuses it, naming the branches with one.
-		{name: "another branch with no open proposed change", args: []string{"--stage", "other/x"}, code: findings.ExitRejected,
-			asked: true, unread: true, want: refusal(findings.RuleStageUnknown, findings.StepResolve, "other",
-				"no open proposed change has source branch other; the branches with one are: change-1")},
-		{name: "no open proposed change on the target's branch", host: func(t *testing.T) *stepHostFixture {
-			h := stepHost(t, "plan-link-added.json", nil)
-			h.infra.changes[0].State = "merged"
-			return h
-		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStageUnknown, findings.StepResolve, "change-1",
-			"no open proposed change has source branch change-1; there is no open proposed change")},
-		{name: "a stage the proposed change lacks", args: []string{"--stage", "change-1/nosuch"}, code: findings.ExitRejected, asked: true, unread: true,
-			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/nosuch",
-				`proposed change pc-1 on change-1 has no stage "nosuch"; its stages are: `+stepStages)},
-		{name: "the current one", args: []string{"--stage", "change-1/sealed"}, code: findings.ExitRejected, asked: true, unread: true,
-			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "change-1/sealed",
-				"the twin is already at stage change-1/sealed (branch change-1, at "+stepMixedAt+"); the proposed change's stages are: "+stepStages)},
-		{name: "the kind absent", host: func(t *testing.T) *stepHostFixture {
-			h := stepHost(t, "plan-link-added.json", nil)
-			h.infra.kind = nil
-			return h
-		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStageKindAbsent, findings.StepResolve, intent.StageKind, ""),
-			fill: func(h *stepHostFixture, f *findings.Finding) { f.Message = "" }},
-		{name: "a duplicate target", host: func(t *testing.T) *stepHostFixture {
-			h := stepHost(t, "plan-link-added.json", nil)
-			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages,
-				mark("st-twice-a", "twice", "2026-10-16T11:45:00Z", ""), mark("st-twice-b", "twice", "2026-10-16T11:50:00Z", ""))
-			return h
-		}, args: []string{"--stage", "change-1/twice"}, code: findings.ExitRejected, asked: true, unread: true,
-			want: refusal(findings.RuleStageDuplicate, findings.StepResolve, "change-1/twice", "")},
-		{name: "a target taking a reserved label", host: refusedTarget(func(h *stepHostFixture) {
-			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-head", "head", "2026-10-16T11:45:00Z", ""))
-		}), args: []string{"--stage", "change-1/head"}, code: findings.ExitRejected, asked: true, unread: true,
-			want: refusal(findings.RuleStageLabelReserved, findings.StepResolve, "change-1/head",
-				`stage change-1/head is a mark labelled "head", which names the derived head of every proposed change and is `+
-					"reserved; relabel it (schema/README.md); the head of change-1 is still its derived stage")},
-		// A rebase moved the branch point past again's at, though not past the branch's
-		// creation.
-		{name: "a target before the branch point, after a rebase", host: refusedTarget(func(h *stepHostFixture) {
-			h.infra.changes[0].BranchedFrom = "2026-10-16T11:15:00.000000+00:00"
-		}), args: []string{"--stage", "change-1/again"}, code: findings.ExitRejected, asked: true, unread: true,
-			want: refusal(findings.RuleStageAtBeforeBranchPoint, findings.StepResolve, "change-1/again",
-				"stage change-1/again has at "+stepLaterAt+", before the branch point 2026-10-16T11:15:00.000000+00:00 of "+
-					"change-1: a rebase at 2026-10-16T11:15:00.000000+00:00 moved the branch point past it (the branch was "+
-					"created at "+fakeBranchedFrom+"); mark the stage again, or delete it")},
-		// Its message names the server's clock, so its words are not compared.
-		{name: "a target given an as_of later than now", host: refusedTarget(func(h *stepHostFixture) {
-			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-future", "future", "2099-01-01T00:00:00Z", ""))
-		}), args: []string{"--stage", "change-1/future"}, code: findings.ExitRejected, asked: true, unread: true,
-			want: refusal(findings.RuleStageAtUnresolved, findings.StepResolve, "change-1/future", "")},
-		// The branch point reads main, none of whose devices is tagged here.
-		{name: "a refused read", host: func(t *testing.T) *stepHostFixture {
-			h := stepHost(t, "plan-link-added.json", nil)
-			h.infra.untagged = map[string]bool{"main": true}
-			return h
-		}, args: []string{"--stage", "change-1/branch-point"}, code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleScopeEmpty, findings.StepRead, "", "")},
 		{name: "a refused compile", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			toID := buildStage(t, h.paths, "linked")
@@ -1385,14 +1222,14 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				t.Fatal(err)
 			}
 			return h
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleBundleIDMismatch, findings.StepCompile, "", "")},
+		}, code: findings.ExitRejected, want: refusal(findings.RuleBundleIDMismatch, findings.StepCompile, "", "")},
 		{name: "the record's bundle not in the store", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			if err := os.RemoveAll(filepath.Join(h.paths.Bundles, h.fromID)); err != nil {
 				t.Fatal(err)
 			}
 			return h
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepBundleMissing, findings.StepResolve, "", ""),
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepBundleMissing, findings.StepResolve, "", ""),
 			fill: func(h *stepHostFixture, f *findings.Finding) {
 				f.Object = h.fromID
 				f.Message = "the record names bundle " + h.fromID + ", which the store under " + h.paths.Bundles +
@@ -1411,7 +1248,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				t.Fatal(err)
 			}
 			return h
-		}, code: findings.ExitError, asked: true, want: refusal(findings.RuleOperationFailed, findings.StepResolve, "", ""),
+		}, code: findings.ExitError, want: refusal(findings.RuleOperationFailed, findings.StepResolve, "", ""),
 			fill: func(h *stepHostFixture, f *findings.Finding) {
 				_, err := bundle.NewDirStore(h.paths.Bundles).Has(context.Background(), h.fromID)
 				f.Object = h.fromID
@@ -1425,7 +1262,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				t.Fatal(err)
 			}
 			return h
-		}, code: findings.ExitError, asked: true, want: refusal(findings.RuleOperationFailed, findings.StepResolve, "", ""),
+		}, code: findings.ExitError, want: refusal(findings.RuleOperationFailed, findings.StepResolve, "", ""),
 			fill: func(h *stepHostFixture, f *findings.Finding) {
 				_, err := bundle.LoadFiles(filepath.Join(h.paths.Bundles, h.fromID))
 				f.Object = h.fromID
@@ -1435,19 +1272,19 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv(lab.EnvHostMemoryMB, "4096")
 			return h
-		}, args: []string{"--allow-restart"}, code: findings.ExitRejected, asked: true,
+		}, args: []string{"--allow-restart"}, code: findings.ExitRejected,
 			want: refusal(findings.RuleHostMemoryExceeded, findings.StepHostCheck, "", "")},
 		{name: "the host check cannot run", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv(lab.EnvHostMemoryMB, "lots")
 			return h
-		}, code: findings.ExitError, asked: true, want: refusal(findings.RuleOperationFailed, findings.StepHostCheck,
+		}, code: findings.ExitError, want: refusal(findings.RuleOperationFailed, findings.StepHostCheck,
 			findings.StepHostCheck, "host check: "+lab.EnvHostMemoryMB+` must be a positive whole number of MiB, got "lots"`)},
 		{name: "a merge package", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv("FYLGJA_PSP_DIR", overridePackage(t, "nokia_srlinux", "mode: replace", "mode: merge"))
 			return h
-		}, args: []string{"--allow-restart"}, code: findings.ExitRejected, asked: true,
+		}, args: []string{"--allow-restart"}, code: findings.ExitRejected,
 			want: refusal(findings.RuleStepPackageMerge, findings.StepCompare, "nokia_srlinux",
 				"support package nokia_srlinux pushes by merge, which a step cannot use: a step removes what the previous "+
 					"artifact added, and only a replace does that; nodes s1; a create from it is unaffected")},
@@ -1455,7 +1292,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv("FYLGJA_PSP_DIR", overridePackage(t, "arista_eos", "mode: replace", "mode: merge"))
 			return h
-		}, args: []string{"--stage", "change-1/less", "--allow-restart"}, code: findings.ExitRejected, asked: true,
+		}, args: []string{"--snapshot", stageID(t, "less"), "--allow-restart"}, code: findings.ExitRejected,
 			want: refusal(findings.RuleStepPackageMerge, findings.StepCompare, "arista_eos",
 				"support package arista_eos pushes by merge, which a step cannot use: a step removes what the previous "+
 					"artifact added, and only a replace does that; nodes e1, e2; a create from it is unaffected")},
@@ -1463,13 +1300,11 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv("FYLGJA_PSP_DIR", overridePackage(t, "nokia_srlinux", "ref: ghcr.io/nokia/srlinux:24.7.1", "ref: ghcr.io/nokia/srlinux:24.7.2"))
 			return h
-		}, args: []string{"--allow-restart"}, code: findings.ExitRejected, asked: true,
+		}, args: []string{"--allow-restart"}, code: findings.ExitRejected,
 			want: refusal(findings.RuleStepNodeUnapplied, findings.StepCompare, "s1",
 				"node s1 changes in image between the two bundles, but containerlab's reconcile would not recreate it "+
 					"(its plan: live); the running node would keep its image; a step cannot apply it")},
-		{name: "a restart without the flag", code: findings.ExitRejected, asked: true, want: restartRequired},
-		{name: "--stage=", args: []string{"--stage="}, code: findings.ExitError,
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", stageRefInvalid(""))},
+		{name: "a restart without the flag", code: findings.ExitRejected, want: restartRequired},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			host := c.host
@@ -1477,7 +1312,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				host = func(t *testing.T) *stepHostFixture { return stepHost(t, "plan-link-added.json", nil) }
 			}
 			h := host(t)
-			if c.name == "--stage=" || c.noTarget {
+			if c.noTarget {
 				h.clab.calls = nil
 			}
 			want := c.want
@@ -1486,7 +1321,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			}
 			args := c.args
 			if !c.noTarget {
-				args = linkedUnlessNamed(args...)
+				args = linkedUnlessNamed(t, args...)
 			}
 			out := runStepCmd(t, args...)
 			got := refusalOf(t, out.doc)
@@ -1500,68 +1335,12 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				t.Errorf("exit %d, refusal %+v\nwant exit %d, %+v", out.code, got, c.code, want)
 			}
 			noContent(t, "the refusal", out.stdout, out.stderr)
-			if asked := len(h.infra.requests()) > h.before; asked != c.asked {
-				t.Errorf("Infrahub asked after the host was built: %v, want %v", asked, c.asked)
-			}
-			if read := intentReadAfter(h.infra, h.before); (!c.asked || c.unread) && len(read) != 0 {
-				t.Errorf("a branch's intent was read for a target refused before its read: %+v", read)
-			}
-			if (c.name == "--stage=" || c.noTarget) && len(h.clab.calls) != 0 {
+			if c.noTarget && len(h.clab.calls) != 0 {
 				t.Errorf("containerlab was asked %v before the refusal", h.clab.calls)
 			}
 			if plans := h.clab.asked("clab", "deploy"); got.Step != findings.StepCompare && len(plans) != 0 {
 				t.Errorf("a refusal at %s read containerlab's plan %v", got.Step, plans)
 			}
-		})
-	}
-}
-
-// A target whose read cannot run, and a target whose at carries more fractional digits than
-// Infrahub honours, end the command as a create ends them for a stage: exit 2, status error,
-// not a refusal's 1 (contracts/cli.md's resolution row). Nothing of the
-// step is computed: containerlab's plan is never read and no service is dialled.
-func TestStepTargetErrorsExitTwo(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		args []string
-		host func(h *stepHostFixture)
-		want findings.Finding // its message "" is not compared
-		// unread is a target refused before its read: no branch's intent is asked.
-		unread bool
-	}{
-		{name: "the target's read cannot run",
-			host: func(h *stepHostFixture) { h.infra.readStatus = map[string]int{"change-1": 500} },
-			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Step: findings.StepRead, Object: "change-1/linked"}},
-		{name: "the target's at carries nine fractional digits", args: []string{"--stage", "change-1/nine"},
-			host: func(h *stepHostFixture) {
-				h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-nine", "nine", "2026-10-16T09:45:00.123456789Z", ""))
-			},
-			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleAtPrecision, Step: findings.StepResolve, Object: "change-1/nine",
-				Message: "stage change-1/nine: at 2026-10-16T09:45:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 " +
-					"(microseconds). Write the stage's as_of with at most six."},
-			unread: true},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			h := stepHost(t, "plan-link-added.json", nil)
-			c.host(h)
-			out := runStepCmd(t, linkedUnlessNamed(c.args...)...)
-			if out.code != findings.ExitError || out.doc.Status != findings.StatusError {
-				t.Errorf("exit %d, status %s; want 2, error; findings %+v", out.code, out.doc.Status, out.doc.Findings)
-			}
-			got := refusalOf(t, out.doc)
-			if c.want.Message == "" {
-				c.want.Message = got.Message
-			}
-			if got != c.want {
-				t.Errorf("finding %+v\nwant %+v", got, c.want)
-			}
-			if plans := h.clab.asked("clab", "deploy"); len(plans) != 0 {
-				t.Errorf("containerlab's plan was read %v for a target that did not compile", plans)
-			}
-			if read := intentReadAfter(h.infra, h.before); c.unread && len(read) != 0 {
-				t.Errorf("a branch's intent was read for a target refused before its read: %+v", read)
-			}
-			noContent(t, "the error", out.stdout, out.stderr)
 		})
 	}
 }
@@ -1608,52 +1387,8 @@ func TestStepTakesNoBranchFlags(t *testing.T) {
 			if code != findings.ExitError || !strings.Contains(stderr, "rejection operation.failed twin.step: unknown flag: "+name) {
 				t.Errorf("exit %d, stderr %q; want 2, unknown flag %s", code, stderr, name)
 			}
-			if len(h.clab.calls) != 0 || len(h.infra.requests()) > h.before {
+			if len(h.clab.calls) != 0 {
 				t.Errorf("something was read before the flag was refused")
-			}
-		})
-	}
-}
-
-// The step reads under the scope its twin records, never the server's default (017;
-// FR-020; US1 scenario 7): with the server's default tag:other, a twin recorded under
-// tag:fylgja finds its target, resolves it and reads its devices by the tag fylgja, and its
-// document names that scope; beside the default tag:fylgja, a twin recorded under tag:other
-// reads by the tag other, which no device of the fake carries, and its target is refused
-// scope.empty naming tag:other.
-func TestStepReadsUnderTheRecordsScope(t *testing.T) {
-	for _, c := range []struct {
-		name, server, record, tag string
-		code                      int
-	}{
-		{"the record's tag:fylgja beside the default tag:other", "tag:other", "tag:fylgja", "fylgja", findings.ExitOK},
-		{"the record's tag:other beside the default tag:fylgja", "tag:fylgja", "tag:other", "other", findings.ExitRejected},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			saved := defaultScope
-			t.Cleanup(func() { defaultScope = saved })
-			defaultScope = c.server
-			h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Provenance.Scope = c.record })
-			out := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart")
-			if out.code != c.code || out.doc.Subject == nil || out.doc.Subject.Scope != c.record {
-				t.Fatalf("exit %d, subject %+v, findings %+v; want %d under %s", out.code, out.doc.Subject, out.doc.Findings, c.code, c.record)
-			}
-			var tags []any
-			for _, r := range h.infra.requests()[h.before:] {
-				if r.Operation == "Devices" {
-					tags = append(tags, r.Variables["tag"])
-				}
-			}
-			if len(tags) == 0 || slices.ContainsFunc(tags, func(tag any) bool { return tag != c.tag }) {
-				t.Errorf("the step's device reads sent the tags %v; want %q on every one", tags, c.tag)
-			}
-			if c.code == findings.ExitOK {
-				return
-			}
-			empty := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Object: c.record,
-				Step: findings.StepRead, Message: "scope " + c.record + " selects no device on branch change-1 at " + stepWrittenAt}
-			if !slices.Contains(out.doc.Findings, empty) {
-				t.Errorf("findings %+v; want %+v", out.doc.Findings, empty)
 			}
 		})
 	}
@@ -1674,7 +1409,7 @@ func TestStepRefusedBesideARunInFlight(t *testing.T) {
 			svc := &fakeService{startErr: &provision.StartError{Status: findings.StatusRejected, Finding: want}}
 			useService(t, svc)
 			useInterrupts(t)
-			out := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart")
+			out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart")
 			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
 				t.Errorf("exit %d, %+v; want 1, %+v", out.code, got, want)
 			}
@@ -1761,7 +1496,7 @@ func TestStepRuns(t *testing.T) {
 			closing: func(_, to string) string {
 				return "stepped to " + to + " in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
 			}},
-		{name: "unchanged", args: []string{"--stage", "change-1/again"}, plan: "plan-nothing.json",
+		{name: "unchanged", args: []string{"--snapshot", stageID(t, "again")}, plan: "plan-nothing.json",
 			res: provision.StepResult{Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{},
 				Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady}},
 			code: findings.ExitOK, status: findings.StatusOK,
@@ -1783,7 +1518,7 @@ func TestStepRuns(t *testing.T) {
 			}},
 		// The wait's clause follows M11's line on an unchanged and a diverged result too, as
 		// contracts/cli.md quotes them.
-		{name: "unchanged, the wait settled", args: []string{"--stage", "change-1/again"}, plan: "plan-nothing.json",
+		{name: "unchanged, the wait settled", args: []string{"--snapshot", stageID(t, "again")}, plan: "plan-nothing.json",
 			res: provision.StepResult{Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{},
 				Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady},
 				Wait: &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 1, AfterS: 1.1, Failing: []wire.StepFinding{}}},
@@ -1844,7 +1579,7 @@ func TestStepRuns(t *testing.T) {
 			useInterrupts(t)
 			svc.stepResult = res
 			// The run repeats the command's host-check warning, which the document keeps once.
-			first := runStepCmd(t, linkedUnlessNamed(append(c.args, "--dry-run")...)...)
+			first := runStepCmd(t, linkedUnlessNamed(t, append(c.args, "--dry-run")...)...)
 			for _, f := range first.doc.Findings {
 				if f.Rule == findings.RuleHostMemoryUnbudgeted {
 					unbudgeted = f
@@ -1852,8 +1587,7 @@ func TestStepRuns(t *testing.T) {
 			}
 			svc.stepResult.Findings = append(findings.List{unbudgeted}, res.Findings...)
 
-			began := time.Now().UTC().Truncate(time.Microsecond)
-			out := runStepCmd(t, linkedUnlessNamed(c.args...)...)
+			out := runStepCmd(t, linkedUnlessNamed(t, c.args...)...)
 			toID := out.doc.BundleID
 			if out.code != c.code || out.doc.Status != c.status {
 				t.Fatalf("exit %d, status %s; want %d, %s; findings %+v", out.code, out.doc.Status, c.code, c.status, out.doc.Findings)
@@ -1964,17 +1698,10 @@ func TestStepRuns(t *testing.T) {
 					t.Errorf("run %d's plan %s; want %s, as containerlab's plan reads", i, asJSON(got.Plan), asJSON(wantPlan))
 				}
 			}
-			// Each run's observed_at is its own command's read's time: within the commands'
-			// span, the second's no earlier than the first's. The store kept the read beside
-			// the bundle until 018 retired the sidecar.
-			ended := time.Now().UTC()
-			firstAt, lastAt := svc.stepped[0].ObservedAt, svc.stepped[1].ObservedAt
-			if at, err := time.Parse(intentstage.ObservedAtFormat, lastAt); err != nil || at.After(ended) || firstAt > lastAt {
-				t.Errorf("the second run's observed_at %q; want a read's time from the first run's %s to %s", lastAt, firstAt,
-					ended.Format(intentstage.ObservedAtFormat))
-			}
-			if at, err := time.Parse(intentstage.ObservedAtFormat, firstAt); err != nil || at.Before(began) || firstAt > lastAt {
-				t.Errorf("the first run's observed_at %q; want a read's time from %s to %s", firstAt, began.Format(intentstage.ObservedAtFormat), lastAt)
+			// Each run's observed_at is its target snapshot's, the stored document's, the first
+			// take's (019, research R-04): no step reads intent since 020.
+			if firstAt, lastAt := svc.stepped[0].ObservedAt, svc.stepped[1].ObservedAt; firstAt != stepObservedAt || lastAt != stepObservedAt {
+				t.Errorf("the runs' observed_at %q and %q; want the target snapshot's, %s", firstAt, lastAt, stepObservedAt)
 			}
 
 			raw, err := json.Marshal(in)
@@ -2006,7 +1733,7 @@ func TestStepStartRefusals(t *testing.T) {
 			stepHost(t, "plan-link-added.json", nil)
 			useInterrupts(t)
 			c.use(t)
-			out := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart")
+			out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart")
 			got := refusalOf(t, out.doc)
 			if out.code != findings.ExitError || out.doc.Status != findings.StatusError || got.Rule != c.rule ||
 				got.Step != findings.StepStart {
@@ -2061,7 +1788,7 @@ func TestStepInterrupt(t *testing.T) {
 		defer cancel()
 		var err error
 		stdout := captureStdout(t, func() {
-			err = runTwinStep(ctx, &options{}, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
+			err = runTwinStep(ctx, &options{}, &stepFlags{snapshot: stageID(t, "linked"), allowRestart: true})
 		})
 		code, doc := exitOf(t, err)
 		validateM10Document(t, doc)
@@ -2189,7 +1916,7 @@ func TestStepWaitFlag(t *testing.T) {
 				Findings: findings.List{}, Record: &wire.TwinRecord{State: wire.StateReady}}}
 			useService(t, svc)
 			useInterrupts(t)
-			out := runStepCmd(t, linkedUnlessNamed(args...)...)
+			out := runStepCmd(t, linkedUnlessNamed(t, args...)...)
 			if out.code != findings.ExitOK || len(svc.stepped) != 2 {
 				t.Fatalf("exit %d, %d runs started; want 0, one per run of the command; findings %+v", out.code, len(svc.stepped),
 					out.doc.Findings)
@@ -2223,16 +1950,15 @@ func TestStepWaitRefusedBeforeAnyConnection(t *testing.T) {
 		t.Run(strings.Join(c.args, " "), func(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
 			h.clab.calls = nil
-			out := runStepCmd(t, linkedUnlessNamed(append([]string{"--allow-restart"}, c.args...)...)...)
+			out := runStepCmd(t, linkedUnlessNamed(t, append([]string{"--allow-restart"}, c.args...)...)...)
 			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleVerifyWaitInvalid, Object: "--wait",
 				Step: findings.StepStart, Message: c.message}
 			if out.code != findings.ExitError || out.doc.Status != findings.StatusError || len(out.doc.Findings) != 1 ||
 				out.doc.Findings[0] != want {
 				t.Errorf("exit %d, status %s, findings %+v; want 2, error, %+v alone", out.code, out.doc.Status, out.doc.Findings, want)
 			}
-			if len(h.infra.requests()) > h.before || len(h.clab.calls) != 0 {
-				t.Errorf("Infrahub was asked %d times and containerlab %v after the host was built; want nothing",
-					len(h.infra.requests())-h.before, h.clab.calls)
+			if len(h.clab.calls) != 0 {
+				t.Errorf("containerlab was asked %v after the host was built; want nothing", h.clab.calls)
 			}
 			if strings.Contains(out.stdout, "dry run") {
 				t.Errorf("the refusal printed the dry run's lines:\n%s", out.stdout)
@@ -2245,7 +1971,7 @@ func TestStepWaitRefusedBeforeAnyConnection(t *testing.T) {
 // push: line, and its document's step.wait is the budget alone.
 func TestStepDryRunWait(t *testing.T) {
 	stepHost(t, "plan-link-added.json", nil)
-	out := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart", "--wait", "30s")
+	out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--dry-run", "--allow-restart", "--wait", "30s")
 	lines := strings.Split(out.stdout, "\n")
 	push := slices.IndexFunc(lines, func(l string) bool { return strings.HasPrefix(l, "push: ") })
 	if push < 0 || push+1 >= len(lines) || lines[push+1] != "wait: after the record, until the twin conforms, at most 30s" {
@@ -2341,7 +2067,7 @@ func TestStepRunReportsTheWait(t *testing.T) {
 			svc := &fakeService{runID: stepRunID, events: events, stepResult: res}
 			useService(t, svc)
 			useInterrupts(t)
-			out := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart")
+			out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart")
 			if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK {
 				t.Fatalf("exit %d status %s, want 0, ok: the wait changes neither; findings %+v", out.code, out.doc.Status, out.doc.Findings)
 			}
@@ -2374,7 +2100,7 @@ func TestStepRunReportsTheWait(t *testing.T) {
 // probe starts its run with no flow, nothing added and nothing dropped.
 func TestStepRunReportsTheLoss(t *testing.T) {
 	stepHost(t, "plan-link-added.json", nil)
-	dry := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart")
+	dry := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--dry-run", "--allow-restart")
 	raw, err := json.Marshal(dry.doc)
 	if err != nil {
 		t.Fatal(err)
@@ -2413,7 +2139,7 @@ func TestStepRunReportsTheLoss(t *testing.T) {
 		Loss:   loss, StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}}
 	useService(t, svc)
 	useInterrupts(t)
-	out := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart")
+	out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart")
 	if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK {
 		t.Fatalf("exit %d status %s, want 0, ok: the loss changes neither; findings %+v", out.code, out.doc.Status, out.doc.Findings)
 	}
@@ -2444,16 +2170,10 @@ func TestStepRunReportsTheLoss(t *testing.T) {
 	}
 }
 
-// US2's step scenarios through the harness (014, T036), on stepInfrahub's proposed change:
-// the target with none given, a step back, a stage foreign to the twin's proposed change, a
-// step from the branch point to the head, a target that is the twin's own stage under
-// another reference, a head that has moved since the twin was built, and a stale target.
-// TestStepRefusedBeforeAnyConnection holds the refusals of the table in contracts/cli.md; these
-// are the scenarios of spec.md's US2.
-
-// stepHeadAt is the head of change-1 as stepInfrahub serves it: one microsecond after its
-// last version's stamp.
-const stepHeadAt = "2026-10-16T11:30:00.000001+00:00"
+// US2's step scenarios through the harness (014, T036), on the targets' snapshots: a step
+// back. TestStepRefusedBeforeAnyConnection holds the refusals of the table in contracts/cli.md.
+// From 020 a stage is the orchestrator's (D-065), and the scenarios of a stage's resolution
+// went with it.
 
 // stepTwin is a twin built from bundle id, read at at on branch, as its create records it;
 // retired drops e2, as less and the head retired it.
@@ -2486,38 +2206,12 @@ func lineOf(stdout string, n int) string {
 	return l[n-1]
 }
 
-// onlyInspected fails unless containerlab was asked nothing but the host's state, once per
-// run of the command: nothing of the step's own (the target's host check, containerlab's
-// plan) was reached.
-func onlyInspected(t *testing.T, label string, c *stepClab) {
-	t.Helper()
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, call := range c.calls {
-		if !slices.Equal(call, inspectAll) {
-			t.Errorf("%s: containerlab was asked %v; a refusal at resolve asks only for the host's state", label, call)
-		}
-	}
-}
-
-// intentReadAfter is every request for a branch's intent the fake answered after the
-// first n: its devices, their ports or an artifact's content.
-func intentReadAfter(f *fakeInfrahub, n int) []fakeRequest {
-	var out []fakeRequest
-	for _, r := range f.requests()[n:] {
-		if strings.HasPrefix(r.Path, "/api/storage/") || r.Operation == "Devices" || r.Operation == "Ports" {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-// Scenario 3: a step back to an earlier mark goes there, forward or back alike: from
+// Scenario 3: a step back to an earlier snapshot goes there, forward or back alike: from
 // linked to sealed, the step takes the link off, containerlab deletes its two ends, and the
 // push sends e1 and s1 sealed's artifacts by their packages' replace, which takes off each
 // node what sealed lacks (M11's step back). The dry run's lines and the run's first and
 // closing lines are pinned.
-func TestStepBackToAnEarlierMark(t *testing.T) {
+func TestStepBackToAnEarlierSnapshot(t *testing.T) {
 	h := stepHost(t, "plan-nothing.json", nil)
 	sealedID := h.fromID
 	linkedID := buildStage(t, h.paths, "linked")
@@ -2528,8 +2222,9 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 	first := []string{
 		"twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(linkedID) + "), branch change-1 at " +
 			stepWrittenAt + "; 3 nodes",
-		`stage change-1/sealed: branch change-1 at ` + stepMixedAt + ` (given), "the mixed fixture as sealed"`,
-		"step snapshot " + short(h.fromSnapshot) + " → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
+		"target: snapshot " + short(stageID(t, "sealed")) + " (branch change-1 at " + stepMixedAt + ")",
+		"step snapshot " + short(h.fromSnapshot) + " → snapshot " + short(stageID(t, "sealed")) + " (" + short(linkedID) + " → " +
+			short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: -e1:eth3 — s1:e1-3",
 		"  artifacts: e1 device-config cbc8c75d… → b1431710…; s1 device-config 8e15691e… → fdf83f15…",
@@ -2537,7 +2232,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 	}
 
-	out := runStepCmd(t, "--stage", "change-1/sealed", "--dry-run", "--allow-restart")
+	out := runStepCmd(t, "--snapshot", stageID(t, "sealed"), "--dry-run", "--allow-restart")
 	want := lines(append(append([]string{"dry run: no lab, container, twin directory or run is changed"}, first...),
 		"wait: after the record, until the twin conforms, at most 2m0s",
 		"memory: sum 5120 MiB; host budget unset",
@@ -2578,7 +2273,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}
 	useService(t, svc)
 	useInterrupts(t)
-	out = runStepCmd(t, "--stage", "change-1/sealed", "--allow-restart")
+	out = runStepCmd(t, "--snapshot", stageID(t, "sealed"), "--allow-restart")
 	want = lines(append(first,
 		"run fylgja-step "+stepRunID,
 		"step inspect: done in 0.1s",
@@ -2608,244 +2303,6 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 	noContent(t, "the step back", out.stdout, out.stderr)
 }
 
-// US3 scenario 3 (FR-014, FR-016; research R-07): a stage twin of proposed change pc-1 steps
-// to a stage of another, of another branch or opened on the twin's own branch since pc-1
-// closed, and the record names that stage, its proposed change and its branch;
-// step.target.foreign refuses it no longer. Between two proposed changes no mark is skipped,
-// and the twin's own stage is not read for stage.twin.moved, though pc-1 is closed. The dry
-// run's resolution and step lines and the run's input are pinned, and the record the run then
-// writes is read back.
-func TestStepToAStageOfAnotherProposedChange(t *testing.T) {
-	const description = "the link, proposed again"
-	for _, c := range []struct {
-		name, branch string
-		setup        func(t *testing.T, f *fakeInfrahub)
-	}{
-		{name: "of another branch", branch: "change-2", setup: func(t *testing.T, f *fakeInfrahub) {
-			mixed, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			mixed.Envelope.Branch = "change-2"
-			linked := withMixedLink(t)
-			linked.Envelope.Branch = "change-2"
-			f.versions["change-2"] = []fakeVersion{{Since: "2026-10-16T08:10:00.000000+00:00", CTM: mixed},
-				{Since: "2026-10-16T09:30:00.000000+00:00", CTM: linked}}
-			f.change("pc-2", "change-2", mark("st-2-linked", "linked", "", description))
-		}},
-		{name: "opened on the twin's branch", branch: "change-1", setup: func(t *testing.T, f *fakeInfrahub) {
-			f.changes[0].State = "closed"
-			f.change("pc-2", "change-1", mark("st-2-linked", "linked", "", description))
-		}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			h := stepHost(t, "plan-link-added.json", nil)
-			c.setup(t, h.infra)
-			ref := c.branch + "/linked"
-			resolved := "stage " + ref + ": branch " + c.branch + " at " + stepWrittenAt + ` (written), "` + description + `"`
-			out := runStepCmd(t, "--stage", ref, "--dry-run", "--allow-restart")
-			if out.code != findings.ExitOK || lineOf(out.stdout, 3) != resolved || out.doc.Subject.Stage != ref ||
-				!strings.HasPrefix(lineOf(out.stdout, 4), "step snapshot "+short(h.fromSnapshot)+" → "+ref+" (") ||
-				!strings.Contains(out.stdout, "\nverdict: clear\n") {
-				t.Errorf("exit %d, subject %+v, findings %+v, stdout:\n%s\nwant 0, the step from change-1/sealed to %s, resolved as %q",
-					out.code, out.doc.Subject, out.doc.Findings, out.stdout, ref, resolved)
-			}
-			for _, rule := range []string{findings.RuleStepStageSkipped, findings.RuleStageTwinMoved} {
-				if carriesRule(out.doc.Findings, rule) {
-					t.Errorf("findings %+v; a step out of the twin's proposed change files no %s", out.doc.Findings, rule)
-				}
-			}
-
-			svc := stepToSnapshotRun(t)
-			out = runStepCmd(t, "--stage", ref, "--allow-restart")
-			if out.code != findings.ExitOK || len(svc.stepped) != 2 {
-				t.Fatalf("exit %d, %d runs started; want 0 and one per run of the command: %+v", out.code, len(svc.stepped),
-					out.doc.Findings)
-			}
-			in := svc.stepped[1]
-			if in.From.SnapshotID != h.fromSnapshot || in.From.BundleID != h.fromID || in.To.Branch != c.branch ||
-				in.To.At != stepWrittenAt {
-				t.Errorf("the run's input %+v → %+v; want sealed's side to pc-2's linked on %s at %s", in.From, in.To, c.branch, stepWrittenAt)
-			}
-			rec := recordOnHost(t, h, in)
-			if rec.Provenance.Branch != c.branch ||
-				rec.Provenance.At != stepWrittenAt || rec.Source != wire.SourceIntent || rec.SnapshotID == nil ||
-				*rec.SnapshotID != in.To.SnapshotID || rec.BundleID != in.To.BundleID {
-				t.Errorf("the record after the step %+v; want pc-2's linked on %s at %s, its snapshot and bundle",
-					rec, c.branch, stepWrittenAt)
-			}
-		})
-	}
-}
-
-// US3 scenarios 2 and 5, and SC-004's third reference (FR-014, FR-016; research R-07): a twin
-// whose record names no stage, built from --branch or --snapshot, steps to --stage
-// <branch>/<label>, resolved and read under the record's scope, and the record names the
-// stage beside the source it keeps (twin.json 10 holds a stage beside source snapshot). No
-// stage.twin.moved and no step.stage.skipped is filed, since the twin names no stage to have
-// moved or to skip from. A stage resolving to the twin's own (branch, at) is
-// step.target.current, as for a stage twin.
-func TestStepStagelessTwinToAStage(t *testing.T) {
-	for _, from := range []int{0, 2} {
-		t.Run("built from "+stepFroms[from].name, func(t *testing.T) {
-			h := stepHost(t, "plan-link-added.json", stepFroms[from].change)
-			twin := "twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(h.fromID) + "), branch change-1"
-			out := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart")
-			resolved := "stage change-1/linked: branch change-1 at " + stepWrittenAt + ` (written), "a link between e1 and s1"`
-			if out.code != findings.ExitOK || !strings.HasPrefix(lineOf(out.stdout, 2), twin) || lineOf(out.stdout, 3) != resolved ||
-				!strings.HasPrefix(lineOf(out.stdout, 4), "step snapshot "+short(h.fromSnapshot)+" → change-1/linked (") ||
-				!strings.Contains(out.stdout, "\nverdict: clear\n") {
-				t.Errorf("exit %d, findings %+v, stdout:\n%s\nwant 0, the step from the twin's snapshot to change-1/linked",
-					out.code, out.doc.Findings, out.stdout)
-			}
-			for _, rule := range []string{findings.RuleStepStageSkipped, findings.RuleStageTwinMoved} {
-				if carriesRule(out.doc.Findings, rule) {
-					t.Errorf("findings %+v; a twin naming no stage files no %s", out.doc.Findings, rule)
-				}
-			}
-
-			svc := stepToSnapshotRun(t)
-			if out = runStepCmd(t, "--stage", "change-1/linked", "--allow-restart"); out.code != findings.ExitOK || len(svc.stepped) != 2 {
-				t.Fatalf("exit %d, %d runs started; findings %+v", out.code, len(svc.stepped), out.doc.Findings)
-			}
-			in := svc.stepped[1]
-			if in.From.SnapshotID != h.fromSnapshot || in.To.Branch != "change-1" || in.To.At != stepWrittenAt {
-				t.Errorf("the run's input %+v → %+v; want the twin's snapshot to change-1/linked", in.From, in.To)
-			}
-			rec := recordOnHost(t, h, in)
-			if rec.Source != stepFroms[from].source ||
-				rec.Provenance.Branch != "change-1" || rec.Provenance.At != stepWrittenAt || rec.BundleID != in.To.BundleID {
-				t.Errorf("the record after the step %+v; want change-1/linked beside source %s", rec, stepFroms[from].source)
-			}
-		})
-	}
-	t.Run("to the twin's own reference", func(t *testing.T) {
-		h := stepHost(t, "plan-link-added.json", func(*lab.RecordFields) {})
-		out := runStepCmd(t, "--stage", "change-1/sealed", "--allow-restart")
-		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetCurrent, Step: findings.StepResolve,
-			Object: "change-1/sealed", Message: "the twin is already at stage change-1/sealed (branch change-1, at " + stepMixedAt +
-				"); the proposed change's stages are: " + stepStages}
-		if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
-			t.Errorf("exit %d, refusal %+v\nwant 1, %+v", out.code, got, want)
-		}
-		if read := intentReadAfter(h.infra, h.before); len(read) != 0 {
-			t.Errorf("a target refused before its read was read: %+v", read)
-		}
-	})
-}
-
-// Scenario 5: from the branch point, a step to the head goes straight there. It warns of no
-// marks between since twin.json 12, whose record names no stage (020, research R-06), and
-// names its from side by the twin's snapshot. main here reads as the mixed fixture, as
-// change-1 began.
-func TestStepFromTheBranchPointToTheHead(t *testing.T) {
-	h := stepHost(t, "plan-nothing.json", nil)
-	mixed, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	mixed.Envelope.Branch = "main"
-	h.infra.branches["main"] = mixed
-	bp := compileStage(t, h.paths, "branch-point")
-	twinAt(t, h, stepTwin{id: bp.id, branch: "main", at: fakeBranchedFrom})
-	twinLine := "twin: snapshot " + short(bp.snapshot.ID) + " (bundle %s), branch main at " + fakeBranchedFrom + "; 3 nodes"
-
-	t.Run("to the head", func(t *testing.T) {
-		h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
-			"deleted-nodes": ["e2"], "recreated-nodes": [], "started-nodes": [], "added-links": [],
-			"deleted-endpoints": ["e1:eth2_1", "s1:e1-2"], "restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
-		out := runStepCmd(t, "--stage", "change-1/head", "--dry-run", "--allow-restart")
-		if out.code != findings.ExitOK || carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) || out.doc.Findings.Rejected() {
-			t.Errorf("exit %d, findings %+v; want 0 and no %s", out.code, out.doc.Findings, findings.RuleStepStageSkipped)
-		}
-		for i, line := range []string{fmt.Sprintf(twinLine, short(bp.id)), "stage change-1/head: branch change-1 at " + stepHeadAt + " (head)"} {
-			if got := lineOf(out.stdout, i+2); got != line {
-				t.Errorf("stdout line %d %q, want %q:\n%s", i+2, got, line, out.stdout)
-			}
-		}
-		if !strings.HasPrefix(lineOf(out.stdout, 4), "step snapshot "+short(bp.snapshot.ID)+" → change-1/head (") ||
-			!strings.Contains(out.stdout, "\nverdict: clear\n") {
-			t.Errorf("stdout:\n%s\nwant the step from the branch point to the head, clear", out.stdout)
-		}
-	})
-}
-
-// A target is the twin's own stage when it resolves to the record's branch and at, whatever
-// its label: another mark whose as_of is the record's at, and the head while it is where the
-// twin was built, are each refused as current, before the from bundle, the host check and
-// containerlab's plan.
-func TestStepTargetCurrentByResolvedReference(t *testing.T) {
-	twinMark := func(_ *testing.T, h *stepHostFixture) {
-		h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-twin", "twin", stepMixedAt, ""))
-	}
-	for _, c := range []struct {
-		name, ref string
-		// next is set when no target is given, ref being the next stage's.
-		next    bool
-		setup   func(t *testing.T, h *stepHostFixture)
-		message string
-	}{
-		{name: "another mark at the twin's at", ref: "change-1/twin", setup: twinMark,
-			message: "the twin is already at stage change-1/twin (branch change-1, at " + stepMixedAt + "); the proposed change's " +
-				"stages are: branch-point, sealed, twin, linked, again, less, head"},
-		{name: "the head where the twin was built", ref: "change-1/head",
-			setup: func(t *testing.T, h *stepHostFixture) {
-				twinAt(t, h, stepTwin{id: buildStage(t, h.paths, "head"), branch: "change-1", at: stepHeadAt,
-					retired: true})
-			},
-			message: "the twin is already at stage change-1/head (branch change-1, at " + stepHeadAt + "); the proposed change's " +
-				"stages are: " + stepStages},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			h := stepHost(t, "plan-nothing.json", nil)
-			c.setup(t, h)
-			h.clab.calls = nil
-			args := []string{"--stage", c.ref, "--dry-run"}
-			if c.next {
-				args = args[2:]
-			}
-			out := runStepCmd(t, args...)
-			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetCurrent, Object: c.ref,
-				Step: findings.StepResolve, Message: c.message}
-			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
-				t.Errorf("exit %d, refusal %+v\nwant 1, %+v", out.code, got, want)
-			}
-			onlyInspected(t, c.name, h.clab)
-		})
-	}
-}
-
-// Scenario 8, for a step: a target marked before its artifacts were regenerated is refused
-// as stale at resolution, given or chosen as the next stage, with the findings stage plan
-// gives it, before it is read and before anything of the step: no service is dialled and
-// containerlab is asked for nothing but the host's state.
-func TestStepToAStaleStageIsRefused(t *testing.T) {
-	h := stepHost(t, "plan-link-added.json", nil)
-	h.infra.stamps = map[string]fakeDeviceStamps{
-		"change-1/e1": {Intent: "2026-10-16T09:45:00.000000+00:00", Artifact: "2026-10-16T09:30:00.000000+00:00"},
-	}
-	_, doc, raw := stageDoc(t, "plan", "--branch", "change-1")
-	stages, _ := planned(t, doc)
-	i := slices.IndexFunc(stages, func(st findings.PlanStage) bool { return st.Label == "linked" })
-	if i < 0 || stages[i].BundleID != nil || !slices.Equal(rulesOf(stages[i].Findings), []string{findings.RuleStageArtifactStale + " e1"}) {
-		t.Fatalf("stage plan did not refuse change-1/linked stale for e1\n%s", raw)
-	}
-	want := stages[i].Findings
-	before := len(h.infra.requests())
-	h.clab.calls = nil
-	for _, args := range [][]string{{"--stage", "change-1/linked"}, {}} {
-		out := runStepCmd(t, linkedUnlessNamed(append(args, "--allow-restart")...)...)
-		if out.code != findings.ExitRejected || !reflect.DeepEqual(out.doc.Findings, want) || out.doc.Step != nil {
-			t.Errorf("%v: exit %d, findings %+v, step %+v\nwant 1, stage plan's %+v, and no step", args, out.code,
-				out.doc.Findings, out.doc.Step, want)
-		}
-	}
-	onlyInspected(t, "a stale target", h.clab)
-	if got := intentReadAfter(h.infra, before); len(got) != 0 {
-		t.Errorf("the stale target was read: %+v", got)
-	}
-}
-
 // A step names each side's snapshot (018; R-13, R-09). From a 9 record of stage sealed to
 // stage again, the twin line names the record's snapshot, the run's input names sealed's on
 // its from side and the one the target's build took on its to side, which the document names
@@ -2864,7 +2321,7 @@ func TestStepNamesEachSidesSnapshot(t *testing.T) {
 			Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady}, Findings: findings.List{},
 			StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:14:32Z"}
 
-		out := runStepCmd(t, "--stage", "change-1/again")
+		out := runStepCmd(t, "--snapshot", stageID(t, "again"))
 		if out.code != findings.ExitOK || len(svc.stepped) != 2 {
 			t.Fatalf("exit %d, %d runs started; want 0 and one per run of the command: %+v", out.code, len(svc.stepped), out.doc.Findings)
 		}
@@ -2913,34 +2370,26 @@ func TestStepNamesEachSidesSnapshot(t *testing.T) {
 			m["twin_version"] = "8"
 			unsnapshotted(m)
 		})
-		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run", "--allow-restart")
+		out := runStepCmd(t, "--snapshot", stageID(t, "again"), "--dry-run", "--allow-restart")
 		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Step: findings.StepResolve,
 			Object: h.fromID, Message: "the twin was created from a record version this build no longer steps (twin.json 8); " +
 				"fylgja twin destroy clears it"}
 		if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
 			t.Errorf("exit %d, refusal %+v, step %+v; want 1 with %+v and no step", out.code, got, out.doc.Step, want)
 		}
-		if len(h.infra.requests()) != h.before {
-			t.Errorf("Infrahub was asked %+v after the host was built", h.infra.requests()[h.before:])
-		}
 	})
 }
 
-// snapshotOfTarget is the snapshot the step's build of its target filed: the one entry of
-// snapshots/ that is not the from side's, whose bundle is bundleID.
+// snapshotOfTarget is the target's snapshot, filed in snapshots/, whose bundle, bundleID, the
+// step filed in bundles/.
 func snapshotOfTarget(t *testing.T, h *stepHostFixture, bundleID string) string {
 	t.Helper()
-	var found []string
-	for _, name := range filedSnapshots(t, h.paths) {
-		if id := strings.TrimSuffix(name, ".json"); id != h.fromSnapshot {
-			found = append(found, id)
-		}
+	id := snapshotOf(t, bundleID)
+	if !slices.Contains(filedSnapshots(t, h.paths), id+".json") || !slices.Contains(storedBundles(t, h.paths.Bundles), bundleID) {
+		t.Fatalf("snapshots/ holds %v, and bundles/ %v; want the target's snapshot %s and bundle %s", filedSnapshots(t, h.paths),
+			storedBundles(t, h.paths.Bundles), id, bundleID)
 	}
-	if len(found) != 1 || !slices.Contains(storedBundles(t, h.paths.Bundles), bundleID) {
-		t.Fatalf("snapshots/ holds %v beside the from side's, and bundles/ %v; want the target's one snapshot and bundle %s",
-			found, storedBundles(t, h.paths.Bundles), bundleID)
-	}
-	return found[0]
+	return id
 }
 
 // recordedStep is what the step's record activity hands NewStepRecord for a step of in from
@@ -2968,51 +2417,7 @@ func recordedStep(prev wire.TwinRecord, in provision.StepInput, outcome string) 
 // 019, US2: twin step --snapshot <id|file> steps any twin whose record names a snapshot to a
 // snapshot of any branch (research R-04). The client sends it as twin create sends one; the
 // server resolves it as create's --snapshot does, compiles and files its bundle, and steps
-// to it as to a stage, with no request to Infrahub for the target.
-
-// --stage beside --snapshot is the server's snapshot.flags.conflict at start, exit 2, naming
-// --stage: the snapshot is the target (US3 scenario 6). It is refused before any connection,
-// whether --snapshot is an id, a file, a file not there or given empty, and whatever --stage
-// says: the client reads no file beside --stage, so the guard answers whatever the file, and
-// nothing is filed, dialled, inspected or asked of Infrahub.
-func TestStepSnapshotBesideAStageIsRefused(t *testing.T) {
-	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotFlagsConflict, Step: findings.StepStart,
-		Object: "--stage", Message: "--stage is meaningless with --snapshot: the snapshot is the target"}
-	file := snapshotFile(t, nil)
-	missing := filepath.Join(t.TempDir(), "typo.json")
-	for _, stage := range []string{"--stage=change-1/linked", "--stage="} {
-		for _, g := range []struct{ name, arg string }{
-			{"an id", fixtureSnapshotID}, {"a file", file}, {"a file not there", missing}, {"--snapshot=", ""},
-		} {
-			t.Run(stage+" beside "+g.name, func(t *testing.T) {
-				h := stepHost(t, "plan-link-added.json", nil)
-				h.clab.calls = nil
-				snapshots := filedSnapshots(t, h.paths)
-				dials := countDials(t)
-				awaitIdle(t)
-				served := servedRequests(findings.OpTwinStep, string(findings.StatusError))
-
-				code, doc, raw := executeClient(t, "twin", "step", "--snapshot="+g.arg, stage)
-				if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want || doc.Subject.Snapshot != g.arg {
-					t.Errorf("exit %d, findings %+v, subject %+v; want 2 with %+v alone", code, doc.Findings, doc.Subject, want)
-				}
-				if n := dials.Load(); n != 0 || len(h.infra.requests()) != h.before || len(h.clab.calls) != 0 {
-					t.Errorf("dialled %d times, asked Infrahub %+v and containerlab %v before the refusal", n,
-						h.infra.requests()[h.before:], h.clab.calls)
-				}
-				awaitIdle(t)
-				if got := servedRequests(findings.OpTwinStep, string(findings.StatusError)) - served; got != 1 {
-					t.Errorf("the server logged %d refused steps, want 1: the refusal is the server's", got)
-				}
-				if got := filedSnapshots(t, h.paths); !slices.Equal(got, snapshots) {
-					t.Errorf("snapshots/ holds %v after a refusal before any connection, held %v", got, snapshots)
-				}
-				validateM10Document(t, doc)
-				mustCarryNoToken(t, stage, raw)
-			})
-		}
-	}
-}
+// to it, with no request to any source of truth: from 020 every target is a snapshot.
 
 // A --snapshot the client cannot send is its own operation.failed, exit 2, as on create, and
 // no request reaches the server: a file it cannot read, worded as the operating system words
@@ -3083,9 +2488,8 @@ func TestAStepsFilesAreOneSnapshotFile(t *testing.T) {
 			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
 				t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
 			}
-			if n := dials.Load(); n != 0 || len(h.infra.requests()) != h.before || len(h.clab.calls) != 0 {
-				t.Errorf("dialled %d times, asked Infrahub %+v and containerlab %v before the refusal", n,
-					h.infra.requests()[h.before:], h.clab.calls)
+			if n := dials.Load(); n != 0 || len(h.clab.calls) != 0 {
+				t.Errorf("dialled %d times and asked containerlab %v before the refusal", n, h.clab.calls)
 			}
 			if got := filedSnapshots(t, h.paths); !slices.Equal(got, snapshots) {
 				t.Errorf("snapshots/ holds %v after the refusal, held %v", got, snapshots)
@@ -3094,10 +2498,9 @@ func TestAStepsFilesAreOneSnapshotFile(t *testing.T) {
 	}
 }
 
-// targetSnapshot files change-1's stage label as a snapshot the operator holds, as a create,
-// a plan or intent read --out on this server files one, and returns it, with its bundle's id.
-// Infrahub's requests are counted again after it, so h.before is what the step must leave
-// unmoved: no request reaches Infrahub for a snapshot target.
+// targetSnapshot files the target label as a snapshot the operator holds, as a create on this
+// server or the orchestrator's take files one, with its bundle, and returns it, with its
+// bundle's id.
 func targetSnapshot(t *testing.T, h *stepHostFixture, label string) (*snap.Snapshot, string) {
 	t.Helper()
 	bundleID := buildStage(t, h.paths, label)
@@ -3105,7 +2508,6 @@ func targetSnapshot(t *testing.T, h *stepHostFixture, label string) (*snap.Snaps
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.before = len(h.infra.requests())
 	return s, bundleID
 }
 
@@ -3228,7 +2630,7 @@ var stepFroms = []struct {
 // --snapshot steps to a snapshot of change-1's stage linked, by its id and by a file. The
 // server compiles it and files its bundle, and starts the step run with a to side naming no
 // stage, the snapshot, its bundle and the envelope's branch and at, and the stored
-// document's observed_at; the fake Infrahub is asked nothing. A file is filed under its id.
+// document's observed_at. A file is filed under its id.
 // The record the run then writes names the target's snapshot, bundle, branch and at and no
 // stage, keeps the twin's source, and validates against twin.json 10; its step block names
 // the from side's stage, from a stage twin, and none on its to side.
@@ -3249,9 +2651,6 @@ func TestStepToASnapshot(t *testing.T) {
 				if out.code != findings.ExitOK || len(svc.stepped) != 2 {
 					t.Fatalf("exit %d, %d runs started; want 0 and one per run of the command: %+v", out.code, len(svc.stepped),
 						out.doc.Findings)
-				}
-				if n := len(h.infra.requests()); n != h.before {
-					t.Errorf("Infrahub was asked %+v for a snapshot target", h.infra.requests()[h.before:])
 				}
 				if got := filedSnapshots(t, h.paths); !slices.Contains(got, target.ID+".json") {
 					t.Errorf("snapshots/ holds %v; want the target filed under its id", got)
@@ -3393,8 +2792,8 @@ func TestStepToASnapshotRefused(t *testing.T) {
 			if out.code != findings.ExitRejected || got != want {
 				t.Errorf("exit %d, refusal %+v\nwant exit 1, %+v", out.code, got, want)
 			}
-			if len(h.svc.stepped) != 0 || len(h.infra.requests()) != h.before {
-				t.Errorf("%d runs started and Infrahub asked %+v; want neither", len(h.svc.stepped), h.infra.requests()[h.before:])
+			if len(h.svc.stepped) != 0 {
+				t.Errorf("%d runs started; want none", len(h.svc.stepped))
 			}
 			if plans := h.clab.asked("clab", "deploy"); len(plans) != 0 {
 				t.Errorf("containerlab's plan was read: %v", plans)
@@ -3426,11 +2825,10 @@ func TestStepToASnapshotRefused(t *testing.T) {
 // mapping version, is refused step.twin.unsteppable before any run, its object the
 // snapshot's id, naming the twin's snapshot's and the target's, by a file and then by the id it was
 // filed under, the dry run's included: the snapshot stays filed and is named, no bundle is
-// filed, Infrahub is asked nothing and twin.json is unchanged. A stage target is judged on its
-// filed snapshot after its build: against a twin whose snapshot's mapping version differs it is
-// refused the same way, its object the stage's reference, before the host check and
-// containerlab's plan; and a stage or a snapshot under the twin's scope and mapping passes
-// without a word.
+// filed and twin.json is unchanged. Against a twin whose snapshot's mapping version differs, a
+// stored target is refused the same way, before the host check and containerlab's plan, since
+// the rule reads the two envelopes and not the record; and a snapshot under the twin's scope
+// and mapping, stored or filed with its bundle, passes without a word.
 func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 	const dcim = "infrahub-dcim opsmill/schema-library 26336e9"
 	const fixed = "; a twin's scope and mapping are fixed when it is created; fylgja twin destroy and create again to change them"
@@ -3483,16 +2881,15 @@ func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 			if got := storedBundles(t, h.paths.Bundles); !slices.Equal(got, bundles) {
 				t.Errorf("bundles/ holds %v, held %v; a refused target's bundle is never filed", got, bundles)
 			}
-			if len(h.svc.stepped) != 0 || len(h.infra.requests()) != h.before || len(h.clab.asked("clab", "deploy")) != 0 {
-				t.Errorf("%d runs started, Infrahub asked %+v, containerlab's plan read %v; want none", len(h.svc.stepped),
-					h.infra.requests()[h.before:], h.clab.asked("clab", "deploy"))
+			if len(h.svc.stepped) != 0 || len(h.clab.asked("clab", "deploy")) != 0 {
+				t.Errorf("%d runs started, containerlab's plan read %v; want none", len(h.svc.stepped), h.clab.asked("clab", "deploy"))
 			}
 			if sha256Of(t, h.paths.TwinJSON) != record {
 				t.Errorf("twin.json changed under a refused step")
 			}
 		})
 	}
-	t.Run("a stage under another mapping version", func(t *testing.T) {
+	t.Run("a stored snapshot against a twin of another mapping version", func(t *testing.T) {
 		h := stepHost(t, "plan-link-added.json", nil)
 		// The twin's snapshot is filed under another mapping version, and the record names it:
 		// the rule reads the snapshot's envelope, not the record (020, research R-06).
@@ -3512,13 +2909,13 @@ func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 			f.Provenance.Mapping.Version = "0f0f0f0"
 		}))
 		record := sha256Of(t, h.paths.TwinJSON)
-		want := unheld("change-1/linked", short(s.ID)+" names scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 0f0f0f0",
-			"stage change-1/linked names scope tag:fylgja and mapping "+dcim)
+		linked := stageID(t, "linked")
+		want := unheld(linked, short(s.ID)+" names scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 0f0f0f0",
+			"snapshot "+short(linked)+" names scope tag:fylgja and mapping "+dcim)
 		for _, args := range [][]string{{"--allow-restart"}, {"--dry-run"}} {
-			out := runStepCmd(t, append([]string{"--stage", "change-1/linked"}, args...)...)
-			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil ||
-				out.doc.Stage == nil || out.doc.Stage.Ref != "change-1/linked" {
-				t.Errorf("%v: exit %d, refusal %+v, step %+v, stage %+v\nwant 1, %+v, no step and the resolved stage", args,
+			out := runStepCmd(t, append([]string{"--snapshot", linked}, args...)...)
+			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil || out.doc.Stage != nil {
+				t.Errorf("%v: exit %d, refusal %+v, step %+v, stage %+v\nwant 1, %+v, and no step or stage", args,
 					out.code, got, out.doc.Step, out.doc.Stage, want)
 			}
 		}
@@ -3533,10 +2930,10 @@ func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 		name string
 		args func(t *testing.T, h *stepHostFixture) []string
 	}{
-		{"a stage under the record's scope and mapping", func(*testing.T, *stepHostFixture) []string {
-			return []string{"--stage", "change-1/linked"}
+		{"a stored snapshot under the record's scope and mapping", func(t *testing.T, _ *stepHostFixture) []string {
+			return []string{"--snapshot", stageID(t, "linked")}
 		}},
-		{"a snapshot under the record's scope and mapping", func(t *testing.T, h *stepHostFixture) []string {
+		{"a snapshot filed with its bundle under the record's scope and mapping", func(t *testing.T, h *stepHostFixture) []string {
 			target, _ := targetSnapshot(t, h, "linked")
 			return []string{"--snapshot", target.ID}
 		}},
@@ -3579,9 +2976,6 @@ func TestStepToASnapshotEdges(t *testing.T) {
 			len(in.PushPlan) != 0 || !diff.Unchanged {
 			t.Errorf("the run's input %+v, step %+v; want an unchanged step to the twin's own bundle", in, out.doc.Step)
 		}
-		if len(h.infra.requests()) != h.before {
-			t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
-		}
 	})
 
 	t.Run("a snapshot of another branch", func(t *testing.T) {
@@ -3605,9 +2999,6 @@ func TestStepToASnapshotEdges(t *testing.T) {
 			rec.SnapshotID == nil || *rec.SnapshotID != in.To.SnapshotID {
 			t.Errorf("the record after the step names %+v and snapshot %v; want branch other under tag:fylgja", rec.Provenance,
 				rec.SnapshotID)
-		}
-		if len(h.infra.requests()) != h.before {
-			t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
 		}
 	})
 
@@ -3637,9 +3028,6 @@ func TestStepToASnapshotEdges(t *testing.T) {
 		out := runStepCmd(t, "--snapshot", target.ID, "--allow-restart")
 		if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
 			t.Errorf("exit %d, %+v; want 1, %+v", out.code, got, want)
-		}
-		if len(h.infra.requests()) != h.before {
-			t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
 		}
 	})
 }
@@ -3699,7 +3087,7 @@ func TestStepToASnapshotDryRun(t *testing.T) {
 				of = "branch change-1, read at " + target.ObservedAt
 			}
 			from := "snapshot " + short(h.fromSnapshot)
-			want := stepDryRunLines(h, toID)
+			want := stepDryRunLines(t, h, toID)
 			want[1] = c.twin(h)
 			want[2] = "target: snapshot " + short(toSnapshot) + " (" + of + ")"
 			want[3] = "step " + from + " → snapshot " + short(toSnapshot) + " (" + short(h.fromID) + " → " + short(toID) + "):"
@@ -3718,8 +3106,8 @@ func TestStepToASnapshotDryRun(t *testing.T) {
 			if got := storedBundles(t, h.paths.Bundles); !slices.Contains(got, toID) {
 				t.Errorf("bundles/ holds %v; want the target's filed", got)
 			}
-			if len(h.svc.stepped) != 0 || len(h.infra.requests()) != h.before {
-				t.Errorf("%d runs started and Infrahub asked %+v; want neither", len(h.svc.stepped), h.infra.requests()[h.before:])
+			if len(h.svc.stepped) != 0 {
+				t.Errorf("%d runs started; want none", len(h.svc.stepped))
 			}
 			if sha256Of(t, h.paths.TwinJSON) != record || !slices.Equal(stateRootListing(t, h.paths.Twin), twinDir) {
 				t.Errorf("the twin directory changed under a dry run")
@@ -3801,9 +3189,6 @@ func TestStepToASnapshotCloses(t *testing.T) {
 			if want := c.closing(h, out.doc.SnapshotID, out.doc.BundleID); !strings.HasSuffix(out.stdout, "\n"+want+"\n") {
 				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, want)
 			}
-			if len(h.infra.requests()) != h.before {
-				t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
-			}
 			if c.name != "stepped" {
 				return
 			}
@@ -3831,7 +3216,7 @@ func TestStepDetachedEndsAtTheRun(t *testing.T) {
 	useService(t, svc)
 	useInterrupts(t)
 
-	out := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart", "--detach")
+	out := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart", "--detach")
 	if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK || out.doc.Subject.RunID != stepRunID {
 		t.Fatalf("exit %d, document %+v; want 0, ok, naming %s", out.code, out.doc, stepRunID)
 	}

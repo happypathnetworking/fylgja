@@ -380,17 +380,20 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	}
 	seen.add("twin.json", record)
 
-	// The create, as the operator sees it: progress and the twin, in text and in JSON. Its
-	// read is the server's since 018, from the fake Infrahub serving the fixture, whose
-	// artifacts carry the marker; the snapshot it files is the store's, never output.
-	newFakeInfrahub(t).start()
+	// The create, as the operator sees it: progress and the twin, in text and in JSON. It
+	// builds from the fixture's snapshot, whose artifacts carry the marker, filed in the
+	// store as the orchestrator's take files one (020); the snapshot is the store's, never
+	// output.
+	if _, err := snap.NewDirStore(paths.Snapshots).Put(context.Background(), snap.Take(read, nil)); err != nil {
+		t.Fatal(err)
+	}
 	for _, asJSON := range []bool{false, true} {
 		useService(t, &fakeService{runID: "run-1", result: res, events: events})
 		useInterrupts(t)
 		var runErr error
 		stderr := captureStderr(t, func() {
 			seen.add("create output", captureStdout(t, func() {
-				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{branch: read.Envelope.Branch})
+				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{snapshot: snap.Take(read, nil).ID})
 			}))
 		})
 		seen.add("create output", stderr)

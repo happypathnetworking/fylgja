@@ -28,7 +28,7 @@ import (
 // The answers of the thirteen operations as the wire carries them. Each is asked of the
 // harness's server three times, over the harness's fakes, as a client other than the CLI
 // asks: with no rendering, with "json" and with "text". These tests live beside the
-// harness, whose fakes (Infrahub, the workflow service, the nodes) are this package's test
+// harness, whose fakes (the workflow service, the nodes, the host) are this package's test
 // code, which internal/server's tests cannot import.
 
 // rawAnswer is one answer as the wire carried it: its status, and each line with its frame.
@@ -294,10 +294,10 @@ func steppedResult() provision.StepResult {
 func answerCases() []answerCase {
 	return []answerCase{
 		{"twin create, a run (TestCreateReadyPrintsTheTwin)", findings.OpTwinCreate, func(t *testing.T) answerWant {
-			paths := useFixtureRead(t)
+			paths := useFixtureSnapshot(t)
 			events := createReadyEvents()
 			useService(t, &fakeService{runID: "run-1", result: readyResult(), events: events})
-			return answerWant{args: map[string]any{"branch": "fylgja-fixture"},
+			return answerWant{args: map[string]any{"snapshot": headSnapshotID},
 				kinds: runKinds(len(events)), status: findings.StatusOK, events: stepsOf(events),
 				stdout: lines(append(storedLines(paths, headSnapshotID, headBundleID), "run fylgja-provision run-1",
 					"step read: begins",
@@ -321,12 +321,12 @@ func answerCases() []answerCase {
 			useService(t, nil)
 			dryRunEnv(t)
 			useClab(t, "inspect-empty.json")
-			newFakeInfrahub(t).start()
-			return answerWant{args: map[string]any{"branch": "fylgja-fixture", "dry_run": true},
+			useFixtureSnapshot(t)
+			return answerWant{args: map[string]any{"snapshot": headSnapshotID, "dry_run": true},
 				kinds: []string{api.KindDocument}, status: findings.StatusOK,
 				cli: func(t *testing.T) string {
 					return cliStdout(t, func() error {
-						return runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", dryRun: true})
+						return runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID, dryRun: true})
 					})
 				}}
 		}},
@@ -384,18 +384,18 @@ func answerCases() []answerCase {
 			events := stepEvents()
 			useService(t, &fakeService{runID: stepRunID, events: events, stepResult: steppedResult()})
 			useInterrupts(t)
-			return answerWant{args: map[string]any{"stage": "change-1/linked", "allow_restart": true},
+			return answerWant{args: map[string]any{"snapshot": stageID(t, "linked"), "allow_restart": true},
 				kinds: runKinds(len(events)), status: findings.StatusOK, events: stepsOf(events),
 				cli: func(t *testing.T) string {
-					return runStepCmd(t, "--stage", "change-1/linked", "--allow-restart").stdout
+					return runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart").stdout
 				}}
 		}},
 		{"twin step --dry-run (TestStepDryRun)", findings.OpTwinStep, func(t *testing.T) answerWant {
 			h := stepHost(t, "plan-link-added.json", nil)
-			toID := runStepCmd(t, "--stage", "change-1/linked", "--dry-run", "--allow-restart").doc.BundleID
-			return answerWant{args: map[string]any{"stage": "change-1/linked", "dry_run": true, "allow_restart": true},
+			toID := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--dry-run", "--allow-restart").doc.BundleID
+			return answerWant{args: map[string]any{"snapshot": stageID(t, "linked"), "dry_run": true, "allow_restart": true},
 				kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				stdout: lines(append(stepDryRunLines(h, toID),
+				stdout: lines(append(stepDryRunLines(t, h, toID),
 					"memory: sum 5120 MiB; host budget unset",
 					"host: lab fylgja present; twin directory present",
 					"verdict: "+findings.VerdictClear)...)}
@@ -442,53 +442,6 @@ func answerCases() []answerCase {
 					})
 				}}
 		}},
-		{"stage list (TestStageList)", findings.OpStageList, func(t *testing.T) answerWant {
-			useStateRoot(t)
-			useService(t, nil)
-			f := newFakeInfrahub(t)
-			f.change("pc-1", "change-1", mark("st-1", "cabled", "", "the leaf cabled"))
-			f.start()
-			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				cli: func(t *testing.T) string {
-					return cliStdout(t, func() error {
-						return runStageList(context.Background(), &options{}, &stageFlags{})
-					})
-				}}
-		}},
-		{"stage plan (TestStagePlan)", findings.OpStagePlan, func(t *testing.T) answerWant {
-			useStateRoot(t)
-			useService(t, nil)
-			f := newFakeInfrahub(t)
-			f.change("pc-1", "change-1", mark("st-1", "cabled", "", "the leaf cabled"))
-			f.start()
-			return answerWant{args: map[string]any{"branch": "change-1"}, kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				cli: func(t *testing.T) string {
-					return cliStdout(t, func() error {
-						return runStagePlan(context.Background(), &options{}, &stageFlags{branch: "change-1", branchGiven: true})
-					})
-				}}
-		}},
-		{"intent read", findings.OpIntentRead, func(t *testing.T) answerWant {
-			useStateRoot(t)
-			newFakeInfrahub(t).start()
-			out := filepath.Join(t.TempDir(), "snapshot.json")
-			return answerWant{args: map[string]any{"branch": "fylgja-fixture", "out": out},
-				kinds: []string{api.KindFiles, api.KindDocument}, status: findings.StatusOK,
-				cli: func(t *testing.T) string {
-					return cliStdout(t, func() error {
-						return runRead(context.Background(), &options{}, &readFlags{branch: "fylgja-fixture", out: out})
-					})
-				}}
-		}},
-		{"schema check (TestCheckNamesTheStageKind)", findings.OpSchemaCheck, func(t *testing.T) answerWant {
-			newFakeInfrahub(t).start()
-			return answerWant{args: map[string]any{"branch": "fylgja-fixture"}, kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				cli: func(t *testing.T) string {
-					return cliStdout(t, func() error {
-						return runCheck(context.Background(), &options{}, &checkFlags{branch: "fylgja-fixture"})
-					})
-				}}
-		}},
 		{"psp validate (TestShippedPackageValidatesClean)", findings.OpPSPValidate, func(t *testing.T) answerWant {
 			paths := []string{repoPath("psp", "nokia_srlinux.yaml")}
 			files, err := readPackages(paths)
@@ -507,12 +460,6 @@ func answerCases() []answerCase {
 				t.Fatal(err)
 			}
 			return answerWant{args: map[string]any{"files": paths}, files: files, kinds: []string{api.KindDocument}, status: findings.StatusRejected}
-		}},
-		// 015: twin.rehearse's guard, which refuses before any connection.
-		{"twin rehearse, refused (TestRehearseGuardsBeforeAnyConnection)", findings.OpTwinRehearse, func(t *testing.T) answerWant {
-			useStateRoot(t)
-			useService(t, nil)
-			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusError}
 		}},
 		// 020: a run by its identity. The read of a run the service does not hold, and the
 		// interrupt of one that has closed, each refused after the describe alone; a read's
@@ -624,7 +571,7 @@ func TestEachOperationAnswersAsAsked(t *testing.T) {
 					t.Errorf("%s: events %q, want %q in order", label, steps, want.events)
 				}
 				for _, line := range a.lines {
-					for _, secret := range []string{harness.token, sentinel, fakeToken} {
+					for _, secret := range []string{harness.token, sentinel} {
 						if bytes.Contains(line, []byte(secret)) {
 							t.Errorf("%s carries a credential: %s", label, line)
 						}

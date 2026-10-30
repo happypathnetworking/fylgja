@@ -24,25 +24,9 @@ import (
 
 const fixtureBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
-// fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json):
-// what a create of the fake Infrahub's fixture branch takes and files before its run (018).
+// fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json), the
+// fixture pinned at its at.
 const fixtureSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
-
-// useFixtureRead serves the fixture branch from a fake Infrahub and points the state root
-// at a fresh directory: a create reads, takes, compiles and files on the server before it
-// starts its run (018), so every create that starts one reads something.
-func useFixtureRead(t *testing.T) lab.Paths {
-	t.Helper()
-	newFakeInfrahub(t).start()
-	return useStateRoot(t)
-}
-
-// headSnapshotID and headBundleID are what an unpinned read of the fake Infrahub's fixture
-// branch takes and compiles to: the fixture's intent, its envelope naming no at.
-const (
-	headSnapshotID = "0d37e2ec3186bb59f58ee414a5ff34bd3e3833637c9684dfb4e6b337805a61f1"
-	headBundleID   = "16141134f94cef43492b5e80dc986a19c446f647a3ed660a5b615dc525848fe0"
-)
 
 // storedLines are the two lines a create prints before its run's start, the snapshot's
 // above the bundle's, under the state root of paths (018, R-09).
@@ -418,7 +402,7 @@ func exitOf(t *testing.T, err error) (int, *findings.Document) {
 }
 
 func TestCreateReadyPrintsTheTwin(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	svc := &fakeService{runID: "run-1", result: readyResult(), events: []provision.Event{
 		{Step: "read"},
 		{Step: "read", End: true, Outcome: provision.EventDone, Duration: 2100 * time.Millisecond},
@@ -436,7 +420,7 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -465,8 +449,8 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 	if out != want {
 		t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 	}
-	if len(svc.started) != 1 || svc.started[0].Source != wire.SourceIntent || svc.started[0].Branch != "fylgja-fixture" {
-		t.Errorf("started %+v, want one intent run for fylgja-fixture", svc.started)
+	if len(svc.started) != 1 || svc.started[0].Source != wire.SourceSnapshot || svc.started[0].Branch != "fylgja-fixture" {
+		t.Errorf("started %+v, want one snapshot run for fylgja-fixture", svc.started)
 	}
 	if !svc.closed {
 		t.Error("the connection to the workflow service was not closed")
@@ -474,13 +458,13 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 }
 
 func TestCreateJSONDocumentCarriesTheTwin(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	useService(t, &fakeService{runID: "run-1", result: readyResult()})
 	useInterrupts(t)
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 	})
 	if out != "" {
 		t.Errorf("--json printed progress on stdout:\n%s", out)
@@ -507,29 +491,23 @@ func TestCreateJSONDocumentCarriesTheTwin(t *testing.T) {
 func TestCreateRefusesBeforeDialling(t *testing.T) {
 	useService(t, nil)
 
-	t.Run("at finer than microseconds", func(t *testing.T) {
-		err := runCreate(context.Background(), &options{asJSON: true},
-			&createFlags{branch: "fylgja-fixture", at: "2026-09-15T14:22:12.1234567Z"})
-		code, doc := exitOf(t, err)
-		if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleAtPrecision {
-			t.Errorf("exit %d, findings %+v; want 2 with %s", code, doc.Findings, findings.RuleAtPrecision)
-		}
-	})
-	t.Run("branch missing", func(t *testing.T) {
+	// 020: a create builds from a snapshot alone (D-065), so the server refuses one that
+	// names none, before any connection.
+	t.Run("snapshot missing", func(t *testing.T) {
 		code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{}))
-		if code != findings.ExitError || !strings.Contains(doc.Findings[0].Message, "--branch") {
-			t.Errorf("exit %d, findings %+v; want 2 naming --branch", code, doc.Findings)
+		if code != findings.ExitError || doc.Findings[0].Message != "--snapshot is required" {
+			t.Errorf("exit %d, findings %+v; want 2: --snapshot is required", code, doc.Findings)
 		}
 	})
 }
 
 // No service and no worker are exit 2 under their own identifiers, not a wait.
 func TestCreateStartRefusals(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	for _, c := range startRefusals() {
 		t.Run(c.name, func(t *testing.T) {
 			c.use(t)
-			wantStartRefusal(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}), c.rule)
+			wantStartRefusal(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}), c.rule)
 		})
 	}
 }
@@ -537,7 +515,7 @@ func TestCreateStartRefusals(t *testing.T) {
 // The first interrupt cancels the run and keeps waiting for its cleanup; the exit status
 // is then the run's.
 func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	interrupts := useInterrupts(t)
 	release := make(chan struct{})
 	svc := &fakeService{runID: "run-1", release: release, result: provision.ProvisionResult{
@@ -548,7 +526,7 @@ func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
 	useService(t, svc)
 	interrupts <- os.Interrupt
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 	if svc.cancels != 1 {
 		t.Errorf("Cancel called %d times, want once", svc.cancels)
 	}
@@ -560,14 +538,14 @@ func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
 // A second interrupt stops waiting: exit 2, run.cancelled, and the run is left to finish
 // on the service.
 func TestCreateSecondInterruptStopsWaiting(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	interrupts := useInterrupts(t)
 	svc := &fakeService{runID: "run-1", release: make(chan struct{})}
 	useService(t, svc)
 	interrupts <- os.Interrupt
 	interrupts <- os.Interrupt
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 	if svc.cancels != 1 {
 		t.Errorf("Cancel called %d times, want once", svc.cancels)
 	}
@@ -584,7 +562,7 @@ func TestCreateSecondInterruptStopsWaiting(t *testing.T) {
 // cleanup removed, whether or not its progress lines arrived; one cancelled before the host
 // check touched nothing and says nothing of cleanup.
 func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	deployFailed := findings.List{{Severity: findings.Rejection, Rule: findings.RuleDeployFailed, Object: "lab fylgja",
 		Step: findings.StepDeploy, Message: "clab deploy exited 1"}}
 	for _, c := range []struct {
@@ -613,7 +591,7 @@ func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
 
 			var err error
 			out := captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+				err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 			})
 			if code, doc := exitOf(t, err); code != c.wantCode {
 				t.Fatalf("exit %d, findings %+v; want %d", code, doc.Findings, c.wantCode)
@@ -625,7 +603,7 @@ func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
 
 			err = nil
 			out = captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+				err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 			})
 			if out != "" {
 				t.Errorf("--json printed on stdout:\n%s", out)
@@ -1132,24 +1110,19 @@ func TestFindingsContractCachedStillValidates(t *testing.T) {
 	}
 }
 
-// The scope a create names is its run's and its document's, over the server's default; with
-// none, the default is (017).
+// The scope of the snapshot a create builds from, its envelope's, is its run's, which the
+// record's provenance carries (017; from 020 a create names no scope of its own, D-065); the
+// document's subject names the snapshot, as a create from a snapshot's has since 018.
 func TestCreateCarriesItsScope(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		flags createFlags
 		want  string
 	}{
-		{"given", createFlags{branch: "fylgja-fixture", scope: "tag:lab-b", scopeGiven: true}, "tag:lab-b"},
-		{"the default", createFlags{branch: "fylgja-fixture"}, defaultScope},
+		{"the snapshot's", createFlags{snapshot: headSnapshotID}, "tag:fylgja"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			// The server reads under the scope before the run (018): the fake tags the
-			// fixture's devices with the scope's tag, so either reads the fixture.
-			f := newFakeInfrahub(t)
-			f.tag = strings.TrimPrefix(c.want, "tag:")
-			f.start()
-			useStateRoot(t)
+			useFixtureSnapshot(t)
 			svc := &fakeService{runID: "run-1", result: readyResult()}
 			useService(t, svc)
 			useInterrupts(t)
@@ -1159,8 +1132,9 @@ func TestCreateCarriesItsScope(t *testing.T) {
 			if code != findings.ExitOK || len(svc.started) != 1 {
 				t.Fatalf("exit %d, started %+v; want 0 and one run", code, svc.started)
 			}
-			if svc.started[0].Scope != c.want || doc.Subject == nil || doc.Subject.Scope != c.want {
-				t.Errorf("the run's scope %q, the subject %+v; want %s in both", svc.started[0].Scope, doc.Subject, c.want)
+			if svc.started[0].Scope != c.want || doc.Subject == nil || doc.Subject.Snapshot != c.flags.snapshot {
+				t.Errorf("the run's scope %q, the subject %+v; want %s, and the subject naming the snapshot", svc.started[0].Scope,
+					doc.Subject, c.want)
 			}
 			validateM10Document(t, doc)
 		})
@@ -1169,7 +1143,7 @@ func TestCreateCarriesItsScope(t *testing.T) {
 
 // --interval and --no-follow are no flags of any command (019, FR-003): through the command
 // line, as an operator would type them, each is cobra's unknown flag, exit 2, refused before
-// any request, so the harness's server logs none. twin create is asked from the branch head,
+// any request, so the harness's server logs none. twin create is asked from a snapshot,
 // where the flags meant something; every other command of the client's tree beside it.
 func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	root := &cobra.Command{Use: "fylgja"}
@@ -1189,15 +1163,19 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	for _, path := range commands {
 		ops = append(ops, strings.Join(path, "."))
 	}
-	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(api.Operations))) {
-		t.Fatalf("the walk found %v; want the API's operations %v", ops, api.Operations)
+	// The API's operations, and until the client loses them (T033) the five commands 020
+	// moved to the orchestrator, whose paths the server answers 404.
+	want := append(slices.Clone(api.Operations), findings.OpTwinRehearse, findings.OpStageList, findings.OpStagePlan,
+		findings.OpIntentRead, findings.OpSchemaCheck)
+	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(want))) {
+		t.Fatalf("the walk found %v; want %v", ops, want)
 	}
 
 	for _, path := range commands {
 		for _, flag := range [][]string{{"--interval", "30s"}, {"--no-follow"}} {
 			args := append(append([]string{}, path...), flag...)
 			if strings.Join(path, " ") == "twin create" {
-				args = append([]string{"twin", "create", "--branch", "b"}, flag...)
+				args = append([]string{"twin", "create", "--snapshot", headSnapshotID}, flag...)
 			}
 			t.Run(strings.Join(args, " "), func(t *testing.T) {
 				awaitIdle(t)
@@ -1232,18 +1210,18 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	}
 }
 
-// A create from the branch head follows nothing (019; US1 scenario 1): its run's input is
-// M3's for the same flags, compiled on the server, with no follow; its text ends at the twin
-// directory; and its document carries no following key.
+// A create from a snapshot of the branch head follows nothing (019; US1 scenario 1): its
+// run's input is compiled on the server, with no follow, and names the snapshot's branch, at
+// and scope; its text ends at the twin directory; and its document carries no following key.
 func TestCreateFollowsNothing(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
 	useService(t, svc)
 	useInterrupts(t)
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -1256,11 +1234,11 @@ func TestCreateFollowsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Compiled on the server (018): the bundle and the snapshot by id, and the read's time.
-	want := `{"source":"intent","branch":"fylgja-fixture","at":"","bundle_path":"` + filepath.Join(paths.Bundles, headBundleID) +
+	want := `{"source":"snapshot","branch":"fylgja-fixture","at":"","bundle_path":"` + filepath.Join(paths.Bundles, headBundleID) +
 		`","bundle_id":"` + headBundleID + `","version":"` + version + `","observed_at":"` + svc.started[0].ObservedAt +
 		`","scope":"tag:fylgja","snapshot_id":"` + headSnapshotID + `"}`
 	if string(b) != want || svc.started[0].ObservedAt == "" {
-		t.Errorf("input\n  %s\nwant M3's with 017's scope, the server's default, and 018's compiled input\n  %s", b, want)
+		t.Errorf("input\n  %s\nwant the snapshot's, with its envelope's scope, and 018's compiled input\n  %s", b, want)
 	}
 	if want := "\ntwin directory /abs/local/twin\n"; !strings.HasSuffix(out, want) || strings.Contains(out, "follow") {
 		t.Errorf("stdout:\n%s\nwant it to end at the twin directory, naming no following", out)
@@ -1268,7 +1246,7 @@ func TestCreateFollowsNothing(t *testing.T) {
 
 	err = nil
 	captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 	})
 	_, doc := exitOf(t, err)
 	if raw, err := json.Marshal(doc); err != nil || bytes.Contains(raw, []byte(`"following"`)) {
@@ -1283,7 +1261,7 @@ func TestCreateFollowsNothing(t *testing.T) {
 // the run, its text the line the command prints. --detach beside --dry-run is
 // run.flags.conflict, exit 1, before the workflow service is dialled.
 func TestCreateDetachedEndsAtTheRun(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	svc := &fakeService{runID: "run-1", result: readyResult(), events: []provision.Event{{Step: "deploy"}}}
 	useService(t, svc)
 	useInterrupts(t)
@@ -1292,7 +1270,7 @@ func TestCreateDetachedEndsAtTheRun(t *testing.T) {
 	var out string
 	errText := captureStderr(t, func() {
 		out = captureStdout(t, func() {
-			err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", detach: true})
+			err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID, detach: true})
 		})
 		_ = report(&options{}, nil, err)
 	})
@@ -1313,7 +1291,7 @@ func TestCreateDetachedEndsAtTheRun(t *testing.T) {
 	validateM10Document(t, doc)
 
 	dials := countDials(t)
-	code, doc = executeTwin(t, "twin", "create", "--branch", "fylgja-fixture", "--dry-run", "--detach")
+	code, doc = executeTwin(t, "twin", "create", "--snapshot", headSnapshotID, "--dry-run", "--detach")
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleRunFlagsConflict ||
 		doc.Findings[0].Object != "dry_run" || dials.Load() != 0 {
 		t.Errorf("--dry-run --detach: exit %d, findings %+v, %d dials; want run.flags.conflict, exit 1, none", code, doc.Findings,

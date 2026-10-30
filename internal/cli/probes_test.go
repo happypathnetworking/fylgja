@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -13,36 +12,11 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/probe"
-	"github.com/happypathnetworking/fylgja/internal/server"
-	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 // probesPath is testdata/probes/<name>, as an operator gives it to --probes.
 func probesPath(name string) string {
 	return repoPath("testdata", "probes", name)
-}
-
-// useProbeKind serves the kind's read from kind for the rest of the test.
-func useProbeKind(t *testing.T, kind *kindProbes) {
-	t.Helper()
-	saved := probeKind
-	probeKind = func() (server.ProbeReader, error) { return kind, nil }
-	t.Cleanup(func() { probeKind = saved })
-}
-
-// declaredProbes is the list of the declaration at path.
-func declaredProbes(t *testing.T, path string) []probe.Probe {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, list := probe.Parse(b, path)
-	if d == nil {
-		t.Fatalf("%s: %+v", path, list)
-	}
-	return d.Probes
 }
 
 // The five commands that take --probes send it as the argument probes, the path, beside the
@@ -107,42 +81,6 @@ func TestProbesBesideASnapshotSendsNoFile(t *testing.T) {
 				t.Errorf("args %s, %d files; want snapshot and probes named, and no file", seen[0].body, len(req.Files))
 			}
 		})
-	}
-}
-
-// Through the harness's server the conflict is snapshot.flags.conflict at --probes, exit 2,
-// at start, before Infrahub or the kind is asked and before the workflow service is dialled.
-func TestProbesBesideASnapshotIsTheServersConflict(t *testing.T) {
-	useStateRoot(t)
-	infra := newFakeInfrahub(t)
-	infra.start()
-	kind := &kindProbes{}
-	useProbeKind(t, kind)
-	dials := countDials(t)
-	id := strings.Repeat("a", 64)
-	for _, args := range [][]string{
-		{"twin", "create", "--snapshot", id, "--probes", probesPath("n1-loop.json")},
-		{"twin", "create", "--snapshot", id, "--probes", probesPath("n1-loop.json"), "--dry-run"},
-		{"twin", "step", "--snapshot", id, "--probes", probesPath("n1-loop.json")},
-	} {
-		code, doc, raw := executeClient(t, args...)
-		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotFlagsConflict, Step: findings.StepStart,
-			Object: "--probes", Message: "--probes is meaningless with --snapshot: a snapshot carries its own probes, which the " +
-				"twin is built with"}
-		if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
-			t.Errorf("%v: exit %d, findings %+v; want 2 and %+v", args, code, doc.Findings, want)
-		}
-		validateM10Document(t, doc)
-		mustCarryNoToken(t, args[1], raw)
-	}
-	if n := len(infra.requests()); n != 0 {
-		t.Errorf("Infrahub was asked %d times", n)
-	}
-	if kind.reads.Load() != 0 {
-		t.Errorf("the kind was read beside a snapshot")
-	}
-	if n := dials.Load(); n != 0 {
-		t.Errorf("the workflow service was dialled %d times", n)
 	}
 }
 
@@ -231,80 +169,5 @@ func TestProbesHelpNamesTheKind(t *testing.T) {
 	}
 	if newStageListCmd(opts).Flags().Lookup("probes") != nil {
 		t.Errorf("stage list takes --probes; it reads no intent to take")
-	}
-}
-
-// intent read --out writes a snapshot 2 carrying the request's one list (FR-005, SC-006's
-// tier-1 half): the file's, replacing the kind's; with no file, the kind's; with neither, [].
-// Each document validates against the current findings contract.
-func TestIntentReadWritesTheRequestsList(t *testing.T) {
-	n1, n2 := declaredProbes(t, probesPath("n1-loop.json")), declaredProbes(t, probesPath("n2-loop.json"))
-	for _, c := range []struct {
-		name string
-		kind []probe.Probe
-		file string
-		want []probe.Probe
-	}{
-		{"the file", n2, probesPath("n1-loop.json"), n1},
-		{"the kind", n2, "", n2},
-		{"neither", nil, "", []probe.Probe{}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			useFixtureRead(t)
-			kind := &kindProbes{probes: c.kind}
-			useProbeKind(t, kind)
-			out := filepath.Join(t.TempDir(), "snap.json")
-			args := []string{"intent", "read", "--branch", "fylgja-fixture", "--out", out}
-			if c.file != "" {
-				args = append(args, "--probes", c.file)
-			}
-			code, doc, _ := executeClient(t, args...)
-			if code != findings.ExitOK || len(doc.Findings) != 0 {
-				t.Fatalf("exit %d, findings %+v; want 0 and none", code, doc.Findings)
-			}
-			validateM10Document(t, doc)
-			b, err := os.ReadFile(out)
-			if err != nil {
-				t.Fatal(err)
-			}
-			s, err := snap.Unmarshal(b)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(string(b), `"snapshot_version": "2"`) || !reflect.DeepEqual(s.Probes, c.want) {
-				t.Errorf("wrote a snapshot carrying %+v:\n%s\nwant a 2 carrying %+v", s.Probes, b, c.want)
-			}
-			if doc.SnapshotID != s.ID {
-				t.Errorf("the document names snapshot %s; the file is %s", doc.SnapshotID, s.ID)
-			}
-			if reads := kind.reads.Load(); (c.file == "") != (reads == 1) {
-				t.Errorf("the kind was read %d times; want once with no file and never with one", reads)
-			}
-		})
-	}
-}
-
-// A create that sends a probe file the server's rules refuse is refused at start naming the
-// file, before Infrahub is asked or the workflow service dialled.
-func TestCreateWithAMalformedProbesFileIsRefusedAtStart(t *testing.T) {
-	useStateRoot(t)
-	infra := newFakeInfrahub(t)
-	infra.start()
-	dials := countDials(t)
-	path := probesPath(filepath.Join("invalid", "probe.gateway.outside.json"))
-	code, doc, _ := executeClient(t, "twin", "create", "--branch", "fylgja-fixture", "--probes", path)
-	if code != findings.ExitRejected || len(doc.Findings) == 0 {
-		t.Fatalf("exit %d, findings %+v; want 1", code, doc.Findings)
-	}
-	f := doc.Findings[0]
-	if f.Rule != findings.RuleProbeGatewayOutside || f.Step != findings.StepStart || !strings.Contains(f.Message, path) {
-		t.Errorf("finding %+v; want probe.gateway.outside at start, naming %s", f, path)
-	}
-	validateM10Document(t, doc)
-	if n := len(infra.requests()); n != 0 {
-		t.Errorf("Infrahub was asked %d times", n)
-	}
-	if n := dials.Load(); n != 0 {
-		t.Errorf("the workflow service was dialled %d times", n)
 	}
 }

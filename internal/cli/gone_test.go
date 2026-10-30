@@ -17,7 +17,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
@@ -249,10 +248,10 @@ func (g *goneService) Result(ctx context.Context, w, r string) (provision.Provis
 // start; a start already waiting for a worker finishes, with the server stopped too;
 // it stops following, and never cancels the run.
 func TestAClientGoneDuringARun(t *testing.T) {
-	create := map[string]any{"branch": "fylgja-fixture"}
+	create := map[string]any{"snapshot": headSnapshotID}
 
 	t.Run("before start", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, reached: make(chan struct{})}
 		var dialReturned atomic.Bool
 		saved := dialService
@@ -288,7 +287,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	// The dial returns once the client has gone: nothing is started for a request that ended
 	// before its start began (contracts/cli.md, "Runs").
 	t.Run("after the dial, before start", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, reached: make(chan struct{})}
 		saved := dialService
 		t.Cleanup(func() { dialService = saved })
@@ -313,7 +312,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	})
 
 	t.Run("the start waiting for a worker", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := newStartService()
 		useStartService(t, svc)
 		awaitIdle(t)
@@ -328,7 +327,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	// The server's stop ends every request's context as a client's departure ends one, and a
 	// start waiting for a worker finishes all the same.
 	t.Run("the start waiting for a worker, the server stopped", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := newStartService()
 		useStartService(t, svc)
 		ts := stoppingServer(t)
@@ -342,7 +341,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	})
 
 	t.Run("the run followed", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, holdFollow: true,
 			reached: make(chan struct{})}
 		useService(t, svc)
@@ -368,7 +367,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 // to cancel all the same, on a context the client's departure does not end, since the client
 // that survives to report says it was.
 func TestAClientGoneAfterItsInterrupt(t *testing.T) {
-	useFixtureRead(t) // the create reads on the server before its dial (018)
+	useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 	svc := &cancelService{goneService: &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()},
 		holdFollow: true, reached: make(chan struct{})}}
 	saved := dialService
@@ -383,7 +382,7 @@ func TestAClientGoneAfterItsInterrupt(t *testing.T) {
 	n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 	delivered := len(requestOutcomes(logInterrupt))
 
-	cutAnswerOn(t, harness.http.URL, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture"},
+	cutAnswerOn(t, harness.http.URL, findings.OpTwinCreate, map[string]any{"snapshot": headSnapshotID},
 		svc.reached, func(stream string) {
 			if code := postInterrupt(t, stream); code != http.StatusNoContent {
 				t.Fatalf("the interrupt was answered %d, want 204", code)
@@ -646,9 +645,8 @@ func (s *startService) wantStartedAndLeft(t *testing.T, start string) {
 }
 
 // A client that goes away during a command that is one answer stops its work too: twin
-// verify's wait
-// reads and sleeps no more, and a create's dry run, cut while Infrahub holds its read open,
-// files nothing and asks the host nothing.
+// verify's wait reads and sleeps no more. (A create's dry run cut during its read went with
+// the read, 020.)
 func TestAClientGoneDuringOneAnswer(t *testing.T) {
 	t.Run("twin verify --wait", func(t *testing.T) {
 		h := verifyHost(t, "three-node", nil, nil)
@@ -697,48 +695,6 @@ func TestAClientGoneDuringOneAnswer(t *testing.T) {
 		}
 		if got := sleeps.Load(); got != 1 {
 			t.Errorf("verify slept %d times, want once: no pause after the client went", got)
-		}
-	})
-
-	t.Run("twin create --dry-run", func(t *testing.T) {
-		paths := useStateRoot(t)
-		useService(t, nil)
-		dryRunEnv(t)
-		var asked atomic.Int32
-		saved := dryRunRunner
-		t.Cleanup(func() { dryRunRunner = saved })
-		dryRunRunner = runnerFunc(func(args ...string) {
-			asked.Add(1)
-		})
-
-		f := newFakeInfrahub(t)
-		reached := make(chan struct{})
-		var held atomic.Bool
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if held.CompareAndSwap(false, true) {
-				close(reached)
-				select {
-				case <-r.Context().Done():
-					return
-				case <-time.After(goneBound):
-				}
-			}
-			f.serve(w, r)
-		}))
-		t.Cleanup(srv.Close)
-		t.Setenv(intent.EnvAddress, srv.URL)
-		t.Setenv(intent.EnvToken, fakeToken)
-		awaitIdle(t)
-		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
-
-		cutAnswer(t, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture", "dry_run": true}, reached)
-
-		wantGone(t, findings.OpTwinCreate, n, panics)
-		if got := entriesOf(t, paths.Bundles); len(got) != 0 {
-			t.Errorf("the store holds %v after a dry run whose client went during its read", got)
-		}
-		if got := asked.Load(); got != 0 {
-			t.Errorf("the host was asked %d times after the client went", got)
 		}
 	})
 }

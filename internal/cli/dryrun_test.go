@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
@@ -457,124 +456,24 @@ func TestProvisionDryRunNamesAnOrphan(t *testing.T) {
 	}
 }
 
-// A create dry run whose read cannot run reports that, exit 2, having dialled no workflow
-// service and asked containerlab nothing: the read comes first.
+// A create dry run whose snapshot cannot be resolved reports that, exit 1, having dialled no
+// workflow service and asked containerlab nothing: the snapshot comes first (020: a create
+// builds from a snapshot alone).
 func TestCreateDryRunNeverDials(t *testing.T) {
 	paths := useStateRoot(t)
 	useService(t, nil)
 	dryRunEnv(t)
 	clab := useClab(t, "inspect-empty.json")
-	t.Setenv(intent.EnvAddress, unreachable)
-	t.Setenv(intent.EnvToken, "any-token")
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture", dryRun: true}))
-	if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleOperationFailed {
-		t.Errorf("exit %d, findings %+v; want 2 with %s", code, doc.Findings, findings.RuleOperationFailed)
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID, dryRun: true}))
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleSnapshotUnknown {
+		t.Errorf("exit %d, findings %+v; want 1 with %s", code, doc.Findings, findings.RuleSnapshotUnknown)
 	}
 	if len(clab.calls) != 0 {
-		t.Errorf("containerlab was asked %v before anything was read", clab.calls)
+		t.Errorf("containerlab was asked %v before the snapshot was resolved", clab.calls)
 	}
 	if got := entriesOf(t, paths.Bundles); len(got) != 0 {
-		t.Errorf("store holds %v after a read that could not run", got)
-	}
-}
-
-// A create dry run from a stage resolves it, prints the stage line, then M2's report
-// on the resolved reference: the read is the pinned read of that branch at that at, so the
-// fixture's stage compiles to the golden bundle, and the twin would not follow. A
-// refusal at resolution ends the dry run with its exit, having read,
-// filed and asked containerlab nothing.
-func TestCreateDryRunFromAStage(t *testing.T) {
-	paths := useStateRoot(t)
-	useService(t, nil)
-	dryRunEnv(t)
-	clab := useClab(t, "inspect-empty.json")
-	f := newFakeInfrahub(t)
-	// The fixture branch's change, branched before the given at, holds a stage that pins it
-	// there and one with no stamp at all.
-	pc := f.change("pc-1", "fylgja-fixture", mark("st-1", "cabled", fixtureAt, "the leaf cabled"),
-		fakeStage{ID: "st-2", Label: "unstamped"})
-	pc.BranchedFrom, pc.CreatedAt = "2026-09-01T00:00:00.000000+00:00", "2026-09-01T00:00:00.000000+00:00"
-	f.start()
-
-	_, readID := compiledCTM(t, wrappedFixture("three-node"))
-	var err error
-	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{stage: "fylgja-fixture/cabled", dryRun: true})
-	})
-	if code, doc := exitOf(t, err); code != findings.ExitOK {
-		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
-	}
-	lines := strings.Split(out, "\n")
-	for i, want := range []string{
-		`stage fylgja-fixture/cabled: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "the leaf cabled"`,
-		"dry run: no lab, container, twin directory or run is created",
-		"read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
-			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
-		// The snapshot above the bundle, each filed with its store path (018).
-		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json"),
-		"bundle_id " + readID + "  stored: " + filepath.Join(paths.Bundles, readID),
-	} {
-		if i >= len(lines) || lines[i] != want {
-			t.Errorf("stdout line %d is not %q:\n%s", i+1, want, out)
-		}
-	}
-	if strings.Contains(out, "\nfollow:") || !strings.Contains(out, "\nverdict: clear\n") {
-		t.Errorf("stdout:\n%s\nwant the verdict and no follow: line", out)
-	}
-	// Every request of the read names the resolved at, verbatim, as --at would. The
-	// resolution's own reads of a branch's latest stamps, the head's and main's, are unpinned
-	// and are not the read's.
-	for _, r := range f.requests() {
-		if (r.Operation == "IntentStamps" || r.Operation == "PortStamps") && r.Query == "" {
-			continue
-		}
-		if strings.HasPrefix(r.Path, "/graphql/") || strings.HasPrefix(r.Path, "/api/storage/") {
-			if r.Query != "at=2026-09-08T12%3A00%3A00Z" {
-				t.Errorf("the read asked %+v, want the stage's at on it", r)
-			}
-		}
-	}
-
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{stage: "fylgja-fixture/cabled", dryRun: true}))
-	want := findings.StageBlock{Ref: "fylgja-fixture/cabled", Branch: "fylgja-fixture", Label: "cabled",
-		ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: "fylgja-fixture"},
-		At:             fixtureAt, AtSource: findings.AtSourceGiven, Description: "the leaf cabled"}
-	if code != findings.ExitOK || doc.BundleID != readID || doc.SnapshotID != fixtureSnapshotID || doc.Stage == nil || *doc.Stage != want ||
-		doc.DryRun == nil ||
-		doc.Subject.Stage != "fylgja-fixture/cabled" || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != fixtureAt {
-		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle and the stage", code, doc)
-	}
-	mustCarryNoToken(t, "dry run", doc)
-	mustNotCarryContent(t, out)
-	validateM10Document(t, doc)
-
-	t.Run("refused at resolution", func(t *testing.T) {
-		paths := useStateRoot(t)
-		clab.calls = nil
-		code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{stage: "fylgja-fixture/unstamped", dryRun: true}))
-		if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleStageAtUnresolved ||
-			doc.Findings[0].Step != findings.StepResolve || doc.DryRun != nil {
-			t.Errorf("exit %d, document %+v; want 1 with %s at step resolve and no dry_run", code, doc, findings.RuleStageAtUnresolved)
-		}
-		if len(clab.calls) != 0 {
-			t.Errorf("containerlab was asked %v after a refused resolution", clab.calls)
-		}
-		if got := entriesOf(t, paths.Bundles); len(got) != 0 {
-			t.Errorf("store holds %v after a refused resolution", got)
-		}
-		validateM10Document(t, doc)
-	})
-}
-
-// mustNotCarryContent fails when a line quotes an artifact: the marker the fixture's
-// artifacts carry, or a line of their configuration (Constitution X).
-func mustNotCarryContent(t *testing.T, out string) {
-	t.Helper()
-	for _, marker := range []string{"FYLGJA-MARKER", "set / interface", "enter candidate"} {
-		if strings.Contains(out, marker) {
-			t.Errorf("output quotes artifact content (%q):\n%s", marker, out)
-		}
+		t.Errorf("store holds %v after a snapshot that could not be resolved", got)
 	}
 }
 

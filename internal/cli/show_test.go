@@ -2074,7 +2074,7 @@ func TestShowStepAndDestroyAnElevenRecord(t *testing.T) {
 		m["stage"], m["rehearsal"] = stage11, rehearsal11
 	})
 	before := sha256Of(t, h.paths.TwinJSON)
-	step := runStepCmd(t, "--stage", "change-1/linked", "--allow-restart")
+	step := runStepCmd(t, "--snapshot", stageID(t, "linked"), "--allow-restart")
 	got := refusalOf(t, step.doc)
 	if step.code != findings.ExitRejected || got.Rule != findings.RuleStepTwinUnsteppable || got.Step != findings.StepResolve ||
 		!strings.Contains(got.Message, "(twin.json 11)") || !strings.HasSuffix(got.Message, "fylgja twin destroy clears it") {

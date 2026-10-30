@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
@@ -32,21 +31,11 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 		// the object is not what the case is about.
 		run func(t *testing.T) (object string, err error)
 	}{
-		{"create dry run, the read cannot run", findings.StepRead, findings.RuleOperationFailed,
-			func(t *testing.T) (string, error) {
-				useStateRoot(t)
-				useService(t, nil)
-				dryRunEnv(t)
-				useClab(t, "inspect-empty.json")
-				t.Setenv(intent.EnvAddress, unreachable)
-				t.Setenv(intent.EnvToken, "any-token")
-				return "branch fylgja-fixture", runCreate(ctx, jsonOut, &createFlags{branch: "fylgja-fixture", dryRun: true})
-			}},
-		{"create, an invalid override package", findings.StepRead, findings.RulePSPReadinessEncoding,
+		{"create, an invalid override package", findings.StepCompile, findings.RulePSPReadinessEncoding,
 			func(t *testing.T) (string, error) {
 				useService(t, nil)
 				usePSPDir(t, invalidOverrideDir(t))
-				return "", runCreate(ctx, &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+				return "", runCreate(ctx, &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 			}},
 		{"provision dry run, the host check cannot run", findings.StepHostCheck, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -74,28 +63,28 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 			}},
 		{"create, the start fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
-				useFixtureRead(t)
+				useFixtureSnapshot(t)
 				useInterrupts(t)
 				useService(t, &fakeService{startErr: boom})
-				return findings.StepStart, runCreate(ctx, jsonOut, &createFlags{branch: "fylgja-fixture"})
+				return findings.StepStart, runCreate(ctx, jsonOut, &createFlags{snapshot: headSnapshotID})
 			}},
 		{"create, waiting for the run fails during deploy", findings.StepDeploy, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
-				useFixtureRead(t)
+				useFixtureSnapshot(t)
 				useInterrupts(t)
 				useService(t, &fakeService{runID: "run-1", resultErr: boom,
 					events: []provision.Event{event(provision.WorkflowProvision, "deploy", findings.StepDeploy)}})
-				return findings.StepDeploy, runCreate(ctx, jsonOut, &createFlags{branch: "fylgja-fixture"})
+				return findings.StepDeploy, runCreate(ctx, jsonOut, &createFlags{snapshot: headSnapshotID})
 			}},
 		{"create, a second interrupt during readiness", findings.StepReadiness, findings.RuleRunCancelled,
 			func(t *testing.T) (string, error) {
-				useFixtureRead(t)
+				useFixtureSnapshot(t)
 				interrupts := useInterrupts(t)
 				svc := &fakeService{runID: "run-1", release: make(chan struct{}),
 					events: []provision.Event{event(provision.WorkflowProvision, "readiness n1", findings.StepReadiness)}}
 				svc.afterFollow = func() { interrupts <- os.Interrupt; interrupts <- os.Interrupt }
 				useService(t, svc)
-				return "run-1", runCreate(ctx, jsonOut, &createFlags{branch: "fylgja-fixture"})
+				return "run-1", runCreate(ctx, jsonOut, &createFlags{snapshot: headSnapshotID})
 			}},
 		{"destroy, the start fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -117,29 +106,17 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 				return findings.StepTeardown, runDestroy(ctx, jsonOut, &destroyFlags{})
 			}},
 		// twin step's own findings, before any run.
-		{"step, an invalid override package", findings.StepRead, findings.RulePSPReadinessEncoding,
+		{"step, an invalid override package", findings.StepCompile, findings.RulePSPReadinessEncoding,
 			func(t *testing.T) (string, error) {
 				stepHost(t, "plan-link-added.json", nil)
 				usePSPDir(t, invalidOverrideDir(t))
-				return "", runTwinStep(ctx, &options{asJSON: true}, &stepFlags{stage: "change-1/linked", stageGiven: true})
+				return "", runTwinStep(ctx, &options{asJSON: true}, &stepFlags{snapshot: stageID(t, "linked")})
 			}},
 		{"step, the host cannot be inspected", findings.StepResolve, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				h := stepHost(t, "plan-link-added.json", nil)
 				h.clab.inspect = []byte("not json")
-				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
-			}},
-		{"step, Infrahub cannot be reached", findings.StepResolve, findings.RuleOperationFailed,
-			func(t *testing.T) (string, error) {
-				stepHost(t, "plan-link-added.json", nil)
-				t.Setenv(intent.EnvAddress, unreachable)
-				return findings.OpTwinStep, runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
-			}},
-		{"step, the target's read cannot run", findings.StepRead, findings.RuleOperationFailed,
-			func(t *testing.T) (string, error) {
-				h := stepHost(t, "plan-link-added.json", nil)
-				h.infra.readStatus = map[string]int{"change-1": 500}
-				return "change-1/linked", runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
+				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{snapshot: stageID(t, "linked")})
 			}},
 		{"step, containerlab's plan cannot be read", findings.StepCompare, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -149,14 +126,14 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 					t.Fatal(err)
 				}
 				h.clab.plan = b
-				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true})
+				return "lab fylgja", runTwinStep(ctx, jsonOut, &stepFlags{snapshot: stageID(t, "linked")})
 			}},
 		{"step, the start fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				stepHost(t, "plan-link-added.json", nil)
 				useInterrupts(t)
 				useService(t, &fakeService{startErr: boom})
-				return findings.StepStart, runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
+				return findings.StepStart, runTwinStep(ctx, jsonOut, &stepFlags{snapshot: stageID(t, "linked"), allowRestart: true})
 			}},
 		{"step, waiting for the run fails during readiness", findings.StepReadiness, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -164,7 +141,7 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 				useInterrupts(t)
 				useService(t, &fakeService{runID: "run-s", resultErr: boom,
 					events: []provision.Event{event(provision.WorkflowStep, "readiness e1", findings.StepReadiness)}})
-				return findings.StepReadiness, runTwinStep(ctx, jsonOut, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
+				return findings.StepReadiness, runTwinStep(ctx, jsonOut, &stepFlags{snapshot: stageID(t, "linked"), allowRestart: true})
 			}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

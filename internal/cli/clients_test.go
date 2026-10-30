@@ -63,12 +63,12 @@ func waitFor(t *testing.T, ch <-chan struct{}, what string) {
 // exit 1, in M12's words, by the workflow service and not by the server; the first goes on to
 // its own end, unaffected.
 func TestTwoCreatesAtOnce(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	useInterrupts(t)
 	svc := &inFlightService{fakeService: &fakeService{runID: "run-1", result: readyResult()},
 		entered: make(chan struct{}), release: make(chan struct{})}
 	useService(t, svc)
-	flags := func() *createFlags { return &createFlags{branch: "fylgja-fixture"} }
+	flags := func() *createFlags { return &createFlags{snapshot: headSnapshotID} }
 
 	first := make(chan error, 1)
 	go func() { first <- runCreate(context.Background(), &options{asJSON: true}, flags()) }()
@@ -166,7 +166,7 @@ func TestADestroyFromASecondClientDuringAStep(t *testing.T) {
 
 	first := make(chan error, 1)
 	go func() {
-		first <- runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{stage: "change-1/linked", stageGiven: true, allowRestart: true})
+		first <- runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{snapshot: stageID(t, "linked"), allowRestart: true})
 	}()
 	waitFor(t, svc.following, "the first client's follow of the step run")
 

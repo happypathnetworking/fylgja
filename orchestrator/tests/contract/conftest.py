@@ -216,6 +216,15 @@ class Core:
     address: str
     token: str
     state: Path
+    log: Path | None = None
+    """The server's log, one line a request (T028 reads which operations it was asked)."""
+
+    def operations(self) -> list[tuple[str, str]]:
+        """Each request the server logged, in order: its operation and its outcome (its log
+        holds one line a request, never a token)."""
+        if self.log is None:
+            return []
+        return re.findall(r" msg=request operation=(\S+) outcome=(\S+)", self.log.read_text())
 
     def run(self, *args: str, timeout: float = 120) -> tuple[int, dict]:
         """One `fylgja` command with --json: its exit and its document."""
@@ -238,9 +247,10 @@ class Core:
 
 
 @contextmanager
-def serving(root: Path):
+def serving(root: Path, extra: dict[str, str] | None = None):
     """`bin/fylgja serve` on 127.0.0.1:0 with a token of its own, its state root under root and
-    no INFRAHUB_*: the compile needs neither Infrahub nor the workflow service."""
+    no INFRAHUB_*: the compile needs neither Infrahub nor the workflow service. `extra` adds
+    variables to its environment (the flows' tests give the host held its logins' names)."""
     binary = REPO / "bin" / "fylgja"
     if not binary.is_file():
         pytest.skip(f"the core's half needs {binary}: make build")
@@ -248,7 +258,8 @@ def serving(root: Path):
     token = secrets.token_hex(16)
     state = root / "state"
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
-           "FYLGJA_STATE_ROOT": str(state), "FYLGJA_API_TOKEN": token}
+           "FYLGJA_STATE_ROOT": str(state), "FYLGJA_API_TOKEN": token, **(extra or {})}
+    assert not any(name.startswith("INFRAHUB_") for name in env), "the core's server is given no INFRAHUB_*"
     log = root / "server.log"
     with open(log, "w") as out:
         server = subprocess.Popen([str(binary), "serve", "--listen", "127.0.0.1:0"], env=env, cwd=root, stdout=out,
@@ -264,7 +275,7 @@ def serving(root: Path):
                 raise RuntimeError(f"the core's server did not listen: {log.read_text()}")
             else:
                 time.sleep(0.1)
-        yield Core(binary, address, token, state)
+        yield Core(binary, address, token, state, log)
     finally:
         server.terminate()
         server.wait(timeout=10)
@@ -566,3 +577,155 @@ def plan_of(branch: str, core: "Core", out: Path, scope: str = SCOPE) -> Plan:
     print(f"planned {branch} in {time.monotonic() - started:.1f}s: {len(planned)} stage(s), "
           f"{sum(s is not None for s in steps)} step(s)")
     return Plan(ch, list(found), planned, steps)
+
+
+# The flows' harness (T028): each flow run in this process on Prefect's test harness, an
+# ephemeral server under a home of the session's own, against a core server of the test's
+# own, which reaches the host's Temporal dev server on :7233 (its default) and no Infrahub.
+
+PLATFORM_STARTUP_S = 180
+"""The harness's start-up bound: a first start in a fresh home took 10–40 s (research §5.17,
+§5.19), past Prefect's 30 s default for the harness."""
+USER_CHECKS_WAIT_S = 360
+"""A creation's user checks' bound, as `internal/checks` bounds them (Go's creationChecksWait)."""
+LOGIN_NAMES = ("FYLGJA_SRLINUX_USERNAME", "FYLGJA_SRLINUX_PASSWORD", "FYLGJA_EOS_USERNAME", "FYLGJA_EOS_PASSWORD")
+"""The node logins' names, which the core's host check reads only as set or not."""
+
+
+@pytest.fixture(scope="session")
+def platform(tmp_path_factory):
+    """`prefect_test_harness`: a temporary database and an ephemeral server for the session,
+    under a PREFECT_HOME of its own, so a flow called here is a run recorded on it and its
+    document the run's artifact. Its first start is timed (research §4, §5). It skips without
+    Infrahub itself, since a session fixture sets up before the autouse skip, and the harness
+    would start for a tier that runs nothing (`test_layout`'s skip case)."""
+    require_infrahub()
+    home = tmp_path_factory.mktemp("prefect-home")
+    os.environ["PREFECT_HOME"] = str(home)
+    os.environ.setdefault("PREFECT_LOGGING_HANDLERS_CONSOLE_LEVEL", "CRITICAL")
+    from prefect.settings import PREFECT_HOME, temporary_settings
+    from prefect.testing.utilities import prefect_test_harness
+
+    started = time.monotonic()
+    with temporary_settings(updates={PREFECT_HOME: home}), prefect_test_harness(PLATFORM_STARTUP_S):
+        print(f"prefect_test_harness up in {time.monotonic() - started:.1f}s (PREFECT_HOME {home})")
+        yield home
+
+
+@dataclass
+class Flows:
+    """The flows' environment: the core of the test's own and the orchestrator's state root
+    under the test's directory, and what the flows print."""
+
+    core: Core
+    root: Path
+    out: list[str] = field(default_factory=list)
+    markdown: list[str] = field(default_factory=list)
+    """What the rehearse flow sent its markdown sink under `markdown=True`, as `--markdown`."""
+
+    def run(self, flow, **params):
+        """One flow called here, its out lines and markdown kept: its document and its time."""
+        from fylgja_orchestrator.flows import common, twin_rehearse
+
+        self.out.clear()
+        self.markdown.clear()
+        tokens = [(common.OUT, common.OUT.set(self.out.append)),
+                  (twin_rehearse.MARKDOWN, twin_rehearse.MARKDOWN.set(self.markdown.append))]
+        started = time.monotonic()
+        try:
+            doc = flow(**params)
+        finally:
+            for var, token in reversed(tokens):
+                var.reset(token)
+        took = time.monotonic() - started
+        print(f"{flow.name} {params}: {doc.status} in {took:.1f}s")
+        return doc, took
+
+    def text(self) -> str:
+        return "\n".join(self.out)
+
+
+def use_core(monkeypatch, core: Core, root: Path) -> Flows:
+    """The process's environment as a flow reads it (`Deps.from_env`): the test's core, an
+    orchestrator root under root, the fixture's scope; no platform to reclaim against."""
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", core.address)
+    monkeypatch.setenv("FYLGJA_API_TOKEN", core.token)
+    monkeypatch.setenv("FYLGJA_ORCHESTRATOR_ROOT", str(root))
+    monkeypatch.setenv("FYLGJA_DEFAULT_SCOPE", SCOPE)
+    for name in ("PREFECT_API_URL", "PREFECT_API_AUTH_STRING"):
+        monkeypatch.delenv(name, raising=False)
+    return Flows(core, root)
+
+
+def artifact_of(run_id: str) -> dict:
+    """The document a flow run filed on the harness, as a check reads it: its artifact of
+    type `fylgja-findings`, its `data` parsed."""
+    from prefect.client.orchestration import get_client
+    from prefect.client.schemas.filters import ArtifactFilter, ArtifactFilterFlowRunId
+
+    with get_client(sync_client=True) as client:
+        of_run = ArtifactFilter(flow_run_id=ArtifactFilterFlowRunId(any_=[run_id]))
+        found = client.read_artifacts(artifact_filter=of_run)
+    [a] = [a for a in found if a.type == "fylgja-findings"]
+    return json.loads(a.data) if isinstance(a.data, str) else a.data
+
+
+def flow_runs_of(name: str) -> list:
+    """Every run of the flow the harness recorded, newest first."""
+    from prefect.client.orchestration import get_client
+    from prefect.client.schemas.filters import FlowFilter, FlowFilterName
+
+    with get_client(sync_client=True) as client:
+        return client.read_flow_runs(flow_filter=FlowFilter(name=FlowFilterName(any_=[name])))
+
+
+def threads_of(change_id: str) -> list[list[str]]:
+    """The proposed change's threads on main, each its comments' texts."""
+    data = graphql("main", "query { CoreChangeThread(change__ids: [%s]) { edges { node { id "
+                   "comments { edges { node { text { value } } } } } } } }" % json.dumps(change_id))
+    return [[c["node"]["text"]["value"] for c in e["node"]["comments"]["edges"]]
+            for e in data["CoreChangeThread"]["edges"]]
+
+
+def check_definitions(branch: str = "main") -> list[dict]:
+    """The check definitions a branch sees, each with its repository's id or None."""
+    data = graphql(branch, "query { CoreCheckDefinition { edges { node { id name { value } "
+                   "repository { node { id } } } } } }")
+    return [{"id": e["node"]["id"], "name": e["node"]["name"]["value"],
+             "repository": (e["node"]["repository"]["node"] or {}).get("id")}
+            for e in data["CoreCheckDefinition"]["edges"]]
+
+
+def user_validators(change_id: str) -> list[dict]:
+    """The proposed change's user validators on main: each one's definition, state and
+    conclusion."""
+    data = graphql("main", "query { CoreUserValidator(proposed_change__ids: [%s]) { edges { node { "
+                   "state { value } conclusion { value } check_definition { node { id name { value } } } } } } }"
+                   % json.dumps(change_id))
+    out = []
+    for e in data["CoreUserValidator"]["edges"]:
+        n = e["node"]
+        d = n["check_definition"]["node"] or {}
+        out.append({"definition": d.get("id"), "name": (d.get("name") or {}).get("value"),
+                    "state": n["state"]["value"], "conclusion": n["conclusion"]["value"]})
+    return out
+
+
+def await_user_checks(branch: str, change_id: str, wait: float = USER_CHECKS_WAIT_S) -> list[dict]:
+    """Polls until every check definition of a registered repository the branch sees has a
+    user validator on the proposed change, completed (`AwaitUserChecks`): marked ready before
+    the creation's fylgja-twin has read it as a draft, it would rehearse it on a twin."""
+    defs = [d for d in check_definitions(branch) if d["repository"]]
+    deadline = time.monotonic() + wait
+    started = time.monotonic()
+    while True:
+        vs = {v["definition"]: v for v in user_validators(change_id)}
+        pending = [f"{d['name']} {vs[d['id']]['state'] if d['id'] in vs else 'not started'}" for d in defs
+                   if vs.get(d["id"], {}).get("state") != "completed"]
+        if not pending:
+            print(f"the creation's user checks concluded on {change_id} after {time.monotonic() - started:.0f}s: "
+                  f"{sorted((v['name'], v['conclusion']) for v in vs.values())}")
+            return list(vs.values())
+        if time.monotonic() > deadline:
+            raise AssertionError(f"proposed change {change_id}: user checks not concluded within {wait}s: {pending}")
+        time.sleep(5)

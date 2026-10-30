@@ -436,7 +436,9 @@ branch, the mixed one, throwaway ones), changes them as the tests need (`-add-li
 `-add-mixed-link`, `-disable-port`, `-set-description`, which sets every device's
 description, the change only the artifact sees, and from 020 the reader's tier-2 changes
 the orchestrator's tests make through it, `-add-device`, `-add-cable`, `-set-platform` and
-`-load-schema-file`), generates their artifacts and waits for
+`-load-schema-file`, and the stages' ones, `-set-serial`, `-describe`, `-set-cable-status`,
+`-re-end-cable`, `-delete-link`, `-add-virtual-interface`, `-tag-devices`, `-rebase`,
+`-update-stage` and `-delete-stages`), generates their artifacts and waits for
 them, and gives a throwaway branch its *proposed change* and
 *marks*: `-propose` opens a draft and waits for its validators, `-stage` marks one,
 `-run-check` asks the proposed change's artifact checks, `-ready` marks it ready for

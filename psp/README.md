@@ -4,7 +4,7 @@ A PSP is everything Fylgja needs to know about one NOS, as data, including which
 it is: the manufacturer and platform names a source of truth gives them
 ([`platform.matches`](#format-07)). Adding a platform is a data change, never a code change; a platform is *supported* when its PSP passes the
 conformance suite. See architecture
-[§4.7](../docs/architecture.md#47-platform-support-packages).
+[§4.8](../docs/architecture.md#48-platform-support-packages).
 
 | File | Purpose |
 |---|---|

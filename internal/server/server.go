@@ -4,8 +4,9 @@
 // operations is the command it is named after, reading and writing a per-request console
 // where the command read flags and wrote to stdout and stderr.
 //
-// The server keeps nothing between two requests (D-014). Packages are loaded, the
-// workflow service dialled and Infrahub read by the request that needs them. While a run's
+// The server keeps nothing between two requests (D-014). Packages are loaded and the
+// workflow service, Docker, containerlab and the nodes dialled by the request that needs
+// them; from 020 it reads no source of truth, which the orchestrator's adapter reads (D-065). While a run's
 // request is open the server holds the channel that request's interrupts arrive on, and
 // nothing once it ends (streams.go).
 package server
@@ -64,16 +65,6 @@ type Server struct {
 	// Getenv reads the host check's and verify's variables: the logins, the memory budget
 	// (os.LookupEnv).
 	Getenv func(string) (string, bool)
-	// Probes is the kind's read a request that sends no probe file makes (016): nil is
-	// intent.ProbeReader from the process environment, and a test sets its own.
-	Probes func() (ProbeReader, error)
-	// RehearsalCeiling is the longest deadline twin rehearse admits; zero is
-	// rehearsal.Ceiling. A test lowers it, and no flag sets it (015).
-	RehearsalCeiling time.Duration
-	// DefaultScope is the scope a request that names none is read under, tag:<name>, from
-	// FYLGJA_DEFAULT_SCOPE at start (017). Empty is none: such a request is refused
-	// scope.unset (scopeOf).
-	DefaultScope string
 	// Build is the server's --version, sent on every answer as Fylgja-Build.
 	Build string
 	// Log takes one line a request when it ends, and the dependencies' warnings of a
@@ -116,7 +107,7 @@ func New(token string) *Server {
 	}
 }
 
-// operation is one of the thirteen: its name, as the findings document names it and its path
+// operation is one of the eleven: its name, as the findings document names it and its path
 // spells it; the handler, M12's command; and whether it takes the operator's interrupt
 // from its start frame.
 type operation struct {
@@ -125,7 +116,7 @@ type operation struct {
 	takesStream bool
 }
 
-// operations is the table of the thirteen, each with its handler (handlers.go).
+// operations is the table of the eleven, each with its handler (handlers.go).
 func operations() []operation {
 	ops := make([]operation, 0, len(api.Operations))
 	for _, name := range api.Operations {
@@ -135,11 +126,10 @@ func operations() []operation {
 }
 
 // takesStream is whether an operation starts a run the operator may interrupt: twin create,
-// twin provision, twin step and twin rehearse (015). twin destroy is followed and takes
-// none, as M12's took none.
+// twin provision and twin step. twin destroy is followed and takes none, as M12's took none.
 func takesStream(op string) bool {
 	switch op {
-	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep, findings.OpTwinRehearse:
+	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep:
 		return true
 	}
 	return false
@@ -157,9 +147,12 @@ const (
 	outcomePanic          = "panic"
 	outcomeDelivered      = "delivered"
 	outcomeStreamEnded    = "stream_ended"
+	// outcomeRunning is a run.read of a run that has not closed, whose answer ends with no
+	// document (020).
+	outcomeRunning = "running"
 )
 
-// The names the log gives a request that is not one of the thirteen.
+// The names the log gives a request that is not one of the eleven.
 const (
 	logInterrupt = "interrupt"
 	logUnknown   = "unknown"
@@ -351,7 +344,16 @@ func (s *Server) answer(c *call, op operation, began time.Time) (outcome string,
 			panic(http.ErrAbortHandler)
 		}
 	}()
-	doc := documentOf(op.name, op.run(c))
+	err := op.run(c)
+	if errors.Is(err, errRunning) {
+		// run.read of a running run: its events are its answer, which ends by EOF.
+		c.console.flush()
+		if c.ctx.Err() != nil {
+			return outcomeClientGone, slog.LevelWarn
+		}
+		return outcomeRunning, slog.LevelInfo
+	}
+	doc := documentOf(op.name, err)
 	if c.ctx.Err() != nil {
 		return outcomeClientGone, slog.LevelWarn
 	}
@@ -414,7 +416,7 @@ func (s *Server) logRequest(op, outcome string, began time.Time, level slog.Leve
 		"operation", op, "outcome", outcome, "duration", time.Since(began).Round(time.Millisecond))
 }
 
-// logName is the operation a path names, for the log alone: one of the thirteen, the
+// logName is the operation a path names, for the log alone: one of the eleven, the
 // interrupt, or unknown. No part of the path itself is logged.
 func logName(path string) string {
 	for _, op := range api.Operations {

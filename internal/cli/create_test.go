@@ -24,25 +24,9 @@ import (
 
 const fixtureBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
-// fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json):
-// what a create of the fake Infrahub's fixture branch takes and files before its run (018).
+// fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json), the
+// fixture pinned at its at.
 const fixtureSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
-
-// useFixtureRead serves the fixture branch from a fake Infrahub and points the state root
-// at a fresh directory: a create reads, takes, compiles and files on the server before it
-// starts its run (018), so every create that starts one reads something.
-func useFixtureRead(t *testing.T) lab.Paths {
-	t.Helper()
-	newFakeInfrahub(t).start()
-	return useStateRoot(t)
-}
-
-// headSnapshotID and headBundleID are what an unpinned read of the fake Infrahub's fixture
-// branch takes and compiles to: the fixture's intent, its envelope naming no at.
-const (
-	headSnapshotID = "0d37e2ec3186bb59f58ee414a5ff34bd3e3833637c9684dfb4e6b337805a61f1"
-	headBundleID   = "16141134f94cef43492b5e80dc986a19c446f647a3ed660a5b615dc525848fe0"
-)
 
 // storedLines are the two lines a create prints before its run's start, the snapshot's
 // above the bundle's, under the state root of paths (018, R-09).
@@ -78,7 +62,7 @@ type fakeService struct {
 	// start, as a start waiting for a worker to take the run does; it then answers runID and
 	// startErr.
 	startBlocks bool
-	// destroyRun, destroyErr and destroyEvents answer StartDestroy, and StartReclaim.
+	// destroyRun, destroyErr and destroyEvents answer StartDestroy.
 	destroyRun    provision.DestroyRun
 	destroyErr    error
 	destroyEvents []provision.Event
@@ -100,12 +84,9 @@ type fakeService struct {
 	readOnly testing.TB
 	// stepResult answers ResultOfStep beside resultErr (M11).
 	stepResult provision.StepResult
-	// rehearseRun answers StartRehearse beside startErr, rehearseEvents answer Follow of the
-	// rehearsal's run, its children's events among them, and rehearseResult answers
-	// ResultOfRehearse beside resultErr (015).
-	rehearseRun    string
-	rehearseEvents []provision.Event
-	rehearseResult provision.RehearseResult
+	// described answers Describe, which answers no run under the identity asked when it is
+	// nil (020).
+	described *provision.RunState
 
 	mu sync.Mutex
 	// calls logs each method that starts a run, in the order they came.
@@ -113,7 +94,6 @@ type fakeService struct {
 	reads     []string
 	started   []provision.ProvisionInput
 	stepped   []provision.StepInput
-	rehearsed []provision.RehearseInput
 	abandoned bool
 	cancels   int
 	destroys  int
@@ -165,12 +145,8 @@ func (f *fakeService) StartProvision(ctx context.Context, in provision.Provision
 	return runID, err
 }
 
-func (f *fakeService) Follow(_ context.Context, workflowID, _ string, onEvent func(provision.Event)) error {
-	events := f.events
-	if workflowID == provision.WorkflowRehearse {
-		events = f.rehearseEvents
-	}
-	for _, e := range events {
+func (f *fakeService) Follow(_ context.Context, _, _ string, onEvent func(provision.Event)) error {
+	for _, e := range f.events {
 		onEvent(e)
 	}
 	if f.afterFollow != nil {
@@ -214,18 +190,18 @@ func (f *fakeService) StartDestroy(_ context.Context, onEvent func(provision.Eve
 	return f.destroyRun, f.destroyErr
 }
 
-// StartReclaim answers as StartDestroy does, under its own name in calls: the rehearsal's
-// reclaim (015, T091). A test that has it refuse sets destroyErr to the refusal.
-func (f *fakeService) StartReclaim(_ context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
-	f.mutating("StartReclaim")
+// StartDestroyDetached answers as StartDestroy does, under its own name in calls, with no
+// result: a detached destroy reads none (020).
+func (f *fakeService) StartDestroyDetached(_ context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
+	f.mutating("StartDestroyDetached")
 	f.mu.Lock()
-	f.calls = append(f.calls, "StartReclaim")
+	f.calls = append(f.calls, "StartDestroyDetached")
 	f.destroys++
 	f.mu.Unlock()
 	for _, e := range f.destroyEvents {
 		onEvent(e)
 	}
-	return f.destroyRun, f.destroyErr
+	return provision.DestroyRun{RunID: f.destroyRun.RunID, Attached: f.destroyRun.Attached}, f.destroyErr
 }
 
 // StartStep and ResultOfStep answer with runID and startErr, and with stepResult and
@@ -258,34 +234,46 @@ func (f *fakeService) ResultOfStep(ctx context.Context, _ string) (provision.Ste
 	return f.stepResult, f.resultErr
 }
 
-// StartRehearse and ResultOfRehearse answer with rehearseRun and startErr, and with
-// rehearseResult and resultErr (015). Each holds as StartProvision and Result do, under
-// startBlocks and release.
-func (f *fakeService) StartRehearse(ctx context.Context, in provision.RehearseInput) (string, error) {
-	f.mutating("StartRehearse")
-	f.mu.Lock()
-	f.calls = append(f.calls, "StartRehearse")
-	f.rehearsed = append(f.rehearsed, in)
-	blocks, runID, err := f.startBlocks, f.rehearseRun, f.startErr
-	f.mu.Unlock()
-	if blocks {
-		<-ctx.Done()
-		f.mu.Lock()
-		f.abandoned = true
-		f.mu.Unlock()
+// Describe answers run.read's and run.interrupt's describe (020): the run described when
+// one is set and the identity asked names it or names no run, and otherwise no run under
+// it, read first as InFlight reads.
+func (f *fakeService) Describe(ctx context.Context, workflowID, runID string) (provision.RunState, error) {
+	if err := f.read(ctx, "Describe"); err != nil {
+		return provision.RunState{}, err
 	}
-	return runID, err
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.described == nil || (runID != "" && runID != f.described.RunID) {
+		return provision.RunState{}, &provision.UnknownRunError{WorkflowID: workflowID, RunID: runID}
+	}
+	return *f.described, nil
 }
 
-func (f *fakeService) ResultOfRehearse(ctx context.Context, _ string) (provision.RehearseResult, error) {
-	if f.release != nil {
-		select {
-		case <-f.release:
-		case <-ctx.Done():
-			return provision.RehearseResult{}, ctx.Err()
-		}
+// describe sets the run Describe answers, as the run moves on between two requests.
+func (f *fakeService) describe(s provision.RunState) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.described = &s
+}
+
+// History replays the run's events as Follow does: the fake's history is whole (020).
+func (f *fakeService) History(ctx context.Context, workflowID, runID string, onEvent func(provision.Event)) error {
+	return f.Follow(ctx, workflowID, runID, onEvent)
+}
+
+// InputOfStep answers the step the fake last started, or none (020).
+func (f *fakeService) InputOfStep(context.Context, string) (provision.StepInput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.stepped) == 0 {
+		return provision.StepInput{}, nil
 	}
-	return f.rehearseResult, f.resultErr
+	return f.stepped[len(f.stepped)-1], nil
+}
+
+// ResultOfDestroy answers the destroy run's result beside destroyErr (020).
+func (f *fakeService) ResultOfDestroy(context.Context, string) (provision.DestroyResult, error) {
+	return f.destroyRun.Result, f.destroyErr
 }
 
 func (f *fakeService) Close() {
@@ -359,7 +347,7 @@ func exitOf(t *testing.T, err error) (int, *findings.Document) {
 }
 
 func TestCreateReadyPrintsTheTwin(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	svc := &fakeService{runID: "run-1", result: readyResult(), events: []provision.Event{
 		{Step: "read"},
 		{Step: "read", End: true, Outcome: provision.EventDone, Duration: 2100 * time.Millisecond},
@@ -377,7 +365,7 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -406,8 +394,8 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 	if out != want {
 		t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 	}
-	if len(svc.started) != 1 || svc.started[0].Source != wire.SourceIntent || svc.started[0].Branch != "fylgja-fixture" {
-		t.Errorf("started %+v, want one intent run for fylgja-fixture", svc.started)
+	if len(svc.started) != 1 || svc.started[0].Source != wire.SourceSnapshot || svc.started[0].Branch != "fylgja-fixture" {
+		t.Errorf("started %+v, want one snapshot run for fylgja-fixture", svc.started)
 	}
 	if !svc.closed {
 		t.Error("the connection to the workflow service was not closed")
@@ -415,13 +403,13 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 }
 
 func TestCreateJSONDocumentCarriesTheTwin(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	useService(t, &fakeService{runID: "run-1", result: readyResult()})
 	useInterrupts(t)
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 	})
 	if out != "" {
 		t.Errorf("--json printed progress on stdout:\n%s", out)
@@ -448,29 +436,23 @@ func TestCreateJSONDocumentCarriesTheTwin(t *testing.T) {
 func TestCreateRefusesBeforeDialling(t *testing.T) {
 	useService(t, nil)
 
-	t.Run("at finer than microseconds", func(t *testing.T) {
-		err := runCreate(context.Background(), &options{asJSON: true},
-			&createFlags{branch: "fylgja-fixture", at: "2026-09-15T14:22:12.1234567Z"})
-		code, doc := exitOf(t, err)
-		if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleAtPrecision {
-			t.Errorf("exit %d, findings %+v; want 2 with %s", code, doc.Findings, findings.RuleAtPrecision)
-		}
-	})
-	t.Run("branch missing", func(t *testing.T) {
+	// 020: a create builds from a snapshot alone (D-065), so the server refuses one that
+	// names none, before any connection.
+	t.Run("snapshot missing", func(t *testing.T) {
 		code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{}))
-		if code != findings.ExitError || !strings.Contains(doc.Findings[0].Message, "--branch") {
-			t.Errorf("exit %d, findings %+v; want 2 naming --branch", code, doc.Findings)
+		if code != findings.ExitError || doc.Findings[0].Message != "--snapshot is required" {
+			t.Errorf("exit %d, findings %+v; want 2: --snapshot is required", code, doc.Findings)
 		}
 	})
 }
 
 // No service and no worker are exit 2 under their own identifiers, not a wait.
 func TestCreateStartRefusals(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	for _, c := range startRefusals() {
 		t.Run(c.name, func(t *testing.T) {
 			c.use(t)
-			wantStartRefusal(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}), c.rule)
+			wantStartRefusal(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}), c.rule)
 		})
 	}
 }
@@ -478,7 +460,7 @@ func TestCreateStartRefusals(t *testing.T) {
 // The first interrupt cancels the run and keeps waiting for its cleanup; the exit status
 // is then the run's.
 func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	interrupts := useInterrupts(t)
 	release := make(chan struct{})
 	svc := &fakeService{runID: "run-1", release: release, result: provision.ProvisionResult{
@@ -489,7 +471,7 @@ func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
 	useService(t, svc)
 	interrupts <- os.Interrupt
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 	if svc.cancels != 1 {
 		t.Errorf("Cancel called %d times, want once", svc.cancels)
 	}
@@ -501,14 +483,14 @@ func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
 // A second interrupt stops waiting: exit 2, run.cancelled, and the run is left to finish
 // on the service.
 func TestCreateSecondInterruptStopsWaiting(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	interrupts := useInterrupts(t)
 	svc := &fakeService{runID: "run-1", release: make(chan struct{})}
 	useService(t, svc)
 	interrupts <- os.Interrupt
 	interrupts <- os.Interrupt
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 	if svc.cancels != 1 {
 		t.Errorf("Cancel called %d times, want once", svc.cancels)
 	}
@@ -525,7 +507,7 @@ func TestCreateSecondInterruptStopsWaiting(t *testing.T) {
 // cleanup removed, whether or not its progress lines arrived; one cancelled before the host
 // check touched nothing and says nothing of cleanup.
 func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	deployFailed := findings.List{{Severity: findings.Rejection, Rule: findings.RuleDeployFailed, Object: "lab fylgja",
 		Step: findings.StepDeploy, Message: "clab deploy exited 1"}}
 	for _, c := range []struct {
@@ -554,7 +536,7 @@ func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
 
 			var err error
 			out := captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+				err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 			})
 			if code, doc := exitOf(t, err); code != c.wantCode {
 				t.Fatalf("exit %d, findings %+v; want %d", code, doc.Findings, c.wantCode)
@@ -566,7 +548,7 @@ func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
 
 			err = nil
 			out = captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+				err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 			})
 			if out != "" {
 				t.Errorf("--json printed on stdout:\n%s", out)
@@ -700,10 +682,14 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 // 016 moves the step, verify, rehearsal and findings contracts on: a document of this build
 // is 019's as built, a null step loss taken out (withoutNullLoss), so it is also validated
 // against 019's frozen copy; one whose step carries a loss is 016's alone, and is read
-// against no earlier copy.
+// against no copy earlier than 016's.
+//
+// 020 moves the findings contract on: every document of this build is 016's as built, so it
+// is also validated against 016's frozen copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	validateWithShow(t, contract016, "016", doc)
 	if carriesLoss(doc) {
 		return
 	}
@@ -715,16 +701,13 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 }
 
 // carriesLoss says whether doc carries what 016 alone writes, which no earlier contract
-// accepts: a step block's loss its flows read, a rehearsal stage's, a verify block of a
-// twin with probes, its hosts and its bursts, or a dry run planning a probe's hosts.
+// accepts: a step block's loss its flows read, a verify block of a twin with probes, its
+// hosts and its bursts, or a dry run planning a probe's hosts.
 func carriesLoss(doc *findings.Document) bool {
 	if doc.Step != nil && doc.Step.Loss != nil {
 		return true
 	}
 	if d := doc.DryRun; d != nil && slices.ContainsFunc(d.Nodes, func(n findings.DryRunNode) bool { return n.Probe != nil }) {
-		return true
-	}
-	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {
 		return true
 	}
 	if v := doc.Verify; v != nil {
@@ -736,22 +719,37 @@ func carriesLoss(doc *findings.Document) bool {
 }
 
 // laterContract is the next later frozen feature's copy of the block name, or the current
-// one when no later copy holds it.
+// one when no later copy holds it. The features are taken in the order they closed
+// (closeOrder).
 func laterContract(t *testing.T, feature, name string) string {
 	t.Helper()
 	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	var later []string
 	for _, d := range dirs {
-		if d.Name() <= feature {
-			continue
+		if closeOrder(d.Name()) > closeOrder(feature) {
+			later = append(later, d.Name())
 		}
-		if path := contractPath(d.Name(), name); fileExists(path) {
+	}
+	slices.SortFunc(later, func(a, b string) int { return strings.Compare(closeOrder(a), closeOrder(b)) })
+	for _, d := range later {
+		if path := contractPath(d, name); fileExists(path) {
 			return path
 		}
 	}
 	return contractPath(currentContract, name)
+}
+
+// closeOrder is feature's place in the order the features closed, as a string to compare:
+// its directory's name, but for 016's, which closed after 019 (Release 0.3 ran 017, 018,
+// 019, then 016), so that its copies are later than 019's though its number is lower.
+func closeOrder(feature string) string {
+	if feature == contract016 {
+		return contract019 + "+"
+	}
+	return feature
 }
 
 func fileExists(path string) bool {
@@ -820,6 +818,11 @@ const contract018 = "018-snapshots"
 // the step, verify and rehearsal blocks, the four 016 moves, frozen under
 // testdata/contracts/019-following-removed/.
 const contract019 = "019-following-removed"
+
+// contract016 is the feature argument that names 016's copies of the findings, API and
+// twin.json contracts, the three 020 moves, frozen under testdata/contracts/016-probes/; its
+// blocks, which 020 does not freeze, are read from contracts/ (laterContract).
+const contract016 = "016-probes"
 
 // namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
 // 018's, which no earlier contract accepts.
@@ -924,7 +927,7 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 		b = as017Contract(t, doc)
 	case contract018:
 		b = as018Contract(t, doc)
-	case currentContract, contract019:
+	case currentContract, contract016, contract019:
 		var err error
 		if b, err = json.Marshal(doc); err != nil {
 			t.Fatal(err)
@@ -932,7 +935,7 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 	default:
 		b = asEarlierContract(t, doc)
 	}
-	if feature != currentContract {
+	if feature != currentContract && feature != contract016 {
 		b = withoutNullLoss(t, b)
 	}
 	if err := validateAgainst(findingsContract(t, feature), b); err != nil {
@@ -1049,24 +1052,19 @@ func TestFindingsContractCachedStillValidates(t *testing.T) {
 	}
 }
 
-// The scope a create names is its run's and its document's, over the server's default; with
-// none, the default is (017).
+// The scope of the snapshot a create builds from, its envelope's, is its run's, which the
+// record's provenance carries (017; from 020 a create names no scope of its own, D-065); the
+// document's subject names the snapshot, as a create from a snapshot's has since 018.
 func TestCreateCarriesItsScope(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		flags createFlags
 		want  string
 	}{
-		{"given", createFlags{branch: "fylgja-fixture", scope: "tag:lab-b", scopeGiven: true}, "tag:lab-b"},
-		{"the default", createFlags{branch: "fylgja-fixture"}, defaultScope},
+		{"the snapshot's", createFlags{snapshot: headSnapshotID}, "tag:fylgja"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			// The server reads under the scope before the run (018): the fake tags the
-			// fixture's devices with the scope's tag, so either reads the fixture.
-			f := newFakeInfrahub(t)
-			f.tag = strings.TrimPrefix(c.want, "tag:")
-			f.start()
-			useStateRoot(t)
+			useFixtureSnapshot(t)
 			svc := &fakeService{runID: "run-1", result: readyResult()}
 			useService(t, svc)
 			useInterrupts(t)
@@ -1076,8 +1074,9 @@ func TestCreateCarriesItsScope(t *testing.T) {
 			if code != findings.ExitOK || len(svc.started) != 1 {
 				t.Fatalf("exit %d, started %+v; want 0 and one run", code, svc.started)
 			}
-			if svc.started[0].Scope != c.want || doc.Subject == nil || doc.Subject.Scope != c.want {
-				t.Errorf("the run's scope %q, the subject %+v; want %s in both", svc.started[0].Scope, doc.Subject, c.want)
+			if svc.started[0].Scope != c.want || doc.Subject == nil || doc.Subject.Snapshot != c.flags.snapshot {
+				t.Errorf("the run's scope %q, the subject %+v; want %s, and the subject naming the snapshot", svc.started[0].Scope,
+					doc.Subject, c.want)
 			}
 			validateM10Document(t, doc)
 		})
@@ -1086,7 +1085,7 @@ func TestCreateCarriesItsScope(t *testing.T) {
 
 // --interval and --no-follow are no flags of any command (019, FR-003): through the command
 // line, as an operator would type them, each is cobra's unknown flag, exit 2, refused before
-// any request, so the harness's server logs none. twin create is asked from the branch head,
+// any request, so the harness's server logs none. twin create is asked from a snapshot,
 // where the flags meant something; every other command of the client's tree beside it.
 func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	root := &cobra.Command{Use: "fylgja"}
@@ -1094,7 +1093,7 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	var commands [][]string
 	var walk func(cmd *cobra.Command)
 	walk = func(cmd *cobra.Command) {
-		if cmd.Runnable() && cmd != root {
+		if cmd.Runnable() && !cmd.HasSubCommands() {
 			commands = append(commands, strings.Fields(cmd.CommandPath())[1:])
 		}
 		for _, sub := range cmd.Commands() {
@@ -1106,15 +1105,17 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	for _, path := range commands {
 		ops = append(ops, strings.Join(path, "."))
 	}
+	// The API's operations alone: the five commands 020 moved to the orchestrator are gone
+	// from the client too (FR-003).
 	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(api.Operations))) {
-		t.Fatalf("the walk found %v; want the API's operations %v", ops, api.Operations)
+		t.Fatalf("the walk found %v; want %v", ops, api.Operations)
 	}
 
 	for _, path := range commands {
 		for _, flag := range [][]string{{"--interval", "30s"}, {"--no-follow"}} {
 			args := append(append([]string{}, path...), flag...)
 			if strings.Join(path, " ") == "twin create" {
-				args = append([]string{"twin", "create", "--branch", "b"}, flag...)
+				args = append([]string{"twin", "create", "--snapshot", headSnapshotID}, flag...)
 			}
 			t.Run(strings.Join(args, " "), func(t *testing.T) {
 				awaitIdle(t)
@@ -1122,8 +1123,7 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 				opts := &options{}
 				root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 				root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-				for _, cmd := range []*cobra.Command{newIntentCmd(opts), newTwinCmd(opts), newStageCmd(opts),
-					newSchemaCmd(opts), newPSPCmd(opts)} {
+				for _, cmd := range []*cobra.Command{newTwinCmd(opts), newPSPCmd(opts), newRunCmd(opts)} {
 					root.AddCommand(cmd)
 				}
 				// --json comes first: cobra stops reading flags at the unknown one.
@@ -1149,18 +1149,18 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	}
 }
 
-// A create from the branch head follows nothing (019; US1 scenario 1): its run's input is
-// M3's for the same flags, compiled on the server, with no follow; its text ends at the twin
-// directory; and its document carries no following key.
+// A create from a snapshot of the branch head follows nothing (019; US1 scenario 1): its
+// run's input is compiled on the server, with no follow, and names the snapshot's branch, at
+// and scope; its text ends at the twin directory; and its document carries no following key.
 func TestCreateFollowsNothing(t *testing.T) {
-	paths := useFixtureRead(t)
+	paths := useFixtureSnapshot(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
 	useService(t, svc)
 	useInterrupts(t)
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -1173,11 +1173,11 @@ func TestCreateFollowsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Compiled on the server (018): the bundle and the snapshot by id, and the read's time.
-	want := `{"source":"intent","branch":"fylgja-fixture","at":"","bundle_path":"` + filepath.Join(paths.Bundles, headBundleID) +
+	want := `{"source":"snapshot","branch":"fylgja-fixture","at":"","bundle_path":"` + filepath.Join(paths.Bundles, headBundleID) +
 		`","bundle_id":"` + headBundleID + `","version":"` + version + `","observed_at":"` + svc.started[0].ObservedAt +
 		`","scope":"tag:fylgja","snapshot_id":"` + headSnapshotID + `"}`
 	if string(b) != want || svc.started[0].ObservedAt == "" {
-		t.Errorf("input\n  %s\nwant M3's with 017's scope, the server's default, and 018's compiled input\n  %s", b, want)
+		t.Errorf("input\n  %s\nwant the snapshot's, with its envelope's scope, and 018's compiled input\n  %s", b, want)
 	}
 	if want := "\ntwin directory /abs/local/twin\n"; !strings.HasSuffix(out, want) || strings.Contains(out, "follow") {
 		t.Errorf("stdout:\n%s\nwant it to end at the twin directory, naming no following", out)
@@ -1185,11 +1185,55 @@ func TestCreateFollowsNothing(t *testing.T) {
 
 	err = nil
 	captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 	})
 	_, doc := exitOf(t, err)
 	if raw, err := json.Marshal(doc); err != nil || bytes.Contains(raw, []byte(`"following"`)) {
 		t.Errorf("the document carries a following key (%v): %s", err, raw)
 	}
 	validateM10Document(t, doc)
+}
+
+// twin create --detach (020; US4 scenario 1) ends once the run has started: the server's
+// read, take, compile and filing print as a followed create's do, then nothing of the run,
+// whose progress is not followed, and the document, exit 0, ends with run.detached naming
+// the run, its text the line the command prints. --detach beside --dry-run is
+// run.flags.conflict, exit 1, before the workflow service is dialled.
+func TestCreateDetachedEndsAtTheRun(t *testing.T) {
+	paths := useFixtureSnapshot(t)
+	svc := &fakeService{runID: "run-1", result: readyResult(), events: []provision.Event{{Step: "deploy"}}}
+	useService(t, svc)
+	useInterrupts(t)
+
+	var err error
+	var out string
+	errText := captureStderr(t, func() {
+		out = captureStdout(t, func() {
+			err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID, detach: true})
+		})
+		_ = report(&options{}, nil, err)
+	})
+	code, doc := exitOf(t, err)
+	if code != findings.ExitOK || doc.Subject.RunID != "run-1" {
+		t.Fatalf("exit %d, document %+v; want 0 naming run-1", code, doc)
+	}
+	if want := strings.Join(storedLines(paths, headSnapshotID, headBundleID), "\n") + "\n"; out != want {
+		t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
+	}
+	if !strings.Contains(errText, "run fylgja-provision run-1 started; read it with fylgja run read") {
+		t.Errorf("stderr:\n%s\nwant the run.detached line", errText)
+	}
+	last := doc.Findings[len(doc.Findings)-1]
+	if last.Rule != findings.RuleRunDetached || last.Object != "fylgja-provision run-1" || len(svc.started) != 1 {
+		t.Errorf("last finding %+v, %d runs started; want run.detached naming fylgja-provision run-1, and one", last, len(svc.started))
+	}
+	validateM10Document(t, doc)
+
+	dials := countDials(t)
+	code, doc = executeTwin(t, "twin", "create", "--snapshot", headSnapshotID, "--dry-run", "--detach")
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleRunFlagsConflict ||
+		doc.Findings[0].Object != "dry_run" || dials.Load() != 0 {
+		t.Errorf("--dry-run --detach: exit %d, findings %+v, %d dials; want run.flags.conflict, exit 1, none", code, doc.Findings,
+			dials.Load())
+	}
 }

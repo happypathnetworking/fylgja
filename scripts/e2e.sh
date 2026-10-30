@@ -4,14 +4,23 @@
 # repository root. Never runs in CI and never gates a PR. No case makes a Schedule: a twin is
 # frozen at its snapshot, and moves only when a step takes it (019).
 #
-# Every fylgja command but worker run goes through the API (M13): the script starts a server
-# of its own from the tree, on a port of its own, with a token it makes for the run, and
-# stops it in its trap. Each command runs with PATH, HOME and the API's address and token,
-# and nothing else of the script's environment. The script's own reads (gnmic, Docker,
-# containerlab, twin.json, the store), the boot half and the fixture tool stay direct, with
-# the full environment, and so does case 3's short-lived worker. Case 9's two rehearsals are
-# no command of the script's: the check fylgja-twin asks them from inside Infrahub's task
-# workers, of the operator's server on the host's Docker bridge (015).
+# Every command reaches the core through its API (M13): the script starts a core server of
+# its own from the tree, on a port of its own, with a token it makes for the run and with no
+# INFRAHUB_* variable and no default scope in its environment, since the core reads no
+# source of truth (020, D-065), and stops it in its trap. Every command that names a branch
+# or a stage, or steps a twin to a stage, is the orchestrator's, fylgja-cli (020, FR-029): it
+# runs its flow in its own process on Prefect's ephemeral server, its home under the run's
+# outputs, with an orchestrator state root of the run's own, and the flow reads Infrahub
+# through the adapter and calls the script's core server. The rest is fylgja's. Each fylgja
+# command runs with PATH, HOME and the API's address and token, and nothing else of the
+# script's environment; each fylgja-cli command with those, Infrahub's address and token,
+# the default scope and its two roots, and nothing else, so no platform is named and none is
+# reached. The script's own reads (gnmic, Docker, containerlab, twin.json, the store), the
+# boot half and the fixture tool stay direct, with the full environment, and so does case
+# 3's short-lived worker. Case 9's two rehearsals are no command of the script's: the check
+# fylgja-twin asks them from inside Infrahub's task workers of the orchestrator's platform
+# on the host's Docker bridge, whose runner's flow drives the operator's core server on
+# loopback (015, 020).
 #
 # After every create and every step that changes a node: each device's first cabled
 # interface reads, over the gNMI its own package declares, the description its staged
@@ -20,9 +29,10 @@
 # package's readiness budget, which differs per platform, a probe's host inside its probe
 # package's (016). Every artifact carries a marker in its header, where the template writes
 # the device's description (017); it is found in no output, record, document, history or
-# worker log. Every create files the snapshot the server took under snapshots/, names it in
-# twin.json, and writes no CTM sidecar (018). No token or password is found there either,
-# nor in the bundle store or the snapshot store, which hold the marker by design. After
+# worker log. Every create files the snapshot it was sent under the core's snapshots/, names
+# it in twin.json, and writes no CTM sidecar (018); the orchestrator filed the same snapshot
+# under its own snapshots/ (020). No token or password is found there either, nor in the
+# bundle store or either snapshot store, which hold the marker by design. After
 # every destroy, no probe's host container (clab-fylgja-<probe>-a or -b) is left (016).
 #
 #   1. create from fylgja-fixture; the conformance suite's boot half reads that twin (M6:
@@ -31,11 +41,13 @@
 #      conforming (M12); twin show names the snapshot beside the bundle (018), the scope
 #      tag:fylgja and the mapping that read it (017); a second create, refused naming that
 #      twin; destroy
-#   2. create --at T, T fixed at the start: another reference, another bundle_id; destroy
+#   2. the branch read --at T, T fixed at the start, and the twin created from that snapshot
+#      (fylgja-cli takes no --at on a create, 020): another reference, another bundle_id;
+#      destroy
 #   3. a one-node lab fylgja deployed by hand outside the state root: a short-lived worker
 #      of the script's own names it an orphan at start, a dry-run create is refused naming
 #      it, and destroy clears it
-#   4. create --at T again: case 2's snapshot and bundle_id; destroy
+#   4. read --at T again and created from it: case 2's snapshot and bundle_id; destroy
 #   5. a throwaway branch seeded; its dry run with the probe file n1-loop (016) lists the
 #      probe's two hosts among the nodes; create from it with that file, under --scope
 #      tag:fylgja named (017), its snapshot carrying the probe and the twin its two hosts;
@@ -47,7 +59,8 @@
 #      containers and twin show's kind line do not move; a step to a snapshot of the changed
 #      branch with the probe, by file, and the node reads disable, and twin verify skips that
 #      port and its link (M12), and the probe's two links at both ends, holds the burst and
-#      names the snapshot; the branch's topology changed, and a step to its snapshot by id;
+#      names the snapshot; the branch's topology changed, its snapshot filed in the core's
+#      store by a dry run of the step by file, and the step to it by id;
 #      each step's document and twin.json carry the probe's loss, measured, on the
 #      container's basis (016); twin show names it, stepped from the first; destroy; the
 #      branch deleted
@@ -59,11 +72,11 @@
 #      seeded marked, a third link added, stage third-link marked; stage plan names four
 #      stages, the branch point refused scope.empty (main holds no tagged device), three
 #      snapshot ids, three bundle ids and three steps, the last unchanged; stage list names
-#      them; create --stage seeded deploys the snapshot and bundle the plan printed and
-#      records the stage in twin.json 11, and twin show and stage list name
-#      it; a step with no target to third-link, the link re-cabled live, and a second to the
-#      head, unchanged, the record moving and each step's sides naming the plan's snapshots
-#      (018); destroy; the stages, the proposed change and the
+#      them; create --stage seeded deploys the snapshot and bundle the plan printed, the
+#      orchestrator's record names the stage and twin.json 12 none (020), and stage list
+#      marks it; a step with no target to third-link, the link re-cabled live, and a second
+#      to the head, unchanged, the record moving and each step's sides naming the plan's
+#      snapshots (018); destroy; the stages, the proposed change and the
 #      branch deleted, after which stage list lists none and stage plan refuses the branch
 #   8. a throwaway branch seeded with the mixed fixture and a draft proposed change opened on
 #      it (M11, 014): stage seeded, a link s1:ethernet-1/3 <-> e1:Ethernet3 added, stage
@@ -72,9 +85,10 @@
 #      snapshot carrying the probe and the twin its two hosts; the step with no target to
 #      mixed-link refused without --allow-restart, dry run and run, naming e1; taken with it:
 #      e1 restarted in place, s1 re-cabled live and e2 untouched (their containers say so),
-#      both pushed, the new link seen from both ends over gNMI, twin.json 11 naming the step
-#      and its wait settled (M12) with the burst held, and the step's document and twin.json
-#      naming the probe's loss across e1's restart, more than none (016); the step back with
+#      both pushed, the new link seen from both ends over gNMI, twin.json 12 naming the step
+#      and its wait settled (M12) with the burst held, the orchestrator's record the stage,
+#      and the step's document and twin.json naming the probe's loss across e1's restart,
+#      more than none (016); the step back with
 #      --stage seeded, settled too; destroy; the probe deleted from main, which then holds
 #      none; the stages, the proposed change and the branch deleted
 #   9. a throwaway branch seeded, the probe n1-loop written into FylgjaProbe on main, which
@@ -84,13 +98,15 @@
 #      marked ready and the user checks run again: fylgja-twin rehearsed it on a twin and
 #      passed, its message saying rehearsal ok and third-link's loss, one comment in a
 #      thread of the proposed change, which its overview shows, holding the table with its
-#      loss column, the drawing and the stages, and no twin left; n1:ethernet-1/10, the
-#      probe's first port, disabled, generated, stage probe-port-down, the checks run again:
-#      fylgja-twin failed, naming probe-port-down's burst (verify.burst), the earlier stages
-#      passed with their loss figures, a second comment in a second thread holding the
-#      commands that reproduce it and the head not reached; the branch deleted, and with its
-#      proposed change the threads, their comments and the validators; the probe deleted
-#      from main. The stage probe-port-down took the place of 015's bad-port: a stage that
+#      loss column, the drawing and the stages, the flow run it names completed on the
+#      platform, its runs of the core's read from its log, and no twin left;
+#      n1:ethernet-1/10, the probe's first port, disabled, generated, stage
+#      probe-port-down, the checks run again: fylgja-twin failed, naming probe-port-down's
+#      burst (verify.burst), the earlier stages passed with their loss figures, a second
+#      comment in a second thread holding the commands that reproduce it, each by its own
+#      client (fylgja-cli's create and steps, fylgja's verify and destroy), and the
+#      head not reached; the branch deleted, and with its proposed change the threads, their
+#      comments and the validators; the probe deleted from main. The stage probe-port-down took the place of 015's bad-port: a stage that
 #      fails stops the run, so a push refused at a fourth stage would never be reached, and
 #      one before it would leave probe-port-down unreached.
 #
@@ -100,30 +116,40 @@
 # (never pulled; docs/development.md says how to import it), the probe package's image
 # (probes/ping.yaml's, alpine:3.24.2, which no command pulls: docker pull it), go (cases 1,
 # 5 and 6 run the boot half as go test; cases 5 to 9 seed their branches with
-# cmd/fylgja-fixture), and Infrahub with fylgja-fixture seeded and the kind FylgjaProbe on
+# cmd/fylgja-fixture), the orchestrator's venv (make orchestrator-venv: fylgja-cli, which
+# starts Prefect's ephemeral server under the run's outputs for each command, and the
+# platform's client), and Infrahub with fylgja-fixture seeded and the kind FylgjaProbe on
 # main holding no probe, since every read with no probe file carries what it holds (016)
 # (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja", the scope every case's
-# fixtures are tagged into, for the script's server to read under; 017).
-# Every command goes to the script's own server, whose
-# port is one the system chooses. Case 9 needs two things more, checked before anything
-# starts: the operator's server from this tree, listening on the Docker bridge with
-# local/.env's token as CLAUDE.md's start line has it (make serve listens on loopback alone),
-# which Infrahub's task workers reach and the script never starts or stops; and the checks
-# fylgja-step and fylgja-twin on main, pushed to origin's main and imported
-# (specs/015-proposed-change-rehearsal/quickstart.md §6).
+# fixtures are tagged into, for fylgja-cli to read under; 017).
+# Every command reaches the script's own core server, whose port is one the system
+# chooses. Case 9 needs more, checked before anything starts, none of which the script
+# starts or stops: the checks fylgja-step and fylgja-twin on main, pushed to origin's main
+# and imported (specs/015-proposed-change-rehearsal/quickstart.md §6), at a commit whose
+# checks are this tree's; the orchestrator's platform on the Docker bridge
+# (PREFECT_API_URL and PREFECT_API_AUTH_STRING in local/.env), answering from inside each of
+# Infrahub's task workers its health and the deployment twin-rehearse/main to the
+# credential the override gives them, and the core's port 7650 unreachable from there
+# (020, FR-005); the runner, fylgja-orchestrator serve, from this tree's source under
+# local/orchestrator/prefect and reading under the default scope tag:fylgja; and the
+# operator's core server from this tree on 127.0.0.1:7650, local/.env's token, holding no
+# Infrahub variable, which the runner's flows drive (scripts/bring-up.sh starts all three).
 # Optional: WORKER_LOG names that worker's log, which the credential greps then cover too.
 # Optional: PLATFORMS narrows the run to a list of shipped packages (the stems of psp/*.yaml,
 # separated by commas or spaces): a case runs when every package it needs is in the list and
 # each account-gated image it needs is present, and is skipped, saying why, otherwise. Unset
 # or empty, every case runs and every package's image is required first. A name no package
 # has, or a list that selects no case, is refused before anything starts.
-# It takes about 36 to 37 minutes, case 5's frozen wait among them: 2,236.6s at 016's first
-# whole run, and 2,171.8s once case 5 ran the boot half too, which adds about 10s (10.0s, and
-# 12.4s by hand; both 2026-10-29); run it on a quiet host (docs/development.md).
+# It took about 36 to 37 minutes before 020, case 5's frozen wait among them: 2,236.6s at
+# 016's first whole run, and 2,171.8s once case 5 ran the boot half too, which adds about 10s
+# (10.0s, and 12.4s by hand; both 2026-10-29); each fylgja-cli command adds its ephemeral
+# server's start, about 17s warm and 40s the first (020's research §5.19), so expect several
+# minutes more until T043 measures it; run it on a quiet host (docs/development.md).
 #
 # Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
-# after the trap's destroy, which cancels a rehearsal in flight and waits for its own destroy,
+# after the trap's destroy, which cancels a step in flight and waits for its record (a
+# rehearsal in flight is the platform's, which the check cancels at its own deadline),
 # and its deletion of the throwaway branches of cases 5 to 9 (7's, 8's and 9's with their
 # stages and proposed changes, 9's threads and validators going with its proposed change),
 # and of the probes cases 8 and 9 wrote on main; a lab, a twin directory, a probe's host
@@ -181,9 +207,18 @@ set -a
 # shellcheck disable=SC1091
 . local/.env
 set +a
+: "${INFRAHUB_ADDRESS:?local/.env must set INFRAHUB_ADDRESS}"
 : "${INFRAHUB_API_TOKEN:?local/.env must set INFRAHUB_API_TOKEN}"
+# The scope every fylgja-cli command reads under but case 5's create, which names it: the
+# fixtures' devices are tagged into it (017), and the orchestrator reads the default, never
+# the core (020).
+[ "${FYLGJA_DEFAULT_SCOPE:-}" = tag:fylgja ] ||
+  fail "local/.env must set FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\", the scope fylgja-cli reads every case's fixtures under"
 
 FYLGJA=./bin/fylgja
+# The orchestrator's client (020), from this tree's venv, which installs the orchestrator
+# editable, so it runs this tree's source.
+FYLGJA_CLI=./orchestrator/.venv/bin/fylgja-cli
 BRANCH=fylgja-fixture
 export BRANCH
 TWIN="$FYLGJA_STATE_ROOT/twin"
@@ -192,6 +227,14 @@ OUT=$(mktemp -d "${TMPDIR:-/tmp}/fylgja-e2e.XXXXXX")
 # Resolved, so the orphan's topology path compares with containerlab's absLabPath.
 OUT=$(realpath "$OUT")
 echo "e2e: outputs in $OUT"
+# fylgja-cli's two roots, the run's own (R-16): the orchestrator's state root, its snapshots/
+# and its record, twin.json, and the home of Prefect's ephemeral server, which each command
+# starts for its flow, since no PREFECT_API_URL reaches it. Both are under $OUT, so the greps
+# cover them.
+ORCH_ROOT="$OUT/orchestrator"
+ORCH_RECORD="$ORCH_ROOT/twin.json"
+E2E_PREFECT_HOME="$OUT/prefect"
+mkdir -p "$ORCH_ROOT" "$E2E_PREFECT_HOME"
 
 # The API's token for this run alone: made here, given to the script's server
 # and to each command, never printed, and searched for in everything the run produced. A
@@ -264,6 +307,17 @@ no_credential_contextual() {
     grep -rlsE -- "$pattern" "$@" >&2 || true
     exit 1
   fi
+}
+
+# no_infrahub_request NAME LOG [FROM]: the core's request log, from byte FROM (0 when not
+# given), names none of the five operations that read Infrahub, which are the
+# orchestrator's (020, FR-029): a line a request, `msg=request operation=<op> outcome=…`.
+INFRAHUB_OPERATIONS='intent\.read|stage\.list|stage\.plan|twin\.rehearse|schema\.check'
+no_infrahub_request() {
+  local found
+  found=$(tail -c "+$(( ${3:-0} + 1 ))" "$2" | grep -oE "msg=request operation=($INFRAHUB_OPERATIONS) " |
+    sed 's/^msg=request operation=//; s/ $//' | LC_ALL=C sort | uniq -c | awk '{print $2 " " $1 "x"}' | paste -sd ',' - || true)
+  [ -z "$found" ] || fail "$1 was asked operations that read Infrahub, which the core no longer serves (020): $found; see $2"
 }
 
 # psp_scalar FILE KEY: the value of the one `  key: value` line in a support package, less
@@ -367,6 +421,25 @@ fylgja() {
   )
 }
 
+# fylgja_cli ARGS...: the orchestrator's command (020, R-16), as fylgja runs the core's: with
+# PATH, HOME, the API's address and token, which its flows call the script's core server
+# with, and Infrahub's address and token and the default scope, which its adapter reads
+# Infrahub with, for it alone; and its two roots, the run's own. Nothing else of the
+# script's environment: no PREFECT_API_URL, which local/.env carries for the operator's
+# platform, so the flow runs on Prefect's ephemeral server under E2E_PREFECT_HOME, and no
+# login, the core's. The tokens are in no process's arguments, as fylgja keeps the API's.
+fylgja_cli() {
+  (
+    # shellcheck disable=SC2046
+    export -n PATH $(compgen -e)
+    # shellcheck disable=SC2030,SC2031 # the command's tokens, for this subshell alone
+    export PATH HOME FYLGJA_API_ADDRESS="$API_ADDRESS" FYLGJA_API_TOKEN="$API_TOKEN" \
+      INFRAHUB_ADDRESS INFRAHUB_API_TOKEN FYLGJA_DEFAULT_SCOPE \
+      FYLGJA_ORCHESTRATOR_ROOT="$ORCH_ROOT" PREFECT_HOME="$E2E_PREFECT_HOME"
+    exec "$FYLGJA_CLI" "$@"
+  )
+}
+
 # stop_server: SIGTERM to the script's server, its exit status in SERVER_STATUS. It closes
 # every connection and exits 0. Does nothing once it is stopped.
 stop_server() {
@@ -383,13 +456,28 @@ fixture() {
 }
 
 # gql BRANCH QUERY: Infrahub's GraphQL answer's data on the branch, or on the default branch
-# through the unnamed endpoint when BRANCH is "", as the stage reader asks it. The token goes
+# through the unnamed endpoint when BRANCH is "", as the adapter asks it. The token goes
 # to curl as a header file, so it is in no process's arguments.
 gql() {
   local body
   body=$(jq -cn --arg q "$2" '{query: $q}')
   curl -sS --fail-with-body -H @<(printf 'X-INFRAHUB-KEY: %s\n' "$INFRAHUB_API_TOKEN") \
     -H 'Content-Type: application/json' -d "$body" "$INFRAHUB_ADDRESS/graphql${1:+/$1}" | jq -e '.data'
+}
+
+# platform_get PATH and platform_post PATH BODY: the orchestrator's platform's answer at PATH
+# under local/.env's PREFECT_API_URL, read by case 9 alone (020). The basic-auth string goes
+# to curl as a header file, base64 reading it on its input, so it is in no process's
+# arguments, as gql keeps Infrahub's token out of them.
+platform_get() {
+  curl -sS --fail-with-body --max-time 30 \
+    -H @<(printf 'Authorization: Basic %s\n' "$(printf %s "$PREFECT_API_AUTH_STRING" | base64 -w0)") \
+    "${PREFECT_API_URL%/}$1"
+}
+platform_post() {
+  curl -sS --fail-with-body --max-time 30 \
+    -H @<(printf 'Authorization: Basic %s\n' "$(printf %s "$PREFECT_API_AUTH_STRING" | base64 -w0)") \
+    -H 'Content-Type: application/json' -d "$2" "${PREFECT_API_URL%/}$1"
 }
 
 # infrahub_holds_none CASE BRANCH: a deleted throwaway branch left nothing in Infrahub
@@ -625,19 +713,22 @@ store_digest() {
   find "$FYLGJA_STATE_ROOT/bundles" -type f | LC_ALL=C sort | xargs sha256sum | sha256sum
 }
 
-# compiled_id CASE ARGS...: the stage commands on the same branch, intent read ARGS, which
-# writes a snapshot, then twin compile --snapshot of it (018); sets COMPILED_ID and
-# COMPILED_SNAPSHOT. A run's bundle is the one they compile (D-024), and its snapshot the
-# one they read, since two reads of one intent differ in observed_at alone (D-061).
+# compiled_id CASE ARGS...: fylgja-cli intent read --branch $BRANCH ARGS, which writes a
+# snapshot and files it under the orchestrator's snapshots/, then fylgja twin compile
+# --snapshot of it (018, 020); sets COMPILED_ID and COMPILED_SNAPSHOT. A run's bundle is the
+# one they compile (D-024), and its snapshot the one they read, since two reads of one intent
+# differ in observed_at alone (D-061).
 compiled_id() {
   local case=$1
   shift
-  fylgja intent read --branch "$BRANCH" "$@" --out "$OUT/snapshot-$case.json" > "$OUT/read-$case.out" 2> "$OUT/read-$case.err" ||
-    fail "case $case: intent read failed; see $OUT/read-$case.err"
+  fylgja_cli intent read --branch "$BRANCH" "$@" --out "$OUT/snapshot-$case.json" > "$OUT/read-$case.out" 2> "$OUT/read-$case.err" ||
+    fail "case $case: fylgja-cli intent read failed; see $OUT/read-$case.out and $OUT/read-$case.err"
   fylgja twin compile --snapshot "$OUT/snapshot-$case.json" --out "$OUT/compiled-$case" --json > "$OUT/compile-$case.json" 2> "$OUT/compile-$case.err" ||
     fail "case $case: twin compile failed; see $OUT/compile-$case.err"
   COMPILED_ID=$(jq -r .bundle_id "$OUT/compile-$case.json")
   COMPILED_SNAPSHOT=$(jq -r .snapshot_id "$OUT/compile-$case.json")
+  [ -f "$ORCH_ROOT/snapshots/$COMPILED_SNAPSHOT.json" ] ||
+    fail "case $case: fylgja-cli intent read filed no snapshot $COMPILED_SNAPSHOT under $ORCH_ROOT/snapshots"
 }
 
 # ready_to_record HISTORY: seconds from the last readiness step's completion to the
@@ -660,13 +751,16 @@ ready_to_record() {
 # readback_mixed after the create.
 READBACK=readback
 
-# create_twin CASE ARGS...: twin create --branch $BRANCH ARGS, or --stage $CREATE_REF in
-# place of the branch when CREATE_REF is set (cases 7 and 8), ending with three
-# ready devices and $HOSTS ready probe hosts (016), the twin recorded, the snapshot the server
-# took stored under its id, version 2 and carrying one probe for each two hosts, the
-# bundle stored and staged as its id, no CTM sidecar written (018), and each device
-# running its artifact; sets and exports SID, BID and RUN_ID,
-# and sets CREATE_TOOK.
+# create_twin CASE ARGS...: fylgja-cli twin create --branch $BRANCH ARGS, or --stage
+# $CREATE_REF in place of the branch when CREATE_REF is set (cases 7 and 8), or fylgja twin
+# create --snapshot $CREATE_SNAPSHOT ARGS when that is set (cases 2 and 4, a snapshot read
+# --at T, since fylgja-cli's create takes no --at; 020), ending with three ready devices and
+# $HOSTS ready probe hosts (016), the twin recorded from the snapshot the core was sent, that
+# snapshot stored under its id in both stores, the core's and the orchestrator's, version 2
+# and carrying one probe for each two hosts, the bundle stored and staged as its id, no CTM
+# sidecar written (018), and each device running its artifact; the orchestrator's record
+# naming the stage after a create from one, and gone after a create from a branch, whose twin
+# names no stage (020); sets and exports SID, BID and RUN_ID, and sets CREATE_TOOK.
 CREATE_TIMES=()
 create_twin() {
   local case=$1
@@ -679,7 +773,11 @@ create_twin() {
   # read before 018, so what is asserted is that this create wrote none.
   touch "$began"
   start=$(now_ns)
-  fylgja twin create "${ref[@]}" "$@" --json > "$OUT/create-$case.json" 2> "$OUT/create-$case.err" || status=$?
+  if [ -n "${CREATE_SNAPSHOT:-}" ]; then
+    fylgja twin create --snapshot "$CREATE_SNAPSHOT" "$@" --json > "$OUT/create-$case.json" 2> "$OUT/create-$case.err" || status=$?
+  else
+    fylgja_cli twin create "${ref[@]}" "$@" --json > "$OUT/create-$case.json" 2> "$OUT/create-$case.err" || status=$?
+  fi
   took=$(since "$start")
   CREATE_TOOK=$took
   echo "e2e: case $case: create took ${took}s (exit $status)"
@@ -695,8 +793,11 @@ create_twin() {
   clab inspect --all --format json > "$OUT/inspect-create-$case.json"
   expect "$OUT/inspect-create-$case.json" '.fylgja | length == (env.NODES|tonumber) and all(.state=="running")'
 
-  expect "$TWIN/twin.json" '.snapshot_id==env.SID and .bundle_id==env.BID and .source=="intent" and .observed_at != null
-    and .run.workflow_id=="fylgja-provision" and .run.run_id==env.RUN_ID and (.nodes|length)==(env.NODES|tonumber)'
+  # The core read nothing: it was sent the snapshot, by fylgja-cli's flow or by the script, so
+  # the twin is a snapshot's (018, 020), and its record names no stage (twin.json 12).
+  expect "$TWIN/twin.json" '.snapshot_id==env.SID and .bundle_id==env.BID and .source=="snapshot" and .observed_at != null
+    and .stage==null and .run.workflow_id=="fylgja-provision" and .run.run_id==env.RUN_ID
+    and (.nodes|length)==(env.NODES|tonumber)'
   # A probe's host (016) is recorded with its probe in place of a package and an artifact,
   # in the container containerlab names after it, <probe>-<endpoint>.
   expect "$TWIN/twin.json" '[.nodes[] | select(.probe != null)] | length == (env.HOSTS|tonumber)
@@ -715,7 +816,19 @@ create_twin() {
       fail "case $case: node $name ($pkg) was ready after ${ready}s, its package's readiness budget is ${budget}s"
   done < <(jq -r '.nodes[] | "\(.name) \(if .probe != null then "probes/\(.probe.package.id)" else "psp/\(.psp.id)" end).yaml \(.ready_after_s)"' "$TWIN/twin.json")
 
-  [ -f "$FYLGJA_STATE_ROOT/snapshots/$SID.json" ] || fail "case $case: the snapshot store holds no entry for $SID"
+  [ -f "$FYLGJA_STATE_ROOT/snapshots/$SID.json" ] || fail "case $case: the core's snapshot store holds no entry for $SID"
+  [ -f "$ORCH_ROOT/snapshots/$SID.json" ] || fail "case $case: the orchestrator's snapshot store holds no entry for $SID"
+  # The orchestrator's record follows the twin as twin show names it (020, R-09): the stage
+  # a create from one names, and none after a create from a branch. A create from a snapshot
+  # is the core's alone, and the record is not the core's to touch.
+  if [ -n "${CREATE_REF:-}" ]; then
+    [ -f "$ORCH_RECORD" ] || fail "case $case: fylgja-cli twin create --stage $CREATE_REF wrote no record at $ORCH_RECORD"
+    export CREATE_REF
+    expect "$ORCH_RECORD" '.record_version=="1" and .flow=="twin-create" and .snapshot_id==env.SID
+      and .stage.branch + "/" + .stage.label == env.CREATE_REF and (.flow_run_id | length) > 0'
+  elif [ -z "${CREATE_SNAPSHOT:-}" ]; then
+    [ ! -e "$ORCH_RECORD" ] || fail "case $case: a create from branch $BRANCH left the orchestrator's record $ORCH_RECORD, which names a stage this twin does not stand at"
+  fi
   # The snapshot is a 2 (016), its probes the ones the twin's hosts are built for. Its version
   # and its probes' names alone are copied out, since its CTM carries the marker.
   jq '{snapshot_version, probes: [.probes[].name]}' "$FYLGJA_STATE_ROOT/snapshots/$SID.json" > "$OUT/probes-snapshot-$case.json"
@@ -779,9 +892,10 @@ cleanup() {
   # The throwaway branches of cases 5 to 9, when they were made and not yet deleted; -delete
   # removes the stages and proposed changes of cases 7, 8 and 9 before their branches, case
   # 9's comments and validators with its proposed change. A failure is reported, not fatal.
-  # The destroy above cancels a step in flight and waits for its record, and a rehearsal in
-  # flight, case 9's check's, and waits for that run's own destroy; the comment the check
-  # posts on the cancelled run goes with its proposed change, or finds none to go on.
+  # The destroy above cancels a step in flight and waits for its record. A rehearsal in
+  # flight, case 9's check's, is a flow on the operator's platform (020): the destroy cancels
+  # the core's run it is in and clears the twin, and the flow's own destroy then finds
+  # nothing; the report it posts goes with its proposed change, or finds none to go on.
   local branch
   for branch in "${FB:-}" "${FM:-}" "${FP:-}" "${FS:-}" "${FR:-}"; do
     [ -n "$branch" ] || continue
@@ -856,6 +970,8 @@ echo "e2e: T=$T"
 # --- preconditions: fail fast, with the remedy, before anything is created ------------
 
 [ -x "$FYLGJA" ] || fail "$FYLGJA is missing: run make build (make test-e2e does)"
+[ -x "$FYLGJA_CLI" ] ||
+  fail "$FYLGJA_CLI is missing: run make orchestrator-venv (every command naming a branch or a stage is the orchestrator's, 020)"
 command -v gnmic > /dev/null || fail "gnmic is not on PATH: every create's read-back uses it"
 command -v go > /dev/null || fail "go is not on PATH: case 5 seeds its branch with go run -tags fixture ./cmd/fylgja-fixture; install Go or add it to PATH"
 # The Temporal CLI, from the PATH or else where its installer, run by scripts/bring-up.sh,
@@ -883,9 +999,10 @@ probes_on_main=$(jq -r '.FylgjaProbe.count' "$OUT/probes-main.json")
   fail "main holds $probes_on_main FylgjaProbe objects, which every case's read with no probe file would carry: delete them with go run -tags fixture ./cmd/fylgja-fixture -delete-probes"
 echo "e2e: the probe image $PROBE_IMAGE is present, and FylgjaProbe on main holds no probe"
 
-# Case 9's rehearsals are asked from inside Infrahub (R-19), so two things outside the script
-# are required first. Case 9 needs nokia_srlinux alone, which every list that selects a case
-# names, so it runs whenever any case does.
+# Case 9's rehearsals are asked from inside Infrahub (015's R-19) of the orchestrator's
+# platform, whose runner's flow drives the operator's core (020), so what serves them is
+# outside the script and required first. Case 9 needs nokia_srlinux alone, which every list
+# that selects a case names, so it runs whenever any case does.
 #
 # The checks, on main: the registration fylgja imports them from origin's main, each with the
 # timeout its class declares. A branch runs the definitions main held at its creation, and
@@ -898,8 +1015,8 @@ jq -e '[.CoreCheckDefinition.edges[].node | {name: .name.value, timeout: .timeou
   "$OUT/check-definitions.json" > /dev/null ||
   fail "case 9 needs the checks fylgja-step (timeout 300) and fylgja-twin (timeout 4260) on main, which holds $(jq -r '[.CoreCheckDefinition.edges[].node | "\(.name.value) (timeout \(.timeout.value))"] | if length == 0 then "none" else join(", ") end' "$OUT/check-definitions.json"): push them to origin's main and import them, as specs/015-proposed-change-rehearsal/quickstart.md §6 does"
 # The definitions' names and timeouts pass for an earlier import too, and case 9 asserts on
-# the Python the task workers run, which must be this tree's, as the server's binary must be
-# below: the registration fylgja's imported commit, read on main, is one this clone knows,
+# the Python the task workers run, which must be this tree's, as the runner's source and the
+# core's binary must be below: the registration fylgja's imported commit, read on main, is one this clone knows,
 # and infrahub/ and .infrahub.yml in the working tree are as that commit holds them.
 gql "" '{ CoreReadOnlyRepository(name__value: "fylgja") { edges { node { commit { value } } } } }' \
   > "$OUT/registration.json" 2> "$OUT/registration.err" ||
@@ -913,67 +1030,185 @@ git cat-file -e "$IMPORTED^{commit}" 2> /dev/null ||
 git diff --quiet "$IMPORTED" -- infrahub .infrahub.yml ||
   fail "case 9 needs the checks the registration fylgja imported, at commit $IMPORTED, to be this tree's, and $(git diff --name-only "$IMPORTED" -- infrahub .infrahub.yml | paste -sd ' ' -) differ here; $IMPORT_REMEDY"
 
-# The server the task workers reach: the operator's, on the Docker bridge's gateway at 7650,
-# where the Compose override points them (host.docker.internal:7650), with local/.env's
-# token, which curl reads from a header file so that it is in no process's arguments. It
-# must be this tree's build, as the script's own server is, since the rehearsals it serves
-# are what case 9 asserts. The script's own server stays on loopback.
-BRIDGE=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2> "$OUT/bridge.err") && [ -n "$BRIDGE" ] ||
-  fail "Docker reports no bridge network, the address Infrahub's task workers reach the server on; see $OUT/bridge.err"
+# The platform the task workers reach (020, R-12, R-16): the orchestrator's Prefect server on
+# the Docker bridge, where the Compose override points them (host.docker.internal:4200) with
+# FYLGJA_ORCHESTRATOR_AUTH. Asked from inside each task worker, as the checks ask it and as
+# tier 2's precheck (internal/checks' platformReached) does, on the worker's own Python and
+# httpx: its health, which answers anyone, and the deployment twin-rehearse/main, which
+# answers the credential and says the runner serves the flow; and the core's port 7650 there,
+# which must not answer, since the core listens on loopback alone (FR-005, R-18). The probe
+# reads the two variables in the worker's own environment and prints statuses and the
+# address, never a value.
+PLATFORM_REMEDY="start the platform and the runner as scripts/bring-up.sh's orchestrator part does, and give Infrahub's task workers the override's two variables with docker compose up -d, as CLAUDE.md says"
+PLATFORM_PROBE='
+import os, httpx
+address = os.environ.get("FYLGJA_ORCHESTRATOR_ADDRESS", "")
+auth = os.environ.get("FYLGJA_ORCHESTRATOR_AUTH", "")
+if not address or not auth:
+    print("unset", "FYLGJA_ORCHESTRATOR_ADDRESS" if not address else "FYLGJA_ORCHESTRATOR_AUTH")
+    raise SystemExit
+base = (address if address.startswith(("http://", "https://")) else "http://" + address).rstrip("/") + "/api"
+user, _, password = auth.partition(":")
+try:
+    health = httpx.get(base + "/health", timeout=10, trust_env=False).status_code
+    deployment = httpx.get(base + "/deployments/name/twin-rehearse/main", auth=(user, password), timeout=10,
+                           trust_env=False).status_code
+except Exception as exc:
+    print("unreachable", address, type(exc).__name__)
+    raise SystemExit
+try:
+    core = str(httpx.post("http://host.docker.internal:7650/v1/twin/show", json={}, timeout=10, trust_env=False).status_code)
+except Exception as exc:
+    core = type(exc).__name__
+print("answered", address, health, deployment, core)
+'
+COMPOSE_PROJECT=${COMPOSE_PROJECT_NAME:-fylgja-infrahub}
+mapfile -t TASK_WORKERS < <(docker ps --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" \
+  --filter label=com.docker.compose.service=task-worker --format '{{.Names}}' 2> "$OUT/task-workers.err" | LC_ALL=C sort)
+[ "${#TASK_WORKERS[@]}" -gt 0 ] ||
+  fail "case 9 needs Infrahub's task workers, which run the checks, and docker lists none of the Compose project $COMPOSE_PROJECT; see $OUT/task-workers.err"
+for worker in "${TASK_WORKERS[@]}"; do
+  docker exec "$worker" python -c "$PLATFORM_PROBE" > "$OUT/platform-probe-$worker.out" 2> "$OUT/platform-probe-$worker.err" ||
+    fail "case 9: the platform's precheck could not run in $worker; see $OUT/platform-probe-$worker.err"
+  said="" address="" health="" deployment="" core=""
+  read -r said address health deployment core < "$OUT/platform-probe-$worker.out" || true
+  case $said in
+    unset) fail "case 9 needs $address in $worker's environment, which the Compose override gives the task workers; $PLATFORM_REMEDY" ;;
+    unreachable) fail "case 9 needs the orchestrator's platform at $address to answer $worker, and it does not ($health); $PLATFORM_REMEDY" ;;
+    answered) ;;
+    *) fail "case 9: the platform's precheck in $worker said something else; see $OUT/platform-probe-$worker.out" ;;
+  esac
+  { [ "$health" = 200 ] && [ "$deployment" = 200 ]; } ||
+    fail "case 9 needs the platform at $address to answer $worker GET /api/health 200 and the deployment twin-rehearse/main 200, and it answered $health and $deployment: a 401 is a credential not the platform's, a 404 a runner serving no flows; $PLATFORM_REMEDY"
+  [[ ! $core =~ ^[0-9]+$ ]] ||
+    fail "case 9 needs the core's port 7650 unreachable from Infrahub's task workers, and host.docker.internal:7650 answered $worker $core: the core listens on loopback alone (020, FR-005); restart it with CLAUDE.md's start line, which names no bridge listener"
+done
+echo "e2e: case 9: the platform answers ${TASK_WORKERS[*]} its health and twin-rehearse/main, and the core's 7650 does not ($core)"
+
+# The platform from this host, for the flow runs case 9 reads (rehearsal_run): local/.env's
+# PREFECT_API_URL and PREFECT_API_AUTH_STRING, the deployment the checks trigger by name.
+{ [ -n "${PREFECT_API_URL:-}" ] && [ -n "${PREFECT_API_AUTH_STRING:-}" ]; } ||
+  fail "case 9 needs local/.env's PREFECT_API_URL and PREFECT_API_AUTH_STRING, the orchestrator's platform, whose flow runs it reads; add them as .env.example says"
+platform_get /deployments/name/twin-rehearse/main > "$OUT/deployment-twin-rehearse.json" 2> "$OUT/deployment-twin-rehearse.err" ||
+  fail "case 9 needs the platform at $PREFECT_API_URL to answer this host the deployment twin-rehearse/main to local/.env's auth string; see $OUT/deployment-twin-rehearse.err; $PLATFORM_REMEDY"
+REHEARSE_DEPLOYMENT=$(jq -r '.id // ""' "$OUT/deployment-twin-rehearse.json")
+[ -n "$REHEARSE_DEPLOYMENT" ] || fail "case 9: the platform's deployment twin-rehearse/main names no id; see $OUT/deployment-twin-rehearse.json"
+export REHEARSE_DEPLOYMENT
+
+# The runner, fylgja-orchestrator serve, which runs the flow the check triggers: this tree's
+# venv's, under the platform's home as scripts/bring-up.sh and make orchestrator-serve start
+# it (a runner a test started, under a home of its own, is not it), started after the
+# orchestrator's source last changed, since the package is installed editable and a running
+# runner holds the code it started with; and reading under the default scope tag:fylgja,
+# since the checks send no scope (017, FR-021). Each variable is one NUL-ended line.
+ORCH_VENV="$(pwd)/orchestrator/.venv"
+PLATFORM_HOME="$(pwd)/local/orchestrator/prefect"
+runner_pid=""
+for pid in $(pgrep -f -- "$ORCH_VENV/bin/fylgja-orchestrator" || true); do
+  mapfile -d '' -t args < "/proc/$pid/cmdline" 2> /dev/null || continue
+  { [ "${args[1]:-}" = "$ORCH_VENV/bin/fylgja-orchestrator" ] && [ "${args[2]:-}" = serve ]; } || continue
+  grep -qxzF "PREFECT_HOME=$PLATFORM_HOME" "/proc/$pid/environ" 2> /dev/null || continue
+  runner_pid=$pid
+  break
+done
+[ -n "$runner_pid" ] ||
+  fail "case 9 needs the runner, $ORCH_VENV/bin/fylgja-orchestrator serve under PREFECT_HOME=$PLATFORM_HOME, and none runs; $PLATFORM_REMEDY"
+runner_started=$(( $(date +%s) - $(ps -o etimes= -p "$runner_pid" | tr -d ' ') ))
+newer=$(find orchestrator/src -name '*.py' -newermt "@$runner_started" -print -quit)
+[ -z "$newer" ] ||
+  fail "case 9 needs the runner to run this tree's orchestrator, and pid $runner_pid started before $newer last changed: restart it; $PLATFORM_REMEDY"
+grep -qxzF 'FYLGJA_DEFAULT_SCOPE=tag:fylgja' "/proc/$runner_pid/environ" 2> /dev/null ||
+  fail "case 9 needs the runner to read under the default scope tag:fylgja, and pid $runner_pid's environment sets no FYLGJA_DEFAULT_SCOPE=tag:fylgja: add FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\" to local/.env; $PLATFORM_REMEDY"
+# The core the runner's flows drive: its FYLGJA_API_ADDRESS, by name, else the default.
+runner_core=$(tr '\0' '\n' < "/proc/$runner_pid/environ" | sed -n 's/^FYLGJA_API_ADDRESS=//p' | tail -1)
+runner_core=${runner_core:-127.0.0.1:7650}
+[ "$runner_core" = 127.0.0.1:7650 ] ||
+  fail "case 9 needs the runner's flows to drive the core on 127.0.0.1:7650, CLAUDE.md's, and pid $runner_pid names FYLGJA_API_ADDRESS=$runner_core"
+
+# The core the runner's flows drive: the operator's server on loopback, with local/.env's
+# token, which curl reads from a header file so that it is in no process's arguments. It must
+# be this tree's build, as the script's own server is, since the rehearsals it serves are what
+# case 9 asserts, writing its log to local/server.log, which the greps read, and holding none
+# of Infrahub's variables and no default scope, since the core reads no source of truth (020,
+# FR-004).
 BUILD=$("$FYLGJA" --version | sed -n 's/^fylgja version //p')
-SERVE_REMEDY="start it from this tree with CLAUDE.md's start line, fylgja serve --listen 127.0.0.1:7650 --listen $BRIDGE:7650, from a shell that has loaded local/.env"
+CORE_LOG="$FYLGJA_STATE_ROOT/server.log"
+SERVE_REMEDY="start it from this tree with CLAUDE.md's start line, fylgja serve --listen 127.0.0.1:7650, from a shell that has loaded local/.env and with no INFRAHUB_* or FYLGJA_DEFAULT_SCOPE"
 # shellcheck disable=SC2031 # local/.env's token, not the one fylgja() sets in its subshell
 [ -n "${FYLGJA_API_TOKEN:-}" ] ||
-  fail "case 9 needs local/.env's FYLGJA_API_TOKEN, the token of the server Infrahub's task workers reach; set it and $SERVE_REMEDY"
+  fail "case 9 needs local/.env's FYLGJA_API_TOKEN, the token of the core the runner's flows drive; set it and $SERVE_REMEDY"
 # shellcheck disable=SC2031
-bridge_status=$(curl -sS -o "$OUT/bridge-show.ndjson" -D "$OUT/bridge-show.headers" -w '%{http_code}' \
+core_status=$(curl -sS -o "$OUT/core-show.ndjson" -D "$OUT/core-show.headers" -w '%{http_code}' \
   -H @<(printf 'Authorization: Bearer %s\n' "$FYLGJA_API_TOKEN") -H 'Content-Type: application/json' \
-  -d '{}' "http://$BRIDGE:7650/v1/twin/show" 2> "$OUT/bridge-show.err") || bridge_status="nothing"
-bridge_build=$(sed -n 's/^Fylgja-Build: *\([^[:space:]]*\).*/\1/Ip' "$OUT/bridge-show.headers" 2> /dev/null | tail -1)
-{ [ "$bridge_status" = 200 ] && [ "$bridge_build" = "$BUILD" ]; } ||
-  fail "case 9 needs the server Infrahub's task workers reach, at http://$BRIDGE:7650, from this tree (build $BUILD) and with local/.env's token: it answered $bridge_status${bridge_build:+, build $bridge_build}; $SERVE_REMEDY"
+  -d '{}' "http://$runner_core/v1/twin/show" 2> "$OUT/core-show.err") || core_status="nothing"
+core_build=$(sed -n 's/^Fylgja-Build: *\([^[:space:]]*\).*/\1/Ip' "$OUT/core-show.headers" 2> /dev/null | tail -1)
+{ [ "$core_status" = 200 ] && [ "$core_build" = "$BUILD" ]; } ||
+  fail "case 9 needs the core the runner's flows drive, at http://$runner_core, from this tree (build $BUILD) and with local/.env's token: it answered $core_status${core_build:+, build $core_build}; $SERVE_REMEDY"
 # Every unstamped build is the same version, so the build header alone proves no tree: the
-# server's process, the fylgja serve whose arguments listen on $BRIDGE:7650, must run this
-# tree's binary itself, neither replaced, (deleted), nor another file. A /proc entry this
-# shell cannot read, as for a server started under sg docker, is said and not compared.
-bridge_pid=""
+# server's process, the fylgja serve that listens on $runner_core by its arguments (or by
+# naming no --listen, whose default it is), must run this tree's binary itself, neither
+# replaced, (deleted), nor another file. A /proc entry this shell cannot read, as for a
+# server started under sg docker, is said and not compared.
+core_pid=""
 for pid in $(pgrep -x fylgja || true); do
   mapfile -d '' -t args < "/proc/$pid/cmdline" 2> /dev/null || continue
   [ "${args[1]:-}" = serve ] || continue
+  listens=0 named=0
   for (( i = 2; i < ${#args[@]}; i++ )); do
-    if [ "${args[i]}" = "--listen=$BRIDGE:7650" ] || { [ "${args[i]}" = --listen ] && [ "${args[i + 1]:-}" = "$BRIDGE:7650" ]; }; then
-      bridge_pid=$pid
-    fi
+    case ${args[i]} in
+      --listen=*) named=1; [ "${args[i]#--listen=}" != "$runner_core" ] || listens=1 ;;
+      --listen) named=1; [ "${args[i + 1]:-}" != "$runner_core" ] || listens=1 ;;
+    esac
   done
-  if [ -n "$bridge_pid" ]; then break; fi
+  [ "$named" -eq 1 ] || listens=1
+  if [ "$listens" -eq 1 ]; then
+    core_pid=$pid
+    break
+  fi
 done
-[ -n "$bridge_pid" ] ||
-  fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and no fylgja serve process listens there by its arguments; $SERVE_REMEDY"
-bridge_binary="its binary not compared"
-if bridge_exe=$(readlink "/proc/$bridge_pid/exe" 2> /dev/null); then
-  case $bridge_exe in
-    *" (deleted)") fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and pid $bridge_pid runs a replaced binary ($bridge_exe): restart it; $SERVE_REMEDY" ;;
+[ -n "$core_pid" ] ||
+  fail "case 9 needs the core on $runner_core to run this tree's $FYLGJA, and no fylgja serve process listens there by its arguments; $SERVE_REMEDY"
+core_binary="its binary not compared"
+if core_exe=$(readlink "/proc/$core_pid/exe" 2> /dev/null); then
+  case $core_exe in
+    *" (deleted)") fail "case 9 needs the core on $runner_core to run this tree's $FYLGJA, and pid $core_pid runs a replaced binary ($core_exe): restart it; $SERVE_REMEDY" ;;
   esac
-  [ "/proc/$bridge_pid/exe" -ef "$FYLGJA" ] ||
-    fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and pid $bridge_pid runs $bridge_exe; $SERVE_REMEDY"
-  bridge_binary="this tree's $FYLGJA (pid $bridge_pid)"
-  # The checks send no scope (017, FR-021): the server reads theirs under its default, which
-  # the fixtures' devices are tagged into. Each variable is one NUL-ended line.
-  grep -qxzF 'FYLGJA_DEFAULT_SCOPE=tag:fylgja' "/proc/$bridge_pid/environ" 2> /dev/null ||
-    fail "case 9 needs the server on $BRIDGE:7650 to read under the default scope tag:fylgja, and pid $bridge_pid's environment sets no FYLGJA_DEFAULT_SCOPE=tag:fylgja: add FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\" to local/.env; $SERVE_REMEDY"
+  [ "/proc/$core_pid/exe" -ef "$FYLGJA" ] ||
+    fail "case 9 needs the core on $runner_core to run this tree's $FYLGJA, and pid $core_pid runs $core_exe; $SERVE_REMEDY"
+  core_binary="this tree's $FYLGJA (pid $core_pid)"
+  [ "$(readlink "/proc/$core_pid/fd/2" 2> /dev/null)" = "$CORE_LOG" ] ||
+    fail "case 9 needs the core on $runner_core to log to $CORE_LOG, which the greps read, and pid $core_pid logs elsewhere; $SERVE_REMEDY"
+  # No Infrahub variable under any name and no default scope, read by name alone, never a
+  # value, as scripts/bring-up.sh starts it without them: Infrahub's address and token, which
+  # the core would read a source of truth by, and local/.env's Compose values, the admin
+  # token among them with the API token's value.
+  held=$(tr '\0' '\n' < "/proc/$core_pid/environ" |
+    sed -n 's/^\(INFRAHUB_[A-Za-z0-9_]*\|FYLGJA_DEFAULT_SCOPE\)=.*/\1/p' | paste -sd ' ' -)
+  [ -z "$held" ] ||
+    fail "case 9 needs the core on $runner_core to read no source of truth (020), and pid $core_pid's environment names $held; $SERVE_REMEDY"
 else
-  echo "e2e: note: the server on $BRIDGE:7650 is pid $bridge_pid, whose /proc/$bridge_pid/exe this shell cannot read, as for a server started under sg docker: its binary is not compared with $FYLGJA, only its build"
+  echo "e2e: note: the core on $runner_core is pid $core_pid, whose /proc/$core_pid/exe this shell cannot read, as for a server started under sg docker: its binary is not compared with $FYLGJA, only its build"
 fi
-echo "e2e: case 9's checks are on main, imported at this tree's ${IMPORTED:0:12}, and the server on $BRIDGE:7650 answers, build $BUILD, $bridge_binary"
+# What the core is asked during the run is read from here on (no Infrahub request, SC-008).
+[ -r "$CORE_LOG" ] || fail "case 9 needs the core's log $CORE_LOG, as CLAUDE.md's start line writes it, to be readable"
+CORE_LOG_FROM=$(stat -c %s "$CORE_LOG")
+echo "e2e: case 9's checks are on main, imported at this tree's ${IMPORTED:0:12}; the runner (pid $runner_pid) serves twin-rehearse/main on $PREFECT_API_URL; the core on $runner_core answers, build $BUILD, $core_binary"
 
-# The script's own server, from the tree and in the script's full environment:
-# Infrahub's variables, both logins, the state root, and docker and containerlab on its PATH,
-# which it reads at each request. Asked for port 0, it listens on one the system chose and
-# names it in its listen line, so no port is taken from another process, nor one taken
-# between a check and the listen. Started as a simple command so that $! is the server
-# itself, as case 3's worker is. Its report and its request log go to server.log, which the
-# greps below search.
-FYLGJA_API_TOKEN="$API_TOKEN" "$FYLGJA" serve --listen 127.0.0.1:0 > "$OUT/server.log" 2>&1 &
+# The script's own core server, from the tree, in the script's environment less every
+# INFRAHUB_* variable, Infrahub's address and token, which no core reads (020, FR-004), and
+# its Compose secrets, which local/.env carries for Compose alone, the admin token among them
+# with the API token's value; less the default scope, which no core reads; and less the
+# platform's credential, which no core holds (FR-005): both logins, the state root, and docker and
+# containerlab on its PATH, which it reads at each request. Asked for port 0, it listens on
+# one the system chose and names it in its listen line, so no port is taken from another
+# process, nor one taken between a check and the listen. Started by a subshell that execs it,
+# so that $! is the server itself, as case 3's worker is. Its report and its request log go
+# to server.log, which the greps below search.
+(
+  # shellcheck disable=SC2046 # one name a word
+  export -n $(compgen -e | grep '^INFRAHUB_') FYLGJA_DEFAULT_SCOPE PREFECT_API_AUTH_STRING FYLGJA_ORCHESTRATOR_AUTH
+  FYLGJA_API_TOKEN="$API_TOKEN" exec "$FYLGJA" serve --listen 127.0.0.1:0
+) > "$OUT/server.log" 2>&1 &
 SERVER_PID=$!
 trap stop_server EXIT
 start=$(now_ns)
@@ -986,21 +1221,22 @@ while :; do
   sleep 0.1
 done
 echo "e2e: the API's server listens on $API_ADDRESS, after $(since "$start")s"
-# Every case reads under the server's default scope, which the fixtures' devices are tagged
-# into (017), but case 5's create, which names it. A server with none refuses each such
-# request scope.unset; say so once, here, with the remedy.
-grep -qx 'fylgja serve: default scope: tag:fylgja' "$OUT/server.log" ||
-  fail "the API's server reads under no default scope tag:fylgja (see $OUT/server.log): add FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\" to local/.env"
+# Its environment, read by name alone, never a value: no INFRAHUB_* variable, no default
+# scope and no platform credential.
+held=$(tr '\0' '\n' < "/proc/$SERVER_PID/environ" |
+  sed -n 's/^\(INFRAHUB_[A-Z_]*\|FYLGJA_DEFAULT_SCOPE\|PREFECT_API_AUTH_STRING\|FYLGJA_ORCHESTRATOR_AUTH\)=.*/\1/p' | paste -sd ' ' -)
+[ -z "$held" ] || fail "the API's server holds $held in its environment, which no core reads (020)"
 
-# The dry run touches nothing but the snapshot store and the bundle store, filing the
-# snapshot it takes and the bundle it compiles. Refused means the host
-# already holds a twin this script did not make: say so rather than destroy it.
+# The dry run touches nothing but the snapshot stores and the bundle store: fylgja-cli files
+# the snapshot it takes, and the core the snapshot it is sent and the bundle it compiles.
+# Refused means the host already holds a twin this script did not make: say so rather than
+# destroy it.
 dry_status=0
-fylgja twin create --branch "$BRANCH" --dry-run --json > "$OUT/dry.json" 2> "$OUT/dry.err" || dry_status=$?
+fylgja_cli twin create --branch "$BRANCH" --dry-run --json > "$OUT/dry.json" 2> "$OUT/dry.err" || dry_status=$?
 if jq -e '.dry_run.verdict=="refused"' "$OUT/dry.json" > /dev/null 2>&1; then
   fail "the host is not clear ($(jq -r '[.findings[] | select(.severity=="rejection") | .rule] | join(", ")' "$OUT/dry.json")): run fylgja twin destroy first"
 fi
-expect "$OUT/dry.json" '.status=="ok" and .dry_run.verdict=="clear" and (.dry_run.nodes|length)==3'
+expect "$OUT/dry.json" '.status=="ok" and .operation=="twin.create" and .dry_run.verdict=="clear" and (.dry_run.nodes|length)==3'
 [ "$dry_status" -eq 0 ] || fail "dry run exited $dry_status with a clear verdict"
 
 # An image pull inside the run counts against the deploy budget (psp/nokia_srlinux.yaml).
@@ -1034,7 +1270,7 @@ expect "$TWIN/twin.json" '.provenance.branch==env.BRANCH and (.provenance | has(
   and .provenance.mapping=={reader: "infrahub-dcim", model: "opsmill/schema-library", version: "26336e9"}'
 
 # twin show names the snapshot the twin was built from beside its bundle (018), the scope
-# the twin's read was made under, the server's default, and the mapping that read it (017;
+# the twin's read was made under, fylgja-cli's default, and the mapping that read it (017;
 # contracts/cli.md, twin show's record line).
 fylgja twin show > "$OUT/show-1.out" 2> "$OUT/show-1.err" ||
   fail "case 1: twin show exited non-zero; see $OUT/show-1.err"
@@ -1044,8 +1280,8 @@ grep -qF 'scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26
   fail "case 1: twin show names no scope tag:fylgja read by infrahub-dcim from opsmill/schema-library@26336e9; see $OUT/show-1.out"
 
 compiled_id 1
-[ "$BID1" = "$COMPILED_ID" ] || fail "case 1: the run deployed $BID1, but intent read | twin compile gives $COMPILED_ID"
-[ "$SID1" = "$COMPILED_SNAPSHOT" ] || fail "case 1: the run was built from snapshot $SID1, but intent read | twin compile gives $COMPILED_SNAPSHOT"
+[ "$BID1" = "$COMPILED_ID" ] || fail "case 1: the run deployed $BID1, but fylgja-cli intent read | twin compile gives $COMPILED_ID"
+[ "$SID1" = "$COMPILED_SNAPSHOT" ] || fail "case 1: the run was built from snapshot $SID1, but fylgja-cli intent read | twin compile gives $COMPILED_SNAPSHOT"
 
 # The conformance suite's boot half on this twin. It reads each node by gNMI
 # and changes nothing, so the refused create below still finds the twin as the run left
@@ -1069,7 +1305,7 @@ clab inspect --all --format json > "$OUT/inspect-1a.json"
 twin_before=$(sha256sum < "$TWIN/twin.json")
 start=$(now_ns)
 refused_status=0
-fylgja twin create --branch "$BRANCH" --json > "$OUT/refused-1.json" 2> "$OUT/refused-1.err" || refused_status=$?
+fylgja_cli twin create --branch "$BRANCH" --json > "$OUT/refused-1.json" 2> "$OUT/refused-1.err" || refused_status=$?
 echo "e2e: case 1: second create refused after $(since "$start")s (exit $refused_status)"
 clab inspect --all --format json > "$OUT/inspect-1b.json"
 [ "$refused_status" -eq 1 ] || fail "case 1: the second create exited $refused_status, not 1; see $OUT/refused-1.json"
@@ -1094,18 +1330,25 @@ fi
 # --- case 2: destroy then create from another reference ------------------------
 if case_runs 2; then
 
-create_twin 2 --at "$T"
+# fylgja-cli's create reads the branch as it stands, and takes no --at (020): a pinned
+# reference is read by intent read --at, and the twin created from that snapshot by the core,
+# which reads nothing. The record's provenance names T all the same, from the envelope.
+fylgja_cli intent read --branch "$BRANCH" --at "$T" --out "$OUT/snapshot-2-at.json" > "$OUT/read-2-at.out" 2> "$OUT/read-2-at.err" ||
+  fail "case 2: fylgja-cli intent read --at $T failed; see $OUT/read-2-at.out and $OUT/read-2-at.err"
+CREATE_SNAPSHOT="$OUT/snapshot-2-at.json"
+create_twin 2
+unset CREATE_SNAPSHOT
 SID2=$SID BID2=$BID RUN2=$RUN_ID
 export BID2 RUN2
-[ "$BID2" != "$BID1" ] || fail "case 2: create --at $T gave case 1's bundle_id $BID1"
+[ "$BID2" != "$BID1" ] || fail "case 2: the create from a read --at $T gave case 1's bundle_id $BID1"
 expect "$TWIN/twin.json" '.provenance.branch==env.BRANCH and .provenance.at==env.T and .bundle_id==env.BID2'
 expect "$FYLGJA_STATE_ROOT/bundles/$BID2/manifest.json" '.provenance.at==env.T'
 { [ -d "$FYLGJA_STATE_ROOT/bundles/$BID1" ] && [ -d "$FYLGJA_STATE_ROOT/bundles/$BID2" ]; } ||
   fail "case 2: the store does not hold both bundles $BID1 and $BID2"
 
 compiled_id 2 --at "$T"
-[ "$BID2" = "$COMPILED_ID" ] || fail "case 2: the run deployed $BID2, but intent read --at $T | twin compile gives $COMPILED_ID"
-[ "$SID2" = "$COMPILED_SNAPSHOT" ] || fail "case 2: the run was built from snapshot $SID2, but intent read --at $T | twin compile gives $COMPILED_SNAPSHOT"
+[ "$BID2" = "$COMPILED_ID" ] || fail "case 2: the run deployed $BID2, but fylgja-cli intent read --at $T | twin compile gives $COMPILED_ID"
+[ "$SID2" = "$COMPILED_SNAPSHOT" ] || fail "case 2: the run was built from snapshot $SID2, but fylgja-cli intent read --at $T | twin compile gives $COMPILED_SNAPSHOT"
 
 destroy_twin 2 "done" "done"
 else
@@ -1170,7 +1413,7 @@ not
   $expected_line"
 
 dry_orphan_status=0
-fylgja twin create --branch "$BRANCH" --dry-run --json > "$OUT/dry-orphan.json" 2> "$OUT/dry-orphan.err" || dry_orphan_status=$?
+fylgja_cli twin create --branch "$BRANCH" --dry-run --json > "$OUT/dry-orphan.json" 2> "$OUT/dry-orphan.err" || dry_orphan_status=$?
 [ "$dry_orphan_status" -eq 1 ] || fail "case 3: the dry run beside the orphan exited $dry_orphan_status, not 1; see $OUT/dry-orphan.json"
 export ORPHAN_REFUSAL="lab fylgja is present (1 node), an orphan: no twin.json records it; deployed from $ORPHAN_TOPO; one twin exists at a time, and fylgja twin destroy clears it"
 expect "$OUT/dry-orphan.json" '.status=="rejected" and .dry_run.verdict=="refused"
@@ -1187,11 +1430,17 @@ fi
 # --- case 4: the pinned reference again, the same bundle -----------------------
 if case_runs 4; then
 
-create_twin 4 --at "$T"
+# The branch read --at T again, as case 2 read it, and created from: the same snapshot, which
+# the stores hold already, and the same bundle (M3).
+fylgja_cli intent read --branch "$BRANCH" --at "$T" --out "$OUT/snapshot-4-at.json" > "$OUT/read-4-at.out" 2> "$OUT/read-4-at.err" ||
+  fail "case 4: fylgja-cli intent read --at $T failed; see $OUT/read-4-at.out and $OUT/read-4-at.err"
+CREATE_SNAPSHOT="$OUT/snapshot-4-at.json"
+create_twin 4
+unset CREATE_SNAPSHOT
 BID4=$BID RUN4=$RUN_ID
-[ "$BID4" = "$BID2" ] || fail "case 4: create --at $T gave $BID4, but case 2 gave $BID2"
-[ "$SID" = "$SID2" ] || fail "case 4: create --at $T took snapshot $SID, but case 2 took $SID2"
-[ "$RUN4" != "$RUN2" ] || fail "case 4: create --at $T reports case 2's run $RUN2"
+[ "$BID4" = "$BID2" ] || fail "case 4: the create from a read --at $T gave $BID4, but case 2 gave $BID2"
+[ "$SID" = "$SID2" ] || fail "case 4: the read --at $T took snapshot $SID, but case 2 took $SID2"
+[ "$RUN4" != "$RUN2" ] || fail "case 4: the create from a read --at $T reports case 2's run $RUN2"
 expect "$TWIN/twin.json" '.provenance.at==env.T and .bundle_id==env.BID2'
 
 destroy_twin 4 "done" "done"
@@ -1232,9 +1481,10 @@ BURST_COUNT=$(psp_scalar "$PROBE_PACKAGE" count)
 
 # The dry run with the file lists the probe's two hosts among the nodes, after the three
 # devices' lines, each on the probe package's image and naming its format where a device
-# names its package, with nothing pushed (contracts/cli.md, "016: probes").
+# names its package, with nothing pushed (contracts/cli.md, "016: probes"): the core's
+# lines, which fylgja-cli prints on stdout as they arrive (020).
 dry5_status=0
-fylgja twin create --branch "$FB" --scope tag:fylgja --probes "$PROBES5" --dry-run > "$OUT/dry-5.out" 2> "$OUT/dry-5.err" || dry5_status=$?
+fylgja_cli twin create --branch "$FB" --scope tag:fylgja --probes "$PROBES5" --dry-run > "$OUT/dry-5.out" 2> "$OUT/dry-5.err" || dry5_status=$?
 [ "$dry5_status" -eq 0 ] || fail "case 5: the dry run with --probes exited $dry5_status; see $OUT/dry-5.out and $OUT/dry-5.err"
 awk '/^nodes:$/ { on = 1; next } on && /^  / { print; next } on { exit }' "$OUT/dry-5.out" > "$OUT/dry-5-nodes.txt"
 [ "$(wc -l < "$OUT/dry-5-nodes.txt")" -eq 5 ] ||
@@ -1246,7 +1496,7 @@ done
 grep -qx 'verdict: clear' "$OUT/dry-5.out" || fail "case 5: the dry run with --probes is not clear; see $OUT/dry-5.out"
 echo "e2e: case 5: the dry run with $PROBES5 lists n1-loop-a and n1-loop-b among the nodes"
 
-# The scope named, the server's default (017). The create follows nothing (019): its
+# The scope named, fylgja-cli's default (017). The create follows nothing (019): its
 # document carries no following block. The file's probe is in its snapshot, and its two hosts
 # beside the devices.
 HOSTS=2
@@ -1342,9 +1592,9 @@ temporal workflow list --address "$TEMPORAL_ADDRESS" --query "StartTime > '$CREA
 expect "$OUT/runs-5-frozen.json" 'length == 0'
 echo "e2e: case 5: ${FROZEN5_TOOK}s after the change, twin.json, the containers and the kind line had not moved, and no run had started since $CREATED5"
 
-# A step to a snapshot of the changed branch, by file (019): intent read --out writes it,
-# with the probe file, so it carries the twin's probe (016), and twin compile names its
-# bundle, which the step deploys with nothing read from Infrahub. The record then names that
+# A step to a snapshot of the changed branch, by file (019): fylgja-cli intent read --out
+# writes it, with the probe file, so it carries the twin's probe (016), and twin compile
+# names its bundle, which the step deploys with nothing read from Infrahub. The record then names that
 # snapshot and bundle, still no stage, and keeps its source; the step's document and the
 # record name the probe's flow across it, measured on the container's basis.
 compiled_id 5a --probes "$PROBES5"
@@ -1365,7 +1615,7 @@ expect "$OUT/step-5a.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and any(.step.pushed[]; .node=="n1") and all(.step.pushed[]; .outcome=="landed")'
 RUN5A=$(jq -r .subject.run_id "$OUT/step-5a.json")
 export RUN5A
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .source=="intent" and .stage==null
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .source=="snapshot" and .stage==null
   and .snapshot_id==env.SID5A and .bundle_id==env.BID5A
   and .provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN5A and .step.phase==null
@@ -1397,8 +1647,10 @@ expect "$OUT/verify-5a.json" '.verify.counts.port_enabled.skipped==1 and .verify
   and .verify.twin.snapshot_id==env.SID5A and .verify.twin.bundle_id==env.BID5A'
 
 # The topology change: a third link, which moves n1's and n3's artifacts too; the
-# fixture tool generates after it. The step to it names the snapshot by the id intent read
-# --out filed it under: the link re-cabled live on n1 and n3, as case 7's.
+# fixture tool generates after it. fylgja-cli intent read --out files its snapshot in the
+# orchestrator's store, which the core does not read (020), so a dry run of the step by file
+# files it in the core's, beside the twin, changing nothing else; the step then names it by
+# that id: the link re-cabled live on n1 and n3, as case 7's.
 cp "$OUT/artifacts-5a.json" "$OUT/artifacts-5b-before.json"
 fixture -branch "$FB" -add-link > "$OUT/add-link-5.out" 2> "$OUT/add-link-5.err" ||
   fail "case 5: -add-link on $FB failed; see $OUT/add-link-5.err"
@@ -1407,8 +1659,15 @@ compiled_id 5b --probes "$PROBES5"
 SID5B=$COMPILED_SNAPSHOT BID5B=$COMPILED_ID
 export SID5B BID5B
 [ "$BID5B" != "$BID5A" ] || fail "case 5: the branch change left the compiled bundle_id at $BID5A"
-[ -f "$FYLGJA_STATE_ROOT/snapshots/$SID5B.json" ] || fail "case 5: intent read --out filed no snapshot $SID5B in the store"
-echo "e2e: case 5: $FB changed; snapshot $SID5B compiles to $BID5B"
+twin_before=$(sha256sum < "$TWIN/twin.json")
+dry5b_status=0
+fylgja twin step --snapshot "$OUT/snapshot-5b.json" --dry-run --json > "$OUT/step-5b-dry.json" 2> "$OUT/step-5b-dry.err" || dry5b_status=$?
+[ "$dry5b_status" -eq 0 ] || fail "case 5: twin step --snapshot $OUT/snapshot-5b.json --dry-run exited $dry5b_status; see $OUT/step-5b-dry.json"
+expect "$OUT/step-5b-dry.json" '.status=="ok" and .operation=="twin.step" and .dry_run.verdict=="clear"
+  and .snapshot_id==env.SID5B and .bundle_id==env.BID5B and (.step | has("run") | not)'
+[ "$twin_before" = "$(sha256sum < "$TWIN/twin.json")" ] || fail "case 5: the step's dry run changed twin.json"
+[ -f "$FYLGJA_STATE_ROOT/snapshots/$SID5B.json" ] || fail "case 5: the step's dry run by file filed no snapshot $SID5B in the core's store"
+echo "e2e: case 5: $FB changed; snapshot $SID5B compiles to $BID5B, filed in the core's store by the step's dry run"
 start=$(now_ns)
 step5b_status=0
 fylgja twin step --snapshot "$SID5B" --json > "$OUT/step-5b.json" 2> "$OUT/step-5b.err" || step5b_status=$?
@@ -1422,7 +1681,7 @@ expect "$OUT/step-5b.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and (.step.reconcile.links_added | length) == 1 and all(.step.pushed[]; .outcome=="landed")'
 RUN5B=$(jq -r .subject.run_id "$OUT/step-5b.json")
 export RUN5B
-expect "$TWIN/twin.json" '.state=="ready" and .source=="intent" and .stage==null
+expect "$TWIN/twin.json" '.state=="ready" and .source=="snapshot" and .stage==null
   and .snapshot_id==env.SID5B and .bundle_id==env.BID5B and .provenance.branch==env.FB
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN5B
   and .step.from.snapshot_id==env.SID5A and .step.to.snapshot_id==env.SID5B
@@ -1563,7 +1822,8 @@ await_checksums_moved 7 "$FP" "$OUT/artifacts-7-sealed-1.json" n1 n3
 fixture -branch "$FP" -stage third-link -description "third link" > "$OUT/stage-7-third-link.out" 2> "$OUT/stage-7-third-link.err" ||
   fail "case 7: marking stage $FP/third-link failed; see $OUT/stage-7-third-link.err"
 
-# The plan: no lab, no worker, no workflow service. Four stages in order. The branch point
+# The plan, fylgja-cli's (020): no lab, no worker, no workflow service; the core compiles
+# each stage and diffs each pair, and reads nothing. Four stages in order. The branch point
 # is main at the branch's creation, which holds no tagged device on this install, so its
 # read is refused scope.empty (017 R-20) and the plan exits 1. The two marks and the head
 # compile to three ids, the head's at being its own. Three steps: the first not computed;
@@ -1572,7 +1832,7 @@ fixture -branch "$FP" -stage third-link -description "third link" > "$OUT/stage-
 # the third unchanged, since nothing was written after the second mark but the mark.
 start=$(now_ns)
 plan_status=0
-fylgja stage plan --branch "$FP" --json > "$OUT/plan-7.json" 2> "$OUT/plan-7.err" || plan_status=$?
+fylgja_cli stage plan --branch "$FP" --json > "$OUT/plan-7.json" 2> "$OUT/plan-7.err" || plan_status=$?
 PLAN7_TOOK=$(since "$start")
 echo "e2e: case 7: plan took ${PLAN7_TOOK}s (exit $plan_status)"
 [ "$plan_status" -eq 1 ] ||
@@ -1619,8 +1879,9 @@ expect "$OUT/plan-7.json" '(.plan.steps[0] | (.computed | not)
     and .from_bundle_id==env.PLAN7T and .to_bundle_id==env.PLAN7H)'
 echo "e2e: case 7: plan $FP/seeded $PLAN7S at $AT7S, $FP/third-link $PLAN7T at $AT7T, $FP/head $PLAN7H at $AT7H; the branch point refused; one link added, n1 and n3 changed; the head unchanged"
 
-# The list, before any twin: the four stages, each resolving as the plan did, and no record.
-fylgja stage list --branch "$FP" --json > "$OUT/list-7-before.json" 2> "$OUT/list-7-before.err" ||
+# The list, before any twin: the four stages, each resolving as the plan did, and no record:
+# case 6's create, from a branch, left none.
+fylgja_cli stage list --branch "$FP" --json > "$OUT/list-7-before.json" 2> "$OUT/list-7-before.err" ||
   fail "case 7: stage list --branch $FP exited non-zero; see $OUT/list-7-before.json and $OUT/list-7-before.err"
 expect "$OUT/list-7-before.json" '.status=="ok" and .stages.branch==env.FP and .stages.record==null
   and [.stages.rows[] | {ref, branch, at, at_source, twin}]
@@ -1630,10 +1891,10 @@ expect "$OUT/list-7-before.json" '.status=="ok" and .stages.branch==env.FP and .
         {ref: (env.FP + "/head"), branch: env.FP, at: env.AT7H, at_source: "head", twin: false}]
   and all(.stages.rows[]; .proposed_change.id==env.PC7)'
 
-# The twin from the first mark: the plan's id, pinned at its at, and the
-# record naming the stage and its proposed change, and no rehearsal (twin.json 11). It is
-# read back against what Infrahub held when the mark was made, since -add-link has moved
-# n1's and n3's artifacts since.
+# The twin from the first mark: the plan's id, pinned at its at; twin.json 12 names no stage
+# and no rehearsal, and the orchestrator's record names the stage and its proposed change
+# (020, R-09). It is read back against what Infrahub held when the mark was made, since
+# -add-link has moved n1's and n3's artifacts since.
 BRANCH=$FP
 READBACK=
 CREATE_REF="$FP/seeded"
@@ -1646,16 +1907,21 @@ expect "$OUT/create-7.json" '.subject.stage==(env.FP + "/seeded") and .subject.b
   and .stage == {ref: (env.FP + "/seeded"), branch: env.FP, label: "seeded",
     proposed_change: {id: env.PC7, name: env.FP, branch: env.FP, draft: true},
     at: env.AT7S, at_source: "written", description: "seeded"}'
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
-  and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .stage==null and .provenance.branch==env.FP
+  and .provenance.at==env.AT7S and .step==null'
+expect "$ORCH_RECORD" '.record_version=="1" and .flow=="twin-create" and .snapshot_id==env.SNAP7S
+  and .stage == {branch: env.FP, label: "seeded", at: env.AT7S} and .proposed_change == {id: env.PC7, branch: env.FP}'
+cp "$ORCH_RECORD" "$OUT/record-7.json"
 readback 7 "$FP" enable "$OUT/artifacts-7-sealed-1.json"
 
 fylgja twin show --json > "$OUT/show-7.json" 2> "$OUT/show-7.err" ||
   fail "case 7: twin show exited non-zero; see $OUT/show-7.err"
 expect "$OUT/show-7.json" '.show.kind=="snapshot" and .show.record.snapshot_id==env.SNAP7S and .show.record.bundle_id==env.PLAN7S and .show.record.at==env.AT7S
-  and .show.record.stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
+  and .show.record.stage==null'
 
-fylgja stage list --branch "$FP" --json > "$OUT/list-7.json" 2> "$OUT/list-7.err" ||
+# The list marks the twin's stage from the orchestrator's record, trusted while twin show
+# names its snapshot (020, R-09).
+fylgja_cli stage list --branch "$FP" --json > "$OUT/list-7.json" 2> "$OUT/list-7.err" ||
   fail "case 7: stage list exited non-zero beside the twin; see $OUT/list-7.json and $OUT/list-7.err"
 expect "$OUT/list-7.json" '.status=="ok"
   and .stages.record == {ref: (env.FP + "/seeded"), proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded",
@@ -1663,13 +1929,14 @@ expect "$OUT/list-7.json" '.status=="ok"
   and [.stages.rows[] | select(.twin) | .ref] == [env.FP + "/seeded"]
   and ([.findings[] | select(.rule=="stage.twin.moved")] | length) == 0'
 
-# A step with no target goes to the next stage, the second mark: the third link re-cabled
+# A step with no target goes to the next stage of the record's, the second mark: fylgja-cli
+# reads and files it, and the core steps to its snapshot (020): the third link re-cabled
 # live on n1 and n3, which SR Linux's package allows with no restart, and both pushed by
 # replace; n2 untouched. The branch has not moved since the mark, so Infrahub's artifacts
 # now are the ones it sealed.
 start=$(now_ns)
 step7a_status=0
-fylgja twin step --json > "$OUT/step-7a.json" 2> "$OUT/step-7a.err" || step7a_status=$?
+fylgja_cli twin step --json > "$OUT/step-7a.json" 2> "$OUT/step-7a.err" || step7a_status=$?
 STEP7A_TOOK=$(since "$start")
 echo "e2e: case 7: step to $FP/third-link took ${STEP7A_TOOK}s (exit $step7a_status)"
 [ "$step7a_status" -eq 0 ] || fail "case 7: twin step exited $step7a_status; see $OUT/step-7a.json and $OUT/step-7a.err"
@@ -1679,19 +1946,20 @@ expect "$OUT/step-7a.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and .step.from.snapshot_id==env.SNAP7S and (.step.to.snapshot_id | type)=="string" and .step.to.snapshot_id==env.SNAP7T'
 RUN7A=$(jq -r .subject.run_id "$OUT/step-7a.json")
 export RUN7A
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
-  and .provenance.branch==env.FP and .provenance.at==env.AT7T
-  and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "third-link", description: "third link", at_source: "written"}
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
+  and .provenance.branch==env.FP and .provenance.at==env.AT7T and .stage==null
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN7A and .step.phase==null
   and .snapshot_id==env.SNAP7T
-  and .step.from.stage.label=="seeded" and .step.from.snapshot_id==env.SNAP7S and .step.from.bundle_id==env.PLAN7S
-  and .step.to.stage.label=="third-link" and (.step.to.snapshot_id | type)=="string" and .step.to.snapshot_id==env.SNAP7T
+  and .step.from.stage==null and .step.from.snapshot_id==env.SNAP7S and .step.from.bundle_id==env.PLAN7S
+  and .step.to.stage==null and (.step.to.snapshot_id | type)=="string" and .step.to.snapshot_id==env.SNAP7T
   and .step.to.bundle_id==env.PLAN7T
   and .step.reconcile.restarted == [] and .step.reconcile.recreated == [] and .step.reconcile.added == []
   and (.step.reconcile.links_added | length) == 1
   and [.step.pushed[] | {node, outcome}] == [{node: "n1", outcome: "landed"}, {node: "n3", outcome: "landed"}]
   and all(.nodes[]; .holds==env.PLAN7T)'
 cp "$TWIN/twin.json" "$OUT/twin-7a.json"
+expect "$ORCH_RECORD" '.flow=="twin-step" and .snapshot_id==env.SNAP7T
+  and .stage == {branch: env.FP, label: "third-link", at: env.AT7T} and .proposed_change == {id: env.PC7, branch: env.FP}'
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 readback 7a "$FP" enable
 history_of step-7a fylgja-step "$RUN7A"
@@ -1702,7 +1970,7 @@ history_of step-7a fylgja-step "$RUN7A"
 # (US2's second scenario). The list then marks the head, which has not moved.
 start=$(now_ns)
 step7b_status=0
-fylgja twin step --json > "$OUT/step-7b.json" 2> "$OUT/step-7b.err" || step7b_status=$?
+fylgja_cli twin step --json > "$OUT/step-7b.json" 2> "$OUT/step-7b.err" || step7b_status=$?
 STEP7B_TOOK=$(since "$start")
 echo "e2e: case 7: step to $FP/head took ${STEP7B_TOOK}s (exit $step7b_status)"
 [ "$step7b_status" -eq 0 ] || fail "case 7: the second twin step exited $step7b_status; see $OUT/step-7b.json and $OUT/step-7b.err"
@@ -1712,16 +1980,17 @@ expect "$OUT/step-7b.json" '.status=="ok" and .operation=="twin.step" and .snaps
 RUN7B=$(jq -r .subject.run_id "$OUT/step-7b.json")
 export RUN7B
 expect "$TWIN/twin.json" '.state=="ready" and .snapshot_id==env.SNAP7H and .bundle_id==env.PLAN7H and .provenance.at==env.AT7H
-  and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "head", description: "", at_source: "head"}
-  and .step.outcome=="unchanged" and .step.run.run_id==env.RUN7B
-  and .step.from.stage.label=="third-link" and .step.from.snapshot_id==env.SNAP7T and .step.from.bundle_id==env.PLAN7T
+  and .stage==null and .step.outcome=="unchanged" and .step.run.run_id==env.RUN7B
+  and .step.from.snapshot_id==env.SNAP7T and .step.from.bundle_id==env.PLAN7T
   and (.step.to.snapshot_id | type)=="string" and .step.to.snapshot_id==env.SNAP7H and .step.to.bundle_id==env.PLAN7H
   and .step.reconcile.skipped and (.step.pushed | length) == 0
   and all(.nodes[]; .holds==env.PLAN7H)'
 cp "$TWIN/twin.json" "$OUT/twin-7b.json"
+expect "$ORCH_RECORD" '.flow=="twin-step" and .snapshot_id==env.SNAP7H
+  and .stage == {branch: env.FP, label: "head", at: env.AT7H} and .proposed_change == {id: env.PC7, branch: env.FP}'
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 history_of step-7b fylgja-step "$RUN7B"
-fylgja stage list --branch "$FP" --json > "$OUT/list-7b.json" 2> "$OUT/list-7b.err" ||
+fylgja_cli stage list --branch "$FP" --json > "$OUT/list-7b.json" 2> "$OUT/list-7b.err" ||
   fail "case 7: stage list exited non-zero beside the twin at the head; see $OUT/list-7b.json and $OUT/list-7b.err"
 expect "$OUT/list-7b.json" '.status=="ok" and .stages.record.label=="head" and .stages.record.at==env.AT7H
   and .stages.record.state=="ready" and [.stages.rows[] | select(.twin) | .ref] == [env.FP + "/head"]
@@ -1733,17 +2002,20 @@ READBACK=readback
 
 # The branch goes with its stages and its proposed change, in that order, and -delete says
 # so; Infrahub then holds none of them. The product then lists no stage of the branch, and
-# plans none: no open proposed change has it as its source. A failed delete fails the case,
-# and the trap tries it again.
+# plans none: no open proposed change has it as its source. The record outlives the destroy,
+# which is the core's, and is distrusted now that twin show names no snapshot: the list says
+# so and marks no row (020, R-09). A failed delete fails the case, and the trap tries it
+# again.
 if fixture -branch "$FP" -delete > "$OUT/delete-branch-7.out" 2>&1; then
   grep -qxF "deleted 2 stages, 1 proposed change, branch $FP" "$OUT/delete-branch-7.out" ||
     fail "case 7: -delete on $FP did not report its two stages and its proposed change; see $OUT/delete-branch-7.out"
   infrahub_holds_none 7 "$FP"
-  fylgja stage list --branch "$FP" --json > "$OUT/list-7-deleted.json" 2> "$OUT/list-7-deleted.err" ||
+  fylgja_cli stage list --branch "$FP" --json > "$OUT/list-7-deleted.json" 2> "$OUT/list-7-deleted.err" ||
     fail "case 7: stage list --branch $FP exited non-zero after the delete; see $OUT/list-7-deleted.err"
-  expect "$OUT/list-7-deleted.json" '.status=="ok" and .stages.branch==env.FP and .stages.rows == []'
+  expect "$OUT/list-7-deleted.json" '.status=="ok" and .stages.branch==env.FP and .stages.rows == []
+    and .stages.record==null and any(.findings[]; .rule=="record.twin.stale")'
   plan_status=0
-  fylgja stage plan --branch "$FP" --json > "$OUT/plan-7-deleted.json" 2> "$OUT/plan-7-deleted.err" || plan_status=$?
+  fylgja_cli stage plan --branch "$FP" --json > "$OUT/plan-7-deleted.json" 2> "$OUT/plan-7-deleted.err" || plan_status=$?
   [ "$plan_status" -eq 1 ] || fail "case 7: stage plan --branch $FP exited $plan_status after the delete, not 1; see $OUT/plan-7-deleted.json"
   expect "$OUT/plan-7-deleted.json" '.status=="rejected" and [.findings[] | select(.severity=="rejection") | .rule] == ["stage.unknown"]'
   unset FP
@@ -1891,15 +2163,16 @@ fixture -branch "$FS" -stage mixed-link -description "mixed link" > "$OUT/stage-
 # no stage's at pins it, and both stages compile with it.
 write_probes 8 testdata/probes/e1-loop.json e1-loop
 
-# The plan (M10, 014): four stages, the branch point refused as case 7's is, so the plan
-# exits 1; the marks and the head compiled to three ids, and between the marks the link,
+# The plan (M10, 014), fylgja-cli's (020): four stages, the branch point refused as case 7's
+# is, so the plan exits 1; the marks and the head compiled to three ids, and between the marks the link,
 # with s1 re-bootstrapped for it and both ends' artifacts re-rendered. e1's bootstrap
 # carries no per-port line, so e1 changes in its mapping alone, if at all; e2 not at all.
 # The step to the head is unchanged. Each compiled stage carries warnings and no rejection:
 # the mixed fixture's EOS artifacts name Management1, which the node calls Management0
-# (artifact.interface.unrepresented, M7), as case 6's create does.
+# (artifact.interface.unrepresented, M7), as case 6's create does, warned once, at the
+# core's compile, where the Go reader warned it at its read too (020's research §5.20).
 plan_status=0
-fylgja stage plan --branch "$FS" --json > "$OUT/plan-8.json" 2> "$OUT/plan-8.err" || plan_status=$?
+fylgja_cli stage plan --branch "$FS" --json > "$OUT/plan-8.json" 2> "$OUT/plan-8.err" || plan_status=$?
 [ "$plan_status" -eq 1 ] ||
   fail "case 8: stage plan --branch $FS exited $plan_status, not 1 for its refused branch point; see $OUT/plan-8.json and $OUT/plan-8.err"
 expect "$OUT/plan-8.json" '.status=="rejected" and .operation=="stage.plan" and .plan.branch==env.FS
@@ -1926,9 +2199,10 @@ expect "$OUT/plan-8.json" '.plan.steps[1] | .computed and (.unchanged | not)
   and [.artifacts.changed[].node] == ["e1", "s1"]'
 echo "e2e: case 8: plan $FS/seeded $P1, $FS/mixed-link $P2; one link added between e1 and s1, both re-rendered"
 
-# The twin at seeded, pushed by replace: the plan's id, an 11 record of no rehearsal that has
-# not stepped, every node holding seeded's bundle; created with no probe file, its snapshot
-# carries the kind's probe, and the twin its two hosts on e1 (016).
+# The twin at seeded, pushed by replace: the plan's id, a 12 record of no rehearsal and no
+# stage that has not stepped, every node holding seeded's bundle, and the orchestrator's
+# record naming the stage (020); created with no probe file, its snapshot carries the kind's
+# probe, and the twin its two hosts on e1 (016).
 BRANCH=$FS
 READBACK=
 CREATE_REF="$FS/seeded"
@@ -1936,39 +2210,45 @@ HOSTS=2
 create_twin 8
 CREATE8_TOOK=$CREATE_TOOK
 [ "$BID" = "$P1" ] || fail "case 8: create --stage $FS/seeded deployed $BID, but the plan printed $P1"
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .step==null
-  and .stage.proposed_change.branch==env.FS and .stage.label=="seeded" and all(.nodes[]; .holds==env.P1)
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .step==null
+  and .stage==null and all(.nodes[]; .holds==env.P1)
   and [.nodes[] | select(.probe != null) | .name] == ["e1-loop-a", "e1-loop-b"]'
+expect "$ORCH_RECORD" '.flow=="twin-create" and .stage.branch==env.FS and .stage.label=="seeded"
+  and .proposed_change.branch==env.FS'
 expect "$OUT/probes-snapshot-8.json" '.probes == ["e1-loop"]'
 readback_mixed 8 "$FS" "$OUT/artifacts-8-sealed-1.json"
 containers_of "$OUT/containers-8-created.txt"
 [ "$(wc -l < "$OUT/containers-8-created.txt")" -eq "$NODES" ] ||
   fail "case 8: docker names $(wc -l < "$OUT/containers-8-created.txt") containers of the twin, not $NODES"
 
-# The step with no target goes to the next stage, mixed-link. It restarts e1, so it is
-# refused without --allow-restart: the dry run says so and touches nothing; the run is
-# refused before it starts, and touches nothing.
+# The step with no target goes to the next stage of the record's, mixed-link, which
+# fylgja-cli reads and files. It restarts e1, so the core refuses it without
+# --allow-restart: the dry run says so and touches nothing; the run is refused before it
+# starts, and touches nothing, the orchestrator's record included.
 twin_before=$(sha256sum < "$TWIN/twin.json")
+record_before=$(sha256sum < "$ORCH_RECORD")
 dry8_status=0
-fylgja twin step --dry-run --json > "$OUT/step-8-dry.json" 2> "$OUT/step-8-dry.err" || dry8_status=$?
+fylgja_cli twin step --dry-run --json > "$OUT/step-8-dry.json" 2> "$OUT/step-8-dry.err" || dry8_status=$?
 [ "$dry8_status" -eq 1 ] || fail "case 8: twin step --dry-run exited $dry8_status, not 1; see $OUT/step-8-dry.json"
 expect "$OUT/step-8-dry.json" '.status=="rejected" and .operation=="twin.step" and .dry_run.verdict=="refused"
   and .subject.stage==(env.FS + "/mixed-link")
   and [.findings[] | select(.severity=="rejection") | .rule] == ["step.restart.required"]
   and (.findings[] | select(.rule=="step.restart.required") | .object)=="e1"
-  and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1
-  and .step.to.stage.label=="mixed-link" and .step.to.bundle_id==env.P2
+  and .stage.label=="mixed-link" and .stage.branch==env.FS
+  and .step.from.stage==null and .step.from.bundle_id==env.P1
+  and .step.to.stage==null and .step.to.bundle_id==env.P2
   and .step.reconcile.restarted == ["e1"]
   and [.step.push_plan[].node] == ["e1", "s1"]
   and (.step | has("run") | not)'
 refused8_status=0
-fylgja twin step --json > "$OUT/step-8-refused.json" 2> "$OUT/step-8-refused.err" || refused8_status=$?
+fylgja_cli twin step --json > "$OUT/step-8-refused.json" 2> "$OUT/step-8-refused.err" || refused8_status=$?
 [ "$refused8_status" -eq 1 ] || fail "case 8: twin step without --allow-restart exited $refused8_status, not 1; see $OUT/step-8-refused.json"
 expect "$OUT/step-8-refused.json" '.status=="rejected"
   and [.findings[] | select(.severity=="rejection") | .rule] == ["step.restart.required"]
   and (.findings[] | select(.rule=="step.restart.required") | .object)=="e1"
   and (.step | has("run") | not)'
 [ "$twin_before" = "$(sha256sum < "$TWIN/twin.json")" ] || fail "case 8: a refused step changed twin.json"
+[ "$record_before" = "$(sha256sum < "$ORCH_RECORD")" ] || fail "case 8: a refused step changed the orchestrator's record"
 containers_of "$OUT/containers-8-refused.txt"
 cmp -s "$OUT/containers-8-created.txt" "$OUT/containers-8-refused.txt" ||
   fail "case 8: a refused step changed the twin's containers; compare $OUT/containers-8-created.txt and $OUT/containers-8-refused.txt"
@@ -1978,7 +2258,7 @@ echo "e2e: case 8: the step to $FS/mixed-link refused step.restart.required nami
 # re-cabled live and e2 untouched, their containers as they were; both pushed by replace.
 start=$(now_ns)
 step8a_status=0
-fylgja twin step --allow-restart --json > "$OUT/step-8a.json" 2> "$OUT/step-8a.err" || step8a_status=$?
+fylgja_cli twin step --allow-restart --json > "$OUT/step-8a.json" 2> "$OUT/step-8a.err" || step8a_status=$?
 STEP8A_TOOK=$(since "$start")
 echo "e2e: case 8: step to $FS/mixed-link took ${STEP8A_TOOK}s (exit $step8a_status)"
 [ "$step8a_status" -eq 0 ] || fail "case 8: twin step --allow-restart exited $step8a_status; see $OUT/step-8a.json and $OUT/step-8a.err"
@@ -1986,16 +2266,17 @@ expect "$OUT/step-8a.json" '.status=="ok" and .operation=="twin.step" and .bundl
   and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
 RUN8A=$(jq -r .subject.run_id "$OUT/step-8a.json")
 export RUN8A
-expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
-  and .stage.proposed_change.branch==env.FS and .stage.label=="mixed-link" and .run.workflow_id=="fylgja-provision"
+expect "$TWIN/twin.json" '.twin_version=="12" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
+  and .stage==null and .run.workflow_id=="fylgja-provision"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8A and .step.phase==null
-  and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2
+  and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2
   and .step.reconcile.restarted == ["e1"] and .step.reconcile.recreated == [] and .step.reconcile.added == []
   and ([.step.pushed[] | {node, reasons, outcome}]
     == [{node: "e1", reasons: ["artifact", "restarted"], outcome: "landed"},
         {node: "s1", reasons: ["artifact", "bootstrap"], outcome: "landed"}])
   and all(.nodes[]; .holds==env.P2)'
 cp "$TWIN/twin.json" "$OUT/twin-8a.json"
+expect "$ORCH_RECORD" '.flow=="twin-step" and .stage.branch==env.FS and .stage.label=="mixed-link"'
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 containers_of "$OUT/containers-8a.txt"
 for node in s1 e2; do
@@ -2034,7 +2315,7 @@ fylgja twin show --json > "$OUT/show-8a.json" 2> "$OUT/show-8a.err" ||
   fail "case 8: twin show exited non-zero after the step; see $OUT/show-8a.err"
 expect "$OUT/show-8a.json" '.show.kind=="snapshot" and .show.record.bundle_id==env.P2
   and .show.record.state=="ready" and .show.record.step.outcome=="stepped"'
-fylgja stage list --branch "$FS" --json > "$OUT/list-8a.json" 2> "$OUT/list-8a.err" ||
+fylgja_cli stage list --branch "$FS" --json > "$OUT/list-8a.json" 2> "$OUT/list-8a.err" ||
   fail "case 8: stage list exited non-zero beside the stepped twin; see $OUT/list-8a.json and $OUT/list-8a.err"
 expect "$OUT/list-8a.json" '.status=="ok" and .stages.record.proposed_change.branch==env.FS
   and .stages.record.label=="mixed-link" and .stages.record.state=="ready" and .stages.record.towards==null
@@ -2045,18 +2326,19 @@ expect "$OUT/list-8a.json" '.status=="ok" and .stages.record.proposed_change.bra
 # the create's.
 start=$(now_ns)
 step8b_status=0
-fylgja twin step --stage "$FS/seeded" --allow-restart --json > "$OUT/step-8b.json" 2> "$OUT/step-8b.err" || step8b_status=$?
+fylgja_cli twin step --stage "$FS/seeded" --allow-restart --json > "$OUT/step-8b.json" 2> "$OUT/step-8b.err" || step8b_status=$?
 STEP8B_TOOK=$(since "$start")
 echo "e2e: case 8: step back to $FS/seeded took ${STEP8B_TOOK}s (exit $step8b_status)"
 [ "$step8b_status" -eq 0 ] || fail "case 8: twin step --stage $FS/seeded exited $step8b_status; see $OUT/step-8b.json and $OUT/step-8b.err"
 expect "$OUT/step-8b.json" '.status=="ok" and .bundle_id==env.P1 and .step.outcome=="stepped"'
 RUN8B=$(jq -r .subject.run_id "$OUT/step-8b.json")
 export RUN8B
-expect "$TWIN/twin.json" '.state=="ready" and .bundle_id==env.P1 and .stage.label=="seeded"
+expect "$TWIN/twin.json" '.state=="ready" and .bundle_id==env.P1 and .stage==null
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8B
-  and .step.from.stage.label=="mixed-link" and .step.from.bundle_id==env.P2
+  and .step.from.bundle_id==env.P2
   and .step.reconcile.restarted == ["e1"] and all(.nodes[]; .holds==env.P1)'
 cp "$TWIN/twin.json" "$OUT/twin-8b.json"
+expect "$ORCH_RECORD" '.flow=="twin-step" and .stage.branch==env.FS and .stage.label=="seeded"'
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 containers_of "$OUT/containers-8b.txt"
 [ "$(container_line "$OUT/containers-8-created.txt" e2)" = "$(container_line "$OUT/containers-8b.txt" e2)" ] ||
@@ -2088,11 +2370,11 @@ if fixture -branch "$FS" -delete > "$OUT/delete-branch-8.out" 2>&1; then
   grep -qxF "deleted 2 stages, 1 proposed change, branch $FS" "$OUT/delete-branch-8.out" ||
     fail "case 8: -delete on $FS did not report its two stages and its proposed change; see $OUT/delete-branch-8.out"
   infrahub_holds_none 8 "$FS"
-  fylgja stage list --branch "$FS" --json > "$OUT/list-8-deleted.json" 2> "$OUT/list-8-deleted.err" ||
+  fylgja_cli stage list --branch "$FS" --json > "$OUT/list-8-deleted.json" 2> "$OUT/list-8-deleted.err" ||
     fail "case 8: stage list --branch $FS exited non-zero after the delete; see $OUT/list-8-deleted.err"
   expect "$OUT/list-8-deleted.json" '.status=="ok" and .stages.branch==env.FS and .stages.rows == []'
   plan_status=0
-  fylgja stage plan --branch "$FS" --json > "$OUT/plan-8-deleted.json" 2> "$OUT/plan-8-deleted.err" || plan_status=$?
+  fylgja_cli stage plan --branch "$FS" --json > "$OUT/plan-8-deleted.json" 2> "$OUT/plan-8-deleted.err" || plan_status=$?
   [ "$plan_status" -eq 1 ] || fail "case 8: stage plan --branch $FS exited $plan_status after the delete, not 1; see $OUT/plan-8-deleted.json"
   expect "$OUT/plan-8-deleted.json" '.status=="rejected" and [.findings[] | select(.severity=="rejection") | .rule] == ["stage.unknown"]'
   unset FS
@@ -2135,25 +2417,41 @@ comments_of() {
 }
 
 # rehearsal_run CASE FILE: the run a rehearsal's comment names in its second paragraph, Run
-# `fylgja-rehearse <id>`; sets REHEARSAL_RUN and REHEARSAL_USED, the time it used against
-# its deadline, and fetches the run's history, whose payloads the greps read decoded.
+# `fylgja-rehearse <id>`, which is the flow run the check triggered on the platform (020);
+# sets REHEARSAL_RUN and REHEARSAL_USED, the time it used against its deadline. The flow run
+# is read from the platform with local/.env's auth string: completed, of the deployment
+# twin-rehearse/main, asked of the case's branch. Its out lines, from its log, name each run
+# of the core's it started, its provision, its steps and its destroy, whose histories are
+# fetched as the greps read them (SC-008), a step's push results carrying the device's diff
+# by design, as cases 7 and 8's do.
 rehearsal_run() {
   # shellcheck disable=SC2016 # the backticks are the markdown's code span, read literally
   REHEARSAL_RUN=$(sed -n 's/^Run `fylgja-rehearse \([^`]*\)`.*/\1/p' "$2")
   # shellcheck disable=SC2016
   REHEARSAL_USED=$(sed -n 's/^Run `fylgja-rehearse [^`]*`, .* \([0-9.]*s of the [0-9]*s deadline\).*/\1/p' "$2")
   [ -n "$REHEARSAL_RUN" ] || fail "case $1: the comment names no fylgja-rehearse run; see $2"
-  history_of "rehearse-$1" fylgja-rehearse "$REHEARSAL_RUN"
-  jq -e '.events[-1].eventType == "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED"' "$OUT/history-rehearse-$1.json" > /dev/null ||
-    fail "case $1: rehearsal run $REHEARSAL_RUN did not complete; see $OUT/history-rehearse-$1.json"
-  # Each child the run started, as its history names them: its provision, its steps and its
-  # destroy, whose histories the greps read too (SC-008), a step's push results carrying the
-  # device's diff by design, as cases 7 and 8's do.
-  jq -r '.events[] | select(.eventType == "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED")
-    | .childWorkflowExecutionStartedEventAttributes.workflowExecution | "\(.workflowId) \(.runId)"' \
-    "$OUT/history-rehearse-$1.json" > "$OUT/children-rehearse-$1.txt"
+  platform_get "/flow_runs/$REHEARSAL_RUN" > "$OUT/flow-run-$1.json" 2> "$OUT/flow-run-$1.err" ||
+    fail "case $1: the platform answered no flow run $REHEARSAL_RUN; see $OUT/flow-run-$1.err"
+  expect "$OUT/flow-run-$1.json" '.state_type == "COMPLETED" and .deployment_id == env.REHEARSE_DEPLOYMENT
+    and .parameters.branch == env.FR'
+  # The run's log, page by page as the checks read it, and its out lines: the records of the
+  # logger prefect.flow_runs.fylgja (research §5.21).
+  local offset=0 page body
+  : > "$OUT/flow-run-lines-$1.txt"
+  while :; do
+    body=$(jq -cn --arg id "$REHEARSAL_RUN" --argjson offset "$offset" \
+      '{logs: {flow_run_id: {any_: [$id]}}, sort: "TIMESTAMP_ASC", limit: 200, offset: $offset}')
+    page="$OUT/flow-run-log-$1-$offset.json"
+    platform_post /logs/filter "$body" > "$page" 2> "$OUT/flow-run-log-$1.err" ||
+      fail "case $1: reading flow run $REHEARSAL_RUN's log failed; see $OUT/flow-run-log-$1.err"
+    jq -r '.[] | select(.name == "prefect.flow_runs.fylgja") | .message' "$page" >> "$OUT/flow-run-lines-$1.txt"
+    [ "$(jq length "$page")" -eq 200 ] || break
+    offset=$((offset + 200))
+  done
+  sed -nE 's/^run (fylgja-(provision|step|destroy)) ([^ ]+)$/\1 \3/p' "$OUT/flow-run-lines-$1.txt" | awk '!seen[$0]++' \
+    > "$OUT/children-rehearse-$1.txt"
   if ! grep -q '^fylgja-provision ' "$OUT/children-rehearse-$1.txt" || ! grep -q '^fylgja-destroy ' "$OUT/children-rehearse-$1.txt"; then
-    fail "case $1: rehearsal run $REHEARSAL_RUN started no provision or no destroy; see $OUT/children-rehearse-$1.txt"
+    fail "case $1: flow run $REHEARSAL_RUN's log names no provision or no destroy of the core's; see $OUT/flow-run-lines-$1.txt"
   fi
   local n=0 workflow run
   while read -r workflow run; do
@@ -2377,16 +2675,18 @@ stage_lines 9b "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage 
   "^stage $FR/probe-port-down: stepped .*; expired after .*; loss $LOSS9; failed: verify\\.burst n1-loop\$" "^stage $FR/head: not reached\$"
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
 # The failure's comment: its table, its drawing, the five commands that reproduce it in order
-# (FR-015), the create naming the scope every stage was read under, the server's default
-# (017's T104), and the caveat last.
+# (FR-015), each naming its own client as the orchestrator renders them (020's R-13, FR-023):
+# the create and the steps fylgja-cli's, the verify and the destroy the core's fylgja; the
+# create naming the scope every stage was read under, the runner's default (017's T104), and
+# the caveat last.
 # shellcheck disable=SC2016 # the backticks are the markdown's fences, read literally by jq
 expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) and (map(.thread) | unique | length == 2)
   and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
     and contains("| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |")
     and contains("```mermaid") and contains("**Reproduce by hand**:\n\n```\n"
-      + "fylgja twin create --stage " + env.FR + "/seeded --scope tag:fylgja\n"
-      + "fylgja twin step --stage " + env.FR + "/third-link --allow-restart\n"
-      + "fylgja twin step --stage " + env.FR + "/probe-port-down --allow-restart\n"
+      + "fylgja-cli twin create --stage " + env.FR + "/seeded --scope tag:fylgja\n"
+      + "fylgja-cli twin step --stage " + env.FR + "/third-link --allow-restart\n"
+      + "fylgja-cli twin step --stage " + env.FR + "/probe-port-down --allow-restart\n"
       + "fylgja twin verify\nfylgja twin destroy\n```\n")
     and endswith("\n\n" + env.CAVEAT + "\n")))'
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
@@ -2443,6 +2743,20 @@ fi
 stop_server
 [ "$SERVER_STATUS" -eq 0 ] || fail "the API's server exited $SERVER_STATUS on SIGTERM, not 0; see $OUT/server.log"
 
+# The core reads no source of truth (020, FR-029, SC-008): the script's server was asked
+# every case's creates, steps and compiles, and no operation that reads Infrahub, which
+# fylgja-cli's flows asked through the adapter instead; nor was the operator's core, from
+# where case 9's precheck read its log, by the runner's flows that drove it.
+no_infrahub_request "the script's core server" "$OUT/server.log"
+grep -q 'msg=request operation=twin\.create ' "$OUT/server.log" ||
+  fail "the script's core server was asked no twin.create; see $OUT/server.log"
+if ran 9; then
+  no_infrahub_request "the operator's core server" "$CORE_LOG" "$CORE_LOG_FROM"
+  tail -c "+$((CORE_LOG_FROM + 1))" "$CORE_LOG" | grep -q 'msg=request operation=twin\.create ' ||
+    fail "case 9's rehearsals asked the operator's core on $runner_core no twin.create; see $CORE_LOG from byte $CORE_LOG_FROM"
+fi
+echo "e2e: the core's servers were asked no operation that reads Infrahub"
+
 # $OUT holds the short-lived worker's stdout and stderr, the orphan's deploy output, every
 # twin show document, every create's provision history, decoded, both boot halves' output
 # (boot-half.out, boot-half-6.out), the plan and list documents of cases 7 and 8 (plan-*.json,
@@ -2451,15 +2765,23 @@ stop_server
 # history-step-*), the workflow service's list of runs over case 5's frozen wait
 # (runs-5-frozen.json),
 # every twin verify document (verify-*.json), case 9's checks with their messages
-# (checks-9*.json), its proposed change's comments (comments-9*.json, comment-9*.md) and its
-# two rehearsals' histories and each of their children's, its provision, its steps and its
-# destroy, decoded (history-rehearse-*), the overview's threads (overview-9.json), the answer
-# of the server on the bridge (bridge-show.*), and the API's
+# (checks-9*.json), its proposed change's comments (comments-9*.json, comment-9*.md), its two
+# flow runs as the platform answers them and their logs (flow-run-*), and the histories of
+# each run of the core's they started, its provision, its steps and its destroy, decoded
+# (history-rehearse-*), the overview's threads (overview-9.json), the platform's precheck
+# from inside each task worker (platform-probe-*) and the answers of the platform and of the
+# operator's core to this host (deployment-twin-rehearse.*, core-show.*), and the API's
 # server's report and request log (server.log). A step history's push results
 # carry the device's diff by design, so they are searched for the marker and the
 # credentials, not for configuration lines; so do a rehearsal's step children's.
-# Case 9's stage.plan and twin.rehearse went to the operator's server on the bridge, not to
-# the script's: its log, local/server.log by CLAUDE.md's start line, is searched too (SC-008).
+# fylgja-cli's own (020): every document it printed (dry*.json, create-*.json, read-*,
+# plan-*.json, list-*.json, step-*.json), the orchestrator's state root ($OUT/orchestrator:
+# its snapshots and its record, record-7.json the copy of one) and the ephemeral server's
+# home ($OUT/prefect: its database of every flow run, their logs and their artifacts).
+# Case 9's flows ran on the operator's platform and drove the operator's core, not the
+# script's: the core's log, local/server.log by CLAUDE.md's start line, the platform's,
+# local/prefect.log, and the runner's, local/orchestrator.log, are searched too, and the
+# platform's home, local/orchestrator/prefect, for the credentials (SC-008).
 # The probes add case 5's text dry run and twin verify (dry-5.out, verify-5.out), the fixture
 # tool's probe writes and deletes (probes-*.out, delete-probes-*.out) and each create's
 # snapshot's probe names (probes-snapshot-*.json), all under $OUT, and nothing else: a
@@ -2467,22 +2789,27 @@ stop_server
 # the targets do not move (016).
 # The worker's log is searched when WORKER_LOG names it, and the line after the greps says
 # whether it was. The bundle store holds every bundle the host compiled, and the snapshot
-# store every snapshot its servers took, each read's CTM with every device's rendered
-# configuration in it, filed beside its bundle as a sidecar before 018 (FR-006): both are
-# searched for the credentials, and neither for the marker, which each holds by design.
+# stores every snapshot the core was sent and the orchestrator took, each read's CTM with
+# every device's rendered configuration in it, filed beside its bundle as a sidecar before
+# 018 (FR-006): all are searched for the credentials, and none for the marker, which each
+# holds by design.
 scan=("$OUT" "$FYLGJA_STATE_ROOT/bundles" "$FYLGJA_STATE_ROOT/snapshots")
-searched="the run's outputs, the bundle store and the snapshot store"
-BRIDGE_LOG=""
+searched="the run's outputs, fylgja-cli's state root and Prefect home, the bundle store and the core's snapshot store"
+logs=()
 if ran 9; then
-  BRIDGE_LOG="$FYLGJA_STATE_ROOT/server.log"
-  [ -r "$BRIDGE_LOG" ] ||
-    fail "case 9 went through the server on $BRIDGE:7650, whose log $BRIDGE_LOG, as CLAUDE.md's start line writes it, is not readable"
-  scan+=("$BRIDGE_LOG")
-  searched+=", the log of the server on the bridge ($BRIDGE_LOG)"
+  for log in "$CORE_LOG" "$FYLGJA_STATE_ROOT/prefect.log" "$FYLGJA_STATE_ROOT/orchestrator.log"; do
+    [ -r "$log" ] ||
+      fail "case 9 went through the orchestrator's platform and the operator's core, and $log, as scripts/bring-up.sh and CLAUDE.md's start lines write it, is not readable"
+    logs+=("$log")
+  done
+  scan+=("${logs[@]}")
+  [ ! -d "$PLATFORM_HOME" ] || scan+=("$PLATFORM_HOME")
+  searched+=", the operator's core's, platform's and runner's logs (${logs[*]}) and the platform's home ($PLATFORM_HOME)"
 fi
 if [ -n "${WORKER_LOG:-}" ]; then
   [ -r "$WORKER_LOG" ] || fail "WORKER_LOG=$WORKER_LOG is not readable"
   scan+=("$WORKER_LOG")
+  logs+=("$WORKER_LOG")
   searched+=" and the worker's log ($WORKER_LOG)"
 else
   searched+=", and not the worker's log, since WORKER_LOG is unset"
@@ -2495,6 +2822,15 @@ no_credential "the API's token" "$API_TOKEN" "${scan[@]}"
 if [ -n "${FYLGJA_API_TOKEN:-}" ]; then
   no_credential "local/.env's API token" "$FYLGJA_API_TOKEN" "${scan[@]}"
 fi
+# The platform's auth string (020, FR-005), which the checks send as FYLGJA_ORCHESTRATOR_AUTH
+# and the runner as PREFECT_API_AUTH_STRING, one value, user:password: its password, which
+# any form that carries it holds, and the basic-auth header's base64 of the whole.
+for secret in PREFECT_API_AUTH_STRING FYLGJA_ORCHESTRATOR_AUTH; do
+  if [ -n "${!secret:-}" ]; then
+    no_credential "local/.env's $secret" "${!secret#*:}" "${scan[@]}"
+    no_credential "local/.env's $secret, as a basic-auth header carries it" "$(printf %s "${!secret}" | base64 -w0)" "${scan[@]}"
+  fi
+done
 no_credential "the probe password" "$FYLGJA_SRLINUX_PASSWORD" "${scan[@]}"
 # Infrahub's own secrets, which Compose reads from local/.env and Fylgja never does: the task
 # workers that run the checks hold them (SC-008), so the comments, the messages and every
@@ -2509,12 +2845,15 @@ done
 no_credential_contextual "the EOS password" "$FYLGJA_EOS_PASSWORD" "${scan[@]}"
 
 # The marker: every output, record copy, twin show document, check result,
-# history, the servers' logs and the worker log. A read's snapshot (snapshot-*.json) and a
-# compiled bundle (compiled-*/) carry the artifact by design, as the snapshot and bundle
-# stores do, so they are left out, and the stores with them.
-if grep -rqsF --exclude='snapshot-*.json' --exclude-dir='compiled-*' -- "$MARKER" "$OUT" ${BRIDGE_LOG:+"$BRIDGE_LOG"} ${WORKER_LOG:+"$WORKER_LOG"}; then
+# history, flow run, the ephemeral server's home, the servers', the platform's and the
+# runner's logs and the worker log. A read's snapshot (snapshot-*.json), the orchestrator's
+# snapshot store ($OUT/orchestrator/snapshots) and a compiled bundle (compiled-*/) carry the
+# artifact by design, as the core's snapshot and bundle stores do, so they are left out, and
+# the stores with them.
+marker_excluded=(--exclude='snapshot-*.json' --exclude-dir='compiled-*' --exclude-dir=snapshots)
+if grep -rqsF "${marker_excluded[@]}" -- "$MARKER" "$OUT" ${logs[@]+"${logs[@]}"}; then
   echo "e2e: LEAK: the artifact marker found in:" >&2
-  grep -rlsF --exclude='snapshot-*.json' --exclude-dir='compiled-*' -- "$MARKER" "$OUT" ${BRIDGE_LOG:+"$BRIDGE_LOG"} ${WORKER_LOG:+"$WORKER_LOG"} >&2 || true
+  grep -rlsF "${marker_excluded[@]}" -- "$MARKER" "$OUT" ${logs[@]+"${logs[@]}"} >&2 || true
   exit 1
 fi
 echo "e2e: no credential and no marker in $searched"

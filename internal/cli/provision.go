@@ -10,6 +10,8 @@ import (
 
 type provisionFlags struct {
 	dryRun bool
+	// detach is --detach (020): the answer ends at the run's identity.
+	detach bool
 }
 
 func newTwinProvisionCmd(opts *options) *cobra.Command {
@@ -21,7 +23,8 @@ func newTwinProvisionCmd(opts *options) *cobra.Command {
 			"it in the bundle store under its identity, and provision it through the lab host's\n" +
 			"worker from the host check onward, exactly as twin create does. No read takes\n" +
 			"place, so the twin records its read time as unknown. Interrupt once to cancel the\n" +
-			"run and wait for its cleanup; a second time to stop waiting.",
+			"run and wait for its cleanup; a second time to stop waiting. --detach ends the command\n" +
+			"once the run has started, at its identity.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTwinProvision(cmd.Context(), opts, f, args[0])
@@ -29,6 +32,7 @@ func newTwinProvisionCmd(opts *options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
 		"verify, file the bundle and check the host; start no run")
+	cmd.Flags().BoolVar(&f.detach, "detach", false, detachUsage+"; refused beside --dry-run")
 	return cmd
 }
 
@@ -44,5 +48,6 @@ func runTwinProvision(ctx context.Context, opts *options, f *provisionFlags, dir
 	}
 	a := given{"bundle": dir}
 	a.bool("dry_run", f.dryRun)
+	a.bool("detach", f.detach)
 	return send(ctx, opts, op, a, files, handlers{})
 }

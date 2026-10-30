@@ -13,16 +13,23 @@ PKGS := ./...
 VERSION ?= 0.1.0-dev
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build test test-contract test-e2e lint linkcheck sdl generate diagrams clean \
-        temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log
+.PHONY: all build test test-contract test-e2e lint lint-python linkcheck diagrams clean \
+        temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log \
+        orchestrator-venv prefect-server orchestrator-serve
+
+# The orchestrator's venv (research R-02), made by `make orchestrator-venv`.
+ORCH_VENV := orchestrator/.venv
 
 all: build
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o $(BIN) ./cmd/fylgja
 
+# Tier 1: the Go packages, then the orchestrator's tests that need no Infrahub. The venv is
+# made by `make orchestrator-venv`.
 test:
 	go test $(PKGS)
+	$(ORCH_VENV)/bin/pytest -q orchestrator -m 'not contract'
 
 # Contract tier: real Infrahub, never a fake (D-017). Needs INFRAHUB_ADDRESS and
 # INFRAHUB_API_TOKEN in the environment (local/.env; see docs/development.md). Never
@@ -30,18 +37,22 @@ test:
 # Infrahub answers. The packages run beside each other against one Infrahub, which works
 # their branches, proposed changes and rebases in turn, so a package takes up to three
 # times as long as it does alone: internal/stages, about four and a half minutes alone,
-# outlasts go test's default ten-minute timeout here (014's research §8.10).
+# outlasted go test's default ten-minute timeout here (014's research §8.10) until 020
+# removed it with the reader (T035), which left internal/checks the Go tier's one package
+# with contract tests; the rest run their tier-1 tests again under the tag.
 # internal/checks runs after the rest, alone. Its registration on main makes every proposed
 # change opened while it lives run its two checks, the other packages' with them, and its
 # waits are those of an Infrahub with nothing else to do: beside the rest, its draft's
 # pipeline took 260 s against 58 s alone and a link's render outlasted its 90 s (015's
-# research §5.5). Both runs go on whatever the first answers, so one tier reports both.
+# research §5.5). The orchestrator's tier 2 runs last, alone against the same Infrahub. Each
+# run goes on whatever the one before answers, so one tier reports all three.
 CHECKS_PKG     := github.com/happypathnetworking/fylgja/internal/checks
 CONTRACT_PKGS   = $(filter-out $(CHECKS_PKG),$(shell go list -tags contract $(PKGS)))
 test-contract:
 	rc=0; \
 	go test -count=1 -timeout 30m -tags contract $(CONTRACT_PKGS) || rc=1; \
 	go test -count=1 -timeout 30m -tags contract $(CHECKS_PKG) || rc=1; \
+	$(ORCH_VENV)/bin/pytest -q orchestrator -m contract || rc=1; \
 	exit $$rc
 
 # End-to-end tier: a booted NOS through Temporal. Needs the dev server (make
@@ -50,8 +61,15 @@ test-contract:
 test-e2e: build
 	scripts/e2e.sh
 
+# golangci-lint, then ruff over the orchestrator and the checks, both with the orchestrator's
+# configuration (orchestrator/pyproject.toml). CI's lint job runs golangci-lint by its action
+# and lint-python on its own.
 lint:
 	golangci-lint run
+	$(MAKE) --no-print-directory lint-python
+
+lint-python:
+	$(ORCH_VENV)/bin/ruff check --config orchestrator/pyproject.toml orchestrator infrahub/checks
 
 # The tracked Markdown's relative links and anchors (scripts/linkcheck.py). A hand tool;
 # not a CI step.
@@ -69,21 +87,10 @@ command-log:
 test-scripts:
 	python3 -I -m unittest discover -s scripts/tests -p 'test_*.py'
 
-# Fetches the GraphQL SDL from a live Infrahub. The SDL is committed
-# so the build never needs Infrahub; only regeneration does. From the default branch:
-# the stage kind and its extension of CoreProposedChange live there (014), and a branch
-# created before the kind was loaded does not carry them. The file's header is kept by hand.
-sdl:
-	go run -tags fixture ./cmd/fylgja-fixture -branch main -sdl schema/infrahub.graphql
-
-# Regenerates the typed client from the committed SDL.
-generate:
-	cd internal/intent && go run github.com/Khan/genqlient
-
 STRUCTURIZR_IMAGE := structurizr/structurizr@sha256:721136283c2f9cf1ba69037bc9de136c579d66fdcb2d771cb60546ec68def1a5
 PLANTUML_IMAGE    := plantuml/plantuml@sha256:d08610df482510844382caa4e016ba2bf7e3231f630f02ee12f250f3416c62b1
 
-# Validates the C4 model and regenerates every committed diagram: the five views as
+# Validates the C4 model and regenerates every committed diagram: the six views as
 # C4-PlantUML and SVG under docs/c4/, the import graph in docs/development.md and the
 # fixture topologies in docs/diagrams/topologies.md. Needs Docker and go; no test tier
 # needs it. A second run changes nothing.
@@ -115,6 +122,35 @@ worker: build
 # root is the worker's, made absolute the same way.
 serve: build
 	FYLGJA_STATE_ROOT=$(CURDIR)/local $(BIN) serve
+
+# The orchestrator's venv: Prefect, the SDK, pytest and ruff at orchestrator/pyproject.toml's
+# pins, the package installed editable. A .gitignore of * inside keeps the tree clean, as
+# the root .venv's does. A second run reinstalls nothing that is current.
+orchestrator-venv:
+	test -x $(ORCH_VENV)/bin/python || python3 -m venv $(ORCH_VENV)
+	printf '*\n' > $(ORCH_VENV)/.gitignore
+	$(ORCH_VENV)/bin/pip install -q -e 'orchestrator[dev]'
+
+# The orchestrator's Prefect server and its runner (research R-01, R-17), beside the worker
+# and the API's server on the lab host. Both read PREFECT_API_URL (http://<bridge>:4200/api,
+# where the server listens: the host's processes and Infrahub's task workers reach it there)
+# and PREFECT_API_AUTH_STRING (<user>:<password>, the server's basic authentication) from
+# the environment and refuse to start without them; load local/.env in their shell first.
+# PREFECT_HOME is local/orchestrator/prefect (the server's SQLite database), made absolute
+# as the state root is, and the runner's state root is local/orchestrator.
+PREFECT_HOME_DIR := $(CURDIR)/local/orchestrator/prefect
+prefect-server:
+	: "$${PREFECT_API_URL:?load local/.env first}" "$${PREFECT_API_AUTH_STRING:?load local/.env first}"; \
+	set -- $$(python3 -I -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p.hostname, p.port)' "$$PREFECT_API_URL"); \
+	mkdir -p $(PREFECT_HOME_DIR) && \
+	PREFECT_HOME=$(PREFECT_HOME_DIR) PREFECT_SERVER_API_AUTH_STRING="$$PREFECT_API_AUTH_STRING" \
+		$(ORCH_VENV)/bin/prefect server start --host "$$1" --port "$$2" --no-ui
+
+orchestrator-serve:
+	: "$${PREFECT_API_URL:?load local/.env first}" "$${PREFECT_API_AUTH_STRING:?load local/.env first}"; \
+	mkdir -p $(PREFECT_HOME_DIR) && \
+	PREFECT_HOME=$(PREFECT_HOME_DIR) FYLGJA_ORCHESTRATOR_ROOT=$(CURDIR)/local/orchestrator \
+		$(ORCH_VENV)/bin/fylgja-orchestrator serve
 
 # Infrahub is operator-provided: bring your own instance and point INFRAHUB_ADDRESS /
 # INFRAHUB_API_TOKEN at it (see .env.example). Fylgja neither vendors nor starts it.

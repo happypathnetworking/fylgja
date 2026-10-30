@@ -15,9 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
@@ -249,10 +250,10 @@ func (g *goneService) Result(ctx context.Context, w, r string) (provision.Provis
 // start; a start already waiting for a worker finishes, with the server stopped too;
 // it stops following, and never cancels the run.
 func TestAClientGoneDuringARun(t *testing.T) {
-	create := map[string]any{"branch": "fylgja-fixture"}
+	create := map[string]any{"snapshot": headSnapshotID}
 
 	t.Run("before start", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, reached: make(chan struct{})}
 		var dialReturned atomic.Bool
 		saved := dialService
@@ -288,7 +289,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	// The dial returns once the client has gone: nothing is started for a request that ended
 	// before its start began (contracts/cli.md, "Runs").
 	t.Run("after the dial, before start", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, reached: make(chan struct{})}
 		saved := dialService
 		t.Cleanup(func() { dialService = saved })
@@ -313,7 +314,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	})
 
 	t.Run("the start waiting for a worker", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := newStartService()
 		useStartService(t, svc)
 		awaitIdle(t)
@@ -328,7 +329,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	// The server's stop ends every request's context as a client's departure ends one, and a
 	// start waiting for a worker finishes all the same.
 	t.Run("the start waiting for a worker, the server stopped", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := newStartService()
 		useStartService(t, svc)
 		ts := stoppingServer(t)
@@ -342,7 +343,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	})
 
 	t.Run("the run followed", func(t *testing.T) {
-		useFixtureRead(t) // the create reads on the server before its dial (018)
+		useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, holdFollow: true,
 			reached: make(chan struct{})}
 		useService(t, svc)
@@ -368,7 +369,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 // to cancel all the same, on a context the client's departure does not end, since the client
 // that survives to report says it was.
 func TestAClientGoneAfterItsInterrupt(t *testing.T) {
-	useFixtureRead(t) // the create reads on the server before its dial (018)
+	useFixtureSnapshot(t) // the create compiles its snapshot on the server before its dial (018)
 	svc := &cancelService{goneService: &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()},
 		holdFollow: true, reached: make(chan struct{})}}
 	saved := dialService
@@ -383,7 +384,7 @@ func TestAClientGoneAfterItsInterrupt(t *testing.T) {
 	n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 	delivered := len(requestOutcomes(logInterrupt))
 
-	cutAnswerOn(t, harness.http.URL, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture"},
+	cutAnswerOn(t, harness.http.URL, findings.OpTwinCreate, map[string]any{"snapshot": headSnapshotID},
 		svc.reached, func(stream string) {
 			if code := postInterrupt(t, stream); code != http.StatusNoContent {
 				t.Fatalf("the interrupt was answered %d, want 204", code)
@@ -478,7 +479,7 @@ func TestAClientGoneDuringADestroysStart(t *testing.T) {
 // was not cancelled, and the start finishes and the run goes on: only the operator's
 // interrupt abandons a start. Each mode has a server of its own, since the first is stopped.
 func TestAServerStoppedDuringADestroy(t *testing.T) {
-	destroyCmd := func(opts *options) error { return runDestroy(context.Background(), opts) }
+	destroyCmd := func(opts *options) error { return runDestroy(context.Background(), opts, &destroyFlags{}) }
 	// stopped runs the destroy in one mode against a server of its own over svc, which it
 	// stops once reached is closed, and returns what the client printed and the address it
 	// named, once the server's handler has ended.
@@ -646,9 +647,8 @@ func (s *startService) wantStartedAndLeft(t *testing.T, start string) {
 }
 
 // A client that goes away during a command that is one answer stops its work too: twin
-// verify's wait
-// reads and sleeps no more, and a create's dry run, cut while Infrahub holds its read open,
-// files nothing and asks the host nothing.
+// verify's wait reads and sleeps no more. (A create's dry run cut during its read went with
+// the read, 020.)
 func TestAClientGoneDuringOneAnswer(t *testing.T) {
 	t.Run("twin verify --wait", func(t *testing.T) {
 		h := verifyHost(t, "three-node", nil, nil)
@@ -699,48 +699,6 @@ func TestAClientGoneDuringOneAnswer(t *testing.T) {
 			t.Errorf("verify slept %d times, want once: no pause after the client went", got)
 		}
 	})
-
-	t.Run("twin create --dry-run", func(t *testing.T) {
-		paths := useStateRoot(t)
-		useService(t, nil)
-		dryRunEnv(t)
-		var asked atomic.Int32
-		saved := dryRunRunner
-		t.Cleanup(func() { dryRunRunner = saved })
-		dryRunRunner = runnerFunc(func(args ...string) {
-			asked.Add(1)
-		})
-
-		f := newFakeInfrahub(t)
-		reached := make(chan struct{})
-		var held atomic.Bool
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if held.CompareAndSwap(false, true) {
-				close(reached)
-				select {
-				case <-r.Context().Done():
-					return
-				case <-time.After(goneBound):
-				}
-			}
-			f.serve(w, r)
-		}))
-		t.Cleanup(srv.Close)
-		t.Setenv(intent.EnvAddress, srv.URL)
-		t.Setenv(intent.EnvToken, fakeToken)
-		awaitIdle(t)
-		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
-
-		cutAnswer(t, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture", "dry_run": true}, reached)
-
-		wantGone(t, findings.OpTwinCreate, n, panics)
-		if got := entriesOf(t, paths.Bundles); len(got) != 0 {
-			t.Errorf("the store holds %v after a dry run whose client went during its read", got)
-		}
-		if got := asked.Load(); got != 0 {
-			t.Errorf("the host was asked %d times after the client went", got)
-		}
-	})
 }
 
 // runnerFunc is a host runner that tells the test it was asked, and answers nothing.
@@ -749,4 +707,123 @@ type runnerFunc func(args ...string)
 func (f runnerFunc) Run(_ context.Context, _ []string, args ...string) ([]byte, []byte, int, error) {
 	f(args...)
 	return []byte("{}"), nil, 0, nil
+}
+
+// The commands and flags 020 moved to the orchestrator (FR-003; US2 scenario 3). Unlike the
+// rest of this file, gone here means gone from the binary: each is the client's own refusal,
+// before any request.
+
+// commandLine runs `fylgja <args>` through a root as cmd/fylgja builds it, the client's
+// commands under AddCommands, and returns its exit status, its stdout and its stderr, and how
+// many requests the harness's server logged meanwhile.
+func commandLine(t *testing.T, args ...string) (code int, stdout, stderr string, requests int) {
+	t.Helper()
+	awaitIdle(t)
+	before := requestsLogged()
+	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true, Version: version}
+	AddCommands(root, version)
+	root.SetArgs(args)
+	stderr = captureStderr(t, func() {
+		stdout = captureStdout(t, func() {
+			cmd, err := root.ExecuteC()
+			code = Report(cmd, err)
+		})
+	})
+	awaitIdle(t)
+	return code, stdout, stderr, requestsLogged() - before
+}
+
+// The five commands the orchestrator's fylgja-cli has in their place: each, with --json or
+// without, is cobra's unknown command, exit 2, in text on stderr and nothing on stdout, since
+// a command line naming no operation has no document to write, and no request is sent. A noun
+// the binary still has refuses its lost verb as the root refuses a lost noun.
+func TestTheOrchestratorsCommandsAreUnknown(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		says string
+	}{
+		{[]string{"twin", "rehearse", "--branch", "change-1"}, `unknown command "rehearse" for "fylgja twin"`},
+		{[]string{"stage", "list"}, `unknown command "stage" for "fylgja"`},
+		{[]string{"stage", "plan", "--branch", "change-1"}, `unknown command "stage" for "fylgja"`},
+		{[]string{"intent", "read", "--branch", "fylgja-fixture", "--out", "x.json"}, `unknown command "intent" for "fylgja"`},
+		{[]string{"schema", "check", "--branch", "fylgja-fixture"}, `unknown command "schema" for "fylgja"`},
+	} {
+		for _, asJSON := range []bool{false, true} {
+			// twin rehearse's flags would be twin's unknown flag before its verb is read, so the
+			// verb is asked alone; the nouns the binary lacks end at their name, flags or none.
+			args := c.args
+			if args[0] == "twin" {
+				args = args[:2]
+			}
+			if asJSON {
+				args = append([]string{"--json"}, args...)
+			}
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				code, stdout, stderr, requests := commandLine(t, args...)
+				if code != findings.ExitError || stdout != "" || stderr != "fylgja: "+c.says+"\n" {
+					t.Errorf("exit %d, stdout %q, stderr %q; want 2, nothing on stdout and %q", code, stdout, stderr, c.says)
+				}
+				if requests != 0 {
+					t.Errorf("the server logged %d requests, want none", requests)
+				}
+			})
+		}
+	}
+}
+
+// The five flags the orchestrator's fylgja-cli reads in their place (--branch, --at, --stage,
+// --scope, --probes) are no flags of any command: each is cobra's unknown flag, exit 2,
+// refused before any request. Under --json it is one document naming the command's own
+// operation; in text, its finding on stderr. twin create and twin step, where the flags meant
+// something, are asked from a snapshot, as an operator moving to the orchestrator would leave
+// one beside them.
+func TestTheOrchestratorsFlagsAreUnknown(t *testing.T) {
+	root := &cobra.Command{Use: "fylgja"}
+	AddCommands(root, build)
+	var commands [][]string
+	var walk func(cmd *cobra.Command)
+	walk = func(cmd *cobra.Command) {
+		if !cmd.HasSubCommands() && cmd.Runnable() && cmd.Name() != "help" {
+			commands = append(commands, strings.Fields(cmd.CommandPath())[1:])
+		}
+		for _, sub := range cmd.Commands() {
+			walk(sub)
+		}
+	}
+	walk(root)
+	if len(commands) != len(api.Operations) {
+		t.Fatalf("the walk found %v; want the API's %d operations", commands, len(api.Operations))
+	}
+	for _, path := range commands {
+		op := strings.Join(path, ".")
+		for _, flag := range [][]string{{"--branch", "fylgja-fixture"}, {"--at", "2026-10-16T12:00:00Z"},
+			{"--stage", "change-1/cabled"}, {"--scope", "tag:fylgja"}, {"--probes", "probes.json"}} {
+			args := append(slices.Clone(path), flag...)
+			if op == findings.OpTwinCreate || op == findings.OpTwinStep {
+				args = append(append(slices.Clone(path), "--snapshot", headSnapshotID), flag...)
+			}
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				// --json comes first: cobra stops reading flags at the unknown one.
+				code, stdout, _, requests := commandLine(t, append([]string{"--json"}, args...)...)
+				var doc findings.Document
+				if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+					t.Fatalf("stdout is not one findings document: %v\n%s", err, stdout)
+				}
+				if code != findings.ExitError || doc.Operation != op || len(doc.Findings) != 1 ||
+					doc.Findings[0].Rule != findings.RuleOperationFailed || doc.Findings[0].Message != "unknown flag: "+flag[0] {
+					t.Errorf("exit %d, %s %+v; want 2, %s, cobra's unknown flag %s", code, doc.Operation, doc.Findings, op, flag[0])
+				}
+				validateWithShow(t, currentContract, "020", &doc)
+
+				code, stdout, stderr, more := commandLine(t, args...)
+				if code != findings.ExitError || stdout != "" ||
+					!strings.HasPrefix(stderr, "rejection operation.failed "+op+": unknown flag: "+flag[0]+"\n") {
+					t.Errorf("text: exit %d, stdout %q, stderr %q; want 2 and the finding on stderr", code, stdout, stderr)
+				}
+				if requests+more != 0 {
+					t.Errorf("the server logged %d requests, want none", requests+more)
+				}
+			})
+		}
+	}
 }

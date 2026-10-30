@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
@@ -30,92 +34,26 @@ func loadCTM(t *testing.T, name, observedAt string) *ctm.CTM {
 	return c
 }
 
-// A take is filed under its id in the state root's snapshots/, in its stored form, and the
-// path the server names is that entry (data-model §4).
-func TestTakeSnapshotFilesUnderItsID(t *testing.T) {
-	paths := useStateRoot(t)
-	s, path, list, err := takeSnapshot(context.Background(), paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
-	if err != nil || len(list) != 0 {
-		t.Fatalf("takeSnapshot = %v, %v; want it filed", list, err)
+// takeSnapshot files c, a read's CTM, as a snapshot carrying probes in the store under the
+// state root, as the orchestrator's adapter files a take, and returns it and its store path,
+// or snapshot.id.mismatch at step for an entry under its id that hashes to another: the
+// store a create, a step and a resolve begin from. From 020 the server takes no snapshot,
+// which the adapter takes (D-065), and this is the tests' alone.
+func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM, probes []probe.Probe) (*snapshot.Snapshot,
+	string, findings.List, error) {
+	s := snapshot.Take(c, probes)
+	store := snapshot.NewDirStore(paths.Snapshots)
+	_, err := store.Put(ctx, s)
+	var mismatch *snapshot.ErrIDMismatch
+	switch {
+	case errors.As(err, &mismatch):
+		var list findings.List
+		list.AddStep(findings.Rejection, step, findings.RuleSnapshotIDMismatch, mismatch.Path, corruptEntry(mismatch, "filed"))
+		return nil, "", list, nil
+	case err != nil:
+		return nil, "", nil, fmt.Errorf("filing snapshot %s: %v", s.ID, err)
 	}
-	if s.ID != fixtureSnapshotID || path != filepath.Join(paths.Snapshots, fixtureSnapshotID+".json") {
-		t.Errorf("took %s at %s; want %s under %s", s.ID, path, fixtureSnapshotID, paths.Snapshots)
-	}
-	stored, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want, err := snapshot.Marshal(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(stored, want) {
-		t.Errorf("the entry is not the take's stored form:\n%s", stored)
-	}
-	if got := snapshotStoredLine(s.ID, path); got != "snapshot_id "+fixtureSnapshotID+"  stored: "+path {
-		t.Errorf("the stored line reads %q", got)
-	}
-	if got := bundleStoredLine(fixtureBundleID, "/b"); got != "bundle_id "+fixtureBundleID+"  stored: /b" {
-		t.Errorf("the bundle's stored line reads %q", got)
-	}
-}
-
-// A second take of the same intent, read later, has the same id and leaves the entry as the
-// first take filed it: the store never overwrites, so the first take's observed_at is kept.
-func TestASecondTakeLeavesTheEntry(t *testing.T) {
-	paths := useStateRoot(t)
-	ctx := context.Background()
-	_, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, again, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T10:30:00.000000Z"), nil)
-	if err != nil || len(list) != 0 || s.ID != fixtureSnapshotID || again != path {
-		t.Fatalf("the second take = %v at %s, %v, %v; want %s at %s", s, again, list, err, fixtureSnapshotID, path)
-	}
-	if second, err := os.ReadFile(path); err != nil || !bytes.Equal(second, first) {
-		t.Errorf("the second take changed the entry (%v):\n%s", err, second)
-	}
-	if entries, err := os.ReadDir(paths.Snapshots); err != nil || len(entries) != 1 {
-		t.Errorf("snapshots/ holds %v (%v); want the one entry", entries, err)
-	}
-}
-
-// An entry under the take's id that hashes to another is snapshot.id.mismatch at the step the
-// caller gives, naming the store path and both ids, and nothing is filed over it.
-func TestACorruptEntryIsSnapshotIDMismatch(t *testing.T) {
-	paths := useStateRoot(t)
-	ctx := context.Background()
-	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	corrupt, err := snapshot.Marshal(other)
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry := filepath.Join(paths.Snapshots, fixtureSnapshotID+".json")
-	if err := os.WriteFile(entry, corrupt, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	s, path, list, err := takeSnapshot(ctx, paths, findings.StepCompile, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
-	if err != nil || s != nil || path != "" {
-		t.Fatalf("takeSnapshot = %v at %q, %v; want no snapshot and the refusal", s, path, err)
-	}
-	want := "store entry " + entry + " hashes to " + other.ID + ", not " + fixtureSnapshotID + ", so snapshot " + fixtureSnapshotID +
-		" cannot be filed"
-	if len(list) != 1 || list[0].Rule != findings.RuleSnapshotIDMismatch || list[0].Severity != findings.Rejection ||
-		list[0].Step != findings.StepCompile || list[0].Object != entry || list[0].Message != want {
-		t.Errorf("findings %+v; want one %s at step compile naming %s: %s", list, findings.RuleSnapshotIDMismatch, entry, want)
-	}
-	if stored, err := os.ReadFile(entry); err != nil || !bytes.Equal(stored, corrupt) {
-		t.Errorf("the corrupt entry was rewritten (%v)", err)
-	}
+	return s, store.Path(s.ID), nil, nil
 }
 
 // fixtureFile is testdata/snapshot/three-node.json as a map, edited by edit, as a client
@@ -354,7 +292,7 @@ func TestResolveSnapshotByID(t *testing.T) {
 	code, doc := exitOf(t, err)
 	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotUnknown, Step: findings.StepResolve,
 		Object: fixtureSnapshotID, Message: "the store under " + paths.Snapshots + " holds no snapshot " + fixtureSnapshotID +
-			"; a snapshot id comes from a create, a dry run, a plan or intent read --out on this server"}
+			"; a snapshot id names one this server filed when a create, a step, a dry run or a twin diff sent it its file"}
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
 		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
 	}
@@ -438,25 +376,6 @@ func TestResolveSnapshotFilesAFile(t *testing.T) {
 	}
 }
 
-// A snapshot's guards come before its files are held to their shape: a request naming a
-// snapshot file's path beside --branch, which the client sends with no file, is the guard's
-// snapshot.flags.conflict at start, exit 2, not "carries no file", and nothing is dialled or
-// filed (T078).
-func TestSnapshotGuardsComeBeforeItsFiles(t *testing.T) {
-	paths := useStateRoot(t)
-	useService(t, nil)
-	f := createFlags{snapshot: "snap.json", snapshotGiven: true, branch: "b"}
-	code, doc := exitOf(t, runCreate(context.Background(), testOptions(t, true), &f, nil))
-	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotFlagsConflict, Step: findings.StepStart,
-		Object: "--branch", Message: "--branch is meaningless with --snapshot: a snapshot carries its own branch, at and scope"}
-	if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
-		t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
-	}
-	if entries, err := os.ReadDir(paths.Root); err == nil && len(entries) != 0 {
-		t.Errorf("the state root holds %v after the refusal", entries)
-	}
-}
-
 // A create's files are one snapshot file beside a --snapshot that is a path, under that
 // path, or none: any other is refused before anything is parsed, operation.failed, exit 2,
 // as twin compile's are, and nothing is dialled or filed (contracts/api.md, "018:
@@ -469,8 +388,6 @@ func TestACreatesFilesAreOneSnapshotFile(t *testing.T) {
 		files   []api.File
 		message string
 	}{
-		{"a file beside --branch", createFlags{branch: "b"}, one,
-			"the request carries 1 file where twin create takes a snapshot file beside --snapshot alone"},
 		{"a file beside an id", createFlags{snapshot: fixtureSnapshotID}, one,
 			"the request carries 1 file where twin create takes a snapshot file beside --snapshot alone"},
 		{"two files", createFlags{snapshot: "snap.json"}, append(one, api.File{Path: "other.json"}),

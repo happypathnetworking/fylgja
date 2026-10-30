@@ -1,0 +1,22 @@
+{
+  "about": "TestTheRunRulesRenderValidDocuments: twin create detached",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.create",
+    "status": "ok",
+    "subject": {
+      "run_id": "0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b"
+    },
+    "findings": [
+      {
+        "severity": "info",
+        "rule": "run.detached",
+        "object": "fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b",
+        "message": "run fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b started; read it with fylgja run read",
+        "step": "start"
+      }
+    ]
+  },
+  "text": "info run.detached [step start] fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b: run fylgja-provision 0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b started; read it with fylgja run read\n1 finding(s): 0 rejection, 0 warning, 1 info\n",
+  "exit": 0
+}

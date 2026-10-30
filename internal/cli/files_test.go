@@ -11,30 +11,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/tree"
 )
 
-// The snapshot a read answers with is written whole or not at all, and a write that fails
-// is M12's sentence, worded for the snapshot (018).
-func TestWriteSnapshotIsAtomic(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "snapshot.json")
-	if err := writeSnapshot([]byte(`{"a":1}`), path); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := os.ReadFile(path); string(b) != `{"a":1}` {
-		t.Errorf("wrote %q", b)
-	}
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
-		t.Errorf("the directory holds %d entries, a temporary file left behind", len(entries))
-	}
-	if info, _ := os.Stat(path); info.Mode().Perm() != 0o644 {
-		t.Errorf("mode %v", info.Mode().Perm())
-	}
-	err := writeSnapshot([]byte(`{}`), filepath.Join(dir, "absent", "snapshot.json"))
-	if err == nil || !strings.HasPrefix(err.Error(), "writing snapshot: ") {
-		t.Errorf("an unwritable path: %v", err)
-	}
-}
-
 // The files a command sends are read as M12 read them, each failure in M12's words.
 func TestTheFilesACommandSends(t *testing.T) {
 	dir := t.TempDir()

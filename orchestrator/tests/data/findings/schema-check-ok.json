@@ -1,0 +1,39 @@
+{
+  "about": "TestVerifiedIsTheMappingsTable and TestVerifiedStagesSatisfiesSchema: a schema check's success",
+  "document": {
+    "findings_version": "1",
+    "operation": "schema.check",
+    "status": "ok",
+    "subject": {
+      "branch": "fylgja-fixture"
+    },
+    "verified": {
+      "model": "opsmill/schema-library",
+      "version": "26336e9",
+      "kinds": [
+        {
+          "kind": "DcimDevice",
+          "fields": [
+            "name",
+            "status",
+            "platform",
+            "tags",
+            "interfaces"
+          ]
+        }
+      ],
+      "stages": {
+        "kind": "FylgjaStage",
+        "present": false,
+        "missing": [
+          "as_of"
+        ],
+        "extension": true,
+        "file": "schema/fylgja-stage.yaml"
+      }
+    },
+    "findings": []
+  },
+  "text": "",
+  "exit": 0
+}

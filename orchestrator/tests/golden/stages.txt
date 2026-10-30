@@ -1,0 +1,6 @@
+proposed change "fylgja-test-golden-41263" (18e3127c-025b-f488-33be-c5158cf576c3) on branch fylgja-test-golden-41263, draft (5 stages)
+  fylgja-test-golden-41263/branch-point  main                      at 2026-10-29T18:09:04.039194Z      (branch point)  ""
+  fylgja-test-golden-41263/seeded        fylgja-test-golden-41263  at 2026-10-29T18:11:38.471611+00:00 (written)       "seeded"
+  fylgja-test-golden-41263/third-link    fylgja-test-golden-41263  at 2026-10-29T18:11:50.425111+00:00 (written)       "third link"
+  fylgja-test-golden-41263/bad-port      fylgja-test-golden-41263  at 2026-10-29T18:12:11.745240+00:00 (written)       "a port SR Linux refuses"
+  fylgja-test-golden-41263/head          fylgja-test-golden-41263  at 2026-10-29T18:12:10.636975+00:00 (head)          ""

@@ -1,0 +1,33 @@
+{
+  "about": "m2Documents: provision failed, cleanup complete",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.provision",
+    "status": "failed",
+    "subject": {
+      "bundle": "/tmp/b",
+      "run_id": "run-2"
+    },
+    "bundle_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    "cleanup": {
+      "teardown": "done",
+      "unstage": "done",
+      "removed": [
+        "lab fylgja (3 containers)",
+        "twin directory /abs/local/twin"
+      ],
+      "remaining": []
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "deploy.failed",
+        "object": "lab fylgja",
+        "message": "clab deploy exited 1",
+        "step": "deploy"
+      }
+    ]
+  },
+  "text": "rejection deploy.failed [step deploy] lab fylgja: clab deploy exited 1\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 3
+}

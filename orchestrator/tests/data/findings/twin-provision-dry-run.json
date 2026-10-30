@@ -1,0 +1,48 @@
+{
+  "about": "m2Documents: dry run, budget unset, with M5's artifact",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.provision",
+    "status": "ok",
+    "subject": {
+      "bundle": "testdata/golden/three-node"
+    },
+    "bundle_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    "dry_run": {
+      "nodes": [
+        {
+          "name": "n1",
+          "image": "ghcr.io/nokia/srlinux:24.7.1",
+          "psp": "nokia_srlinux",
+          "memory_mb": 2048,
+          "artifact": {
+            "name": "device-config",
+            "content_type": "text/plain",
+            "checksum": "28881d3d28881d3d28881d3d28881d3d",
+            "size": 1327
+          }
+        }
+      ],
+      "memory_sum_mb": 2048,
+      "host_budget_mb": null,
+      "host": {
+        "lab_present": false,
+        "twin_dir_present": false
+      },
+      "verdict": "clear",
+      "lossy_mappings": 0,
+      "shared_ports": 0
+    },
+    "findings": [
+      {
+        "severity": "warning",
+        "rule": "host.memory.unbudgeted",
+        "object": "host",
+        "message": "sum 6144 MiB; no host budget set",
+        "step": "host_check"
+      }
+    ]
+  },
+  "text": "warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB; no host budget set\n1 finding(s): 0 rejection, 1 warning, 0 info\n",
+  "exit": 0
+}

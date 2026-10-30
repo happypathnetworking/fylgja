@@ -1,0 +1,207 @@
+{
+  "snapshot_version": "2",
+  "snapshot_id": "f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff",
+  "observed_at": "2026-09-20T12:00:00.000000Z",
+  "ctm": {
+    "ctm_version": "2",
+    "envelope": {
+      "branch": "mixed-fixture",
+      "at": "2026-09-20T12:00:00Z",
+      "observed_at": "2026-09-20T12:00:00.000000Z",
+      "schema_hash": "fixture",
+      "scope": "tag:fylgja",
+      "mapping": {
+        "reader": "infrahub-dcim",
+        "model": "opsmill/schema-library",
+        "version": "26336e9"
+      },
+      "fidelity": [
+        {
+          "disposition": "approximated",
+          "object": "interface.enabled",
+          "source": "InterfacePhysical.status",
+          "reason": "a port is enabled unless its status is disabled; the library's status is not an admin state"
+        },
+        {
+          "disposition": "approximated",
+          "object": "interface.mgmt_only",
+          "source": "InterfacePhysical.role",
+          "reason": "the management port is the port whose role is management; the library has no management-only flag"
+        },
+        {
+          "disposition": "omitted",
+          "object": "platform.version",
+          "source": "DcimPlatform",
+          "reason": "the library's platform carries no version"
+        }
+      ]
+    },
+    "devices": [
+      {
+        "name": "e1",
+        "platform": {
+          "package": "arista_eos"
+        },
+        "interfaces": [
+          {
+            "name": "Ethernet1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "e1:Ethernet1|s1:ethernet-1/1"
+          },
+          {
+            "name": "Ethernet10",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "Ethernet11",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "Ethernet2/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "e1:Ethernet2/1|e2:Ethernet1"
+          },
+          {
+            "name": "Management1",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "b14317103453751062ebfb7d96129ed8",
+          "content": "! e1: production configuration rendered by Infrahub (fylgja-artifacts)\n! platform Arista EOS; FYLGJA-MARKER-mixed-fixture\nhostname e1\nip routing\ninterface Ethernet1\ndescription to s1 ethernet-1/1\nno shutdown\ninterface Ethernet10\nno shutdown\nno switchport\nip address 10.2.10.1/24\ninterface Ethernet11\nno shutdown\nno switchport\nip address 10.2.11.1/24\ninterface Ethernet2/1\ndescription to e2 Ethernet1\nno shutdown\n! Management1: out-of-band management, left to the platform\n"
+        }
+      },
+      {
+        "name": "e2",
+        "platform": {
+          "package": "arista_eos"
+        },
+        "interfaces": [
+          {
+            "name": "Ethernet1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "e1:Ethernet2/1|e2:Ethernet1"
+          },
+          {
+            "name": "Ethernet10",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "Ethernet11",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "Ethernet3/1/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "e2:Ethernet3/1/1|s1:ethernet-1/2"
+          },
+          {
+            "name": "Management1",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "e74b3db4e64e7b72a9cd4d200b7e2d97",
+          "content": "! e2: production configuration rendered by Infrahub (fylgja-artifacts)\n! platform Arista EOS; FYLGJA-MARKER-mixed-fixture\nhostname e2\nip routing\ninterface Ethernet1\ndescription to e1 Ethernet2/1\nno shutdown\ninterface Ethernet10\nno shutdown\nno switchport\nip address 10.3.10.1/24\ninterface Ethernet11\nno shutdown\nno switchport\nip address 10.3.11.1/24\ninterface Ethernet3/1/1\ndescription to s1 ethernet-1/2\nno shutdown\n! Management1: out-of-band management, left to the platform\n"
+        }
+      },
+      {
+        "name": "s1",
+        "platform": {
+          "package": "nokia_srlinux"
+        },
+        "interfaces": [
+          {
+            "name": "ethernet-1/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "e1:Ethernet1|s1:ethernet-1/1"
+          },
+          {
+            "name": "ethernet-1/10",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/11",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/2",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "e2:Ethernet3/1/1|s1:ethernet-1/2"
+          },
+          {
+            "name": "mgmt0",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "fdf83f15e9437480e82fd8f67775d310",
+          "content": "# s1: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform Nokia SR Linux; FYLGJA-MARKER-mixed-fixture\nset / system name host-name s1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to e1 Ethernet1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/10 admin-state enable\nset / interface ethernet-1/10 subinterface 0 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 address 10.1.10.1/24\nset / network-instance default interface ethernet-1/10.0\nset / interface ethernet-1/11 admin-state enable\nset / interface ethernet-1/11 subinterface 0 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 address 10.1.11.1/24\nset / network-instance default interface ethernet-1/11.0\nset / interface ethernet-1/2 description \"to e2 Ethernet3/1/1\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\n# mgmt0: out-of-band management, left to the platform\n"
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "e1:Ethernet1|s1:ethernet-1/1",
+        "endpoints": [
+          {
+            "device": "e1",
+            "interface": "Ethernet1"
+          },
+          {
+            "device": "s1",
+            "interface": "ethernet-1/1"
+          }
+        ]
+      },
+      {
+        "id": "e1:Ethernet2/1|e2:Ethernet1",
+        "endpoints": [
+          {
+            "device": "e1",
+            "interface": "Ethernet2/1"
+          },
+          {
+            "device": "e2",
+            "interface": "Ethernet1"
+          }
+        ]
+      },
+      {
+        "id": "e2:Ethernet3/1/1|s1:ethernet-1/2",
+        "endpoints": [
+          {
+            "device": "e2",
+            "interface": "Ethernet3/1/1"
+          },
+          {
+            "device": "s1",
+            "interface": "ethernet-1/2"
+          }
+        ]
+      }
+    ]
+  },
+  "probes": []
+}

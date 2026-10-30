@@ -26,13 +26,13 @@ func TestCreateInterruptWhileStartingAbandonsTheStart(t *testing.T) {
 		{"no run had been started", context.Canceled, "nothing was started"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			useFixtureRead(t)
+			useFixtureSnapshot(t)
 			interrupts := useInterrupts(t)
 			svc := &fakeService{startBlocks: true, startErr: c.startErr}
 			useService(t, svc)
 			interrupts <- os.Interrupt
 
-			code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+			code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 
 			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleRunCancelled ||
 				doc.Findings[0].Step != findings.StepStart || !strings.Contains(doc.Findings[0].Message, c.want) {
@@ -55,7 +55,7 @@ func TestCreateInterruptWhileStartingAbandonsTheStart(t *testing.T) {
 // An interrupt that arrives just as a start succeeds is the first interrupt: the run is
 // cancelled and the command waits for its cleanup.
 func TestCreateInterruptRacingASuccessfulStartCancelsTheRun(t *testing.T) {
-	useFixtureRead(t)
+	useFixtureSnapshot(t)
 	interrupts := useInterrupts(t)
 	release := make(chan struct{})
 	svc := &fakeService{runID: "run-1", startBlocks: true, release: release, result: provision.ProvisionResult{
@@ -66,7 +66,7 @@ func TestCreateInterruptRacingASuccessfulStartCancelsTheRun(t *testing.T) {
 	useService(t, svc)
 	interrupts <- os.Interrupt
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 
 	if svc.cancels != 1 {
 		t.Errorf("Cancel called %d times, want once", svc.cancels)

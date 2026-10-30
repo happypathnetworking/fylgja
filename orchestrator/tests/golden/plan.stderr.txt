@@ -1,0 +1,8 @@
+rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-29T18:09:04.039194Z
+warning artifact.interface.unrepresented [step read] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+warning artifact.interface.unrepresented [step compile] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+warning artifact.interface.unrepresented [step read] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+warning artifact.interface.unrepresented [step compile] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+info omit.interface.unmappable [step compile] n1:ethernet-1/99: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node
+info omit.interface.unmappable [step compile] n1:ethernet-1/99: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node
+7 finding(s): 1 rejection, 4 warning, 2 info

@@ -39,7 +39,7 @@ func newWorkerCmd(opts *options) *cobra.Command {
 	run := &cobra.Command{
 		Use:   "run",
 		Short: "Serve task queue fylgja on this host",
-		Long: "Serve task queue fylgja: its four workflows and every activity, on the host where\n" +
+		Long: "Serve task queue fylgja: its three workflows and every activity, on the host where\n" +
 			"the containers run. Runs until interrupted. Produces no findings document;\n" +
 			"start-up lines go to stdout and logs to stderr.",
 		Args: cobra.NoArgs,

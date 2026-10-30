@@ -24,25 +24,25 @@ const (
 // snapshot in place of ctm, and a request carrying ctm is refused as any argument not taken,
 // pre-1.0, as 014 renamed series to stage. From 019 twin.create takes neither interval nor
 // no_follow, which are refused the same way: a twin follows nothing; and twin.step takes
-// snapshot, a target as twin.create's snapshot is a source. From 016 the five that read
-// intent take probes, the path of the probe file the request carries.
+// snapshot, a target as twin.create's snapshot is a source. From 020 the four runs take
+// detach, which ends the answer at the run's identity; and twin.create and twin.step take
+// snapshot alone of what named their intent: branch, at, stage, scope and probes are refused
+// as any argument not taken, since the server reads no source of truth (D-065; research R-19).
 var operationArgs = map[string]map[string]string{
-	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "dry_run": argBool,
-		"scope": argString, "snapshot": argString, "probes": argString},
-	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
-	findings.OpTwinStep: {"stage": argString, "snapshot": argString, "probes": argString, "allow_restart": argBool,
-		"dry_run": argBool, "wait": argString},
-	findings.OpTwinDestroy: {},
+	findings.OpTwinCreate:    {"dry_run": argBool, "snapshot": argString, "detach": argBool},
+	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool, "detach": argBool},
+	findings.OpTwinStep: {"snapshot": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString,
+		"detach": argBool},
+	findings.OpTwinDestroy: {"detach": argBool},
 	findings.OpTwinShow:    {},
 	findings.OpTwinVerify:  {"wait": argString, "args": argStrings},
 	findings.OpCompile:     {"snapshot": argString, "out": argString},
-	findings.OpStageList:   {"branch": argString, "scope": argString},
-	findings.OpStagePlan:   {"branch": argString, "scope": argString, "probes": argString},
-	findings.OpIntentRead: {"branch": argString, "at": argString, "stage": argString, "out": argString, "scope": argString,
-		"probes": argString},
-	findings.OpSchemaCheck:  {"branch": argString},
-	findings.OpPSPValidate:  {"files": argStrings},
-	findings.OpTwinRehearse: {"branch": argString, "scope": argString, "probes": argString},
+	findings.OpPSPValidate: {"files": argStrings},
+	// 020: a run by its identity, its workflow's latest run when run_id is absent.
+	findings.OpRunRead:      {"workflow_id": argString, "run_id": argString},
+	findings.OpRunInterrupt: {"workflow_id": argString, "run_id": argString},
+	// 020: the step between two snapshots, each an id or the path of a file the request carries.
+	findings.OpTwinDiff: {"from": argString, "to": argString},
 }
 
 // args are one request's arguments, read strictly: checkArgs has refused a name the
@@ -120,36 +120,37 @@ func (a args) strings(name string) []string {
 	return v
 }
 
-// handlers are the thirteen operations' runs: each fills the flags M12's command filled from
+// detachable are a run's options with the request's detach (020).
+func (c *call) detachable(a args) *options {
+	o := c.options()
+	o.detach = a.bool("detach")
+	return o
+}
+
+// handlers are the eleven operations' runs: each fills the flags M12's command filled from
 // the request's arguments, a key's presence standing for cobra's Changed, and calls M12's
 // logic, which keeps its guards, their order, their identifiers and their words.
 var handlers = map[string]func(*call) error{
 	findings.OpTwinCreate: func(c *call) error {
 		a := args(c.req.Args)
-		probes, files := probesOf(a, c.req.Files)
-		return runCreate(c.ctx, c.options(), &createFlags{
-			branch: a.string("branch"), at: a.string("at"),
-			stage: a.string("stage"), stageGiven: a.given("stage"),
-			dryRun: a.bool("dry_run"), scope: a.string("scope"), scopeGiven: a.given("scope"),
-			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"), probes: probes,
-		}, files)
+		return runCreate(c.ctx, c.detachable(a), &createFlags{
+			dryRun: a.bool("dry_run"), snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"),
+		}, c.req.Files)
 	},
 	findings.OpTwinProvision: func(c *call) error {
 		a := args(c.req.Args)
-		return runTwinProvision(c.ctx, c.options(), &provisionFlags{dryRun: a.bool("dry_run")}, a.string("bundle"), c.req.Files)
+		return runTwinProvision(c.ctx, c.detachable(a), &provisionFlags{dryRun: a.bool("dry_run")}, a.string("bundle"), c.req.Files)
 	},
 	findings.OpTwinStep: func(c *call) error {
 		a := args(c.req.Args)
-		probes, files := probesOf(a, c.req.Files)
-		return runTwinStep(c.ctx, c.options(), &stepFlags{
-			stage: a.string("stage"), stageGiven: a.given("stage"),
-			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"), probes: probes,
+		return runTwinStep(c.ctx, c.detachable(a), &stepFlags{
+			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"),
 			allowRestart: a.bool("allow_restart"), dryRun: a.bool("dry_run"),
 			wait: a.string("wait"), waitGiven: a.given("wait"),
-		}, files)
+		}, c.req.Files)
 	},
 	findings.OpTwinDestroy: func(c *call) error {
-		return runDestroy(c.ctx, c.options())
+		return runDestroy(c.ctx, c.detachable(args(c.req.Args)))
 	},
 	findings.OpTwinShow: func(c *call) error {
 		return runShow(c.ctx, c.options())
@@ -164,45 +165,26 @@ var handlers = map[string]func(*call) error{
 		a := args(c.req.Args)
 		return runCompile(c.options(), &compileFlags{snapshotPath: a.string("snapshot"), out: a.string("out")}, c.req.Files)
 	},
-	findings.OpStageList: func(c *call) error {
-		a := args(c.req.Args)
-		return runStageList(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
-			scope: a.string("scope"), scopeGiven: a.given("scope")})
-	},
-	findings.OpStagePlan: func(c *call) error {
-		a := args(c.req.Args)
-		probes, _ := probesOf(a, c.req.Files)
-		return runStagePlan(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
-			scope: a.string("scope"), scopeGiven: a.given("scope"), probes: probes})
-	},
-	findings.OpIntentRead: func(c *call) error {
-		a := args(c.req.Args)
-		probes, _ := probesOf(a, c.req.Files)
-		return runRead(c.ctx, c.options(), &readFlags{
-			branch: a.string("branch"), at: a.string("at"),
-			stage: a.string("stage"), stageGiven: a.given("stage"),
-			out: a.string("out"), scope: a.string("scope"), scopeGiven: a.given("scope"), probes: probes,
-		})
-	},
-	findings.OpSchemaCheck: func(c *call) error {
-		a := args(c.req.Args)
-		return runCheck(c.ctx, c.options(), &checkFlags{branch: a.string("branch")})
-	},
 	findings.OpPSPValidate: func(c *call) error {
 		a := args(c.req.Args)
 		return runPSPValidate(c.options(), a.strings("files"), c.req.Files)
 	},
-	findings.OpTwinRehearse: func(c *call) error {
+	findings.OpRunRead: func(c *call) error {
 		a := args(c.req.Args)
-		probes, _ := probesOf(a, c.req.Files)
-		return runTwinRehearse(c.ctx, c.options(), &rehearseFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
-			scope: a.string("scope"), scopeGiven: a.given("scope"), probes: probes})
+		return runReadByIdentity(c.ctx, c.options(), a.string("workflow_id"), a.string("run_id"))
+	},
+	findings.OpRunInterrupt: func(c *call) error {
+		a := args(c.req.Args)
+		return runInterruptByIdentity(c.ctx, c.options(), a.string("workflow_id"), a.string("run_id"))
+	},
+	findings.OpTwinDiff: func(c *call) error {
+		a := args(c.req.Args)
+		return runTwinDiff(c.ctx, c.options(), &diffFlags{from: a.string("from"), to: a.string("to")}, c.req.Files)
 	},
 }
 
 // checkRequest refuses an argument op does not take, a value of another kind, an argument
-// required or left without the one it belongs to, files on an operation that takes none, or
-// files that are not the one a probes argument names (016).
+// required or left without the one it belongs to, or files on an operation that takes none.
 func checkRequest(op string, req api.Request) error {
 	if err := checkArgs(op, req.Args); err != nil {
 		return err
@@ -210,18 +192,17 @@ func checkRequest(op string, req api.Request) error {
 	if err := checkRequired(op, req.Args); err != nil {
 		return err
 	}
-	if err := checkFiles(op, len(req.Files)); err != nil {
-		return err
-	}
-	return probesFiles(op, req.Args, req.Files)
+	return checkFiles(op, len(req.Files))
 }
 
-// checkRequired refuses the two requests no client's command can build, whose answers would
+// checkRequired refuses the requests no client's command can build, whose answers would
 // name nothing or ignore an argument: twin.provision without its bundle
 // directory, which M12's ExactArgs(1) made the command's, so every sentence would name ""
-// as the directory; and twin.verify with "args" and no "wait", whose words only a bare
+// as the directory; twin.verify with "args" and no "wait", whose words only a bare
 // --wait leaves behind and which verifyBudget reads only under it, as M12's cobra refused
-// an argument without --wait. The sentence names the argument and never its value.
+// an argument without --wait; and run.read or run.interrupt without the workflow its run is
+// of, which the command's --workflow always gives (020). The sentence names the argument and
+// never its value.
 func checkRequired(op string, given map[string]json.RawMessage) error {
 	a := args(given)
 	switch {
@@ -229,6 +210,8 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 		return fmt.Errorf("the request is not one: %s takes the bundle directory as its argument %q", op, "bundle")
 	case op == findings.OpTwinVerify && a.given("args") && !a.given("wait"):
 		return fmt.Errorf("the request is not one: %s's argument %q is given without %q", op, "args", "wait")
+	case (op == findings.OpRunRead || op == findings.OpRunInterrupt) && !a.given("workflow_id"):
+		return fmt.Errorf("the request is not one: %s takes the workflow its run is of as its argument %q", op, "workflow_id")
 	}
 	return nil
 }
@@ -236,10 +219,11 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 // takesFiles are the operations a request's files belong to. twin.create takes one, a
 // snapshot file beside --snapshot alone (018), and twin.step the same (019), which each holds
 // to that shape itself (snapshotFiles), as twin compile holds its snapshot, so a request
-// carrying another is its operation.failed and not the transport's. From 016 the five that
-// take probes take its one file, which probesFiles holds to that shape before the answer.
+// carrying another is its operation.failed and not the transport's. From 020 twin.diff takes
+// a snapshot file for each of from and to that is a path, which it holds to that shape itself
+// (diffFiles); and no operation takes a probe file, since none takes probes.
 var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate, findings.OpTwinCreate,
-	findings.OpTwinStep, findings.OpIntentRead, findings.OpStagePlan, findings.OpTwinRehearse}
+	findings.OpTwinStep, findings.OpTwinDiff}
 
 // checkFiles refuses files on an operation that takes none.
 func checkFiles(op string, n int) error {

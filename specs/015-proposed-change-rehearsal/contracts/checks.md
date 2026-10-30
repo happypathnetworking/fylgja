@@ -1,5 +1,8 @@
 # Contract: the two checks, `fylgja-step` and `fylgja-twin`
 
+> **Current since 020:** the checks reach the orchestrator's platform, not the API:
+> [contracts/checks.md](../../../contracts/checks.md).
+
 Infrahub's runtime, as the Jinja template is (Constitution I): Python glue in this
 repository, run by Infrahub's task workers on a proposed change at its creation and on a
 re-run, reaching Fylgja through the API alone (XI). Everything that decides is behind the

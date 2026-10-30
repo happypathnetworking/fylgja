@@ -1,57 +1,97 @@
 # Security
 
-Fylgja builds a network twin on one lab host from intent it reads in Infrahub. This page
-says what it protects, what it leaves to the operator, and how to report a vulnerability.
+Fylgja builds a network twin on one lab host from intent it reads in Infrahub. It is two
+deployables ([D-065](docs/decisions.md#d-065)): the **core**, the `fylgja` binary, which
+runs a twin from a snapshot and knows no source of truth, and the **orchestrator**, a
+Python project on Prefect under `orchestrator/`, which reads Infrahub, plans and rehearses
+a proposed change's stages and drives the core through its API. This page says what each
+protects, what it leaves to the operator, and how to report a vulnerability.
 
 ## The threat model
 
-**The API has one token.** Every command but `fylgja serve` and `fylgja worker run` is a
-request to the API's server, `fylgja serve`, on the lab host. The server reads one token,
-`FYLGJA_API_TOKEN`, from its environment and refuses to start without it. A client sends
-it as `Authorization: Bearer <token>` on every request, and the server compares it, in
+**The core's API has one token.** Every `fylgja` command but `fylgja serve` and `fylgja
+worker run` is a request to the API's server, `fylgja serve`, on the lab host, and so is
+every call the orchestrator's flows make to the core. The server reads one token,
+`FYLGJA_API_TOKEN`, from its environment and refuses to start without it. A client sends it
+as `Authorization: Bearer <token>` on every request, and the server compares it, in
 constant time, before it reads anything else. There are no roles and no second token:
-whoever holds the token can do everything the operator can, from reading intent to
-building, stepping and destroying the twin ([D-042](docs/decisions.md#d-042)).
+whoever holds the token can do everything the operator can do to the twin, from building,
+stepping and destroying it to compiling a snapshot ([D-042](docs/decisions.md#d-042)).
 
-**The token is sent in the clear.** The server speaks HTTP/1.1 and terminates no TLS. It
-listens on `127.0.0.1:7650` unless `--listen`, which may be given more than once, says
-otherwise, and for each address off loopback its start-up report says the token is sent
-unencrypted on it. Keeping the token
-confidential is the transport's work, and the transport is the operator's: loopback, an
-SSH tunnel (`ssh -N -L 7650:127.0.0.1:7650 <lab host>` from a client's machine), or a
-proxy that terminates TLS, which a client addresses by an `https://` URL. A client follows
-no redirect, so it never sends the token to an address the operator did not give.
+**The token is sent in the clear, on loopback.** The server speaks HTTP/1.1 and terminates
+no TLS. It listens on `127.0.0.1:7650` unless `--listen`, which may be given more than
+once, says otherwise, and for each address off loopback its start-up report says the token
+is sent unencrypted on it. The development host starts it on loopback alone (020's
+FR-005). Keeping the token confidential is the transport's work, and the transport is the
+operator's: loopback, an SSH tunnel (`ssh -N -L 7650:127.0.0.1:7650 <lab host>` from a
+client's machine), or a proxy that terminates TLS, which a client addresses by an
+`https://` URL. A client follows no redirect, so it never sends the token to an address the
+operator did not give. **The core's token never crosses the Docker bridge**: nothing inside
+Infrahub's containers holds it or reaches the core.
 
-**The bridge listener.** On the lab host the server also listens on the host's Docker
-bridge address (`docker0`, `172.17.0.1` by Docker's default), port 7650, so that
-Infrahub's task workers, on their own Compose network, reach it: the checks `fylgja-step`
-and `fylgja-twin` run there and are clients of the API. Any container on the host can
-reach that address, the twin's nodes included, and the bearer check is what guards it.
-The token is in the task workers' environment, which the Compose override gives them
-from `local/.env`, as well as in that file, so whoever can inspect those containers or
-read that file holds it. There is no TLS on the bridge, and the server's start-up report
-says the token is sent unencrypted on it. It is the same one token with no roles: the
-revisit [D-042](docs/decisions.md#d-042) names for the check inside Infrahub, a client
-that needs less than everything, is consciously deferred
-([D-050](docs/decisions.md#d-050)).
+**The orchestrator's platform is on the bridge.** The orchestrator's flows run on a Prefect
+server of its own (`make prefect-server`), which listens on the host's Docker bridge
+address (`docker0`, `172.17.0.1` by Docker's default), port 4200, so that Infrahub's task
+workers, on their own Compose network, reach it as `host.docker.internal:4200`: the checks
+`fylgja-step` and `fylgja-twin` run there and are clients of the platform, never of the
+core. Its API takes basic authentication, one `<user>:<password>` string
+(`PREFECT_API_AUTH_STRING` for the host's processes, the same value as
+`FYLGJA_ORCHESTRATOR_AUTH` for the checks); without it every path is `401` but Prefect's
+`/api/health`. There is no TLS on the bridge, so the string is sent in the clear, and any
+container on the host can reach that address, the twin's nodes included: the credential is
+what guards it. Whoever holds it can start any of the six flows the runner,
+`fylgja-orchestrator serve`, serves, with any parameters, and the runner runs them as the
+operator's user with the orchestrator's credentials: reading Infrahub, writing a snapshot
+file where a read's `out` names, creating, stepping and destroying the twin through the
+core, and posting a rehearsal's report on a proposed change. It also reads every flow run
+the platform holds, with its parameters, its findings document and its log. It is one
+credential with no roles, a client that needs less than everything still deferred as
+[D-050](docs/decisions.md#d-050) deferred it for the core's token.
 
-**The server and the worker hold every credential.** Both run on the lab host with both
-node logins in their process environment, and the server with Infrahub's token, which the
-worker no longer reads ([D-062](docs/decisions.md#d-062)) but carries when it is started
-from `local/.env`, as the bring-up script starts it. The server also
-holds the API's token, which the worker never reads; a client holds the API's token
-alone. `local/.env`, kept at mode `0600`, is the one file that holds a value. Fylgja
-reads the process environment only, and never prints, logs or persists a credential: none
-is in a snapshot, a bundle, a finding, an answer, a log line, a start-up report, a check's
-message or the thread a check posts.
+**Who holds what.** `local/.env`, kept at mode `0600`, is the one file that holds a value.
+Fylgja reads the process environment only.
+
+- **The core's server** reads the API's token and both node logins. It reads no
+  `INFRAHUB_*` and no scope, and it holds none: the bring-up script starts it with every
+  `INFRAHUB_*` name taken from its environment, Infrahub's Compose values among them, whose
+  `INFRAHUB_INITIAL_ADMIN_TOKEN` is Infrahub's token, and `FYLGJA_DEFAULT_SCOPE` with them,
+  and restarts one that holds any; tier 3 refuses to run against one that does. It carries
+  the rest of `local/.env`'s variables, which it never reads, the platform's auth string
+  among them. (Until 020's close the script took only Infrahub's address and token and the
+  scope, so the core held the Compose values, Infrahub's token under another name; that is
+  closed.)
+- **The core's worker** reads both node logins, never the API's token or Infrahub's, and
+  carries `local/.env` whole when it is started from it, as the bring-up script starts it.
+- **A client of the core**, `fylgja` on any machine, holds the API's token alone.
+- **The orchestrator**, `fylgja-cli` and the runner and its flows, reads Infrahub's token,
+  for its adapter and for the report it posts, the API's token, since its flows are the
+  core's clients, and the platform's auth string; never a node login, which it carries
+  unread when started from `local/.env`. Its Prefect server reads the auth string alone,
+  as `PREFECT_SERVER_API_AUTH_STRING`.
+- **The Infrahub adapter** run as a tool (`python -m fylgja_orchestrator.adapters.infrahub`)
+  reads Infrahub's token, never the API's.
+- **The checks**, inside Infrahub's task workers, hold the platform's auth string alone, of
+  Fylgja's credentials: the Compose override gives it them from `local/.env`, so whoever can
+  inspect those containers holds it, and never the API's token.
+
+None of them prints, logs or persists a credential: none is in a snapshot, a bundle, a
+finding, an answer, a log line, a start-up report, a flow run's artifact or log, a check's
+message or the thread the rehearse flow posts.
 
 ### On a shared host
 
-- **The API's port** is on loopback and on the Docker bridge, so any local user and any
-  container on the host can reach it, but nothing is done without the token.
+- **The API's port** is on loopback alone, so any local user can reach it, but nothing is
+  done without the token.
+- **The orchestrator's platform** is on the Docker bridge, so any local user and any
+  container on the host can reach it, but nothing is done or read without its auth string.
+  Its database, under `local/orchestrator/prefect`, holds every flow run's parameters,
+  findings document and log, and the orchestrator's state root, `local/orchestrator`, its
+  snapshots, each carrying every device's artifact: both are as readable as the operator
+  leaves those directories.
 - **The environment and `local/.env` are the credentials.** Anyone who can read the
   environment of the operator's processes (as that user, or as root) or `local/.env` has
-  every credential: the API's token, Infrahub's token and both node logins.
+  every credential: the API's token, Infrahub's token, the platform's auth string and both
+  node logins.
 - **The workflow service** is Temporal's dev server (`temporal server start-dev`), on
   `127.0.0.1:7233` with its UI on `:8233`. It checks no credential, so any local user can
   read every run's history and start or cancel runs on the queue the worker serves.
@@ -67,21 +107,25 @@ message or the thread a check posts.
 
 Report it privately, through GitHub's private vulnerability reporting: the repository's
 **Security** tab, then **Report a vulnerability**. Do not open a public issue for it. Say
-what you found, how to reproduce it, and the version (`fylgja --version`) or commit it
-applies to.
+what you found, how to reproduce it, and the version (`fylgja --version`, `fylgja-cli
+--version`) or commit it applies to.
 
 **In scope**: the `fylgja` binary (the API's server, the worker and the client's
-commands), the two checks under `infrahub/checks/` that Infrahub's task workers run, the
-scripts under `scripts/`, and the workflows under `.github/workflows/`.
+commands), the orchestrator under `orchestrator/` (`fylgja-cli`, the runner, its flows and
+the Infrahub adapter), the two checks under `infrahub/checks/` that Infrahub's task workers
+run, the scripts under `scripts/`, and the workflows under `.github/workflows/`.
 
 **Not in scope**:
 
 - The network operating system images and their published default logins, which a twin
   uses on purpose.
-- Infrahub, containerlab and Temporal themselves: report those to their projects
+- Infrahub, containerlab, Temporal and Prefect themselves: report those to their projects
   ([Infrahub](https://github.com/opsmill/infrahub),
   [containerlab](https://github.com/srl-labs/containerlab),
-  [Temporal](https://github.com/temporalio/temporal)).
-- What this page states as the design: one token with no roles, sent without TLS, and the
-  shared-host exposure above. A way around the token, or a credential that reaches a
-  snapshot, a bundle, a finding, a log line or the output of a command or a script, is in scope.
+  [Temporal](https://github.com/temporalio/temporal),
+  [Prefect](https://github.com/PrefectHQ/prefect)).
+- What this page states as the design: one token with no roles, sent without TLS, one
+  platform credential with no roles, sent without TLS on the bridge, and the shared-host
+  exposure above. A way around the token or the platform's credential, or a credential that
+  reaches a snapshot, a bundle, a finding, a flow run's artifact or log, a log line or the
+  output of a command or a script, is in scope.

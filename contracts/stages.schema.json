@@ -66,7 +66,7 @@
         "description": {"type": "string"},
         "twin": {
           "type": "boolean",
-          "description": "true on the one row the host's record names (twin.json 6's stage, by proposed change id and label); stage.twin.moved beside it says when that row no longer resolves to what the record holds"
+          "description": "true on the one row the twin's record names (its stage, by proposed change id and label); stage.twin.moved beside it says when that row no longer resolves to what the record holds. Before 020: the core's record, twin.json 6 to 11's stage. 020: the orchestrator's record (contracts/orchestrator.md), since twin.json 12 names no stage (D-065, D-066), and only while it is trusted, twin show's record naming its snapshot; not trusted, no row is true and record.twin.stale says why"
         }
       }
     },

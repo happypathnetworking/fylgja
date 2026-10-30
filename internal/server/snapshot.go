@@ -11,40 +11,9 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
-	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/validate"
 )
-
-// takeSnapshot wraps a CTM a read produced as a snapshot, with probes, the request's one list
-// (016, R-06; readProbes), and files it in the store under the state root, returning the
-// snapshot and its store path (data-model §4; R-05). Where
-// the server takes a snapshot is here alone, so the create, its dry run, intent read and
-// the stages' pipeline take and file alike (D-011's one code path). Called after a clean
-// read and before the compile: a refused read files nothing, and a compile refused after
-// it leaves the snapshot filed, since its CTM validated.
-//
-// The store never overwrites: a second take of the same intent keeps the first take's
-// entry, and its observed_at, and returns the snapshot as taken now. An entry already
-// under the id that hashes to another, or declares another, is snapshot.id.mismatch at
-// step, naming the store path and both ids, the one finding it returns, with no snapshot, since none was filed;
-// any other failure is an error the caller reports as operation.failed.
-func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM, probes []probe.Probe) (*snapshot.Snapshot,
-	string, findings.List, error) {
-	s := snapshot.Take(c, probes)
-	store := snapshot.NewDirStore(paths.Snapshots)
-	_, err := store.Put(ctx, s)
-	var mismatch *snapshot.ErrIDMismatch
-	switch {
-	case errors.As(err, &mismatch):
-		var list findings.List
-		list.AddStep(findings.Rejection, step, findings.RuleSnapshotIDMismatch, mismatch.Path, corruptEntry(mismatch, "filed"))
-		return nil, "", list, nil
-	case err != nil:
-		return nil, "", nil, fmt.Errorf("filing snapshot %s: %v", s.ID, err)
-	}
-	return s, store.Path(s.ID), nil, nil
-}
 
 // corruptEntry is snapshot.id.mismatch's message for a store entry that hashes to another id
 // than the one it is filed under, or hashes to it and declares another, worded as the bundle
@@ -76,45 +45,6 @@ func snapshotFiles(op string, subject *findings.Subject, given bool, arg string,
 	return nil
 }
 
-// snapshotGuards refuses what a snapshot makes meaningless, before any connection (R-07):
-// --branch, --stage, --at or --scope beside --snapshot, the first found in that order, is
-// snapshot.flags.conflict, since a snapshot carries its own branch, at and scope, exit 2 at
-// start; then --probes (016), since it carries its own probes. --dry-run is accepted.
-func snapshotGuards(op string, subject *findings.Subject, f *createFlags) error {
-	for _, c := range []struct {
-		given bool
-		flag  string
-	}{
-		{f.branch != "", "--branch"},
-		{f.fromStage(), "--stage"},
-		{f.at != "", "--at"},
-		{f.scopeGiven, "--scope"},
-	} {
-		if c.given {
-			return snapshotConflict(op, subject, c.flag, c.flag+" is meaningless with --snapshot: a snapshot carries its own "+
-				"branch, at and scope")
-		}
-	}
-	if f.probes.given {
-		return probesConflict(op, subject)
-	}
-	return nil
-}
-
-// snapshotConflict is snapshot.flags.conflict at flag, at start, saying message.
-func snapshotConflict(op string, subject *findings.Subject, flag, message string) error {
-	doc := findings.RuleErrorDocument(op, subject, findings.RuleSnapshotFlagsConflict, flag, message)
-	doc.Findings[0].Step = findings.StepStart
-	return &result{doc: doc}
-}
-
-// probesConflict is --probes beside --snapshot on a create or a step (016; FR-006): the
-// snapshot's own list is the one its twin carries, and a file would replace nothing.
-func probesConflict(op string, subject *findings.Subject) error {
-	return snapshotConflict(op, subject, "--probes", "--probes is meaningless with --snapshot: a snapshot carries its own "+
-		"probes, which the twin is built with")
-}
-
 // resolveSnapshot resolves --snapshot to the stored snapshot a create builds from, at
 // resolve, and returns it with its store path (R-12). An argument of a snapshot id's shape
 // is looked up in the store: absent is snapshot.unknown, naming the store's directory, and a
@@ -141,7 +71,7 @@ func resolveSnapshot(ctx context.Context, paths lab.Paths, op string, subject *f
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
 			return refuse(findings.RuleSnapshotUnknown, id, fmt.Sprintf("the store under %s holds no snapshot %s; a snapshot id "+
-				"comes from a create, a dry run, a plan or intent read --out on this server", paths.Snapshots, id))
+				"names one this server filed when a create, a step, a dry run or a twin diff sent it its file", paths.Snapshots, id))
 		case errors.As(err, &mismatch):
 			return refuse(findings.RuleSnapshotIDMismatch, mismatch.Path, corruptEntry(mismatch, done))
 		}

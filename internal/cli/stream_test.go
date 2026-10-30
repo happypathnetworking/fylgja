@@ -31,21 +31,20 @@ func TestInterruptsBeforeTheStartReachNoServer(t *testing.T) {
 		run  func(t *testing.T) error
 		want findings.Finding
 	}{
-		{"twin create --stage=", func(t *testing.T) error {
+		{"twin create with no --snapshot", func(t *testing.T) error {
 			useStateRoot(t)
 			useService(t, nil)
-			return runCreate(context.Background(), &options{asJSON: true}, &createFlags{stageGiven: true})
-		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageRefInvalid, Object: "", Step: findings.StepStart,
-			Message: `--stage "" is not a stage reference: expected <branch>/<label>, a branch with no "/" and no whitespace ` +
-				`and a label with neither`}},
+			return runCreate(context.Background(), &options{asJSON: true}, &createFlags{})
+		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: findings.OpTwinCreate,
+			Message: "--snapshot is required"}},
 		{"twin create, the workflow service unreachable", func(t *testing.T) error {
-			useFixtureRead(t)
+			useFixtureSnapshot(t)
 			startRefusals()[0].use(t)
-			return runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+			return runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 		}, findings.Finding{Rule: findings.RuleRunServiceUnreachable, Step: findings.StepStart}},
 		{"twin step --wait=", func(t *testing.T) error {
 			stepHost(t, "plan-link-added.json", nil)
-			return runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{allowRestart: true, waitGiven: true})
+			return runTwinStep(context.Background(), &options{asJSON: true}, &stepFlags{snapshot: stageID(t, "linked"), allowRestart: true, waitGiven: true})
 		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleVerifyWaitInvalid, Object: "--wait", Step: findings.StepStart,
 			Message: "--wait= is empty; give a duration such as --wait=2m, or leave --wait out for the default 2m0s"}},
 	} {
@@ -155,7 +154,7 @@ func TestInterruptsAreSentOneAtATime(t *testing.T) {
 	var code int
 	printedBy(t, func() {
 		code = report(&options{asJSON: true}, nil,
-			runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
+			runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID}))
 	})
 
 	stub.mu.Lock()
@@ -188,7 +187,7 @@ func TestAnInterruptForAnEndedStreamIsReadPast(t *testing.T) {
 
 	var err error
 	_, stderr := printedBy(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
+		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: headSnapshotID})
 	})
 
 	stub.mu.Lock()
@@ -216,16 +215,18 @@ func TestEveryRunRequestNamesAFreshStream(t *testing.T) {
 		run func() error
 	}{
 		{findings.OpTwinCreate, func() error {
-			return runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+			return runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 		}},
 		{findings.OpTwinCreate, func() error {
-			return runCreate(context.Background(), &options{}, &createFlags{stage: "change-1/cabled", stageGiven: true})
+			return runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID, dryRun: true})
 		}},
 		{findings.OpTwinProvision, func() error {
 			return runTwinProvision(context.Background(), &options{}, &provisionFlags{}, bundleDir)
 		}},
-		{findings.OpTwinStep, func() error { return runTwinStep(context.Background(), &options{}, &stepFlags{}) }},
-		{findings.OpTwinDestroy, func() error { return runDestroy(context.Background(), &options{}) }},
+		{findings.OpTwinStep, func() error {
+			return runTwinStep(context.Background(), &options{}, &stepFlags{snapshot: stageID(t, "linked")})
+		}},
+		{findings.OpTwinDestroy, func() error { return runDestroy(context.Background(), &options{}, &destroyFlags{}) }},
 		{findings.OpTwinShow, func() error { return runShow(context.Background(), &options{}) }},
 	}
 	printedBy(t, func() {

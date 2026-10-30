@@ -1,0 +1,19 @@
+{
+  "about": "m2Documents: destroy error",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.destroy",
+    "status": "error",
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "run.service.unreachable",
+        "object": "localhost:1",
+        "message": "the workflow service did not answer at localhost:1",
+        "step": "start"
+      }
+    ]
+  },
+  "text": "rejection run.service.unreachable [step start] localhost:1: the workflow service did not answer at localhost:1\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 2
+}

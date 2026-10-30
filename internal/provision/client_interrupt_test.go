@@ -21,8 +21,8 @@ import (
 // An interrupt that arrives while the start request is in flight does not cut the request
 // short: a run the service accepted needs its run id for the command to terminate it. The
 // request completes, and the run is then terminated before any worker takes it, as
-// run.cancelled at step start (contracts/cli.md create step 7). A step's start and a
-// rehearsal's (015) are the provisioning run's in this.
+// run.cancelled at step start (contracts/cli.md create step 7). A step's start is the
+// provisioning run's in this.
 func TestInterruptDuringTheStartRequestTerminatesTheRun(t *testing.T) {
 	for _, c := range []struct {
 		name       string
@@ -35,10 +35,6 @@ func TestInterruptDuringTheStartRequestTerminatesTheRun(t *testing.T) {
 		}},
 		{"step", WorkflowStep, func(ctx context.Context, c *Client) error {
 			_, err := c.StartStep(ctx, stepInput())
-			return err
-		}},
-		{"rehearse", WorkflowRehearse, func(ctx context.Context, c *Client) error {
-			_, err := c.StartRehearse(ctx, rehearseInput())
 			return err
 		}},
 	} {

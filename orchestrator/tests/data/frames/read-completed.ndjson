@@ -1,0 +1,33 @@
+{"run":{"workflow_id":"fylgja-provision","run_id":"01a10000-0000-7000-8000-000000000dp1","state":"completed"}}
+{"out":"run fylgja-provision 01a10000-0000-7000-8000-000000000dp1: completed\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":false}}
+{"out":"step host check: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":true,"outcome":"done","duration_s":0.01716235}}
+{"out":"step host check: done in 0.0s\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"stage","finding_step":"stage","end":false}}
+{"out":"step stage: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"stage","finding_step":"stage","end":true,"outcome":"done","duration_s":0.01306421}}
+{"out":"step stage: done in 0.0s\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"deploy","finding_step":"deploy","end":false}}
+{"out":"step deploy: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"deploy","finding_step":"deploy","end":true,"outcome":"done","duration_s":0.016614172,"detail":"1 node"}}
+{"out":"step deploy: done in 0.0s (1 node)\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"readiness n1","finding_step":"readiness","end":false}}
+{"out":"step readiness n1: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"readiness n1","finding_step":"readiness","end":true,"outcome":"done","duration_s":0.013526249}}
+{"out":"step readiness n1: ready in 0.0s\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"push n1","finding_step":"push","end":false}}
+{"out":"step push n1: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"push n1","finding_step":"push","end":true,"outcome":"cancelled","duration_s":5.081727871}}
+{"out":"step push n1: cancelled after 5.1s\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"cleanup teardown","finding_step":"teardown","end":false}}
+{"out":"cleanup teardown: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"cleanup teardown","finding_step":"teardown","end":true,"outcome":"done","duration_s":0.023714429,"detail":"1 container"}}
+{"out":"cleanup teardown: done in 0.0s (1 container)\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"cleanup unstage","finding_step":"unstage","end":false}}
+{"out":"cleanup unstage: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"cleanup unstage","finding_step":"unstage","end":true,"outcome":"done","duration_s":0.01531517}}
+{"out":"cleanup unstage: done in 0.0s\n"}
+{"out":"removed lab fylgja (1 container)\n"}
+{"out":"removed twin directory /t032/twin\n"}
+{"document":{"findings_version":"1","operation":"run.read","status":"failed","subject":{"run_id":"01a10000-0000-7000-8000-000000000dp1"},"bundle_id":"f387afcba5dcef0c1d00b38094840f806d463029f348f5b958fc902836ee0486","cleanup":{"teardown":"done","unstage":"done","removed":["lab fylgja (1 container)","twin directory /t032/twin"],"remaining":[]},"findings":[{"severity":"rejection","rule":"run.cancelled","object":"01a10000-0000-7000-8000-000000000dp1","message":"run 01a10000-0000-7000-8000-000000000dp1 was cancelled at step push; teardown and unstage then ran","step":"push"}]},"text":"rejection run.cancelled [step push] 01a10000-0000-7000-8000-000000000dp1: run 01a10000-0000-7000-8000-000000000dp1 was cancelled at step push; teardown and unstage then ran\n1 finding(s): 1 rejection, 0 warning, 0 info\n"}

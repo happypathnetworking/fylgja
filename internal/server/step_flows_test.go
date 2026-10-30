@@ -3,6 +3,7 @@ package server
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
@@ -139,12 +140,11 @@ func TestStepClosingCarriesTheLoss(t *testing.T) {
 		fromID = "348fd9340000000000000000000000000000000000000000000000000000abcd"
 		toID   = "ee291b0f0000000000000000000000000000000000000000000000000000abcd"
 	)
-	change := wire.StageChange{ID: "pc-1", Branch: "change-1"}
 	in := provision.StepInput{
-		From: wire.StepSide{Stage: &wire.StageRef{ProposedChange: change, Label: "cabled"}, BundleID: fromID},
-		To:   wire.StepSide{Stage: &wire.StageRef{ProposedChange: change, Label: "live"}, BundleID: toID},
+		From: wire.StepSide{SnapshotID: strings.Repeat("576933ec", 8), BundleID: fromID},
+		To:   wire.StepSide{SnapshotID: strings.Repeat("9c2d01e7", 8), BundleID: toID},
 	}
-	const stepped = "stepped to stage change-1/live (bundle ee291b0f…) in 71.2s"
+	const stepped = "stepped to snapshot 9c2d01e7… (bundle ee291b0f…) in 71.2s"
 	settled := &wire.StepWait{Outcome: wire.WaitSettled, AfterS: 1.9}
 	measured := wire.ProbeLoss{Probe: "n1-loop", Outcome: wire.FlowMeasured, Sent: 312}
 	for _, c := range []struct {

@@ -7,21 +7,16 @@ import (
 	"sort"
 )
 
-// Operation names the command that produced a document.
+// Operation names the command that produced a document. 020 moved five to the
+// orchestrator (T035): intent.read, schema.check, stage.list, stage.plan and twin.rehearse
+// name its documents, never the core's.
 const (
-	OpIntentRead    = "intent.read"
 	OpCompile       = "twin.compile"
-	OpSchemaCheck   = "schema.check"
 	OpPSPValidate   = "psp.validate"
 	OpTwinCreate    = "twin.create"
 	OpTwinProvision = "twin.provision"
 	OpTwinDestroy   = "twin.destroy"
 	OpTwinShow      = "twin.show"
-
-	// 014: a proposed change's stages listed and planned, with no lab (M10's two
-	// operations, renamed).
-	OpStageList = "stage.list"
-	OpStagePlan = "stage.plan"
 
 	// M11: a twin stepped to another stage of its proposed change (014), and its dry
 	// run.
@@ -30,9 +25,11 @@ const (
 	// M12: the twin read and verified against intent, with no run.
 	OpTwinVerify = "twin.verify"
 
-	// 015: a proposed change's stages rehearsed on a twin of its own, built, stepped,
-	// verified and destroyed by one run.
-	OpTwinRehearse = "twin.rehearse"
+	// 020: a run read and interrupted by its identity, and two snapshots' bundles
+	// compared with no twin (data-model §1).
+	OpRunRead      = "run.read"
+	OpRunInterrupt = "run.interrupt"
+	OpTwinDiff     = "twin.diff"
 )
 
 // Status maps onto the process exit code.
@@ -115,258 +112,11 @@ const (
 	AtSourceHead        = "head"         // the source branch's latest stamp or intent event plus one microsecond
 )
 
-// AtSourceText is how the text names where an at came from: the identifier, but for the
-// branch point, which reads as two words.
-func AtSourceText(source string) string {
-	if source == AtSourceBranchPoint {
-		return "branch point"
-	}
-	return source
-}
-
-// StageChange is the proposed change a stage belongs to (014; stages.schema.json,
-// $defs/proposed_change): found by its source branch among the open ones. Its name is the
-// operator's and not unique; its id is the identity.
-type StageChange struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
-	Draft  bool   `json:"draft"`
-}
-
-// StageBlock is the reference one stage resolved to (014): the stage block of twin create,
-// its dry run, intent read given --stage, and twin step once its target resolved
-// (stages.schema.json, $defs/resolved). Branch is the branch the read is on: the default
-// branch for the branch point, the proposed change's source branch otherwise. At is
-// verbatim: what was written on the mark, what Infrahub returned, or the first instant
-// after what it returned (the head).
-type StageBlock struct {
-	Ref            string      `json:"ref"`
-	Branch         string      `json:"branch"`
-	Label          string      `json:"label"`
-	ProposedChange StageChange `json:"proposed_change"`
-	At             string      `json:"at"`
-	AtSource       string      `json:"at_source"`
-	Description    string      `json:"description"`
-}
-
-// Line is the one line printed wherever a reference resolved
-// (specs/014-proposed-change-stages/contracts/stage-commands.md):
-//
-//	stage change-1/cabled: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"
-//	stage change-1/branch-point: main at 2026-10-16T17:20:19.944651+00:00 (branch point)
-//	stage change-1/head: branch change-1 at 2026-10-16T17:30:11.884302+00:00 (head)
-func (s StageBlock) Line() string {
-	return fmt.Sprintf("stage %s: %s", s.Ref, s.Resolution())
-}
-
-// Resolution is the line's part after the reference, which stage plan prints after each
-// compiled stage's reference. A mark's description is the operator's, quoted, and "" when
-// none was written; a derived stage has none and prints none.
-func (s StageBlock) Resolution() string {
-	where := "branch " + s.Branch
-	if s.AtSource == AtSourceBranchPoint {
-		where = s.Branch
-	}
-	line := fmt.Sprintf("%s at %s (%s)", where, s.At, AtSourceText(s.AtSource))
-	if s.AtSource == AtSourceGiven || s.AtSource == AtSourceWritten {
-		line += fmt.Sprintf(", %q", s.Description)
-	}
-	return line
-}
-
-// StagesBlock is stage list's block (014; stages.schema.json, $defs/list): the stages of
-// every open proposed change, or of the one whose source branch was asked for, sorted by
-// branch then order, each with the reference it resolves to; the orphaned stages; and the
-// stage the host's record names.
-type StagesBlock struct {
-	// Branch is the --branch filter, or nil when every open proposed change was listed.
-	Branch  *string       `json:"branch"`
-	Rows    []StageRow    `json:"rows"`
-	Orphans []StageOrphan `json:"orphans"`
-	// Record is what twin.json names, as recorded, when it is readable and names a
-	// stage; nil otherwise. Written as an explicit null, as the contract requires.
-	Record *StageRecord `json:"record"`
-}
-
-// MarshalJSON writes no rows and no orphans as [] rather than null: the contract requires
-// the lists.
-func (b StagesBlock) MarshalJSON() ([]byte, error) {
-	type plain StagesBlock
-	if b.Rows == nil {
-		b.Rows = []StageRow{}
-	}
-	if b.Orphans == nil {
-		b.Orphans = []StageOrphan{}
-	}
-	return json.Marshal(plain(b))
-}
-
-// StageRow is one listed stage: the reference it resolves to now, with no refusal (a
-// listing resolves nothing for a run), and whether it is the one the host's twin was built
-// from. A stage nothing names an at for has its row with no at.
-type StageRow struct {
-	StageBlock
-	Twin bool `json:"twin"`
-}
-
-// MarshalJSON leaves at out of a row whose stage has none, which the contract allows a
-// row and not a resolved stage block.
-func (r StageRow) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Ref            string      `json:"ref"`
-		Branch         string      `json:"branch"`
-		Label          string      `json:"label"`
-		ProposedChange StageChange `json:"proposed_change"`
-		At             string      `json:"at,omitempty"`
-		AtSource       string      `json:"at_source"`
-		Description    string      `json:"description"`
-		Twin           bool        `json:"twin"`
-	}{r.Ref, r.Branch, r.Label, r.ProposedChange, r.At, r.AtSource, r.Description, r.Twin})
-}
-
-// StageOrphan is a stage its proposed change no longer names, removed from its
-// fylgja_stages (D-047): listed, warned (stage.orphaned), never planned or created from.
-type StageOrphan struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	At       string `json:"at"`
-	AtSource string `json:"at_source"`
-}
-
 // StageChangeRef names a proposed change as twin.json 6 records it: its id and its source
 // branch.
 type StageChangeRef struct {
 	ID     string `json:"id"`
 	Branch string `json:"branch"`
-}
-
-// StageRecord is the stage a twin.json 6 names, with the reference the record holds: its
-// provenance's branch and at, which the row's may since differ from (stage.twin.moved).
-type StageRecord struct {
-	Ref            string         `json:"ref"`
-	ProposedChange StageChangeRef `json:"proposed_change"`
-	Label          string         `json:"label"`
-	Branch         string         `json:"branch"`
-	At             string         `json:"at"`
-	AtSource       string         `json:"at_source"`
-	// State is the record's: ready or diverged.
-	State string `json:"state"`
-	// Towards is the target of the diverged step, when State is diverged; nil otherwise,
-	// written as an explicit null.
-	Towards *StageTowards `json:"towards"`
-}
-
-// StageTowards names the stage a diverged step was going to.
-type StageTowards struct {
-	Ref string `json:"ref"`
-}
-
-// PlanBlock is stage plan's block (014; stages.schema.json, $defs/plan): the proposed change
-// named by its source branch, each of its stages in order as far as it got, and the step
-// between each consecutive pair.
-type PlanBlock struct {
-	Branch         string      `json:"branch"`
-	ProposedChange StageChange `json:"proposed_change"`
-	Stages         []PlanStage `json:"stages"`
-	// Steps are internal/step's pairs as they marshal themselves, one fewer than the
-	// stages, in order. Raw, because the step's shape is the step package's to render,
-	// and this package imports none of Fylgja's.
-	Steps []json.RawMessage `json:"steps"`
-}
-
-// MarshalJSON writes no stages and no steps as [] rather than null: the contract requires
-// the lists.
-func (b PlanBlock) MarshalJSON() ([]byte, error) {
-	type plain PlanBlock
-	if b.Stages == nil {
-		b.Stages = []PlanStage{}
-	}
-	if b.Steps == nil {
-		b.Steps = []json.RawMessage{}
-	}
-	return json.Marshal(plain(b))
-}
-
-// PlanStage is one stage of a plan. Its reference, label, description and the source of
-// its at are known whether or not it resolves; Branch and At are set once it resolved,
-// SnapshotID once its read was filed (018), BundleID once it compiled, Read once its read
-// did. A stage refused at resolution carries those four and its findings alone.
-type PlanStage struct {
-	Ref         string      `json:"ref"`
-	Label       string      `json:"label"`
-	Description string      `json:"description"`
-	AtSource    string      `json:"at_source"`
-	Branch      string      `json:"branch,omitempty"`
-	At          string      `json:"at,omitempty"`
-	SnapshotID  *string     `json:"snapshot_id"`
-	BundleID    *string     `json:"bundle_id"`
-	Read        *ReadCounts `json:"read"`
-	// Findings are this stage's, each also in the document's own list.
-	Findings List `json:"findings"`
-}
-
-// MarshalJSON writes no findings as [] rather than null: the contract requires the list.
-func (s PlanStage) MarshalJSON() ([]byte, error) {
-	type plain PlanStage
-	if s.Findings == nil {
-		s.Findings = List{}
-	}
-	return json.Marshal(plain(s))
-}
-
-// ReadCounts is intent read's summary line as numbers: what a read holds, and what the
-// packages' profiles make of it.
-type ReadCounts struct {
-	Devices       int `json:"devices"`
-	Interfaces    int `json:"interfaces"`
-	Links         int `json:"links"`
-	Artifacts     int `json:"artifacts"`
-	LossyMappings int `json:"lossy_mappings"`
-	SharedPorts   int `json:"shared_ports"`
-}
-
-// KindFields is one kind the mapping reads, with the fields of it a schema check
-// verified, attributes first, in the mapping's table's order (017).
-type KindFields struct {
-	Kind   string   `json:"kind"`
-	Fields []string `json:"fields"`
-}
-
-// Verified is the success detail of a schema check: what was verified. Model and Version
-// name the schema library and the commit the mapping's table was written against, and
-// Kinds every kind and field of it the branch was found to hold (017).
-type Verified struct {
-	Model   string       `json:"model"`
-	Version string       `json:"version"`
-	Kinds   []KindFields `json:"kinds"`
-	// Stages is whether the default branch carries the stage kind and its extension,
-	// whatever branch was checked (014): information beside the conformance answer, never
-	// a finding.
-	Stages *StagesVerified `json:"stages,omitempty"`
-}
-
-// StagesVerified is the stage kind as the default branch's schema holds it (014;
-// verified.stages): present with every attribute and the relationship this build reads,
-// or absent, or lacking what Missing names; and whether CoreProposedChange carries the
-// extension the file adds.
-type StagesVerified struct {
-	Kind      string   `json:"kind"`
-	Present   bool     `json:"present"`
-	Missing   []string `json:"missing"`
-	Extension bool     `json:"extension"`
-	// File is the schema file that loads the kind and the extension.
-	File string `json:"file"`
-}
-
-// MarshalJSON writes nothing missing as [] rather than null: the contract requires the
-// list.
-func (s StagesVerified) MarshalJSON() ([]byte, error) {
-	type plain StagesVerified
-	if s.Missing == nil {
-		s.Missing = []string{}
-	}
-	return json.Marshal(plain(s))
 }
 
 // TwinBlock is the success detail of twin create and twin provision: the twin that was
@@ -746,12 +496,11 @@ type ShowRef struct {
 }
 
 // ShowRun is a run in flight and the step its history has reached. A rehearsal's child run
-// in flight is its Child, which has none of its own.
+// was its Child until 020, when the rehearsal left the core's worker (T034, T035).
 type ShowRun struct {
-	WorkflowID string   `json:"workflow_id"`
-	RunID      string   `json:"run_id"`
-	Step       string   `json:"step"`
-	Child      *ShowRun `json:"child,omitempty"`
+	WorkflowID string `json:"workflow_id"`
+	RunID      string `json:"run_id"`
+	Step       string `json:"step"`
 }
 
 // Document is the machine-readable result of one operation. M1's operations conform to
@@ -761,38 +510,37 @@ type ShowRun struct {
 // removed the following block and dry_run.follow, pre-1.0, under the same version. M5's
 // operations — the artifact on a dry run's, a twin's and a shown host's nodes,
 // `pushed_in_s`, and the step `push` — conform to M5's, with show.schema.json added as a
-// resource under its $id. 014's — subject.stage, the stage block, record.stage in the show
-// block, and the stages and plan blocks of stage list and stage plan — conform to the
-// current contract, with stages.schema.json added under its $id as well, and 015's
-// rehearsal block with rehearsal.schema.json. Each
+// resource under its $id. 014's record.stage in the show block conforms to the current
+// contract, with stages.schema.json added under its $id as well; its subject.stage, stage
+// block and the stages and plan blocks, 015's rehearsal block, and intent read's and
+// schema check's were the five operations' 020 moved to the orchestrator (T035), whose
+// documents they are. Each
 // milestone's copy is kept under testdata/contracts/, and the current contract is
 // contracts/findings.schema.json. No field of any block carries a byte of artifact content.
 type Document struct {
-	FindingsVersion string        `json:"findings_version"`
-	Operation       string        `json:"operation"`
-	Status          Status        `json:"status"`
-	Subject         *Subject      `json:"subject,omitempty"`
-	SnapshotID      string        `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
-	BundleID        string        `json:"bundle_id,omitempty"`
-	Verified        *Verified     `json:"verified,omitempty"`
-	Twin            *TwinBlock    `json:"twin,omitempty"`
-	Cleanup         *CleanupBlock `json:"cleanup,omitempty"`
-	DryRun          *DryRunBlock  `json:"dry_run,omitempty"`
-	Show            *ShowBlock    `json:"show,omitempty"`
-	// Stage is the reference --stage resolved to (014), present once it resolved.
-	Stage *StageBlock `json:"stage,omitempty"`
-	// Stages is stage list's block, Plan stage plan's (014).
-	Stages *StagesBlock `json:"stages,omitempty"`
-	Plan   *PlanBlock   `json:"plan,omitempty"`
-	// Step is twin step's block, on the dry run and the run (M11).
+	FindingsVersion string   `json:"findings_version"`
+	Operation       string   `json:"operation"`
+	Status          Status   `json:"status"`
+	Subject         *Subject `json:"subject,omitempty"`
+	SnapshotID      string   `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
+	BundleID        string   `json:"bundle_id,omitempty"`
+	// SnapshotFrom, SnapshotTo, BundleFrom and BundleTo are twin.diff's two sides (020): each
+	// snapshot once resolved, and the bundle it compiled to once filed.
+	SnapshotFrom string        `json:"snapshot_from,omitempty"`
+	SnapshotTo   string        `json:"snapshot_to,omitempty"`
+	BundleFrom   string        `json:"bundle_from,omitempty"`
+	BundleTo     string        `json:"bundle_to,omitempty"`
+	Twin         *TwinBlock    `json:"twin,omitempty"`
+	Cleanup      *CleanupBlock `json:"cleanup,omitempty"`
+	DryRun       *DryRunBlock  `json:"dry_run,omitempty"`
+	Show         *ShowBlock    `json:"show,omitempty"`
+	// Step is twin step's block, on the dry run and the run (M11), and twin.diff's, the pair
+	// alone (020; StepBlock.Pair).
 	Step *StepBlock `json:"step,omitempty"`
 	// Verify is twin verify's block (M12),
 	// present once the staged bundle was read and its assertions derived.
-	Verify *VerifyBlock `json:"verify,omitempty"`
-	// Rehearsal is twin rehearse's block (015), present once the proposed change was found
-	// and its stages resolved.
-	Rehearsal *RehearsalBlock `json:"rehearsal,omitempty"`
-	Findings  List            `json:"findings"`
+	Verify   *VerifyBlock `json:"verify,omitempty"`
+	Findings List         `json:"findings"`
 }
 
 // NewDocument builds a document, deriving status from the findings unless the caller
@@ -948,12 +696,25 @@ type StepBlock struct {
 	// Loss is what the step's probe flows lost (016), written always: null on the dry run,
 	// before the run closed and when the run ended before its flows were read.
 	Loss *StepLoss `json:"loss"`
+	// Pair, when set, is twin.diff's block (020): the step between two snapshots' bundles as
+	// internal/step marshals a pair (stages.schema.json, $defs/step), which is written alone,
+	// in place of every field above. twin.diff touches no lab, so it has no side's record, no
+	// containerlab plan and no push plan to write.
+	Pair json.RawMessage `json:"-"`
+}
+
+// DiffBlock is twin.diff's step block (020): pair, as internal/step marshals it.
+func DiffBlock(pair json.RawMessage) *StepBlock {
+	return &StepBlock{Pair: pair}
 }
 
 // MarshalJSON writes an empty push plan, and a run's empty pushes and awaited nodes, as []
 // rather than null. StepRunBlock has no MarshalJSON of its own on purpose: embedded, it
 // would be promoted to this one's alias and marshal the run fields alone.
 func (b StepBlock) MarshalJSON() ([]byte, error) {
+	if b.Pair != nil {
+		return b.Pair, nil
+	}
 	type plain StepBlock
 	if b.PushPlan == nil {
 		b.PushPlan = []StepPushPlanEntry{}
@@ -969,6 +730,24 @@ func (b StepBlock) MarshalJSON() ([]byte, error) {
 		b.StepRunBlock = &run
 	}
 	return json.Marshal(plain(b))
+}
+
+// UnmarshalJSON reads twin step's block, or twin.diff's pair (020), which has no diff of its
+// own and is kept as it came, in Pair.
+func (b *StepBlock) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	if _, ok := keys["diff"]; !ok {
+		*b = StepBlock{Pair: append(json.RawMessage(nil), data...)}
+		return nil
+	}
+	type plain StepBlock
+	return json.Unmarshal(data, (*plain)(b))
 }
 
 // StepLoss is the step document's loss (contracts/step.schema.json, $defs/loss), as
@@ -1143,180 +922,4 @@ type StepTimingsBlock struct {
 type StepReadyAfter struct {
 	Node        string  `json:"node"`
 	ReadyAfterS float64 `json:"ready_after_s"`
-}
-
-// RehearsalBlock is twin rehearse's block (015; rehearsal.schema.json, $defs/rehearsal): the
-// proposed change rehearsed, when its stages were resolved, the deadline, the ceiling and the
-// time used, the dead rehearsal whose twin was reclaimed first, the run, the baseline's
-// findings, every stage in the proposed change's order with its role, its verdict and what
-// the run did at it, the destroy's cleanup and, when a stage failed, the commands that
-// reproduce it. Every list is sorted or in the stages' order, so the same run gives the same
-// block. No configuration line, device diff, artifact or bootstrap content, token or login;
-// the markdown rendering rides beside the document, not in it.
-type RehearsalBlock struct {
-	ProposedChange StageChange `json:"proposed_change"`
-	// ResolvedAt is when the server resolved and read the stages, RFC 3339 UTC: what the
-	// report and the comment are headed by.
-	ResolvedAt string `json:"resolved_at"`
-	// DeadlineS is the stages' budgets summed; CeilingS is Fylgja's ceiling, a mechanism
-	// constant.
-	DeadlineS int `json:"deadline_s"`
-	CeilingS  int `json:"ceiling_s"`
-	// UsedS is the run's whole time on its clock, 0 when the rehearsal was refused before
-	// any run.
-	UsedS float64 `json:"used_s"`
-	// Reclaimed is the dead rehearsal whose twin was destroyed before this one started, and
-	// what its destroy did; nil, written as an explicit null, when none was.
-	Reclaimed *RehearsalReclaim `json:"reclaimed"`
-	// Run is the fylgja-rehearse run once started, absent when refused before any run.
-	Run *ShowRef `json:"run,omitempty"`
-	// Baseline is the baseline stage and the findings its wait left failing; nil, written as
-	// null, when no stage compiled or the baseline was not built.
-	Baseline *RehearsalBaseline `json:"baseline"`
-	Stages   []RehearsalStage   `json:"stages"`
-	// Destroy is the destroy child's cleanup; nil, written as null, when the rehearsal was
-	// refused before any run.
-	Destroy *CleanupBlock `json:"destroy"`
-	// Reproduce is, when a stage failed, the commands that reproduce it by hand on the same
-	// stages, in order; none otherwise.
-	Reproduce []string `json:"reproduce"`
-}
-
-// MarshalJSON writes no stages and nothing to reproduce as [] rather than null: the contract
-// requires both lists.
-func (b RehearsalBlock) MarshalJSON() ([]byte, error) {
-	type plain RehearsalBlock
-	b.Stages = orEmpty(b.Stages)
-	b.Reproduce = orEmpty(b.Reproduce)
-	return json.Marshal(plain(b))
-}
-
-// RehearsalReclaim is the dead rehearsal whose twin was destroyed before a rehearsal
-// started: its run, and what the destroy did.
-type RehearsalReclaim struct {
-	Run     ShowRef      `json:"run"`
-	Cleanup CleanupBlock `json:"cleanup"`
-}
-
-// RehearsalBaseline is the baseline stage, by its reference, and the baseline findings: the
-// assertions its wait left failing, by identifier, object and message, which fail nothing
-// and against which every later stage's wait is compared by identifier and object.
-type RehearsalBaseline struct {
-	Ref      string            `json:"ref"`
-	Findings []StepWaitFailing `json:"findings"`
-}
-
-// MarshalJSON writes no baseline finding as [] rather than null: the contract requires the
-// list.
-func (b RehearsalBaseline) MarshalJSON() ([]byte, error) {
-	type plain RehearsalBaseline
-	b.Findings = orEmpty(b.Findings)
-	return json.Marshal(plain(b))
-}
-
-// RehearsalStage is one stage of a rehearsal, in the proposed change's order: the plan's
-// stage, the role the rehearsal gave it and the verdict it came to, and what the run did at
-// it. Branch and At are set once the stage resolved; SnapshotID (018) and BundleID once it
-// compiled, nil for a stage refused. Role is refused (the branch point passed over),
-// baseline, rehearsed or not_reached; Verdict is refused, baseline, passed, failed, error
-// or not_reached.
-type RehearsalStage struct {
-	Ref         string  `json:"ref"`
-	Label       string  `json:"label"`
-	Description string  `json:"description"`
-	AtSource    string  `json:"at_source"`
-	Branch      string  `json:"branch,omitempty"`
-	At          string  `json:"at,omitempty"`
-	SnapshotID  *string `json:"snapshot_id"`
-	BundleID    *string `json:"bundle_id"`
-	Role        string  `json:"role"`
-	Verdict     string  `json:"verdict"`
-	// Findings are this stage's, each also in the document's own list: the plan's, the
-	// child's, and the wait's as warnings.
-	Findings List `json:"findings"`
-	// Provision is the baseline's child as it ended, nil on every other stage; Step the
-	// step child into a rehearsed stage, nil on the baseline, a refused stage and one not
-	// reached. Each nil is written as an explicit null.
-	Provision *RehearsalProvision `json:"provision"`
-	Step      *RehearsalStep      `json:"step"`
-	// Wait is the baseline's wait or a rehearsed stage's, nil when it did not run.
-	Wait *RehearsalWait `json:"wait"`
-	// Verify is the wait's last read counted by kind, nil when no read was made.
-	Verify *VerifyCounts `json:"verify"`
-	// Loss is what the step child's probe flows lost, the step document's block copied
-	// (016), written always: null on the baseline, a refused stage, one not reached, and a
-	// step that ended before its flows were read.
-	Loss *StepLoss `json:"loss"`
-	// NewFindings are the wait's failing assertions the baseline's wait did not have, by
-	// identifier then object.
-	NewFindings []StepWaitFailing `json:"new_findings"`
-	// TookS is the stage's whole time on the run's clock, its child and its wait; 0 for a
-	// stage refused or not reached.
-	TookS float64 `json:"took_s"`
-}
-
-// MarshalJSON writes no finding and no new finding as [] rather than null: the contract
-// requires both lists.
-func (s RehearsalStage) MarshalJSON() ([]byte, error) {
-	type plain RehearsalStage
-	if s.Findings == nil {
-		s.Findings = List{}
-	}
-	s.NewFindings = orEmpty(s.NewFindings)
-	return json.Marshal(plain(s))
-}
-
-// RehearsalProvision is the baseline's provision child as it ended: ready, rejected,
-// failed, cancelled or error, its run, the step it stopped at when it did not end ready,
-// and its cleanup when it made one.
-type RehearsalProvision struct {
-	Outcome string        `json:"outcome"`
-	Run     ShowRef       `json:"run"`
-	Step    string        `json:"step,omitempty"`
-	Cleanup *CleanupBlock `json:"cleanup,omitempty"`
-}
-
-// RehearsalStep is the step child into a rehearsed stage as it ended: stepped, unchanged,
-// diverged, rejected, error or cancelled, its run, the phase a diverged one stopped at, the
-// nodes containerlab restarted, recreated or created, each push's outcome, and the
-// timings. No content.
-type RehearsalStep struct {
-	Outcome   string           `json:"outcome"`
-	Run       ShowRef          `json:"run"`
-	Phase     string           `json:"phase,omitempty"`
-	Restarted []string         `json:"restarted"`
-	Recreated []string         `json:"recreated"`
-	Created   []string         `json:"created"`
-	Pushed    []RehearsalPush  `json:"pushed"`
-	Timings   StepTimingsBlock `json:"timings"`
-}
-
-// MarshalJSON writes every empty list as [] rather than null: the contract requires each.
-func (s RehearsalStep) MarshalJSON() ([]byte, error) {
-	type plain RehearsalStep
-	s.Restarted = orEmpty(s.Restarted)
-	s.Recreated = orEmpty(s.Recreated)
-	s.Created = orEmpty(s.Created)
-	s.Pushed = orEmpty(s.Pushed)
-	return json.Marshal(plain(s))
-}
-
-// RehearsalPush is one push of a rehearsed step and what came of it: landed, refused,
-// failed or not attempted, the finding's identifier for a refused or failed one, and how
-// long it took.
-type RehearsalPush struct {
-	Node    string   `json:"node"`
-	Outcome string   `json:"outcome"`
-	Rule    string   `json:"rule,omitempty"`
-	TookS   *float64 `json:"took_s,omitempty"`
-}
-
-// RehearsalWait is how a stage's wait ended (settled, expired, cancelled or incomplete), its
-// budget, the reads it made and the seconds from the record to the read that settled or to
-// its end.
-type RehearsalWait struct {
-	Outcome string  `json:"outcome"`
-	BudgetS int     `json:"budget_s"`
-	Reads   int     `json:"reads"`
-	AfterS  float64 `json:"after_s"`
 }

@@ -163,7 +163,7 @@ func runTwinVerify(ctx context.Context, opts *options, f *verifyFlags) error {
 	}
 	block := report.Block(verify.TwinOf(*rec, stagedID), inFlight, service, wait)
 
-	printVerify(opts, report, block, towardsOf(reads.inFlight))
+	printVerify(opts, report, block)
 	if f.waitGiven {
 		opts.note("%s", waitLine(budget, waited))
 	}
@@ -231,9 +231,8 @@ func twinAbsent(host lab.HostState, paths lab.Paths, runs []findings.ShowRun) (o
 	return object, message
 }
 
-// hostHolder is the run in flight whose work the host holds, or nil: an operator's
-// provisioning run, or a rehearsal's, from its stage through its cleanup, or a step from its
-// stage through its record.
+// hostHolder is the run in flight whose work the host holds, or nil: a provisioning run from
+// its stage through its cleanup, or a step from its stage through its record.
 func hostHolder(runs []findings.ShowRun) *findings.ShowRun {
 	if r := provisionAtHost(runs); r != nil {
 		return r
@@ -318,25 +317,17 @@ func verifyStatus(r verify.Report) findings.Status {
 // verifyTwinLine is the twin: line (contracts/cli.md): the record's reference as twin show
 // names it, the snapshot and the bundle the record says the twin is at (019: "snapshot
 // none" for a record naming no snapshot), its state, a diverged twin's step, its target named
-// as twin show names it (stepSideRef), and the node count.
+// as twin show names it (its Name()), and the node count. A record names no stage and no
+// rehearsal from 020.
 func verifyTwinLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
-	if rec.Stage != nil {
-		// A rehearsal's twin names its run after the stage (015).
-		ref = "stage " + rec.Stage.Name()
-		if r := rec.Rehearsal; r != nil {
-			ref += fmt.Sprintf(" of rehearsal run %s %s", r.WorkflowID, r.RunID)
-		}
-	} else if rec.Provenance.At != "" {
+	if rec.Provenance.At != "" {
 		ref += " at " + rec.Provenance.At
 	}
 	state := "ready"
-	switch st := rec.Step; {
-	case rec.State == wire.StateDiverged && st != nil:
-		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", stepSideRef(rec, st.To),
+	if st := rec.Step; rec.State == wire.StateDiverged && st != nil {
+		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", st.To.Name(),
 			shortID(st.To.BundleID), phaseOf(st), st.Run.WorkflowID, st.Run.RunID)
-	case rec.Stage != nil && rec.Provenance.At != "":
-		state += ", pinned at " + rec.Provenance.At
 	}
 	snapshot := "none"
 	if id := rec.SnapshotID; id != nil {
@@ -348,7 +339,7 @@ func verifyTwinLine(rec *wire.TwinRecord) string {
 
 // printVerify writes one line per node, the skips, the runs in flight, the nodes the bundle
 // does not name and the counts (contracts/cli.md), from the read the block was built from.
-func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, towards map[string]string) {
+func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock) {
 	claims := map[string]verify.Claim{}
 	for _, c := range r.Claims {
 		claims[c.Node] = c
@@ -375,7 +366,7 @@ func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, to
 		opts.note("%s", nodeLine(n, mine, claim, e))
 	}
 	opts.note("skipped: %s", skippedText(block.Skipped))
-	printInFlight(opts, block.Service, block.InFlight, towards)
+	printInFlight(opts, block.Service, block.InFlight)
 	if len(block.ExtraNodes) > 0 {
 		opts.note("not in the bundle: %s", strings.Join(block.ExtraNodes, ", "))
 	}

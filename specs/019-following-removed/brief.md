@@ -374,6 +374,6 @@ Read in this order, after `CLAUDE.md`'s list.
 | [contracts/cli.md](../../contracts/cli.md), [api.md](../../contracts/api.md), [show.schema.json](../../contracts/show.schema.json), [findings.schema.json](../../contracts/findings.schema.json), [twin.schema.json](../../contracts/twin.schema.json), [step.schema.json](../../contracts/step.schema.json) | the formats that move |
 | [internal/provision](../../internal/provision) (`workflow_reconcile.go`, `activities.go`, `workflow_provision.go`, `workflow_step.go`, `workflow_rehearse.go`, `client.go`, `types.go`, `options.go`, `worker.go`) | what goes, and the guard relaxed |
 | [internal/server](../../internal/server) (`create.go`, `show.go`, `destroy.go`, `dryrun.go`, `follow.go`, `step.go`, `snapshot.go`) | the server's half |
-| [internal/rehearsal/deadline.go](../../internal/rehearsal/deadline.go), [internal/lab/twin.go](../../internal/lab/twin.go) (`NewStepRecord`), [internal/findings](../../internal/findings) | the deadline, the record's rule, the rules that go |
+| [internal/rehearsal/deadline.go](https://github.com/happypathnetworking/fylgja/blob/07b3d7fb936c754e6e1f5c32f5e9231b19dfb7a1/internal/rehearsal/deadline.go), [internal/lab/twin.go](../../internal/lab/twin.go) (`NewStepRecord`), [internal/findings](../../internal/findings) | the deadline, the record's rule, the rules that go |
 | [scripts/e2e.sh](../../scripts/e2e.sh): case 5, case 7, the trap's leak check | the case repurposed |
 | [016's brief](../016-probes/brief.md) | the next spec, which this one prepares the ground for |

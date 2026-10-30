@@ -67,28 +67,26 @@ func snapshotFile(t *testing.T, edit func(doc map[string]any)) string {
 }
 
 // wantSnapshotRun holds in to the input a create from the fixture's snapshot starts its run with: the
-// envelope's branch, at and scope, the stored document's observed_at, both ids, and no stage.
+// envelope's branch, at and scope, the stored document's observed_at and both ids.
 func wantSnapshotRun(t *testing.T, paths lab.Paths, in provision.ProvisionInput, observedAt string) {
 	t.Helper()
 	if in.Source != wire.SourceSnapshot || in.SnapshotID != fixtureSnapshotID || in.BundleID != fixtureBundleID ||
 		in.BundlePath != filepath.Join(paths.Bundles, fixtureBundleID) || in.Branch != "fylgja-fixture" || in.At != fixtureAt ||
-		in.Scope != "tag:fylgja" || in.ObservedAt != observedAt || in.Stage != nil {
+		in.Scope != "tag:fylgja" || in.ObservedAt != observedAt {
 		t.Errorf("the run was started with %+v; want source snapshot, snapshot %s, bundle %s, branch fylgja-fixture at %s, "+
-			"scope tag:fylgja, observed at %s, and no stage", in, fixtureSnapshotID, fixtureBundleID, fixtureAt, observedAt)
+			"scope tag:fylgja, observed at %s", in, fixtureSnapshotID, fixtureBundleID, fixtureAt, observedAt)
 	}
 }
 
 // US3 scenario 1 and FR-015: a stored snapshot's id builds the twin with no read. The server
 // compiles the stored snapshot, files the bundle and starts the provision run with both ids,
-// printing the two stored lines before it; the fake Infrahub is asked nothing, and the run's
-// record names the snapshot, its source snapshot, at the envelope's at.
+// printing the two stored lines before it, and the run's record names the snapshot, its
+// source snapshot, at the envelope's at.
 func TestCreateFromAStoredSnapshot(t *testing.T) {
 	paths := useStateRoot(t)
 	useInterrupts(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
 	useService(t, svc)
-	infra := newFakeInfrahub(t)
-	infra.start()
 	storeFixtureSnapshot(t, paths)
 
 	var err error
@@ -109,9 +107,6 @@ func TestCreateFromAStoredSnapshot(t *testing.T) {
 			doc.Subject, fixtureSnapshotID, fixtureAt)
 	}
 	validateM10Document(t, doc)
-	if n := len(infra.requests()); n != 0 {
-		t.Errorf("Infrahub was asked %d requests: %+v", n, infra.requests())
-	}
 	if len(svc.started) != 2 {
 		t.Fatalf("started %+v, want two runs", svc.started)
 	}
@@ -122,30 +117,28 @@ func TestCreateFromAStoredSnapshot(t *testing.T) {
 	validateTwinJSON(t, record)
 	w := decodeRecord(t, record)
 	if w.Source != wire.SourceSnapshot || w.SnapshotID == nil || *w.SnapshotID != fixtureSnapshotID || w.BundleID != fixtureBundleID ||
-		w.Provenance.Branch != "fylgja-fixture" || w.Provenance.At != fixtureAt || w.Stage != nil {
+		w.Provenance.Branch != "fylgja-fixture" || w.Provenance.At != fixtureAt {
 		t.Errorf("the run recorded\n%s\nwant source snapshot, snapshot %s and bundle %s of fylgja-fixture at %s", record,
 			fixtureSnapshotID, fixtureBundleID, fixtureAt)
 	}
 }
 
 // US3 scenario 2: an id the store does not hold is snapshot.unknown at resolve, exit 1,
-// naming the id and the store's directory, before any run: nothing is dialled, Infrahub is
-// asked nothing, and nothing is filed.
+// naming the id and the store's directory, before any run: nothing is dialled and nothing is
+// filed.
 func TestCreateFromAnUnknownSnapshot(t *testing.T) {
 	paths := useStateRoot(t)
 	dials := countDials(t)
-	infra := newFakeInfrahub(t)
-	infra.start()
 
 	code, doc := executeTwin(t, "twin", "create", "--snapshot", fixtureSnapshotID)
 	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotUnknown, Step: findings.StepResolve,
 		Object: fixtureSnapshotID, Message: "the store under " + paths.Snapshots + " holds no snapshot " + fixtureSnapshotID +
-			"; a snapshot id comes from a create, a dry run, a plan or intent read --out on this server"}
+			"; a snapshot id names one this server filed when a create, a step, a dry run or a twin diff sent it its file"}
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
 		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
 	}
-	if n := dials.Load(); n != 0 || len(infra.requests()) != 0 {
-		t.Errorf("dialled %d times and asked Infrahub %+v; want neither", n, infra.requests())
+	if n := dials.Load(); n != 0 {
+		t.Errorf("dialled %d times; want none", n)
 	}
 	if got := storedBundles(t, paths.Bundles); len(got) != 0 {
 		t.Errorf("bundles/ holds %v", got)
@@ -235,8 +228,6 @@ func TestCreateDryRunFromASnapshot(t *testing.T) {
 			useService(t, nil)
 			dryRunEnv(t)
 			useClab(t, "inspect-empty.json")
-			infra := newFakeInfrahub(t)
-			infra.start()
 			storeFixtureSnapshot(t, paths)
 
 			var err error
@@ -259,71 +250,7 @@ func TestCreateDryRunFromASnapshot(t *testing.T) {
 				t.Errorf("exit %d, document %+v; want 0 naming both ids", code, doc)
 			}
 			validateM10Document(t, doc)
-			if n := len(infra.requests()); n != 0 {
-				t.Errorf("Infrahub was asked %d requests", n)
-			}
 		})
-	}
-}
-
-// US3 scenario 5 and FR-016, FR-018: --snapshot beside --branch, --stage, --at or --scope is
-// snapshot.flags.conflict naming the first found in that order, exit 2 at start, the
-// server's refusal before any connection:
-// neither the workflow service dialled nor Infrahub asked, whether --snapshot is an id, a
-// file, a file that is not there or given empty. The client reads no file beside such a
-// flag, so the guard answers whatever the file (T078).
-func TestSnapshotFlagConflicts(t *testing.T) {
-	const conflict = " is meaningless with --snapshot: a snapshot carries its own branch, at and scope"
-	refusal := func(rule, object, message string) findings.Finding {
-		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: findings.StepStart, Object: object, Message: message}
-	}
-	file := snapshotFile(t, nil)
-	missing := filepath.Join(t.TempDir(), "typo.json")
-	for _, c := range []struct {
-		name string
-		args []string
-		want findings.Finding
-	}{
-		{"--branch", []string{"--branch", "fylgja-fixture"}, refusal(findings.RuleSnapshotFlagsConflict, "--branch", "--branch"+conflict)},
-		{"--stage", []string{"--stage", "change-1/cabled"}, refusal(findings.RuleSnapshotFlagsConflict, "--stage", "--stage"+conflict)},
-		{"--stage=", []string{"--stage="}, refusal(findings.RuleSnapshotFlagsConflict, "--stage", "--stage"+conflict)},
-		{"--at", []string{"--at", "2026-09-16T14:00:00Z"}, refusal(findings.RuleSnapshotFlagsConflict, "--at", "--at"+conflict)},
-		{"--scope", []string{"--scope", "tag:fylgja"}, refusal(findings.RuleSnapshotFlagsConflict, "--scope", "--scope"+conflict)},
-		{"--scope and --at", []string{"--scope", "tag:fylgja", "--at", "2026-09-16T14:00:00Z"},
-			refusal(findings.RuleSnapshotFlagsConflict, "--at", "--at"+conflict)},
-		{"--stage and --branch", []string{"--stage", "change-1/cabled", "--branch", "change-1"},
-			refusal(findings.RuleSnapshotFlagsConflict, "--branch", "--branch"+conflict)},
-	} {
-		for _, g := range []struct{ name, arg string }{
-			{"an id", fixtureSnapshotID}, {"a file", file}, {"a file not there", missing}, {"--snapshot=", ""},
-		} {
-			given := g.arg
-			t.Run(c.name+" beside "+g.name, func(t *testing.T) {
-				paths := useStateRoot(t)
-				dials := countDials(t)
-				infra := newFakeInfrahub(t)
-				infra.start()
-				awaitIdle(t)
-				served := servedRequests(findings.OpTwinCreate, string(findings.StatusError))
-
-				code, doc, raw := executeClient(t, append([]string{"twin", "create", "--snapshot", given}, c.args...)...)
-				if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != c.want || doc.Subject.Snapshot != given {
-					t.Errorf("exit %d, findings %+v, subject %+v; want 2 with %+v alone", code, doc.Findings, doc.Subject, c.want)
-				}
-				if n := dials.Load(); n != 0 || len(infra.requests()) != 0 {
-					t.Errorf("dialled %d times and asked Infrahub %+v before the refusal", n, infra.requests())
-				}
-				awaitIdle(t)
-				if got := servedRequests(findings.OpTwinCreate, string(findings.StatusError)) - served; got != 1 {
-					t.Errorf("the server logged %d refused creates, want 1: the refusal is the server's", got)
-				}
-				if got := filedSnapshots(t, paths); len(got) != 0 {
-					t.Errorf("snapshots/ holds %v after a refusal before any connection", got)
-				}
-				validateM10Document(t, doc)
-				mustCarryNoToken(t, c.name, raw)
-			})
-		}
 	}
 }
 
@@ -418,17 +345,14 @@ func TestShowSnapshotTwin(t *testing.T) {
 
 // US3 scenario 7, reversed by 019 (US2 scenario 3): a twin built from a snapshot names no
 // stage and steps to a snapshot all the same, the guard that only a twin built from a stage
-// steps gone. Its dry run goes from the snapshot the record names, and Infrahub is asked
-// nothing. TestStepToASnapshot steps it by id and by file.
+// steps gone. Its dry run goes from the snapshot the record names. TestStepToASnapshot steps
+// it by id and by file.
 func TestStepFromSnapshotTwin(t *testing.T) {
-	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage, f.Source = nil, wire.SourceSnapshot })
+	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Source = wire.SourceSnapshot })
 	target, toID := targetSnapshot(t, h, "linked")
 	out := runStepCmd(t, "--snapshot", target.ID, "--dry-run", "--allow-restart")
 	if out.code != findings.ExitOK || out.doc.Step == nil || out.doc.Step.From.Stage != nil || out.doc.Step.To.BundleID != toID {
 		t.Errorf("exit %d, step %+v, findings %+v; want 0 from the record's snapshot to %s", out.code, out.doc.Step, out.doc.Findings, toID)
-	}
-	if len(h.infra.requests()) != h.before {
-		t.Errorf("Infrahub was asked %+v after the host was built", h.infra.requests()[h.before:])
 	}
 }
 
@@ -444,9 +368,9 @@ func TestSnapshotIDShapeIsTheCoresOwn(t *testing.T) {
 }
 
 // FR-009, FR-015: twin create's help says what the server does before the run, as twin
-// compile's says it takes a snapshot (TestCompileTakesNoCTM): it reads, takes the snapshot,
-// compiles and files, or builds from --snapshot with no read, and the run begins at the host
-// check. The help's line breaks are not pinned.
+// compile's says it takes a snapshot (TestCompileTakesNoCTM): it builds from --snapshot, files
+// a file sent and compiles it, with no read, and the run begins at the host check; a branch or
+// a stage is fylgja-cli's (020, FR-003). The help's line breaks are not pinned.
 func TestCreateHelpNamesTheServersTake(t *testing.T) {
 	help := &cobra.Command{Use: "fylgja"}
 	help.AddCommand(newTwinCmd(&options{}))
@@ -457,18 +381,21 @@ func TestCreateHelpNamesTheServersTake(t *testing.T) {
 		}
 	})), " ")
 	for _, want := range []string{
-		"Provision one twin from an Infrahub branch, a proposed change's stage or a snapshot.",
-		"The API's server resolves the stage, reads the branch, takes the snapshot of what it read, compiles it " +
-			"and files the snapshot and the bundle, before any run.",
-		"--snapshot <id|file> builds the twin from a snapshot instead",
-		"which the server files: no branch is read.",
+		"Provision one twin from a snapshot: --snapshot <id|file> names one the API's server's store holds by its id, " +
+			"or a snapshot file sent from here, which the server files.",
+		"The server compiles it and files the bundle, before any run; no source of truth is read.",
 		"one run with the fixed identity fylgja-provision, from the host check on,",
+		"A twin of a branch or a stage is fylgja-cli twin create's, the orchestrator's,",
 		"--snapshot string",
-		"read, take and file the snapshot, compile and file the bundle, and check the host; start no run " +
-			"(with --snapshot, nothing is read)",
+		"file a snapshot file sent, compile and file the bundle, and check the host; start no run",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the help does not say %q:\n%s", want, text)
+		}
+	}
+	for _, gone := range []string{"--branch", "--at", "--stage", "--scope", "--probes"} {
+		if strings.Contains(text, gone+" ") {
+			t.Errorf("the help still names %s:\n%s", gone, text)
 		}
 	}
 	if strings.Contains(text, "Read an Infrahub branch, compile it") {

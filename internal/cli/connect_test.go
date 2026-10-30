@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -14,12 +13,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
 // Every refusal M2–M12 make "before any connection" is the server's, made before it connects
-// to Infrahub or the workflow service, in M12's words: neither is ever dialled. Like
+// to the workflow service, in M12's words: it is never dialled. From 020 the server reads no
+// source of truth (D-065). Like
 // answer_test.go, these live beside the harness, whose
 // fakes are this package's test code.
 
@@ -53,7 +52,7 @@ func executeClient(t *testing.T, args ...string) (int, *findings.Document, strin
 	opts := &options{}
 	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-	root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newStageCmd(opts), newSchemaCmd(opts), newPSPCmd(opts))
+	root.AddCommand(newTwinCmd(opts), newPSPCmd(opts), newRunCmd(opts))
 	root.SetArgs(append(args, "--json"))
 	var code int
 	out := captureStdout(t, func() {
@@ -73,79 +72,34 @@ func servedRequests(op, outcome string) int {
 }
 
 // The refusals before any connection, each through the command line to the harness's
-// server: one document, M12's finding word for word, exit 2 or 1 as at M12, and neither the
-// workflow service dialled nor Infrahub asked. The server logged the request, so the refusal
-// is the server's and not the client's.
+// server: one document, M12's finding word for word, exit 2 or 1 as at M12, and the workflow
+// service never dialled. The server logged the request, so the refusal is the server's and
+// not the client's.
 func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
-	const notARef = `is not a stage reference: expected <branch>/<label>, a branch with no "/" and no whitespace and a label with neither`
-	const notABranch = `is not a branch: expected a branch with no "/" and no whitespace`
-	const tooPrecise = "2026-09-15T14:22:12.1234567Z"
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
 	}
 	type refusalCase struct {
 		name string
 		args []string
-		// step, when set, builds the stage twin for twin step's cases.
+		// step, when set, builds the snapshot twin for twin step's cases.
 		step bool
 		want findings.Finding
 		code int
-		// asked is whether Infrahub is asked before the refusal: a target refused by what
-		// Infrahub names. A non-dry step asks the workflow service first whether a rehearsal is
-		// running (T080), so such a step was dialled once, after its flags' guards.
-		asked bool
-		// noDefault serves the request from a server with no default scope (017).
-		noDefault bool
 	}
 	cases := []refusalCase{
-		// twin create (M1, M4, 014).
-		{name: "create with neither --branch nor --stage", args: []string{"twin", "create"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--branch or --stage or --snapshot is required")},
-		{name: "create with an at finer than microseconds", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--at", tooPrecise},
-			want: refusal(findings.RuleAtPrecision, "", tooPrecise, "at "+tooPrecise+" carries 7 fractional digits; "+
-				"Infrahub honours at most 6 (microseconds). Re-run with a coarser --at.")},
-		{name: "create with an invalid stage reference", args: []string{"twin", "create", "--stage", "change-1"},
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "change-1", `--stage "change-1" `+notARef)},
-		{name: "create with --stage=", args: []string{"twin", "create", "--stage="},
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--stage "" `+notARef)},
-		{name: "create --dry-run with --stage= beside --branch", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--stage=", "--dry-run"},
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--stage "" `+notARef)},
-		{name: "create with --stage and --branch", args: []string{"twin", "create", "--stage", "change-1/cabled", "--branch", "change-1"},
-			want: refusal(findings.RuleStageFlagsConflict, findings.StepStart, "--branch",
-				"--branch is meaningless with --stage: a stage is a whole pinned reference (branch and at)")},
+		// twin create (M1; 020: a create builds from a snapshot alone, D-065).
+		{name: "create with no --snapshot", args: []string{"twin", "create"},
+			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--snapshot is required")},
 
-		// intent read and schema check (M1, 014).
-		{name: "read with neither --branch nor --stage", args: []string{"intent", "read", "--out", "x.json"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpIntentRead, "--branch or --stage is required")},
-		{name: "read with --stage=", args: []string{"intent", "read", "--stage=", "--out", "x.json"},
-			want: refusal(findings.RuleStageRefInvalid, "", "", `--stage "" `+notARef)},
-		{name: "check with no --branch", args: []string{"schema", "check"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpSchemaCheck, "--branch is required")},
-
-		// stage list and plan (014).
-		{name: "list with a branch holding a slash", args: []string{"stage", "list", "--branch=a/b"},
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "a/b", `--branch "a/b" `+notABranch)},
-		{name: "plan with --branch=", args: []string{"stage", "plan", "--branch="},
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--branch "" `+notABranch)},
-		{name: "plan with no --branch", args: []string{"stage", "plan"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpStagePlan, "--branch is required")},
-
-		// twin step (M11, M12).
+		// twin step (M11, M12; 020: a step names its target).
 		{name: "step with --wait=", args: []string{"twin", "step", "--allow-restart", "--wait="}, step: true,
 			want: refusal(findings.RuleVerifyWaitInvalid, findings.StepStart, "--wait",
 				"--wait= is empty; give a duration such as --wait=2m, or leave --wait out for the default 2m0s")},
 		{name: "step --dry-run with --wait banana", args: []string{"twin", "step", "--allow-restart", "--wait", "banana", "--dry-run"}, step: true,
 			want: refusal(findings.RuleVerifyWaitInvalid, findings.StepStart, "--wait", `--wait=banana is not a duration: time: invalid duration "banana"`)},
-		{name: "step with --stage=", args: []string{"twin", "step", "--stage="}, step: true,
-			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--stage "" `+notARef)},
-		{name: "step to a stage the proposed change lacks", args: []string{"twin", "step", "--stage", "change-1/nosuch"}, step: true,
-			code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/nosuch",
-				`proposed change pc-1 on change-1 has no stage "nosuch"; its stages are: `+stepStages)},
-		{name: "step to the current stage", args: []string{"twin", "step", "--stage", "change-1/sealed"}, step: true,
-			code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "change-1/sealed",
-				"the twin is already at stage change-1/sealed (branch change-1, at "+stepMixedAt+"); the proposed change's stages are: "+stepStages)},
+		{name: "step with no --snapshot", args: []string{"twin", "step", "--allow-restart"}, step: true, code: findings.ExitRejected,
+			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "--snapshot", noTargetMessage)},
 
 		// twin verify (M12).
 		{name: "verify with --wait=", args: []string{"twin", "verify", "--wait="},
@@ -154,48 +108,14 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 		{name: "verify with a negative --wait", args: []string{"twin", "verify", "--wait=-5s"},
 			want: refusal(findings.RuleVerifyWaitInvalid, findings.StepStart, "--wait", "--wait=-5s is not a duration: a budget cannot be negative")},
 	}
-	// The scope on the five commands that read under one (017): a value that is not
-	// tag:<name>, an empty one included, and none beside a server with no default.
-	const notAScope = ` is not a scope: the accepted form is tag:<name>, the literal tag: and one word, the tag every device of the twin carries`
-	const noScope = "no --scope was given and the server has no default: name one with --scope tag:<name>, or set FYLGJA_DEFAULT_SCOPE where fylgja serve starts"
-	for _, args := range [][]string{
-		{"twin", "create", "--branch", "fylgja-fixture"},
-		{"twin", "rehearse", "--branch", "change-1"},
-		{"intent", "read", "--branch", "fylgja-fixture", "--out", "x.json"},
-		{"stage", "plan", "--branch", "change-1"},
-		{"stage", "list"},
-	} {
-		command := strings.Join(args[:2], " ")
-		cases = append(cases,
-			refusalCase{name: command + " with --scope fylgja", args: append(append([]string{}, args...), "--scope", "fylgja"),
-				want: refusal(findings.RuleScopeInvalid, findings.StepStart, "fylgja", `--scope "fylgja"`+notAScope)},
-			refusalCase{name: command + " with --scope=", args: append(append([]string{}, args...), "--scope="),
-				want: refusal(findings.RuleScopeInvalid, findings.StepStart, "", `--scope ""`+notAScope)},
-			refusalCase{name: command + " with no scope and no default", args: args, noDefault: true,
-				want: refusal(findings.RuleScopeUnset, findings.StepStart, "FYLGJA_DEFAULT_SCOPE", noScope)},
-		)
-	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.noDefault {
-				saved := defaultScope
-				t.Cleanup(func() { defaultScope = saved })
-				defaultScope = ""
-			}
-			var infra *fakeInfrahub
-			before := 0
 			if c.step {
-				h := stepHost(t, "plan-link-added.json", nil)
-				infra, before = h.infra, h.before
+				stepHost(t, "plan-link-added.json", nil)
 			} else {
 				useStateRoot(t)
-				infra = newFakeInfrahub(t)
-				infra.start()
 			}
 			dials := countDials(t)
-			if c.step && c.asked {
-				dials = countDialsTo(t, &fakeService{readOnly: t})
-			}
 			want := c.code
 			if want == 0 {
 				want = findings.ExitError
@@ -212,22 +132,17 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 			if code != want || doc.Status != status || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
 				t.Errorf("exit %d, status %s, findings %+v\nwant exit %d, %s, with %+v alone", code, doc.Status, doc.Findings, want, status, c.want)
 			}
-			dialled := int32(0)
-			if c.step && c.asked {
-				dialled = 1
-			}
-			if n := dials.Load(); n != dialled {
-				t.Errorf("the workflow service was dialled %d times before the refusal, want %d", n, dialled)
-			}
-			if asked := len(infra.requests()) > before; asked != c.asked {
-				t.Errorf("Infrahub asked before the refusal: %v, want %v (%+v)", asked, c.asked, infra.requests()[before:])
+			if n := dials.Load(); n != 0 {
+				t.Errorf("the workflow service was dialled %d times before the refusal, want none", n)
 			}
 			awaitIdle(t)
 			if got := servedRequests(op, string(status)) - served; got != 1 {
 				t.Errorf("the server logged %d requests of %s ending %s, want 1: the refusal is the server's", got, op, status)
 			}
 			validateM10Document(t, doc)
-			mustCarryNoToken(t, op, raw)
+			if strings.Contains(raw, harness.token) {
+				t.Errorf("%s's document carries the API's token", op)
+			}
 		})
 	}
 }
@@ -235,25 +150,13 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 // What each command needed at M12 it still needs, with the server in the CLI's place:
 // twin show answers for the host and the record with the workflow service
 // unreachable, inside its budget, exit 0; twin verify reads the twin with it unreachable,
-// exit 0 with M12's warning; stage list and plan answer without dialling it at all; and
-// psp validate and twin compile answer with neither it nor Infrahub reachable.
+// exit 0 with M12's warning; and psp validate and twin compile answer with it unreachable.
 func TestEachCommandNeedsWhatItNeededAtM12(t *testing.T) {
 	refused := &provision.UnreachableError{Address: "localhost:7233", Err: errors.New("connection refused")}
 	unreachableDial := func(t *testing.T) {
 		saved := dialService
 		t.Cleanup(func() { dialService = saved })
 		dialService = func(context.Context) (provision.Service, error) { return nil, refused }
-	}
-	// closedInfrahub points Infrahub's variables at a port nothing listens on.
-	closedInfrahub := func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		addr := ln.Addr().String()
-		_ = ln.Close()
-		t.Setenv(intent.EnvAddress, "http://"+addr)
-		t.Setenv(intent.EnvToken, fakeToken)
 	}
 
 	t.Run("twin show", func(t *testing.T) {
@@ -283,22 +186,8 @@ func TestEachCommandNeedsWhatItNeededAtM12(t *testing.T) {
 			t.Errorf("exit %d, findings %+v; want 0, the verify block, and %+v alone", out.code, out.doc.Findings, want)
 		}
 	})
-	for _, args := range [][]string{{"stage", "list"}, {"stage", "plan", "--branch", "change-1"}} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			useStateRoot(t)
-			useService(t, nil)
-			f := newFakeInfrahub(t)
-			f.change("pc-1", "change-1", mark("st-1", "cabled", "", "the leaf cabled"))
-			f.start()
-			code, doc, raw := executeClient(t, args...)
-			if code != findings.ExitOK || findings.List(doc.Findings).Rejected() {
-				t.Errorf("exit %d, %s; want 0", code, raw)
-			}
-		})
-	}
 	t.Run("psp validate", func(t *testing.T) {
 		useService(t, nil)
-		closedInfrahub(t)
 		code, doc, raw := executeClient(t, "psp", "validate", repoPath("psp", "nokia_srlinux.yaml"), repoPath("psp", "arista_eos.yaml"))
 		if code != findings.ExitOK || len(doc.Findings) != 0 {
 			t.Errorf("exit %d, %s; want 0 with no finding", code, raw)
@@ -306,7 +195,6 @@ func TestEachCommandNeedsWhatItNeededAtM12(t *testing.T) {
 	})
 	t.Run("twin compile", func(t *testing.T) {
 		useService(t, nil)
-		closedInfrahub(t)
 		out := filepath.Join(t.TempDir(), "b")
 		code, doc, raw := executeClient(t, "twin", "compile", "--snapshot", wrappedFixture("three-node"), "--out", out)
 		if code != findings.ExitOK || doc.BundleID != fixtureBundleID {

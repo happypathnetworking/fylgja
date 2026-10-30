@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,8 +29,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
-	"github.com/happypathnetworking/fylgja/internal/rehearsal"
-	"github.com/happypathnetworking/fylgja/internal/step"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -368,10 +367,14 @@ func TestARefusedTokenReadsNoneOfTheBody(t *testing.T) {
 }
 
 // leastRequest is the least request op takes: none, but for twin.provision's bundle
-// directory, which is required.
+// directory and the workflow run.read and run.interrupt name a run of (020), which are
+// required.
 func leastRequest(op string) string {
-	if op == findings.OpTwinProvision {
+	switch op {
+	case findings.OpTwinProvision:
 		return `{"args":{"bundle":"b"}}`
+	case findings.OpRunRead, findings.OpRunInterrupt:
+		return `{"args":{"workflow_id":"fylgja-provision"}}`
 	}
 	return `{}`
 }
@@ -427,6 +430,49 @@ func TestEveryOperationIsServed(t *testing.T) {
 	}
 }
 
+// Each operation's arguments in api.schema.json are the ones the server takes, by name and
+// by kind, so the contract gains an argument where the server does (020: detach on the four
+// runs, workflow_id and run_id on run.read and run.interrupt, from and to on twin.diff).
+func TestOperationArgsAreTheContracts(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "contracts", "api.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			Args struct {
+				Defs map[string]struct {
+					Properties map[string]struct {
+						Type string `json:"type"`
+					} `json:"properties"`
+				} `json:"$defs"`
+			} `json:"args"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]string{argString: "string", argBool: "boolean", argStrings: "array"}
+	if len(schema.Defs.Args.Defs) != len(operationArgs) {
+		t.Errorf("the contract defines the args of %d operations, the server %d", len(schema.Defs.Args.Defs), len(operationArgs))
+	}
+	for op, taken := range operationArgs {
+		def, ok := schema.Defs.Args.Defs[op]
+		if !ok {
+			t.Errorf("the contract defines no args of %s", op)
+			continue
+		}
+		if got, want := slices.Sorted(maps.Keys(def.Properties)), slices.Sorted(maps.Keys(taken)); !slices.Equal(got, want) {
+			t.Errorf("%s: the contract's args are %v, the server's %v", op, got, want)
+		}
+		for name, kind := range taken {
+			if p, ok := def.Properties[name]; ok && p.Type != kinds[kind] {
+				t.Errorf("%s's %s is %q in the contract, %s to the server", op, name, p.Type, kind)
+			}
+		}
+	}
+}
+
 // An argument the operation does not take, a value of another kind, and files on an
 // operation that takes none are a request the server cannot read: 400 before the answer
 // begins, and no operation runs (contracts/api.md, "The request is decoded strictly").
@@ -436,17 +482,16 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpTwinShow, `{"args":{"branch":"b"}}`, `twin.show takes no argument "branch"`},
 		// 014: the argument M10 named is gone with the waypoint; stage is its successor.
 		{findings.OpTwinCreate, `{"args":{"waypoint":"demo/2"}}`, `twin.create takes no argument "waypoint"`},
-		{findings.OpStageList, `{"args":{"series":"demo"}}`, `stage.list takes no argument "series"`},
 		// 018: twin.compile's ctm is renamed snapshot.
 		{findings.OpCompile, `{"args":{"ctm":"ctm.json","out":"out"}}`, `twin.compile takes no argument "ctm"`},
 		// 019: a twin follows nothing, so twin.create takes neither the interval nor no_follow.
-		{findings.OpTwinCreate, `{"args":{"branch":"b","interval":"30s"}}`, `twin.create takes no argument "interval"`},
-		{findings.OpTwinCreate, `{"args":{"branch":"b","no_follow":true}}`, `twin.create takes no argument "no_follow"`},
-		{findings.OpTwinCreate, `{"args":{"branch":true}}`, `twin.create's argument "branch" is not a string`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":"s.json","interval":"30s"}}`, `twin.create takes no argument "interval"`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":"s.json","no_follow":true}}`, `twin.create takes no argument "no_follow"`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":true}}`, `twin.create's argument "snapshot" is not a string`},
 		{findings.OpTwinCreate, `{"args":{"dry_run":"yes"}}`, `twin.create's argument "dry_run" is not a boolean`},
 		{findings.OpTwinVerify, `{"args":{"args":"x"}}`, `twin.verify's argument "args" is not an array of strings`},
 		{findings.OpPSPValidate, `{"args":{"files":null}}`, `psp.validate's argument "files" is not an array of strings`},
-		{findings.OpTwinCreate, `{"args":{"branch":null}}`, `twin.create's argument "branch" is not a string`},
+		{findings.OpTwinCreate, `{"args":{"snapshot":null}}`, `twin.create's argument "snapshot" is not a string`},
 		// A null element is not an empty string.
 		{findings.OpPSPValidate, `{"args":{"files":["a.yaml",null]},"files":[{"path":"a.yaml","data":""}]}`,
 			`psp.validate's argument "files" is not an array of strings`},
@@ -466,19 +511,15 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 			`twin.provision takes the bundle directory as its argument "bundle"`},
 		{findings.OpTwinVerify, `{"args":{"args":["x"]}}`, `twin.verify's argument "args" is given without "wait"`},
 		{findings.OpTwinVerify, `{"args":{"args":[]}}`, `twin.verify's argument "args" is given without "wait"`},
-		// 015: twin.rehearse takes the branch alone, and a string.
-		{findings.OpTwinRehearse, `{"args":{"stage":"change-1/head"}}`, `twin.rehearse takes no argument "stage"`},
-		{findings.OpTwinRehearse, `{"args":{"branch":"change-1","dry_run":true}}`, `twin.rehearse takes no argument "dry_run"`},
-		{findings.OpTwinRehearse, `{"args":{"branch":["change-1"]}}`, `twin.rehearse's argument "branch" is not a string`},
-		// 016: twin.rehearse takes a probe file beside its probes argument alone.
-		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`,
-			`twin.rehearse carries 1 file where it takes a probe file beside its argument "probes" alone`},
-		// 017: twin.step reads under its record's scope and takes none, and an operation that
-		// reads no intent takes none either; where it is taken, it is a string.
+		// 017: twin.step reads under its record's scope and takes none.
 		{findings.OpTwinStep, `{"args":{"scope":"tag:fylgja"}}`, `twin.step takes no argument "scope"`},
-		{findings.OpSchemaCheck, `{"args":{"branch":"b","scope":"tag:fylgja"}}`, `schema.check takes no argument "scope"`},
-		{findings.OpIntentRead, `{"args":{"scope":true}}`, `intent.read's argument "scope" is not a string`},
-		{findings.OpStageList, `{"args":{"scope":null}}`, `stage.list's argument "scope" is not a string`},
+		// 020: a run by its identity names its workflow always, each a string, and takes
+		// nothing a run's start takes.
+		{findings.OpRunRead, `{"args":{"run_id":"r1"}}`, `run.read takes the workflow its run is of as its argument "workflow_id"`},
+		{findings.OpRunInterrupt, `{}`, `run.interrupt takes the workflow its run is of as its argument "workflow_id"`},
+		{findings.OpRunRead, `{"args":{"workflow_id":"fylgja-step","run_id":1}}`, `run.read's argument "run_id" is not a string`},
+		{findings.OpRunInterrupt, `{"args":{"workflow_id":"fylgja-step","detach":true}}`, `run.interrupt takes no argument "detach"`},
+		{findings.OpRunRead, `{"args":{"workflow_id":"fylgja-step"},"files":[{"path":"a","data":""}]}`, `run.read takes no files`},
 	} {
 		resp, body := post(t, nil, srv.URL+api.Path(c.op), testToken, c.body, nil)
 		var p api.Problem
@@ -491,33 +532,26 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		t.Errorf("%d operations ran", n)
 	}
 	waitForLog(t, log, "operation=twin.show", "outcome=unreadable", "level=WARN")
-	// Every operation but twin.provision, whose bundle directory is required, takes a request
-	// with no arguments; a bundle given as empty is one given, as M12's cobra took "".
+	// Every operation but twin.provision, whose bundle directory is required, and run.read
+	// and run.interrupt, whose workflow is (020), takes a request with no arguments; a bundle
+	// or a workflow given as empty is one given, as M12's cobra took "".
 	for _, op := range api.Operations {
 		body := `{"args":{}}`
-		if op == findings.OpTwinProvision {
+		switch op {
+		case findings.OpTwinProvision:
 			body = `{"args":{"bundle":""}}`
+		case findings.OpRunRead, findings.OpRunInterrupt:
+			body = `{"args":{"workflow_id":""}}`
 		}
 		resp, _ := post(t, nil, srv.URL+api.Path(op), testToken, body, nil)
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("%s with %s: status %d", op, body, resp.StatusCode)
 		}
 	}
-	// 017: the five operations that read intent under a scope take one, an empty one
-	// included, which is scope.invalid's to refuse and not the transport's; a client that
-	// sends none was served above.
-	for _, op := range []string{findings.OpTwinCreate, findings.OpTwinRehearse, findings.OpIntentRead,
-		findings.OpStagePlan, findings.OpStageList} {
-		for _, body := range []string{`{"args":{"scope":"tag:fylgja"}}`, `{"args":{"scope":""}}`} {
-			if resp, _ := post(t, nil, srv.URL+api.Path(op), testToken, body, nil); resp.StatusCode != http.StatusOK {
-				t.Errorf("%s with %s: status %d", op, body, resp.StatusCode)
-			}
-		}
-	}
 	// 018: twin.create takes a snapshot file, which the create holds to its one shape, beside
 	// --snapshot under its path; the transport refuses none of them.
 	for _, body := range []string{`{"args":{"snapshot":"s.json"},"files":[{"path":"s.json","data":""}]}`,
-		`{"args":{"branch":"b"},"files":[{"path":"s.json","data":""}]}`} {
+		`{"args":{"snapshot":"other.json"},"files":[{"path":"s.json","data":""}]}`, `{"files":[{"path":"s.json","data":""}]}`} {
 		if resp, _ := post(t, nil, srv.URL+api.Path(findings.OpTwinCreate), testToken, body, nil); resp.StatusCode != http.StatusOK {
 			t.Errorf("twin.create with %s: status %d", body, resp.StatusCode)
 		}
@@ -963,7 +997,7 @@ func TestAPanicEndsTheAnswerWithoutADocument(t *testing.T) {
 		panic("a value that names " + testToken)
 	}
 	_, srv, log, _ := testServer(t, run)
-	req, _ := http.NewRequest(http.MethodPost, srv.URL+api.Path(findings.OpStagePlan), strings.NewReader(`{"render":"text"}`))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+api.Path(findings.OpTwinDiff), strings.NewReader(`{"render":"text"}`))
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -979,7 +1013,7 @@ func TestAPanicEndsTheAnswerWithoutADocument(t *testing.T) {
 			t.Errorf("a document after a panic: %s", l)
 		}
 	}
-	l := waitForLog(t, log, "operation=stage.plan", "outcome=panic", "level=ERROR")
+	l := waitForLog(t, log, "operation=twin.diff", "outcome=panic", "level=ERROR")
 	if strings.Contains(log.String(), "a value that names") {
 		t.Errorf("the log carries the panic's value: %s", l)
 	}
@@ -1099,47 +1133,6 @@ func TestTheConsoleRendersAsAsked(t *testing.T) {
 	}
 	if strings.Contains(l, "chatter") {
 		t.Errorf("the server's log carries a dependency's info line:\n%s", l)
-	}
-}
-
-// twin rehearse's document frame carries its markdown beside its text under render
-// markdown alone (015, research R-10): rehearsal.Markdown over the document and the plan's
-// steps, the comment a check posts, a refusal's before any stage was planned included. Under
-// text and json it carries none, and the frame is valid against the API's contract.
-func TestTheRehearsalsDocumentCarriesItsMarkdown(t *testing.T) {
-	steps := []step.Pair{step.NotComputed("change-1/branch-point", "change-1/seeded", "", "abcd", "change-1/branch-point was refused")}
-	planned := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"}, nil)
-	planned.Rehearsal = &findings.RehearsalBlock{ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1"},
-		ResolvedAt: "2026-10-19T10:00:00Z", DeadlineS: 1980, CeilingS: 3600, Stages: []findings.RehearsalStage{
-			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Branch: "main",
-				At: "2026-10-16T17:20:19.944651+00:00", Role: "refused", Verdict: "refused", Findings: findings.List{}},
-			{Ref: "change-1/seeded", Label: "seeded", AtSource: "written", Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00",
-				Role: "not_reached", Verdict: "not_reached", Findings: findings.List{}}}, Reproduce: []string{}}
-	refused := findings.RuleErrorDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"},
-		findings.RuleStageUnknown, "change-1", "branch change-1 is not on Infrahub")
-	for _, c := range []struct {
-		name  string
-		doc   *findings.Document
-		steps []step.Pair
-	}{{"a rehearsal planned", planned, steps}, {"a refusal before the plan", refused, nil}} {
-		_, srv, _, _ := testServer(t, func(c2 *call) error {
-			c2.steps = c.steps
-			return &result{doc: c.doc}
-		})
-		frame := apiSchema(t, "frame")
-		for _, render := range []string{api.RenderMarkdown, api.RenderText, api.RenderJSON} {
-			_, body := post(t, nil, srv.URL+api.Path(findings.OpTwinRehearse), testToken, `{"render":"`+render+`","args":{"branch":"change-1"}}`, nil)
-			ls := answerLines(t, body)
-			satisfies(t, frame, ls[len(ls)-1], c.name+" under "+render)
-			last := frameOf(t, ls[len(ls)-1])
-			want := ""
-			if render == api.RenderMarkdown {
-				want = rehearsal.Markdown(c.doc, c.steps)
-			}
-			if last.Markdown != want || render != api.RenderJSON && last.Text == "" && len(c.doc.Findings) > 0 {
-				t.Errorf("%s under %s: markdown %q, text %q; want markdown %q", c.name, render, last.Markdown, last.Text, want)
-			}
-		}
 	}
 }
 
@@ -1308,35 +1301,36 @@ func TestTheClientSpeaksToTheServer(t *testing.T) {
 	}
 }
 
-// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 8): change-1/seeded,
-// of rehearsal run r1; nil rehearsal for the hand twin of the same stage.
-func rehearsalTwin(rehearsal *wire.RehearsalRef) *wire.TwinRecord {
+// rehearsalTwin is the record a rehearsal's baseline leaves (twin.json 12): the orchestrator's
+// rehearse flow creates it through twin.create from a snapshot of change-1 (020), so it names no
+// stage and no rehearsal (research R-06), and a hand twin of the same snapshot is the same
+// record.
+func rehearsalTwin() *wire.TwinRecord {
 	snapshot := strings.Repeat("35aea06f", 8)
 	return &wire.TwinRecord{TwinVersion: lab.TwinVersion, Lab: wire.LabName, SnapshotID: &snapshot,
 		BundleID:   "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
 		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00", Scope: "tag:fylgja", Mapping: dcimMapping},
-		Source:     wire.SourceIntent,
+		Source:     wire.SourceSnapshot,
 		Run:        wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
-		Stage:      &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "written"},
-		Rehearsal:  rehearsal, State: wire.StateReady,
-		Nodes: []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
+		State:      wire.StateReady,
+		Nodes:      []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
 }
 
-// twin show beside a rehearsal (015; contracts/rehearse-command.md): the kind line of a
-// rehearsal's twin names its run after the stage, a stepped one's too, and its JSON carries
-// record.rehearsal, null for a hand twin's; while the run is in flight the kind line ends
-// with where it is, its child's stage and step, and the in flight: line names the child and
-// the stage it is for; a baseline being built is the host's work, never an orphan.
-func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
-	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
+// twin show of a rehearsal's twin: the kind line names the twin's snapshot alone, a stepped
+// one's the snapshot it stepped from, and the JSON carries no record.rehearsal (020, research
+// R-06). The rehearsal runs in the orchestrator, so the core's runs in flight are its own
+// children's alone, each named as an operator's: a step at the host holds it, and a
+// provisioning run building the baseline is the host's work, never an orphan. No run in flight
+// carries a child.
+func TestShowNamesARehearsalsTwin(t *testing.T) {
 	lab3 := lab.LabState{Present: true, Nodes: []wire.LabNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running"}}}
 	at := "2026-10-16T17:25:30.118244+00:00"
-	pinned := "snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/seeded, of rehearsal run fylgja-rehearse r1"
+	pinned := "snapshot 35aea06f… (branch change-1 at " + at + ")"
+	towards := "snapshot 9c2d01e7…"
 
-	stepped := rehearsalTwin(of)
-	stepped.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "third-link", AtSource: "given"}
+	stepped := rehearsalTwin()
 	stepped.Step = &wire.StepRecord{Outcome: wire.StepStepped,
-		From: wire.StepSide{Stage: rehearsalTwin(nil).Stage}, To: wire.StepSide{Stage: stepped.Stage},
+		From: wire.StepSide{SnapshotID: strings.Repeat("576933ec", 8)}, To: wire.StepSide{SnapshotID: *stepped.SnapshotID},
 		Run: wire.RunRef{WorkflowID: provision.WorkflowStep, RunID: "s1"}, EndedAt: "2026-10-19T10:02:00Z"}
 
 	for _, c := range []struct {
@@ -1345,70 +1339,49 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 		runs     []provision.RunInFlight
 		kind     string
 		inFlight string
+		held     bool
 	}{
-		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)}, nil, pinned, "in flight: none"},
-		{"a hand twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(nil)}, nil,
-			"snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/seeded", "in flight: none"},
+		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()}, nil, pinned, "in flight: none", false},
 		{"a rehearsal's twin stepped", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: stepped}, nil,
-			"snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/third-link (stepped from change-1/seeded by run " +
-				"fylgja-step s1, ended 2026-10-19T10:02:00Z), of rehearsal run fylgja-rehearse r1", "in flight: none"},
-		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "step",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: "stage change-1/third-link"}}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/third-link, step push",
-			"in flight: run fylgja-rehearse r1 at step step (run fylgja-step s1 at step push), stepping towards stage change-1/third-link"},
-		{"at the baseline's wait", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "observe"}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step observe",
-			"in flight: run fylgja-rehearse r1 at step observe"},
-		{"destroying", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "destroy",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d1", Step: "teardown"}}},
-			pinned + "; rehearsal run fylgja-rehearse r1 is destroying the twin, step teardown",
-			"in flight: run fylgja-rehearse r1 at step destroy (run fylgja-destroy d1 at step teardown), destroying the twin"},
+			pinned + " (stepped from snapshot 576933ec… by run fylgja-step s1, ended 2026-10-19T10:02:00Z)", "in flight: none", false},
+		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin()},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: towards}},
+			pinned + "; run fylgja-step s1 is at step push, stepping towards " + towards,
+			"in flight: run fylgja-step s1 at step push", true},
 		{"building the baseline", lab.HostState{Lab: lab3, TwinDirPresent: true},
-			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy", Towards: "stage change-1/seeded"}}},
-			"none; run fylgja-provision p1 is at step deploy, and the host holds its work; " +
-				"rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step deploy",
-			"in flight: run fylgja-rehearse r1 at step provision (run fylgja-provision p1 at step deploy), creating the twin at stage change-1/seeded"},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}},
+			"none; run fylgja-provision p1 is at step deploy, and the host holds its work",
+			"in flight: run fylgja-provision p1 at step deploy", true},
 	} {
 		block, text := decideShow(c.host, serviceReads{inFlight: c.runs}, "")
 		if text.kind != c.kind {
 			t.Errorf("%s: kind\n %q\nwant\n %q", c.name, text.kind, c.kind)
 		}
-		if c.runs != nil && !text.hostHeld {
-			t.Errorf("%s: a rehearsal in flight does not hold the host", c.name)
+		if text.hostHeld != c.held {
+			t.Errorf("%s: host held %v, want %v", c.name, text.hostHeld, c.held)
 		}
-		out := captureStdout(t, func() { printInFlight(testOptions(t, false), block.Service, block.InFlight, text.towards) })
+		out := captureStdout(t, func() { printInFlight(testOptions(t, false), block.Service, block.InFlight) })
 		if out != c.inFlight+"\n" {
 			t.Errorf("%s: %q, want %q", c.name, out, c.inFlight)
 		}
 		switch r := block.Record; {
 		case c.host.Twin == nil && r != nil:
 			t.Errorf("%s: a record %+v", c.name, r)
-		case c.host.Twin != nil && c.host.Twin.Rehearsal == nil && r.Rehearsal != nil:
-			t.Errorf("%s: record.rehearsal %+v", c.name, r.Rehearsal)
-		case c.host.Twin != nil && c.host.Twin.Rehearsal != nil && (r.Rehearsal == nil || *r.Rehearsal != findings.ShowRef{WorkflowID: "fylgja-rehearse", RunID: "r1"}):
-			t.Errorf("%s: record.rehearsal %+v", c.name, r.Rehearsal)
+		case c.host.Twin != nil && (r.Rehearsal != nil || r.Stage != nil):
+			t.Errorf("%s: record.rehearsal %+v, record.stage %+v; want neither", c.name, r.Rehearsal, r.Stage)
 		}
 	}
 }
 
-// twin verify beside a rehearsal (015): its first line names the rehearsal's run after the
-// stage, a hand twin's names none; a twin absent while the baseline is built names the run
-// whose work the host holds.
-func TestVerifyNamesARehearsal(t *testing.T) {
-	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
-	if got, want := verifyTwinLine(rehearsalTwin(of)), "twin: stage change-1/seeded of rehearsal run fylgja-rehearse r1 "+
-		"(snapshot 35aea06f…, bundle 5c6c1d96…), ready, pinned at 2026-10-16T17:25:30.118244+00:00; 3 nodes"; got != want {
+// twin verify of a rehearsal's twin: its first line names the twin's branch, at, snapshot and
+// bundle, never a stage or a rehearsal (020, research R-06); a twin absent while the
+// baseline is built names the provisioning run whose work the host holds.
+func TestVerifyNamesARehearsalsTwin(t *testing.T) {
+	if got, want := verifyTwinLine(rehearsalTwin()), "twin: branch change-1 at 2026-10-16T17:25:30.118244+00:00 "+
+		"(snapshot 35aea06f…, bundle 5c6c1d96…), ready; 3 nodes"; got != want {
 		t.Errorf("%q, want %q", got, want)
 	}
-	if got := verifyTwinLine(rehearsalTwin(nil)); strings.Contains(got, "rehearsal") {
-		t.Errorf("a hand twin's line %q", got)
-	}
-	runs := showRuns([]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-		Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}}})
+	runs := showRuns([]provision.RunInFlight{{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}})
 	host := lab.HostState{Lab: lab.LabState{Present: true}, TwinDirPresent: true}
 	if _, message := twinAbsent(host, lab.PathsAt("/srv"), runs); !strings.HasSuffix(message, "; run fylgja-provision p1 is at step deploy") {
 		t.Errorf("%q", message)

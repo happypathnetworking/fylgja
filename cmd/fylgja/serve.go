@@ -64,9 +64,8 @@ func newServeCmd(version string) *cobra.Command {
 		Use:   "serve",
 		Short: "Serve the API on this host",
 		Long: "Serve the API, version " + api.Version + ", on the lab host beside fylgja worker run: every\n" +
-			"other command is a request to it. Reads the API's token from FYLGJA_API_TOKEN, and\n" +
-			"the scope a request that names none is read under from FYLGJA_DEFAULT_SCOPE.\n" +
-			"Runs until interrupted. Produces no findings document; start-up lines go to\n" +
+			"other command is a request to it. Reads the API's token from FYLGJA_API_TOKEN, and no\n" +
+			"source of truth: the orchestrator reads Infrahub. Runs until interrupted. Produces no findings document; start-up lines go to\n" +
 			"stdout and logs to stderr.",
 		// A usage error is a refusal to start, as the others are: a line on stderr and exit
 		// 2, before anything listens, and no findings document, whose operation enum names
@@ -93,8 +92,9 @@ func newServeCmd(version string) *cobra.Command {
 
 // runServe serves the API until ctx ends: SIGINT or SIGTERM. Every refusal to start is one
 // or more lines on stderr and exit 2, and each comes before anything listens.
-// Neither the workflow service nor Infrahub is dialled
-// here: a request that needs one connects to it.
+// Nothing is dialled here: a request that needs the workflow service, Docker, containerlab or
+// a node connects to it. From 020 the server reads no INFRAHUB_* and no FYLGJA_DEFAULT_SCOPE,
+// since it reads no source of truth (D-065; FR-004).
 func runServe(ctx context.Context, opts *serveOptions, version string) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -112,13 +112,6 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 		if _, _, err := net.SplitHostPort(addr); err != nil {
 			return serveExit(opts, "--listen %s is not host:port", addr)
 		}
-	}
-	// The default scope (017), checked by the rule a request's --scope is held to, so the
-	// server never serves a default no request could name. Unset or empty is no default: a
-	// request that names no scope is then refused scope.unset.
-	defaultScope, _ := opts.getenv(server.EnvDefaultScope)
-	if defaultScope != "" && !server.ValidScope(defaultScope) {
-		return serveExit(opts, "%s %s is not tag:<name>", server.EnvDefaultScope, defaultScope)
 	}
 	paths, err := lab.ResolvePaths()
 	if err != nil {
@@ -180,11 +173,10 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 	s.Paths = func() (lab.Paths, error) { return paths, nil }
 	s.PSPDir = pspDir
 	s.Getenv = opts.getenv
-	s.DefaultScope = defaultScope
 	s.Build = version
 	s.Log = logger
 
-	for _, line := range serveReport(ctx, opts, reg, probes, paths, listeners, defaultScope, version) {
+	for _, line := range serveReport(ctx, opts, reg, probes, paths, listeners, version) {
 		_, _ = fmt.Fprintln(opts.stdout, "fylgja serve: "+line)
 	}
 
@@ -270,13 +262,12 @@ func listable(dir string) error {
 // serveReport is what the server says once it listens and before it takes a request, one
 // line each with no prefix: each address it listens on, in the order given, with the API's
 // version and its build, each followed straight away, when it is not loopback, by a line
-// saying the token is sent unencrypted on it; the state root; the default scope (017), or
-// that there is none; that the workflow service and Infrahub are dialled when a
-// request needs them; and the worker's own lines for the memory budget, each package and
-// each probe package (016). It names variables, never their values, but for the default
-// scope, which names a tag.
+// saying the token is sent unencrypted on it; the state root; that the workflow service,
+// Docker, containerlab and the nodes, and nothing else, are dialled when a request needs them
+// (020: no Infrahub and no default scope, FR-004); and the worker's own lines for the memory
+// budget, each package and each probe package (016). It names variables, never their values.
 func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, probes *probe.Registry, paths lab.Paths,
-	listeners []listener, defaultScope, version string) []string {
+	listeners []listener, version string) []string {
 	var lines []string
 	for _, l := range listeners {
 		lines = append(lines, fmt.Sprintf("listening on %s (API version %s, build %s)", l.addr, api.Version, version))
@@ -284,14 +275,9 @@ func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, pro
 			lines = append(lines, l.addr+" is not a loopback address: the API's token is sent unencrypted on it")
 		}
 	}
-	scopeLine := "default scope: unset (a request that names no scope is refused)"
-	if defaultScope != "" {
-		scopeLine = "default scope: " + defaultScope
-	}
 	lines = append(lines,
 		fmt.Sprintf("state root %s (bundles: %s, snapshots: %s, twin: %s)", paths.Root, paths.Bundles, paths.Snapshots, paths.Twin),
-		scopeLine,
-		fmt.Sprintf("the workflow service (%s, namespace %s) and Infrahub are dialled when a request needs them",
+		fmt.Sprintf("the workflow service (%s, namespace %s), Docker, containerlab and the nodes are dialled when a request needs them",
 			envOr(opts.getenv, lab.EnvTemporalAddress, provision.DefaultAddress),
 			envOr(opts.getenv, lab.EnvTemporalNamespace, provision.DefaultNamespace)),
 		provision.BudgetLine(opts.getenv),

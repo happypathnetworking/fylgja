@@ -78,10 +78,12 @@ const (
 	MaxStreamLength = 128
 )
 
-// Operations are the thirteen, named as the findings document names them. Each is POST
+// Operations are the eleven, named as the findings document names them. Each is POST
 // Path(op). There is no other: no health check, no listing of
-// runs, no fetch of a bundle. 015 adds twin.rehearse, which takes the branch and an
-// interrupt from its start.
+// runs, no fetch of a bundle. 020 adds run.read and run.interrupt, which reach a run by its
+// identity, and twin.diff, the step between two snapshots; and loses twin.rehearse,
+// stage.list, stage.plan, intent.read and schema.check, which read Infrahub and are the
+// orchestrator's (D-065), so each path answers 404 as one the version has no operation at.
 var Operations = []string{
 	findings.OpTwinCreate,
 	findings.OpTwinProvision,
@@ -90,12 +92,10 @@ var Operations = []string{
 	findings.OpTwinShow,
 	findings.OpTwinVerify,
 	findings.OpCompile,
-	findings.OpStageList,
-	findings.OpStagePlan,
-	findings.OpIntentRead,
-	findings.OpSchemaCheck,
 	findings.OpPSPValidate,
-	findings.OpTwinRehearse,
+	findings.OpRunRead,
+	findings.OpRunInterrupt,
+	findings.OpTwinDiff,
 }
 
 // Path is an operation's path: its noun and its verb under the version,
@@ -128,7 +128,8 @@ type Request struct {
 	// present one a flag given, whatever its value. Each handler decodes them strictly.
 	Args map[string]json.RawMessage `json:"args,omitempty"`
 	// Files are the operator's files, on twin.create (its one snapshot file, beside a
-	// --snapshot that is a path), twin.compile, twin.provision and psp.validate.
+	// --snapshot that is a path), twin.compile, twin.provision and psp.validate, and on
+	// twin.diff each snapshot file its from and to name (020).
 	Files []File `json:"files,omitempty"`
 }
 
@@ -441,11 +442,17 @@ func (f Frame) Kind() string {
 }
 
 // RunRef is a run's identity. A start frame carries the workflow id alone, since the run
-// has none yet.
+// has none yet. On run.read alone it carries the run's state (020): running, completed,
+// failed, cancelled, terminated or timed_out.
 type RunRef struct {
 	WorkflowID string `json:"workflow_id"`
 	RunID      string `json:"run_id,omitempty"`
+	State      string `json:"state,omitempty"`
 }
+
+// StateRunning is the state of a run that has not closed, as run.read's run frame names it:
+// that answer ends after its events, by EOF, with no document (020).
+const StateRunning = "running"
 
 // Event is M2's progress event as JSON: one step boundary of a run, or one notice
 // about a run, read from the run's history.

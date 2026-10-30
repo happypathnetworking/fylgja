@@ -40,8 +40,8 @@ const Version = "2"
 const Version1 = "1"
 
 // ObservedAtLayout is the take's observed_at: UTC, six fractional digits, the form the
-// CTM envelope records a read's in. It is stage.ObservedAtFormat, kept here because the
-// snapshot imports nothing of the stages; a test holds the two equal.
+// CTM envelope records a read's in. It was internal/stage's read's form too, until 020 moved
+// the read to the orchestrator's adapter, which writes it the same way (T035).
 const ObservedAtLayout = "2006-01-02T15:04:05.000000Z"
 
 // Snapshot is one take of intent: the outer part first, then the body.

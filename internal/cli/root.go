@@ -41,36 +41,31 @@ type result struct {
 	doc  *findings.Document
 	raw  json.RawMessage
 	text string
-	// markdown is the report as markdown the server rendered beside the text, under
-	// render markdown on twin rehearse alone (015).
-	markdown string
 }
 
 func (r *result) Error() string { return string(r.doc.Status) }
 
-// options are the flags every client's command shares: --json, and twin rehearse's
-// --markdown, the one command with a markdown rendering, which no other command binds and
-// which cobra refuses beside --json. The override directory of support packages is the
-// server's.
+// options are the flags every client's command shares: --json. The override directory of
+// support packages is the server's. twin rehearse's --markdown left with the command, which
+// is the orchestrator's (020).
 type options struct {
-	asJSON   bool
-	markdown bool
+	asJSON bool
 }
 
 // rootOptions are the root command's, which AddCommands binds and Report reads.
 var rootOptions = &options{}
 
 // AddCommands gives root the persistent --json flag every client's command shares, and the
-// client's commands; b is the binary's --version.
+// client's commands; b is the binary's --version. The nouns intent, stage and schema, and
+// twin rehearse, are the orchestrator's fylgja-cli's (020): this binary has them no more,
+// so each is cobra's unknown command, as each lost flag is its unknown flag.
 func AddCommands(root *cobra.Command, b string) {
 	build = b
 	root.PersistentFlags().BoolVar(&rootOptions.asJSON, "json", false,
 		"emit one findings document on stdout and nothing else there")
-	root.AddCommand(newIntentCmd(rootOptions))
 	root.AddCommand(newTwinCmd(rootOptions))
-	root.AddCommand(newStageCmd(rootOptions))
-	root.AddCommand(newSchemaCmd(rootOptions))
 	root.AddCommand(newPSPCmd(rootOptions))
+	root.AddCommand(newRunCmd(rootOptions))
 }
 
 // Report renders whatever a client's command produced and returns the process exit code.
@@ -78,15 +73,33 @@ func Report(cmd *cobra.Command, err error) int {
 	return report(rootOptions, cmd, err)
 }
 
+// noun is a command that names a group of operations and is none itself: fylgja twin, psp
+// and run. Given no verb it prints its help, as cobra does; given a word that is none of its
+// verbs it ends with cobra's unknown command, exit 2, as the root's does. cobra refuses an
+// unknown command at the root alone, and printed a noun's help with exit 0 for one, so
+// fylgja twin rehearse, the orchestrator's from 020, would have ended as if it were asked
+// for help (FR-003): the noun runs, to refuse what it was given.
+func noun(use, short string, verbs ...*cobra.Command) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+	}
+	cmd.AddCommand(verbs...)
+	return cmd
+}
+
 // operationOf names the command a failure came from, in the form the findings
-// contract uses: `fylgja intent read` is `intent.read`. Taking it from cobra rather
+// contract uses: `fylgja twin create` is `twin.create`. Taking it from cobra rather
 // than a second hand-kept table means the document's `operation` cannot drift from
 // the command that produced it.
 //
 // It is empty when the failure is the root command's own — `fylgja --nope`, before
-// any operation was named.
+// any operation was named — or a noun's, which names none either: `fylgja twin
+// rehearse`, `fylgja twin --nope`.
 func operationOf(cmd *cobra.Command) string {
-	if cmd == nil {
+	if cmd == nil || cmd.HasSubCommands() {
 		return ""
 	}
 	parts := strings.Fields(cmd.CommandPath())
@@ -99,9 +112,8 @@ func operationOf(cmd *cobra.Command) string {
 // report renders whatever a command produced and returns the process exit code. A document
 // the server sent is printed as it came: under --json its bytes re-indented, which is
 // WriteJSON's output byte for byte, and otherwise the findings' text the server
-// rendered, on stderr where M12's report wrote WriteText's. Under --markdown, the markdown
-// the server rendered is printed on stdout and nothing else is, the findings' text still on
-// stderr (015). The exit status is the document's.
+// rendered, on stderr where M12's report wrote WriteText's. The exit status is the
+// document's.
 func report(opts *options, cmd *cobra.Command, err error) int {
 	var res *result
 	switch {
@@ -120,12 +132,6 @@ func report(opts *options, cmd *cobra.Command, err error) int {
 				return findings.ExitError
 			}
 			return res.doc.Status.ExitCode()
-		}
-		if opts.markdown {
-			if _, err := os.Stdout.WriteString(res.markdown); err != nil {
-				_, _ = fmt.Fprintln(os.Stderr, "fylgja:", err)
-				return findings.ExitError
-			}
 		}
 		if _, err := os.Stderr.WriteString(res.text); err != nil {
 			return findings.ExitError

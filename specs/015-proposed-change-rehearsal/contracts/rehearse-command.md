@@ -1,5 +1,8 @@
 # Contract: `twin rehearse`, the operation `twin.rehearse`, the report, `twin.json` 7
 
+> **Current since 020:** `twin rehearse` is the orchestrator's `fylgja-cli`'s and its flow
+> `twin-rehearse`'s, and the API's `twin.rehearse` is gone: [contracts/orchestrator.md](../../../contracts/orchestrator.md).
+
 Extends [contracts/cli.md](../../../contracts/cli.md) and [contracts/api.md](../../../contracts/api.md)
 as 014 leaves them; at the close each gains a section "015: the rehearsal" that says what
 this file says. **Everything not named here is as 014 left it.** Identifiers, exit statuses

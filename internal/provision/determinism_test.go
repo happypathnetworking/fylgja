@@ -72,7 +72,7 @@ func TestWorkflowFilesAreDeterministic(t *testing.T) {
 			return true
 		})
 	}
-	for _, must := range []string{"workflow_provision.go", "workflow_rehearse.go", "options.go"} {
+	for _, must := range []string{"workflow_provision.go", "workflow_step.go", "workflow_destroy.go", "options.go"} {
 		if !slices.Contains(checked, must) {
 			t.Errorf("%s was not checked; the rule proved nothing about it", must)
 		}

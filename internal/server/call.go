@@ -19,8 +19,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
-	"github.com/happypathnetworking/fylgja/internal/rehearsal"
-	"github.com/happypathnetworking/fylgja/internal/step"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -43,10 +41,6 @@ type call struct {
 	// interrupts are the operator's, delivered to this request by the interrupt call from
 	// its start frame on; a request without a stream gets a channel no one writes to.
 	interrupts <-chan os.Signal
-	// steps are the plan's steps between the stages twin rehearse planned, which its
-	// markdown draws (015): the document names no step's difference. nil for every other
-	// operation, and for a rehearsal refused before its plan.
-	steps []step.Pair
 }
 
 func (s *Server) newCall(ctx context.Context, op string, req api.Request, f *frames, interrupts <-chan os.Signal) *call {
@@ -66,9 +60,8 @@ func (s *Server) newCall(ctx context.Context, op string, req api.Request, f *fra
 // document writes the answer's last frame: the document as findings.WriteJSON marshals it,
 // and under render text its findings as WriteText renders them, which M12's report printed
 // on stderr once the command had returned. A document with no findings has
-// no text. Under render markdown the frame is text's, and twin rehearse's, the one
-// operation with a markdown rendering, carries it beside the text: its report as the
-// comment a check posts, a refusal's included (015, research R-10).
+// no text. Under render markdown the frame is text's: from 020 no operation carries a
+// markdown rendering, twin rehearse's having left the core with the rehearsal (D-065).
 func (c *call) document(doc *findings.Document) error {
 	c.console.flush()
 	var raw bytes.Buffer
@@ -82,9 +75,6 @@ func (c *call) document(doc *findings.Document) error {
 			return err
 		}
 		f.Text = text.String()
-	}
-	if c.req.Render == api.RenderMarkdown && c.op == findings.OpTwinRehearse {
-		f.Markdown = rehearsal.Markdown(doc, c.steps)
 	}
 	return c.frames.writeLast(f)
 }
@@ -107,6 +97,11 @@ func (c *call) startFrame(workflowID string) (<-chan os.Signal, error) {
 // runFrame names the run once it is started.
 func (c *call) runFrame(workflowID, runID string) {
 	_ = c.frames.write(api.Frame{Run: &api.RunRef{WorkflowID: workflowID, RunID: runID}})
+}
+
+// runStateFrame names the run run.read reads, with its state (020).
+func (c *call) runStateFrame(s provision.RunState) {
+	_ = c.frames.write(api.Frame{Run: &api.RunRef{WorkflowID: s.WorkflowID, RunID: s.RunID, State: s.State}})
 }
 
 // eventFrame is one progress event of a run, as the run's history gave it to the

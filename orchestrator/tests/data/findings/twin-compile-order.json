@@ -1,0 +1,30 @@
+{
+  "about": "TestTextRenderingPutsRejectionsFirstAndSummaryLast",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.compile",
+    "status": "rejected",
+    "findings": [
+      {
+        "severity": "info",
+        "rule": "omit.mgmt.extra",
+        "object": "n1:mgmt1",
+        "message": "one management connection per node"
+      },
+      {
+        "severity": "rejection",
+        "rule": "link.endpoints.count",
+        "object": "n1:e1|n2:e1",
+        "message": "link has 1 endpoint"
+      },
+      {
+        "severity": "warning",
+        "rule": "psp.resources.implausible",
+        "object": "nokia_srlinux",
+        "message": "implausible"
+      }
+    ]
+  },
+  "text": "rejection link.endpoints.count n1:e1|n2:e1: link has 1 endpoint\nwarning psp.resources.implausible nokia_srlinux: implausible\ninfo omit.mgmt.extra n1:mgmt1: one management connection per node\n3 finding(s): 1 rejection, 1 warning, 1 info\n",
+  "exit": 1
+}

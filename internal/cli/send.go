@@ -45,49 +45,9 @@ func (g given) bool(name string, value bool) {
 	}
 }
 
-// scope names --scope whenever it was given, an empty one included, which the server
-// refuses as scope.invalid; not given, the request names none, and the server's default
-// stands (017).
-func (g given) scope(value string, wasGiven bool) {
-	if wasGiven {
-		g["scope"] = value
-	}
-}
-
-// probes names --probes whenever it was given, an empty one included (016).
-func (g given) probes(value string, wasGiven bool) {
-	if wasGiven {
-		g["probes"] = value
-	}
-}
-
-// probesUsage is --probes's help on the five commands that take one (016): the file replaces
-// the kind's probes, which are the default.
-const probesUsage = "a probe declaration file, read here and sent: every snapshot the command takes carries its probes, " +
-	"in place of the ones declared in Infrahub (default: the probes of FylgjaProbe on the default branch, and none " +
-	"when it holds none)"
-
-// probesSent is the request's files for a --probes given as path (016): the declaration at
-// that path, read here, under it, as snapshotSent sends a snapshot file. Not given, none. A
-// file the client cannot read is its own failure, before any connection, as an explicit empty
-// --probes= is, which names no file.
-func probesSent(op string, subject *findings.Subject, path string, wasGiven bool) ([]api.File, error) {
-	if !wasGiven {
-		return nil, nil
-	}
-	if path == "" {
-		return nil, fail(op, subject, "--probes= is empty; give the path of a probe declaration file")
-	}
-	file, err := readProbes(path)
-	if err != nil {
-		return nil, fail(op, subject, "%v", err)
-	}
-	return []api.File{file}, nil
-}
-
-// scopeUsage is --scope's help on the five commands that read intent under one (017).
-const scopeUsage = "the devices to read, tag:<name>: every device carrying the tag of that name (default: the server's " +
-	"FYLGJA_DEFAULT_SCOPE)"
+// detachUsage is --detach's help on the four commands that start a run (020, R-03).
+const detachUsage = "end once the run has started, printing its identity, and leave it running; fylgja run read reads it " +
+	"and fylgja run interrupt interrupts it"
 
 // progress is how far an answer got, which a failure of the transport names.
 type progress struct {
@@ -102,10 +62,9 @@ type progress struct {
 
 // send is a command's one request and what it prints. args are the flags
 // that were given, at their values as given, so an absent key is a flag not given and
-// "stage": "" is --stage=; every guard is the server's. The rendering is the one
-// --json or --markdown selects. Each out frame is printed to stdout and each err frame to
-// stderr as it arrives, but under --markdown, whose stdout is the markdown alone, the out
-// frames go to stderr too; the document ends the command, as a result report prints.
+// "wait": "" is --wait=; every guard is the server's. The rendering is the one --json
+// selects. Each out frame is printed to stdout and each err frame to stderr as it arrives;
+// the document ends the command, as a result report prints.
 func send(ctx context.Context, opts *options, op string, args map[string]any, files []api.File, h handlers) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -115,12 +74,8 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 		return transportFailure(op, err, progress{})
 	}
 	req := api.Request{Render: api.RenderText, Files: files}
-	out := io.Writer(os.Stdout)
-	switch {
-	case opts.asJSON:
+	if opts.asJSON {
 		req.Render = api.RenderJSON
-	case opts.markdown:
-		req.Render, out = api.RenderMarkdown, os.Stderr
 	}
 	if len(args) > 0 {
 		req.Args = make(map[string]json.RawMessage, len(args))
@@ -162,6 +117,12 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 	}()
 	for {
 		f, err := answer.Next()
+		if errors.Is(err, io.EOF) {
+			// A run.read of a run that has not closed ends after its events with no document,
+			// the one answer that does (R-04): the client reads its end as EOF only there, and
+			// the command exits 0 with nothing more to print.
+			return nil
+		}
 		if err != nil {
 			if armed != nil {
 				got.cancelAsked = armed.deliveredAny()
@@ -176,7 +137,7 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 		}
 		switch f.Kind() {
 		case api.KindOut:
-			_, _ = io.WriteString(out, f.Out)
+			_, _ = io.WriteString(os.Stdout, f.Out)
 		case api.KindErr:
 			_, _ = io.WriteString(os.Stderr, f.Err)
 		case api.KindFiles:
@@ -205,19 +166,17 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 			if written != nil {
 				return writeFailure(op, &doc, written)
 			}
-			return &result{doc: &doc, raw: f.Document, text: f.Text, markdown: f.Markdown}
+			return &result{doc: &doc, raw: f.Document, text: f.Text}
 		}
 		// A frame of a kind this build does not know is passed over.
 	}
 }
 
 // writeFailure is a file of the answer that could not be written on this machine: the
-// operation failing in M12's words, under the subject and the stage the server's document
-// named, which are what M12's command had decided when its write failed.
+// operation failing in M12's words, under the subject the server's document named, which
+// is what M12's command had decided when its write failed.
 func writeFailure(op string, served *findings.Document, err error) error {
-	res := &result{doc: findings.ErrorDocument(op, served.Subject, err.Error())}
-	res.doc.Stage = served.Stage
-	return res
+	return &result{doc: findings.ErrorDocument(op, served.Subject, err.Error())}
 }
 
 // failAt is fail for a command whose findings name the step they belong to and the object
@@ -240,11 +199,11 @@ func buildLine(client *api.Client, served string) {
 }
 
 // takesInterrupts is whether an operation starts a run the operator may interrupt, and so
-// names a stream for it: twin create, twin provision, twin step and twin rehearse (015).
-// twin destroy takes none, as at M12.
+// names a stream for it: twin create, twin provision and twin step. twin destroy takes none,
+// as at M12, and twin rehearse is the orchestrator's (020).
 func takesInterrupts(op string) bool {
 	switch op {
-	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep, findings.OpTwinRehearse:
+	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep:
 		return true
 	}
 	return false

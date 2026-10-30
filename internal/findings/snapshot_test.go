@@ -25,6 +25,10 @@ const contract018 = "018-snapshots"
 // 016 does not move, are read from contracts/.
 const contract019 = "019-following-removed"
 
+// contract016 is the directory 016's copy of the findings contract, which 020 moves, is
+// frozen under; its blocks, which 020 does not freeze, are read from contracts/.
+const contract016 = "016-probes"
+
 // compile017FindingsSchema is 017's findings contract, with the four blocks 018 moves frozen
 // beside it and verify.schema.json, which 018 does not move, read from contracts/.
 func compile017FindingsSchema(t *testing.T) *jsonschema.Schema {
@@ -77,14 +81,14 @@ func mutated(t *testing.T, doc *Document, change func(map[string]any)) []byte {
 	return b
 }
 
-// noSnapshotDocuments are every document this package's tests build for a twin, a read, a
-// plan, a step or a rehearsal that names no snapshot, each dry run of M2's and M4's given
+// noSnapshotDocuments are every document this package's tests build for a twin or a step
+// that names no snapshot (the read's, the plan's and the rehearsal's left with their
+// operations at 020, T035), each dry run of M2's and M4's given
 // the artifacts every dry run has carried since M5 (withDryRunArtifacts).
 func noSnapshotDocuments() []labelledDocument {
 	var docs []labelledDocument
-	for _, set := range [][]labelledDocument{m2Documents(), m4Documents(), m5Documents(), scopedDocuments(),
-		stageDocuments(), listAndPlanDocuments(), stepDocuments(), showStepDocuments(), listStepDocuments(),
-		rehearsalDocuments(), rehearsalTwinDocuments(), verifyDocuments()} {
+	for _, set := range [][]labelledDocument{m2Documents(), m4Documents(), m5Documents(),
+		stepDocuments(), showStepDocuments(), rehearsalTwinDocuments(), verifyDocuments()} {
 		docs = append(docs, set...)
 	}
 	for i, c := range docs {
@@ -160,6 +164,18 @@ func TestA019DocumentIsUnchanged(t *testing.T) {
 	}
 }
 
+// Every document this package builds is 016's as built, its null losses kept: 016's copy
+// stays as 016 left it when 020 moves the findings contract on, and the claim is that the
+// older contract still accepts these documents.
+func TestA016DocumentIsUnchanged(t *testing.T) {
+	v016 := compileFeatureFindingsSchema(t, contract016, currentResources...)
+	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, v016, mustMarshal(t, c.doc), c.label+" against 016's contract")
+		})
+	}
+}
+
 // 019 removed the following block and dry_run.follow from the contract (formats.md §2), and
 // the show kinds pinned, frozen and following with the show's following and last check
 // (§3): the current findings.schema.json refuses every document an earlier build wrote with
@@ -199,9 +215,10 @@ var (
 )
 
 // snapshotDocuments are 018's documents, each naming a snapshot where 018 puts one: a
-// compile's top level and subject, a create's dry run from --snapshot, a plan's compiled
-// stages, a step's two sides and its target, a rehearsal's compiled stages, a show of a
-// twin built from a snapshot, and a show of a stepped record naming each side's.
+// compile's top level and subject, a create's dry run from --snapshot, a step's two sides
+// and its target, a show of a twin built from a snapshot, and a show of a stepped record
+// naming each side's. A plan's and a rehearsal's compiled stages name theirs too, in the
+// orchestrator's documents since 020 (T035).
 func snapshotDocuments() []labelledDocument {
 	compiled := NewDocument(OpCompile, &Subject{Snapshot: "snapshot.json", Out: "/tmp/b"}, nil)
 	compiled.SnapshotID = snapshotID
@@ -212,24 +229,10 @@ func snapshotDocuments() []labelledDocument {
 	dry.BundleID = strings.Repeat("43", 32)
 	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{}, Host: DryRunHost{}, Verdict: VerdictClear}
 
-	planned := listAndPlanDocuments()[7].doc
-	for i := range planned.Plan.Stages {
-		if planned.Plan.Stages[i].BundleID != nil {
-			planned.Plan.Stages[i].SnapshotID = &snapshotID
-		}
-	}
-
 	stepped := stepDocuments()[1].doc
 	stepped.SnapshotID = stepSnapshotID
 	stepped.Step.From.SnapshotID = snapshotID
 	stepped.Step.To.SnapshotID = stepSnapshotID
-
-	rehearsed := rehearsalDocuments()[0].doc
-	for i := range rehearsed.Rehearsal.Stages {
-		if rehearsed.Rehearsal.Stages[i].BundleID != nil {
-			rehearsed.Rehearsal.Stages[i].SnapshotID = &snapshotID
-		}
-	}
 
 	frozen := showStepDocuments()[2].doc
 	frozen.Show.Record.SnapshotID = &snapshotID
@@ -244,9 +247,7 @@ func snapshotDocuments() []labelledDocument {
 	return []labelledDocument{
 		{"compile of a snapshot", compiled},
 		{"create from a snapshot, dry run", dry},
-		{"plan naming each compiled stage's snapshot", planned},
 		{"step naming each side's snapshot", stepped},
-		{"rehearsal naming each compiled stage's snapshot", rehearsed},
 		{"show of a twin built from a snapshot", frozen},
 		{"show of a step naming each side's snapshot", shownStep},
 	}
@@ -272,15 +273,15 @@ func TestSnapshotBlocksSatisfyTheContract(t *testing.T) {
 		})
 	}
 
-	// The keys as the contract names them: the record's, each plan stage's and each rehearsal
-	// stage's written as null when the block names none, never left out.
+	// The keys as the contract names them: the record's written as null when the block names
+	// none, never left out.
 	for _, c := range []struct {
 		doc  *Document
 		keys []string
 	}{
 		{showStepDocuments()[2].doc, []string{`"record":{"branch":"change-1","at":"2026-10-16T17:30:00.000000+00:00","snapshot_id":null,"bundle_id":`}},
-		{snapshotDocuments()[5].doc, []string{`"snapshot_id":"` + snapshotID + `","bundle_id":`, `"source":"snapshot"`}},
-		{snapshotDocuments()[3].doc, []string{`"snapshot_id":"` + stepSnapshotID + `","bundle_id":`,
+		{snapshotDocuments()[3].doc, []string{`"snapshot_id":"` + snapshotID + `","bundle_id":`, `"source":"snapshot"`}},
+		{snapshotDocuments()[2].doc, []string{`"snapshot_id":"` + stepSnapshotID + `","bundle_id":`,
 			`"from":{"stage":{`, `"snapshot_id":"` + snapshotID + `","bundle_id":"` + stepFromID + `"`}},
 		{snapshotDocuments()[0].doc, []string{`"subject":{"out":"/tmp/b","snapshot":"snapshot.json"},"snapshot_id":"` + snapshotID + `","bundle_id":`}},
 		{snapshotDocuments()[1].doc, []string{`"subject":{"snapshot":"` + snapshotID + `"},"snapshot_id":"` + snapshotID + `","bundle_id":`}},
@@ -301,27 +302,18 @@ func TestSnapshotBlocksSatisfyTheContract(t *testing.T) {
 		{"subject.snapshot not a string", snapshotDocuments()[0].doc, func(d map[string]any) {
 			d["subject"].(map[string]any)["snapshot"] = 1
 		}},
-		{"show record not an id", snapshotDocuments()[5].doc, func(d map[string]any) {
+		{"show record not an id", snapshotDocuments()[3].doc, func(d map[string]any) {
 			d["show"].(map[string]any)["record"].(map[string]any)["snapshot_id"] = strings.Repeat("A", 64)
 		}},
 		{"show record without the key", showStepDocuments()[2].doc, func(d map[string]any) {
 			delete(d["show"].(map[string]any)["record"].(map[string]any), "snapshot_id")
 		}},
-		{"show record's step side not an id", snapshotDocuments()[6].doc, func(d map[string]any) {
+		{"show record's step side not an id", snapshotDocuments()[4].doc, func(d map[string]any) {
 			step := d["show"].(map[string]any)["record"].(map[string]any)["step"].(map[string]any)
 			step["from"].(map[string]any)["snapshot_id"] = nil
 		}},
-		{"step side not an id", snapshotDocuments()[3].doc, func(d map[string]any) {
+		{"step side not an id", snapshotDocuments()[2].doc, func(d map[string]any) {
 			d["step"].(map[string]any)["to"].(map[string]any)["snapshot_id"] = "5e"
-		}},
-		{"plan stage without the key", listAndPlanDocuments()[7].doc, func(d map[string]any) {
-			delete(d["plan"].(map[string]any)["stages"].([]any)[0].(map[string]any), "snapshot_id")
-		}},
-		{"rehearsal stage without the key", rehearsalDocuments()[0].doc, func(d map[string]any) {
-			delete(d["rehearsal"].(map[string]any)["stages"].([]any)[0].(map[string]any), "snapshot_id")
-		}},
-		{"rehearsal stage not an id", snapshotDocuments()[4].doc, func(d map[string]any) {
-			d["rehearsal"].(map[string]any)["stages"].([]any)[0].(map[string]any)["snapshot_id"] = "x"
 		}},
 	}
 	for _, c := range refusals {

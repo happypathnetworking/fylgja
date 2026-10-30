@@ -39,18 +39,17 @@ func workerOptions() worker.Options {
 	return worker.Options{MaxHeartbeatThrottleInterval: HeartbeatThrottle}
 }
 
-// NewWorker assembles the one worker on task queue fylgja: its four workflows — the
-// provisioning and destroy runs, the step run (M11) and the rehearsal (015), which starts
-// the other three as its children by the type names they are registered under here — and
-// every host-bound activity, each registered by the name workflows schedule it by (D-015).
-// Each run is started with a snapshot id and a bundle id the server compiled, and none
-// reads a source of truth (019). There is one registration site, here.
+// NewWorker assembles the one worker on task queue fylgja: its three workflows — the
+// provisioning and destroy runs and the step run (M11); the rehearsal left for the
+// orchestrator (020) — and every host-bound activity, each registered by the name
+// workflows schedule it by (D-015). Each run is started with a snapshot id and a bundle id
+// the server compiled, and none reads a source of truth (019). There is one registration
+// site, here.
 func NewWorker(c client.Client, acts *lab.Activities) worker.Worker {
 	w := worker.New(c, TaskQueue, workerOptions())
 	w.RegisterWorkflow(Provision)
 	w.RegisterWorkflow(Destroy)
 	w.RegisterWorkflow(Step)
-	w.RegisterWorkflow(Rehearse)
 	registerActivities(w, acts.Names())
 	return w
 }

@@ -1,0 +1,35 @@
+{
+  "about": "TestATwinDiffDocumentCarriesItsSidesAndItsPair",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.diff",
+    "status": "ok",
+    "snapshot_from": "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+    "snapshot_to": "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+    "bundle_from": "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672",
+    "bundle_to": "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672",
+    "step": {
+      "from": "snapshot b9db37f8…",
+      "to": "snapshot b9db37f8…",
+      "from_bundle_id": "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672",
+      "to_bundle_id": "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672",
+      "computed": true,
+      "unchanged": true,
+      "nodes": {
+        "added": [],
+        "removed": [],
+        "changed": []
+      },
+      "links": {
+        "added": [],
+        "removed": []
+      },
+      "artifacts": {
+        "changed": []
+      }
+    },
+    "findings": []
+  },
+  "text": "",
+  "exit": 0
+}

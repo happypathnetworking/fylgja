@@ -44,5 +44,42 @@ class ReportMarker(unittest.TestCase):
         self.assertEqual(self.marker("CLARIFY-DONE\nand then some prose\n"), "and then some prose")
 
 
+class SeedWorktree(unittest.TestCase):
+    """A lane's worktree is seeded with both venvs by symlink, the root's and the
+    orchestrator's, so a lane's `make test` and `make lint` find pytest and ruff, and each
+    is listed so the lane's dirty check leaves it out."""
+
+    def test_both_venvs_are_linked_and_listed(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = os.path.join(d, "repo")
+            git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"]
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            for path, text in {
+                ".gitignore": "local/\n",
+                ".specify/extensions.yml": "hooks: {}\n",
+                "orchestrator/pyproject.toml": "[project]\n",
+            }.items():
+                os.makedirs(os.path.dirname(os.path.join(repo, path)), exist_ok=True)
+                with open(os.path.join(repo, path), "w") as f:
+                    f.write(text)
+            subprocess.run([*git, "add", "-A"], cwd=repo, check=True)
+            subprocess.run([*git, "commit", "-qm", "base"], cwd=repo, check=True)
+            for venv in (".venv", "orchestrator/.venv"):
+                os.makedirs(os.path.join(repo, venv, "bin"))
+                with open(os.path.join(repo, venv, ".gitignore"), "w") as f:
+                    f.write("*\n")
+                open(os.path.join(repo, venv, "bin", "python"), "w").close()
+            wt, seeded = os.path.join(d, "wt"), os.path.join(d, "seeded")
+            body = function("seed_worktree") + '\nFEATURE_REL=specs/000-x; seed_worktree "$1" lane/x "$2"'
+            out = subprocess.run(["bash", "-c", body, "bash", wt, seeded], cwd=repo, capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            for venv in (".venv", "orchestrator/.venv"):
+                self.assertTrue(os.path.islink(os.path.join(wt, venv)), venv)
+                self.assertEqual(os.readlink(os.path.join(wt, venv)), os.path.join(os.path.realpath(repo), venv))
+            listed = open(seeded).read().split()
+            self.assertIn(".venv", listed)
+            self.assertIn("orchestrator/.venv", listed)
+
+
 if __name__ == "__main__":
     unittest.main()

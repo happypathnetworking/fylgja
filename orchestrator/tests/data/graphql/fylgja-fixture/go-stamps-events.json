@@ -1,0 +1,515 @@
+{
+ "events": [
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:44.727862+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-a88f-f465-33b0-c51889938927",
+    "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:44.723720+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-3e65-80f5-33bf-c51c68637630",
+    "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:44.721030+00:00",
+   "Kind": "DcimCable",
+   "Nodes": [
+    "18e2ebff-983b-b045-33bf-c512b4bf4df7",
+    "18e2ebff-3e65-80f5-33bf-c51c68637630",
+    "18e2ebfe-a88f-f465-33b0-c51889938927"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:44.596647+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+    "18e2ebff-9088-afbd-33b8-c51053d5c358"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:44.592141+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+    "18e2ebff-9088-afbd-33b8-c51053d5c358"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:44.589220+00:00",
+   "Kind": "DcimCable",
+   "Nodes": [
+    "18e2ebff-9088-afbd-33b8-c51053d5c358",
+    "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+    "18e2ebff-376b-cedb-33b4-c51cff4d38b8"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:44.467338+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+    "18e2ebff-7599-0821-33b2-c516f58b6134"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:44.463141+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+    "18e2ebff-7599-0821-33b2-c516f58b6134"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:44.460489+00:00",
+   "Kind": "DcimCable",
+   "Nodes": [
+    "18e2ebff-7599-0821-33b2-c516f58b6134",
+    "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+    "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:43.770836+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+    "18e2ebff-6006-119a-33ba-c51bb1ece87d"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:43.768136+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-6006-119a-33ba-c51bb1ece87d",
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:43.425163+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+    "18e2ebff-4b77-17d6-33bb-c516eb985884"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:43.422524+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-4b77-17d6-33bb-c516eb985884",
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:43.307684+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+    "18e2ebff-3e65-80f5-33bf-c51c68637630"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:43.303693+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-3e65-80f5-33bf-c51c68637630",
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:43.091763+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+    "18e2ebff-376b-cedb-33b4-c51cff4d38b8"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:43.088987+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:42.971661+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+    "18e2ebff-3083-8b18-33b5-c516a46e146e"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:42.968940+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-3083-8b18-33b5-c516a46e146e",
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:42.855222+00:00",
+   "Kind": "DcimPlatform",
+   "Nodes": [
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:42.852510+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b",
+    "18e2ebfd-e135-7632-33b9-c512c9e47196"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:42.443698+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+    "18e2ebff-0fb0-0292-33b5-c51e876c3de1"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:42.440911+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebff-0fb0-0292-33b5-c51e876c3de1",
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:42.072386+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+    "18e2ebfe-fad9-4921-33bd-c51130548d82"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:42.069348+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-fad9-4921-33bd-c51130548d82",
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:41.955451+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+    "18e2ebfe-f3bb-7991-33b3-c51c5c595c14"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:41.952907+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:41.836789+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+    "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:41.834086+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:41.696842+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+    "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:41.694197+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c",
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:41.579170+00:00",
+   "Kind": "DcimPlatform",
+   "Nodes": [
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:41.573723+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b",
+    "18e2ebfd-e135-7632-33b9-c512c9e47196"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:41.182563+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+    "18e2ebfe-c575-78be-33b4-c51bbd7e3413"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:41.179181+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-c575-78be-33b4-c51bbd7e3413",
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:40.789432+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+    "18e2ebfe-aecd-f747-33bb-c515e159cb0e"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:40.785861+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-aecd-f747-33bb-c515e159cb0e",
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:40.686073+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+    "18e2ebfe-a88f-f465-33b0-c51889938927"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:40.683648+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-a88f-f465-33b0-c51889938927",
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:40.581453+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+    "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:40.579004+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:39.847910+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+    "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:39.845110+00:00",
+   "Kind": "InterfacePhysical",
+   "Nodes": [
+    "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60",
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:39.072647+00:00",
+   "Kind": "DcimPlatform",
+   "Nodes": [
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:39.069762+00:00",
+   "Kind": "DcimDevice",
+   "Nodes": [
+    "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b",
+    "18e2ebfd-e135-7632-33b9-c512c9e47196"
+   ]
+  },
+  {
+   "Name": "infrahub.node.updated",
+   "OccurredAt": "2026-10-29T06:24:38.126628+00:00",
+   "Kind": "OrganizationManufacturer",
+   "Nodes": [
+    "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:38.125148+00:00",
+   "Kind": "DcimPlatform",
+   "Nodes": [
+    "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+    "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa"
+   ]
+  },
+  {
+   "Name": "infrahub.node.created",
+   "OccurredAt": "2026-10-29T06:24:38.037419+00:00",
+   "Kind": "OrganizationManufacturer",
+   "Nodes": [
+    "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa"
+   ]
+  }
+ ],
+ "stamps": {
+  "Latest": "2026-10-29T06:24:58.771767+00:00",
+  "Devices": {
+   "n1": {
+    "Match": {
+     "manufacturer": "Nokia",
+     "platform": "SR Linux"
+    },
+    "IDs": [
+     "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+     "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+     "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+     "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+     "18e2ebfe-aecd-f747-33bb-c515e159cb0e",
+     "18e2ebfe-c575-78be-33b4-c51bbd7e3413",
+     "18e2ebfe-a88f-f465-33b0-c51889938927",
+     "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60",
+     "18e2ebff-7599-0821-33b2-c516f58b6134",
+     "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+    ],
+    "Intent": "2026-10-29T06:24:44.662611+00:00",
+    "Artifacts": {
+     "device-config": "2026-10-29T06:24:58.771767+00:00"
+    }
+   },
+   "n2": {
+    "Match": {
+     "manufacturer": "Nokia",
+     "platform": "SR Linux"
+    },
+    "IDs": [
+     "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+     "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+     "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+     "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+     "18e2ebfe-fad9-4921-33bd-c51130548d82",
+     "18e2ebff-0fb0-0292-33b5-c51e876c3de1",
+     "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+     "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c",
+     "18e2ebff-7599-0821-33b2-c516f58b6134",
+     "18e2ebff-9088-afbd-33b8-c51053d5c358"
+    ],
+    "Intent": "2026-10-29T06:24:44.533142+00:00",
+    "Artifacts": {
+     "device-config": "2026-10-29T06:24:58.733506+00:00"
+    }
+   },
+   "n3": {
+    "Match": {
+     "manufacturer": "Nokia",
+     "platform": "SR Linux"
+    },
+    "IDs": [
+     "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+     "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+     "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+     "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+     "18e2ebff-4b77-17d6-33bb-c516eb985884",
+     "18e2ebff-6006-119a-33ba-c51bb1ece87d",
+     "18e2ebff-3e65-80f5-33bf-c51c68637630",
+     "18e2ebff-3083-8b18-33b5-c516a46e146e",
+     "18e2ebff-9088-afbd-33b8-c51053d5c358",
+     "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+    ],
+    "Intent": "2026-10-29T06:24:44.662611+00:00",
+    "Artifacts": {
+     "device-config": "2026-10-29T06:24:58.755014+00:00"
+    }
+   }
+  }
+ }
+}

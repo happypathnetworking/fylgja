@@ -30,8 +30,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/server"
 	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
-	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -164,7 +164,7 @@ var stepOf = map[string]string{
 // node, and nowhere else (Constitution VIII).
 //
 // A create is driven end to end without infrastructure: the fixture CTM compiled by
-// stage.Compile and filed in the bundle store, as the server compiles and files a create's
+// server.Compile and filed in the bundle store, as the server compiles and files a create's
 // read, then the Provision workflow on the Temporal test suite, started with that bundle
 // and the snapshot's id as the server starts it, with the worker's own activities wherever
 // they need no host — CheckHost (over a recorded containerlab), StageBundle,
@@ -205,7 +205,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, compiledID, list := stage.Compile(read, nil, reg, nil)
+	files, compiledID, list := server.Compile(read, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the fixture does not compile: %v", list)
 	}
@@ -380,17 +380,20 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	}
 	seen.add("twin.json", record)
 
-	// The create, as the operator sees it: progress and the twin, in text and in JSON. Its
-	// read is the server's since 018, from the fake Infrahub serving the fixture, whose
-	// artifacts carry the marker; the snapshot it files is the store's, never output.
-	newFakeInfrahub(t).start()
+	// The create, as the operator sees it: progress and the twin, in text and in JSON. It
+	// builds from the fixture's snapshot, whose artifacts carry the marker, filed in the
+	// store as the orchestrator's take files one (020); the snapshot is the store's, never
+	// output.
+	if _, err := snap.NewDirStore(paths.Snapshots).Put(context.Background(), snap.Take(read, nil)); err != nil {
+		t.Fatal(err)
+	}
 	for _, asJSON := range []bool{false, true} {
 		useService(t, &fakeService{runID: "run-1", result: res, events: events})
 		useInterrupts(t)
 		var runErr error
 		stderr := captureStderr(t, func() {
 			seen.add("create output", captureStdout(t, func() {
-				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{branch: read.Envelope.Branch})
+				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{snapshot: snap.Take(read, nil).ID})
 			}))
 		})
 		seen.add("create output", stderr)

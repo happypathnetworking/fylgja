@@ -5,14 +5,11 @@ package provision
 import (
 	"time"
 
-	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
-	"github.com/happypathnetworking/fylgja/internal/rehearsal"
-	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
 // Mechanism constants: they bound the machinery, never how long a platform may take.
@@ -282,39 +279,4 @@ func flowsOptions(budgetS int) workflow.ActivityOptions {
 	o := hostBoundOptions(seconds(budgetS)+FlowsMargin, true)
 	o.ScheduleToCloseTimeout = o.StartToCloseTimeout
 	return o
-}
-
-// ChildOptions run a rehearsal's provision, steps and destroy as its children, each under
-// its fixed id. ABANDON keeps a child running to its own cleanup when the rehearsal is
-// terminated; WaitForCancellation makes a cancelled rehearsal wait for the child's cleanup
-// before it closes. Their absence is silent, which is why a test pins them.
-func ChildOptions(workflowID string) workflow.ChildWorkflowOptions {
-	return workflow.ChildWorkflowOptions{
-		WorkflowID:          workflowID,
-		TaskQueue:           TaskQueue,
-		ParentClosePolicy:   enumspb.PARENT_CLOSE_POLICY_ABANDON,
-		WaitForCancellation: true,
-	}
-}
-
-// DeadlineMechanism is the mechanism constants a rehearsal's deadline sums (015, research
-// R-09): the bound of each activity its children run that no package decides, the margins
-// each package's own budget is given — a probe package's flows' among them (016) — and
-// verify's one default wait, which every stage of a
-// rehearsal waits. internal/rehearsal takes them as a value, so it imports neither this
-// package nor verify.
-func DeadlineMechanism() rehearsal.Mechanism {
-	return rehearsal.Mechanism{
-		CheckHost:       CheckHostBudget,
-		Stage:           StageBudget,
-		Record:          RecordBudget,
-		PlanTeardown:    PlanTeardownBudget,
-		Unstage:         UnstageBudget,
-		InspectTwin:     InspectTwinBudget,
-		ReadinessMargin: ReadinessMargin,
-		PushMargin:      PushMargin,
-		VerifyMargin:    VerifyMargin,
-		FlowsMargin:     FlowsMargin,
-		Wait:            verify.DefaultBudget,
-	}
 }

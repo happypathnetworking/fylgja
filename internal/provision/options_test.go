@@ -11,12 +11,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
-	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
-	"github.com/happypathnetworking/fylgja/internal/rehearsal"
-	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
 // planFor builds a node plan from a package as the host check does: every budget is
@@ -212,23 +208,6 @@ func TestReadOnlyConstants(t *testing.T) {
 	}
 }
 
-// A rehearsal's children: ABANDON and WaitForCancellation change nothing visible until a
-// rehearsal is terminated or cancelled while a child runs. Every field is pinned, for the
-// destroy and the provision.
-func TestChildOptionsPinned(t *testing.T) {
-	for _, id := range []string{WorkflowDestroy, WorkflowProvision} {
-		want := workflow.ChildWorkflowOptions{
-			WorkflowID:          id,
-			TaskQueue:           "fylgja",
-			ParentClosePolicy:   enumspb.PARENT_CLOSE_POLICY_ABANDON,
-			WaitForCancellation: true,
-		}
-		if got := ChildOptions(id); !reflect.DeepEqual(got, want) {
-			t.Errorf("ChildOptions(%s) = %+v\nwant %+v", id, got, want)
-		}
-	}
-}
-
 // The step adds no budget: each
 // of its four activities runs under the option of the M2–M5 step whose work it shares, and
 // the readiness and push it reuses are M2's and M5's own. Every field is compared, so a
@@ -309,97 +288,5 @@ func TestStepStartOptionsPinned(t *testing.T) {
 	}
 	if WorkflowStep != wire.StepWorkflowID {
 		t.Errorf("WorkflowStep = %q, want the wire's %q", WorkflowStep, wire.StepWorkflowID)
-	}
-}
-
-// A second rehearsal refuses rather than attaching to the first, as a second step does
-// (015, D-051): the fixed id and WorkflowExecutionErrorWhenAlreadyStarted, whose absence is
-// silent.
-func TestRehearseStartOptionsPinned(t *testing.T) {
-	o := rehearseStartOptions()
-	if o.ID != "fylgja-rehearse" || o.TaskQueue != "fylgja" || !o.WorkflowExecutionErrorWhenAlreadyStarted ||
-		o.WorkflowIDConflictPolicy != enumspb.WORKFLOW_ID_CONFLICT_POLICY_UNSPECIFIED {
-		t.Errorf("start options = {ID:%q TaskQueue:%q WorkflowExecutionErrorWhenAlreadyStarted:%v WorkflowIDConflictPolicy:%v}, "+
-			"want fylgja-rehearse, fylgja, true, unspecified", o.ID, o.TaskQueue, o.WorkflowExecutionErrorWhenAlreadyStarted,
-			o.WorkflowIDConflictPolicy)
-	}
-	if WorkflowRehearse != wire.RehearseWorkflowID {
-		t.Errorf("WorkflowRehearse = %q, want the wire's %q", WorkflowRehearse, wire.RehearseWorkflowID)
-	}
-}
-
-// The deadline sums the bounds the children's activities run under, so the mechanism it is
-// given must be those constants, each the one its activity's options use, and verify's
-// default wait: internal/rehearsal cannot import them, and a constant moved here without
-// the deadline would cut a rehearsal its own budgets allow (015, research R-09). With the
-// shipped SR Linux package's budgets, the fixture's rehearsal (the branch point refused, two
-// marks and the head) is 1,950 s, research §1.7's: the baseline's stop-following bound, 30 s,
-// that 015's T082 added is gone with following (019, R-15). With the probed golden's two
-// probes, 2,130 s: each rehearsed stage starts and reads its flows (016, research R-16).
-func TestDeadlineMechanismIsTheConstants(t *testing.T) {
-	m := DeadlineMechanism()
-	for _, c := range []struct {
-		field     string
-		got, want time.Duration
-	}{
-		{"CheckHost", m.CheckHost, CheckHostBudget},
-		{"Stage", m.Stage, StageBudget},
-		{"Record", m.Record, RecordBudget},
-		{"PlanTeardown", m.PlanTeardown, PlanTeardownBudget},
-		{"Unstage", m.Unstage, UnstageBudget},
-		{"InspectTwin", m.InspectTwin, InspectTwinBudget},
-		{"ReadinessMargin", m.ReadinessMargin, ReadinessMargin},
-		{"PushMargin", m.PushMargin, PushMargin},
-		{"VerifyMargin", m.VerifyMargin, VerifyMargin},
-		{"FlowsMargin", m.FlowsMargin, FlowsMargin},
-		{"Wait", m.Wait, verify.DefaultBudget},
-		// The options the children's activities run under, read rather than restated.
-		{"CheckHost as CheckHostOptions", m.CheckHost, CheckHostOptions().StartToCloseTimeout},
-		{"Stage as StageOptions", m.Stage, StageOptions().StartToCloseTimeout},
-		{"Record as RecordOptions", m.Record, RecordOptions().StartToCloseTimeout},
-		{"PlanTeardown as PlanTeardownOptions", m.PlanTeardown, PlanTeardownOptions().StartToCloseTimeout},
-		{"Unstage as UnstageOptions", m.Unstage, UnstageOptions().StartToCloseTimeout},
-		{"InspectTwin as InspectTwinOptions", m.InspectTwin, InspectTwinOptions().StartToCloseTimeout},
-		{"Wait and VerifyMargin as VerifyOptions", m.Wait + m.VerifyMargin, VerifyOptions(int(verify.DefaultBudget / time.Second)).StartToCloseTimeout},
-		{"FlowsMargin as StartFlowsOptions with no flow", m.FlowsMargin, StartFlowsOptions(nil).StartToCloseTimeout},
-		{"FlowsMargin as ReadFlowsOptions with no flow", m.FlowsMargin, ReadFlowsOptions(nil).StartToCloseTimeout},
-	} {
-		if c.got != c.want {
-			t.Errorf("%s = %s, want %s", c.field, c.got, c.want)
-		}
-	}
-	if v := reflect.ValueOf(m); v.NumField() != 11 {
-		t.Errorf("rehearsal.Mechanism has %d fields, want the eleven this test compares", v.NumField())
-	}
-
-	plan := srlinuxPlan(t)
-	stages := []rehearsal.DeadlineStage{{Role: rehearsal.RoleRefused}, {Role: rehearsal.RoleBaseline, Nodes: plan},
-		{Role: rehearsal.RoleRehearsed, Nodes: plan}, {Role: rehearsal.RoleRehearsed, Nodes: plan}}
-	if got := rehearsal.Deadline(m, stages); got != 1950*time.Second {
-		t.Errorf("the fixture's deadline = %s, want 1950s (570 + 630 + 630 + 120)", got)
-	}
-
-	// With probes (016, research R-16): the probed golden planned from the shipped packages,
-	// its hosts' flows budgets the ping package's (start 30, read 30). The baseline starts no
-	// flow, so it stays 570; each rehearsed stage adds (30 + 15) + (30 + 15), 720; the destroy
-	// stays 120, a host's 30 under SR Linux's 60.
-	reg, err := psp.Load("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	probes, err := probe.Load("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	probed, err := lab.NodePlans(filepath.Join("..", "..", "testdata", "golden", "three-node-probed"), reg, probes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stages = []rehearsal.DeadlineStage{{Role: rehearsal.RoleRefused}, {Role: rehearsal.RoleBaseline, Nodes: probed},
-		{Role: rehearsal.RoleRehearsed, Nodes: probed}, {Role: rehearsal.RoleRehearsed, Nodes: probed}}
-	got := rehearsal.Deadline(m, stages)
-	if got != 2130*time.Second || !rehearsal.Fits(got, rehearsal.Ceiling) {
-		t.Errorf("the probed fixture's deadline = %s, want 2130s (570 + 720 + 720 + 120), under the ceiling %s",
-			got, rehearsal.Ceiling)
 	}
 }

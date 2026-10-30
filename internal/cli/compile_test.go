@@ -94,11 +94,6 @@ type findingsDoc struct {
 		Snapshot string `json:"snapshot"`
 		CTM      string `json:"ctm"`
 	} `json:"subject"`
-	Verified *struct {
-		Model   string                `json:"model"`
-		Version string                `json:"version"`
-		Kinds   []findings.KindFields `json:"kinds"`
-	} `json:"verified"`
 	Findings []struct {
 		Severity string `json:"severity"`
 		Rule     string `json:"rule"`

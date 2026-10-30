@@ -10,12 +10,9 @@ import (
 )
 
 func newTwinCmd(opts *options) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "twin",
-		Short: "Build and inspect twins",
-	}
-	cmd.AddCommand(newTwinCompileCmd(opts), newTwinCreateCmd(opts), newTwinProvisionCmd(opts), newTwinDestroyCmd(opts), newTwinShowCmd(opts), newTwinStepCmd(opts), newTwinVerifyCmd(opts), newTwinRehearseCmd(opts))
-	return cmd
+	return noun("twin", "Build and inspect twins", newTwinCompileCmd(opts), newTwinCreateCmd(opts),
+		newTwinProvisionCmd(opts), newTwinDestroyCmd(opts), newTwinShowCmd(opts), newTwinStepCmd(opts),
+		newTwinVerifyCmd(opts), newTwinDiffCmd(opts))
 }
 
 type compileFlags struct {
@@ -37,7 +34,8 @@ func newTwinCompileCmd(opts *options) *cobra.Command {
 			"packages. Files nothing and creates no runtime resource — this is the stage\n" +
 			"before anything is deployed.\n" +
 			"\n" +
-			"A snapshot is what intent read --out writes. A bare CTM is wrapped by hand as\n" +
+			"A snapshot is what the orchestrator's fylgja-cli intent read --out writes. A bare\n" +
+			"CTM is wrapped by hand as\n" +
 			"{\"snapshot_version\": \"2\", \"ctm\": <the CTM>, \"probes\": []}: the server\n" +
 			"computes the snapshot_id and fills the observed_at from the CTM.",
 		Args: cobra.NoArgs,

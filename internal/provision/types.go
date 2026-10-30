@@ -5,7 +5,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
-	"github.com/happypathnetworking/fylgja/internal/rehearsal"
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
@@ -21,11 +20,6 @@ const (
 	// third short workflow with a fixed id, D-007's kind, so a step is serialised with
 	// itself by the id and refused beside a provisioning or destroy run.
 	WorkflowStep = wire.StepWorkflowID // "fylgja-step"
-	// WorkflowRehearse is the one rehearsal run (015, D-051): a short workflow with a
-	// fixed id, which runs a provision, a step per later stage and a destroy as its children
-	// under their own fixed ids, so a rehearsal is serialised with itself by its id and with
-	// the operator's runs by its children's, and is refused beside any of them.
-	WorkflowRehearse = wire.RehearseWorkflowID // "fylgja-rehearse"
 )
 
 // Outcomes of a provisioning run. The run returns one of these in every
@@ -71,14 +65,9 @@ type ProvisionInput struct {
 	// snapshot's being its stored take (018), and by an earlier build's rebuild, its check's
 	// read (M4); empty for twin provision.
 	ObservedAt string `json:"observed_at,omitempty"`
-	// Stage is the stage the server resolved Branch and At from (014), which the record
-	// step writes into twin.json. The run branches on nothing of it. Nil in every input
-	// and recorded history of a run not created from a stage, and omitted when nil.
-	Stage *StageInput `json:"stage,omitempty"`
-	// Rehearsal is the rehearsal run whose baseline this run is (015), which the record step
-	// writes into twin.json. The run branches on nothing of it. Nil in every input and
-	// recorded history of a run a rehearsal did not start, and omitted when nil.
-	Rehearsal *wire.RehearsalRef `json:"rehearsal,omitempty"`
+	// An input recorded before 020 may carry the stage the server resolved Branch and At
+	// from (014) and the rehearsal whose baseline the run was (015), which twin.json 12 does
+	// not record (research R-06) and which decode to nothing; the run branched on neither.
 	// Scope is the scope the server's read was made under, tag:<name>, as the server
 	// resolved it (017), or the snapshot's: provenance, and the read's scope only in a
 	// history recorded before 018, whose run reads.
@@ -91,12 +80,6 @@ type ProvisionInput struct {
 	// a twin provision's input, and omitted when empty, so they replay.
 	SnapshotID string `json:"snapshot_id,omitempty"`
 }
-
-// StageInput names a stage as the record does: its proposed change by id and source
-// branch, its label, description and where the at came from. It is the record input's own
-// type, so the run copies it in one assignment and a nil stays nil with no branch in the
-// workflow.
-type StageInput = wire.StageRef
 
 // ProvisionResult is how a provisioning run ended.
 type ProvisionResult struct {
@@ -134,6 +117,31 @@ type DestroyRun struct {
 	Attached bool
 	Result   DestroyResult
 }
+
+// The states of a run, as run.read names them (020, R-04): the workflow service's statuses
+// of an execution, in contracts/api.md's words. A run the operator interrupted closes
+// completed, its result saying it was cancelled: the workflows answer a cancellation with a
+// result rather than failing.
+const (
+	RunRunning    = "running"
+	RunCompleted  = "completed"
+	RunFailed     = "failed"
+	RunCancelled  = "cancelled"
+	RunTerminated = "terminated"
+	RunTimedOut   = "timed_out"
+)
+
+// RunState is a run the workflow service holds, as Describe found it: its identity, the
+// workflow's latest run's when the request named none, and its state, one of the Run*
+// states.
+type RunState struct {
+	WorkflowID string
+	RunID      string
+	State      string
+}
+
+// Running is whether the run has not closed.
+func (s RunState) Running() bool { return s.State == RunRunning }
 
 // StepInput starts a step run: everything the CLI
 // resolved, read, compiled and decided before any connection, so the run reads only the
@@ -234,112 +242,14 @@ type StepResult struct {
 	// cancelled before the wait began, and every run of a history from before its marker.
 	// Nothing else of the result depends on it.
 	Wait *wire.StepWait `json:"wait,omitempty"`
-	// WaitCounts is the wait's last read counted by kind, as the activity answered it, for a
-	// rehearsal's report (015, research R-07). Nil when the activity gave none: the wait did
-	// not run, failed outright, kept no read, or was a retry's answer from the record.
+	// WaitCounts is the wait's last read counted by kind, as the activity answered it, which
+	// the step's document carries for the orchestrator's rehearsal report (015, research R-07;
+	// 020). Nil when the activity gave none: the wait did not run, failed outright, kept no
+	// read, or was a retry's answer from the record.
 	WaitCounts *wire.VerifyCounts `json:"wait_counts,omitempty"`
 	// Loss is what the step's flows lost, as ReadFlows answered it (016), or each flow not_read
 	// when the read itself failed. Nil when the flows did not run: a dry run, a run that ended
 	// at or before its stage, and every run of a history from before the marker flows. A step
 	// with no probe, none added and none dropped carries the empty loss, and reads nothing.
 	Loss *wire.Loss `json:"loss,omitempty"`
-}
-
-// RehearseInput starts a rehearsal run (015, data-model §6): everything the server
-// resolved, read, compiled and decided before any connection, so the run reads no disk and
-// no Infrahub. The proposed change; when its stages were resolved; the deadline the stages'
-// budgets sum to and the ceiling it was held under, in seconds; and every stage of the plan
-// in order, with the role the rehearsal gives it and the child input that runs it.
-type RehearseInput struct {
-	ProposedChange findings.StageChange `json:"proposed_change"`
-	ResolvedAt     string               `json:"resolved_at"`
-	DeadlineS      int                  `json:"deadline_s"`
-	CeilingS       int                  `json:"ceiling_s"`
-	Stages         []RehearseStage      `json:"stages"`
-	// Version is the starting binary's version, kept in history only.
-	Version string `json:"version"`
-}
-
-// RehearseStage is one stage of the plan as the server decided it: its reference, the
-// mark's label and description and where its at came from; the branch, the at and the
-// bundle it resolved to and compiled to, empty when the plan refused it; the plan's refusal;
-// its role (rehearsal.RoleRefused, RoleBaseline or RoleRehearsed); M10's step from the
-// previous compiled stage, for the report's drawing; and the child input that runs it, the
-// baseline's provision or a rehearsed stage's step, with the budget of its wait. The run
-// branches on the role and on nothing else of it.
-type RehearseStage struct {
-	Ref         string           `json:"ref"`
-	Label       string           `json:"label"`
-	Description string           `json:"description"`
-	AtSource    string           `json:"at_source"`
-	Branch      string           `json:"branch,omitempty"`
-	At          string           `json:"at,omitempty"`
-	BundleID    string           `json:"bundle_id,omitempty"`
-	BundlePath  string           `json:"bundle_path,omitempty"`
-	Refused     *RehearseRefusal `json:"refused,omitempty"`
-	Role        string           `json:"role"`
-	// Diff is M10's step from the previous compiled stage as its pair JSON
-	// (stages.schema.json, $defs/step); absent on the first.
-	Diff json.RawMessage `json:"diff,omitempty"`
-	// Provision is the baseline's provision, already compiled, with its stage; the run adds
-	// its own reference.
-	Provision *ProvisionInput `json:"provision,omitempty"`
-	// Step is a rehearsed stage's step from the previous compiled stage, with restarts
-	// allowed and the default wait.
-	Step *StepInput `json:"step,omitempty"`
-	// WaitS is the budget of the stage's wait, in seconds: the baseline's VerifyTwin, or the
-	// step's own, which Step.WaitS carries.
-	WaitS int `json:"wait_s"`
-	// SnapshotID is the stage's snapshot, beside BundleID, empty when the plan refused the
-	// stage (018). The run branches on nothing of it. Empty in every recorded history before
-	// 018, and omitted when empty, so they replay.
-	SnapshotID string `json:"snapshot_id,omitempty"`
-}
-
-// RehearseRefusal is why the plan refused a stage the rehearsal passes over: the branch
-// point's one rejection, scope.empty at read (research R-03; 017's FR-015).
-type RehearseRefusal struct {
-	Rule    string `json:"rule"`
-	Message string `json:"message"`
-}
-
-// RehearseResult is how a rehearsal run ended (data-model §6). One shape in every case.
-type RehearseResult struct {
-	// Outcome is one of rehearsal.OutcomeOK, OutcomeStageFailed, OutcomeStageError,
-	// OutcomeBaselineFailed, OutcomeCut, OutcomeCancelled and OutcomeRejected.
-	Outcome string `json:"outcome"`
-	// Stages is every stage of the input in order: the refused one passed over, each the run
-	// came to with its verdict, and every one after the stage that stopped the run not
-	// reached.
-	Stages []RehearsedStage `json:"stages"`
-	// Reached is the stage the run stopped at, or the last when every stage passed.
-	Reached string `json:"reached,omitempty"`
-	// DeadlineHit is set when the deadline's timer fired and cut the stage in progress.
-	DeadlineHit bool    `json:"deadline_hit"`
-	StartedAt   string  `json:"started_at"`
-	EndedAt     string  `json:"ended_at"`
-	UsedS       float64 `json:"used_s"`
-	// Destroy is how the destroy child ended; when it could not start or closed without a
-	// result, what it could not check is its remaining, under cleanup.incomplete. nil when the
-	// run was rejected: it touched nothing, so no destroy was needed.
-	Destroy *DestroyResult `json:"destroy,omitempty"`
-	// Findings are the run's own: a child that could not start or closed without a result.
-	// Each child's own findings stay in its result.
-	Findings findings.List `json:"findings"`
-}
-
-// RehearsedStage is one stage as the run left it: its verdict; the child it ran and that
-// child's result, the baseline's provision or a rehearsed stage's step; the stage's wait and
-// its last read counted by kind; the wait's failing assertions the baseline's did not have;
-// and the stage's whole time on the run's clock, its child and its wait.
-type RehearsedStage struct {
-	Ref         string             `json:"ref"`
-	Verdict     rehearsal.Verdict  `json:"verdict"`
-	Run         *wire.RunRef       `json:"run,omitempty"`
-	Provision   *ProvisionResult   `json:"provision,omitempty"`
-	Step        *StepResult        `json:"step,omitempty"`
-	Wait        *wire.StepWait     `json:"wait,omitempty"`
-	Counts      *wire.VerifyCounts `json:"counts,omitempty"`
-	NewFindings []wire.StepFinding `json:"new_findings,omitempty"`
-	TookS       float64            `json:"took_s"`
 }

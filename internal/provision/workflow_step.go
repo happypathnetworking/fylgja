@@ -816,10 +816,9 @@ func sortedSet[V any](m map[string]V) []string {
 
 // Ineligible is the refusal of a host whose twin cannot step, at step at, or
 // nil when its twin can: no twin; an orphan, an unreadable record or a record whose lab is
-// gone, in M3's phrase; a diverged twin, which accepts only twin destroy; or a record of
-// twin.json 5 or earlier naming M10's waypoint, whose reference this build no longer reads.
-// A twin that names no stage is not refused here (019, research R-03): whether its record
-// names a snapshot, as a twin that steps must, is the server's to judge, since this is also
+// gone, in M3's phrase; or a diverged twin, which accepts only twin destroy. A record's
+// version is not judged here (020, research R-06), nor whether it names a snapshot (019,
+// research R-03), as a twin that steps must: each is the server's to judge, since this is also
 // the run's second lock, which reads the records of its recorded histories, and those name
 // none. twinDir is the twin directory's path when the caller knows it, the object of a
 // directory found without its lab; the run names it "twin directory".
@@ -832,7 +831,7 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 	case !host.LabPresent && !host.TwinDirPresent:
 		return refuse(findings.RuleStepTwinUnsteppable, lab,
 			"no twin: no "+lab+" and no twin directory; a twin built from a snapshot steps "+
-				"(fylgja twin create --branch, --stage or --snapshot)")
+				"(fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)")
 	case host.Twin == nil || !host.LabPresent:
 		object := lab
 		if !host.LabPresent {
@@ -845,9 +844,6 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 			host.Phrase+"; a twin built from a snapshot steps; fylgja twin destroy clears it")
 	case host.Twin.State == wire.StateDiverged:
 		return refuse(findings.RuleStepTwinDiverged, host.Twin.BundleID, divergedTwin(host.Twin))
-	case host.Twin.Stage == nil && host.Twin.Superseded:
-		return refuse(findings.RuleStepTwinUnsteppable, host.Twin.BundleID, "the twin was created from "+
-			host.Twin.SupersededWaypoint()+"; a twin built from a snapshot steps; fylgja twin destroy clears it")
 	}
 	return nil
 }
@@ -870,8 +866,7 @@ func withoutPresence(list findings.List) findings.List {
 }
 
 // divergedTwin is step.twin.diverged's message: the step that left the twin diverged,
-// towards the side its to side's Name() names (019, research R-05), or towards the waypoint
-// it was on a record of twin.json 5 or earlier.
+// towards the side its to side's Name() names (019, research R-05).
 func divergedTwin(rec *wire.TwinRecord) string {
 	st := rec.Step
 	if st == nil {
@@ -882,20 +877,17 @@ func divergedTwin(rec *wire.TwinRecord) string {
 		phase = *st.Phase
 	}
 	towards := st.To.Name()
-	if st.To.Stage == nil && rec.Superseded {
-		towards = rec.SupersededWaypoint()
-	}
 	return fmt.Sprintf("the twin is diverged: step run %s %s towards %s stopped at phase %s (%s); it accepts only fylgja twin destroy",
 		st.Run.WorkflowID, st.Run.RunID, towards, phase, Landed(st.Pushed, ": "))
 }
 
 // notPlannedFrom is the run's second lock at inspect: the host's record
-// must still name the bundle and stage the server planned from. Either moving between the
+// must still name the bundle the server planned from. That moving between the
 // CLI's look and the run's means the host changed, and nothing is touched. Where the twin is
 // is named by the record's Position() and where the step was planned from by the from side's
 // Name() (019, research R-05).
 func notPlannedFrom(rec *wire.TwinRecord, from wire.StepSide) *findings.Finding {
-	if rec.BundleID == from.BundleID && sameStage(rec.Stage, from.Stage) {
+	if rec.BundleID == from.BundleID {
 		return nil
 	}
 	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
@@ -903,14 +895,6 @@ func notPlannedFrom(rec *wire.TwinRecord, from wire.StepSide) *findings.Finding 
 			"the twin is at %s (bundle %s), not at %s (bundle %s) the step was planned from: the host changed "+
 				"after the command looked; nothing was touched; run fylgja twin step again",
 			rec.Position(), shortBundle(rec.BundleID), from.Name(), shortBundle(from.BundleID))}
-}
-
-// sameStage says whether two records name the same stage, nil included.
-func sameStage(a, b *wire.StageRef) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
 }
 
 // shortBundle is a bundle id's first eight characters and an ellipsis, as the step's lines

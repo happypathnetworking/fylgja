@@ -17,18 +17,19 @@ dependency actually behaved ([verified facts](verified-facts.md)).
 
 **The bring-up script** stands a host up: `scripts/bring-up.sh [--ceos-tar PATH] [--part
 NAME]... [--help]`, run from the clone by the user who will run Fylgja, never root. A
-preamble, then four parts in order, `toolchain`, `lab`, `infrahub` and `fylgja`; `--part`
-(repeatable) runs the named ones alone. Each item is verified, installed when it is
-missing and verified again, and prints one line, `bring-up: <part>: <item>: present`,
-`installed` or `skipped (<why>)`; every wait names what it waits for and its bound, and
-fails naming both on expiry. Exit 0: every part run completed and the last report printed.
-Exit 1: an item or a tier failed, named in the output. Exit 2: refused in the preamble,
-before any change. It never prints, logs or passes as an argument a value of `local/.env`
-and never uses `set -x`, so its output can go into a CI log. A second run on a host it set
-up installs nothing, keeps `local/.env` and the running Infrahub, runs both tiers again
-and ends the same way. On a fresh VM of the development host's shape a first run took 28
-minutes with the cEOS tar and 20 without, most of it the images' pulls and import; a second
-run takes about 7, most of it tier 2. Its contract is
+preamble, then five parts in order, `toolchain`, `lab`, `infrahub`, `orchestrator` and
+`fylgja`; `--part` (repeatable) runs the named ones alone. Each item is verified, installed
+when it is missing and verified again, and prints one line, `bring-up: <part>: <item>:
+present`, `installed` or `skipped (<why>)`; every wait names what it waits for and its
+bound, and fails naming both on expiry. Exit 0: every part run completed and the last
+report printed. Exit 1: an item or a tier failed, named in the output. Exit 2: refused in
+the preamble, before any change. It never prints, logs or passes as an argument a value of
+`local/.env` and never uses `set -x`, so its output can go into a CI log. A second run on a
+host it set up installs nothing, keeps `local/.env` and the running Infrahub, runs both
+tiers again and ends the same way. On a fresh VM of the development host's shape a first
+run took 28 minutes with the cEOS tar and 20 without, most of it the images' pulls and
+import, before 020 added the orchestrator's part; a second run takes about 7, most of it
+tier 2. Its contract is
 [specs/013-launch/contracts/bring-up-script.md](../specs/013-launch/contracts/bring-up-script.md).
 
 - **The preamble** changes nothing until `local/.env`. It refuses a release other than
@@ -41,12 +42,17 @@ run takes about 7, most of it tier 2. Its contract is
   every name `.env.example` documents filled: the tokens and Infrahub's Compose secrets
   made then, `FYLGJA_STATE_ROOT` the absolute `local/`, `FYLGJA_HOST_MEMORY_MB` the host's
   memory less 8 GiB, each login its image's published default, `FYLGJA_DEFAULT_SCOPE`
-  `tag:fylgja`, the fixtures' tag, and `FYLGJA_PSP_DIR` empty on purpose. A present file
-  is kept byte for byte; one kept from before 017 that names no `FYLGJA_DEFAULT_SCOPE` is
-  reported, saying to add `FYLGJA_DEFAULT_SCOPE='tag:fylgja'`, since the server then starts
-  with no default scope and refuses a request that names none, the checks' among them. Then the first report: the host, the
-  parts, where the tar was found or looked for, the platforms the host can run, and the
-  memory, with a warning under 24 GiB, since tier 3 was proved with 32.
+  `tag:fylgja`, the fixtures' tag, `FYLGJA_PSP_DIR` empty on purpose, and from 020 the
+  orchestrator's four: `FYLGJA_ORCHESTRATOR_ROOT` the absolute `local/orchestrator`,
+  `PREFECT_API_URL` `http://<the bridge's address>:4200/api`, and one `fylgja:<password>`
+  made then as both `PREFECT_API_AUTH_STRING` and `FYLGJA_ORCHESTRATOR_AUTH`. A present file
+  is kept byte for byte, and read by name alone: one that names no `FYLGJA_DEFAULT_SCOPE` is
+  reported, saying to add `FYLGJA_DEFAULT_SCOPE='tag:fylgja'`, since the orchestrator then
+  reads with no default scope and refuses a read that names none, the checks' among them;
+  one that lacks the orchestrator's names is reported, saying what to add, since the
+  `orchestrator` part cannot start its platform without them. Then the first report: the
+  host, the parts, where the tar was found or looked for, the platforms the host can run,
+  and the memory, with a warning under 24 GiB, since tier 3 was proved with 32.
 - **`toolchain`**: Ubuntu's `make`, `git`, `curl`, `jq`, `xz-utils`, `file`, `golang-go`,
   `python3-venv` and `shellcheck`, in one `apt-get install` of those missing; Go (its row
   below); golangci-lint 2.14.0 into `/usr/local/bin`; the Temporal CLI 1.9.1 into
@@ -77,25 +83,33 @@ run takes about 7, most of it tier 2. Its contract is
   artifacts, seeded when absent, cleaned and seeded when incomplete, the seed run once
   more on `graphql: None`. It runs alone on any host with `docker`, `go`, `curl` and `jq`
   on the `PATH`, and is what CI's contract job runs.
+- **`orchestrator`** (020, [D-065](decisions.md#d-065)): `orchestrator/.venv` by `make
+  orchestrator-venv`; the orchestrator's platform, `prefect server start` on the host's
+  Docker bridge, where Infrahub's task workers reach it, under `PREFECT_HOME`
+  `local/orchestrator/prefect`, logging to `local/prefect.log`, awaited until it answers
+  `local/.env`'s auth string as the venv's Prefect; and the runner, `fylgja-orchestrator
+  serve`, logging to `local/orchestrator.log`, read to report serving the six deployments
+  on the platform. Each is started detached and verified, and one already running is kept
+  only when it is this venv's, writes to its log under `local/` and answers as it should,
+  the runner also only when no file of `orchestrator/src` is newer than it and the platform
+  was not started by this run; any other is restarted, saying why. It recreates nothing of
+  Infrahub's: a changed override reaches the task workers by the `infrahub` part's `up -d`.
 - **`fylgja`**: `make build`, checked static with `file`; then the dev server, the worker
-  and the API's server, started detached as the three-process paragraph below starts
-  them, logging under `local/`; then tier 1 and tier 2, each timed, so that tier 2's
-  `TestChecksInsideInfrahub` reaches this build's server on the bridge. A process already
+  and the API's server, started detached as the five-process paragraph below starts
+  them, logging under `local/`; then tier 1 and tier 2, each timed. A process already
   running from this tree's `bin/fylgja` is `present` when its output is its log under
-  `local/` and, for the server, its arguments listen on loopback and on the bridge; one on
-  a replaced or `(deleted)` binary, writing elsewhere (`make worker`, `make serve`) or
-  listening on less is restarted, saying why. Each report is read: the dev server
-  `SERVING`, and the worker's and the server's naming every package the host can run with
-  its login set, the server's naming loopback and the bridge as well, so a server on
-  loopback alone is restarted, and, when `local/.env` names `FYLGJA_DEFAULT_SCOPE` (read by
-  name, never by value), its `default scope: tag:…` line, so a server started before the
-  file named one, whose report says `default scope: unset`, is restarted rather than left
-  to refuse tier 2's scopeless checks `scope.unset`.
+  `local/` and, for the server, it listens on loopback alone and holds no Infrahub
+  variable, since the core reads no source of truth (020); one on a replaced or
+  `(deleted)` binary, writing elsewhere (`make worker`, `make serve`) or started otherwise
+  is restarted, saying why. Each report is read: the dev server `SERVING`, and the
+  worker's and the server's naming every package the host can run with its login set, the
+  server's naming `127.0.0.1:7650`.
   The last report gives each part's counts, the tar and the platforms again, both tiers'
-  times, how to run tier 3, the three processes with their pids and logs, the server's
-  two addresses and that the token crosses the bridge in the clear, how to stop them
-  (`pkill -x fylgja; pkill -f 'temporal server start-dev'`), and `DONE` with the run's
-  time.
+  times, how to run tier 3, the five processes with their pids and logs, the platform's
+  address and that its auth string crosses the bridge in the clear, the server on
+  `127.0.0.1:7650` alone, how to stop them (`pkill -f '<venv>/bin/fylgja-orchestrator
+  serve'`, `pkill -f '<venv>/bin/prefect server start'`, `pkill -x fylgja`, `pkill -f
+  'temporal server start-dev'`), and `DONE` with the run's time.
 
 **The cEOS tar.** The operator downloads `cEOS-lab-4.32.0.2F.tar` from Arista's software
 downloads, which need an account; the portal may name it `.tar.xz`, and the file is
@@ -126,7 +140,7 @@ architecture](#test-architecture)); a default run refuses before any case, namin
 | Temporal Go SDK | v1.49.0 (`go.temporal.io/api` v1.63.5) | in `go.mod` with `openconfig/gnmi` v0.14.1 and `grpc` v1.83.2, all pure Go. Its `testsuite` is the tier-1 workflow harness |
 | gnmic | 0.49.0 | a hand tool for asking a node something, or for disabling a port outside Fylgja; **not** a dependency. The readiness probe and `twin verify` are in-process gNMI clients, so nothing Fylgja runs shells out to gnmic |
 | golangci-lint | 2.14.0 | must be the v2 line: `.golangci.yml` declares `version: "2"`, which v1 rejects |
-| Python | 3.14.4 | `.venv/` at the root holds `infrahub-sdk[ctl]` 1.23.2, whose `infrahubctl` is the operator's hand tool for marking stages and connects as Admin. The repository does not ignore `.venv`: the `.gitignore` of `*` inside it keeps the tree clean, and a venv made by hand needs one too |
+| Python | 3.14.4 | two venvs. `.venv/` at the root holds `infrahub-sdk[ctl]` 1.23.2, whose `infrahubctl` is the operator's hand tool for marking stages and connects as Admin. `orchestrator/.venv/` (020, `make orchestrator-venv`) holds the orchestrator at `orchestrator/pyproject.toml`'s pins: Prefect 3.8.8 with `fastapi` 0.150.0 beside it (3.9.0 and the SDK need disjoint ranges of `whenever`, and 3.8.8's server fails at start on a later FastAPI), `infrahub-sdk` 1.23.2, `whenever` 0.9.5, `pydantic` 2.14, `httpx` 0.28, `pytest` 9.2.0 and `ruff` 0.17.3, the package installed editable, so its `fylgja-cli` and `fylgja-orchestrator` run this tree's code. The repository does not ignore either: the `.gitignore` of `*` inside each keeps the tree clean, and a venv made by hand needs one too |
 | ShellCheck | 0.11.0 | Ubuntu 26.04's package. The lint job runs the runner's over both scripts |
 | SR Linux image | `ghcr.io/nokia/srlinux:24.7.1` | public, 5.19 GB as Docker counts it. Its package says `acquisition: public_registry`, so a deploy may pull it; the lab part pulls it. Boots once AppArmor allows its `rsyslogd` (containerlab row) |
 | cEOS image | `ceos:4.32.0.2F`, imported | **account-gated: never vendored, never pulled.** Imported from the tar above, `docker import cEOS-lab-4.32.0.2F.tar ceos:4.32.0.2F`: one layer, whose digest is the sha256 of the decompressed tar (`sha256:09ab9635…` for the recorded one), and no `Cmd`, as `docker import` leaves it; containerlab's `ceos` kind supplies the command. 2.91 GB as Docker counts it. Its package says `acquisition: account_gated`, so the host check verifies presence under exactly that reference and **refuses the run rather than pulling**; the same image under another tag is absent |
@@ -134,8 +148,11 @@ architecture](#test-architecture)); a default run refuses before any case, namin
 **Credentials.** `local/.env` (git-ignored, mode `0600`) is the only file that holds a
 value: the preamble writes it, and `.env.example` documents every name and no value. It
 holds the Infrahub address and token, both node logins — `FYLGJA_SRLINUX_USERNAME`/`_PASSWORD`
-and `FYLGJA_EOS_USERNAME`/`_PASSWORD`, each its image's published default — and the API's
-token `FYLGJA_API_TOKEN`. It also holds Infrahub's Compose values, which Compose reads
+and `FYLGJA_EOS_USERNAME`/`_PASSWORD`, each its image's published default — the API's
+token `FYLGJA_API_TOKEN`, and from 020 the orchestrator's platform's basic-auth string, as
+`PREFECT_API_AUTH_STRING` for the platform and its clients and as
+`FYLGJA_ORCHESTRATOR_AUTH` for the Compose override, which hands it to the task workers.
+It also holds Infrahub's Compose values, which Compose reads
 through `--env-file` and Fylgja never reads: `COMPOSE_PROJECT_NAME` (`fylgja-infrahub`),
 `INFRAHUB_INITIAL_ADMIN_TOKEN` (`INFRAHUB_API_TOKEN` carries the same value),
 `INFRAHUB_INITIAL_ADMIN_PASSWORD`, `INFRAHUB_INITIAL_AGENT_TOKEN` and
@@ -146,32 +163,47 @@ it with `set -a; . local/.env; set +a`. Fylgja reads the process environment onl
 a file — and never echoes, persists, or embeds a credential in a bundle, a finding, or a
 log line.
 
-**Environment variables.** One binary runs in three roles, and each reads its own
-([D-040](decisions.md#d-040)). **A client's command** (every command but the two roles)
-reads the API's two variables and nothing else of Fylgja's, Infrahub's or a node's
+**Environment variables.** The core's binary runs in three roles, and each reads its own
+([D-040](decisions.md#d-040)); the orchestrator reads its own beside them (below). **A
+client's command** of the core's (every `fylgja` command but the two roles) reads the
+API's two variables and nothing else of Fylgja's, Infrahub's or a node's
 (`TestTheClientReadsTheAPIsTwoVariablesAlone`, `internal/cli`):
 
 | Variable | Default | Read by |
 |---|---|---|
-| `FYLGJA_API_ADDRESS` | `127.0.0.1:7650` | a client alone: `host:port`, or an `http://` or `https://` URL for a proxy the operator runs. The server's address is `fylgja serve --listen`, which has no variable |
-| `FYLGJA_API_TOKEN` | none | a client, which sends it with every request and sends nothing when it is unset, holds a character no request header can carry, such as a carriage return, or ends in a space or a tab (`api.token.refused`); and the server, which compares it and refuses to start without it; never the worker. Never printed, logged or persisted ([D-042](decisions.md#d-042)) |
+| `FYLGJA_API_ADDRESS` | `127.0.0.1:7650` | a client alone, and the orchestrator as one: `host:port`, or an `http://` or `https://` URL for a proxy the operator runs. The server's address is `fylgja serve --listen`, which has no variable |
+| `FYLGJA_API_TOKEN` | none | a client, which sends it with every request and sends nothing when it is unset, holds a character no request header can carry, such as a carriage return, or ends in a space or a tab (`api.token.refused`); the orchestrator, as a client; and the server, which compares it and refuses to start without it; never the worker. Never printed, logged or persisted ([D-042](decisions.md#d-042)) |
 
 **The server and the worker** read the rest, at start or when a request needs them, and
 never a client:
 
 | Variable | Default | Read by |
 |---|---|---|
-| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | none | the server alone, for every command that reads intent (`intent read`, `schema check`, `stage list` and `stage plan`, every `twin create` from a branch or a stage and its dry run, from the resolution to the read, `twin step`'s stage target, and `twin rehearse`'s plan and its stages read again once the run has closed); never `twin create --snapshot` or `twin step --snapshot`, which read none. Never the worker, which reads no source of truth from 019 ([D-062](decisions.md#d-062)): one started from `local/.env` carries both and reads neither |
-| `FYLGJA_TEMPORAL_ADDRESS` | `localhost:7233` | the server, for every command that starts, follows, cancels or lists runs (`twin show` and `twin verify` best-effort); `worker run` |
+| `FYLGJA_TEMPORAL_ADDRESS` | `localhost:7233` | the server, for every command that starts, follows, reads, interrupts, cancels or lists runs (`twin show` and `twin verify` best-effort); `worker run` |
 | `FYLGJA_TEMPORAL_NAMESPACE` | `default` | the same |
 | `FYLGJA_STATE_ROOT` | `local` under the working directory, made absolute at start | the server and the worker, each resolving it once at start: start both from the repository root, or set it (`make worker` and `make serve` set it absolute). The conformance suite's boot half reads the twin under it and refuses it unset or relative, since `go test` runs in the package's directory (`scripts/e2e.sh` exports it absolute) |
 | `FYLGJA_HOST_MEMORY_MB` | unset: the host check warns with the memory sum and proceeds | the worker's host check; the server's dry runs and `twin step`'s host check; both roles' start-up reports |
 | `FYLGJA_SRLINUX_USERNAME`, `FYLGJA_SRLINUX_PASSWORD` | unset: the host check refuses | the worker's readiness probe and configuration push; the conformance suite's boot half; `twin verify`'s reads, which the server makes; the dry runs and both roles' start-up reports check presence only. The names are the SR Linux package's `readiness.login` and `config.push.login` data, not code |
 | `FYLGJA_EOS_USERNAME`, `FYLGJA_EOS_PASSWORD` | unset: the host check refuses a bundle with an EOS node | the same, for a node whose package is `arista_eos`. The names are that package's data too: a host check reads the login names of each node's own package, so a twin of SR Linux alone never asks for these |
-| `FYLGJA_DEFAULT_SCOPE` | none: the server starts, reports `default scope: unset (a request that names no scope is refused)`, and refuses such a request `scope.unset` | the server alone, at start: the scope, `tag:<name>`, a request that names none is read under (`twin create`, `twin rehearse`, `intent read`, `stage plan` and `stage list`, each also taking `--scope`; the checks `fylgja-step` and `fylgja-twin` send none). A value that is not `tag:<name>` refuses its start, exit 2, before it listens. Never the worker, which reads no intent, nor a client. The bring-up script scaffolds `tag:fylgja` ([specs/017-dcim-reader/contracts/scope-and-commands.md](../specs/017-dcim-reader/contracts/scope-and-commands.md)) |
-| `FYLGJA_PSP_DIR` | none: embedded packages only | the server and the worker, each also taking `--psp-dir`, and the boot half. A client's command has no `--psp-dir` (`unknown flag: --psp-dir`, exit 2, nothing sent), and is checked against the server's packages |
+| `FYLGJA_PSP_DIR` | none: embedded packages only | the server and the worker, each also taking `--psp-dir`, and the boot half; the orchestrator's adapter too, for the overrides' `platform` alone. A client's command has no `--psp-dir` (`unknown flag: --psp-dir`, exit 2, nothing sent), and is checked against the server's packages |
 
-The server needs `containerlab` and `docker` on its `PATH`. A client needs neither.
+From 020 neither role reads `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` or
+`FYLGJA_DEFAULT_SCOPE` ([D-065](decisions.md#d-065)): a worker or server started from
+`local/.env` carries them and reads none, and the bring-up script starts the server without
+them. The server needs `containerlab` and `docker` on its `PATH`. A client needs neither.
+
+**The orchestrator** reads these, each where a request needs it
+([contracts/orchestrator.md](../contracts/orchestrator.md), "Environment"):
+
+| Variable | Default | Read by |
+|---|---|---|
+| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | none: a read is refused `operation.failed` before anything is read | the adapter, in `fylgja-cli`'s flows, the runner's and the adapter as a tool; the rehearse flow's post. Never the core, never the checks |
+| `FYLGJA_DEFAULT_SCOPE` | none: a read that names no scope is refused `scope.unset` | the adapter: the scope, `tag:<name>`, a request that names none is read under (`twin create`, `twin rehearse`, `intent read`, `stage plan`, `stage list`, each also taking `--scope`; `twin step` with no twin recorded; the checks, which send none, through the runner). A value that is not `tag:<name>` is `scope.invalid` naming the variable. The bring-up script scaffolds `tag:fylgja` |
+| `FYLGJA_ORCHESTRATOR_ROOT` | `local/orchestrator` under the working directory | `fylgja-cli` and the runner: the orchestrator's store and record (`make orchestrator-serve` sets it absolute) |
+| `PREFECT_API_URL`, `PREFECT_API_AUTH_STRING` | unset: `fylgja-cli` runs its flow on Prefect's ephemeral server; the runner refuses to start | `fylgja-cli` and the runner: the platform, `http://<bridge>:4200/api`, and its `<user>:<password>`; `make prefect-server` starts the platform with the second as its `PREFECT_SERVER_API_AUTH_STRING` |
+| `PREFECT_HOME` | Prefect's own, under the home directory | the platform's database (`local/orchestrator/prefect`, as the make targets set it), and `fylgja-cli`'s ephemeral server when `PREFECT_API_URL` is unset |
+| `FYLGJA_PSP_SHIPPED` | the repository's `psp/`, found from the editable install | the adapter, when the package is installed elsewhere than this tree |
+| `FYLGJA_ORCHESTRATOR_ADDRESS`, `FYLGJA_ORCHESTRATOR_AUTH` | none: each check fails naming the unset one | the two checks alone, in Infrahub's task workers, from the Compose override: `host.docker.internal:4200` and `local/.env`'s auth string |
 
 **Temporal.** The toolchain part installs the CLI (`curl -sSf
 https://temporal.download/cli.sh | sh -s -- --version 1.9.1`), and the `fylgja` part runs
@@ -183,43 +215,49 @@ temporal server start-dev --db-filename local/temporal.db
 
 Web UI at http://localhost:8233. `make temporal-dev` wraps the command.
 
-**Three processes on the lab host.** The dev server (`make temporal-dev`), the worker
-(`make worker`) and the API's server ([D-041](decisions.md#d-041)). `make serve` listens
-on loopback alone, which Infrahub's task workers cannot reach: the lab host's server is
-started with the two `--listen` values below, as `CLAUDE.md`'s start line gives them.
-The script's `fylgja` part leaves all three running. Start the worker and the server from
-shells that loaded `local/.env`, from the repository root,
-so they share one state root and one environment, the server adding `FYLGJA_API_TOKEN`.
-**The server listens on loopback and on the host's Docker bridge**
-([D-050](decisions.md#d-050)): `--listen 127.0.0.1:7650 --listen <bridge>:7650`, the
-bridge's address read with `docker network inspect bridge -f '{{(index .IPAM.Config
-0).Gateway}}'` (`172.17.0.1` by Docker's default), as `CLAUDE.md`'s start line and the
-script's `fylgja` part start it. Its report names both addresses, the bridge's followed by
-the line saying the token is sent unencrypted on it. The part keeps a running worker or
-server only when its output is `local/worker.log` or `local/server.log`, so that the log's
-last report is its own, and, for the server, when its arguments listen on both addresses;
-it restarts any other, saying why, so one from `make worker` or `make serve` is replaced.
-Infrahub's task workers, where the checks run as clients, reach it there as
-`host.docker.internal:7650`: the Compose override
-gives them the `host-gateway` entry that name resolves to, `FYLGJA_API_ADDRESS` and
-`FYLGJA_API_TOKEN`, which Compose reads from `local/.env`. A changed override reaches the
-task workers only when they are recreated: `compose up -d` with the project's flags, which
-recreates the services whose configuration moved and leaves the rest and the volumes, and
-which the script's `infrahub` part runs whenever it copies or replaces the override.
-Every other command is a client of the server: from a shell that holds `FYLGJA_API_TOKEN`
+**Five processes on the lab host.** The core's three: the dev server (`make
+temporal-dev`), the worker (`make worker`) and the API's server (`make serve`,
+[D-041](decisions.md#d-041)); and the orchestrator's two: its platform (`make
+prefect-server`) and its runner (`make orchestrator-serve`) ([D-065](decisions.md#d-065)).
+The script's `orchestrator` and `fylgja` parts leave all five running. Start each from a
+shell that loaded `local/.env`, from the repository root, so the core's two share one state
+root and one environment, the server adding `FYLGJA_API_TOKEN`, and the orchestrator's two
+one root, `local/orchestrator`. **The server listens on loopback alone**, `127.0.0.1:7650`,
+as `make serve` and `CLAUDE.md`'s start line start it; from 015 until 020 it listened on
+the host's Docker bridge as well, for Infrahub's task workers ([D-050](decisions.md#d-050),
+superseded in its listener by D-065). Its report names the address. The part keeps a
+running worker or server only when its output is `local/worker.log` or `local/server.log`,
+so that the log's last report is its own, and restarts any other, saying why, so one from
+`make worker` or `make serve` is replaced. **The platform listens on the bridge**:
+`PREFECT_API_URL`'s address, `http://<bridge>:4200/api`, the bridge's address read with
+`docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'` (`172.17.0.1` by
+Docker's default); the host's own processes reach it there too, so one listener serves
+both. Its basic-auth string crosses the bridge in the clear. Infrahub's task workers, where
+the checks run as its clients, reach it as `host.docker.internal:4200`: the Compose override
+gives them the `host-gateway` entry that name resolves to, `FYLGJA_ORCHESTRATOR_ADDRESS` and
+`FYLGJA_ORCHESTRATOR_AUTH`, which Compose reads from `local/.env`, and no API token. A
+changed override reaches the task workers only when they are recreated: `compose up -d`
+with the project's flags, which recreates the services whose configuration moved and leaves
+the rest and the volumes, and which the script's `infrahub` part runs whenever it copies or
+replaces the override.
+Every `fylgja` command is a client of the server: from a shell that holds `FYLGJA_API_TOKEN`
 alone (and `FYLGJA_API_ADDRESS` off `127.0.0.1:7650`), on the lab host or, through
 `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, on another machine with a binary built from
-this tree. The server dials nothing at start and keeps nothing between two requests, so
-it starts before or after the dev server and Infrahub, and a restart loses nothing but the
-answers it was sending, whose runs go on. **Restart the worker and the server after every
-rebuild**: each keeps serving from a binary replaced under it, which `/proc/<pid>/exe`
-then reads as `(deleted)`.
+this tree. `fylgja-cli` is `orchestrator/.venv/bin/fylgja-cli`, run with `local/.env`
+loaded, on the lab host. The server dials nothing at start and keeps nothing between two
+requests, so it starts before or after the dev server and Infrahub, and a restart loses
+nothing but the answers it was sending, whose runs go on. **Restart the worker and the
+server after every rebuild**: each keeps serving from a binary replaced under it, which
+`/proc/<pid>/exe` then reads as `(deleted)`. The runner runs the editable install's code as
+it was when it started, so restart it after a change under `orchestrator/src`.
 
-**What Infrahub needs.** Fylgja reads intent and each device's configuration artifact
-from Infrahub, and never writes to it; the fixture tool (`cmd/fylgja-fixture`) is the
-only binary that does. The two checks this repository registers write one thing, a thread
-on the proposed change they run for, through Infrahub's own task worker
-([D-053](decisions.md#d-053)). Infrahub's `main` carries:
+**What Infrahub needs.** The orchestrator's adapter reads intent and each device's
+configuration artifact from Infrahub, and the core never reaches it
+([D-065](decisions.md#d-065)); the fixture tool (`cmd/fylgja-fixture`) is the one binary
+that writes to it. The rehearse flow writes one thing, a thread on the proposed change it
+rehearsed, through the adapter's client ([D-053](decisions.md#d-053), its thread kept by
+D-065); the two checks this repository registers write nothing. Infrahub's `main`
+carries:
 
 - **the schema**: the schema library's DCIM at `opsmill/schema-library@26336e9`,
   vendored byte for byte under `schema/dcim/` ([D-057](decisions.md#d-057)), and the stage
@@ -229,8 +267,8 @@ on the proposed change they run for, through Infrahub's own task worker
   library and implements none of its kinds. `-prepare-main` loads the stage and probe
   kinds wherever absent, then the library only on a `main` holding none of its kinds, and
   refuses one holding any, writing nothing of the library, since a library already there
-  is its operator's: `fylgja schema check` says whether it is the
-  one the reader reads;
+  is its operator's: `fylgja-cli schema check` says whether it is the
+  one the adapter reads;
 - **the empty group `fylgja-devices`**, the artifact definition's target; a device renders
   only once it joins it;
 - **the artifacts template**, which this repository carries: `.infrahub.yml` at the root,
@@ -251,7 +289,8 @@ on the proposed change they run for, through Infrahub's own task worker
   (`fylgja_twin.py`, `FylgjaTwin`, timeout 4,260 s), beside their shared glue,
   `fylgja_api.py`, which each imports relatively. Infrahub's task workers run both on every
   proposed change at its creation and on a re-run of its user checks, each reaching the
-  server on the bridge (the three-process paragraph above). The registration imported them
+  orchestrator's platform on the bridge (the five-process paragraph above) and triggering
+  a flow there, `stage-plan` or `twin-rehearse`. The registration imported them
   from `origin`'s `main` at `999456e` on 2026-10-19, and at `d70ad24` on 2026-10-20, when
   `fylgja-twin`'s report moved from a comment to a thread ([D-053](decisions.md#d-053));
   it reads `c006bf9`, imported on 2026-10-26 (017), whose template query reads the
@@ -310,8 +349,8 @@ library, finding the stage kind, the group and the registration present; the tem
 commit, once on `origin`'s `main`, is imported (the operator's gate: until then no
 artifact renders, so the fixture cannot be re-seeded and tier 2 cannot run, while tier 1
 can); `make infrahub-clean` and `make infrahub-seed` re-seed the fixture in the library's
-kinds, since it is never rebased; and `make sdl` and `make generate` refetch the SDL and
-the client from the migrated `main`. The development host's `main` was migrated on
+kinds, since it is never rebased; and, until 020 removed both, `make sdl` and `make
+generate` refetched the SDL and the client from the migrated `main`. The development host's `main` was migrated on
 2026-10-26, its hash moving from `e43a1cde…` to `7c413536…`. A fresh install, CI's among
 them, never had the removed kinds: `-prepare-main` loads the library on its empty `main`.
 
@@ -319,8 +358,8 @@ them, never had the removed kinds: `-prepare-main` loads the library on its empt
 branch-agnostic, and stages are read there whatever branch their proposed change is from
 ([D-045](decisions.md#d-045)). A test opens proposed changes only from its own
 `fylgja-test-*` branch, through `testsupport`, and deletes what it wrote, stages first. The
-contract tier leaves none behind: after `make test-contract`, `fylgja stage list` prints
-`no open proposed change`. `fylgja-fixture` has no proposed change, and the fixture tool
+contract tier leaves none behind: after `make test-contract`, `fylgja-cli stage list`
+prints `no open proposed change`. `fylgja-fixture` has no proposed change, and the fixture tool
 refuses to open one on it. A stage outlives its branch, so a throwaway branch's stages and
 proposed changes are deleted with it, by `-delete`; a proposed change's threads, their
 comments and its validators go with it. An operator's own proposed changes and
@@ -328,7 +367,7 @@ stages are the operator's, marked by object file, the UI or `infrahubctl`
 ([schema/README.md](../schema/README.md)), and nothing here touches them. Once the
 registration has imported the checks, every proposed change opened on this host runs
 `fylgja-step` and `fylgja-twin` at its creation, and once it is ready for review a re-run
-of its user checks rehearses it on a twin: mark a proposed change ready only after its
+of its user checks rehearses it on a twin, through the orchestrator's platform and runner: mark a proposed change ready only after its
 creation's user checks have concluded, as tier 3's case 9 does, and never re-run a ready
 one's checks while tier 2 runs.
 
@@ -336,20 +375,21 @@ one's checks while tier 2 runs.
 
 ## Repository layout
 
-Single Go module, `github.com/happypathnetworking/fylgja`, one binary
-([D-018](decisions.md#d-018)).
+The core is a single Go module, `github.com/happypathnetworking/fylgja`, one binary
+([D-018](decisions.md#d-018)); the orchestrator is one Python project under
+`orchestrator/`, with its own venv, tests and linter, in the same repository
+([D-065](decisions.md#d-065)).
 
 ```
 cmd/fylgja/            main: the root command, `--json`, `--version` (the Makefile's `-X main.version`); the two roles, `fylgja serve` and `fylgja worker run`
-cmd/fylgja-fixture/    build tag `fixture`: the schema load (the library, then the stage and probe kinds), the seeds in the library's kinds (group join, generate), `main`'s preparation and a demo's window, delete, SDL fetch, the tiers' changes to a throwaway branch, and its proposed change and stages; a declaration's probes written into `FylgjaProbe` on `main` and deleted (`-probes`, `-delete-probes`). The only binary that writes to Infrahub
+cmd/fylgja-fixture/    build tag `fixture`: the schema load (the library, then the stage and probe kinds), the seeds in the library's kinds (group join, generate), `main`'s preparation and a demo's window, delete, the tiers' changes to a throwaway branch, and its proposed change and stages; a declaration's probes written into `FylgjaProbe` on `main` and deleted (`-probes`, `-delete-probes`). The only binary that writes to Infrahub
 embed.go               package fylgja: //go:embed of schema/*.yaml, schema/dcim/*.yml with the library's LICENSE.txt, psp/*.yaml, psp/*.json, probes/*.yaml, probes/*.json
 internal/api/          the API's wire (version, paths, headers, request, frames, event, files, problem, the bound) and the client that speaks it; imports internal/findings alone
-internal/server/       the API's server: the thirteen handlers that hold the commands' logic, the token, the per-request console, the streams and the log; imports the core
+internal/server/       the API's server: the handlers of the core's eleven operations, the token, the per-request console, the streams and the log; `server.Compile` (`compile.go`), every compile's one path; imports the core
 internal/cli/          the client's commands: each builds one request, prints what comes back and exits by the document; imports cobra, internal/api, internal/findings and internal/tree and nothing else of the module (test-enforced)
 internal/tree/         a directory of regular files read into and written from a map, shared by internal/bundle and the client
-internal/intent/       the Infrahub reader of the schema library's DCIM (genqlient): the mapping (`mapping.go`, the one place that knows the library's kinds), conformance against its table, the read in two queries (the scope's devices by their tag, then their physical ports by the devices' ids, each cable through its port's connector) and the CTM projection; the stage reader on the default branch's unnamed endpoints (proposed changes and their stages, orphans, the branch point, the artifact validators) and a scope's stamps, read in the read's two shapes, with the query groups that name Infrahub's own account (D-058, D-060); the probe reader, `FylgjaProbe` on the default branch as declarations (016)
 internal/ctm/          Canonical Topology Model types and JSON
-internal/validate/     completeness and intent rules on the CTM, and the probes' placement through the compiler's; run by `intent read` and `twin compile` (on a snapshot's CTM)
+internal/validate/     completeness and intent rules on the CTM, and the probes' placement through the compiler's; run by `twin compile`, a create, a step and `twin diff` (on a snapshot's CTM)
 internal/compiler/     CTM and probes → bundle; pure; `PlaceProbes` (`synthesize.go`), each probe's two synthesized hosts placed before the survey (016)
 internal/bundle/       bundle format, canonical hashing, bundle store
 internal/snapshot/     the snapshot (018, D-061): the document wrapping a CTM and, from 016, its probes, its take, its id over the hashed bytes, its strict reading (a `1` as a `2` with no probe) and the snapshot store; imports internal/ctm, internal/probe, internal/findings and the standard library alone (test-enforced)
@@ -358,27 +398,28 @@ internal/probe/        the one definition of a probe (016, D-064): the declarati
 internal/conformance/  the conformance suite: the pure half (the probe packages' check among it), the boot half, the version rule; imported by no product code (test-enforced); reads nodes through internal/verify's readers
 internal/verify/       the readers of a booted node; the assertions derived from a manifest, each probe's burst among them (016), the record's claims, one read of the twin, the bounded wait and the report. Imports compiler, psp, probe, findings and lab/wire, never internal/lab (which imports it) or internal/conformance; walked by the platform grep
 internal/findings/     Finding, rule identifiers, the --json document, text and JSON rendering, exit codes
-internal/stages/       a proposed change's stages: the reference, its resolution to (branch, at), the staleness rule, the list and the plan; a step's target; walked by the platform grep
 internal/step/         the step between two bundles, a pure function of the two, held pure by a test; the push plan and the unapplied changes a step acts on
-internal/rehearsal/    a rehearsal's pure rules and renderings: the deadline, each stage's verdict, the report's block, its text lines, the reproduce commands and the markdown; imports findings, lab/wire and step alone, held pure by a test (no I/O, no clock, no environment); walked by the platform grep
-internal/testsupport/  build tag `contract || fixture`: the contract-test harness; never imported by product code (test-enforced)
-internal/checks/       tier 2's proof of the two Infrahub checks inside a running Infrahub (build tag `contract`): the tree's infrahub/checks/ served from the Docker bridge under test-only names; no product code
-internal/stage/        the read and compile stages, which serve the server alone: its stage handlers, its create and dry run, stage plan, twin step and twin rehearse; no provisioning activity reads or compiles (019); imports no Temporal
-internal/provision/    Temporal workflows (provision, destroy, step, rehearse), each started with a snapshot id and a bundle id, none reading a source of truth; the workflow service's client, which the server uses; worker registration and start-up report
+internal/testsupport/  build tag `contract || fixture`: the contract-test harness the fixture tool and internal/checks use; never imported by product code (test-enforced)
+internal/checks/       tier 2's proof of the two Infrahub checks inside a running Infrahub (build tag `contract`): the tree's infrahub/checks/ served from the Docker bridge under test-only names, reaching the orchestrator's platform; no product code
+internal/provision/    Temporal workflows (provision, destroy, step), each started with a snapshot id and a bundle id, none reading a source of truth; the workflow service's client, which the server uses to start, follow, read and interrupt runs; worker registration and start-up report
 internal/lab/          host-bound activities: containerlab shell-out, host check and image presence, staging, deploy, the gNMI readiness probe (TLS or plaintext) and a probe's host's exec readiness, the configuration push (json_rpc, eapi; merge or replace), twin.json; containerlab's plan and the reconcile, the step's stage and record, the step's flows (StartFlows, ReadFlows) and the step's VerifyTwin; the burster, `docker exec` of a probe's burst, which the server's `twin verify` uses too
 internal/lab/wire/     types only: activity names and the payloads crossing the task queue; workflow files import it, never internal/lab
 internal/*/testdata/contracts/<feature>/
                        frozen copies of older formats' schemas, which additivity tests read; never edited
-contracts/             the current formats' contracts: the CLI and the API (cli.md, api.md) and every JSON schema (findings, show, twin, manifest, CTM, snapshot, probes, PSP, step, verify, stages, rehearsal, API frames); the tests read them here
-schema/                dcim/, the schema library's six DCIM files at opsmill/schema-library@26336e9, vendored byte for byte with its licence and a README of their SHA-256s, fylgja-stage.yaml, the stage kind, and fylgja-probe.yaml, the probe kind (016); infrahub.graphql, the default branch's SDL, committed, and genqlient's input (`make sdl`); README, with the guide to marking a stage
-psp/                   platform support packages (YAML) + JSON schema; README's Supported packages table
+orchestrator/          the orchestrator (020, D-065): pyproject.toml (the package fylgja_orchestrator, its console scripts fylgja-cli and fylgja-orchestrator, its pins: Prefect 3.8.8, fastapi 0.150.0, infrahub-sdk 1.23.2; pytest's markers; ruff's rules), its venv .venv (git-ignored by a .gitignore of * inside, made by make orchestrator-venv)
+orchestrator/src/fylgja_orchestrator/
+                       adapters/infrahub/ (the Infrahub adapter, a tool of its own: the client, the mapping, conformance, the read, stamps, events, stages, probes, the snapshot and its id, intrinsic validation, the report's post), documents/ (the stages, plan and rehearsal blocks, their text and markdown, the deadline, the findings document, rules.py), flows/ (the six flows and stage list's body), core.py (the core's client), record.py (the store and the record), cli.py (fylgja-cli), serve.py (the runner)
+orchestrator/tests/    unit/ (tier 1), contract/ (tier 2, marked `contract`), golden/ (the stages, plan and rehearsal renderings captured from the Go renderers before they left, 020's T003), data/ (copies of the core's fixtures and Infrahub's schema and answers, each README saying where it came from)
+contracts/             the current formats' contracts: the core's CLI and API (cli.md, api.md), the orchestrator's (orchestrator.md), the checks' (checks.md) and every JSON schema (findings, show, twin, manifest, CTM, snapshot, probes, PSP, step, verify, stages, rehearsal, API frames); the tests read them here
+schema/                dcim/, the schema library's six DCIM files at opsmill/schema-library@26336e9, vendored byte for byte with its licence and a README of their SHA-256s, fylgja-stage.yaml, the stage kind, and fylgja-probe.yaml, the probe kind (016); README, with the guide to marking a stage. The SDL, infrahub.graphql, left with genqlient at 020
+psp/                   platform support packages (YAML) + JSON schema; README's Supported packages table; read by the core embedded and by the orchestrator's adapter as files
 probes/                probe packages (YAML), one per format, + JSON schema (format 0.1); ping.yaml, the one shipped (016)
 .infrahub.yml          the artifacts template's manifest and the two checks' registration, which Infrahub reads at the repository root
-SECURITY.md            the threat model (one bearer token over HTTP on loopback and the Docker bridge, the credentials the server and the worker hold) and how to report a vulnerability
-infrahub/              the template's query and Jinja2 body (queries/, templates/), and the two checks, fylgja-step and fylgja-twin, Python glue Infrahub's task workers run as clients of the API (checks/)
+SECURITY.md            the threat model (the core's bearer token on loopback, the orchestrator's platform credential on the Docker bridge, what each process holds) and how to report a vulnerability
+infrahub/              the template's query and Jinja2 body (queries/, templates/), and the two checks, fylgja-step and fylgja-twin, Python glue Infrahub's task workers run as clients of the orchestrator's platform (checks/)
 testdata/              golden bundles, fixture CTMs and the same three wrapped as snapshots (testdata/snapshot/), with the three-node one wrapped with a probe beside them (three-node-probed.json), probe declarations (probes/: n1-loop, n2-loop, e1-loop, and invalid/, one file per refusal), test-only packages (psp/heterogeneous, psp/lossy, psp/defects; never embedded), the boundary test's leaky fixture
-scripts/bring-up.sh    the bring-up script: a fresh Ubuntu 26.04 host to tiers 1 and 2 and the three processes; its `infrahub` part alone is CI's contract job (Local environment, above)
-scripts/infrahub/      docker-compose.override.yml, copied beside Infrahub's published Compose file under local/infrahub/: the 1.11.2 pin, the Neo4j cap, and the task workers' host-gateway entry and the API's two variables, the token read from local/.env
+scripts/bring-up.sh    the bring-up script: a fresh Ubuntu 26.04 host to tiers 1 and 2 and the five processes; its `infrahub` part alone is CI's contract job (Local environment, above)
+scripts/infrahub/      docker-compose.override.yml, copied beside Infrahub's published Compose file under local/infrahub/: the 1.11.2 pin, the Neo4j cap, and the task workers' host-gateway entry and the orchestrator's platform's two variables, the auth string read from local/.env
 scripts/e2e.sh         the body of `make test-e2e`
 scripts/diagrams.sh    writes the import graph below and docs/diagrams/topologies.md; run by `make diagrams`
 scripts/linkcheck.py   checks every relative link and anchor in the tracked Markdown; run by `make linkcheck`, by hand
@@ -388,12 +429,12 @@ scripts/merge-tasks.py  git's merge driver for specs/*/tasks.md (.gitattributes)
 scripts/tests/         the Python scripts' tests (the planner, the merge driver, the command-log hook): `python3 -I -m unittest discover -s scripts/tests`
 docs/                  brief, architecture, decisions, roadmap, glossary, development, verified-facts, ideas, and how-it-was-built, the one-page write-up of how Fylgja was built
 docs/recording/        session.cast, the README's recorded session (stage list, then twin rehearse: a proposed change's stages rehearsed on one twin; recorded at v0.1.0 with waypoints and remade at v0.2.0), session.gif, rendered from it, and four screenshots of what the checks post in Infrahub
-docs/c4/               workspace.dsl, the C4 model, and its five views exported as .puml and .svg
+docs/c4/               workspace.dsl, the C4 model, and its six views exported as .puml and .svg
 docs/diagrams/         the fixture topologies (generated) and the schema's entity diagram
 docs/templates/        section lists for the documents Spec Kit has no template for: a feature's brief, a decision entry, research.md, quickstart.md, data-model.md and a contract's feature section (Spec Kit workflow, below)
 specs/                 Spec Kit features (NNN-slug), created by the first feature here
 commands/              git-ignored: the command log the hooks publish (see below)
-local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (its .reads/, a following twin's check's CTMs, written by nothing since 019), snapshots/, twin/, command-log/; infrahub/, the Compose project's two files; converge-loop/, one directory per loop run (its summary, events, reports and gate logs); lanes/, a lane's worktree while it runs or when its merge stopped the loop; the three processes' and the bring-up script's logs
+local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (its .reads/, a following twin's check's CTMs, written by nothing since 019), snapshots/, twin/, command-log/; orchestrator/, the orchestrator's root (its snapshots/, twin.json and prefect/, the platform's home); infrahub/, the Compose project's two files; converge-loop/, one directory per loop run (its summary, events, reports and gate logs); lanes/, a lane's worktree while it runs or when its merge stopped the loop; the five processes' (prefect.log and orchestrator.log among them) and the bring-up script's logs
 .specify/              the constitution (memory/constitution.md, amended only by citing a decision-log entry), the amended plan template, templates/overrides/ (this repository's tasks template, which Spec Kit's resolver prefers to its own) and extensions.yml; Spec Kit's own scripts, templates and install metadata are installed per host and git-ignored (Spec Kit workflow, below)
 .claude/               Claude Code: the project settings, the command-log hook, and the two project skills, feature-open and converge-loop; the speckit-* skills are installed per host and git-ignored
 .github/workflows/     ci.yml (the lint and unit jobs; the contract job on pushes to main), pull-requests.yml (comments the Contributing sentence on a pull request and closes it) and release.yml (a tag's draft release); Test architecture, below
@@ -402,7 +443,8 @@ local/                 git-ignored, the default state root: .env, temporal.db, b
 `internal/lab` is the host-bound boundary: everything that must run where the
 containers are lives there, so per-host task queues are a dispatch change, not a
 refactor ([D-015](decisions.md#d-015)). PSPs and the schema are compiled in with
-`embed` and overridable from a directory at runtime.
+`embed` and overridable from a directory at runtime; the orchestrator reads the same
+`psp/*.yaml` from the tree.
 
 `internal/cli` is the API's boundary on the client's side ([D-040](decisions.md#d-040),
 Constitution XI). `TestClientReachesTheCoreThroughTheAPIAlone`
@@ -410,9 +452,15 @@ Constitution XI). `TestClientReachesTheCoreThroughTheAPIAlone`
 package, to a fixed point, and fails unless the set reached is exactly `internal/api`,
 `internal/findings` and `internal/tree`, or when `internal/api` or `internal/tree` imports
 anything of the module but `internal/findings`, or `internal/findings` anything at all. A
-second case walks `testdata/boundary/leaky`, whose one file imports `internal/stage`, and
+second case walks `testdata/boundary/leaky`, whose one file imports `internal/server`, and
 passes only when the walk names it. So the package that holds the client's commands does
-not link the core, and no flag or variable can make it run the core. Test files are not
+not link the core, and no flag or variable can make it run the core. On the core's side,
+`TestTheCoreLinksNoReader` (the same file, 020) holds that of `go list -deps ./cmd/fylgja`
+no package is genqlient's or names `infrahub` in its path, that the module walk from
+`cmd/fylgja` reaches none of the four packages that left with the reader
+(`internal/intent`, `internal/stages`, `internal/stage`, `internal/rehearsal`), and that
+none of their directories exists. The orchestrator reaches the core through the same API
+and is no Go: it is in neither walk. Test files are not
 walked: test code may call the core directly. A helper the client needs from the core is a
 sign the work belongs in a server handler.
 
@@ -421,6 +469,8 @@ sign the work belongs in a server handler.
 package outside it. `scripts/diagrams.sh` draws every package of the module and every
 import between them from `go list`, the two build-tagged test tools
 (`cmd/fylgja-fixture`, `internal/testsupport`) aside; regenerate it with `make diagrams`.
+The orchestrator's modules are drawn in the C4 model's `OrchestratorComponents` view
+([architecture §4.7](architecture.md#47-the-orchestrator)), not here.
 
 <!-- import-graph -->
 ```mermaid
@@ -438,17 +488,13 @@ graph LR
     internal_compiler["internal/compiler"]
     internal_conformance["internal/conformance"]
     internal_ctm["internal/ctm"]
-    internal_intent["internal/intent"]
     internal_lab["internal/lab"]
     internal_lab_wire["internal/lab/wire"]
     internal_probe["internal/probe"]
     internal_provision["internal/provision"]
     internal_psp["internal/psp"]
-    internal_rehearsal["internal/rehearsal"]
     internal_server["internal/server"]
     internal_snapshot["internal/snapshot"]
-    internal_stage["internal/stage"]
-    internal_stages["internal/stages"]
     internal_step["internal/step"]
     internal_validate["internal/validate"]
     internal_verify["internal/verify"]
@@ -476,10 +522,6 @@ graph LR
     internal_conformance --> internal_probe
     internal_conformance --> internal_psp
     internal_conformance --> internal_verify
-    internal_intent --> internal_ctm
-    internal_intent --> internal_findings
-    internal_intent --> internal_probe
-    internal_intent --> internal_psp
     internal_lab --> internal_bundle
     internal_lab --> internal_compiler
     internal_lab --> internal_ctm
@@ -498,30 +540,21 @@ graph LR
     internal_provision --> internal_lab_wire
     internal_provision --> internal_probe
     internal_provision --> internal_psp
-    internal_provision --> internal_rehearsal
     internal_provision --> internal_snapshot
     internal_provision --> internal_step
-    internal_provision --> internal_verify
     internal_psp --> fylgja
     internal_psp --> internal_findings
-    internal_rehearsal --> internal_findings
-    internal_rehearsal --> internal_lab_wire
-    internal_rehearsal --> internal_step
     internal_server --> internal_api
     internal_server --> internal_bundle
     internal_server --> internal_compiler
     internal_server --> internal_ctm
     internal_server --> internal_findings
-    internal_server --> internal_intent
     internal_server --> internal_lab
     internal_server --> internal_lab_wire
     internal_server --> internal_probe
     internal_server --> internal_provision
     internal_server --> internal_psp
-    internal_server --> internal_rehearsal
     internal_server --> internal_snapshot
-    internal_server --> internal_stage
-    internal_server --> internal_stages
     internal_server --> internal_step
     internal_server --> internal_tree
     internal_server --> internal_validate
@@ -529,23 +562,6 @@ graph LR
     internal_snapshot --> internal_ctm
     internal_snapshot --> internal_findings
     internal_snapshot --> internal_probe
-    internal_stage --> internal_bundle
-    internal_stage --> internal_compiler
-    internal_stage --> internal_ctm
-    internal_stage --> internal_findings
-    internal_stage --> internal_intent
-    internal_stage --> internal_probe
-    internal_stage --> internal_psp
-    internal_stage --> internal_validate
-    internal_stages --> internal_compiler
-    internal_stages --> internal_ctm
-    internal_stages --> internal_findings
-    internal_stages --> internal_intent
-    internal_stages --> internal_lab_wire
-    internal_stages --> internal_probe
-    internal_stages --> internal_psp
-    internal_stages --> internal_stage
-    internal_stages --> internal_step
     internal_step --> internal_compiler
     internal_validate --> internal_compiler
     internal_validate --> internal_ctm
@@ -567,20 +583,22 @@ graph LR
 | Target | Does |
 |---|---|
 | `make build` | `bin/fylgja`, `CGO_ENABLED=0`. `VERSION=…` stamps `fylgja --version`; it identifies the binary and reaches no bundle ([D-024](decisions.md#d-024)) |
-| `scripts/bring-up.sh` | not a target: stands a fresh Ubuntu 26.04 host up, from the toolchain to tiers 1 and 2 and the three processes; `--part infrahub` alone brings Infrahub up and prepares it, as CI does (Local environment, above) |
-| `make test` | tier 1: unit, golden, workflow tests. Under 65 s wall uncached (`go clean -testcache` first), raised from 45 s on 2026-10-29 when 016's close measured 53.6–60.9 s in three runs at a load of 3–4, `internal/cli` 43.8–44.5 s of it. No infrastructure |
-| `make test-contract` | tier 2: real Infrahub. Needs `local/.env`. Minutes. Runs `go test -count=1`, so it always asks the Infrahub in front of it: a cached result keys on the test binary, the environment and the files read, never on what a service answers. Its `-timeout 30m` is there because the packages share one Infrahub, which slows each of them well past the time it takes alone. `internal/checks` runs after the rest, alone, in a second `go test`: its registration on `main` makes every proposed change opened while it lives run its two checks, and its waits are an otherwise idle Infrahub's. The target runs both whatever the first answers, and fails if either fails |
-| `make test-e2e` | tier 3: builds, then runs `scripts/e2e.sh`, nine cases and nine twins in one run (the [Test architecture](#test-architecture) describes them). Needs `make temporal-dev` and `make worker` running from the repository root, Docker, containerlab, **both** images, the probe package's image (`alpine:3.24.2`, which nothing pulls: `docker pull` it) and Infrahub, with `FylgjaProbe` on `main` holding no probe; it starts its own server for its commands, so `make serve` need not run, but case 9 needs the lab host's server from this tree on the Docker bridge, started as the three-process paragraph starts it, and the two checks imported on `main`, both checked before any case. `WORKER_LOG=<file>` adds the worker's log to its credential and marker greps. `PLATFORMS=<list>` narrows it to the cases a list of shipped packages can run, ending `E2E-PARTIAL` when it skipped one. Never in CI |
+| `scripts/bring-up.sh` | not a target: stands a fresh Ubuntu 26.04 host up, from the toolchain to tiers 1 and 2 and the five processes; `--part infrahub` alone brings Infrahub up and prepares it, as CI does (Local environment, above) |
+| `make orchestrator-venv` | `orchestrator/.venv` on the host's `python3` (3.14), with `pip install -e 'orchestrator[dev]'` at `pyproject.toml`'s pins and a `.gitignore` of `*` inside it; a second run reinstalls nothing current. `make test`, `make lint` and `make test-contract` run from it |
+| `make test` | tier 1: Go's unit, golden and workflow tests, then `orchestrator/.venv/bin/pytest -q orchestrator -m 'not contract'`, the orchestrator's (about 1,120 in about 18 s). Under 90 s wall uncached (`go clean -testcache` first), raised from 65 s on 2026-10-29 by the operator's answer (020's T047 note) when 020's Run 17 measured 68.0 s and 67.0 s at a load of 2.1–4.7 with the orchestrator's 710 Python tests beside Go, `internal/cli` 42.2–43.2 s of it; from 45 s on 2026-10-29 when 016's close measured 53.6–60.9 s in three runs at a load of 3–4, `internal/cli` 43.8–44.5 s of it. Since 020's removal of the reader it measured 49.95–61.1 s, `internal/cli` about 22 s, and 55.9 s at 020's close (a load of 2.1, 1,120 Python tests in 18.3 s). No infrastructure |
+| `make test-contract` | tier 2: real Infrahub. Needs `local/.env`. Minutes. Runs `go test -count=1`, so it always asks the Infrahub in front of it: a cached result keys on the test binary, the environment and the files read, never on what a service answers. Three runs, each whatever the one before answered, the target failing if any failed: the Go packages under the tag `contract` (from 020 their tier-1 tests again, no package but `internal/checks` holding a contract test), `internal/checks` alone in a second `go test`, since its registration on `main` makes every proposed change opened while it lives run its two checks and its waits are an otherwise idle Infrahub's, then `pytest -q orchestrator -m contract`, the orchestrator's, alone against the same Infrahub. Its `-timeout 30m` is there because packages that share one Infrahub slow each other well past the time each takes alone |
+| `make test-e2e` | tier 3: builds, then runs `scripts/e2e.sh`, nine cases and nine twins in one run (the [Test architecture](#test-architecture) describes them). Needs `make temporal-dev` and `make worker` running from the repository root, `orchestrator/.venv`, Docker, containerlab, **both** images, the probe package's image (`alpine:3.24.2`, which nothing pulls: `docker pull` it) and Infrahub, with `FylgjaProbe` on `main` holding no probe; it starts its own core server for its commands, so `make serve` need not run, and runs every `fylgja-cli` command on Prefect's ephemeral server, but case 9 needs the lab host's platform and runner from this tree and its core server, started as the five-process paragraph starts them, and the two checks imported on `main`, all checked before any case. `WORKER_LOG=<file>` adds the worker's log to its credential and marker greps. `PLATFORMS=<list>` narrows it to the cases a list of shipped packages can run, ending `E2E-PARTIAL` when it skipped one. Never in CI |
 | `make worker` | builds, then `fylgja worker run` on queue `fylgja` with the state root made absolute. Load `local/.env` in its shell first: it carries **both** node logins, and a worker started without them fails a create at the host check or the push; Infrahub's address and token, which it carries too, the worker reads no longer ([D-062](decisions.md#d-062)). `docker` must be on its `PATH`, for the image-presence check. **Restart it after every rebuild** |
-| `make serve` | builds, then `fylgja serve` on `127.0.0.1:7650` with the state root made absolute, as `make worker` does. Load `local/.env` in its shell first: the server reads Infrahub's address and token, **both** node logins and `FYLGJA_API_TOKEN`, without which it refuses to start. `containerlab` and `docker` must be on its `PATH`. It prints where it listens (API version and build), its state root, that the workflow service and Infrahub are dialled on need, the memory budget and each package as the worker prints them, and one line a request on stderr. It listens on loopback alone; the lab host's server listens on the bridge as well, started as the three-process paragraph says. **Restart it after every rebuild** |
-| `make lint` | `gofmt`, `go vet`, `golangci-lint`. Runs with build tags `contract,fixture,e2e` (`.golangci.yml`), so the tagged files — `cmd/fylgja-fixture`, the contract tests and the boot half's tier-3 entry (`internal/conformance/boot_e2e_test.go`) — are linted too rather than only when Infrahub or a twin is up. `go vet -tags contract,fixture,e2e ./...` checks the same set |
+| `make serve` | builds, then `fylgja serve` on `127.0.0.1:7650` with the state root made absolute, as `make worker` does. Load `local/.env` in its shell first: the server reads **both** node logins and `FYLGJA_API_TOKEN`, without which it refuses to start, and from 020 no Infrahub variable or scope. `containerlab` and `docker` must be on its `PATH`. It prints where it listens (API version and build), its state root, that the workflow service, Docker, containerlab and the nodes are dialled when a request needs them, the memory budget and each package as the worker prints them, and one line a request on stderr. **Restart it after every rebuild** |
+| `make prefect-server` | the orchestrator's platform: `prefect server start --no-ui` at `PREFECT_API_URL`'s host and port, with `PREFECT_HOME` `local/orchestrator/prefect` made absolute and `PREFECT_API_AUTH_STRING` as its `PREFECT_SERVER_API_AUTH_STRING`; refuses without both variables (load `local/.env` first). Its first start takes about 30 s |
+| `make orchestrator-serve` | the runner: `fylgja-orchestrator serve` with the same `PREFECT_HOME` and `FYLGJA_ORCHESTRATOR_ROOT` `local/orchestrator`, serving the six deployments; refuses with no `PREFECT_API_URL` or a platform that does not answer its credential. Restart it after a change under `orchestrator/src` |
+| `make lint` | `gofmt`, `go vet`, `golangci-lint`, then `make lint-python`. Runs with build tags `contract,fixture,e2e` (`.golangci.yml`), so the tagged files — `cmd/fylgja-fixture`, the contract tests and the boot half's tier-3 entry (`internal/conformance/boot_e2e_test.go`) — are linted too rather than only when Infrahub or a twin is up. `go vet -tags contract,fixture,e2e ./...` checks the same set |
+| `make lint-python` | `ruff check` over `orchestrator` and `infrahub/checks` with the orchestrator's configuration (`orchestrator/pyproject.toml`: E, F, W, B, SIM, line length 120); CI's lint job runs it beside the golangci-lint action |
 | `make linkcheck` | `scripts/linkcheck.py`: every relative link and anchor in the tracked Markdown resolves as a public clone sees it (a git-ignored file on disk counts as missing; headings are slugged as GitHub slugs them). Prints each broken link as `path:line: target [why]` and exits 1 on any. A hand tool, run before a docs commit; not a CI step |
-| `make diagrams` | validates the C4 model `docs/c4/workspace.dsl` and regenerates every committed diagram: the five views as C4-PlantUML and SVG under `docs/c4/`, the import graph above and `docs/diagrams/topologies.md`. Two images, pinned by digest in the Makefile (`STRUCTURIZR_IMAGE`, `PLANTUML_IMAGE`) and pulled on first use, do the model's part; `scripts/diagrams.sh` needs `go`. Needs Docker; no tier needs it, and a second run changes nothing |
-| `make sdl` | refetch Infrahub's SDL for the default branch, `main`, which carries the schema library and the stage kind with its extension, into `schema/`. Infrahub's field order is not stable between fetches, so a refetch diffs by thousands of lines with nothing changed: compare two SDLs structurally, not by `diff`. The header is kept by hand |
-| `make generate` | regenerate the `genqlient` client |
+| `make diagrams` | validates the C4 model `docs/c4/workspace.dsl` and regenerates every committed diagram: the six views as C4-PlantUML and SVG under `docs/c4/`, the import graph above and `docs/diagrams/topologies.md`. Two images, pinned by digest in the Makefile (`STRUCTURIZR_IMAGE`, `PLANTUML_IMAGE`) and pulled on first use, do the model's part; `scripts/diagrams.sh` needs `go`. Needs Docker; no tier needs it, and a second run changes nothing. `make sdl` and `make generate`, which fetched the SDL and regenerated the reader's `genqlient` client, left with the reader at 020 |
 | `make temporal-dev` | start the file-backed dev server, with the Temporal CLI on the `PATH` or else `~/.temporalio/bin/temporal`, where the bring-up script installs it |
 | `make command-log` | publish the command log the hooks kept (Spec Kit workflow, below) |
-| `make infrahub-seed` / `infrahub-clean` | fixture branch lifecycle. The seed loads the schema (the library, then the stage kind), writes the three-node topology in the library's kinds, joins the devices to `fylgja-devices`, generates their artifacts and waits for `Ready`. `go run -tags fixture ./cmd/fylgja-fixture -branch <b>` seeds a throwaway branch the same way, and changes one with `-add-link`, `-generate` (generate and wait), `-set-description <v>` (every `DcimDevice`'s description, which the template's header prints, so it moves the artifact only) or `-disable-port <dev>:<if>` (one `InterfacePhysical`'s status `disabled`). The identical-bytes case, an edit the template does not render, is a serial number written through test support's `SetDeviceSerial`, which has no flag. Every change flag refuses `fylgja-fixture`. The seed and `-add-link` render and wait for `Ready` themselves; `-set-description` and `-disable-port` change intent only, so `-generate` must follow them, since Infrahub 1.11.2 regenerates nothing on its own. `-mixed` seeds one SR Linux node and two EOS, two `DcimPlatform`s under their manufacturers. A throwaway branch's proposed change ([D-045](decisions.md#d-045)): `-propose` opens a draft from `-branch` into `main`, waits up to 180s until its validators have concluded, its artifact validator among them when the branch's devices render, and prints its id; `-stage <label>` marks one stage on the branch's open proposed change, with `-at <t>` for a given `as_of` and `-description <s>`, and prints its `at` and whether it was written or given (`head` and `branch-point` are written too, so a test can write what Fylgja refuses); `-run-check` asks the open proposed change's artifact checks and waits up to 120s for its artifact validator's `completed_at` to move; `-run-checks artifact` is the same, and `-run-checks user` asks its user checks, waits up to 4,500s until each check definition the branch sees of a registered repository has run again to `completed`, naming any validator still `in_progress` at the bound, and prints each check's name, conclusion and message length (a branch that sees none returns at once, saying so); `-ready` sets `is_draft` false, which starts no check; `-close` closes it, its stages staying. Each refuses `fylgja-fixture`, which has no proposed change, and any branch outside `fylgja-test-`, before any request, and `-at` or `-description` without `-stage` is refused, as is a `-run-checks` kind other than `artifact` or `user`. `-add-interface <dev>:<name>` writes one `InterfacePhysical`, active and uncabled, on a `fylgja-test-` branch's device and renders nothing, so `-generate` must follow it; it refuses any other branch and a value that is not `<dev>:<name>` before any request. `-add-fourth-node <peer>` adds the `DcimDevice` n4 to a three-node `fylgja-test-` branch, with `mgmt0` and `ethernet-1/1`, cabled by a `DcimCable` to the peer's new `ethernet-1/3`, and renders every artifact; it refuses `fylgja-fixture`, any other branch outside the prefix and a peer that is not a plain device name before any request, and a second n4 or a peer whose `ethernet-1/3` exists after reading the branch. A demo cables n4 to n2, since `-add-link` takes n1's and n3's `ethernet-1/3`, and awaits n4's artifact and n2's checksum before marking. Compose a story by marking each stage after the writes it seals and after their generate has moved the artifacts: seed, `-propose`, `-stage seeded`, `-add-link`, the checksums of n1 and n3 awaited, `-stage third-link`. `-probes <file>` writes each probe of a declaration file as one `FylgjaProbe` on `main`, which every read with no probe file then carries, and `-delete-probes` deletes every `FylgjaProbe` there (016), each taking no other flag. `-delete` removes every stage of every proposed change whose source is the branch, whatever its state, then those proposed changes, then the branch, printing the counts: Infrahub refuses a proposed change's delete while a stage names it, and a branch deleted first cancels its open proposed change. `-add-mixed-link` adds `s1:ethernet-1/3`, `e1:Ethernet3` and the link between them to a branch seeded with `-mixed`, and generates; it refuses `fylgja-fixture` and a second add on one branch. A mixed story is composed the same way: `-mixed`, `-propose`, `-stage seeded`, `-add-mixed-link`, `-stage mixed-link`. Composing a rehearsal for a test (015) goes on from the story's two marks: `-ready` and `-run-checks user` so that `fylgja-twin` rehearses, then `-add-interface n1:ethernet-1/99`, `-generate` with n1's checksum awaited, `-stage bad-port` and `-run-checks user` again for a stage that fails at the push, then `-delete`, which takes the proposed change's comments and validators with it. A demo's window ([D-054](decisions.md#d-054)): `-seed-main` writes the three-node seed onto `main` in the library's kinds (the devices' description `FYLGJA-MARKER-main`), joins the devices to `fylgja-devices` and renders their artifacts, refusing a `main` that holds anything of the baseline's kinds (the tag, the manufacturer, the platform, the four locations, the devices, their ports and cables); `-clear-main` deletes exactly that, cables first, then any of the devices' artifacts Infrahub left, printing the counts, and refuses while any `fylgja-test-*` branch exists or when `main` holds anything beyond the baseline, deleting nothing. Each takes no other flag. While the window is open no tier 2 or tier 3 runs, since a test branch made from `main` would hold the baseline's devices and not its own. `-prepare-main` acts on `main` alone and takes no `-branch`, nor any flag but `-schema-dir`, `-repository-name`, `-repository-location`, `-repository-ref` and `-wait`: it loads the schema library only on a `main` holding none of its kinds, and on one holding any it refuses, exit 1, writing nothing, the group and the registration included, naming how many and which (`main holds <n> of the schema library's kinds (…): -prepare-main is the development host's and CI's tool, which loads the library on an empty main alone; …`); after the library it loads the stage kind and, from 016, the probe kind, creates the group `fylgja-devices` and registers this repository read-only with no credential, each only when absent, then waits up to `-wait` (300s) for the import. So a second run is that refusal, which the bring-up script reads as `present` once `main` holds the stage kind, the group and the registration |
+| `make infrahub-seed` / `infrahub-clean` | fixture branch lifecycle. The seed loads the schema (the library, then the stage kind), writes the three-node topology in the library's kinds, joins the devices to `fylgja-devices`, generates their artifacts and waits for `Ready`. `go run -tags fixture ./cmd/fylgja-fixture -branch <b>` seeds a throwaway branch the same way, and changes one with `-add-link`, `-generate` (generate and wait), `-set-description <v>` (every `DcimDevice`'s description, which the template's header prints, so it moves the artifact only) or `-disable-port <dev>:<if>` (one `InterfacePhysical`'s status `disabled`). The identical-bytes case, an edit the template does not render, is a serial number, `-set-serial <dev>[,<dev>…]=<serial>` (020). Every change flag refuses `fylgja-fixture`. The seed and `-add-link` render and wait for `Ready` themselves; `-set-description` and `-disable-port` change intent only, so `-generate` must follow them, since Infrahub 1.11.2 regenerates nothing on its own. `-mixed` seeds one SR Linux node and two EOS, two `DcimPlatform`s under their manufacturers. A throwaway branch's proposed change ([D-045](decisions.md#d-045)): `-propose` opens a draft from `-branch` into `main`, waits up to 180s until its validators have concluded, its artifact validator among them when the branch's devices render, and prints its id; `-stage <label>` marks one stage on the branch's open proposed change, with `-at <t>` for a given `as_of` and `-description <s>`, and prints its `at` and whether it was written or given (`head` and `branch-point` are written too, so a test can write what Fylgja refuses); `-run-check` asks the open proposed change's artifact checks and waits up to 120s for its artifact validator's `completed_at` to move; `-run-checks artifact` is the same, and `-run-checks user` asks its user checks, waits up to 4,500s until each check definition the branch sees of a registered repository has run again to `completed`, naming any validator still `in_progress` at the bound, and prints each check's name, conclusion and message length (a branch that sees none returns at once, saying so); `-ready` sets `is_draft` false, which starts no check; `-close` closes it, its stages staying. Each refuses `fylgja-fixture`, which has no proposed change, and any branch outside `fylgja-test-`, before any request, and `-at` or `-description` without `-stage` is refused, as is a `-run-checks` kind other than `artifact` or `user`. `-add-interface <dev>:<name>` writes one `InterfacePhysical`, active and uncabled, on a `fylgja-test-` branch's device and renders nothing, so `-generate` must follow it; it refuses any other branch and a value that is not `<dev>:<name>` before any request. The reader's tier-2 changes (020), which the orchestrator's tests make through the tool since `internal/testsupport` is not ported: `-add-device <name>:<port>[,<port>…]` writes one `DcimDevice` with no tag, no platform and no group, and its `InterfacePhysical` ports, printing its id; `-add-cable <label>=<dev>:<port>,<dev>:<port>[,…]` one `DcimCable` joining any number of ports; `-set-platform <dev>=<manufacturer>/<platform>` moves a device onto a `DcimPlatform` under its manufacturer, each made where absent, and `<dev>=` takes its platform away; `-load-schema-file <path>` loads one schema file and waits until its kinds are exposed and the ones it removes (`state: absent`) are gone. None renders; each refuses `fylgja-fixture`, any branch outside `fylgja-test-`, a second of them and a value not of its form, before any request. `-add-device` takes `-device-platform <manufacturer>/<platform>`, `-device-tag <tag>`, `-device-management <port>` and `-device-group` (joins `fylgja-devices`, rendering nothing), each refused without it. The stages' tier-2 changes (020, T021), each refusing the same branches and malformed values before any request, combining with no flag but `-branch`, and rendering nothing: `-set-serial <dev>[,<dev>…]=<serial>`; `-describe device:<name>=<text>`, `platform:<name>=<text>`, `manufacturer:<name>=<text>` or `virtual:<dev>:<name>=<text>`; `-set-cable-status <label>=<status>`, printing the cable's stamp; `-re-end-cable <dev>:<port>=<dev>:<port>[,…]`; `-delete-link <dev>:<port>`, printing when the delete returned; `-add-virtual-interface <dev>:<name>`; `-tag-devices <dev>[,…]` (the tag `fylgja`); and `-rebase`, which waits for the rebase. Beside the proposal flags, `-update-stage <label>:<field>=<value>` edits one mark's `label`, `as_of` or `description`, and `-delete-stages` deletes the open proposed change's marks, leaving it open. `-mixed` refuses `fylgja-fixture` before any request. `-add-fourth-node <peer>` adds the `DcimDevice` n4 to a three-node `fylgja-test-` branch, with `mgmt0` and `ethernet-1/1`, cabled by a `DcimCable` to the peer's new `ethernet-1/3`, and renders every artifact; it refuses `fylgja-fixture`, any other branch outside the prefix and a peer that is not a plain device name before any request, and a second n4 or a peer whose `ethernet-1/3` exists after reading the branch. A demo cables n4 to n2, since `-add-link` takes n1's and n3's `ethernet-1/3`, and awaits n4's artifact and n2's checksum before marking. Compose a story by marking each stage after the writes it seals and after their generate has moved the artifacts: seed, `-propose`, `-stage seeded`, `-add-link`, the checksums of n1 and n3 awaited, `-stage third-link`. `-probes <file>` writes each probe of a declaration file as one `FylgjaProbe` on `main`, which every read with no probe file then carries, and `-delete-probes` deletes every `FylgjaProbe` there (016), each taking no other flag. `-delete` removes every stage of every proposed change whose source is the branch, whatever its state, then those proposed changes, then the branch, printing the counts: Infrahub refuses a proposed change's delete while a stage names it, and a branch deleted first cancels its open proposed change. `-add-mixed-link` adds `s1:ethernet-1/3`, `e1:Ethernet3` and the link between them to a branch seeded with `-mixed`, and generates; it refuses `fylgja-fixture` and a second add on one branch. A mixed story is composed the same way: `-mixed`, `-propose`, `-stage seeded`, `-add-mixed-link`, `-stage mixed-link`. Composing a rehearsal for a test (015) goes on from the story's two marks: `-ready` and `-run-checks user` so that `fylgja-twin` rehearses, then `-add-interface n1:ethernet-1/99`, `-generate` with n1's checksum awaited, `-stage bad-port` and `-run-checks user` again for a stage that fails at the push, then `-delete`, which takes the proposed change's comments and validators with it. A demo's window ([D-054](decisions.md#d-054)): `-seed-main` writes the three-node seed onto `main` in the library's kinds (the devices' description `FYLGJA-MARKER-main`), joins the devices to `fylgja-devices` and renders their artifacts, refusing a `main` that holds anything of the baseline's kinds (the tag, the manufacturer, the platform, the four locations, the devices, their ports and cables); `-clear-main` deletes exactly that, cables first, then any of the devices' artifacts Infrahub left, printing the counts, and refuses while any `fylgja-test-*` branch exists or when `main` holds anything beyond the baseline, deleting nothing. Each takes no other flag. While the window is open no tier 2 or tier 3 runs, since a test branch made from `main` would hold the baseline's devices and not its own. `-prepare-main` acts on `main` alone and takes no `-branch`, nor any flag but `-schema-dir`, `-repository-name`, `-repository-location`, `-repository-ref` and `-wait`: it loads the schema library only on a `main` holding none of its kinds, and on one holding any it refuses, exit 1, writing nothing, the group and the registration included, naming how many and which (`main holds <n> of the schema library's kinds (…): -prepare-main is the development host's and CI's tool, which loads the library on an empty main alone; …`); after the library it loads the stage kind and, from 016, the probe kind, creates the group `fylgja-devices` and registers this repository read-only with no credential, each only when absent, then waits up to `-wait` (300s) for the import. So a second run is that refusal, which the bring-up script reads as `present` once `main` holds the stage kind, the group and the registration |
 | `go test ./internal/compiler -update` | regenerate golden bundles after an intended compiler change. **Review the diff**: goldens enshrine bugs as readily as fixes. Four goldens, each with its `bundle_id` asserted in `golden_test.go`: `testdata/golden/three-node/` (SR Linux, `c70589c3…`), `testdata/golden/lossy/` (the design-case package beside SR Linux, `10099944…`), `testdata/golden/mixed/` (SR Linux beside two EOS nodes, `44ac283f…`) and, from 016, `testdata/golden/three-node-probed/` (the three-node snapshot wrapped with the probe `n1-loop`, its two `linux` hosts on n1's `ethernet-1/10` and `ethernet-1/11`, `5222063b…`), each re-baselined at 016's formats (CTM `2`, bundle `6`), and the three-node, mixed and probed ones again for the fixtures' probe-ready ports. Prefer `-run TestGoldenLossy -update` so nothing else moves. A diff in the three-node or lossy golden from a change to the mapping profile or how it is applied is a defect in that change, never a re-baseline; a change meant to move them, such as a new bundle format, says so in its spec, and its re-baseline is a commit of its own |
 
 ---
@@ -609,56 +627,65 @@ and `internal/cli`, beside 017's own two there, the bundle manifest `4` in
 
 | Tier | Covers | Runs | Needs |
 |---|---|---|---|
-| 1 — Unit + golden + workflow | **The compiler and its formats**: the four goldens, each fact asserted by name, and the lossy golden's shuffled fixture; two fidelity rows tying on disposition and object compiling to one bundle in either order; every mapping kind, shared port, omission and refusal, worded alike by validation and the compiler; every `psp.*` rule from its fixture under `testdata/psp/defects/`, the two `psp.matches.*` among them, and the registry's exact match, its load refusing an override sharing an embedded package's pair or its id (`psp.identity.duplicate`), and `serve` refusing either at start; a CTM of another version, or declaring none, refused `ctm.version.unsupported`, and one leaving out its fidelity list, its links or a device's interfaces `data.required.missing`, by `twin compile` inside a snapshot, the version at the file and a missing field at its name prefixed `ctm.`, and a device with no port written `"interfaces": []`; bundle hashing and verification, a bundle of another format refused naming both; `step.Diff`, `PushPlan` and `Unapplied`, pure. **The snapshot** (`internal/snapshot`): its id over every fixture, `observed_at` and list order left out of the hashed bytes and an artifact byte, a fidelity row and each envelope field moving it (`TestObservedAtIsNotHashed`, `TestOrderIsNotHashed`, `TestAnArtifactByteMovesTheID`, `TestEnvelopeFieldsMoveTheID`), the hashed envelope and CTM held to the CTM's fields by reflection, the package importing the CTM, the probe and the findings alone (`TestSnapshotImportsTheCTMAndTheProbeAlone`); `Unmarshal`'s refusals in their order; the stored form and its round trip; the store filing under the id, keeping the first take (`TestPutKeepsTheFirstTake`) and refusing a corrupt entry; every document against `contracts/snapshot.schema.json`; and the three fixtures wrapped under `testdata/snapshot/` (`TestWrappedFixtures`), each compiling to its golden byte for byte (`TestWrappedFixturesCompileToTheGoldens`, `internal/stage`). **The probes** (016): the declaration's every rule from its file under `testdata/probes/invalid/`, every fault in one pass, and the contract, the reader and the kind's schema saying one thing (`internal/probe`); the probe package's every refusal, an override shadowing the embedded one by format and refusing the load when invalid, and the PSP loader skipping `probes/`; `ParsePing` on busybox's output; the package importing `findings`, the embedded files and the decoders alone; `PlaceProbes` on one device and across two, in any declaration order, and every placement refusal in one pass, worded alike by validation (`internal/compiler`'s `synthesize_test.go`); the fourth golden (`TestGoldenThreeNodeProbed`), whose hosts' names, kind and image the compiler's sources never spell (`TestCompilerNamesNoPlatform`'s `probeNames`); the snapshot `2`, a `1` read as a `2` with none, the probes moving the id (`TestProbesMoveTheID`) and the wrapped probed fixture as a fresh take (`TestProbedFixture`); the host check planning a host from its probe package, its image absent whatever its acquisition and its package missing; a host's `exec` readiness; `StartFlows`, `ReadFlows` and the burster against a recorded runner; the step's flows over every path, started and read, not started, not read, interrupted by a cancellation or a failure after the stage, and none when the step stops before it (`internal/provision`'s `workflow_step_flows_test.go`); `twin verify`'s burst held, short and not run, through the harness's server (`TestVerifyAProbedTwin`); the report's `loss` column, its every outcome and its shortening (`TestTheLossColumn`), and a burst failed in the wait failing the stage (`TestABurstFailedFailsTheStage`); `--probes` sent as the one file, refused beside `--snapshot` and taken by neither `twin compile` nor `twin provision` (`internal/cli`'s `probes_test.go`); the probe reader against an `httptest` Infrahub, paged, its kind checked and its token kept out (`internal/intent`'s `probes_test.go`). **The read**: the mapping's conformance table and every `schema.*` finding against an `httptest` schema document with a kind, a field, a choice or an implementer removed or changed, the generic `DcimConnector`'s `connected_endpoints` among the fields; the CTM projection, every artifact refusal and every `platform.*`, `scope.*` and `omit.cable.*` finding from an `httptest` Infrahub (a three-ended cable, a one-ended one, an end outside the scope, an end of another kind, a console port's or a virtual interface's, a connector that is not a `DcimCable`, a device with two management ports compiling one, a device with no platform, one no package matches exactly); the read-only test's lists of roots and fragments over every operation the operations documents declare, the `Devices` operation selecting none of the device's role, status or device type, and the scope's tag read by its filter alone; the vendored library's every file at its recorded SHA-256 (`TestVendoredLibraryIsThePinnedCommit`); the stage reference's every shape and every resolution refusal, none reading the branch's intent, with the order's ends fixed, the head one microsecond after the later of the latest stamp and the latest intent event and a rebase named, and the staleness rule per device against faked stamps and intent events, a stamp by the account that created the template query's internal groups counting as its node's creation ([D-058](decisions.md#d-058), [D-060](decisions.md#d-060)); the list and the plan with every stage's outcome. **The node**: each push mechanism, merge and replace, against an `httptest` node (the request in order and in one call, a refusal's reason cut with no configuration line kept, `commit validate` after a cut refusal, the device's diff in the result and in no log line); the gNMI readers and the readiness probe against in-process gNMI servers, TLS and plaintext; `twin verify`'s every assertion and claim outcome against a faked reader; the conformance suite's pure half over every package meant to load, its `matches` check among them, and the boot half's every check and wording against a faked reader, on a probed twin its devices alone, a synthesized link's neighbour skipped in verify's words (`TestBootHalfOnAProbedTwin`). **The rehearsal**, pure: the deadline over every budget, each verdict, the new findings by rule and object, the block against its schema, the reproduce commands, the stage lines, and the markdown, escaped, never longer than a comment's 4,092 bytes (`TestMarkdownFitsAComment`), and held pure (`TestRehearsalIsPure`); the checks' source asking with the branch alone, no scope, and concluding a document of status error by `log_error` (`TestTheChecksPassNoScopeAndFailAnError`); `.infrahub.yml` registering both checks with their files present (`TestInfrahubYAMLRegistersTheChecks`). **The workflows**, on the Temporal Go SDK test suite with mocked activities: every outcome of provision, destroy and step, the step's wait among them, and a provision naming no bundle ending `operation.failed` with no activity scheduled (`TestProvisionWithNoBundleSchedulesNothing`); the worker registering the four workflows and the lab's seventeen activities and no `Reconcile` (`TestWorkerRegistersEveryScheduledActivity`); the rehearsal with its three children faked, over every path (every stage passing, a stage failing by divergence or by a new finding, the baseline's findings failing nothing, the baseline not built, a step refused, a wait incomplete, the deadline cutting the baseline, a step or a wait, a cancellation, an unclean destroy, one stage alone); and seven histories recorded from the dev server replayed with `worker.WorkflowReplayer` where the test suite departs from the service. **The API and the commands**: every client's command run through a server in the test's own process (`internal/cli`'s harness: one `httptest` server over a `server.Server`, a token made for the run, every byte the server writes recorded); every refusal made before any connection, with nothing dialled; each operation's answer under each rendering, every frame valid against `contracts/api.schema.json`; a run started, followed, interrupted and left by its client; `twin rehearse`'s every status, its text, JSON and markdown, the reclaim and the host's refusals, over a fake Infrahub and a faked workflow service; a create read, taken, compiled and filed on the server and started already compiled, with no sidecar written; `twin create --snapshot` by id and by file, its guards before any connection, `snapshot.unknown` and `snapshot.id.mismatch`, and its twin of kind `snapshot`, its kind line naming the envelope's branch and its `at` or its read time (`TestShowSnapshotTwin`); `twin compile --snapshot`, `--ctm` unknown with no request; `intent read --out` writing and filing a snapshot; each compiled stage's, step side's and rehearsal row's snapshot id; `scope` on the five operations that take it and its two refusals before any connection, `scope.invalid` and `scope.unset`, `stage plan`, `intent read --stage`, `twin create --stage` and `twin rehearse` sending every stamps and devices read under the scope given, and `twin step` reading under its record's scope; `twin step --snapshot` by id and by file from a twin built by `--branch`, `--stage` or `--snapshot`, Infrahub asked nothing (`TestStepToASnapshot`), each refusal at resolve or compile before any run (`TestStepToASnapshotRefused`), a target of another scope or mapping refused `step.twin.unsteppable` (`TestStepTargetKeepsScopeAndMapping`), a stage of another proposed change taken (`TestStepToAStageOfAnotherProposedChange`), and no target for a twin whose record names no stage refused `step.target.unknown` before any connection (`TestStepWithNoTargetNamesNoStage`); the client's own failures and environment; `fylgja serve`'s refusals and report, `--listen` repeated; the boundary test. **Secrets**: the marker proof (an artifact's bytes reach the bundle and no finding, log line, payload, record or answer) and the token in nothing the server writes | CI's unit job, on every push to `main` and every pull request; seconds | nothing |
-| 2 — Contract | the read against a real Infrahub with the vendored library, the stage kind and the probe kind loaded on `main`: the fixture reads to `testdata/ctm/three-node.json` in everything below the envelope, and in the envelope's scope, mapping and fidelity rows (`TestFixtureReadsToTheThreeNodeCTM`); a three-ended cable and one to an untagged device omitted, each a finding and a fidelity row, refusing nothing (`TestCablesTheReadCannotPlace`); a device with no platform and one on a platform no package matches exactly refused by name in one pass (`TestPlatformsTheReadRefuses`); `tag:nothing` refused `scope.empty` (`TestScopeSelectsNothing`); the fixture conformant, naming the library's commit and each kind the mapping reads (`TestConformanceOnTheFixtureBranch`), and a branch with `DcimCable` removed by a `state: absent` document refused `schema.kind.missing` by `schema check` and the read (`TestSchemaCheckNamesAMissingKind`); a seeded branch's defects in the library's kinds reported in one pass (`TestSeededDefectsAreAllReportedInOnePass`); a pinned read reproduces its bundle and its snapshot id after the branch changes, an unpinned read after the change has another id, and a device tagged after T is not read at T (`TestPinnedReadReproducesItsBundle`); a seeded branch reads with every artifact, a description change moves the id and a serial number change regenerates identical bytes and moves nothing, and a device outside the target group, or in it before its first generate, is `artifact.missing` (`TestArtifactOnASeededBranch`); a mixed branch reads three devices of two platforms and compiles with both bootstrap routes and both forwarding entries and reads to `testdata/ctm/mixed.json` below the envelope, each artifact's marker the fixture's, and in the envelope's scope, mapping and fidelity rows (`TestMixedSeedReads`, which fails when an EOS device's artifact is SR Linux text); the stage kind and its extension are on `main`, as this build reads them, the kind they replaced is not, and a duplicate label is refused from the branch (`TestStageKindLoads`); a draft proposed change's four stages list and plan to three ids and three steps, the branch point refused `scope.empty` on a `main` with no tagged device, and the CTM a mark's bundle compiled from is the branch read at its `at`, its `at` kept by a `description` edit, moved to a relabel's write, and given back by an `as_of` (`TestStagesListAndPlan`); a mark refused stale on exactly the devices whose intent moved, a serial number edit the template does not render cleared by a run-check and not by a generate, every mark refused after a rebase naming it, a reserved label, an `as_of` in the future, an unknown stage of an open proposed change, a closed proposed change and an unknown branch (`TestStageRefusals`); each write on what a tagged device owns or reaches (its platform's description, its manufacturer's, a cable re-ended, the description of a virtual interface it already has, the interface's creation cleared first) makes the next mark stale on exactly the tagged devices that reach it, an untagged device created on their platform makes it stale on all three by the platform's update event, the over-report US5 accepts, and an untagged device's own write on none (`TestStagesSeeEveryWriteOfADevice`, SC-009); a cable deleted as the branch's latest write stamps its two end ports, the head moves past the stamps by the branch's intent events, the stage marked after it and the head are refused stale for n1 and n2 alone, and a regenerate clears the head, which then reads 2 links (`TestStagesSeeARemoval`, [D-048](decisions.md#d-048)); `schema check` through the harness's server, passing on both fixtures with the commit and the kinds named (`internal/cli/schema_contract_test.go`); a rehearsal whose plan refuses a stale mark refused with the plan's findings, the workflow service never dialled, no host tool run and no twin directory made (`TestRehearseRefusesBeforeAnyRun`), and a rehearsal's composition by the fixture tool's `-propose`, `-ready` (once the creation's user checks have concluded on the draft, so that no check reads it ready and rehearses it on a twin), `-add-interface`, `-generate`, `-run-checks user` and `-delete`, each line exact (`TestRehearseComposedByTheFixtureTool`, `internal/server`); a stage planned twice through the server's path names one snapshot id, its stored document unchanged by the second plan and no sidecar written (`TestStageTakenTwiceHasOneSnapshot`, `internal/server`); a mark's read taken by `intent read --out --stage` on the server's path, and a step's snapshot target built from that file and then from its id, each filing the snapshot `stage plan` names and compiling to its bundle, the file filed whole, with no request to Infrahub, counted by a proxy, and no twin booted (`TestStepTargetFromASnapshot`, `internal/server`); `FylgjaProbe` the second source of a request's one list (016): `n2-loop` written on the default branch and carried by an intent read with no file, replaced by `n1-loop`'s file, and none once it is deleted, with no warning (`TestProbesFromTheKind`, `internal/server`, which refuses to run over a kind holding an operator's probe); `intent read --out` with `n1-loop`'s file writing a snapshot `2` that carries it alone, from which `twin create --snapshot <file> --dry-run` compiles the two hosts on n1's `ethernet-1/10` and `ethernet-1/11`, asking neither Infrahub nor the workflow service (`TestIntentReadFilesASnapshot2`, `internal/cli`); and **the two checks inside Infrahub's pipeline** (`TestChecksInsideInfrahub`, `internal/checks`, below). Every branch it writes is `fylgja-test-*`, and the test that wrote it deletes its stages, then its proposed changes, then the branch. Every wait for an artifact's generation, `WaitForArtifacts` and each test's wait for a checksum to move, is bounded by `testsupport.ArtifactWait`, 180 s, since 90 s lapsed three times under the whole tier on 2026-10-29 with each test green alone; the schema waits keep 90 s. The tier takes about 33 minutes (2,009 s on 2026-10-28 with 019's `TestStepTargetFromASnapshot` and without `TestFollowingDetection`; 1,814.4 s on 2026-10-27 with 018's snapshots, 1,714.7 s on 2026-10-26, over the library's kinds, beside the checks imported on `main`): `internal/stages` the longest package at 1,690.6 s, 109 s under its `-timeout 30m`, beside `internal/server` at 1,182.9 s, `internal/stage` at 736.3 s and `internal/intent` at 666.5 s (1,514.6 s, 933.5 s, 709.0 s and 477.5 s on 2026-10-27), then `internal/checks` alone in 310.0 s; `internal/intent` again alone in 220.3 s on 2026-10-28, a seed's 1m30s artifact wait having lapsed under the tier's own load; `internal/cli` took 207.7 s within the tier on 2026-10-26 and 66.9 s alone on 2026-10-27; the packages share one Infrahub, so each runs well past its time alone, which is why `make test-contract` sets `-timeout 30m`. The token case has no live oracle, because this Infrahub reads anonymously | CI's contract job, on every push to `main`; locally before merge | Infrahub in Docker |
-| 3 — End-to-end | nine cases and nine twins in one run, every command through a server the script starts, three of them probed (016), and the ninth a proposed change rehearsed by the checks inside Infrahub (below) | on demand (`make test-e2e`), never in CI | dev server, worker, privileged Docker, **both** NOS images (the cEOS one imported from the operator's tar), or a `PLATFORMS` list for fewer, and the probe image `alpine:3.24.2`; Infrahub, with the checks imported on `main` and `FylgjaProbe` there holding no probe; for case 9 the lab host's server from this tree on the Docker bridge |
+| 1 — Unit + golden + workflow | **The compiler and its formats**: the four goldens, each fact asserted by name, and the lossy golden's shuffled fixture; two fidelity rows tying on disposition and object compiling to one bundle in either order; every mapping kind, shared port, omission and refusal, worded alike by validation and the compiler; every `psp.*` rule from its fixture under `testdata/psp/defects/`, the two `psp.matches.*` among them, and the registry's exact match, its load refusing an override sharing an embedded package's pair or its id (`psp.identity.duplicate`), and `serve` refusing either at start; a CTM of another version, or declaring none, refused `ctm.version.unsupported`, and one leaving out its fidelity list, its links or a device's interfaces `data.required.missing`, by `twin compile` inside a snapshot, the version at the file and a missing field at its name prefixed `ctm.`, and a device with no port written `"interfaces": []`; bundle hashing and verification, a bundle of another format refused naming both; `step.Diff`, `PushPlan` and `Unapplied`, pure. **The snapshot** (`internal/snapshot`): its id over every fixture, `observed_at` and list order left out of the hashed bytes and an artifact byte, a fidelity row and each envelope field moving it (`TestObservedAtIsNotHashed`, `TestOrderIsNotHashed`, `TestAnArtifactByteMovesTheID`, `TestEnvelopeFieldsMoveTheID`), the hashed envelope and CTM held to the CTM's fields by reflection, the package importing the CTM, the probe and the findings alone (`TestSnapshotImportsTheCTMAndTheProbeAlone`); `Unmarshal`'s refusals in their order; the stored form and its round trip; the store filing under the id, keeping the first take (`TestPutKeepsTheFirstTake`) and refusing a corrupt entry; every document against `contracts/snapshot.schema.json`; the three fixtures wrapped under `testdata/snapshot/` (`TestWrappedFixtures`), each compiling to its golden byte for byte; and two files the orchestrator's tests read, written by Go with `-update` (`TestTheOrchestratorsEscapesFixture`, `internal/validate`'s `TestTheOrchestratorsIntrinsicCases`). **The probes** (016): the declaration's every rule from its file under `testdata/probes/invalid/`, every fault in one pass, and the contract and the kind's schema saying one thing (`internal/probe`); the probe package's every refusal, an override shadowing the embedded one by format and refusing the load when invalid, and the PSP loader skipping `probes/`; `ParsePing` on busybox's output; the package importing `findings`, the embedded files and the decoders alone; `PlaceProbes` on one device and across two, in any declaration order, and every placement refusal in one pass, worded alike by validation (`internal/compiler`'s `synthesize_test.go`); the fourth golden (`TestGoldenThreeNodeProbed`), whose hosts' names, kind and image the compiler's sources never spell (`TestCompilerNamesNoPlatform`'s `probeNames`); the snapshot `2`, a `1` read as a `2` with none, the probes moving the id (`TestProbesMoveTheID`) and the wrapped probed fixture as a fresh take (`TestProbedFixture`); the host check planning a host from its probe package, its image absent whatever its acquisition and its package missing; a host's `exec` readiness; `StartFlows`, `ReadFlows` and the burster against a recorded runner; the step's flows over every path, started and read, not started, not read, interrupted by a cancellation or a failure after the stage, and none when the step stops before it (`internal/provision`'s `workflow_step_flows_test.go`); `twin verify`'s burst held, short and not run, through the harness's server (`TestVerifyAProbedTwin`). **The node**: each push mechanism, merge and replace, against an `httptest` node (the request in order and in one call, a refusal's reason cut with no configuration line kept, `commit validate` after a cut refusal, the device's diff in the result and in no log line); the gNMI readers and the readiness probe against in-process gNMI servers, TLS and plaintext; `twin verify`'s every assertion and claim outcome against a faked reader; the conformance suite's pure half over every package meant to load, its `matches` check among them, and the boot half's every check and wording against a faked reader, on a probed twin its devices alone, a synthesized link's neighbour skipped in verify's words (`TestBootHalfOnAProbedTwin`). **The workflows**, on the Temporal Go SDK test suite with mocked activities: every outcome of provision, destroy and step, the step's wait among them, and a provision naming no bundle ending `operation.failed` with no activity scheduled (`TestProvisionWithNoBundleSchedulesNothing`); the worker registering the three workflows and the lab's seventeen activities, and neither `Reconcile` nor `Rehearse` (`TestWorkerRegistersEveryScheduledActivity`); a follow of a history holding a child, which an earlier build's rehearsal left, read to its close with the child's history never asked for (`TestFollowFollowsNoChild`); and seven histories recorded from the dev server replayed with `worker.WorkflowReplayer` where the test suite departs from the service. **The API and the commands**: every client's command run through a server in the test's own process (`internal/cli`'s harness: one `httptest` server over a `server.Server`, a token made for the run, every byte the server writes recorded, no `INFRAHUB_*` set); every refusal made before any connection, with nothing dialled; each operation's answer under each rendering, every frame valid against `contracts/api.schema.json`; a run started, followed, interrupted and left by its client; a run started detached (`TestCreateDetachedEndsAtTheRun`), then read and interrupted by its identity (`TestADetachedRunIsReadAndInterruptedByItsIdentity`, `TestRunReadReplaysEachRecordedHistory`, `TestARunNoneHasIsUnknown`); `twin diff` between two snapshots, building nothing (`TestTwinDiffPrintsTheStepBetweenTwoSnapshots`, `TestTwinDiffRefusesWhatItCannotSend`); `twin create --snapshot` by id and by file, its guards before any connection, `snapshot.unknown` and `snapshot.id.mismatch`, and its twin of kind `snapshot`, its kind line naming the envelope's branch and its `at` or its read time (`TestShowSnapshotTwin`); `twin compile --snapshot`, `--ctm` unknown with no request; `twin step --snapshot` by id and by file (`TestStepToASnapshot`), each refusal at resolve or compile before any run (`TestStepToASnapshotRefused`), a target of another scope or mapping refused `step.twin.unsteppable` (`TestStepTargetKeepsScopeAndMapping`); the five commands the orchestrator took unknown, and each of their five flags on every command left (`TestTheOrchestratorsCommandsAreUnknown`, `TestTheOrchestratorsFlagsAreUnknown`), and their paths `404` and arguments `400` at the server (`internal/server`'s `gone_test.go`); every rule the orchestrator took absent from the core and present in its `rules.py` (`TestTheOrchestratorsRulesAreRetired`); the client's own failures and environment; `fylgja serve`'s refusals and report, `--listen` repeated, and no `INFRAHUB_*` or scope read; `.infrahub.yml` registering both checks with their files present (`TestInfrahubYAMLRegistersTheChecks`); the two boundary tests. **Secrets**: the marker proof (an artifact's bytes reach the bundle and no finding, log line, payload, record or answer) and the token in nothing the server writes. **The orchestrator's**, `pytest` under `orchestrator/tests/unit/` (about 1,120 cases): the adapter against Infrahub's answers recorded under `tests/data/` and the SDK run whole through its own requester hook (the client and its worded failures, conformance case by case on a copy of the pinned schema, the read, its artifacts and cables, the stamps, the intent events, the stage reader and every resolution refusal, the probes, the packages, the intrinsic rules held to the Go-written cases), the snapshot id held to every Go-written fixture byte for byte and to `0940db93…`; the documents held to the Go renderers' goldens byte for byte (`test_plan.py`, `test_rehearsal.py`, `test_stages.py`, `test_deadline.py`, `test_findings.py`, every document valid against `contracts/findings.schema.json`); the core's client (`test_core.py`); each flow's body with the adapter and the core stubbed (`test_flows.py`, `test_rehearse.py`, the golden rehearsal replayed from the core's answers); the record and its trust (`test_record.py`); `fylgja-cli` and the runner (`test_cli.py`); and the checks' glue imported by its path alone, against a stub platform, both checks run through the SDK's `InfrahubCheck` (`test_checks_glue.py`) | CI's unit job, on every push to `main` and every pull request; seconds | nothing |
+| 2 — Contract | **The orchestrator's**, `pytest -m contract` under `orchestrator/tests/contract/`, against a real Infrahub with the vendored library, the stage kind and the probe kind loaded on `main`, each case carried over from the Go reader's contract tests with its assertions when the reader left the core (020): the SDK the pinned one and Infrahub answering the token (`test_infrahub.py`), the client against the host's Infrahub (`test_client.py`); the fixture reading to its snapshot and to `testdata/ctm/three-node.json` below the envelope, the cables the read cannot place, the platforms it refuses, a scope selecting nothing, a pinned and an unpinned read, and a wrong credential not leaking (`test_read_fixture.py`); conformance and a `DcimCable` removed by a `state: absent` document (`test_read_conformance.py`); a seeded branch's defects in one pass (`test_read_defects.py`); `FylgjaProbe` as the second source of a request's one list (`test_read_probes.py`); `schema check` (`test_schema_check.py`); the snapshot id of the core's filed `0940db93…` (`test_snapshot_id.py`); a draft proposed change's stages listed and planned, every resolution and staleness refusal, each write a tagged device owns or reaches making the next mark stale on exactly the devices that reach it, a removal seen by the intent events (`test_stages.py`); a seeded branch's artifacts, a mixed branch's read and a pinned read reproducing its bundle (`test_stage_take.py`); a stage taken twice to one snapshot, and a step's target built from that snapshot by the core with no request to Infrahub (`test_snapshot_of_a_stage.py`); and the flows on Prefect's test harness, each against a core server the test starts with no `INFRAHUB_*`: a create's dry run from the fixture filing `0940db93…` and the core compiling `c3872f5c…` (`test_flows_create_from_fixture.py`), a rehearsal refused on a stale mark and its report posted (`test_rehearse_refused_on_a_stale_mark.py`), a throwaway change's plan (`test_stage_plan_of_a_throwaway_change.py`), and a rehearsal's composition by the fixture tool, a draft's, a ready change's plan and a held host's (`test_rehearse_composed_by_the_fixture_tool.py`). The read's files took 363.5 s alone, the stages' 1,501.9 s, the flows' 583.5 s, each file run alone on 2026-10-29 and 2026-10-30; under `make test-contract` on 2026-10-30, 2,322.3 s of the tier's 2,692.6 s, the Go half about 370 s. **Go's**: the two checks inside Infrahub's pipeline (`TestChecksInsideInfrahub`, `internal/checks`, below), and every package's tier-1 tests again under the tag. Every branch either writes is `fylgja-test-*`, and the test that wrote it deletes its stages, then its proposed changes, then the branch; afterwards `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage`, `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` count 0. Every wait for an artifact's generation is bounded at 180 s (`testsupport.ArtifactWait`, and the orchestrator's `ARTIFACT_WAIT_S` beside it), since 90 s lapsed under the whole tier with each test green alone; the schema waits keep 90 s. Until 020 the Go reader's packages held these cases, `internal/stages` the longest at 1,690–1,713 s of a tier of about 33 minutes. The token case has no live oracle, because this Infrahub reads anonymously | CI's contract job, on every push to `main`; locally before merge | Infrahub in Docker, and `orchestrator/.venv` |
+| 3 — End-to-end | nine cases and nine twins in one run, every `fylgja` command through a core server the script starts and every command that names a branch or a stage through `fylgja-cli` on Prefect's ephemeral server, three of them probed (016), and the ninth a proposed change rehearsed by the checks inside Infrahub through the orchestrator's platform (below) | on demand (`make test-e2e`), never in CI | dev server, worker, privileged Docker, **both** NOS images (the cEOS one imported from the operator's tar), or a `PLATFORMS` list for fewer, and the probe image `alpine:3.24.2`; `orchestrator/.venv`; Infrahub, with the checks imported on `main` and `FylgjaProbe` there holding no probe; for case 9 the lab host's platform, runner and core server from this tree |
 
 **CI** (`.github/workflows/ci.yml`) runs three jobs on GitHub's hosted `ubuntu-26.04`
 runner, named rather than `ubuntu-latest` because the bring-up script supports that release
-alone. The **lint job** and the **unit job** run on every push to `main` and every pull
-request: the lint job golangci-lint and `shellcheck` over `scripts/bring-up.sh` and
-`scripts/e2e.sh`, the unit job `make build` and `make test`. The **contract job** runs
-after both on pushes to `main` alone, never on a pull request:
-`scripts/bring-up.sh --part infrahub` brings Infrahub 1.11.2 up on the runner, prepares
-`main` with this repository registered read-only and seeds the fixture branch;
-then `go generate ./... && git diff --exit-code`, which checks the committed client against
-the committed SDL and needs no Infrahub; then `make test-contract` with the job's
-`local/.env` loaded. It needs no secret: the script makes Infrahub's admin token on the
-runner, keeps it in that file and never prints it, and the repository holds none. Its first
-run took 6 min 55 s, the script's part 229 s of it. The README's badge shows the last run
-on `main`; a pull request's run does not move it. `pull-requests.yml`, on
-`pull_request_target` with no checkout and the job's own token alone, comments the
-README's Contributing sentence on each pull request and closes it, and is the repository's
-one use of that trigger. `release.yml` builds a pushed `v*` tag's draft release: the static
-binary and its checksum, from the tagged commit, once that commit's `ci` run succeeded; the
-operator pushes the tag and publishes the draft.
+alone. Each sets up Python 3.14 (`actions/setup-python`) and runs `make orchestrator-venv`
+beside Go. The **lint job** and the **unit job** run on every push to `main` and every pull
+request: the lint job golangci-lint by its action, `shellcheck` over
+`scripts/bring-up.sh` and `scripts/e2e.sh`, and `make lint-python`, ruff over the
+orchestrator and the checks; the unit job `make build` and `make test`, Go's tests then the
+orchestrator's. The **contract job** runs after both on pushes to `main` alone, never on a
+pull request: `scripts/bring-up.sh --part infrahub` brings Infrahub 1.11.2 up on the runner,
+prepares `main` with this repository registered read-only and seeds the fixture branch;
+then `make test-contract` with the job's `local/.env` loaded, the orchestrator's contract
+tests among it. The `go generate ./... && git diff --exit-code` step, which held the
+reader's committed client to the committed SDL, left with them at 020. It needs no
+secret: the script makes Infrahub's admin token on the runner, keeps it in that file and
+never prints it, and the repository holds none. Its first run took 6 min 55 s, the
+script's part 229 s of it. The README's badge shows the last run on `main`; a pull
+request's run does not move it. `pull-requests.yml`, on `pull_request_target` with no
+checkout and the job's own token alone, comments the README's Contributing sentence on
+each pull request and closes it, and is the repository's one use of that trigger.
+`release.yml` builds a pushed `v*` tag's draft release: the static binary and its
+checksum, from the tagged commit, once that commit's `ci` run succeeded, after its own
+`make orchestrator-venv` and `make test`; the operator pushes the tag and publishes the
+draft.
 
-**The checks are proved inside a running Infrahub, from Go** (`internal/checks`, research
-R-18). They are Python glue on Infrahub's runtime, and the repository keeps one test
-framework (Constitution I), so no Python test is added, and the OpsMill skill's YAML test
-definitions and `infrahubctl check` are not used. `TestChecksInsideInfrahub` copies the
-tree's `infrahub/checks/` and `infrahub/queries/branch.gql` into a scratch repository
-whose own `.infrahub.yml` names them under test-only names, `fylgja-test-step`,
-`fylgja-test-twin` and the query `fylgja_test_branch`, since Infrahub holds each check's
-and each query's name once on `main` and the host's registration already holds the real
-ones. It serves that repository from the Docker bridge, registers it read-only as
-`fylgja-test-checks-<pid>`, waits for the import and both task workers' fetches, seeds a
-throwaway branch and opens a draft: `fylgja-test-twin` skips it and boots nothing, and
-`fylgja-test-step` passes with the plan; two marks and a re-run pass again; a stale mark
-fails `fylgja-test-step` naming `stage.artifact.stale`; marked ready with the stale mark
-standing, `fylgja-test-twin` fails, Fylgja refusing the rehearsal before any boot, and
-posts the report in a thread the overview lists. Every message is searched for each token,
-password and secret key. It deletes the branch, with its proposed change, threads and
-validators, and the registration, with its definitions, however it ends. **Where the task
-workers reach no server**, as in CI's contract job, which runs none, it skips once the
-draft's skip is proved, saying why; on the development host it needs the lab host's
-server from this tree on the bridge, and once the checks have reached a server it fails
-unless that server's process runs this tree's `bin/fylgja`, as case 9's precondition
-compares it. It took 199.5 s within the tier on 2026-10-19,
-309.4 s alone on 2026-10-20 with its seventh step, the ready proposed change, 252.8 s
-within the tier that day beside the host's imported checks, 278.8 s in the tier's
-second `go test` on 2026-10-26, over the library's kinds, 291.7 s on 2026-10-27, its
-stages and rehearsals naming their snapshots, and 310.0 s on 2026-10-28.
+**The checks are proved twice** (`internal/checks`, research R-18 of 015; 020's §5.21).
+They are Python glue on Infrahub's runtime, so the OpsMill skill's YAML test definitions
+and `infrahubctl check` are not used. In tier 1 the orchestrator's `test_checks_glue.py`
+imports `infrahub/checks/` by its path alone, holds its names to the flows' and the twin
+check's deadline to the rehearse flow's, and runs both checks through the SDK's
+`InfrahubCheck` against a stub platform. In tier 2, from Go,
+`TestChecksInsideInfrahub` copies the tree's `infrahub/checks/` and
+`infrahub/queries/branch.gql` into a scratch repository whose own `.infrahub.yml` names
+them under test-only names, `fylgja-test-step`, `fylgja-test-twin` and the query
+`fylgja_test_branch`, since Infrahub holds each check's and each query's name once on
+`main` and the host's registration already holds the real ones. It serves that repository
+from the Docker bridge, registers it read-only as `fylgja-test-checks-<pid>`, waits for the
+import and both task workers' fetches, seeds a throwaway branch and opens a draft:
+`fylgja-test-twin` skips it and triggers nothing, and `fylgja-test-step` passes with the
+plan; two marks and a re-run pass again; a stale mark fails `fylgja-test-step` naming
+`stage.artifact.stale`; marked ready with the stale mark standing, `fylgja-test-twin`
+fails, the rehearse flow refusing the rehearsal before any boot and posting the report in
+a thread the overview lists. Every message is searched for each token, password and secret
+key. It deletes the branch, with its proposed change, threads and validators, and the
+registration, with its definitions, however it ends. **Where the task workers reach no
+platform**, as in CI's contract job, which runs none, it skips once the draft's skip is
+proved, saying why: from inside each task worker, on the worker's own Python, a probe reads
+the two variables and asks the platform's `/api/health` and, with the credential, the
+deployment `twin-rehearse/main`, and anything but `200` and `200` is the reason
+(`platformReached`). On the development host it needs the platform and the runner from
+this tree. From 015 until 020 it reached the core's server on the bridge instead, and
+compared that server's binary with this tree's. It took 199.5 s within the tier on
+2026-10-19, 309.4 s alone on 2026-10-20 with its seventh step, the ready proposed change,
+278.8 s in the tier's second `go test` on 2026-10-26, 310.0 s on 2026-10-28, and 151.2 to
+170.3 s on 2026-10-30, skipping for task workers that did not yet carry the override's new
+variables.
 
 **Tier 3, as `scripts/e2e.sh` runs it.** Before anything runs the script checks the cEOS
 image is present under the reference `psp/arista_eos.yaml` names, and stops saying to
@@ -671,18 +698,23 @@ nine cases; it took about 29.5 minutes before 019 (1,769.0 s on 2026-10-26, 1,75
 against the script's estimate of 32 to 33 (019's research R-18); 016's probes put it at
 about 37 minutes (2,236.6 s on 2026-10-29, against its research R-25's 34), and case 5's
 boot half on its probed twin adds about 10 s (2,171.8 s whole the same day, the boot half
-10.0 s). Every case reads under
-the server's default scope, `tag:fylgja`, which every fixture's devices carry, but case
-5's create, which names it: the script's own server must report `default scope:
-tag:fylgja`, read from `local/.env`, or the run fails before any case, saying to add
-`FYLGJA_DEFAULT_SCOPE` there. Case 9's needs are checked before any case too: `fylgja-step` and
-`fylgja-twin` among `main`'s check definitions, and the lab host's server answering on the
-bridge with `local/.env`'s token and this tree's build, its process (the `fylgja serve`
-whose arguments listen there) running this tree's `bin/fylgja`, neither `(deleted)` nor
-another file, since every unstamped build has the same version, with
-`FYLGJA_DEFAULT_SCOPE=tag:fylgja` in its environment, since the checks send no scope; without either it fails
-before any case, saying what to do. A server whose `/proc/<pid>/exe` the script cannot
-read, as one started under `sg docker`, is said and not compared. **`PLATFORMS=<list> make test-e2e`** narrows a run to a list of shipped
+10.0 s). 020 moves every command that names a branch or a stage to `fylgja-cli`, each
+paying its ephemeral server's start (about 17 s warm), and its run is measured at 020's
+close. Every case reads under the orchestrator's default scope, `tag:fylgja`, which every
+fixture's devices carry, but case 5's create, which names it: `local/.env` must name
+`FYLGJA_DEFAULT_SCOPE=tag:fylgja`, or the run fails before any case, saying to add it.
+Case 9's needs are checked before any case too: `fylgja-step` and `fylgja-twin` among
+`main`'s check definitions at this tree's commit; from inside each task worker, on its own
+Python, the platform's `/api/health` and, with the credential, the deployment
+`twin-rehearse/main` both `200`, and the core's `POST
+host.docker.internal:7650/v1/twin/show` answering nothing, since the core listens on
+loopback alone; the platform from the host at `local/.env`'s `PREFECT_API_URL` with its
+auth string; the runner, `fylgja-orchestrator serve` of this venv under
+`PREFECT_HOME=local/orchestrator/prefect`, started after `orchestrator/src`'s last change,
+reading under `FYLGJA_DEFAULT_SCOPE=tag:fylgja` and reaching the core at
+`127.0.0.1:7650`; and the operator's core there, this tree's binary and build, logging to
+`local/server.log` and holding none of `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` and
+`FYLGJA_DEFAULT_SCOPE`. Without any of them it fails before any case, saying what to do. **`PLATFORMS=<list> make test-e2e`** narrows a run to a list of shipped
 package names (the stems of `psp/*.yaml`, comma- or space-separated). A case runs when the
 list names every package it needs (cases 1–5, 7 and 9 `nokia_srlinux`; 6 and 8 also
 `arista_eos`, in one table at the top of the script) and each account-gated image among
@@ -695,17 +727,25 @@ cases 1–5, 7 and 9 and took about 19 minutes before 019, which adds case 5's f
 to it too (1,027.7 s on 2026-10-19, 1,042.9 s on 2026-10-20, 1,156.3 s on 2026-10-26,
 1,156.1 s on 2026-10-27). After the workflow service's health check it
 makes a token for the run (never exported), starts `bin/fylgja serve --listen 127.0.0.1:0`
-from the tree in its full environment, logging to `$OUT/server.log`, and reads the port
-the system chose. Every `fylgja` command, the trap's destroy included, runs with `PATH`,
-`HOME` and the API's two variables alone, as `env -i` would; `gnmic`, Docker,
-containerlab, `twin.json`, the store, the boot half, the fixture tool and case 3's
-short-lived worker stay direct. From 018 every create asserts its snapshot filed under
+from the tree with every `INFRAHUB_*`, `FYLGJA_DEFAULT_SCOPE` and the platform's auth
+string unexported, logging to `$OUT/server.log`, and reads the port the system chose. Every
+`fylgja` command, the trap's destroy included, runs with `PATH`, `HOME` and the API's two
+variables alone, as `env -i` would; every `fylgja-cli` command with those, Infrahub's two,
+`FYLGJA_DEFAULT_SCOPE`, `FYLGJA_ORCHESTRATOR_ROOT=$OUT/orchestrator` and
+`PREFECT_HOME=$OUT/prefect` alone, so no `PREFECT_API_URL` reaches it and each flow runs
+on Prefect's ephemeral server; `gnmic`, Docker, containerlab, `twin.json`, the store, the
+boot half, the fixture tool and case 3's short-lived worker stay direct. At the end the
+script's core log, and the operator's from where case 9 began, are held to name none of the
+five operations the orchestrator took and at least one `twin.create`. From 018 every create asserts its snapshot filed under
 `snapshots/<snapshot_id>.json`, named in `twin.json`, and no `bundles/*.ctm.json` newer
 than the case's start, since the host's store keeps the retired sidecars of every read
-before it; the read-then-compile helper reads with `intent read --out`, a snapshot, and
-compiles with `twin compile --snapshot`. The cases:
+before it; the read-then-compile helper reads with `fylgja-cli intent read --out`, a
+snapshot, and compiles with `fylgja twin compile --snapshot`. From 020 every create is sent
+its snapshot, so every record's `source` is `snapshot`, and a stage is read from the
+orchestrator's record under `$OUT/orchestrator`, since `twin.json` `12` names none. The
+cases:
 
-1. **A create.** `twin create` from `fylgja-fixture`, to three ready SR Linux
+1. **A create.** `fylgja-cli twin create` from `fylgja-fixture`, to three ready SR Linux
    nodes with the snapshot and the `bundle_id` that `intent read | twin compile` gives;
    each node read back over gNMI (its `ethernet-1/1` description is the one its staged
    artifact sets, and `twin.json`'s checksums are Infrahub's); the conformance suite's boot
@@ -714,13 +754,15 @@ compiles with `twin compile --snapshot`. The cases:
    bundle, `snapshot <id>, bundle_id <id>`; `twin.json`'s provenance and `twin show` naming
    `scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`; a second
    create refused naming the twin; destroy.
-2. **Another reference.** A create `--at T`, T taken once the fixture's three artifacts are
-   `Ready`, with the snapshot and the `bundle_id` that `intent read --at T | twin compile`
-   gives; destroy.
+2. **Another reference.** A read at `T`, T taken once the fixture's three artifacts are
+   `Ready` (`fylgja-cli intent read --at T --out`), and `fylgja twin create --snapshot` of
+   it, since `fylgja-cli twin create` takes no `--at`, with the snapshot and the
+   `bundle_id` that `intent read --at T | twin compile` gives, the record's provenance
+   naming `T`; destroy.
 3. **An orphan.** A one-node lab `fylgja` deployed by hand, named an orphan by a
    short-lived worker of the script's own and by a dry run, and cleared by destroy.
-4. **Reproducibility.** The create `--at T` again, holding case 2's snapshot and
-   `bundle_id`; destroy.
+4. **Reproducibility.** The read at `T` and its create again, holding case 2's snapshot
+   and `bundle_id`; destroy.
 5. **A frozen twin, stepped** (019), **with a probe** (016). A throwaway branch
    `fylgja-test-e2e-<pid>-<n>` is seeded; its dry run with `--probes
    testdata/probes/n1-loop.json` lists the probe's two hosts among the nodes, and a twin is
@@ -733,13 +775,14 @@ compiles with `twin compile --snapshot`. The cases:
    checksum awaited, then 330 s from that moment (`FROZEN_WAIT_S`, longer than the default
    interval of the check a following build ran): `twin.json`, the three containers and
    the kind line have not moved, and the workflow service lists no run started since the
-   create's answer. `intent read --out` and `twin compile --snapshot` give the changed
-   branch's snapshot and bundle, and `twin step --snapshot <file>` steps to them: the
-   record names that snapshot and bundle, no stage and `source` `intent`, n1 reads
+   create's answer. `fylgja-cli intent read --out` and `twin compile --snapshot` give the
+   changed branch's snapshot and bundle, and `twin step --snapshot <file>` steps to them: the
+   record names that snapshot and bundle, no stage and `source` `snapshot`, n1 reads
    `disable`, and `twin verify` (5a) skips that port and both ends of its link, and the
    probe's two links at both ends, holds the burst and names the snapshot. A link change
-   (`-add-link`), n1's and n3's checksums awaited, is stepped to by the id `intent read
-   --out` filed it under, the link re-cabled live, and `twin show` names that snapshot,
+   (`-add-link`), n1's and n3's checksums awaited, is read by `fylgja-cli intent read
+   --out`, filed beside the twin by a dry run of `twin step --snapshot <file>`, which
+   leaves `twin.json` unchanged, and stepped to by its id, the link re-cabled live, and `twin show` names that snapshot,
    stepped from the first by run `fylgja-step`. Each step's document and `twin.json` carry
    the probe's loss, alike, on basis `container`, `measured`, more than none sent, its
    figure printed and never asserted. Destroy; the branch is deleted.
@@ -750,22 +793,23 @@ compiles with `twin compile --snapshot`. The cases:
    the branch deleted.
 7. **A proposed change's stages.** A throwaway branch `fylgja-test-e2e-st-<pid>-<n>`:
    seed, `-propose`, `-stage seeded`, `-add-link`, n1's and n3's checksums awaited,
-   `-stage third-link`. `stage plan --json` lists four stages and three steps, exit 1: the
+   `-stage third-link`. `fylgja-cli stage plan --json` lists four stages and three steps, exit 1: the
    branch point refused `scope.empty`, since the development host's `main` holds no
    device tagged `fylgja`, its snapshot and bundle ids null and its step not computed;
    `seeded`, `third-link` and the head taken and compiled to three snapshot ids and three
    bundle ids; a link added with n1 and n3 changed, their artifacts included; and
-   `unchanged` to the head. `stage list --json` lists the four with no twin. `twin create
-   --stage …/seeded` deploys the plan's `seeded` snapshot and bundle, its `twin.json` `11`
-   names the stage and the proposed change, `twin show` gives kind `snapshot`, naming the
-   plan's snapshot, and `stage list` marks it; it is read back against the artifacts Infrahub held when `seeded` was marked.
-   A `twin step` with no target takes it to `third-link`, the link re-cabled live on n1
+   `unchanged` to the head. `stage list --json` lists the four with no twin. `fylgja-cli
+   twin create --stage …/seeded` deploys the plan's `seeded` snapshot and bundle, the
+   orchestrator's record names the stage and the proposed change, `twin show` gives kind
+   `snapshot`, naming the plan's snapshot, and `stage list` marks it; it is read back against the artifacts Infrahub held when `seeded` was marked.
+   A `fylgja-cli twin step` with no target takes it to `third-link`, the link re-cabled live on n1
    and n3 and both pushed, n2 untouched; a second, to the head, is `unchanged` and moves
    the record, and the list's mark follows each. Each step's sides, its document and the
-   record it leaves name the plan's snapshot and bundle ids for their stages. Destroy;
-   `-delete` reports two stages, one proposed
-   change and the branch, after which `stage list --branch` lists nothing, exit 0, and
-   `stage plan --branch` is refused `stage.unknown`, exit 1.
+   record it leaves name the plan's snapshot and bundle ids for their stages. Destroy,
+   after which the record is not trusted; `-delete` reports two stages, one proposed
+   change and the branch, after which `stage list --branch` lists nothing but
+   `record.twin.stale`, exit 0, and `stage plan --branch` is refused `stage.unknown`,
+   exit 1.
 8. **A step.** A throwaway mixed branch `fylgja-test-e2e-step-<pid>-<n>`: `-mixed`,
    `-propose`, `-stage seeded`, `-add-mixed-link`, `-stage mixed-link`. The probe
    `e1-loop` is written into `FylgjaProbe` on `main` (`-probes`), which every read from then
@@ -797,16 +841,25 @@ compiles with `twin compile --snapshot`. The cases:
    `not reached`. `-delete`, after which the threads, their comments and the user
    validators are gone, and the probe is deleted from `main`. `probe-port-down` took 015's
    `bad-port`'s place: a stage that fails stops the run, so a push refused at a fourth
-   stage would never be reached. The two rehearsals are no command of the script's: the check asks them of the
-   lab host's server on the bridge.
+   stage would never be reached. The two rehearsals are no command of the script's: each
+   check triggers the rehearse flow on the lab host's platform, whose runner drives the
+   operator's core on loopback. The run named in each thread, `fylgja-rehearse <id>`, is
+   the flow run, read on the platform `COMPLETED`, of the deployment
+   `twin-rehearse/main` with the case's branch; its log, read as the checks read it, names
+   the core's runs, a provision and a destroy among them, whose histories are fetched for
+   the greps; and each reproduce line of the report names its own client, `fylgja-cli`
+   for the create and the steps, `fylgja` for the verify and the destroy.
 
 Every seeded device's `description` carries `FYLGJA-MARKER`, which the template writes
 into its artifact's header comment, and the script finds it, and
 the API's token, `local/.env`'s token and both passwords, in no output, record, document,
 decoded run history, server log (or the worker's, with `WORKER_LOG`), check message or
-comment, and the tokens and passwords in neither the bundle store nor the snapshot store
-either: the marker only in a read's snapshot and a compiled bundle, as both stores hold it
-by design. The server is stopped before the greps, and one that
+comment, nor, when case 9 ran, in `local/server.log`, `local/prefect.log`,
+`local/orchestrator.log` and the platform's home; the platform's auth string is searched
+as its password and as the basic-auth header's base64 of the whole. The tokens and
+passwords are in neither the bundle store nor either snapshot store: the marker only in a
+read's snapshot (the directories named `snapshots`, the orchestrator's under `$OUT` among
+them) and a compiled bundle, as the stores hold it by design. The server is stopped before the greps, and one that
 does not exit 0 on SIGTERM fails the run. After every destroy no probe's host container,
 `clab-fylgja-<probe>-a` or `-b`, is left. The script leaves the host clean: a leaked lab,
 twin directory, probe's host container or Schedule `fylgja-follow` exits 99, the last one a following build's,
@@ -854,15 +907,15 @@ Rules:
   compiler's own sources spell nothing a probe package names (`linux`, `alpine`, the
   literal `"ping"`). The grep
   (`TestCompilerNamesNoPlatform`) walks named directories, not the whole of `internal/`:
-  the compiler, `psp`, `lab`, `provision`, `stage`, `bundle`, `validate`, `step`,
-  `stages`, `verify`, `api`, `server`, `cli`, `tree` and `rehearsal`. A new package joins
-  it only by being added to that list. `internal/step` and `internal/rehearsal` are also
+  the compiler, `psp`, `lab`, `provision`, `bundle`, `validate`, `step`, `verify`, `api`,
+  `server`, `cli` and `tree` (`stage`, `stages` and `rehearsal` left with the reader at
+  020). A new package joins it only by being added to that list. `internal/step` is also
   held pure by a test in the compiler's shape. That grep is how
   [D-031](decisions.md#d-031) is enforced: a mechanism is keyed by a format value, never
   by which platform is being provisioned.
-- **Contract tests use a real Infrahub, never a fake.** The mapping over the library's
-  kinds, as Infrahub's schema endpoint and GraphQL report them, and time-travel are the
-  integrations most likely to surprise us.
+- **Contract tests use a real Infrahub, never a fake**, Go's and the orchestrator's alike.
+  The mapping over the library's kinds, as Infrahub's schema endpoint and GraphQL report
+  them, and time-travel are the integrations most likely to surprise us.
 - **Workflow tests use Temporal's `testsuite`**: retry, timeout, cancellation and
   cleanup-on-failure paths, without a server. Where the testsuite departs from the
   service — it settles a cancelled activity at once — a history recorded from the dev
@@ -918,8 +971,8 @@ from every failure and cancellation path after the host check. There is no sweep
 leaked lab in end-to-end is a bug, not a flake. A step tears nothing down: its cleanup is
 `RecordStep`, run on a disconnected context from every path after its stage, which
 writes the twin `diverged` when the step failed or was cancelled
-([D-036](decisions.md#d-036)). A rehearsal's cleanup is its `fylgja-destroy` child,
-started on a disconnected context from every path ([D-051](decisions.md#d-051)).
+([D-036](decisions.md#d-036)). A rehearsal's cleanup is the rehearse flow's
+`twin.destroy`, from its `finally`, outside the core ([D-065](decisions.md#d-065)).
 
 **Cancellation waits for the activity.** Host-bound activities are scheduled with
 `WaitForCancellation: true`, and the worker sets `MaxHeartbeatThrottleInterval: 10s`
@@ -946,8 +999,8 @@ server's already-started error and a second `create` attaches to the first and r
 its result as its own. `fylgja-destroy` starts with the `USE_EXISTING` conflict policy,
 so a second destroy attaches to the one in flight. `fylgja-step` starts as
 `fylgja-provision` does (`stepStartOptions`), so a second step is refused naming the
-first, and so does `fylgja-rehearse` (`rehearseStartOptions`). All four are asserted in
-tier 1.
+first. All three are asserted in tier 1; `fylgja-rehearse`'s, the fourth, left with its
+workflow at 020.
 
 **An interrupted start terminates its run.** A command starts nothing while no worker polls
 the queue. It then sends the start request where an interrupt does not reach it, under
@@ -1042,11 +1095,9 @@ a retried `push.failed` ([D-034](decisions.md#d-034), [D-035](decisions.md#d-035
 
 **A step is a third short workflow** ([D-036](decisions.md#d-036)). `twin step` makes
 every refusal before any connection to the service, in the API's server: the host as
-`twin show` reads it, whose record must name a snapshot (019), the target
-(`stages.Target`, then the stage's resolution), the read, compile and filing
-(`stages.Build`, `stage plan`'s path), or, for `--snapshot`, the snapshot resolved,
-compiled and filed as a create's with no request to Infrahub, either target held to the
-record's scope and mapping, the from bundle from the store, the host check in-process with
+`twin show` reads it, whose record must name a snapshot (019), the target snapshot,
+`--snapshot`'s, resolved, compiled (`server.Compile`) and filed as a create's, held to the
+twin's filed snapshot's scope and mapping, the from bundle from the store, the host check in-process with
 the two presence refusals dropped, and containerlab's plan (`Clab.DeployPlan`: `clab
 deploy --dry-run --format json` on the store's copy of the target, with
 `CLAB_LABDIR_BASE` at the twin directory, which writes nothing). Then `StartStep` starts
@@ -1103,28 +1154,19 @@ never the activity's error; only the activity's own failure stops the step at th
 `flows`. `internal/provision`'s `workflow_step_flows_test.go` holds every path on the test
 suite.
 
-**A rehearsal is a fourth short workflow, a parent of the three** ([D-051](decisions.md#d-051)).
-`twin rehearse` makes every refusal in the API's server before any run starts: the plan
-over every stage (`stages.Plan`, `stage plan`'s path), the baseline rule, the deadline
-(`rehearsal.Deadline`, from the node plans the host check reads and the mechanism
-constants `provision.DeadlineMechanism()` hands it, since `internal/rehearsal` imports
-neither `provision` nor `verify`; a test holds the two to agree), the runs in flight, the
-reclaim, the host check of the baseline's bundle, and each step's input. Then
-`StartRehearse` starts `Rehearse`, which runs the baseline as a `fylgja-provision` child
-(already compiled), `VerifyTwin` on the children's context with its own run id, so it
-writes no record, each later stage as a `fylgja-step` child, and always a `fylgja-destroy`
-child on a disconnected context, each child under `ChildOptions` and its own fixed id.
-The deadline is `workflow.NewTimer` on the run's clock whose firing cancels the children's
-context; it is stopped once the stages are done, so it never cuts the destroy. Each stage's verdict is `rehearsal.Classify` and `rehearsal.Stop`, pure
-functions of the child's result and its wait (`StepResult.WaitCounts` and
-`wire.VerifyResult.Counts` carry the verify counts, both omitted when nil, so the recorded
-step histories replay unchanged). It starts no activity of its own but the baseline's
-`VerifyTwin`, holds no signal and no TTL, and returns one result in every case, never an
-error. `StartDestroy` cancels a rehearsal in flight and waits for it before its own
-destroy; `StartProvision` and `StartStep` refuse beside one (`run.in_flight`), and
-`InFlight` lists it with its child. The rehearsal's reclaim destroys through
-`StartReclaim`, which reads the runs in flight again and refuses beside a rehearsal,
-provisioning or step run, naming it, where `StartDestroy` would cancel it.
+**A rehearsal was a fourth short workflow, a parent of the three, from 015 until 020**
+([D-051](decisions.md#d-051)): `fylgja-rehearse` ran the baseline as a `fylgja-provision`
+child, each later stage as a `fylgja-step` child and always a `fylgja-destroy` child on a
+disconnected context, under a deadline timer that cancelled the children's context, and
+returned one result in every case. It left the core at 020 with `internal/rehearsal`,
+`StartRehearse`, `StartReclaim`, `ChildOptions` and the in-flight reads of a child: the
+rehearsal is the orchestrator's flow `twin-rehearse`, which drives the three workflows
+through the API as any client does, each run started detached and read by its identity
+([D-065](decisions.md#d-065), architecture [§4.7](architecture.md#47-the-orchestrator)).
+`StepResult.WaitCounts` stays, since the step's document carries it and the flow reads it.
+No workflow of the core starts a child now, so `Follow` never follows one, and a history an
+earlier build's rehearsal left is read to its close with the child's history never asked
+for (`TestFollowFollowsNoChild`).
 
 **Naming.**
 
@@ -1134,7 +1176,7 @@ provisioning or step run, naming it, where `StartDestroy` would cancel it.
 | destroy workflow ID | `fylgja-destroy` (fixed) |
 | step workflow ID | `fylgja-step` (fixed; `wire.StepWorkflowID`, `provision.WorkflowStep`) |
 | the step's wait | activity `VerifyTwin` (`wire.ActVerifyTwin`), version change id `verify` (`provision.VerifyVersionID`), findings step `observe` |
-| rehearsal workflow ID | `fylgja-rehearse` (fixed; `wire.RehearseWorkflowID`, `provision.WorkflowRehearse`) |
+| rehearsal workflow ID | `fylgja-rehearse`, from 015 until 020; the rehearse flow's report names its flow run `fylgja-rehearse <id>` |
 | task queue | `fylgja` |
 | containerlab lab name | `fylgja` |
 | twin directory | `<state root>/twin/` |
@@ -1378,7 +1420,9 @@ convergence unattended, in two stages.
    loop resumes where it stopped. **Lanes**: two runs that mark each other `[∥ Run M]` run
    at once, up to `--lanes` (2), each as a headless session in its own worktree under
    `local/lanes/` on a branch `lane/<run>`, seeded with the git-ignored files Spec Kit needs
-   (directories by symlink, files by copy, since git refuses a symlinked `.gitignore`), with
+   and both venvs, the root's `infrahubctl` and `orchestrator/.venv`, whose `pytest` and
+   `ruff` `make test` and `make lint` run (directories by symlink, files by copy, since git
+   refuses a symlinked `.gitignore`), with
    `local/.env` and the command log's two directories linked so the hook writes the pending
    file this tree shares. A lane is told to run the tests of the packages it touched, not
    the whole tier, since two `make test` at once trip tier 1's wall bound; the merged tree
@@ -1484,7 +1528,11 @@ headless session like any other, except that it keeps both node logins, gets
 never to end its turn while a command it started still runs, and how to wait for tier 3
 instead: start it detached with its exit status in `local/converge-e2e.out`, then wait in
 foreground calls of under ten minutes. A headless session that ends its turn exits, and
-what it started dies with it, and tier 3 outlasts one Bash call. Converge, attended, tags
+what it started dies with it, and tier 3 outlasts one Bash call. Every implement session,
+live or not, is told the same of a subagent or background task it starts: 020's Run 10
+ended its turn with four subagents fixing tests, and the headless runtime stopped them ten
+minutes later, leaving its lane uncommitted and the loop stopped at `contract`
+(2026-10-29). Converge, attended, tags
 what needs the host `[live]` and keeps `[operator]` for what needs a decision; unattended
 both are `[operator]`. The attended session itself never runs tier 3, a twin or the worker.
 

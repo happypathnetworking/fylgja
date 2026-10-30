@@ -315,7 +315,7 @@ func TestSendHandsTheFilesOverBeforeWhatFollows(t *testing.T) {
 	})
 	var got []api.File
 	stdout, _ := printedBy(t, func() {
-		err := send(context.Background(), &options{}, findings.OpIntentRead, nil, nil, handlers{files: func(f []api.File) error {
+		err := send(context.Background(), &options{}, findings.OpCompile, nil, nil, handlers{files: func(f []api.File) error {
 			got = f
 			_, _ = io.WriteString(os.Stdout, "<files taken>\n")
 			return nil
@@ -329,9 +329,9 @@ func TestSendHandsTheFilesOverBeforeWhatFollows(t *testing.T) {
 		t.Errorf("files %+v", got)
 	}
 
-	refused := fail(findings.OpIntentRead, nil, "writing snapshot: a disk that is full")
+	refused := fail(findings.OpCompile, nil, "writing bundle: a disk that is full")
 	stdout, _ = printedBy(t, func() {
-		err := send(context.Background(), &options{}, findings.OpIntentRead, nil, nil,
+		err := send(context.Background(), &options{}, findings.OpCompile, nil, nil,
 			handlers{files: func([]api.File) error { return refused }})
 		if err != refused {
 			t.Errorf("send returned %v, not the files' failure", err)
@@ -349,7 +349,7 @@ var streamRE = regexp.MustCompile(`^[0-9a-f]{32}$`)
 func TestSendNamesAStreamForARunAlone(t *testing.T) {
 	fake := newAPIFake(t, func(w *fakeAnswer, op string, _ api.Request) { w.document(okDocument(op), "") })
 	ops := []string{findings.OpTwinCreate, findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep,
-		findings.OpTwinDestroy, findings.OpTwinShow, findings.OpTwinVerify, findings.OpIntentRead}
+		findings.OpTwinDestroy, findings.OpTwinShow, findings.OpTwinVerify, findings.OpCompile}
 	printedBy(t, func() {
 		for _, op := range ops {
 			_ = send(context.Background(), &options{}, op, nil, nil, handlers{})

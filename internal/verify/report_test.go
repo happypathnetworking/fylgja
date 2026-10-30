@@ -821,21 +821,19 @@ func TestBlock(t *testing.T) {
 		in.Record.BundleID = previousID
 		fromSnapshot, toSnapshot := strings.Repeat("35aea06f", 8), strings.Repeat("9c2d01e7", 8)
 		in.Record.SnapshotID = &fromSnapshot
-		in.Record.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", Description: "first", AtSource: "given"}
 		in.Record.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-			To: wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live", Description: "second", AtSource: "written"},
-				SnapshotID: toSnapshot, BundleID: target},
+			To:  wire.StepSide{SnapshotID: toSnapshot, BundleID: target},
 			Run: wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: "01a3"}}
-		in.Record.Nodes[0].Holds = &prev // e1 refused its push and holds change-1/cabled
-		// A rehearsal's twin (015): the record names the run whose baseline it is.
-		in.Record.Rehearsal = &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "01a1"}
+		in.Record.Nodes[0].Holds = &prev // e1 refused its push and holds the previous bundle
 		r := read(t, in)
 		wait := &findings.VerifyWait{BudgetS: 20, Reads: 3, Outcome: "settled", AfterS: 2.1}
 		doc := document(t, schema, r, r.Block(TwinOf(in.Record, in.StagedID), nil, findings.ShowServiceOK, wait), findings.StatusNonconforming)
 		v := doc["verify"].(map[string]any)
-		// The staged bundle is the step's target, so the snapshot named is the target's.
-		want := `{"snapshot_id":"` + toSnapshot + `","bundle_id":"` + target + `","stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled","description":"first","at_source":"given"},` +
-			`"rehearsal":{"workflow_id":"fylgja-rehearse","run_id":"01a1"},"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live","description":"second","at_source":"written"},` +
+		// The staged bundle is the step's target, so the snapshot named is the target's. A
+		// record names no stage and no rehearsal from twin.json 12, so the block's stage,
+		// rehearsal and towards' stage are null (020, research R-06).
+		want := `{"snapshot_id":"` + toSnapshot + `","bundle_id":"` + target + `","stage":null,` +
+			`"rehearsal":null,"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"stage":null,` +
 			`"bundle_id":"` + target + `"},"run":{"workflow_id":"fylgja-step","run_id":"01a3"},"phase":"push"}}`
 		if got := jsonOf(t, v["twin"]); got != canon(t, want) {
 			t.Errorf("twin %s\nwant %s", got, want)

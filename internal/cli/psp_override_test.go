@@ -2,11 +2,8 @@ package cli
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -72,30 +69,4 @@ func TestInvalidOverridePackageIsARejection(t *testing.T) {
 		}
 	})
 
-	t.Run("intent read", func(t *testing.T) {
-		// A server that counts requests: the package is refused before any is sent.
-		var requests atomic.Int32
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requests.Add(1)
-			http.Error(w, "unexpected", http.StatusTeapot)
-		}))
-		defer srv.Close()
-		t.Setenv("INFRAHUB_ADDRESS", srv.URL)
-		t.Setenv("INFRAHUB_API_TOKEN", "not-a-real-token")
-
-		out := filepath.Join(t.TempDir(), "snapshot.json")
-		usePSPDir(t, dir)
-		err := runRead(t.Context(), &options{asJSON: true},
-			&readFlags{branch: "fylgja-fixture", out: out})
-		code, doc := docOf(t, err)
-		if code != findings.ExitRejected || !carries(doc, findings.RulePSPReadinessEncoding) {
-			t.Errorf("exit %d, findings %+v; want 1 with %s", code, doc.Findings, findings.RulePSPReadinessEncoding)
-		}
-		if n := requests.Load(); n != 0 {
-			t.Errorf("Infrahub received %d request(s) before the package was refused", n)
-		}
-		if _, err := os.Stat(out); !os.IsNotExist(err) {
-			t.Errorf("a refused read wrote %s", out)
-		}
-	})
 }

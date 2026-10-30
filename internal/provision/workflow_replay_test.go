@@ -63,8 +63,10 @@ func replayProvision(t *testing.T, history string) ProvisionResult {
 // input and result and the run's own result, were rewritten to the stage block by
 // testdata/rewrite-stage.go (014, research R-10): proposed change fylgja-test-pause-pc on the
 // series' branch, labelled s<sequence>, each payload otherwise as recorded, the old messages'
-// words included. The run decides on the block's presence, never its content, so without it
-// the replay would refuse the twin as unsteppable and issue other commands.
+// words included. Until 020 the run decided on the block's presence, never its content, so
+// without it the replay would have refused the twin as unsteppable and issued other commands;
+// from 020 it reads neither the block nor a waypoint (research R-06), its second lock
+// comparing bundles alone, and each history replays to the same commands, unchanged (FR-033).
 func replayStep(t *testing.T, history string) StepResult {
 	t.Helper()
 	capture := &resultCapture{}

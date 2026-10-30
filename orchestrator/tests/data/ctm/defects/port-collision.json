@@ -1,0 +1,116 @@
+{
+  "ctm_version": "2",
+  "envelope": {
+    "branch": "fylgja-fixture",
+    "observed_at": "2026-09-08T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "scope": "tag:fylgja",
+    "mapping": {
+      "reader": "infrahub-dcim",
+      "model": "opsmill/schema-library",
+      "version": "26336e9"
+    },
+    "fidelity": [
+      {
+        "disposition": "approximated",
+        "object": "interface.enabled",
+        "source": "InterfacePhysical.status",
+        "reason": "a port is enabled unless its status is disabled; the library's status is not an admin state"
+      },
+      {
+        "disposition": "approximated",
+        "object": "interface.mgmt_only",
+        "source": "InterfacePhysical.role",
+        "reason": "the management port is the port whose role is management; the library has no management-only flag"
+      },
+      {
+        "disposition": "omitted",
+        "object": "platform.version",
+        "source": "DcimPlatform",
+        "reason": "the library's platform carries no version"
+      }
+    ]
+  },
+  "devices": [
+    {
+      "name": "c1",
+      "platform": {
+        "package": "chassisos"
+      },
+      "interfaces": [
+        {
+          "name": "Ethernet1/1",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/1|c2:Ethernet1/1"
+        },
+        {
+          "name": "Ethernet2/1",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet2/1|c2:Ethernet1/2"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "a16f653a076e2559a056c5d8e18c1212",
+        "content": "! c1: production configuration (illustrative, never deployed)\nhostname c1\n"
+      }
+    },
+    {
+      "name": "c2",
+      "platform": {
+        "package": "chassisos"
+      },
+      "interfaces": [
+        {
+          "name": "Ethernet1/1",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/1|c2:Ethernet1/1"
+        },
+        {
+          "name": "Ethernet1/2",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet2/1|c2:Ethernet1/2"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "f63e12228620357f0246ed8bac1e19a6",
+        "content": "! c2: production configuration (illustrative, never deployed)\nhostname c2\n"
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "c1:Ethernet1/1|c2:Ethernet1/1",
+      "endpoints": [
+        {
+          "device": "c1",
+          "interface": "Ethernet1/1"
+        },
+        {
+          "device": "c2",
+          "interface": "Ethernet1/1"
+        }
+      ]
+    },
+    {
+      "id": "c1:Ethernet2/1|c2:Ethernet1/2",
+      "endpoints": [
+        {
+          "device": "c1",
+          "interface": "Ethernet2/1"
+        },
+        {
+          "device": "c2",
+          "interface": "Ethernet1/2"
+        }
+      ]
+    }
+  ]
+}

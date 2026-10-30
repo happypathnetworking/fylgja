@@ -1,0 +1,23 @@
+{
+  "about": "m2Documents: create rejected by the host check",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.create",
+    "status": "rejected",
+    "subject": {
+      "branch": "fylgja-fixture"
+    },
+    "bundle_id": "b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5",
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "host.lab.present",
+        "object": "lab fylgja",
+        "message": "lab fylgja exists (3 nodes); fylgja twin destroy clears it",
+        "step": "host_check"
+      }
+    ]
+  },
+  "text": "rejection host.lab.present [step host_check] lab fylgja: lab fylgja exists (3 nodes); fylgja twin destroy clears it\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 1
+}

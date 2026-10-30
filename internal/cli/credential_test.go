@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,7 +17,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -32,8 +29,8 @@ import (
 const sentinel = "fylgja-secret-sentinel-4f2a9c"
 
 // unreachable is an address where nothing listens, so the failure is a transport
-// error carrying a request dump — the shape most likely to quote a header back
-// (internal/intent/errors.go, redact).
+// error carrying a request dump — the shape most likely to quote a header back (the Go
+// reader's redact did until 020, T035).
 const unreachable = "http://127.0.0.1:1"
 
 // shown collects every byte a command would put in front of an operator: the JSON
@@ -57,92 +54,9 @@ func shown(t *testing.T, err error) string {
 	return buf.String()
 }
 
-// echoingServer answers every request with the given status and a body quoting the
-// credential back, the way a badly behaved proxy or a debug-mode server would. If
-// anything Fylgja prints were built from a response body, the sentinel would surface
-// through it — which is what makes these cases evidence rather than decoration.
-func echoingServer(t *testing.T, status int) string {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(`{"errors":["rejected key ` + r.Header.Get("X-INFRAHUB-KEY") + `"]}`))
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL
-}
-
-// The credential must appear in no finding and no error message — including when the
-// credential itself is what failed (Constitution X). A token that
-// leaks into an error is a token that ends up in a log, a ticket, and a pasted stack
-// trace.
-func TestCredentialNeverReachesOutput(t *testing.T) {
-	// A mode with no address gets an echoing server, built per subtest so each gets
-	// a fresh one; status 0 means "reach nothing at all".
-	for _, mode := range []struct {
-		name    string
-		address string
-		status  int
-	}{
-		{name: "unreachable address", address: unreachable},
-		{name: "rejected credential", status: http.StatusUnauthorized},
-		{name: "server error quoting the credential", status: http.StatusInternalServerError},
-	} {
-		for _, op := range []struct {
-			name string
-			run  func(t *testing.T, out string) error
-		}{
-			{"intent read", func(t *testing.T, out string) error {
-				return runRead(t.Context(), &options{}, &readFlags{branch: "any-branch", out: out})
-			}},
-			{"schema check", func(t *testing.T, _ string) error {
-				return runCheck(t.Context(), &options{}, &checkFlags{branch: "any-branch"})
-			}},
-			// A dry run reads in the CLI's own process, with the CLI's own token.
-			{"twin create --dry-run", func(t *testing.T, _ string) error {
-				paths := useStateRoot(t)
-				useService(t, nil)
-				dryRunEnv(t)
-				useClab(t, "inspect-empty.json")
-				err := runCreate(t.Context(), &options{}, &createFlags{branch: "any-branch", dryRun: true})
-				if got := entriesOf(t, paths.Bundles); len(got) != 0 {
-					t.Errorf("a dry run whose read failed filed %v", got)
-				}
-				return err
-			}},
-		} {
-			t.Run(mode.name+"/"+op.name, func(t *testing.T) {
-				address := mode.address
-				if address == "" {
-					address = echoingServer(t, mode.status)
-				}
-				t.Setenv(intent.EnvAddress, address)
-				t.Setenv(intent.EnvToken, sentinel)
-				served := markServed()
-
-				out := filepath.Join(t.TempDir(), "never.json")
-				var err error
-				stdout := captureStdout(t, func() { err = op.run(t, out) })
-				noSecretServed(t, served, sentinel)
-				if err == nil {
-					t.Fatal("expected the operation to fail")
-				}
-				if text := stdout + shown(t, err); strings.Contains(text, sentinel) {
-					t.Errorf("the credential appeared in output:\n%s", text)
-				}
-				var res *result
-				if asResult(err, &res) && res.doc.Status.ExitCode() != findings.ExitError {
-					t.Errorf("exit %d, want %d", res.doc.Status.ExitCode(), findings.ExitError)
-				}
-				if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-					t.Errorf("a failed %s left a file at %s", op.name, out)
-				}
-			})
-		}
-	}
-}
-
 // probeSentinel stands in for the readiness probe's password, as sentinel stands in for the
-// Infrahub token.
+// Infrahub token. (The Infrahub token's own cases, a read and a schema check through a
+// server reading Infrahub, went with the reader, 020: the core reads no Infrahub.)
 const probeSentinel = "fylgja-probe-password-sentinel-7c1d0e"
 
 // The probe password is held by the worker, not the CLI, and read for its presence
@@ -155,7 +69,7 @@ func TestProbeLoginNeverReachesOutput(t *testing.T) {
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", probeSentinel)
 
 	t.Run("create reporting a readiness timeout", func(t *testing.T) {
-		useFixtureRead(t)
+		useFixtureSnapshot(t)
 		result, events := readinessTimeoutRun()
 		useService(t, &fakeService{runID: "run-1", events: events, result: result})
 		useInterrupts(t)
@@ -163,7 +77,7 @@ func TestProbeLoginNeverReachesOutput(t *testing.T) {
 
 		var err error
 		stdout := captureStdout(t, func() {
-			err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
+			err = runCreate(context.Background(), &options{}, &createFlags{snapshot: headSnapshotID})
 		})
 		noSecretServed(t, served, probeSentinel)
 		code, doc := exitOf(t, err)
@@ -300,8 +214,8 @@ func readinessTimeoutRun() (provision.ProvisionResult, []provision.Event) {
 // and neither may the command's own output, even though `twin compile` never reads
 // the network and never needs a token.
 func TestBundleCarriesNoCredential(t *testing.T) {
-	t.Setenv(intent.EnvAddress, unreachable)
-	t.Setenv(intent.EnvToken, sentinel)
+	t.Setenv("INFRAHUB_ADDRESS", unreachable)
+	t.Setenv("INFRAHUB_API_TOKEN", sentinel)
 
 	out := filepath.Join(t.TempDir(), "bundle")
 	served := markServed()
@@ -336,60 +250,5 @@ func TestBundleCarriesNoCredential(t *testing.T) {
 	})
 	if walkErr != nil {
 		t.Fatal(walkErr)
-	}
-}
-
-// An unset credential is refused before the first request, not after one is rejected:
-// sending an unauthenticated read would put a request in Infrahub's log for an
-// operation that was never going to work, and the operator would read the answer as
-// "the token is wrong" rather than "there is no token".
-func TestMissingCredentialSendsNoRequest(t *testing.T) {
-	for _, op := range []struct {
-		name string
-		run  func(t *testing.T, out string) error
-	}{
-		{"intent read", func(t *testing.T, out string) error {
-			return runRead(t.Context(), &options{}, &readFlags{branch: "fylgja-fixture", out: out})
-		}},
-		{"schema check", func(t *testing.T, _ string) error {
-			return runCheck(t.Context(), &options{}, &checkFlags{branch: "fylgja-fixture"})
-		}},
-	} {
-		t.Run(op.name, func(t *testing.T) {
-			requests := 0
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				requests++
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			t.Setenv(intent.EnvAddress, srv.URL)
-			t.Setenv(intent.EnvToken, "")
-			served := markServed()
-
-			out := filepath.Join(t.TempDir(), "never.json")
-			err := op.run(t, out)
-			noSecretServed(t, served)
-
-			var res *result
-			if !asResult(err, &res) {
-				t.Fatalf("returned %v, want a findings result", err)
-			}
-			if code := res.doc.Status.ExitCode(); code != findings.ExitError {
-				t.Errorf("exit %d, want %d", code, findings.ExitError)
-			}
-			if len(res.doc.Findings) != 1 || res.doc.Findings[0].Rule != findings.RuleOperationFailed {
-				t.Fatalf("want one %s finding, got %+v", findings.RuleOperationFailed, res.doc.Findings)
-			}
-			if msg := res.doc.Findings[0].Message; !strings.Contains(msg, intent.EnvToken) {
-				t.Errorf("message does not name the variable to set: %s", msg)
-			}
-			if requests != 0 {
-				t.Errorf("%d request(s) reached Infrahub with no credential set", requests)
-			}
-			if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-				t.Error("a failed operation left a file behind")
-			}
-		})
 	}
 }

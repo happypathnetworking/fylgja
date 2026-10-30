@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -47,7 +48,6 @@ var dataModelRules = []string{
 	"psp.acquisition.kvm",
 	// Operational failures.
 	"operation.failed",
-	"intent.at.precision",
 
 	// M2's rules. Appended, not interleaved, so M1's list above stays as it was
 	// transcribed.
@@ -110,7 +110,6 @@ var dataModelRules = []string{
 	"step.twin.unsteppable",
 	"step.twin.diverged",
 	"step.target.unknown",
-	"step.target.current",
 	"step.bundle.missing",
 	"step.package.merge",
 	"step.node.unapplied",
@@ -135,46 +134,13 @@ var dataModelRules = []string{
 	"api.version.unknown",
 	"api.transfer.too_large",
 
-	// 014's rules (research R-08). Appended; they replace M10's eight, which left with
-	// M11's skipped-target warning at the switch: seven renamed, five new, and the
-	// reversed-time warning dropped, since marks are ordered by their at. The skipped
-	// target is step.stage.skipped, last.
-	"stage.ref.invalid",
-	"stage.flags.conflict",
-	"stage.kind.absent",
-	"stage.unknown",
-	"stage.duplicate",
-	"stage.at.unresolved",
-	"stage.at.before_branch_point",
-	"stage.label.reserved",
-	"stage.artifact.stale",
-	"stage.orphaned",
-	"stage.main.moved",
-	"stage.twin.moved",
-	"step.stage.skipped",
-
-	// 015's rules (research R-08). Appended; the refusals before the start, an interrupt,
-	// a destroy that leaves something and the verify findings keep their identifiers.
-	"rehearsal.deadline.unfit",
-	"rehearsal.twin.reclaimed",
-	"rehearsal.steps.none",
-	"rehearsal.stage.failed",
-	"rehearsal.stage.error",
-	"rehearsal.baseline.failed",
-	"rehearsal.deadline.cut",
-	"rehearsal.stage.moved",
-	"rehearsal.change.closed",
+	// 014's twelve stage rules and step.stage.skipped, and 015's nine rehearsal rules, left
+	// this table at 020 (T035) with their operations: the orchestrator's
+	// (TestTheOrchestratorsRulesAreRetired).
 
 	// 017's rules (research R-21). Appended; the eight the generics left are gone from
-	// both lists (FR-016; retiredWithTheGenerics below).
-	"scope.invalid",
-	"scope.unset",
-	"scope.empty",
-	"schema.kind.missing",
-	"schema.field.missing",
-	"schema.field.mismatch",
-	"schema.choice.missing",
-	"schema.used_by.missing",
+	// both lists (FR-016; retiredWithTheGenerics below), and the scope's three and the
+	// schema check's five went to the orchestrator at 020 (T035).
 	"platform.missing",
 	"platform.unmatched",
 	"omit.cable.ends",
@@ -192,12 +158,11 @@ var dataModelRules = []string{
 	"snapshot.version.unsupported",
 	"snapshot.id.mismatch",
 	"snapshot.unknown",
-	"snapshot.flags.conflict",
 
-	// 016's rules (data-model §12). Appended; none retires (R-27), and snapshot.invalid,
-	// snapshot.version.unsupported and snapshot.flags.conflict above are reworded, not renamed.
-	"probes.version.unsupported",
-	"probes.invalid",
+	// 016's rules (data-model §12). Appended; none retired at 016 (R-27), and snapshot.invalid
+	// and snapshot.version.unsupported above are reworded, not renamed. The declaration
+	// file's two, probes.version.unsupported and probes.invalid, and probe.kind.absent went
+	// to the orchestrator at 020 (T035), with snapshot.flags.conflict.
 	"probe.name.invalid",
 	"probe.name.duplicate",
 	"probe.address.invalid",
@@ -212,7 +177,6 @@ var dataModelRules = []string{
 	"probe.interface.mgmt_only",
 	"probe.port.taken",
 	"probe.host.collision",
-	"probe.kind.absent",
 	"probe.package.schema",
 	"probe.package.version.unknown",
 	"probe.package.format.duplicate",
@@ -221,6 +185,14 @@ var dataModelRules = []string{
 	"flow.start.failed",
 	"flow.read.failed",
 	"verify.burst",
+
+	// 020's rules (data-model §11, R-19). Appended; the core's runs by identity. The
+	// orchestrator's left this table at T035 (TestTheOrchestratorsRulesAreRetired).
+	"run.detached",
+	"run.unknown",
+	"run.cancel.requested",
+	"run.ended",
+	"run.flags.conflict",
 }
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
@@ -332,6 +304,66 @@ func TestTheGenericsRulesAreRetired(t *testing.T) {
 		}
 		if slices.Contains(dataModelRules, rule) {
 			t.Errorf("the rule table still names %q; 017 retired it with the generics", rule)
+		}
+	}
+}
+
+// retiredToTheOrchestrator are the core's identifiers 020 moved to the orchestrator
+// (data-model §11; research R-19, §5.13): 014's stage rules, 015's rehearsal rules, 017's
+// scope and schema check rules, the read's at, the declaration file's and the probe kind's,
+// the read's flags beside --snapshot, and the step's two stage rules. step.target.unknown
+// and M2's stage.failed stay the core's: the first is twin step's refusal of no
+// --snapshot, the second M2's staging step.
+var retiredToTheOrchestrator = []string{
+	"scope.invalid", "scope.unset", "scope.empty",
+	"schema.kind.missing", "schema.field.missing", "schema.field.mismatch", "schema.choice.missing", "schema.used_by.missing",
+	"intent.at.precision", "probe.kind.absent", "probes.version.unsupported", "probes.invalid", "snapshot.flags.conflict",
+	"stage.ref.invalid", "stage.flags.conflict", "stage.kind.absent", "stage.unknown", "stage.duplicate", "stage.at.unresolved",
+	"stage.at.before_branch_point", "stage.label.reserved", "stage.artifact.stale", "stage.orphaned", "stage.main.moved",
+	"stage.twin.moved", "step.target.current", "step.stage.skipped",
+	"rehearsal.deadline.unfit", "rehearsal.twin.reclaimed", "rehearsal.steps.none", "rehearsal.stage.failed",
+	"rehearsal.stage.error", "rehearsal.baseline.failed", "rehearsal.deadline.cut", "rehearsal.stage.moved",
+	"rehearsal.change.closed",
+}
+
+// rulesFile is the orchestrator's table of every rule its adapter and flows file
+// (data-model §11), read as a file: this package imports nothing of the orchestrator's.
+var rulesFile = filepath.Join("..", "..", "orchestrator", "src", "fylgja_orchestrator", "documents", "rules.py")
+
+// Each retired identifier is neither declared nor in the rule table, so no document of the
+// core's carries one, and each is the orchestrator's: a _r("<id>", …) row of its rules.py
+// that does not say core=True. step.target.unknown and stage.failed stay declared.
+func TestTheOrchestratorsRulesAreRetired(t *testing.T) {
+	raw, err := os.ReadFile(rulesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string]string{}
+	for _, m := range regexp.MustCompile(`(?s)_r\("([a-z_.]+)",(.*?)\),\n`).FindAllStringSubmatch(string(raw), -1) {
+		rows[m[1]] = m[2]
+	}
+	if len(rows) < len(retiredToTheOrchestrator) {
+		t.Fatalf("%s holds %d rows; the test is reading the wrong place", rulesFile, len(rows))
+	}
+	declared := declaredRules(t)
+	for _, rule := range retiredToTheOrchestrator {
+		if name, ok := declared[rule]; ok {
+			t.Errorf("%s = %q is declared; 020 moved it to the orchestrator", name, rule)
+		}
+		if slices.Contains(dataModelRules, rule) {
+			t.Errorf("the rule table still names %q; 020 moved it to the orchestrator", rule)
+		}
+		row, ok := rows[rule]
+		switch {
+		case !ok:
+			t.Errorf("%s has no row for %q, which the core no longer files", rulesFile, rule)
+		case strings.Contains(row, "core=True"):
+			t.Errorf("%s marks %q the core's; 020 retired it from the core", rulesFile, rule)
+		}
+	}
+	for _, kept := range []string{"step.target.unknown", "stage.failed"} {
+		if _, ok := declared[kept]; !ok {
+			t.Errorf("%q is not declared; the core keeps it", kept)
 		}
 	}
 }
@@ -470,10 +502,6 @@ func TestEveryOperationRendersAValidDocument(t *testing.T) {
 		Location: &Location{File: "psp/x.yaml", Line: 12},
 	}}
 
-	readOK := NewDocument(OpIntentRead, &Subject{Branch: "fylgja-fixture", CTM: "ctm.json"}, nil)
-	readPinned := NewDocument(OpIntentRead,
-		&Subject{Branch: "fylgja-fixture", At: "2026-09-14T12:00:00.000000Z", CTM: "ctm.json"}, rejected)
-
 	compileOK := NewDocument(OpCompile, &Subject{CTM: "ctm.json", Out: "/tmp/bundle"}, nil)
 	compileOK.BundleID = strings.Repeat("ab", 32)
 
@@ -481,22 +509,9 @@ func TestEveryOperationRendersAValidDocument(t *testing.T) {
 		label string
 		doc   *Document
 	}{
-		{"intent read ok", readOK},
-		{"intent read rejected", readPinned},
-		{"intent read at too precise", RuleErrorDocument(OpIntentRead,
-			&Subject{Branch: "b", At: "2026-09-14T12:00:00.123456789Z"},
-			RuleAtPrecision, "2026-09-14T12:00:00.123456789Z",
-			"--at carries 9 fractional digits; Infrahub honours at most six")},
 		{"twin compile ok", compileOK},
 		{"twin compile rejected", NewDocument(OpCompile, &Subject{CTM: "ctm.json", Out: "/tmp/b"}, rejected)},
 		{"twin compile error", ErrorDocument(OpCompile, &Subject{Out: "/tmp/b"}, "--out is required")},
-		// A schema check's success is not M1's from 017: verified names the library's
-		// table in place of the generics contract, a removal formats.md accepts, and is
-		// held to the current contract (TestVerifiedIsTheMappingsTable).
-		{"schema check rejected", NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, List{{
-			Severity: Rejection, Rule: RuleSchemaKindMissing, Object: "DcimCable",
-			Message: "the branch's schema has no kind DcimCable; the mapping reads it as opsmill/schema-library@26336e9 has it",
-		}})},
 		{"psp validate with location", NewDocument(OpPSPValidate, &Subject{Files: []string{"psp/x.yaml"}}, withLocation)},
 	}
 	for _, c := range cases {
@@ -504,20 +519,65 @@ func TestEveryOperationRendersAValidDocument(t *testing.T) {
 	}
 }
 
-// The operation names in the schema's enum and the Op* constants are one list.
-func TestOperationConstantsMatchTheContract(t *testing.T) {
-	got := []string{OpIntentRead, OpCompile, OpSchemaCheck, OpPSPValidate}
-	sort.Strings(got)
-	want := []string{"intent.read", "psp.validate", "schema.check", "twin.compile"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("operations = %v, contract enum = %v", got, want)
-	}
+// orchestratorOperations are the five operations 020 moved to the orchestrator (D-065;
+// data-model §11): its fylgja-cli prints findings 1 documents under them, held to the same
+// contract (orchestrator/src/fylgja_orchestrator/documents/findings.py), so they stay in the
+// contract's enum (research R-13) while the core declares none of them (T035).
+var orchestratorOperations = []string{"intent.read", "schema.check", "stage.list", "stage.plan", "twin.rehearse"}
 
-	// The newest schema enumerates every operation there is: M4's eight, 014's two (M10's
-	// two, renamed), M11's one, M12's one and 015's one.
-	all := []string{OpIntentRead, OpCompile, OpSchemaCheck, OpPSPValidate,
-		OpTwinCreate, OpTwinProvision, OpTwinDestroy, OpTwinShow,
-		OpStageList, OpStagePlan, OpTwinStep, OpTwinVerify, OpTwinRehearse}
+// declaredOperations reads the Op* constants out of render.go's syntax tree, as
+// declaredRules reads the rules, so a constant added to the file cannot escape the
+// comparison.
+func declaredOperations(t *testing.T) map[string]string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "render.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing render.go: %v", err)
+	}
+	out := map[string]string{}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, name := range vs.Names {
+				if !strings.HasPrefix(name.Name, "Op") || i >= len(vs.Values) {
+					continue
+				}
+				if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					value, err := strconv.Unquote(lit.Value)
+					if err != nil {
+						t.Fatalf("%s: %v", name.Name, err)
+					}
+					out[value] = name.Name
+				}
+			}
+		}
+	}
+	return out
+}
+
+// The operation names in the schema's enum are the core's Op* constants and the
+// orchestrator's five, each once: M4's eight less intent.read and schema.check, M11's one,
+// M12's one and 020's three are the core's.
+func TestOperationConstantsMatchTheContract(t *testing.T) {
+	declared := declaredOperations(t)
+	all := []string{OpCompile, OpPSPValidate, OpTwinCreate, OpTwinProvision, OpTwinDestroy, OpTwinShow,
+		OpTwinStep, OpTwinVerify, OpRunRead, OpRunInterrupt, OpTwinDiff}
+	if len(declared) != len(all) {
+		t.Errorf("render.go declares %d operations, %v; the test names %d", len(declared), declared, len(all))
+	}
+	for _, op := range orchestratorOperations {
+		if name, ok := declared[op]; ok {
+			t.Errorf("%s = %q is declared; 020 moved it to the orchestrator", name, op)
+		}
+	}
+	all = append(all, orchestratorOperations...)
 	sort.Strings(all)
 	raw, err := os.ReadFile(newestSchemaPath("findings.schema.json"))
 	if err != nil {
@@ -1593,4 +1653,93 @@ func withDryRunArtifacts(doc *Document, checksum string) *Document {
 	block.Nodes = nodes
 	out.DryRun = &block
 	return &out
+}
+
+// 020's five run rules (data-model §1, §11) in documents of the operations that file them,
+// each held to the current contract with the status and exit the data model gives it: a
+// detached start is ok, an unknown or ended identity and a detach beside a dry run are
+// refusals (exit 1), an interrupt asked is ok; twin.diff's document carries no rule of its
+// own (TestATwinDiffDocumentCarriesItsSidesAndItsPair holds its fields).
+func TestTheRunRulesRenderValidDocuments(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	const runID = "0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b"
+	identity := "fylgja-provision " + runID
+
+	var detached List
+	detached.AddStep(Info, StepStart, RuleRunDetached, identity,
+		"run "+identity+" started; read it with fylgja run read")
+	var conflict List
+	conflict.AddStep(Rejection, StepStart, RuleRunFlagsConflict, "dry_run",
+		"detach was given beside dry_run; a dry run starts no run to detach from")
+	var unknown, requested, ended List
+	unknown.Add(Rejection, RuleRunUnknown, identity, "the workflow service holds no run "+identity)
+	requested.Add(Info, RuleRunCancelRequested, identity, "cancellation of run "+identity+" was requested")
+	ended.Add(Rejection, RuleRunEnded, identity, "run "+identity+" has already closed: completed")
+
+	cases := []struct {
+		label string
+		doc   *Document
+		exit  int
+	}{
+		{"twin create detached", NewDocument(OpTwinCreate, &Subject{RunID: runID}, detached), ExitOK},
+		{"twin step detach beside dry_run", NewDocument(OpTwinStep, nil, conflict), ExitRejected},
+		{"run read unknown", NewDocument(OpRunRead, &Subject{RunID: runID}, unknown), ExitRejected},
+		{"run interrupt requested", NewDocument(OpRunInterrupt, &Subject{RunID: runID}, requested), ExitOK},
+		{"run interrupt ended", NewDocument(OpRunInterrupt, &Subject{RunID: runID}, ended), ExitRejected},
+		{"twin diff ok", NewDocument(OpTwinDiff, nil, nil), ExitOK},
+	}
+	for _, c := range cases {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidate(t, schema, c.doc, c.label)
+			if got := c.doc.Status.ExitCode(); got != c.exit {
+				t.Errorf("exit = %d (status %s), want %d", got, c.doc.Status, c.exit)
+			}
+		})
+	}
+}
+
+// twin.diff's document (020, R-05) names its two sides and carries the step between their
+// bundles as its step block, the pair as internal/step marshals it (stages.schema.json's
+// $defs/step) and nothing of twin step's block, which the current contract holds; read back,
+// the block is the pair as written, and written again it is the same bytes.
+func TestATwinDiffDocumentCarriesItsSidesAndItsPair(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	const a, b = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+		"c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
+	pair := `{"from":"snapshot b9db37f8…","to":"snapshot b9db37f8…","from_bundle_id":"` + b + `","to_bundle_id":"` + b +
+		`","computed":true,"unchanged":true,"nodes":{"added":[],"removed":[],"changed":[]},` +
+		`"links":{"added":[],"removed":[]},"artifacts":{"changed":[]}}`
+	doc := NewDocument(OpTwinDiff, nil, nil)
+	doc.SnapshotFrom, doc.SnapshotTo, doc.BundleFrom, doc.BundleTo = a, a, b, b
+	doc.Step = DiffBlock(json.RawMessage(pair))
+	mustValidate(t, schema, doc, "twin diff")
+
+	written, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read Document
+	if err := json.Unmarshal(written, &read); err != nil {
+		t.Fatal(err)
+	}
+	if read.Step == nil || string(read.Step.Pair) != pair || read.SnapshotFrom != a || read.BundleTo != b {
+		t.Fatalf("read back %+v, step %+v; want the sides and the pair as written", read, read.Step)
+	}
+	again, err := json.Marshal(&read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again) != string(written) {
+		t.Errorf("written again:\n%s\nwant:\n%s", again, written)
+	}
+
+	// Twin step's block is read as one still: its diff is what tells the two apart.
+	var step StepBlock
+	if err := json.Unmarshal([]byte(`{"from":{"stage":null,"bundle_id":"`+b+`","at":""},"to":{"stage":null,"bundle_id":"`+b+
+		`","at":""},"diff":`+pair+`,"reconcile":{},"push_plan":[],"allow_restart":false,"loss":null}`), &step); err != nil {
+		t.Fatal(err)
+	}
+	if step.Pair != nil || step.From.BundleID != b || string(step.Diff) != pair {
+		t.Errorf("twin step's block read as %+v; want its sides and its diff", step)
+	}
 }

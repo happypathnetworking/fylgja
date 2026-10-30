@@ -2,7 +2,7 @@
 
 A **verified fact** is something about a dependency that was checked against the running
 system, not taken from its documentation or from memory: how Infrahub, containerlab, a
-network operating system, Temporal, GitHub's runner or the host actually behaves. Each fact below names the
+network operating system, Temporal, Prefect, GitHub's runner or the host actually behaves. Each fact below names the
 version it was verified against and the date. Re-verify a fact on any upgrade of the
 system it names, and before a change depends on one that is not here, verify it and add
 it, as the [development guide](development.md#verification-is-just-in-time) says. A fact a
@@ -860,6 +860,84 @@ registration `fylgja`.
   against `main`'s schema and writes nothing; `main`'s hash read `0aba31a5…` before and
   after seven rounds of checks. *(10-16)*
 
+**The embedded Prefect**
+
+- **Infrahub's Prefect is a separate server, on the Compose network alone.** The service
+  `task-manager` runs `uvicorn --host 0.0.0.0 --port 4200 --factory
+  infrahub.prefect_server.app:create_infrahub_prefect` against `task-manager-db` (Postgres
+  18) and publishes no port on the host, whose `4200` stays free; from inside a task
+  worker its API answers `GET /api/version` `0.8.4` and `POST /api/flows/filter` (Infrahub's
+  own flows) with no authentication. So an orchestrator's Prefect server on the host
+  collides with nothing. *(10-29)*
+- **The task workers are Prefect workers pointed at it**: `prefect worker start --type
+  infrahubasync --pool infrahub-worker` with `PREFECT_API_URL=http://task-manager:4200/api`.
+  Inside `fylgja-infrahub-task-worker-1`: Prefect 3.7.5 on Python 3.14.7, `httpx` 0.28.1,
+  `requests` 2.34.2, `infrahub_sdk` 1.11.2 (the image's own), `pydantic` 2.12.5, `yaml`
+  6.0.3, no `aiohttp`. A check that drives another Prefect server must not use the worker's
+  Prefect client, whose environment names Infrahub's; plain HTTP with `httpx` reaches it.
+  *(10-29)*
+- **A recreated task worker has no checkout, and a user check cannot make one for a
+  read-only registration.** The task workers mount no volume, so `up -d` empties
+  `/opt/infrahub/git`. The minute's `git_repositories_sync` reads `CoreRepository` alone and
+  never clones a `CoreReadOnlyRepository`; `run_user_check` (`infrahub/git/tasks.py:1193`)
+  passes `InfrahubKind.REPOSITORY` hard-coded, so on a worker with no clone it asks for a
+  `CoreRepository` named `fylgja`, gets `NodeNotFoundError`, and the validator stays
+  `in_progress`: the first proposed change opened after a recreate had both user validators
+  `in_progress` for ever, and the fixture tool's `-propose` lapsed its 6 minutes. The
+  artifact check, which passes the registration's own kind, cloned it on both workers about
+  90 s on (`Initialized the local directory for fylgja because it was missing`), and a
+  re-run of the user checks then concluded both; every later check ran. *(10-30;
+  `specs/020-core-orchestrator-split/research.md` §5.28)*
+- Infrahub removes no clone of a deleted repository: each task worker keeps the checkout
+  directory of a registration a test made and deleted. *(10-30)*
+
+**The adapter (020)**
+
+The orchestrator's Infrahub adapter, Python 3.14.4 in `orchestrator/.venv`.
+
+- **`infrahub-sdk` 1.23.2's `execute_graphql` rewrites `at`**: its `_graphql_url` parses
+  the value with the SDK's `Timestamp` and sends `to_string()`, UTC with six fractional
+  digits (`2026-10-29T12:00:00.123456+02:00` goes as `…T10:00:00.123456Z`, `12:00:00Z` as
+  `12:00:00.000000Z`, a zone-less `2026-10-29 12:00:00` as UTC), so the operator's `at`
+  is not what reaches Infrahub. The branch goes in the path, `quote(branch, safe='')`.
+  Its exceptions drop the HTTP status: a 401 or 403 is `AuthenticationError` with
+  Infrahub's messages, a 404 `URLNotFoundError` naming the URL alone (not GraphQL's
+  `Branch: <b> not found.`), and any other status whose body holds `errors`, 400 and 422
+  among them, a `GraphQLError` as if under 200. The client's `custom_recorder` sees every
+  response, and its `sync_requester` replaces the transport. Its settings read
+  `INFRAHUB_*` from the environment: a `username` there turns on password login unless
+  `username` is passed explicitly. The adapter's `client.py` overrides `_graphql_url` to
+  send `at` verbatim, form-encoded, and reads the status from a recorder; against this
+  host's 1.11.2 a pinned `at` with a `+00:00` offset and six digits read `main`, and a
+  missing branch answered 400 from the schema endpoint and 404 from GraphQL, both
+  `Branch: <b> not found.`. *(10-29; `specs/020-core-orchestrator-split/research.md`
+  §5.10)*
+- **The snapshot id in Python**: SHA-256 of the hashed body as
+  `json.MarshalIndent(body, "", "  ")` plus a trailing newline, keys in the contract's
+  order and the lists sorted as `ctm.Normalize` sorts them; Python's `json.dumps(body,
+  indent=2) + "\n"` gave `1a29d9dc…` and `6a4a91ff…`, the ids the core's server filed for
+  the NetBox spike's two snapshots; the compact and sorted-key forms do not. *(10-29)*
+- **Python writes Go's bytes once five characters are escaped**: Python 3.14.4's
+  `json.dumps(…, indent=2, ensure_ascii=False)`, with `<`, `>`, `&`, U+2028 and U+2029
+  translated to Go's `\u003c`, `\u003e`, `\u0026`, `\u2028`, `\u2029` and a lone surrogate
+  to U+FFFD, plus a newline, is go1.26.8's `json.MarshalIndent` byte for byte: control
+  characters both write as `\b`, `\f`, `\n`, `\r`, `\t` or a lowercase `\u00XX`, DEL and
+  every character beyond ASCII both raw. The default `ensure_ascii=True` escapes beyond
+  ASCII, which Go never does, so the form above is exact only for ASCII text. The adapter's
+  `snapshot.py` gave the id of all 203 snapshots under this host's `local/snapshots/` (133
+  of version `1`), wrote the 70 of version `2` back byte for byte, and did the same for the
+  four wrapped fixtures and a Go-written file holding every such character
+  (`orchestrator/tests/data/snapshot/escapes.json`). *(10-29;
+  `specs/020-core-orchestrator-split/research.md` §5.9)*
+- **The adapter's read of the fixture** (`python -m fylgja_orchestrator.adapters.infrahub
+  read --branch fylgja-fixture`) took 4.0–4.6 s wall, the interpreter's start included,
+  three times, each to snapshot `0940db93…` (3 devices, 15 interfaces, 3 links, 3
+  artifacts, schema `8a4f3bee…`). Beside the Go reader before it went, Go's through the
+  server and the adapter's in the test's process, the fixture read 3.3 s and 2.8 s, a
+  pinned read 2.1 s and 2.3 s, and seven reads 39.8 s and 34.7 s in all, every file equal
+  byte for byte once its two `observed_at` lines were equalised. *(10-30;
+  `specs/020-core-orchestrator-split/research.md` §5.15, §5.28)*
+
 ---
 
 ## NetBox 4.7.4 with netbox-branching 1.2.2
@@ -959,11 +1037,8 @@ the core took unchanged. The adapter and the install files are not in this repos
   failed none, and gNMI read `n1`'s `admin-state` `enable` before and `disable` after.
   A twin's node addresses are reassigned at each create: read them from `twin show`.
   *(10-29)*
-- **The snapshot id reproduces outside Go**: SHA-256 of the hashed body as
-  `json.MarshalIndent(body, "", "  ")` plus a trailing newline, keys in the contract's
-  order and the lists sorted as `ctm.Normalize` sorts them; Python's `json.dumps(body,
-  indent=2) + "\n"` gave `1a29d9dc…` and `6a4a91ff…`, the ids the server filed; the
-  compact and sorted-key forms do not. *(10-29)*
+- **The snapshot id reproduces outside Go**, as the spike's Python gave it, which 020's
+  adapter then took: the rule is under Infrahub 1.11.2, **The adapter (020)**. *(10-29)*
 
 ---
 
@@ -1230,6 +1305,122 @@ the core took unchanged. The adapter and the install files are not in this repos
 
 ---
 
+## Prefect 3.8.8
+
+The orchestrator's platform, in `orchestrator/.venv` on Python 3.14.4. §1 of
+`specs/020-core-orchestrator-split/research.md` verified 3.9.0 on 10-29; the pins below
+made it 3.8.8, and each fact says which it holds on.
+
+**The install**
+
+- **Prefect 3.9.0 installs and runs on Python 3.14.4** alone (`pydantic` 2.14.2, a SQLite
+  server), but **does not co-install with `infrahub-sdk` 1.23.2**: `ResolutionImpossible`,
+  the SDK requiring `whenever<0.10.0,>=0.9.3` and 3.9.0 `whenever<0.11.0,>=0.10.5`. No SDK
+  release, pre-releases included, admits `whenever` 0.10; every Prefect from 3.6.26 to 3.8.8
+  says `whenever<0.11.0,>=0.7.3`. *(10-29)*
+- **Prefect 3.8.8 with the SDK 1.23.2** resolves (`whenever` 0.9.5), but its server does
+  not start against the FastAPI pip picks for it: `fastapi<1.0.0,>=0.139.0` resolved to
+  0.162.0, and `prefect server start` fails at import (`concurrency_limits_v2.py`:
+  `TypeError: Body() got an unexpected keyword argument 'min_items'`); 3.9.0 narrowed it to
+  `fastapi<0.151`. With `fastapi==0.150.0` pinned beside 3.8.8 the server starts and `pip
+  check` is clean; `make orchestrator-venv` makes that venv in about 60 s. *(10-29)*
+
+**The server**
+
+- `prefect server start --host <address> --port <port> --no-ui` under a `PREFECT_HOME`
+  with `PREFECT_SERVER_API_AUTH_STRING=<user>:<password>` has **basic authentication**:
+  without the credential `GET /api/version`, `/api/admin/version` and `POST
+  /api/flows/filter` are `401` and `/api/health` stays `200`; with `Authorization: Basic`
+  (`httpx` `auth=(user, password)`, or the client's `PREFECT_API_AUTH_STRING`) the API
+  answers. Its API version is `0.8.4`, as Infrahub's 3.7.5 reports. `/api/health` answered
+  `200` 23.6–32 s after the start, on 3.8.8 as on 3.9.0. `prefect config view` reads
+  `PREFECT_RUNNER_POLL_FREQUENCY='10' (from defaults)`, and no profile persists an auth
+  string (the home holds no `profiles.toml`). *(3.9.0, 10-29; 3.8.8, 10-29, 10-30)*
+- **A `503` at start**: the first `create_flow_run` straight after the deployments
+  appeared answered `503 Service Unavailable`, the same request seconds later `201`. *(3.9.0,
+  10-29)*
+
+**Deployments, runs and their documents over HTTP**
+
+- `serve(flow.to_deployment(name="main"), …)` from one process (the runner) serves each
+  flow's deployment: `GET /api/deployments/name/<flow>/main` answers its `id` within 4 s of
+  the runner's start, `404` for one not served, `401` without the credential. `POST
+  /api/deployments/<id>/create_flow_run {"parameters": {…}}` answers `201` with the run
+  (`SCHEDULED`) in 0.05–0.08 s; `GET /api/flow_runs/<id>` gives `state.type`, `state.name`
+  and `end_time`, and `404` for an unknown id. Nothing locks two runs of one deployment.
+  *(3.9.0, 10-29; 3.8.8, 10-30)*
+- **The runner's poll is 10 s**, Prefect's default: `created` to `start_time` 4.2–9.5 s
+  over six runs (12.4 s once, a poll missed), the 2.6–3.1 s between `PENDING` and `RUNNING`
+  the runner's subprocess starting. *(3.8.8, 10-30)*
+- **`POST /api/flow_runs/filter`'s default order is not newest first**: it is
+  `FlowRunSort.ID_DESC` (`prefect/server/api/flow_runs.py:587`) over ids that are `uuid4`
+  (`orm_models.py:119`), so with two runs of one flow either can come first;
+  `sort: START_TIME_DESC` orders them by time. *(3.8.8, 10-30)*
+- **A cancellation**: `POST /api/flow_runs/<id>/set_state {"state": {"type":
+  "CANCELLING"}}` without `force` answers `ACCEPT` for a running run, `CANCELLED` about
+  4 s later (3.7 s; 4.1 s with `force`); `REJECT` for a scheduled one, which the server ends `CANCELLED` at once; and
+  `ABORT` (`Run is already in terminal state COMPLETED.`) for an ended one, which stays as
+  it was. **With `force`, an ended `COMPLETED` run is moved to `CANCELLING` and left
+  there** (`201 ACCEPT`). *(3.9.0, 10-29; 3.8.8, 10-30)*
+- **A flow's document crosses as an artifact**: `Artifact(type="fylgja-findings", key=…,
+  data={…}).create()` inside the flow, read by `POST /api/artifacts/filter {"artifacts":
+  {"flow_run_id": {"any_": [<id>]}, "type": {"any_": ["fylgja-findings"]}}, "sort":
+  "CREATED_DESC", "limit": 1}`, its `data` the dict **as a JSON string**; visible within
+  0.02 s of the run's final state. A flow's return value is never read, since its
+  persistence needs a result store. *(3.9.0, 10-29; 3.8.8, 10-30)*
+- **A run's log**: `POST /api/logs/filter {"logs": {"flow_run_id": {"any_": […]}}, "sort":
+  "TIMESTAMP_ASC", "limit", "offset"}` answers its records (`name`, `level`, `message`),
+  landing about 1 s after the run reads `COMPLETED`; 250 lines came back whole across two
+  pages of 200. Prefect's own lines and `get_run_logger()`'s share the name
+  `prefect.flow_runs`; `get_run_logger().getChild("fylgja")` reaches the API under
+  `prefect.flow_runs.fylgja`, which tells a flow's lines apart. `prefect.flow_runs`
+  propagates to the root logger's console handler (3.8.8's `logging.yml`), so a process
+  that prints its own lines sets `PREFECT_LOGGING_HANDLERS_CONSOLE_LEVEL=CRITICAL`.
+  *(3.8.8, 10-30)*
+- A flow called in a process whose `PREFECT_API_URL` names a server is a run recorded
+  there **with no deployment**, beside the deployments' runs. *(3.8.8, 10-30)*
+
+**A timeout and a cancellation**
+
+- **A timeout**: `@flow(timeout_seconds=3)` sleeping in 1 s steps got
+  `prefect.flow_engine.FlowRunTimeoutError`, a `TimeoutError`, inside the body 3 s after it
+  began, between two sleeps; its `finally` ran, the `on_failure` hook ran, and the run ended
+  `FAILED` named `TimedOut` (`Flow run exceeded timeout of 3.0 second(s)`). The runner's
+  log also shows `Engine execution exited with unexpected exception … CancelledError`,
+  noise. *(3.9.0, 10-29; 3.8.8, 10-30)*
+- **A cancellation runs the `finally` and the `on_cancellation` hook, inside a fixed 30 s
+  grace**: the runner sends SIGTERM, which the flow sees as `TerminationSignal` (a
+  `BaseException`), then SIGKILL 30 s on. A `finally` sleeping 60 s began 0.09 s after
+  `set_state CANCELLING` and never ended; the run read `CANCELLED` within 31 s. The 30 s is
+  `grace_seconds = 30.0` in the source (`runner/_cancellation_manager.py:102`,
+  `runner/runner.py:1275`), read from no setting. A rehearsal cancelled 15 s into its
+  baseline's provision asked the core's destroy 0.5 s after, the lab was gone 6.3 s after,
+  and the run read `CANCELLED` 15.7 s after, its report posted, inside the grace.
+  *(3.8.8, 10-30; `specs/020-core-orchestrator-split/research.md` §5.18, §5.28)*
+
+**The ephemeral server and the test harness**
+
+- **With no `PREFECT_API_URL`, a flow runs on an ephemeral server** under `PREFECT_HOME`,
+  recorded in that home's database with its artifacts. Its first start in a fresh home
+  lapsed the default `PREFECT_SERVER_EPHEMERAL_STARTUP_TIMEOUT_SECONDS` of 20; at 180 it
+  started in about 10–31 s. A `fylgja-cli` command took 39.8–40.4 s on a fresh home and
+  16.8–17.1 s warm, every command starting the server in its own process. *(3.8.8,
+  10-30)*
+- **`prefect.testing.utilities.prefect_test_harness`** exists (3.9.0 and 3.8.8); a flow
+  called under it with no `PREFECT_API_URL` is a run it records, `COMPLETED`, its artifact
+  read back through Prefect's client. Its first start in a fresh home took 26.9–28.3 s in
+  five starts, under its 30 s default but close to it. *(3.9.0, 10-29; 3.8.8, 10-30)*
+
+**The flow's overhead, on the development host**
+
+- `create_flow_run` to a flow's first request to the core: 9.3 s warm, 29.9 s when its
+  adapter read was Infrahub's first since a restart; for the checks' rehearsals 13.6–15.4 s
+  (10-30, by hand) and 13.9–23.0 s (10-30, tier 3's case 9, a poll missed in the second),
+  beside `fylgja-twin`'s 4,260 s. *(3.8.8, 10-30; `specs/020-core-orchestrator-split/research.md`
+  §5.28, §5.29)*
+
+---
+
 ## GitHub Actions, `ubuntu-26.04`
 
 - The hosted runner for a public repository has 4 vCPUs, 15,983 MiB and 3 GiB of swap,
@@ -1279,17 +1470,46 @@ re-verified here.
   there answers it, `200` with the API's token and `401` without, Docker's inter-network
   isolation not applying since the address is the host's own. The published task worker's
   environment holds `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` and nothing of Fylgja's;
-  it has `git` 2.47.3, Python 3.14.7 and `httpx` 0.28.1. *(10-17, 10-19)*
+  it has `git` 2.47.3, Python 3.14.7 and `httpx` 0.28.1. *(10-17, 10-19)* Since 020 the bridge carries
+  the orchestrator's Prefect server, and the core's server listens on loopback alone
+  (below). *(10-30)*
 - **A changed Compose override reaches a service only when it is recreated**: `docker
   compose … up -d` recreated the two task workers, whose entry and environment had moved,
   and left the other six services and the volumes as they were. *(10-19)*
+- **The host's five processes (020)**: Temporal's dev server on `:7233`; the core's worker;
+  the core's server, `fylgja serve --listen 127.0.0.1:7650` alone, started with no
+  `INFRAHUB_*` name and no `FYLGJA_DEFAULT_SCOPE` in its environment (`ss` shows `7650` on
+  loopback alone); the orchestrator's Prefect server on the bridge, `prefect server start
+  --host 172.17.0.1 --port 4200 --no-ui` under `PREFECT_HOME=local/orchestrator/prefect`;
+  and its runner, `fylgja-orchestrator serve`, serving six deployments 4.1 s after its
+  start. The task workers, recreated with the override's `FYLGJA_ORCHESTRATOR_ADDRESS`
+  (`host.docker.internal:4200`) and `FYLGJA_ORCHESTRATOR_AUTH` (16 s, the two alone), read
+  `GET …/api/deployments/name/twin-rehearse/main` `200` with the auth and `401` without,
+  and `POST http://host.docker.internal:7650/v1/twin/show` fails `ConnectError [Errno 111]
+  Connection refused`. A core started from a shell that loaded `local/.env` with only
+  `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` and the scope unset still holds Compose's
+  `INFRAHUB_INITIAL_*` and `INFRAHUB_SECURITY_SECRET_KEY`, the admin token equal to the API
+  token among them, so every `INFRAHUB_*` name is removed. *(10-30;
+  `specs/020-core-orchestrator-split/research.md` §5.28)*
 - Infrahub idles at about 5 GiB, and its Neo4j, uncapped, once took the headroom a twin
   needs and killed an end-to-end run; capped at heap 1g/2g and page cache 1g, it does not.
   *(09-21)* On 26.04: 5.2 GiB idle across its eight containers, Neo4j 2.12 GiB under the
   cap and the server 1.56 GiB, leaving 24.5 GiB available with the three processes
   running. *(26.04, 10-08)* After 017's contract tier, before tier 3: Infrahub's
   containers held about 14 GiB, its server 7.5 GiB of that, with 12.1 GiB available, and
-  tier 3 passed whole. *(10-26; `specs/017-dcim-reader/research.md` §5.15)*
+  tier 3 passed whole. *(10-26; `specs/017-dcim-reader/research.md` §5.15)* With the
+  five processes: 15,770 MiB available before 020's live work, 21,196 MiB after a Compose
+  `restart` of Infrahub's containers (12 s); 18,033 MiB after tier 2 whole with those
+  containers at about 6.5 GiB, 19,750 MiB after a restart, and tier 3 passed whole.
+  *(10-30; `specs/020-core-orchestrator-split/research.md` §5.28, §5.29)*
+- **020's tiers on this host**: tier 2 whole (`make test-contract`) 2,692.6 s, its Go half
+  about 370 s with no `internal/stages` (the first `go test`'s 21 packages, `internal/cli`
+  21.2 s the longest, then `internal/checks` alone 338.3 s) and `pytest -m contract`
+  2,322.3 s; tier 3's nine cases 2,798.6 s, 562 s more than 016's 2,236.6 s, since every
+  `fylgja-cli` command starts Prefect's ephemeral server in its own process (17–40 s a
+  start). The tier-3 figure is a copy of `scripts/e2e.sh` whose case-9 precheck compared
+  the checks' syntax trees where the script compares bytes, the script itself refused at
+  that precheck. *(10-30; `specs/020-core-orchestrator-split/research.md` §5.29)*
 - On a host with little memory to spare, a twin booted beside the contract tier starves
   the worker: it misses heartbeats, its deploys are cut short, and Infrahub times out the
   tier. Read `free -m` before booting a twin. *(09-15)* Not re-verified on 26.04, on

@@ -1,0 +1,103 @@
+{
+  "snapshot_version": "2",
+  "snapshot_id": "38e0ced3c6f63a1dc2963f1841080beddfabe99e3731839d14043cf954c67538",
+  "observed_at": "2026-10-29T12:00:00.000000Z",
+  "ctm": {
+    "ctm_version": "2",
+    "envelope": {
+      "branch": "fylgja-fixture",
+      "observed_at": "2026-10-29T12:00:00.000000Z",
+      "schema_hash": "fixture",
+      "scope": "tag:fylgja",
+      "mapping": {
+        "reader": "infrahub-dcim",
+        "model": "opsmill/schema-library",
+        "version": "26336e9"
+      },
+      "fidelity": [
+        {
+          "disposition": "approximated",
+          "object": "interface.enabled",
+          "source": "InterfacePhysical.status",
+          "reason": "a"
+        },
+        {
+          "disposition": "approximated",
+          "object": "interface.enabled",
+          "source": "InterfacePhysical.status",
+          "reason": "b"
+        },
+        {
+          "disposition": "omitted",
+          "object": "platform.version",
+          "source": "DcimPlatform",
+          "reason": "a\u003cb\u003ec\u0026d\u2028e\u2029f\u0001g\bh\fi\nj\rk\tl\u001fm\"n\\o/pqér😀s"
+        }
+      ]
+    },
+    "devices": [
+      {
+        "name": "n1",
+        "platform": {
+          "package": "nokia_srlinux"
+        },
+        "interfaces": [
+          {
+            "name": "ethernet-1/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n1:ethernet-1/1|n2:Ethernet1"
+          },
+          {
+            "name": "mgmt0",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "3d69f2bdfea08f16a169b01e47cd3ac5",
+          "content": "hostname n1\na\u003cb\u003ec\u0026d\u2028e\u2029f\u0001g\bh\fi\nj\rk\tl\u001fm\"n\\o/pqér😀s\n"
+        }
+      },
+      {
+        "name": "n2",
+        "platform": {
+          "package": "arista_ceos",
+          "version": "4.32.0.2F"
+        },
+        "interfaces": [
+          {
+            "name": "Ethernet1",
+            "mgmt_only": false,
+            "enabled": false,
+            "link": "n1:ethernet-1/1|n2:Ethernet1"
+          },
+          {
+            "name": "mgmt0",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "provenance": "synthesized"
+      }
+    ],
+    "links": [
+      {
+        "id": "n1:ethernet-1/1|n2:Ethernet1",
+        "endpoints": [
+          {
+            "device": "n1",
+            "interface": "ethernet-1/1"
+          },
+          {
+            "device": "n2",
+            "interface": "Ethernet1"
+          }
+        ]
+      }
+    ]
+  },
+  "probes": []
+}

@@ -1,0 +1,765 @@
+{
+  "schema_hash": "8a4f3bee8a72549e97450a414da18107",
+  "answers": [
+    {
+      "operation": "Devices",
+      "variables": {
+        "tag": "fylgja",
+        "limit": 100,
+        "offset": 0
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "DcimDevice": {
+            "count": 3,
+            "edges": [
+              {
+                "node": {
+                  "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                  "name": {
+                    "value": "n1"
+                  },
+                  "platform": {
+                    "node": {
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node": {
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "status": {
+                            "value": "Ready"
+                          },
+                          "content_type": {
+                            "value": "text/plain"
+                          },
+                          "checksum": {
+                            "value": "28881d3d0d61d3fe5acf1f1ee0e31a60"
+                          },
+                          "storage_id": {
+                            "value": "18e2ec02-d8a9-61fc-33b1-c5141d4ecb87"
+                          },
+                          "definition": {
+                            "node": {
+                              "artifact_name": {
+                                "value": "device-config"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                  "name": {
+                    "value": "n2"
+                  },
+                  "platform": {
+                    "node": {
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node": {
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "status": {
+                            "value": "Ready"
+                          },
+                          "content_type": {
+                            "value": "text/plain"
+                          },
+                          "checksum": {
+                            "value": "092ca9f62fe2887add0ae679de0a7076"
+                          },
+                          "storage_id": {
+                            "value": "18e2ec02-d7ca-a841-33b1-c512680cab17"
+                          },
+                          "definition": {
+                            "node": {
+                              "artifact_name": {
+                                "value": "device-config"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                  "name": {
+                    "value": "n3"
+                  },
+                  "platform": {
+                    "node": {
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node": {
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "status": {
+                            "value": "Ready"
+                          },
+                          "content_type": {
+                            "value": "text/plain"
+                          },
+                          "checksum": {
+                            "value": "95a3a91788e63626cdb9b4ecdf56eb58"
+                          },
+                          "storage_id": {
+                            "value": "18e2ec02-d8b7-0b9d-33b2-c5137ce59847"
+                          },
+                          "definition": {
+                            "node": {
+                              "artifact_name": {
+                                "value": "device-config"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "operation": "Ports",
+      "variables": {
+        "devices": [
+          "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+          "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+          "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+        ],
+        "limit": 100,
+        "offset": 0
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "InterfacePhysical": {
+            "count": 15,
+            "edges": [
+              {
+                "node": {
+                  "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                  "name": {
+                    "value": "ethernet-1/1"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node": {
+                      "__typename": "DcimCable",
+                      "id": "18e2ebff-7599-0821-33b2-c516f58b6134",
+                      "label": {
+                        "value": "n1:ethernet-1/1|n2:ethernet-1/1"
+                      },
+                      "connected_endpoints": {
+                        "count": 2,
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                              "name": {
+                                "value": "ethernet-1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                              "name": {
+                                "value": "ethernet-1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-aecd-f747-33bb-c515e159cb0e",
+                  "name": {
+                    "value": "ethernet-1/10"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-c575-78be-33b4-c51bbd7e3413",
+                  "name": {
+                    "value": "ethernet-1/11"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                  "name": {
+                    "value": "ethernet-1/2"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node": {
+                      "__typename": "DcimCable",
+                      "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7",
+                      "label": {
+                        "value": "n1:ethernet-1/2|n3:ethernet-1/2"
+                      },
+                      "connected_endpoints": {
+                        "count": 2,
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                              "name": {
+                                "value": "ethernet-1/2"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                              "name": {
+                                "value": "ethernet-1/2"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60",
+                  "name": {
+                    "value": "mgmt0"
+                  },
+                  "role": {
+                    "value": "management"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                  "name": {
+                    "value": "ethernet-1/1"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node": {
+                      "__typename": "DcimCable",
+                      "id": "18e2ebff-7599-0821-33b2-c516f58b6134",
+                      "label": {
+                        "value": "n1:ethernet-1/1|n2:ethernet-1/1"
+                      },
+                      "connected_endpoints": {
+                        "count": 2,
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                              "name": {
+                                "value": "ethernet-1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                              "name": {
+                                "value": "ethernet-1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-fad9-4921-33bd-c51130548d82",
+                  "name": {
+                    "value": "ethernet-1/10"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-0fb0-0292-33b5-c51e876c3de1",
+                  "name": {
+                    "value": "ethernet-1/11"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                  "name": {
+                    "value": "ethernet-1/2"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node": {
+                      "__typename": "DcimCable",
+                      "id": "18e2ebff-9088-afbd-33b8-c51053d5c358",
+                      "label": {
+                        "value": "n2:ethernet-1/2|n3:ethernet-1/1"
+                      },
+                      "connected_endpoints": {
+                        "count": 2,
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                              "name": {
+                                "value": "ethernet-1/2"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                              "name": {
+                                "value": "ethernet-1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c",
+                  "name": {
+                    "value": "mgmt0"
+                  },
+                  "role": {
+                    "value": "management"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                  "name": {
+                    "value": "ethernet-1/1"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node": {
+                      "__typename": "DcimCable",
+                      "id": "18e2ebff-9088-afbd-33b8-c51053d5c358",
+                      "label": {
+                        "value": "n2:ethernet-1/2|n3:ethernet-1/1"
+                      },
+                      "connected_endpoints": {
+                        "count": 2,
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                              "name": {
+                                "value": "ethernet-1/2"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                              "name": {
+                                "value": "ethernet-1/1"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-4b77-17d6-33bb-c516eb985884",
+                  "name": {
+                    "value": "ethernet-1/10"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-6006-119a-33ba-c51bb1ece87d",
+                  "name": {
+                    "value": "ethernet-1/11"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                  "name": {
+                    "value": "ethernet-1/2"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node": {
+                      "__typename": "DcimCable",
+                      "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7",
+                      "label": {
+                        "value": "n1:ethernet-1/2|n3:ethernet-1/2"
+                      },
+                      "connected_endpoints": {
+                        "count": 2,
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                              "name": {
+                                "value": "ethernet-1/2"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "InterfacePhysical",
+                              "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                              "name": {
+                                "value": "ethernet-1/2"
+                              },
+                              "device": {
+                                "node": {
+                                  "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "18e2ebff-3083-8b18-33b5-c516a46e146e",
+                  "name": {
+                    "value": "mgmt0"
+                  },
+                  "role": {
+                    "value": "management"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

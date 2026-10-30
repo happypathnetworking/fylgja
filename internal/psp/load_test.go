@@ -318,8 +318,8 @@ func TestMissingOverrideDirectoryIsReported(t *testing.T) {
 // The check is over the whole transitive closure, not this package's own imports: a
 // dependency that dialled out would break the guarantee just as surely, and only the
 // closure can see that. It is scoped to internal/psp deliberately — cmd/fylgja
-// necessarily imports internal/intent, so the command-level guarantee is the psp
-// tests in cmd/fylgja, which touch no address at all.
+// necessarily dials the workflow service, Docker and the nodes, so the command-level
+// guarantee is the psp tests in cmd/fylgja, which touch no address at all.
 func TestValidationReachesNoNetwork(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", ".").Output()
 	if err != nil {
@@ -328,7 +328,6 @@ func TestValidationReachesNoNetwork(t *testing.T) {
 	forbidden := map[string]string{
 		"net":      "network I/O",
 		"net/http": "network I/O",
-		"github.com/happypathnetworking/fylgja/internal/intent": "intent reaches Infrahub",
 	}
 	var closure int
 	for _, dep := range strings.Split(strings.TrimSpace(string(out)), "\n") {

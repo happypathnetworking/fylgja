@@ -1,0 +1,334 @@
+{
+  "findings_version": "1",
+  "operation": "stage.plan",
+  "status": "rejected",
+  "subject": {
+    "scope": "tag:fylgja"
+  },
+  "plan": {
+    "branch": "fylgja-test-golden-41263",
+    "proposed_change": {
+      "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+      "name": "fylgja-test-golden-41263",
+      "branch": "fylgja-test-golden-41263",
+      "draft": true
+    },
+    "stages": [
+      {
+        "ref": "fylgja-test-golden-41263/branch-point",
+        "label": "branch-point",
+        "description": "",
+        "at_source": "branch_point",
+        "branch": "main",
+        "at": "2026-10-29T18:09:04.039194Z",
+        "snapshot_id": null,
+        "bundle_id": null,
+        "read": null,
+        "findings": [
+          {
+            "severity": "rejection",
+            "rule": "scope.empty",
+            "object": "tag:fylgja",
+            "message": "scope tag:fylgja selects no device on branch main at 2026-10-29T18:09:04.039194Z",
+            "step": "read"
+          }
+        ]
+      },
+      {
+        "ref": "fylgja-test-golden-41263/seeded",
+        "label": "seeded",
+        "description": "seeded",
+        "at_source": "written",
+        "branch": "fylgja-test-golden-41263",
+        "at": "2026-10-29T18:11:38.471611+00:00",
+        "snapshot_id": "78232019fdb8bb0413b7a122a443c1e70f8719b5e2e7658a5c2e1e27fd877478",
+        "bundle_id": "ce705cdb14ccd7d56109a1708e5a1d00f703018df96c1440baeddc4d8c1b13b8",
+        "read": {
+          "devices": 3,
+          "interfaces": 15,
+          "links": 3,
+          "artifacts": 3,
+          "lossy_mappings": 0,
+          "shared_ports": 0
+        },
+        "findings": []
+      },
+      {
+        "ref": "fylgja-test-golden-41263/third-link",
+        "label": "third-link",
+        "description": "third link",
+        "at_source": "written",
+        "branch": "fylgja-test-golden-41263",
+        "at": "2026-10-29T18:11:50.425111+00:00",
+        "snapshot_id": "5cbbe59387fa465c80cd3bd83687c8cb978333c0c8f0baba8ee50a35255b2559",
+        "bundle_id": "61665b99bb406d2b6c3aefc1f6624ca4bd6c57ea44f13e65c904733ed5a159e9",
+        "read": {
+          "devices": 3,
+          "interfaces": 17,
+          "links": 4,
+          "artifacts": 3,
+          "lossy_mappings": 0,
+          "shared_ports": 0
+        },
+        "findings": []
+      },
+      {
+        "ref": "fylgja-test-golden-41263/bad-port",
+        "label": "bad-port",
+        "description": "a port SR Linux refuses",
+        "at_source": "written",
+        "branch": "fylgja-test-golden-41263",
+        "at": "2026-10-29T18:12:11.745240+00:00",
+        "snapshot_id": "cc81016f65b5d964622510eae026276e1eaf91e2f09a22ac911014b76050ef26",
+        "bundle_id": "0b8af687b3e91282898e33c3e14eed1139cecf0957496677b2ac9d8cd1d730bc",
+        "read": {
+          "devices": 3,
+          "interfaces": 18,
+          "links": 4,
+          "artifacts": 3,
+          "lossy_mappings": 0,
+          "shared_ports": 0
+        },
+        "findings": [
+          {
+            "severity": "warning",
+            "rule": "artifact.interface.unrepresented",
+            "object": "n1:ethernet-1/99",
+            "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+            "step": "read"
+          },
+          {
+            "severity": "warning",
+            "rule": "artifact.interface.unrepresented",
+            "object": "n1:ethernet-1/99",
+            "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+            "step": "compile"
+          },
+          {
+            "severity": "info",
+            "rule": "omit.interface.unmappable",
+            "object": "n1:ethernet-1/99",
+            "message": "rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node",
+            "step": "compile"
+          }
+        ]
+      },
+      {
+        "ref": "fylgja-test-golden-41263/head",
+        "label": "head",
+        "description": "",
+        "at_source": "head",
+        "branch": "fylgja-test-golden-41263",
+        "at": "2026-10-29T18:12:10.636975+00:00",
+        "snapshot_id": "8b986a1036a37a2ba19c5a8f6a7884d56d18d77c95717d24482791227df1ef0f",
+        "bundle_id": "4215a6c2e3e7e1e64b6331e2d6406f1cf45d905db7e8c449ea076e8ea51fd9b5",
+        "read": {
+          "devices": 3,
+          "interfaces": 18,
+          "links": 4,
+          "artifacts": 3,
+          "lossy_mappings": 0,
+          "shared_ports": 0
+        },
+        "findings": [
+          {
+            "severity": "warning",
+            "rule": "artifact.interface.unrepresented",
+            "object": "n1:ethernet-1/99",
+            "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+            "step": "read"
+          },
+          {
+            "severity": "warning",
+            "rule": "artifact.interface.unrepresented",
+            "object": "n1:ethernet-1/99",
+            "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+            "step": "compile"
+          },
+          {
+            "severity": "info",
+            "rule": "omit.interface.unmappable",
+            "object": "n1:ethernet-1/99",
+            "message": "rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node",
+            "step": "compile"
+          }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "from": "fylgja-test-golden-41263/branch-point",
+        "to": "fylgja-test-golden-41263/seeded",
+        "from_bundle_id": null,
+        "to_bundle_id": "ce705cdb14ccd7d56109a1708e5a1d00f703018df96c1440baeddc4d8c1b13b8",
+        "computed": false,
+        "not_computed": "fylgja-test-golden-41263/branch-point was refused"
+      },
+      {
+        "from": "fylgja-test-golden-41263/seeded",
+        "to": "fylgja-test-golden-41263/third-link",
+        "from_bundle_id": "ce705cdb14ccd7d56109a1708e5a1d00f703018df96c1440baeddc4d8c1b13b8",
+        "to_bundle_id": "61665b99bb406d2b6c3aefc1f6624ca4bd6c57ea44f13e65c904733ed5a159e9",
+        "computed": true,
+        "unchanged": false,
+        "nodes": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            {
+              "node": "n1",
+              "reasons": [
+                "bootstrap",
+                "mapping"
+              ]
+            },
+            {
+              "node": "n3",
+              "reasons": [
+                "bootstrap",
+                "mapping"
+              ]
+            }
+          ]
+        },
+        "links": {
+          "added": [
+            {
+              "id": "n1:ethernet-1/3|n3:ethernet-1/3",
+              "a": {
+                "node": "n1",
+                "port": "e1-3"
+              },
+              "b": {
+                "node": "n3",
+                "port": "e1-3"
+              }
+            }
+          ],
+          "removed": []
+        },
+        "artifacts": {
+          "changed": [
+            {
+              "node": "n1",
+              "name": "device-config",
+              "from": "0b214ab6f2c7cdfcf90e4391a1fc4458",
+              "to": "c4e86b9055f46dc08cf20b96452a2503"
+            },
+            {
+              "node": "n3",
+              "name": "device-config",
+              "from": "64199f06c7af015a162ffa6cb6fc1907",
+              "to": "d7218a558d064b75554b35fb16725fb2"
+            }
+          ]
+        }
+      },
+      {
+        "from": "fylgja-test-golden-41263/third-link",
+        "to": "fylgja-test-golden-41263/bad-port",
+        "from_bundle_id": "61665b99bb406d2b6c3aefc1f6624ca4bd6c57ea44f13e65c904733ed5a159e9",
+        "to_bundle_id": "0b8af687b3e91282898e33c3e14eed1139cecf0957496677b2ac9d8cd1d730bc",
+        "computed": true,
+        "unchanged": false,
+        "nodes": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            {
+              "node": "n1",
+              "reasons": [
+                "mapping"
+              ]
+            }
+          ]
+        },
+        "links": {
+          "added": [],
+          "removed": []
+        },
+        "artifacts": {
+          "changed": [
+            {
+              "node": "n1",
+              "name": "device-config",
+              "from": "c4e86b9055f46dc08cf20b96452a2503",
+              "to": "52e8a7ff4e883e85310df284840aefde"
+            }
+          ]
+        }
+      },
+      {
+        "from": "fylgja-test-golden-41263/bad-port",
+        "to": "fylgja-test-golden-41263/head",
+        "from_bundle_id": "0b8af687b3e91282898e33c3e14eed1139cecf0957496677b2ac9d8cd1d730bc",
+        "to_bundle_id": "4215a6c2e3e7e1e64b6331e2d6406f1cf45d905db7e8c449ea076e8ea51fd9b5",
+        "computed": true,
+        "unchanged": true,
+        "nodes": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "links": {
+          "added": [],
+          "removed": []
+        },
+        "artifacts": {
+          "changed": []
+        }
+      }
+    ]
+  },
+  "findings": [
+    {
+      "severity": "rejection",
+      "rule": "scope.empty",
+      "object": "tag:fylgja",
+      "message": "scope tag:fylgja selects no device on branch main at 2026-10-29T18:09:04.039194Z",
+      "step": "read"
+    },
+    {
+      "severity": "warning",
+      "rule": "artifact.interface.unrepresented",
+      "object": "n1:ethernet-1/99",
+      "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+      "step": "read"
+    },
+    {
+      "severity": "warning",
+      "rule": "artifact.interface.unrepresented",
+      "object": "n1:ethernet-1/99",
+      "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+      "step": "compile"
+    },
+    {
+      "severity": "info",
+      "rule": "omit.interface.unmappable",
+      "object": "n1:ethernet-1/99",
+      "message": "rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node",
+      "step": "compile"
+    },
+    {
+      "severity": "warning",
+      "rule": "artifact.interface.unrepresented",
+      "object": "n1:ethernet-1/99",
+      "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+      "step": "read"
+    },
+    {
+      "severity": "warning",
+      "rule": "artifact.interface.unrepresented",
+      "object": "n1:ethernet-1/99",
+      "message": "artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)",
+      "step": "compile"
+    },
+    {
+      "severity": "info",
+      "rule": "omit.interface.unmappable",
+      "object": "n1:ethernet-1/99",
+      "message": "rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node",
+      "step": "compile"
+    }
+  ]
+}

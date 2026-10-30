@@ -42,15 +42,10 @@ var (
 	stepFrom = strings.Repeat("34", 32)
 	stepTo   = strings.Repeat("ee", 32)
 	// Each side's snapshot (018): the lossy and mixed fixtures' wrapped ids, any identity
-	// serving.
+	// serving. The step goes from snapshot 91f06cd6… to snapshot f3980cc7…, each side named
+	// by its snapshot, since a side names no stage from twin.json 12 (020, research R-06).
 	stepFromSnapshot = "91f06cd67de31f6c986bc47019e79870b02403a2970d50b6b4497df64c17f10c"
 	stepToSnapshot   = "f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff"
-	// stageCabled and stageLive are two stages of proposed change pc-1 on branch change-1
-	// (014): the step goes from change-1/cabled to change-1/live.
-	stageCabled = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
-		Description: "before the change", AtSource: "written"}
-	stageLive = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live",
-		Description: "after the first cut-over", AtSource: "written"}
 	// stepStart is when a run starts on the test suite's clock, for a test that sets it, so
 	// that its record's times are known exactly. The clock moves only when a mocked activity
 	// waits on it (MockCallWrapper.After).
@@ -74,13 +69,12 @@ func stepPlan() wire.ReconcilePlan {
 
 // stepInput is the CLI's input for case 8's step, given --allow-restart.
 func stepInput() StepInput {
-	from, to := stageCabled, stageLive
 	return StepInput{
-		From:         wire.StepSide{Stage: &from, BundleID: stepFrom, At: stepFromAt},
-		To:           wire.StepSide{Stage: &to, BundleID: stepTo, At: stepToAt, Branch: "change-1"},
+		From:         wire.StepSide{SnapshotID: stepFromSnapshot, BundleID: stepFrom, At: stepFromAt},
+		To:           wire.StepSide{SnapshotID: stepToSnapshot, BundleID: stepTo, At: stepToAt, Branch: "change-1"},
 		ObservedAt:   "2026-10-02T09:14:01.000000Z",
 		ToBundlePath: "/state/bundles/" + stepTo,
-		Diff: json.RawMessage(`{"from":"change-1/cabled","to":"change-1/live","from_bundle_id":"` + stepFrom + `","to_bundle_id":"` + stepTo +
+		Diff: json.RawMessage(`{"from":"snapshot 91f06cd6…","to":"change-1/live","from_bundle_id":"` + stepFrom + `","to_bundle_id":"` + stepTo +
 			`","computed":true,"unchanged":false,"nodes":{"added":[],"removed":[],"changed":[{"node":"s1","reasons":["bootstrap","mapping"]}]},` +
 			`"links":{"added":[{"id":"e1:Ethernet3|s1:ethernet-1/3","a":{"node":"e1","port":"eth3"},"b":{"node":"s1","port":"e1-3"}}],"removed":[]},` +
 			`"artifacts":{"changed":[{"node":"e1","name":"device-config","from":"43e8fd0c2de5f4646f74a51d34742824","to":"9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"},` +
@@ -124,14 +118,14 @@ func stepLab() []wire.LabNode {
 }
 
 // stepTwinHost is the host holding the twin the step was planned from: ready at
-// change-1/cabled.
+// snapshot 91f06cd6…, in this build's record (020, research R-06).
 func stepTwinHost() wire.HostReport {
-	st := stageCabled
+	snap := stepFromSnapshot
 	return wire.HostReport{LabPresent: true, TwinDirPresent: true, Nodes: stepLab(),
-		Twin: &wire.TwinRecord{TwinVersion: "8", Lab: wire.LabName, BundleID: stepFrom, Stage: &st, State: wire.StateReady,
-			Provenance: wire.Provenance{Branch: "change-1", At: stepFromAt}, Source: wire.SourceIntent,
+		Twin: &wire.TwinRecord{TwinVersion: lab.TwinVersion, Lab: wire.LabName, BundleID: stepFrom, SnapshotID: &snap,
+			State: wire.StateReady, Provenance: wire.Provenance{Branch: "change-1", At: stepFromAt}, Source: wire.SourceSnapshot,
 			Run: wire.RunRef{WorkflowID: WorkflowProvision, RunID: "run-0"}},
-		Phrase: "the twin of branch change-1 at " + stepFromAt + ", stage change-1/cabled"}
+		Phrase: "the twin of branch change-1 at " + stepFromAt + ", bundle_id " + stepFrom}
 }
 
 // stepHarness is a workflow test environment for Step: every activity it schedules
@@ -324,7 +318,8 @@ func (h *stepHarness) recordAs(_ context.Context, in wire.RecordStepInput) (wire
 	rec := *h.host.Twin
 	rec.State = wire.StateDiverged
 	if in.Outcome != wire.StepDiverged {
-		rec.BundleID, rec.Stage, rec.State = in.To.BundleID, in.To.Stage, wire.StateReady
+		snap := in.To.SnapshotID
+		rec.BundleID, rec.SnapshotID, rec.State = in.To.BundleID, &snap, wire.StateReady
 	}
 	var phase *string
 	if in.Phase != "" {
@@ -448,8 +443,8 @@ func TestStepStepped(t *testing.T) {
 		wire.ReconcileResult{Nodes: stepLab(), TookS: 3.9}, nil).After(4 * time.Second)
 	h.mockHappyPath()
 	in := stepInput()
-	// Each side's snapshot crosses as data (018): the record step is given both.
-	in.From.SnapshotID, in.To.SnapshotID = stepFromSnapshot, stepToSnapshot
+	// Each side's snapshot crosses as data (018): the input names both, and the record step
+	// is given both.
 	res := h.run(in)
 
 	if res.Outcome != StepStepped || res.Phase != "" || res.Step != "" {
@@ -695,26 +690,20 @@ func TestStepRejectedAtEachLock(t *testing.T) {
 		{"the record names another bundle", func(h *stepHarness, _ *StepInput) {
 			h.host.Twin.BundleID = stepTo
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"the twin is at stage change-1/cabled (bundle eeeeeeee…), not at stage change-1/cabled (bundle 34343434…) the step was planned from: " +
-				"the host changed after the command looked; nothing was touched; run fylgja twin step again"},
-		{"the record names another stage", func(h *stepHarness, _ *StepInput) {
-			st := stageLive
-			h.host.Twin.Stage = &st
-		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"the twin is at stage change-1/live (bundle 34343434…), not at stage change-1/cabled (bundle 34343434…) the step was planned from: " +
+			"the twin is at snapshot 91f06cd6… (bundle eeeeeeee…), not at snapshot 91f06cd6… (bundle 34343434…) the step was planned from: " +
 				"the host changed after the command looked; nothing was touched; run fylgja twin step again"},
 		{"the record is diverged", func(h *stepHarness, _ *StepInput) {
 			h.host.Twin.State = wire.StateDiverged
 			h.host.Twin.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-				Run: wire.RunRef{WorkflowID: WorkflowStep, RunID: "01a1"}, To: wire.StepSide{Stage: &stageLive},
+				Run: wire.RunRef{WorkflowID: WorkflowStep, RunID: "01a1"}, To: wire.StepSide{SnapshotID: stepToSnapshot, BundleID: stepTo},
 				Pushed: []wire.StepPush{{Node: "s1", Outcome: wire.PushLanded}, {Node: "e1", Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}}
 		}, findings.StepInspect, findings.RuleStepTwinDiverged,
-			"the twin is diverged: step run fylgja-step 01a1 towards stage change-1/live stopped at phase push " +
+			"the twin is diverged: step run fylgja-step 01a1 towards snapshot f3980cc7… stopped at phase push " +
 				"(landed: s1; not landed: e1 (push.refused)); it accepts only fylgja twin destroy"},
 		{"no twin", func(h *stepHarness, _ *StepInput) {
 			h.host = wire.HostReport{}
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --branch, --stage or --snapshot)"},
+			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)"},
 		{"the target does not fit the host", func(h *stepHarness, _ *StepInput) {
 			h.plan.Findings = findings.List{
 				{Severity: findings.Rejection, Rule: findings.RuleHostLabPresent, Object: "lab fylgja", Step: findings.StepHostCheck, Message: "lab"},
@@ -917,8 +906,8 @@ func TestStepDivergedAtEachPhase(t *testing.T) {
 				failure(findings.RuleStageFailed, findings.StepStage, "/state/twin/bundle", "twin/bundle holds bundle 5151…"))
 		}, findings.StepReconcile, findings.StepStage, findings.RuleStageFailed, false,
 			map[string]string{"e1": wire.PushNotAttempted, "s1": wire.PushNotAttempted},
-			"step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase reconcile: landed none; " +
-				"not landed e1, s1; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, " +
+			"step run default-test-run-id towards snapshot f3980cc7… (bundle eeeeeeee…) stopped at phase reconcile: landed none; " +
+				"not landed e1, s1; the twin is up and diverged at snapshot 91f06cd6… (bundle 34343434…), its record says so, " +
 				"and it accepts only fylgja twin destroy"},
 		{"the reconcile", func(h *stepHarness) {
 			h.env.OnActivity(wire.ActReconcileLab, mock.Anything, mock.Anything).Return(wire.ReconcileResult{},
@@ -936,8 +925,8 @@ func TestStepDivergedAtEachPhase(t *testing.T) {
 					"node e1 refused artifact device-config (checksum aaaa…) at line 7: Invalid input (at token 0: 'bogus')"))
 		}, findings.StepPush, findings.StepPush, findings.RulePushRefused, true,
 			map[string]string{"e1": wire.PushRefused, "s1": wire.PushLanded},
-			"step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase push: landed s1; " +
-				"not landed e1 (push.refused); the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, " +
+			"step run default-test-run-id towards snapshot f3980cc7… (bundle eeeeeeee…) stopped at phase push: landed s1; " +
+				"not landed e1 (push.refused); the twin is up and diverged at snapshot 91f06cd6… (bundle 34343434…), its record says so, " +
 				"and it accepts only fylgja twin destroy"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -1209,8 +1198,8 @@ func TestStepDivergedAtTheRecord(t *testing.T) {
 			res.Step, res.Record)
 	}
 	onlyFinding(t, res.Findings, findings.RuleRecordFailed)
-	want := "step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase record: landed e1, s1; " +
-		"not landed none; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), but its record could not be written " +
+	want := "step run default-test-run-id towards snapshot f3980cc7… (bundle eeeeeeee…) stopped at phase record: landed e1, s1; " +
+		"not landed none; the twin is up and diverged at snapshot 91f06cd6… (bundle 34343434…), but its record could not be written " +
 		"and still says it is ready there; fylgja twin destroy clears it"
 	if d := onlyFinding(t, res.Findings, findings.RuleStepDiverged); d.Message != want || d.Step != findings.StepRecord {
 		t.Errorf("step.diverged %+v\nwant %q", d, want)
@@ -1412,8 +1401,8 @@ func TestStepCancelled(t *testing.T) {
 						t.Errorf("record input push %+v, want landed with its time", p)
 					}
 				}
-				want := "step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase push: landed e1, s1; " +
-					"not landed none; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, and it " +
+				want := "step run default-test-run-id towards snapshot f3980cc7… (bundle eeeeeeee…) stopped at phase push: landed e1, s1; " +
+					"not landed none; the twin is up and diverged at snapshot 91f06cd6… (bundle 34343434…), its record says so, and it " +
 					"accepts only fylgja twin destroy"
 				if d := onlyFinding(t, res.Findings, findings.RuleStepDiverged); d.Message != want {
 					t.Errorf("step.diverged %q\nwant %q", d.Message, want)
@@ -1678,8 +1667,8 @@ func TestStepCancelledWhenTheRecordCannotBeWritten(t *testing.T) {
 		t.Errorf("record.failed %+v, want at record", f)
 	}
 	d := onlyFinding(t, res.Findings, findings.RuleStepDiverged)
-	prefix := "step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase push: "
-	suffix := "; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), but its record could not be written and " +
+	prefix := "step run default-test-run-id towards snapshot f3980cc7… (bundle eeeeeeee…) stopped at phase push: "
+	suffix := "; the twin is up and diverged at snapshot 91f06cd6… (bundle 34343434…), but its record could not be written and " +
 		"still says it is ready there; fylgja twin destroy clears it"
 	if d.Step != findings.StepPush || !strings.HasPrefix(d.Message, prefix) || !strings.HasSuffix(d.Message, suffix) {
 		t.Errorf("step.diverged %+v\nwant at push, beginning %q and ending %q", d, prefix, suffix)
@@ -1800,12 +1789,18 @@ func TestPlanRulesUnappliedIsStepUnapplied(t *testing.T) {
 }
 
 // Every shape of an ineligible host, worded once for the CLI and the run. A twin that names
-// no stage is not one (019, research R-03): a branch twin, pinned or not, a snapshot twin and
-// a bundle twin pass, since whether a record names a snapshot is the server's to judge.
+// no snapshot is not one (019, research R-03): a branch twin, pinned or not, a snapshot twin
+// and a bundle twin pass, since whether a record names a snapshot is the server's to judge;
+// nor is a record of an earlier version, whose version is the server's to judge too (020,
+// research R-06), so a record of twin.json 5 that named M10's waypoint is no longer refused
+// here.
 func TestIneligibleWording(t *testing.T) {
 	branch := func(at, source string) wire.HostReport {
 		h := stepTwinHost()
-		h.Twin.Stage, h.Twin.Provenance.At, h.Twin.Source = nil, at, source
+		h.Twin.Provenance.At, h.Twin.Source = at, source
+		if source != wire.SourceSnapshot {
+			h.Twin.SnapshotID = nil
+		}
 		return h
 	}
 	orphan := wire.HostReport{LabPresent: true, Phrase: "an orphan: lab fylgja with no twin directory"}
@@ -1813,22 +1808,21 @@ func TestIneligibleWording(t *testing.T) {
 	gone.LabPresent = false
 	gone.Phrase = "a twin record whose lab is gone"
 	leftover := wire.HostReport{TwinDirPresent: true, Phrase: "a leftover twin directory: no twin.json and no lab fylgja"}
-	// A record of twin.json 5 that named M10's pinned reference reads with no stage and
-	// Superseded set (lab.ReadRecord, 014), and is refused as such.
-	superseded := branch(stepFromAt, wire.SourceIntent)
-	superseded.Twin.TwinVersion, superseded.Twin.Superseded = "5", true
+	earlier := func(version string) wire.HostReport {
+		h := branch(stepFromAt, wire.SourceIntent)
+		h.Twin.TwinVersion = version
+		return h
+	}
 	for _, c := range []struct {
 		name         string
 		host         wire.HostReport
 		object, want string
 	}{
 		{"no twin", wire.HostReport{}, "lab fylgja", "no twin: no lab fylgja and no twin directory; a twin built from a snapshot " +
-			"steps (fylgja twin create --branch, --stage or --snapshot)"},
+			"steps (fylgja twin create --snapshot, or fylgja-cli twin create from a branch or a stage)"},
 		{"an orphan", orphan, "lab fylgja", orphan.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
 		{"a record whose lab is gone", gone, "/state/twin", gone.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
 		{"a leftover twin directory", leftover, "/state/twin", leftover.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
-		{"a superseded twin", superseded, stepFrom, "the twin was created from a waypoint of a record version this build no " +
-			"longer reads (twin.json 5); a twin built from a snapshot steps; fylgja twin destroy clears it"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := Ineligible(c.host, findings.StepResolve, "/state/twin")
@@ -1841,17 +1835,20 @@ func TestIneligibleWording(t *testing.T) {
 		})
 	}
 	if f := Ineligible(stepTwinHost(), findings.StepResolve, ""); f != nil {
-		t.Errorf("a ready stage twin refused: %+v", *f)
+		t.Errorf("a ready snapshot twin refused: %+v", *f)
 	}
 	for name, host := range map[string]wire.HostReport{
 		"a branch twin":   branch("", wire.SourceIntent),
 		"a pinned twin":   branch(stepFromAt, wire.SourceIntent),
 		"a snapshot twin": branch(stepFromAt, wire.SourceSnapshot),
 		"a bundle twin":   branch("", wire.SourceBundle),
+		"a twin.json 11":  earlier("11"),
+		"a twin.json 5":   earlier("5"),
 	} {
 		for _, at := range []string{findings.StepResolve, findings.StepInspect} {
 			if f := Ineligible(host, at, ""); f != nil {
-				t.Errorf("%s at %s refused: %+v; a twin naming no stage is the server's to judge", name, at, *f)
+				t.Errorf("%s at %s refused: %+v; a twin naming no snapshot, and a record's version, are the server's to judge",
+					name, at, *f)
 			}
 		}
 	}
@@ -1867,23 +1864,15 @@ func TestIneligibleWording(t *testing.T) {
 	}
 }
 
-// The run's texts name each side as twin step's lines do (019, research R-05): a stage as
-// stage <branch>/<label>, as before, and a side naming no stage by its snapshot, so a step
-// towards a snapshot, or from a twin built from one, says where it went and where the twin
-// is: step.diverged, step.twin.diverged and the second lock at inspect.
+// The run's texts name each side as twin step's lines do (019, research R-05): by its
+// snapshot, a side naming no stage from twin.json 12 (020, research R-06), so a step towards
+// a snapshot, or from a twin built from one, says where it went and where the twin is:
+// step.diverged, step.twin.diverged and the second lock at inspect.
 func TestStepTextsNameASnapshotSide(t *testing.T) {
 	fromSnap, toSnap := strings.Repeat("576933ec", 8), strings.Repeat("9c2d01e7", 8)
-	cabled := stageCabled
-	in := StepInput{From: wire.StepSide{Stage: &cabled, SnapshotID: fromSnap, BundleID: stepFrom},
+	in := StepInput{From: wire.StepSide{SnapshotID: fromSnap, BundleID: stepFrom},
 		To: wire.StepSide{SnapshotID: toSnap, BundleID: stepTo}}
 	pushes := []wire.StepPush{{Node: "s1", Outcome: wire.PushLanded}, {Node: "e1", Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}
-	if got, want := divergedFinding("r1", in, findings.StepPush, pushes, true).Message,
-		"step run r1 towards snapshot 9c2d01e7… (bundle eeeeeeee…) stopped at phase push: landed s1; not landed e1 (push.refused); "+
-			"the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, and it accepts only "+
-			"fylgja twin destroy"; got != want {
-		t.Errorf("step.diverged towards a snapshot:\n got %q\nwant %q", got, want)
-	}
-	in.From.Stage = nil
 	if got, want := divergedFinding("r1", in, findings.StepPush, pushes, true).Message,
 		"step run r1 towards snapshot 9c2d01e7… (bundle eeeeeeee…) stopped at phase push: landed s1; not landed e1 (push.refused); "+
 			"the twin is up and diverged at snapshot 576933ec… (bundle 34343434…), its record says so, and it accepts only "+
@@ -1906,6 +1895,12 @@ func TestStepTextsNameASnapshotSide(t *testing.T) {
 		"was planned from: the host changed after the command looked; nothing was touched; run fylgja twin step again"; f == nil ||
 		f.Message != want {
 		t.Errorf("the second lock between two snapshots: %+v\nwant %q", f, want)
+	}
+	// The second lock compares bundles alone (020, research R-06): a record on the bundle the
+	// step was planned from passes, whatever snapshot it names.
+	rec = &wire.TwinRecord{TwinVersion: lab.TwinVersion, BundleID: stepFrom, SnapshotID: &toSnap, State: wire.StateReady}
+	if f := notPlannedFrom(rec, wire.StepSide{SnapshotID: fromSnap, BundleID: stepFrom}); f != nil {
+		t.Errorf("the second lock on the bundle planned from: %+v; want none", *f)
 	}
 }
 

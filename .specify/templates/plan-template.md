@@ -40,22 +40,22 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitution 2.3.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
+Constitution 3.0.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
 why), or VIOLATION (justify in Complexity Tracking). Cite the principle number.
 
 | # | Gate | Status |
 |---|---|---|
-| I | Go only; static binary; no second runtime; pure-Go deps; PSPs and schema embedded | |
+| I | Go only for the core; static binary; no second runtime; pure-Go deps; PSPs and schema embedded; the orchestrator, a Python project on Prefect, unbound by I and reaching the core through the API alone | |
 | II | Platforms are data: no compiler change for a platform; no vendor-homogeneity assumption; budgets/timeouts/readiness and the manufacturer and platform pairs from the PSP; a probe format is a probe package, its budgets from it, nothing branching on a format | |
-| III | The CTM is the contract; the reader names its model version; approximations and omissions in the envelope's fidelity list, copied by the compiler; nothing read the mapping does not name; the read-only test's list; wiring derived from what was mapped; conformance and completeness checked separately | |
+| III | The CTM is the contract; a reader is an adapter of the orchestrator, writing a snapshot, the core's one input; the reader names its model version; approximations and omissions in the envelope's fidelity list, copied by the compiler; nothing read the mapping does not name; the read-only test's list; wiring derived from what was mapped; conformance and completeness checked separately | |
 | IV | No configuration rendered; bootstrap from the PSP only; production config is an Infrahub artifact | |
 | V | Compiler pure (test-enforced); bundle deterministic, self-describing, content-addressed, deployable as emitted; `twin compile` shares the test code path | |
-| VI | Provenance recorded (branch, `at`, schema hash, scope, mapping and model version in the bundle; `observed_at` in the CTM envelope, the snapshot's outer part and `twin.json`, never in the bundle nor in the bytes a snapshot's id hashes); `at` passed verbatim or not at all; where the source cannot replay time, the snapshot's id addresses intent | |
+| VI | Provenance recorded (branch, `at`, schema hash, scope, mapping and model version in the bundle; `observed_at` in the CTM envelope, the snapshot's outer part and `twin.json`, never in the bundle nor in the bytes a snapshot's id hashes); `at` passed verbatim or not at all; where the source cannot replay time, the snapshot's id addresses intent, and a stage there is the snapshot the adapter took, held by the orchestrator | |
 | VII | One twin at a time: create refused while lab `fylgja` exists; orphan detection at create and worker start; nothing per-twin | |
-| VIII | Temporal: `provision`/`destroy` with fixed IDs; deterministic workflow code; idempotent activities passing references; heartbeats with PSP budgets; cleanup on a disconnected context; one task queue; host-bound code in `internal/lab` | |
-| IX | No database; containerlab + twin directory + bundle store + Temporal history | |
+| VIII | Temporal, in the core: `provision`/`destroy` with fixed IDs; deterministic workflow code; idempotent activities passing references; heartbeats with PSP budgets; cleanup on a disconnected context; one task queue; host-bound code in `internal/lab`; the orchestrator drives the core through the API and starts none of its workflows | |
+| IX | No database in either deployable; containerlab + twin directory + bundle store + Temporal history; the orchestrator's Prefect run history, snapshots and one twin record under its state root | |
 | X | Fidelity manifest on every bundle; skips and omissions recorded; stable finding IDs; no credential persisted or logged | |
-| XI | The API is the boundary: a user-facing client reaches the core through the API alone; every refusal is the server's; payloads are the versioned documents; test code excepted, with no second path in a shipped client; held by an import test | |
+| XI | The API is the boundary: a user-facing client, the orchestrator and a check inside Infrahub among them, reaches the core through the API alone; every refusal is the server's; payloads are the versioned documents; test code excepted, with no second path in a shipped client; held by an import test | |
 
 **Blessed layers** (do not flag as complexity): the CTM (D-010), the PSP abstraction
 (D-016), the mapping, one per source, documented (D-057), the probe package (D-031, D-064).

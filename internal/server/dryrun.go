@@ -13,20 +13,11 @@ import (
 	"go.temporal.io/sdk/temporal"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
-
-// readSummary is what a dry run's read saw, for the report's read: line.
-type readSummary struct {
-	counts   intent.Counts
-	packages []intent.PackageCount
-	envelope ctm.Envelope
-}
 
 // dryRunReport runs the host check in this process, against the bundle already filed at
 // bundlePath, and reports what a real run would do: the nodes and their images, the memory
@@ -37,11 +28,11 @@ type readSummary struct {
 // Sound because the server and the worker share the host (D-041); at M9 this moves behind
 // the queue.
 //
-// snap is the snapshot the dry run filed before the bundle, nil when it took none (twin
-// provision). read is nil when no read took place (twin provision). prior holds the read's
-// and the compile's findings, reported with the host check's.
+// snap is the snapshot the dry run resolved before the bundle, nil when it has none (twin
+// provision). prior holds the compile's findings, reported with the host check's. From 020
+// no dry run reads intent, so the report has no read: line.
 func dryRunReport(ctx context.Context, opts *options, op string, subject *findings.Subject, reg *psp.Registry,
-	paths lab.Paths, snap *filedSnapshot, bundlePath, id string, read *readSummary, prior findings.List) error {
+	paths lab.Paths, snap *filedSnapshot, bundlePath, id string, prior findings.List) error {
 	// A host check that cannot run leaves what was filed before it filed, so the answer names
 	// it as the success does, the input above the output (R-09), and as a create's run that
 	// fails at the host check names it: the stored lines on stdout, and the ids and the
@@ -83,9 +74,6 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 	block, verdict := dryRunBlock(plan, artifacts, lossy, plan.Findings)
 
 	opts.note("dry run: no lab, container, twin directory or run is created")
-	if read != nil {
-		opts.note("read: %s (%s)", readCounts(read.counts, read.packages, lossy), readSubject(read.envelope))
-	}
 	// The input above the output, as the create prints them (R-09).
 	if snap != nil {
 		opts.note("%s", snapshotStoredLine(snap.id, snap.path))
@@ -207,25 +195,6 @@ func manifestSummary(bundlePath string) (map[string]*findings.DryRunArtifact, co
 		}
 	}
 	return out, m.LossyCounts(), nil
-}
-
-// readCounts is what a read holds, as `intent read`'s summary and a dry run's read line
-// both say it (contracts/cli.md).
-//
-// The devices are broken down by support package, in package id order: with
-// two platforms in one read, how many nodes of each is the first thing an operator wants,
-// and a read of one platform says so in the same shape.
-func readCounts(n intent.Counts, packages []intent.PackageCount, lossy compiler.SurveyCounts) string {
-	parts := make([]string, 0, len(packages))
-	for _, p := range packages {
-		parts = append(parts, fmt.Sprintf("%s %d", p.PSPID, p.Devices))
-	}
-	devices := fmt.Sprintf("%d devices", n.Devices)
-	if len(parts) > 0 {
-		devices += " (" + strings.Join(parts, ", ") + ")"
-	}
-	return fmt.Sprintf("%s, %d interfaces, %d links, %d artifacts, %d lossy mappings, %d shared ports",
-		devices, n.Interfaces, n.Links, n.Artifacts, lossy.LossyMappings, lossy.SharedPorts)
 }
 
 func presence(what string, present bool) string {

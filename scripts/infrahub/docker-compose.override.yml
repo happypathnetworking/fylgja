@@ -10,12 +10,16 @@
 # Neo4j capped: uncapped, its JVM grew into the headroom a twin needs and a tier-3 run
 # died of memory (docs/verified-facts.md, The host).
 #
-# The task workers reach Fylgja's API, for the checks fylgja-step and fylgja-twin (D-050):
-# host.docker.internal resolves to the host's Docker bridge address, where fylgja serve
-# listens beside loopback, since neither loopback nor the bare name reaches the host from
-# Infrahub's Compose network. The token is read by Compose from `--env-file local/.env`;
-# this file holds no value, and the address is a name. Nothing else of Fylgja's reaches the
-# task workers. A changed entry reaches them only when they are recreated (`up -d`).
+# The task workers reach the orchestrator's platform, for the checks fylgja-step and
+# fylgja-twin (D-050, D-065): each check is a client of the Prefect server, which starts a
+# flow run on the runner's deployment and reads its document, and never of the core, whose
+# server listens on loopback alone, so the core's token never crosses the bridge (020's
+# FR-005). host.docker.internal resolves to the host's Docker bridge address, where the
+# Prefect server listens on port 4200 (research R-01), since neither loopback nor the bare
+# name reaches the host from Infrahub's Compose network. The platform's basic-auth string,
+# <user>:<password>, is read by Compose from `--env-file local/.env`; this file holds no
+# value, and the address is a name. Nothing else of Fylgja's reaches the task workers. A
+# changed entry reaches them only when they are recreated (`up -d`).
 services:
   task-manager:
     image: registry.opsmill.io/opsmill/infrahub:1.11.2
@@ -26,8 +30,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      FYLGJA_API_ADDRESS: host.docker.internal:7650
-      FYLGJA_API_TOKEN: ${FYLGJA_API_TOKEN}
+      FYLGJA_ORCHESTRATOR_ADDRESS: host.docker.internal:4200
+      FYLGJA_ORCHESTRATOR_AUTH: ${FYLGJA_ORCHESTRATOR_AUTH}
   database:
     environment:
       NEO4J_server_memory_heap_initial__size: 1g

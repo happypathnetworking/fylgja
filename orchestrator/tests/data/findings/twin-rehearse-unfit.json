@@ -1,0 +1,23 @@
+{
+  "about": "015: a rehearsal refused before any run, its deadline over the ceiling",
+  "document": {
+    "findings_version": "1",
+    "operation": "twin.rehearse",
+    "status": "rejected",
+    "subject": {
+      "branch": "change-1",
+      "scope": "tag:fylgja"
+    },
+    "findings": [
+      {
+        "severity": "rejection",
+        "rule": "rehearsal.deadline.unfit",
+        "object": "change-1",
+        "message": "the stages need 4200s; the ceiling is 3600s",
+        "step": "start"
+      }
+    ]
+  },
+  "text": "rejection rehearsal.deadline.unfit [step start] change-1: the stages need 4200s; the ceiling is 3600s\n1 finding(s): 1 rejection, 0 warning, 0 info\n",
+  "exit": 1
+}

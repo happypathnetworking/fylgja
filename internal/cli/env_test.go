@@ -56,18 +56,13 @@ func askedEnv(t *testing.T, address string) func() []string {
 func clientCommands(t *testing.T) [][]string {
 	t.Helper()
 	return [][]string{
-		{"twin", "create", "--branch", "fylgja-fixture"},
+		{"twin", "create", "--snapshot", headSnapshotID},
 		{"twin", "provision", copyGoldenBundle(t, "bundle")},
 		{"twin", "step"},
 		{"twin", "destroy"},
 		{"twin", "show"},
 		{"twin", "verify"},
-		{"twin", "rehearse", "--branch", "change-1"},
 		{"twin", "compile", "--snapshot", wrappedFixture("three-node"), "--out", filepath.Join(t.TempDir(), "out")},
-		{"intent", "read", "--branch", "fylgja-fixture"},
-		{"stage", "list"},
-		{"stage", "plan", "--branch", "change-1"},
-		{"schema", "check", "--branch", "fylgja-fixture"},
 		{"psp", "validate", repoPath("psp", "nokia_srlinux.yaml")},
 	}
 }
@@ -159,7 +154,7 @@ func TestNoClientsCommandTakesPSPDir(t *testing.T) {
 		opts := &options{}
 		root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 		root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-		root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newStageCmd(opts), newSchemaCmd(opts), newPSPCmd(opts))
+		root.AddCommand(newTwinCmd(opts), newPSPCmd(opts))
 		root.SetArgs(append(append([]string{"--json"}, args...), "--psp-dir", "x"))
 		var code int
 		out := captureStdout(t, func() {

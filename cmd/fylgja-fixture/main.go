@@ -2,7 +2,8 @@
 
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
 // schema library and the stage kind onto a branch and seeds the three-node fixture
-// or the mixed one, or makes tier 3's branch changes on a throwaway branch, or opens,
+// or the mixed one, or makes tier 3's and the orchestrator's tier 2's branch changes on a
+// throwaway branch, or opens,
 // marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
 // the schema, the group and this repository's read-only registration (D-044), or opens and
 // closes a demo's window, the three-node baseline on main (D-054), or writes and deletes the
@@ -16,7 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,7 +37,6 @@ func main() {
 	remove := flag.Bool("delete", false,
 		"delete the branch instead, a "+testsupport.TestBranchPrefix+"* one or "+testsupport.FixtureBranch+
 			": every stage of every proposed change whose source it is, those proposed changes, then the branch")
-	sdl := flag.String("sdl", "", "write the branch's GraphQL SDL to this path and exit")
 	addLink := flag.Bool("add-link", false,
 		"add the InterfacePhysical ports n1:ethernet-1/3 and n3:ethernet-1/3 and the DcimCable between them "+
 			"to a seeded throwaway branch and exit")
@@ -57,6 +57,47 @@ func main() {
 	addInterface := flag.String("add-interface", "",
 		"add one InterfacePhysical, active and uncabled, to a DcimDevice on a "+testsupport.TestBranchPrefix+
 			"* -branch and exit, as <device>:<name> (render it with -generate)")
+	addDevice := flag.String("add-device", "",
+		"add one DcimDevice, with no tag, no platform and no group unless -device-* gives them, and its InterfacePhysical ports, to a "+
+			testsupport.TestBranchPrefix+"* -branch, print its id, and exit, as <name>:<port>[,<port>...]")
+	addCable := flag.String("add-cable", "",
+		"add one DcimCable joining any number of InterfacePhysical ports on a "+testsupport.TestBranchPrefix+
+			"* -branch and exit, as <label>=<device>:<port>,<device>:<port>[,...]; it renders nothing")
+	setPlatform := flag.String("set-platform", "",
+		"move one DcimDevice onto a DcimPlatform under its manufacturer, made where absent, on a "+
+			testsupport.TestBranchPrefix+"* -branch and exit, as <device>=<manufacturer>/<platform>; "+
+			"<device>= takes its platform away; it renders nothing")
+	loadSchemaFile := flag.String("load-schema-file", "",
+		"load one schema file onto a "+testsupport.TestBranchPrefix+"* -branch, wait until its kinds are "+
+			"exposed and the ones it removes (state: absent) are gone, and exit")
+	devicePlatform := flag.String("device-platform", "",
+		"with -add-device: its DcimPlatform under its manufacturer, made where absent, as <manufacturer>/<platform>")
+	deviceTag := flag.String("device-tag", "", "with -add-device: the tag it carries, made where absent")
+	deviceManagement := flag.String("device-management", "", "with -add-device: the one of its ports given the management role")
+	deviceGroup := flag.Bool("device-group", false,
+		"with -add-device: join it to the group "+testsupport.ArtifactGroupName+", rendering nothing")
+	setSerial := flag.String("set-serial", "",
+		"set the serial number of each named DcimDevice on a "+testsupport.TestBranchPrefix+
+			"* -branch and exit, as <device>[,<device>...]=<serial> (the template renders it not)")
+	describe := flag.String("describe", "",
+		"set one object's description on a "+testsupport.TestBranchPrefix+"* -branch and exit, as device:<name>=<text>, "+
+			"platform:<name>=<text>, manufacturer:<name>=<text> or virtual:<device>:<name>=<text>")
+	setCableStatus := flag.String("set-cable-status", "",
+		"set the status of the DcimCable of a label on a "+testsupport.TestBranchPrefix+
+			"* -branch, print its stamp, and exit, as <label>=<status>")
+	reEndCable := flag.String("re-end-cable", "",
+		"give the one DcimCable ending at a port on a "+testsupport.TestBranchPrefix+
+			"* -branch the ends named, in place of its own, and exit, as <device>:<port>=<device>:<port>[,...]")
+	deleteLink := flag.String("delete-link", "",
+		"delete the one DcimCable ending at a port on a "+testsupport.TestBranchPrefix+
+			"* -branch, print when the delete returned, and exit, as <device>:<port>")
+	addVirtual := flag.String("add-virtual-interface", "",
+		"add one InterfaceVirtual to a DcimDevice on a "+testsupport.TestBranchPrefix+"* -branch and exit, as <device>:<name>")
+	tagDevices := flag.String("tag-devices", "",
+		"add the tag "+testsupport.FixtureTag+" to each named DcimDevice on a "+testsupport.TestBranchPrefix+
+			"* -branch and exit, as <device>[,<device>...]")
+	rebase := flag.Bool("rebase", false,
+		"rebase a "+testsupport.TestBranchPrefix+"* -branch on main, wait for it, and exit")
 	mixed := flag.Bool("mixed", false,
 		"seed the mixed fixture (two DcimPlatforms under their manufacturers, three DcimDevices) "+
 			"on a throwaway branch instead of the three-node one")
@@ -73,6 +114,11 @@ func main() {
 	ready := flag.Bool("ready", false,
 		"mark a throwaway -branch's open proposed change ready for review (is_draft false), and exit; it starts no check")
 	closePC := flag.Bool("close", false, "close a throwaway -branch's open proposed change (its stages stay), and exit")
+	deleteStages := flag.Bool("delete-stages", false,
+		"delete every stage of a throwaway -branch's open proposed change, leaving it open, print the count, and exit")
+	update := flag.String("update-stage", "",
+		"edit one stage of a throwaway -branch's open proposed change, found by its label, and exit, "+
+			"as <label>:<field>=<value>, the field label, as_of or description")
 	at := flag.String("at", "",
 		"with -stage: its as_of, verbatim; omitted, its at is when it was written")
 	description := flag.String("description", "", "with -stage: its description")
@@ -139,9 +185,33 @@ func main() {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture: -at and -description describe the stage -stage marks; give it")
 		os.Exit(1)
 	}
-	if *propose || *ready || *stage != "" || *runCheck || *runChecks != "" || *closePC {
+	device := deviceFlags{platform: *devicePlatform, tag: *deviceTag, management: *deviceManagement, group: *deviceGroup}
+	if d := device.given(); len(d) > 0 && *addDevice == "" {
+		fmt.Fprintf(os.Stderr, "fylgja-fixture: %s describe the device -add-device adds; give it\n", strings.Join(d, " and "))
+		os.Exit(1)
+	}
+	w := writeFlags{serial: *setSerial, describe: *describe, cableStatus: *setCableStatus, reEnd: *reEndCable,
+		deleteLink: *deleteLink, virtual: *addVirtual, tag: *tagDevices, rebase: *rebase}
+	if writes := w.given(); len(writes) > 0 {
+		var other []string
+		flag.Visit(func(f *flag.Flag) {
+			if f.Name != "branch" && !slices.Contains(writes, "-"+f.Name) {
+				other = append(other, "-"+f.Name)
+			}
+		})
+		if len(other) > 0 {
+			verb := "combines"
+			if len(writes) > 1 {
+				verb = "combine"
+			}
+			fmt.Fprintf(os.Stderr, "fylgja-fixture: %s %s with no flag but -branch: %s was given\n",
+				strings.Join(writes, " and "), verb, strings.Join(other, ", "))
+			os.Exit(1)
+		}
+	}
+	if *propose || *ready || *stage != "" || *runCheck || *runChecks != "" || *closePC || *update != "" || *deleteStages {
 		if err := proposal(*branch, proposalFlags{propose: *propose, ready: *ready, label: *stage, runCheck: *runCheck,
-			runChecks: *runChecks, closePC: *closePC, at: *at, description: *description}); err != nil {
+			runChecks: *runChecks, closePC: *closePC, update: *update, deleteStages: *deleteStages, at: *at, description: *description}); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -171,6 +241,21 @@ func main() {
 		}
 		return
 	}
+	if *addDevice != "" || *addCable != "" || *setPlatform != "" || *loadSchemaFile != "" {
+		if err := edit(*branch, editFlags{device: *addDevice, cable: *addCable, platform: *setPlatform,
+			schemaFile: *loadSchemaFile, of: device}); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(w.given()) > 0 {
+		if err := write(*branch, w); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if *generate || *setDescription != "" || *disablePort != "" || *addInterface != "" {
 		if err := change(*branch, *generate, *setDescription, *disablePort, *addInterface); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
@@ -179,13 +264,6 @@ func main() {
 		return
 	}
 
-	if *sdl != "" {
-		if err := writeSDL(*branch, *sdl); err != nil {
-			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
-			os.Exit(1)
-		}
-		return
-	}
 	if err := run(*branch, *schemaDir, *schemaOnly, *remove, *mixed); err != nil {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 		os.Exit(1)
@@ -426,27 +504,6 @@ func prepareMain(schemaDir, name, location, ref string, wait time.Duration) erro
 	return nil
 }
 
-// writeSDL fetches the branch's GraphQL schema. genqlient generates the typed client
-// from it, so it is committed: the build must never need a live Infrahub (D-017).
-func writeSDL(branch, path string) error {
-	c, err := testsupport.NewClient()
-	if err != nil {
-		return err
-	}
-	sdl, err := c.SDL(branch)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, sdl, 0o644); err != nil {
-		return err
-	}
-	fmt.Printf("wrote %d bytes of SDL from %s to %s\n", len(sdl), branch, path)
-	return nil
-}
-
 // addThirdLink makes the topology change tier 3's cases 5 and 7 step a twin to and case 9
 // rehearses (until 019, the change case 5's following rebuilt on).
 // The durable fixture branch is never changed: every test and the twins
@@ -522,6 +579,8 @@ type proposalFlags struct {
 	runCheck        bool
 	runChecks       string
 	closePC         bool
+	update          string
+	deleteStages    bool
 	at, description string
 }
 
@@ -546,7 +605,7 @@ func proposal(branch string, f proposalFlags) error {
 		name string
 		set  bool
 	}{{"propose", f.propose}, {"ready", f.ready}, {"stage", f.label != ""}, {"run-check", f.runCheck},
-		{"run-checks", f.runChecks != ""}, {"close", f.closePC}} {
+		{"run-checks", f.runChecks != ""}, {"close", f.closePC}, {"update-stage", f.update != ""}, {"delete-stages", f.deleteStages}} {
 		if g.set {
 			given = append(given, "-"+g.name)
 		}
@@ -557,6 +616,14 @@ func proposal(branch string, f proposalFlags) error {
 	flagName := given[0]
 	if f.runChecks != "" && f.runChecks != checksArtifact && f.runChecks != checksUser {
 		return fmt.Errorf("-run-checks takes %s or %s, got %q", checksArtifact, checksUser, f.runChecks)
+	}
+	var updateLabel string
+	var updateFields map[string]any
+	if f.update != "" {
+		var err error
+		if updateLabel, updateFields, err = stageFields(f.update); err != nil {
+			return err
+		}
 	}
 	if branch == testsupport.FixtureBranch {
 		return fmt.Errorf("%s refuses branch %s: the fixture has no proposed change", flagName, branch)
@@ -579,6 +646,14 @@ func proposal(branch string, f proposalFlags) error {
 	switch {
 	case f.label != "":
 		return markStage(c, branch, id, f.label, f.at, f.description)
+	case f.update != "":
+		return updateStage(c, branch, id, updateLabel, updateFields)
+	case f.deleteStages:
+		n, err := c.DeleteStagesOf(id)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("deleted %s of proposed change %s on %s; it stays open\n", plural(n, "stage", "stages"), id, branch)
 	case f.ready:
 		if err := c.MarkReady(id); err != nil {
 			return err
@@ -776,6 +851,151 @@ func change(branch string, generate bool, description, port, addIface string) er
 	return nil
 }
 
+// editFlags are the reader's seeding flags as given (020, T020): the changes the Go reader's
+// contract tests made through testsupport, which the orchestrator's tier 2 makes through this
+// tool, since internal/testsupport is not ported.
+type editFlags struct {
+	device, cable, platform, schemaFile string
+	of                                  deviceFlags
+}
+
+// edit applies the one seeding flag given. Each is refused, before any request, on the
+// fixture and on a branch outside the test prefix, as -add-interface is, and so is more than
+// one at once, or a value not of the flag's form.
+func edit(branch string, f editFlags) error {
+	var given []string
+	for _, g := range []struct {
+		name string
+		set  bool
+	}{{"add-device", f.device != ""}, {"add-cable", f.cable != ""}, {"set-platform", f.platform != ""},
+		{"load-schema-file", f.schemaFile != ""}} {
+		if g.set {
+			given = append(given, "-"+g.name)
+		}
+	}
+	if len(given) > 1 {
+		return fmt.Errorf("%s change a branch one at a time; give one", strings.Join(given, " and "))
+	}
+	flagName := given[0]
+	if branch == testsupport.FixtureBranch {
+		return fmt.Errorf("%s refuses branch %s: the fixture is written once and never changed; "+
+			"seed a throwaway branch and name it with -branch", flagName, branch)
+	}
+	if !strings.HasPrefix(branch, testsupport.TestBranchPrefix) {
+		return fmt.Errorf("%s refuses branch %s: every branch it changes begins %s; "+
+			"seed a throwaway branch and name it with -branch", flagName, branch, testsupport.TestBranchPrefix)
+	}
+	var device testsupport.Device
+	var label string
+	var ends []string
+	var target, manufacturer, platform string
+	switch {
+	case f.device != "":
+		name, ports, ok := strings.Cut(f.device, ":")
+		if !ok || name == "" || ports == "" || strings.ContainsAny(name, " \t/") {
+			return fmt.Errorf("-add-device takes <name>:<port>[,<port>...], got %q", f.device)
+		}
+		device = testsupport.Device{Name: name, Ports: strings.Split(ports, ","), Tag: f.of.tag, Management: f.of.management}
+		if slices.Contains(device.Ports, "") {
+			return fmt.Errorf("-add-device takes <name>:<port>[,<port>...], got %q: a port has no name", f.device)
+		}
+		if f.of.platform != "" {
+			var ok bool
+			if device.Manufacturer, device.Platform, ok = strings.Cut(f.of.platform, "/"); !ok ||
+				device.Manufacturer == "" || device.Platform == "" {
+				return fmt.Errorf("-device-platform takes <manufacturer>/<platform>, got %q", f.of.platform)
+			}
+		}
+		if device.Management != "" && !slices.Contains(device.Ports, device.Management) {
+			return fmt.Errorf("-device-management names %q, which is not among -add-device's ports %s", device.Management, ports)
+		}
+	case f.cable != "":
+		var list string
+		var ok bool
+		label, list, ok = strings.Cut(f.cable, "=")
+		if !ok || label == "" || list == "" {
+			return fmt.Errorf("-add-cable takes <label>=<device>:<port>,<device>:<port>[,...], got %q", f.cable)
+		}
+		ends = strings.Split(list, ",")
+		for _, e := range ends {
+			if d, p, ok := strings.Cut(e, ":"); !ok || d == "" || p == "" {
+				return fmt.Errorf("-add-cable's end %q is not <device>:<port>", e)
+			}
+		}
+	case f.platform != "":
+		var pair string
+		var ok bool
+		target, pair, ok = strings.Cut(f.platform, "=")
+		if !ok || target == "" {
+			return fmt.Errorf("-set-platform takes <device>=<manufacturer>/<platform>, or <device>= to take it away, got %q",
+				f.platform)
+		}
+		if pair != "" {
+			if manufacturer, platform, ok = strings.Cut(pair, "/"); !ok || manufacturer == "" || platform == "" {
+				return fmt.Errorf("-set-platform takes <device>=<manufacturer>/<platform>, got %q", f.platform)
+			}
+		}
+	}
+	c, err := testsupport.NewClient()
+	if err != nil {
+		return err
+	}
+	switch {
+	case f.device != "":
+		id, err := c.AddDevice(branch, device)
+		if err != nil {
+			return err
+		}
+		if f.of.group {
+			if err := c.JoinArtifactGroup(branch, []string{id}); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("device %s added on %s: id %s, ports %s; %s\n", device.Name, branch, id,
+			strings.Join(device.Ports, ", "), addedWith(device, f.of.group))
+	case f.cable != "":
+		if err := c.AddCable(branch, label, ends...); err != nil {
+			return err
+		}
+		fmt.Printf("cable %s added on %s: %s\n", label, branch, strings.Join(ends, ", "))
+	case f.platform != "":
+		if err := c.SetDevicePlatform(branch, target, manufacturer, platform); err != nil {
+			return err
+		}
+		if platform == "" {
+			fmt.Printf("device %s on %s has no platform\n", target, branch)
+		} else {
+			fmt.Printf("device %s on %s moved onto platform %s / %s\n", target, branch, manufacturer, platform)
+		}
+	default:
+		began := time.Now()
+		if err := c.LoadSchemaFile(branch, f.schemaFile); err != nil {
+			return err
+		}
+		fmt.Printf("schema file %s loaded on %s in %.1fs\n", f.schemaFile, branch, time.Since(began).Seconds())
+	}
+	return nil
+}
+
+// addedWith says what -add-device gave a device beyond its ports: each of its tag, platform
+// and group, or that it has none.
+func addedWith(d testsupport.Device, group bool) string {
+	parts := []string{"no tag", "no platform", "no group"}
+	if d.Tag != "" {
+		parts[0] = "tag " + d.Tag
+	}
+	if d.Platform != "" {
+		parts[1] = "platform " + d.Manufacturer + " / " + d.Platform
+	}
+	if group {
+		parts[2] = "in group " + testsupport.ArtifactGroupName
+	}
+	if d.Management != "" {
+		parts = append(parts, "management port "+d.Management)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // deleteBranch deletes a branch and what hangs on it. A test branch goes in the fixed
 // order: every stage of every proposed change whose source it is, then those proposed
 // changes, then the branch, since Infrahub refuses a proposed change's delete while a
@@ -811,6 +1031,12 @@ func deletable(branch string) error {
 }
 
 func run(branch, schemaDir string, schemaOnly, remove, mixed bool) error {
+	// The mixed seed refuses the durable fixture branch before any request, as SeedMixed
+	// does: that branch holds the three-node fixture and nothing else.
+	if mixed && branch == testsupport.FixtureBranch {
+		return fmt.Errorf("-mixed refuses branch %s: it holds the three-node fixture, written once and never changed; "+
+			"seed a throwaway branch and name it with -branch", branch)
+	}
 	if remove {
 		if err := deletable(branch); err != nil {
 			return err

@@ -110,17 +110,6 @@ func activityMessage(err error) string {
 	return err.Error()
 }
 
-// causeMessage is an activity's or child's failure as the M4 messages quote it: the
-// ApplicationError's own message, without the type and retryability the SDK appends, so a
-// cause reads as the activity worded it (contracts/cli.md, "(<err>)").
-func causeMessage(err error) string {
-	var appErr *temporal.ApplicationError
-	if errors.As(err, &appErr) {
-		return appErr.Message()
-	}
-	return activityMessage(err)
-}
-
 // plural counts a noun: "1 container", "3 containers".
 func plural(n int, noun string) string {
 	if n == 1 {

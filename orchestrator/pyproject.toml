@@ -1,0 +1,56 @@
+# The orchestrator: the adapter, the documents, the record and the six flows on Prefect
+# (research R-01, R-02). Its venv is orchestrator/.venv, made by `make orchestrator-venv`;
+# the root .venv stays the operator's infrahubctl alone.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fylgja-orchestrator"
+version = "0.1.0.dev0"
+description = "Fylgja's orchestrator: the source of truth's adapter, the documents and the flows."
+license = "Apache-2.0"
+requires-python = ">=3.14"
+# Prefect and the SDK pinned, as the host verified them (research §1.2, §5.7): Prefect
+# 3.8.8, since 3.9.0 needs a whenever the SDK refuses, and FastAPI beside it, since 3.8.8's
+# server fails at start on the release pip otherwise picks. The rest at the versions
+# Prefect's own constraints settle.
+dependencies = [
+    "prefect==3.8.8",
+    "fastapi==0.150.0",
+    "infrahub-sdk==1.23.2",
+    "httpx",
+    "pydantic",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.2.0",
+    "ruff==0.17.3",
+]
+
+[project.scripts]
+fylgja-cli = "fylgja_orchestrator.cli:main"
+fylgja-orchestrator = "fylgja_orchestrator.serve:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Tier 1 by default; tier 2 is marked `contract` and skips without INFRAHUB_ADDRESS
+# (tests/contract/conftest.py). `make test` deselects it, `make test-contract` selects it.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--import-mode=importlib"]
+markers = [
+    "contract: tier 2, against a real Infrahub (INFRAHUB_ADDRESS, INFRAHUB_API_TOKEN)",
+]
+
+# The orchestrator and infrahub/checks/ are linted with this one configuration
+# (`make lint` passes it with --config).
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "SIM"]

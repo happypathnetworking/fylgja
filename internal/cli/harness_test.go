@@ -24,9 +24,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
-	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/server"
 	"github.com/happypathnetworking/fylgja/internal/verify"
@@ -35,8 +33,8 @@ import (
 // The harness. Every command these tests run
 // is one request to a server in the test's own process: TestMain starts one httptest server
 // over a server.Server, with a token made for the run, and points the client's environment
-// at it. The server reads the process environment the tests set (the state root, Infrahub's
-// variables, the logins) at each request, as fylgja serve reads its own; its log goes to a
+// at it. The server reads the process environment the tests set (the state root and the
+// logins) at each request, as fylgja serve reads its own; its log goes to a
 // buffer the tests read, never to the process's stderr, which the tests capture.
 
 // harness is the server every command reaches.
@@ -59,11 +57,9 @@ var harness struct {
 // field it became at every request: dialService is Dial,
 // dryRunRunner Runner, verifyReader Reader, verifySleep and verifyNow Sleep and Now,
 // showServiceBudget ServiceBudget, and pspDir, which a test sets through usePSPDir where it
-// gave options{pspDir: …}, is PSPDir. rehearsalCeiling, which no flag sets, is
-// RehearsalCeiling: a test lowers it under a rehearsal's deadline (015), and zero is
-// rehearsal.Ceiling. defaultScope is DefaultScope, the server's FYLGJA_DEFAULT_SCOPE: the
-// fixture's tag, which a test empties for a server with no default (017). notifyInterrupt
-// stays the client's own (interrupt.go).
+// gave options{pspDir: …}, is PSPDir. notifyInterrupt stays the client's own (interrupt.go).
+// From 020 the server reads no source of truth, so the rehearsal's ceiling, the default
+// scope and the kind's probe read are seams no longer.
 var (
 	dialService = func(ctx context.Context) (provision.Service, error) {
 		return provision.Dial(ctx, nil)
@@ -75,37 +71,7 @@ var (
 	verifyNow         func() time.Time
 	showServiceBudget = provision.ShowServiceBudget
 	pspDir            string
-	rehearsalCeiling  time.Duration
-	defaultScope      = "tag:fylgja"
-	// probeKind is Probes, the kind's read a request that sends no probe file makes (016):
-	// FylgjaProbe present on the default branch and holding no probe, so a test that sends
-	// no --probes is served an empty list with no warning, as before the kind, and no
-	// request of the read reaches a fake Infrahub a test serves. A test that reads the kind
-	// sets its own.
-	probeKind = func() (server.ProbeReader, error) { return &kindProbes{}, nil }
 )
-
-// kindProbes is a FylgjaProbe on the default branch: check is Check's answer, and probes
-// and err Probes'. reads counts the reads of the list.
-type kindProbes struct {
-	check  error
-	probes []probe.Probe
-	err    error
-	reads  atomic.Int32
-}
-
-func (k *kindProbes) Check(context.Context) error { return k.check }
-
-func (k *kindProbes) Probes(context.Context) ([]probe.Probe, error) {
-	k.reads.Add(1)
-	if k.err != nil {
-		return nil, k.err
-	}
-	if k.probes == nil {
-		return []probe.Probe{}, nil
-	}
-	return k.probes, nil
-}
 
 // version is the build of the harness's server and of its client: M12's unstamped version,
 // which a run records as the CLI's version was.
@@ -140,18 +106,14 @@ func TestMain(m *testing.M) {
 		return "", false
 	}
 	// No tier-1 test reaches the host: a test that gives no state root of its own files in
-	// a scratch one, never the operator's local/, and one that serves no fake Infrahub reads
-	// from an address nothing answers, never the operator's Infrahub, whatever the shell
-	// that ran the tests had loaded (018: every create now reads on the server).
+	// a scratch one, never the operator's local/. The server reads no source of truth (020),
+	// so the harness gives it no Infrahub, not even a placeholder.
 	state, err := os.MkdirTemp("", "fylgja-cli-state-*")
 	if err != nil {
 		panic(err)
 	}
-	for name, value := range map[string]string{lab.EnvStateRoot: state, intent.EnvAddress: unreachable,
-		intent.EnvToken: "tier-1-no-token"} {
-		if err := os.Setenv(name, value); err != nil {
-			panic(err)
-		}
+	if err := os.Setenv(lab.EnvStateRoot, state); err != nil {
+		panic(err)
 	}
 	code := m.Run()
 	harness.http.Close()
@@ -179,9 +141,6 @@ func handSeams() {
 	s.Burster = verifyBurster
 	s.Sleep, s.Now = verifySleep, verifyNow
 	s.ServiceBudget = showServiceBudget
-	s.RehearsalCeiling = rehearsalCeiling
-	s.DefaultScope = defaultScope
-	s.Probes = probeKind
 	s.PSPDir = pspDir
 	if s.PSPDir == "" {
 		s.PSPDir = os.Getenv(lab.EnvPSPDir)

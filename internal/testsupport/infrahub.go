@@ -579,28 +579,9 @@ func (c *Client) DeleteProbes() (int, error) {
 	return n, nil
 }
 
-// ProbeCount is how many objects of the probe kind the default branch holds. It writes
-// nothing.
-func (c *Client) ProbeCount() (int, error) {
-	ids, err := c.ids(DefaultBranch, ProbeKind, "")
-	return len(ids), err
-}
-
 // json_Unmarshal is a tiny indirection so seed.go can decode without importing
 // encoding/json again under a different name.
 func json_Unmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
-
-// SDL fetches a branch's GraphQL schema definition.
-func (c *Client) SDL(branch string) ([]byte, error) {
-	status, body, err := c.do(http.MethodGet, "/schema.graphql?branch="+branch, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("fetching SDL: HTTP %d", status)
-	}
-	return body, nil
-}
 
 // ArtifactDefinitionName is the definition this repository's .infrahub.yml declares, which
 // renders a device's configuration once the repository is registered on main (D-044). It
@@ -767,55 +748,6 @@ func (c *Client) WaitForArtifacts(branch string, want int) error {
 	}
 	return fmt.Errorf("branch %s: %d artifact(s) did not all reach Ready within %s (last saw %s)",
 		branch, want, ArtifactWait, last)
-}
-
-// ArtifactsReadyAt returns when the branch's last artifact was rendered: the latest
-// checksum stamp among them. A first generation stamps the checksum, the storage id and
-// the status alike, but a regeneration moves the checksum's and the storage id's and
-// leaves the status's where it was, Ready to Ready being no change (research §2.5), so
-// only the checksum's stamp sees every generation. A read pinned after it sees every
-// artifact as last rendered. It refuses a branch with no artifact, or with one not Ready,
-// since no such instant exists.
-func (c *Client) ArtifactsReadyAt(branch string) (time.Time, error) {
-	const q = `{ CoreArtifact { edges { node { status { value } checksum { updated_at } } } } }`
-	raw, err := c.GraphQL(branch, q)
-	if err != nil {
-		return time.Time{}, err
-	}
-	var r struct {
-		A struct {
-			Edges []struct {
-				Node struct {
-					Status struct {
-						Value string `json:"value"`
-					} `json:"status"`
-					Checksum struct {
-						UpdatedAt string `json:"updated_at"`
-					} `json:"checksum"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"CoreArtifact"`
-	}
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return time.Time{}, err
-	}
-	if len(r.A.Edges) == 0 {
-		return time.Time{}, fmt.Errorf("branch %s holds no artifact", branch)
-	}
-	var latest time.Time
-	for _, e := range r.A.Edges {
-		if e.Node.Status.Value != "Ready" {
-			return time.Time{}, fmt.Errorf("branch %s holds an artifact %s, not Ready", branch, e.Node.Status.Value)
-		}
-		at, err := time.Parse(time.RFC3339Nano, e.Node.Checksum.UpdatedAt)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("branch %s: artifact checksum stamp %q: %w", branch, e.Node.Checksum.UpdatedAt, err)
-		}
-		if at.After(latest) {
-			latest = at
-		}
-	}
-	return latest, nil
 }
 
 // groupMemberCount is how many artifacts a fully generated branch should hold: one per

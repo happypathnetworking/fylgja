@@ -34,6 +34,10 @@ jobs:
           make build VERSION="$VERSION"
           test "$(bin/fylgja --version)" = "fylgja version $VERSION"
           file bin/fylgja | grep -q 'statically linked'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: make orchestrator-venv
       - run: make test
       - run: |
           gh run list --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" --workflow ci \

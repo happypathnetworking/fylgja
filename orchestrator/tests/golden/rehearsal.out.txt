@@ -1,0 +1,94 @@
+rehearsal of proposed change "fylgja-test-golden-41263" (18e3127c-025b-f488-33be-c5158cf576c3) on branch fylgja-test-golden-41263: 5 stages; deadline 43m0s (ceiling 1h0m0s), scope tag:fylgja
+fylgja-test-golden-41263/branch-point: refused (scope.empty)
+  rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-29T18:09:04.039194Z
+fylgja-test-golden-41263/seeded: branch fylgja-test-golden-41263 at 2026-10-29T18:11:38.471611+00:00 (written), "seeded"; baseline
+fylgja-test-golden-41263/third-link: branch fylgja-test-golden-41263 at 2026-10-29T18:11:50.425111+00:00 (written), "third link"
+fylgja-test-golden-41263/bad-port: branch fylgja-test-golden-41263 at 2026-10-29T18:12:11.745240+00:00 (written), "a port SR Linux refuses"
+  warning artifact.interface.unrepresented [step read] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  warning artifact.interface.unrepresented [step compile] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  info omit.interface.unmappable [step compile] n1:ethernet-1/99: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node
+fylgja-test-golden-41263/head: branch fylgja-test-golden-41263 at 2026-10-29T18:12:10.636975+00:00 (head)
+  warning artifact.interface.unrepresented [step read] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  warning artifact.interface.unrepresented [step compile] n1:ethernet-1/99: artifact device-config names interface ethernet-1/99 at line 27, which the twin does not represent: omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)
+  info omit.interface.unmappable [step compile] n1:ethernet-1/99: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node
+run fylgja-rehearse 01a188df-b883-70f8-8999-bc18b484dc1f
+stage fylgja-test-golden-41263/seeded: creating the twin
+run fylgja-provision 01a188df-b908-761c-95d8-868a578bec10
+step host check: begins
+step host check: done in 0.2s
+step stage: begins
+step stage: done in 0.0s
+step deploy: begins
+step deploy: done in 39.8s (3 nodes)
+step readiness n1: begins
+step readiness n2: begins
+step readiness n3: begins
+step readiness n1: ready in 0.3s
+step readiness n3: ready in 0.4s
+step readiness n2: ready in 0.4s
+step push n1: begins
+step push n2: begins
+step push n3: begins
+step push n3: done in 3.0s
+step push n2: done in 3.0s
+step push n1: done in 3.1s
+step record: begins
+step record: done in 0.0s
+stage fylgja-test-golden-41263/seeded: verify: settled after 4.4s (1 read)
+stage fylgja-test-golden-41263/third-link: stepping
+run fylgja-step 01a188e0-7642-75da-b355-c789b0bffe8e
+step inspect: begins
+step inspect: done in 0.2s
+step host check: begins
+step host check: done in 0.2s
+step plan reconcile: begins
+step plan reconcile: done in 0.3s (live n1, n3)
+step stage: begins
+step stage: done in 0.0s
+step reconcile: begins
+step reconcile: done in 0.8s (3 nodes)
+step push n1: begins
+step push n3: begins
+step push n1: done in 2.9s
+step push n3: done in 3.2s
+step record: begins
+step record: done in 0.0s
+step observe: begins
+step observe: settled after 5.5s (1 read)
+stage fylgja-test-golden-41263/bad-port: stepping
+run fylgja-step 01a188e0-a0b7-78e2-9cb0-2c7bf655c46f
+step inspect: begins
+step inspect: done in 0.3s
+step host check: begins
+step host check: done in 0.2s
+step plan reconcile: begins
+step plan reconcile: done in 0.3s (nothing to apply)
+step stage: begins
+step stage: done in 0.0s
+step push n1: begins
+step push n1: failed push.refused: node n1 refused artifact device-config (checksum 52e8a7ff4e883e85310df284840aefde): the node's message ends before any reason Fylgja can read, and the candidate it refused passes `commit validate`, which does not run every check a commit does (D-035)
+step record: begins
+step record: done in 0.0s
+step observe: begins
+step observe: settled after 5.5s (1 read)
+destroying the twin
+run fylgja-destroy 01a188e0-d0c3-7ce5-a3ce-8cae374baa9e
+step plan teardown: begins
+step plan teardown: done in 0.0s
+step teardown: begins
+step teardown: done in 2.4s (3 containers)
+step unstage: begins
+step unstage: done in 0.0s
+removed lab fylgja (3 containers)
+removed twin directory <state-root>/twin
+stage fylgja-test-golden-41263/branch-point: refused (scope.empty)
+stage fylgja-test-golden-41263/seeded: created; settled after 4.4s (1 read); 15 held, 0 failed, 0 skipped; baseline
+stage fylgja-test-golden-41263/third-link: stepped in 5.1s (push n1 2.9s, n3 3.2s); settled after 5.5s (1 read); 19 held, 0 failed, 0 skipped; passed
+stage fylgja-test-golden-41263/bad-port: diverged at phase push: landed none; not landed n1 (push.refused); settled after 5.5s (1 read); 19 held, 0 failed, 0 skipped; failed
+stage fylgja-test-golden-41263/head: not reached
+rehearsal nonconforming: stage fylgja-test-golden-41263/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:
+  fylgja-cli twin create --stage fylgja-test-golden-41263/seeded --scope tag:fylgja
+  fylgja-cli twin step --stage fylgja-test-golden-41263/third-link --allow-restart
+  fylgja-cli twin step --stage fylgja-test-golden-41263/bad-port --allow-restart
+  fylgja twin verify
+  fylgja twin destroy

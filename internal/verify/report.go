@@ -558,26 +558,24 @@ func short(id string) string {
 }
 
 // TwinInfo is the twin as its record names it, for the block: the staged
-// bundle the assertions were derived from and its snapshot, the record's stage, the rehearsal it is the
-// baseline of, its state, source and node count, and where a diverged twin's step was going.
+// bundle the assertions were derived from and its snapshot, its state, source and node count,
+// and where a diverged twin's step was going. A record names no stage and no rehearsal from
+// twin.json 12 (020), so the block's stage and rehearsal are null.
 type TwinInfo struct {
 	// SnapshotID is the snapshot of the staged bundle (019): the record's when the staged
 	// bundle is the record's, the step's target's when it is the step's (a diverged twin),
 	// and nil otherwise, a record naming none included.
 	SnapshotID *string
 	BundleID   string // the staged bundle's
-	Stage      *wire.StageRef
-	Rehearsal  *wire.RehearsalRef // nil for a twin no rehearsal built, and a record before 7
-	State      string             // wire.StateReady or wire.StateDiverged; a record before 4 reads ready
+	State      string // wire.StateReady or wire.StateDiverged; a record before 4 reads ready
 	Source     string
 	Nodes      int
 	Diverged   *Divergence
 }
 
-// Divergence is a diverged record's step: the stage and bundle it was going to, its run
-// and the phase it stopped at.
+// Divergence is a diverged record's step: the bundle it was going to, its run and the phase
+// it stopped at.
 type Divergence struct {
-	Towards       *wire.StageRef
 	TowardsBundle string
 	RunID         string
 	Phase         string
@@ -585,7 +583,7 @@ type Divergence struct {
 
 // TwinOf names the twin from its record and the staged bundle's id.
 func TwinOf(rec wire.TwinRecord, staged string) TwinInfo {
-	t := TwinInfo{BundleID: staged, Stage: rec.Stage, Rehearsal: rec.Rehearsal, State: rec.State, Source: rec.Source, Nodes: len(rec.Nodes)}
+	t := TwinInfo{BundleID: staged, State: rec.State, Source: rec.Source, Nodes: len(rec.Nodes)}
 	if t.State == "" {
 		t.State = wire.StateReady
 	}
@@ -597,7 +595,7 @@ func TwinOf(rec wire.TwinRecord, staged string) TwinInfo {
 		t.SnapshotID = &id
 	}
 	if s := rec.Step; rec.State == wire.StateDiverged && s != nil {
-		d := &Divergence{Towards: s.To.Stage, TowardsBundle: s.To.BundleID, RunID: s.Run.RunID}
+		d := &Divergence{TowardsBundle: s.To.BundleID, RunID: s.Run.RunID}
 		if s.Phase != nil {
 			d.Phase = *s.Phase
 		}
@@ -786,27 +784,13 @@ func (c counter) block(skips bool) findings.VerifyCount {
 }
 
 func twinBlock(t TwinInfo) findings.VerifyTwin {
-	out := findings.VerifyTwin{SnapshotID: t.SnapshotID, BundleID: t.BundleID, Stage: StageBlock(t.Stage), State: t.State,
-		Source: t.Source, Nodes: t.Nodes}
-	if r := t.Rehearsal; r != nil {
-		out.Rehearsal = &findings.ShowRef{WorkflowID: r.WorkflowID, RunID: r.RunID}
-	}
+	out := findings.VerifyTwin{SnapshotID: t.SnapshotID, BundleID: t.BundleID, State: t.State, Source: t.Source, Nodes: t.Nodes}
 	if d := t.Diverged; d != nil {
 		out.Diverged = &findings.VerifyDiverged{
-			Towards: findings.VerifyTowards{Stage: StageBlock(d.Towards), BundleID: d.TowardsBundle},
+			Towards: findings.VerifyTowards{BundleID: d.TowardsBundle},
 			Run:     findings.ShowRef{WorkflowID: wire.StepWorkflowID, RunID: d.RunID},
 			Phase:   d.Phase,
 		}
 	}
 	return out
-}
-
-// StageBlock is a record's stage as the documents name it, or nil when it names none:
-// twin verify's twin and towards, and twin show's record and step sides.
-func StageBlock(st *wire.StageRef) *findings.ShowStage {
-	if st == nil {
-		return nil
-	}
-	return &findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: st.ProposedChange.ID, Branch: st.ProposedChange.Branch},
-		Label: st.Label, Description: st.Description, AtSource: st.AtSource}
 }

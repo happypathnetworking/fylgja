@@ -538,9 +538,8 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 		}
 	}
 
-	// The four workflows the server starts, and no other (M11 adds the step, 015 the
-	// rehearsal, which starts the first three as its children by these names; 019 removes
-	// the check). The SDK offers no listing, but it refuses to register a workflow name
+	// The three workflows the server starts, and no other (M11 adds the step; 019 removes the
+	// check; 020 the rehearsal, which the orchestrator runs). The SDK offers no listing, but it refuses to register a workflow name
 	// twice (SDK v1.49.0, internal/internal_worker.go, RegisterWorkflowWithOptions: a
 	// present workflowFuncMap entry panics "workflow name ... is already registered"), so a
 	// refused second registration is its word that the first happened. A lazy client dials
@@ -551,23 +550,19 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 	}
 	defer c.Close()
 	w := NewWorker(c, &lab.Activities{})
-	for name, wf := range map[string]any{"Provision": Provision, "Destroy": Destroy, "Step": Step, "Rehearse": Rehearse} {
+	for name, wf := range map[string]any{"Provision": Provision, "Destroy": Destroy, "Step": Step} {
 		if msg := panics(func() { w.RegisterWorkflow(wf) }); !strings.Contains(msg, fmt.Sprintf("workflow name %q is already registered", name)) {
 			t.Errorf("registering %s again: %q; want the SDK to refuse it as already registered by NewWorker", name, msg)
 		}
 	}
-	// A rehearsal starts its children by type name, so each must be the name NewWorker
-	// registered it under.
-	for name, typeName := range map[string]string{"Provision": provisionWorkflowType, "Destroy": destroyWorkflowType, "Step": stepWorkflowType} {
-		if typeName != name {
-			t.Errorf("the children start %s as %q, which NewWorker does not register", name, typeName)
+	// The check an earlier build's Schedule started, by the type name Reconcile, and the
+	// rehearsal an earlier build served, by the type name Rehearse, are not served: the SDK
+	// takes a first registration under either name.
+	for _, name := range []string{"Reconcile", "Rehearse"} {
+		gone := func(workflow.Context) error { return nil }
+		if msg := panics(func() { w.RegisterWorkflowWithOptions(gone, workflow.RegisterOptions{Name: name}) }); msg != "" {
+			t.Errorf("registering a workflow as %s: %q; want it taken, since NewWorker registers none", name, msg)
 		}
-	}
-	// The check an earlier build's Schedule started, by the type name Reconcile, is not
-	// served: the SDK takes a first registration under that name.
-	check := func(workflow.Context) error { return nil }
-	if msg := panics(func() { w.RegisterWorkflowWithOptions(check, workflow.RegisterOptions{Name: "Reconcile"}) }); msg != "" {
-		t.Errorf("registering a workflow as Reconcile: %q; want it taken, since NewWorker registers no check", msg)
 	}
 }
 

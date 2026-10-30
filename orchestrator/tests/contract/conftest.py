@@ -671,12 +671,16 @@ def artifact_of(run_id: str) -> dict:
 
 
 def flow_runs_of(name: str) -> list:
-    """Every run of the flow the harness recorded, newest first."""
+    """Every run of the flow the harness recorded, newest first: sorted by start time, since
+    the server's default order is by id, a random uuid4, so once the session holds two runs of
+    one flow (the composed rehearsal's plan before the plan's own) the first is either."""
     from prefect.client.orchestration import get_client
     from prefect.client.schemas.filters import FlowFilter, FlowFilterName
+    from prefect.client.schemas.sorting import FlowRunSort
 
     with get_client(sync_client=True) as client:
-        return client.read_flow_runs(flow_filter=FlowFilter(name=FlowFilterName(any_=[name])))
+        return client.read_flow_runs(flow_filter=FlowFilter(name=FlowFilterName(any_=[name])),
+                                     sort=FlowRunSort.START_TIME_DESC)
 
 
 def threads_of(change_id: str) -> list[list[str]]:

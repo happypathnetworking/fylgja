@@ -3,7 +3,7 @@
 Infrahub's runtime, as the Jinja template is: Python glue in this repository, run by
 Infrahub's task workers on a proposed change at its creation and on a re-run, reaching
 Fylgja through the orchestrator's platform alone (020's FR-024, R-12). Everything that
-decides is the orchestrator's flows' and the core's; the Python finds the proposed change,
+decides is the orchestrator's flows' ([orchestrator.md](orchestrator.md)) and the core's; the Python finds the proposed change,
 triggers one flow, waits for its run, reads the run's document and out lines, and concludes.
 Neither check writes to Infrahub: the rehearse flow posts the report itself
 ([D-065](../docs/decisions.md#d-065); 020's R-11).

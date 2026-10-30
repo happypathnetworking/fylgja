@@ -1,4 +1,4 @@
-# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed; 016 — probes; 020 — runs by identity and the diff
+# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed; 016 — probes; 020 — runs by identity and the diff, and the commands the orchestrator took
 
 Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
 stage surface" at the end says what moved. 015 adds to it, and the section "015: the
@@ -7,8 +7,10 @@ scope and the DCIM reader" says what moved. 018 makes the snapshot the core's on
 and the section "018: snapshots" says what moved. 019 removes following from the core, and
 the section "019: following removed" says what moved. 016 adds probes, and the section
 "016: probes" says what moved. 020 adds `--detach`, `fylgja run read`, `fylgja run
-interrupt` and `fylgja twin diff`, and the section "020: runs by identity and the diff",
-last, says what was added. **Everything not named here is
+interrupt` and `fylgja twin diff`, and the section "020: runs by identity and the diff"
+says what was added; 020 then removes the commands that read Infrahub, which are the
+orchestrator's `fylgja-cli`'s ([orchestrator.md](orchestrator.md)), and the section "020: the
+commands the orchestrator took", last, says what left. **Everything not named here is
 as M12 left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
@@ -22,7 +24,7 @@ version; 018 added the snapshot `1`, moved `twin.json` to `9`, and retired `twin
 --ctm` and the bundle's CTM sidecar; 019 moved `twin.json` to `10` and removed the following
 blocks from the findings document and the `show` block; 016 added the probe declaration `1`
 and the probe package `0.1`, and moved the snapshot to `2`, the bundle manifest to `6` and
-`twin.json` to `11`.
+`twin.json` to `11`; 020 moved `twin.json` to `12`.
 
 ## `fylgja serve [--listen <host:port>]... [--psp-dir <dir>]`
 
@@ -30,7 +32,10 @@ and the probe package `0.1`, and moved the snapshot to `2`, the bundle manifest 
 every address given, and on `127.0.0.1:7650` when none is. It reads `FYLGJA_DEFAULT_SCOPE`
 since 017 ("017: the scope and the DCIM reader", below), which adds one refusal to start
 and one line of the report. Since 018 the state root line names the snapshot store beside
-the bundles ("018: snapshots", below). What follows is M13's, for each address.
+the bundles ("018: snapshots", below). Since 020 it reads no `INFRAHUB_*` and no
+`FYLGJA_DEFAULT_SCOPE`, connects to no Infrahub, and its report says what it dials ("020:
+the commands the orchestrator took", below). What follows is M13's, for each address, with
+020's report.
 
 The API's server: a role of the binary, run on the lab host beside `fylgja worker run`,
 as a process of its own. It serves until interrupted, prints its start-up report on
@@ -52,8 +57,8 @@ The report:
 
 ```
 fylgja serve: listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)
-fylgja serve: state root /srv/fylgja/local (bundles: /srv/fylgja/local/bundles, twin: /srv/fylgja/local/twin)
-fylgja serve: the workflow service (localhost:7233, namespace default) and Infrahub are dialled when a request needs them
+fylgja serve: state root /srv/fylgja/local (bundles: /srv/fylgja/local/bundles, snapshots: /srv/fylgja/local/snapshots, twin: /srv/fylgja/local/twin)
+fylgja serve: the workflow service (localhost:7233, namespace default), Docker, containerlab and the nodes are dialled when a request needs them
 fylgja serve: host memory budget: unset (memory sums will be warnings)
 fylgja serve: probe login nokia_srlinux: FYLGJA_SRLINUX_USERNAME set, FYLGJA_SRLINUX_PASSWORD set
 fylgja serve: <the package's line, as fylgja worker run prints it>
@@ -71,8 +76,9 @@ The listen line names the address as `--listen` gave it, with the port it got: `
 127.0.0.1:0` names the port the system chose. Once it serves, a failure to accept is
 `fylgja serve: serving on <address>: <error>`, exit 2.
 
-- It starts with neither Infrahub nor the workflow service reachable, and connects to
-  each only when a request needs it.
+- It starts with nothing it dials reachable, and connects to each only when a request
+  needs it. Until 020 that included Infrahub, and the dial line read `the workflow service
+  (localhost:7233, namespace default) and Infrahub are dialled when a request needs them`.
 - It keeps nothing between two requests.
 - It logs one line a request on stderr when the request ends: `operation`, `outcome`,
   `duration`. `operation` is the operation's name, an operation's path asked with another
@@ -98,10 +104,13 @@ The listen line names the address as `--listen` gave it, with the port it got: `
 
 `twin create`, `twin show`, `twin destroy`, `twin provision`, `twin step`, `twin verify`,
 `twin compile`, `waypoint list` and `waypoint plan` (moved at 014: `stage list` and `stage
-plan`), `intent read`, `schema check` and `psp validate`, each with its dry run where it
-has one, and `twin rehearse` (added at 015), and `run read`, `run interrupt` and `twin
-diff` (added at 020). Each does its work by one request to the API and prints what comes
-back.
+plan`), `intent read`, `schema check` and `psp validate`, each with its dry run where it has
+one, and `twin rehearse` (added at 015), and `run read`, `run interrupt` and `twin diff`
+(added at 020). Each does its work by one request to the API and prints what comes back.
+Removed at 020: `stage list`, `stage plan`, `intent read`, `schema check` and `twin
+rehearse`, and `--branch`, `--at`, `--stage`, `--scope` and `--probes` on `twin create` and
+`--stage` and `--probes` on `twin step`, which are the orchestrator's `fylgja-cli`'s ("020:
+the commands the orchestrator took", below; [orchestrator.md](orchestrator.md)).
 
 - **What it prints and how it exits are M12's**, for the same arguments and the same
   state of the host, Infrahub and the workflow service.
@@ -124,9 +133,10 @@ back.
 What each command needed at M12 it still needs, with the server in the CLI's place: `twin
 show` answers for the host and the record with the workflow service unreachable, inside
 five seconds; `twin verify` needs no run and no worker; `waypoint list` and `waypoint
-plan` (moved at 014: `stage list` and `stage plan`, which need the same) need no lab,
-worker or workflow service; `psp validate` and `twin compile` need
-neither Infrahub nor the workflow service. **Each needs a server.**
+plan` (moved at 014: `stage list` and `stage plan`, which need the same, until 020) need no
+lab, worker or workflow service; `psp validate`, `twin compile` and `twin diff` need
+neither Infrahub nor the workflow service, and since 020 no command needs Infrahub. **Each
+needs a server.**
 
 ## The client's environment
 
@@ -185,8 +195,8 @@ its `Location`), or `the API at <address> sent a document this client cannot rea
 
 Each prints the run's progress as it happens, line for line as at M12, and ends with
 M12's closing lines, document and exit status. Everything a run command does before its
-start runs in the server, in M12's order. `twin rehearse` (015) is a run command too, and
-what follows holds for it, with its own interrupt below.
+start runs in the server, in M12's order. `twin rehearse` was a run command too from 015 to
+020, and what follows held for it, with its own interrupt below.
 
 | The operator | What happens | Ends |
 |---|---|---|
@@ -212,11 +222,11 @@ what follows holds for it, with its own interrupt below.
 
 | Command | The client | The server |
 |---|---|---|
-| `intent read … --out <file>` | writes the CTM that comes back, atomically; writes nothing when the read is refused (since 018 a snapshot, which the server also files: "018: snapshots") | reads, validates, answers with the CTM and M12's summary line |
+| `intent read … --out <file>`, until 020 | writes the CTM that comes back, atomically; writes nothing when the read is refused (since 018 a snapshot, which the server also files: "018: snapshots") | reads, validates, answers with the CTM and M12's summary line |
 | `twin compile --ctm <file> --out <dir>` (retired at 018: `--snapshot <file>`) | reads the CTM once both flags are given; writes the bundle that comes back | parses it, checks its contract, compiles on the golden tests' code path |
 | `psp validate <file>…` | reads each file | refuses a second YAML document, validates the set; every finding names the path given |
 | `twin provision <bundle-dir>` | reads the directory's regular files | verifies, files in its store, and deploys the filed copy |
-| `schema check --branch <b>` | sends the branch | answers as at M12 |
+| `schema check --branch <b>`, until 020 | sends the branch | answers as at M12 |
 
 - A file the client cannot read, or cannot write, is its own `operation.failed`, exit 2,
   in M12's words for that command: `reading CTM: open ctm.json: no such file or
@@ -276,7 +286,8 @@ None is added, removed or changed. `fylgja-provision`, `fylgja-destroy`, `fylgja
 `Reconcile`, the Schedule, all twenty activities and every wire type are M12's, and the
 nine recorded histories replay. 015 adds one workflow, `fylgja-rehearse`, below; 017 adds
 none, its scope riding the runs' inputs; 018 adds none, its snapshot id riding them too; 019
-removes `Reconcile`, the Schedule and five activities ("019: following removed", below). The
+removes `Reconcile`, the Schedule and five activities ("019: following removed", below); 020
+removes `fylgja-rehearse`, leaving three ("020: the commands the orchestrator took", below). The
 server starts, follows and cancels runs through
 `provision.Service`, as the CLI did. `worker run` is M12's, with `--psp-dir` now its own
 flag.
@@ -289,17 +300,19 @@ Who reads each variable from M13:
 |---|---|---|---|
 | `FYLGJA_API_ADDRESS` | yes | no (`--listen`) | no |
 | `FYLGJA_API_TOKEN` | yes | yes | no |
-| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | no | yes | no (yes until 019) |
+| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | no | no (yes until 020) | no (yes until 019) |
 | `FYLGJA_TEMPORAL_ADDRESS`, `_NAMESPACE` | no | yes | yes |
 | `FYLGJA_STATE_ROOT` | no | yes | yes |
 | `FYLGJA_HOST_MEMORY_MB` | no | yes | yes |
 | each package's login names | no | yes | yes |
 | `FYLGJA_PSP_DIR` | no | yes | yes |
-| `FYLGJA_DEFAULT_SCOPE` (017) | no | yes | no |
+| `FYLGJA_DEFAULT_SCOPE` (017) | no | no (yes from 017 to 020) | no |
 
 The server needs `containerlab` and `docker` on its `PATH`. A client needs neither. The
-two checks of 015, inside Infrahub's task workers, are clients too, and read
-`FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` alone (below).
+two checks of 015, inside Infrahub's task workers, were clients too until 020, and read
+`FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` alone (below); since 020 they reach the
+orchestrator's platform ([checks.md](checks.md)). The orchestrator's processes are clients,
+and what each of them reads is [orchestrator.md](orchestrator.md)'s, "Environment".
 
 ## Tier 3 (`scripts/e2e.sh`)
 
@@ -323,6 +336,11 @@ change's source branch: its two derived stages, `branch-point` and `head`, and t
 operator writes between them as `FylgjaStage` objects ([schema/README.md](../schema/README.md)).
 **Everything not named here is as M13 left it.** Identifiers, exit statuses and the JSON
 documents are the contract; text is illustrative except where a sentence is quoted.
+
+Removed at 020: `stage list`, `stage plan` and `--stage` are the orchestrator's
+`fylgja-cli`'s, unchanged but for what [orchestrator.md](orchestrator.md) names, and the
+twin's record names no stage ("020: the commands the orchestrator took", below;
+[orchestrator.md](orchestrator.md)).
 
 ### The commands
 
@@ -571,6 +589,12 @@ Infrahub by two checks this repository ships ([D-049](../docs/decisions.md#d-049
 documents are the contract; text is illustrative except where a sentence is quoted. The wire
 is [api.md](api.md), "015: the rehearsal"; the block is
 [rehearsal.schema.json](rehearsal.schema.json).
+
+Removed at 020: `twin rehearse` is the orchestrator's `fylgja-cli`'s and its flow
+`twin-rehearse`'s, the workflow `fylgja-rehearse` is gone from the worker, the twin's record
+names no rehearsal, and the checks trigger the orchestrator's flows on its platform rather
+than asking the API ([checks.md](checks.md)) ("020: the commands the orchestrator took",
+below; [orchestrator.md](orchestrator.md)).
 
 ### `twin rehearse --branch <b> [--markdown] [--json]`
 
@@ -868,7 +892,8 @@ block of an operation it does not run.
 ### Workflows and activities
 
 Moved at 019: the worker serves four workflows, `Reconcile` gone ("019: following removed",
-below).
+below). Moved at 020: it serves three, `fylgja-rehearse` gone too ("020: the commands the
+orchestrator took", below).
 
 One workflow is added, `fylgja-rehearse` ([D-051](../docs/decisions.md#d-051)), with a
 fixed id, its children `fylgja-provision`, `fylgja-step` and `fylgja-destroy` under theirs;
@@ -908,6 +933,11 @@ place of Fylgja's generics and the contract node ([D-057](../docs/decisions.md#d
 a twin is of is a **scope**. **Everything not named here is as 015 left it.** Identifiers,
 exit statuses and the JSON documents are the contract; text is illustrative except where a
 sentence is quoted. The wire is [api.md](api.md), "017: the scope and the DCIM reader".
+
+Removed at 020: `--scope` and the reader are the orchestrator's, the reader its adapter in
+Python reading the same mapping, and `fylgja serve` reads no `FYLGJA_DEFAULT_SCOPE`, prints
+no `default scope:` line and refuses no start for it ("020: the commands the orchestrator
+took", below; [orchestrator.md](orchestrator.md)).
 
 ### The scope
 
@@ -1142,7 +1172,11 @@ except where a sentence is quoted. The wire is [api.md](api.md), "018: snapshots
 
 Moved at 019: the reconcile is gone, so every workflow takes a snapshot id and a bundle id
 ("019: following removed", below). Moved at 016: the snapshot is version `2`, its `probes`
-the probe declarations, and a `1` reads as a `2` with none ("016: probes", below).
+the probe declarations, and a `1` reads as a `2` with none ("016: probes", below). Moved at
+020: the server takes no snapshot of its own, since it reads no source of truth: every
+snapshot it holds was sent to it, by a create, a step or a diff, and `intent read --out` is
+`fylgja-cli`'s ("020: the commands the orchestrator took", below;
+[orchestrator.md](orchestrator.md)).
 
 ### The commands
 
@@ -1608,6 +1642,11 @@ wire is [api.md](api.md), "016: probes"; the declaration is
 [probes.schema.json](probes.schema.json), the probe package
 [probes/probe.schema.json](../probes/probe.schema.json).
 
+Removed at 020: `--probes` and the read of `FylgjaProbe` are the orchestrator's; a probe
+reaches the core in the snapshot alone, and the core keeps the probe package, the hosts, the
+flows and the bursts ("020: the commands the orchestrator took", below;
+[orchestrator.md](orchestrator.md)).
+
 ### The commands
 
 ```text
@@ -1912,8 +1951,8 @@ A run can be left running and reached again by its identity, from any client, an
 between two snapshots is printed with nothing built. **Everything not named here is as 016
 left it.** Identifiers, exit statuses and the JSON documents are the contract; text is
 illustrative except where a sentence is quoted. The wire is [api.md](api.md), "020: runs by
-identity and the diff". The commands the orchestrator takes over leave the core's CLI later
-in 020, and are not named here.
+identity and the diff". The commands the orchestrator took leave the core's CLI in the
+section after this one.
 
 ### The commands
 
@@ -2048,10 +2087,11 @@ Five added, none retired; no step, status or exit is new.
   compares their envelopes' scope and mapping, `step.twin.unsteppable` naming both (`the
   twin's snapshot <short>… names scope … and mapping …; <target> names scope … and mapping
   …; …`); a twin whose snapshot the store does not hold is refused so, its object the id. A
-  step given neither `--snapshot` nor `--stage` is `step.target.unknown`, its object
-  `--snapshot`, before anything is read: `twin step names its target: give --snapshot
-  <id|file>, or --stage <branch>/<label>`. `twin verify`'s `twin:` line names no stage and no
-  rehearsal, and `stage list` marks no twin's row.
+  step given no `--snapshot` is `step.target.unknown`, its object `--snapshot`, before
+  anything is read: `twin step names its target: give --snapshot <id|file>` (`…, or --stage
+  <branch>/<label>` until `--stage` left). `twin verify`'s `twin:` line names no stage and no
+  rehearsal; `fylgja-cli stage list` marks the twin's row from the orchestrator's record
+  ([orchestrator.md](orchestrator.md), "The record and the store").
 
 ### Workflows and activities
 
@@ -2060,3 +2100,125 @@ a run of `fylgja-provision`, `fylgja-step` or `fylgja-destroy` through `provisio
 (`Describe`, `History`, `Follow`, the results and `Cancel`), and the seven recorded
 histories replay through them. A detached destroy starts its run with
 `StartDestroyDetached`, which reads no result. `twin diff` dials no workflow service.
+
+## 020: the commands the orchestrator took
+
+Fylgja is two deployables ([D-065](../docs/decisions.md#d-065)): `fylgja` runs a twin from a
+snapshot, and the orchestrator's `fylgja-cli` reads Infrahub, plans and rehearses a
+proposed change's stages and drives the core through the API
+([orchestrator.md](orchestrator.md)). **Everything not named here is as "020: runs by
+identity and the diff" left it.** Identifiers, exit statuses and the JSON documents are the
+contract; text is illustrative except where a sentence is quoted. The wire is
+[api.md](api.md), "020: the operations the orchestrator took".
+
+### The commands
+
+Gone from `fylgja`, each in `fylgja-cli` under the same noun and verb, its text, document and
+exit as this file's earlier sections give them but for what [orchestrator.md](orchestrator.md)
+names:
+
+| `fylgja` | Ends, exit 2, no request sent |
+|---|---|
+| `twin rehearse …` | `fylgja: unknown command "rehearse" for "fylgja twin"` |
+| `stage list …`, `stage plan …` | `fylgja: unknown command "stage" for "fylgja"` |
+| `intent read …` | `fylgja: unknown command "intent" for "fylgja"` |
+| `schema check …` | `fylgja: unknown command "schema" for "fylgja"` |
+| `--branch`, `--at`, `--stage`, `--scope` or `--probes` on any command | `unknown flag: --branch` (the flag given), `operation.failed` in the command's own operation |
+
+- A lost command is cobra's unknown command on stderr and nothing on stdout, under `--json`
+  too, since a command line naming no operation has no document. A noun the binary still
+  has, `twin`, refuses its lost verb as the root refuses a lost noun; a noun alone prints its
+  help, exit 0. A lost flag under `--json` is the command's own document on stdout, its
+  finding on stderr in text.
+- **`twin create`** builds from `--snapshot <id|file>` alone: without it `operation.failed`,
+  `--snapshot is required`, exit 2, before any connection. Its help ends `A twin of a branch
+  or a stage is fylgja-cli twin create's, the orchestrator's, which reads it and sends this
+  server its snapshot.`
+- **`twin step`** steps to `--snapshot <id|file>` alone: without it `step.target.unknown` at
+  `resolve`, object `--snapshot`, exit 1, before anything is read: `twin step names its
+  target: give --snapshot <id|file>`. Its help ends `A step to a stage is fylgja-cli twin
+  step's, the orchestrator's, which reads the stage and sends this server its snapshot.` The
+  worker's refusal of a step with no twin names both: `no twin: no lab fylgja and no twin
+  directory; a twin built from a snapshot steps (fylgja twin create --snapshot, or
+  fylgja-cli twin create from a branch or a stage)`.
+- **`twin compile`**'s help says a snapshot is what the orchestrator's `fylgja-cli intent
+  read --out` writes.
+- **`fylgja --help`** and `fylgja twin --help` name none of the lost commands; both need no
+  server.
+
+### `fylgja serve`
+
+- It reads no `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` or `FYLGJA_DEFAULT_SCOPE`: it starts
+  and serves without them, and with them set ignores them. It connects to no Infrahub and
+  makes no snapshot of its own; every snapshot its store holds was sent to it as a file.
+- **Its report** names what it dials, and nothing of Infrahub or a scope: no `default
+  scope:` line, and the dial line
+
+  ```
+  fylgja serve: the workflow service (localhost:7233, namespace default), Docker, containerlab and the nodes are dialled when a request needs them
+  ```
+
+  in place of 019's `… and Infrahub are dialled when a request needs them`. Its refusals to
+  start lose `FYLGJA_DEFAULT_SCOPE <value> is not tag:<name>`.
+- **It listens on loopback alone** on the lab host: `127.0.0.1:7650`, and no listener on the
+  Docker bridge is part of the host's start, since no task worker asks it; the checks reach
+  the orchestrator's platform instead ([checks.md](checks.md)). `--listen` is still
+  repeatable, and a non-loopback address still gets its line.
+- `snapshot.unknown`'s message names where a snapshot id comes from now: `the store under
+  <dir> holds no snapshot <id>; a snapshot id names one this server filed when a create, a
+  step, a dry run or a twin diff sent it its file`, where it named `a create, a dry run, a
+  plan or intent read --out on this server`.
+
+### Identifiers
+
+None added. Retired from the core, and the orchestrator's with their wording
+([orchestrator.md](orchestrator.md), "Identifiers"): `scope.invalid`, `scope.unset`,
+`scope.empty`; every `schema.*`, `stage.*` but `stage.failed`, `stages.*`, `rehearsal.*` and
+`probes.*` rule; `intent.at.precision`, `probe.kind.absent`, `snapshot.flags.conflict`,
+`step.target.current` and `step.stage.skipped`. `step.target.unknown` stays the core's, for
+a step given no `--snapshot` (above), and `stage.failed` stays M2's. The operations
+`twin.rehearse`, `stage.list`, `stage.plan`, `intent.read` and `schema.check` stay in
+[findings.schema.json](findings.schema.json)'s enum, the orchestrator's; no `fylgja`
+command answers under one. `TestTheOrchestratorsRulesAreRetired` holds every retired id
+absent from the core.
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| the API | `1` | [api.schema.json](api.schema.json): the five operations' args, `twin.create`'s `branch`, `at`, `stage`, `scope` and `probes`, `twin.step`'s `stage` and `probes`, the `start` frame's `fylgja-rehearse` and the `document` frame's `markdown` gone; pre-1.0, as at 019 |
+| findings | `1` | [show.schema.json](show.schema.json)'s `in_flight[].child` and [verify.schema.json](verify.schema.json)'s `$defs/run.child` gone, which only a rehearsal set; the operation enum unchanged |
+| `twin.json` | `12` | as "020: runs by identity and the diff" |
+| snapshot, bundle manifest, PSP, CTM, probe declaration, probe package | `2`, `6`, `0.7`, `2`, `1`, `0.1` | none |
+
+The goldens are unmoved. Earlier builds' documents are held to the copies frozen under each
+package's `testdata/contracts/016-probes/`.
+
+### Workflows and activities
+
+The worker serves three workflows, `fylgja-provision`, `fylgja-step` and `fylgja-destroy`,
+and seventeen activities: `fylgja-rehearse` is gone, with its input and result types, its
+child options and the rehearsal's branches of the client's follow, so a rehearsal's history
+recorded before 020 is followed to its close and its child never asked for. The seven
+recorded histories replay unchanged, and the worker's start-up report is unchanged.
+
+### Environment
+
+| Variable | Client | Server | Worker |
+|---|---|---|---|
+| `FYLGJA_API_ADDRESS` | yes | no (`--listen`) | no |
+| `FYLGJA_API_TOKEN` | yes | yes | no |
+| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | no | no | no |
+| `FYLGJA_DEFAULT_SCOPE` | no | no | no |
+| `FYLGJA_TEMPORAL_ADDRESS`, `_NAMESPACE`, `FYLGJA_STATE_ROOT`, `FYLGJA_HOST_MEMORY_MB`, each package's login names, `FYLGJA_PSP_DIR` | no | yes | yes |
+
+The orchestrator's processes read Infrahub's two, the scope and the API's two
+([orchestrator.md](orchestrator.md), "Environment").
+
+### Tier 3 (`scripts/e2e.sh`)
+
+Nine cases, unchanged in what they assert: every command that names a branch, a stage or a
+rehearsal runs through `fylgja-cli`, case 3's dry run among them, and every other through
+`fylgja`; case 9's two rehearsals are asked by `fylgja-twin` from inside Infrahub through the
+orchestrator's platform, whose flow drives the core, and the thread's table still carries
+`loss`.

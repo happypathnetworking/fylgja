@@ -1,4 +1,4 @@
-# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed; 016's probes; 020's runs by identity and the diff
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed; 016's probes; 020's runs by identity and the diff, and the operations the orchestrator took
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
@@ -8,15 +8,20 @@ it), and 017 moved them again ("017: the scope and the DCIM reader"), and 018 ad
 snapshot ("018: snapshots"), and 019 removed following from them ("019: following removed"),
 and 016 added probes to them ("016: probes"), and 020 added the detached run, the run read
 and interrupted by its identity and the step between two snapshots ("020: runs by identity
-and the diff", last). The addresses, the statuses, the frame kinds and the
+and the diff"), and 020 removed the five operations that read Infrahub, which the
+orchestrator took ("020: the operations the orchestrator took", last;
+[orchestrator.md](orchestrator.md)). The addresses, the statuses, the frame kinds and the
 document are the contract; a sentence is contract only where it is quoted.
 
 ## Transport
 
 HTTP/1.1, JSON, no TLS (D-040, D-042). The server listens on every address `--listen`
 gives, which is repeatable since 015, and on `127.0.0.1:7650` when none is; on the lab
-host, on loopback and on the host's Docker bridge, where Infrahub's task workers reach it
-(D-050). A client on another machine comes through an SSH tunnel or a
+host, on loopback alone since 020. From 015 to 020 it also listened on the host's Docker
+bridge, where Infrahub's task workers reached it (D-050); they now reach the orchestrator's
+platform ([checks.md](checks.md)), and the API's token crosses no bridge. Its clients are
+the operator's `fylgja` and the orchestrator's flows ([orchestrator.md](orchestrator.md)).
+A client on another machine comes through an SSH tunnel or a
 proxy the operator runs; a client's address may be an `https://` URL for such a proxy.
 The API never redirects, and a client follows no redirect: a `3xx` is the status it
 answered, and nothing is sent to its `Location`.
@@ -52,22 +57,17 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot`, `probes`, `detach` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start`; by identity, `run.interrupt` |
+| `twin.create` | `/v1/twin/create` | `snapshot`, `dry_run`, `detach` | the snapshot, when `snapshot` is a path | | from `start`; by identity, `run.interrupt` |
 | `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run`, `detach` | the bundle's regular files | | from `start`; by identity |
-| `twin.step` | `/v1/twin/step` | `stage`, `snapshot`, `probes`, `allow_restart`, `dry_run`, `wait`, `detach` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start`; by identity |
+| `twin.step` | `/v1/twin/step` | `snapshot`, `allow_restart`, `dry_run`, `wait`, `detach` | the snapshot, when `snapshot` is a path | | from `start`; by identity |
 | `twin.destroy` | `/v1/twin/destroy` | `detach` | | | by identity alone |
-| `twin.show` | `/v1/twin/show` | | | | no |
-| `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
-| `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope`, `probes` | the probe file, when `probes` is given | | from `start` |
-| `twin.compile` | `/v1/twin/compile` | `snapshot`, `out` | the snapshot | the bundle | no |
-| `stage.list` | `/v1/stage/list` | `branch`, `scope` | | | no |
-| `stage.plan` | `/v1/stage/plan` | `branch`, `scope`, `probes` | the probe file, when `probes` is given | | no |
-| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope`, `probes` | the probe file, when `probes` is given | the snapshot | no |
-| `schema.check` | `/v1/schema/check` | `branch` | | | no |
-| `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
 | `run.read` | `/v1/run/read` | `workflow_id`, `run_id` | | | no |
 | `run.interrupt` | `/v1/run/interrupt` | `workflow_id`, `run_id` | | | no |
 | `twin.diff` | `/v1/twin/diff` | `from`, `to` | each snapshot file `from` and `to` name | | no |
+| `twin.show` | `/v1/twin/show` | | | | no |
+| `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
+| `twin.compile` | `/v1/twin/compile` | `snapshot`, `out` | the snapshot | the bundle | no |
+| `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
 
 There is no other operation. In particular there is none to list runs or to fetch a filed
 bundle; until 020 there was none to re-attach to a run, which `run.read` now reads by its
@@ -84,14 +84,18 @@ takes the argument `snapshot`, with the snapshot's file when it is a path. Moved
 `twin.step`, `stage.plan` and `twin.rehearse`, with the probe file it names. Added at 020:
 the argument `detach` on `twin.create`, `twin.provision`, `twin.step` and `twin.destroy`,
 and the operations `run.read`, `run.interrupt` and `twin.diff` ("020: runs by identity and
-the diff").
+the diff"). Removed at 020: `twin.rehearse`, `stage.list`, `stage.plan`, `intent.read` and
+`schema.check`, the arguments `branch`, `at`, `stage`, `scope` and `probes` of
+`twin.create`, and `stage` and `probes` of `twin.step`, whose work is the orchestrator's
+("020: the operations the orchestrator took").
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
-one that was, whatever its value (`"stage": ""` is `--stage=`). Every guard is the
+one that was, whatever its value (`"snapshot": ""` is `--snapshot=`). Every guard is the
 server's, under M12's identifier, wording and exit status, and each is made before the
-server connects to Infrahub or the workflow service where M2–M12 said "before any
-connection". A path in `args` is used for wording and the document's subject alone: the
-server opens no path a client names.
+server connects to the workflow service where M2–M12 said "before any connection" (and,
+until 020, before it connected to Infrahub, which it no longer reads). A path in `args` is
+used for wording and the document's subject alone: the server opens no path a client
+names.
 
 **The request is decoded strictly.** Each of these is `400` before the answer begins,
 with a message that begins `the request is not one: `, and no guard runs:
@@ -100,7 +104,7 @@ with a message that begins `the request is not one: `, and no guard runs:
   it (`unknown field "ARGS"`; `unknown field "PATH" in files[0]`), since a key is matched
   exactly, whatever its case would match;
 - an argument the operation does not take (`twin.show takes no argument "branch"`), or
-  one of another kind, `null` included (`twin.create's argument "branch" is not a
+  one of another kind, `null` included (`twin.create's argument "snapshot" is not a
   string`; a flag's value is a boolean, `args` and `files` arrays of strings, with no
   `null` element);
 - `twin.provision` without `bundle`, which M12's command took as its one argument
@@ -113,7 +117,8 @@ with a message that begins `the request is not one: `, and no guard runs:
 - files on an operation that takes none (`twin.show takes no files`), a file that is
   `null` (`files[0] is not a file`) or has no path, data that is not base64, or bytes
   after the object;
-- a `render` other than `"text"`, `"json"` and `"markdown"` (the last added at 015).
+- a `render` other than `"text"`, `"json"` and `"markdown"` (the last added at 015, and
+  since 020 answered by every operation as `"text"`).
 
 [`$defs/request`](api.schema.json) is what a client sends. The server also reads `render:
 ""`, `"args": null` and `"files": null` as absent, and a file without `data` as one with
@@ -133,8 +138,8 @@ events.
 | `{"start": {"workflow_id": "…"}}` | the server begins to start this run; from here an interrupt reaches it, but for `twin.destroy`'s, `fylgja-destroy`, which opens no stream |
 | `{"run": {"workflow_id": "…", "run_id": "…", "state": "…"}}` | the run's identity; `state` on `run.read` alone (020) |
 | `{"event": {…}}` | one step boundary of a run, or one notice about a run |
-| `{"files": [{"path": "…", "data": "<base64>"}]}` | the CTM (`ctm.json`; since 018 the snapshot, `snapshot.json`), or every file of the bundle |
-| `{"document": {…}, "text": "…", "markdown": "…"}` | the command's findings document; `text` under `render: "text"` or `"markdown"` when it has findings; `markdown` under `render: "markdown"` on `twin.rehearse` alone (015) |
+| `{"files": [{"path": "…", "data": "<base64>"}]}` | every file of the bundle `twin.compile` compiled (until 020 also `intent.read`'s CTM, `ctm.json`, since 018 its snapshot, `snapshot.json`) |
+| `{"document": {…}, "text": "…"}` | the command's findings document; `text` under `render: "text"` or `"markdown"` when it has findings (from 015 to 020 also `markdown`, under `render: "markdown"` on `twin.rehearse` alone) |
 
 **What `render` asks for.**
 
@@ -143,11 +148,11 @@ events.
 | absent | none | none | none |
 | `"text"` | every line the command printed without `--json` at M12 | every line it wrote to stderr | its findings as text |
 | `"json"` | none | what it wrote to stderr under `--json` | none |
-| `"markdown"` (015) | as under `"text"` | as under `"text"` | as under `"text"`; on `twin.rehearse`, `document.markdown` beside it |
+| `"markdown"` (015) | as under `"text"` | as under `"text"` | as under `"text"` (until 020, on `twin.rehearse`, `document.markdown` beside it) |
 
 With `render` absent, a command that is one answer is its `document` frame alone, but for
-`intent.read` and `twin.compile`, whose `files` frame comes first. A run is its `start`,
-its `run`, its `event`s and its `document`, and `twin.destroy` its `start`, the destroy's
+`twin.compile` (and `intent.read` until 020), whose `files` frame comes first. A run is
+its `start`, its `run`, its `event`s and its `document`, and `twin.destroy` its `start`, the destroy's
 `event`s and its `document`, with no `run`. Under `detach` (020) a run is its `start`, its
 `run` and its `document`, a destroy's included, and `run.read` is its `run`, its `event`s
 and, once the run has closed, its `document`.
@@ -177,19 +182,20 @@ own fault, with a body of [`$defs/problem`](api.schema.json).
 
 ## A run
 
-`twin.create`, `twin.provision` and `twin.step` start a run and stay open as its
-progress, and so does `twin.rehearse` (015). `twin.destroy` is followed the same way and takes no interrupt. Its `start`
-comes just before the destroy run is started, and opens no stream; its answer has no `run`
-frame, and the document's `subject.run_id` names the destroy run. An answer cut after its
-`start` says a run may have been started and was not cancelled. Until 019 a destroy first
-stopped following, and its answer carried that stop's events before its `start`.
+`twin.create`, `twin.provision` and `twin.step` start a run and stay open as its progress,
+as `twin.rehearse` did from 015 to 020. `twin.destroy` is followed the same way and takes no
+interrupt. Its `start` comes just before the destroy run is started, and opens no stream;
+its answer has no `run` frame, and the document's `subject.run_id` names the destroy run. An
+answer cut after its `start` says a run may have been started and was not cancelled. Until
+019 a destroy first stopped following, and its answer carried that stop's events before its
+`start`.
 
 ```text
 POST /v1/twin/create        Fylgja-Stream: 5f1c9a…
 ← {"start":{"workflow_id":"fylgja-provision"}}
 ← {"run":{"workflow_id":"fylgja-provision","run_id":"01a1…"}}
-← {"event":{"workflow_id":"fylgja-provision","step":"read","finding_step":"read","end":false}}
-← {"event":{"workflow_id":"fylgja-provision","step":"read","finding_step":"read","end":true,"outcome":"done","duration_s":2.1}}
+← {"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":false}}
+← {"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":true,"outcome":"done","duration_s":0.3}}
   …
 ← {"document":{"findings_version":"1","operation":"twin.create","status":"ok",…}}
 ```
@@ -242,8 +248,8 @@ bytes written are the bytes read.
   where twin compile takes the CTM alone`) or the path's mismatch (`the request carries its
   CTM under another path than --ctm gives, where twin compile takes the CTM alone, under
   that path`), and nothing of the file.
-- **`intent.read`**: the answer's `files` frame holds `ctm.json` (since 018
-  `snapshot.json`), before the summary line. A refused read has no `files` frame.
+- **`intent.read`**, until 020: the answer's `files` frame held `ctm.json` (since 018
+  `snapshot.json`), before the summary line. A refused read had no `files` frame.
 - **`twin.provision`**: `files` holds every regular file of the bundle directory, each
   under its slash-separated path inside it. The server verifies and files it, and every
   refusal names the directory as `args.bundle` gave it. Files that cannot all be files of
@@ -287,6 +293,10 @@ document.
 
 ## 014: the stage surface
 
+Removed at 020: `stage.list` and `stage.plan`, and `stage` on `twin.create`, `twin.step` and
+`intent.read`, the stages being the orchestrator's ("020: the operations the orchestrator
+took", below; [orchestrator.md](orchestrator.md)).
+
 A proposed change's stages replace the waypoint ([D-045](../docs/decisions.md#d-045);
 [cli.md](cli.md), "014: the stage surface", says what each command does). The API's
 version stays `1`: it is pre-1.0, and every other operation, the transport, the token, the
@@ -319,6 +329,11 @@ frames, the statuses and the files are as M13 left them.
   `verify`.
 
 ## 015: the rehearsal
+
+Removed at 020: `twin.rehearse`, the rendering's `markdown` field and the workflow
+`fylgja-rehearse`; the checks no longer reach the API, but the orchestrator's platform
+([checks.md](checks.md)), and the server listens on loopback alone ("020: the operations the
+orchestrator took", below; [orchestrator.md](orchestrator.md)).
 
 A proposed change rehearsed on a twin ([D-049](../docs/decisions.md#d-049)–[D-052](../docs/decisions.md#d-052);
 [cli.md](cli.md), "015: the rehearsal", says what the command does and how it exits). The
@@ -389,6 +404,10 @@ curl -sS -N -X POST -H "Authorization: Bearer $FYLGJA_API_TOKEN" \
 
 ## 017: the scope and the DCIM reader
 
+Removed at 020: the argument `scope`, the server's `FYLGJA_DEFAULT_SCOPE` and its reader,
+which is the orchestrator's adapter, in Python, reading the same mapping ("020: the
+operations the orchestrator took", below; [orchestrator.md](orchestrator.md)).
+
 The Infrahub reader reads the schema library's DCIM at `opsmill/schema-library@26336e9`,
 and a twin is of a scope ([D-057](../docs/decisions.md#d-057); [cli.md](cli.md), "017: the
 scope and the DCIM reader", says what each command does). The API's version stays `1`: a
@@ -435,7 +454,10 @@ transport, the token, the frames, the statuses and the files are as 017 left the
 these.
 
 Moved at 019: `interval` and `no_follow` are no longer arguments of `twin.create` ("019:
-following removed", below).
+following removed", below). Removed at 020: `intent.read`, `twin.create`'s `branch`,
+`stage`, `at` and `scope` and `twin.step`'s `stage`, so `snapshot` names their intent alone
+and `snapshot.flags.conflict` is retired ("020: the operations the orchestrator took",
+below).
 
 | | Operation | `args` | Files in | Files out |
 |---|---|---|---|---|
@@ -514,6 +536,10 @@ Every operation, the transport, the token, the frames, the statuses and the file
 
 ## 016: probes
 
+Removed at 020: the argument `probes` and the read of `FylgjaProbe`; a probe reaches the
+core in the snapshot alone, the list the orchestrator's adapter takes ("020: the operations
+the orchestrator took", below; [orchestrator.md](orchestrator.md)).
+
 A probe is a declaration outside intent, carried by the snapshot and compiled into
 synthesized hosts ([D-064](../docs/decisions.md#d-064); [cli.md](cli.md), "016: probes",
 says what each command does). The API's version stays `1`: a client that never sends
@@ -578,8 +604,8 @@ snapshots is read with nothing built ([cli.md](cli.md), "020: runs by identity a
 diff", says what each command does). The API's version stays `1`: a client that never sends
 `detach` is answered as before, and a client ignores an operation it never asks and a frame
 field it does not know. Every other operation, the transport, the token, the statuses and
-the files are as 016 left them, but for these. The operations the orchestrator takes over
-leave the API later in 020, and are not named here.
+the files are as 016 left them, but for these. The operations the orchestrator took leave
+the API in the section after this one.
 
 | | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|---|
@@ -595,9 +621,9 @@ leave the API later in 020, and are not named here.
   at step `start`, object `<workflow_id> <run_id>`: `run <workflow_id> <run_id> started;
   read it with fylgja run read`. No `event` of the run is sent, and the run goes on.
   `twin.destroy`'s detached answer carries the `run` frame its followed answer never did;
-  what it cancels first, a create, a step or a rehearsal in flight, is still waited for
-  inside the answer, as when it is followed. Beside `dry_run` it is `run.flags.conflict`,
-  error, at step `start`, object `dry_run`, before any guard: `--detach is meaningless with
+  what it cancels first, a create or a step in flight (a rehearsal too, until the operation
+  left), is still waited for inside the answer, as when it is followed. Beside `dry_run` it
+  is `run.flags.conflict`, error, at step `start`, object `dry_run`, before any guard: `--detach is meaningless with
   --dry-run: a dry run starts no run to detach from`. A refusal before the start is the
   `document` frame alone, as without it. An interrupt delivered before the run frame was
   the operator's before the run was detached from: the run is asked to cancel and followed
@@ -670,3 +696,68 @@ leave the API later in 020, and are not named here.
   `run.unknown`, `run.cancel.requested`, `run.ended` and `run.flags.conflict` are
   [findings.schema.json](findings.schema.json)'s.
 - **The checks** `fylgja-step` and `fylgja-twin` send nothing new.
+
+## 020: the operations the orchestrator took
+
+Fylgja is two deployables ([D-065](../docs/decisions.md#d-065)): the core runs a twin from a
+snapshot, and the orchestrator owns the source of truth, the stages and the rehearsal, and
+drives the core through this API alone ([orchestrator.md](orchestrator.md); [cli.md](cli.md),
+"020: the commands the orchestrator took", says what each command does). The API's version
+stays `1`, pre-1.0, as at 014, 015, 017, 018 and 019. Every other operation, the transport,
+the token, the frames, the statuses and the files are as "020: runs by identity and the
+diff" left them, but for these.
+
+| | Operation | Path | `args` |
+|---|---|---|---|
+| removed | `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope`, `probes` |
+| removed | `stage.list` | `/v1/stage/list` | `branch`, `scope` |
+| removed | `stage.plan` | `/v1/stage/plan` | `branch`, `scope`, `probes` |
+| removed | `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope`, `probes` |
+| removed | `schema.check` | `/v1/schema/check` | `branch` |
+| arguments removed | `twin.create` | | `branch`, `at`, `stage`, `scope`, `probes` |
+| arguments removed | `twin.step` | | `stage`, `probes` |
+
+- **A removed operation's path** is `404` without `Fylgja-Api-Versions`, as any path under
+  `/v1/` that names no operation: `API version 1 has no operation at this path; nothing was
+  read or done`. The server has read and done nothing, and a client reads it as `answered
+  404 Not Found`.
+- **A removed argument** is refused as any argument not taken: `400`, `the request is not
+  one: twin.create takes no argument "branch"`. `twin.create` takes `snapshot`, `dry_run`
+  and `detach`, and `twin.step` `snapshot`, `allow_restart`, `dry_run`, `wait` and
+  `detach`: `snapshot` names their intent alone, and its file is the request's one file
+  when it is a path. Without it a create is `operation.failed`, `--snapshot is required`,
+  exit 2, and a step `step.target.unknown` at `resolve`, object `--snapshot`, exit 1: `twin
+  step names its target: give --snapshot <id|file>`. Both before any connection.
+- **The server reads no source of truth.** It takes no `INFRAHUB_ADDRESS`,
+  `INFRAHUB_API_TOKEN` or `FYLGJA_DEFAULT_SCOPE`, dials the workflow service, Docker,
+  containerlab and the nodes and nothing else, and listens on loopback alone on the lab
+  host ([cli.md](cli.md), `fylgja serve`). Every snapshot it holds was sent to it: `twin.create`,
+  `twin.step` and `twin.diff` file one sent as a file, and an id names one filed so, else
+  `snapshot.unknown` at `resolve`.
+- **The frames**: [api.schema.json](api.schema.json)'s `start` frame's `workflow_id` enum
+  loses `fylgja-rehearse`; the `files` frame is `twin.compile`'s alone; the `document` frame
+  carries no `markdown`, and `render: "markdown"` is answered as `"text"`. The `run` frame,
+  `state` on `run.read` alone, the detached answer's `start`, `run` and `document`, and a
+  running run's `run.read` ending with no `document` are "020: runs by identity and the
+  diff"'s, unmoved.
+- **The long operation, as the orchestrator asks it.** Its flows are clients of the API like
+  any other, on `FYLGJA_API_ADDRESS` with `FYLGJA_API_TOKEN`: each starts a run under
+  `detach`, then asks `run.read` every 2 s until the answer ends with its `document`, never
+  holding the stream open, and interrupts a run by `run.interrupt` (the rehearsal's
+  deadline). A plan is `twin.compile` for each stage and `twin.diff` for each pair; a
+  rehearsal is `twin.create`, `twin.verify` with `wait`, `twin.step` with `allow_restart`
+  and `twin.destroy`, each so.
+- **The documents** stay `findings_version` `1`. The core answers none of the five
+  operations; [findings.schema.json](findings.schema.json)'s operation enum keeps them, the
+  orchestrator's documents' ([orchestrator.md](orchestrator.md), "The documents"), with the
+  `stages`, `plan` and `rehearsal` blocks of [stages.schema.json](stages.schema.json) and
+  [rehearsal.schema.json](rehearsal.schema.json), which are the orchestrator's, their files
+  and `$id`s unmoved. The rules the core no longer files, every `scope.*`, `schema.*`,
+  `stage.*` but `stage.failed`, `rehearsal.*` and `probes.*` rule with `intent.at.precision`,
+  `probe.kind.absent`, `snapshot.flags.conflict`, `step.target.current` and
+  `step.stage.skipped`, are the orchestrator's. `twin.show`'s `in_flight` entries and
+  `twin.verify`'s runs lose `child`, which only a rehearsal had
+  ([show.schema.json](show.schema.json), [verify.schema.json](verify.schema.json)).
+- **The checks** `fylgja-step` and `fylgja-twin` are no longer clients of the API: they
+  trigger the orchestrator's `stage-plan` and `twin-rehearse` on its platform, with its
+  credential and never the API's token ([checks.md](checks.md)).

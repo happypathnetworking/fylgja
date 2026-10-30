@@ -1,5 +1,8 @@
 # Contract: the stage commands, the API's operations, the findings blocks and `twin.json` 6
 
+> **Current since 020:** the stage commands are the orchestrator's `fylgja-cli`'s, and the
+> API's `stage.list` and `stage.plan` are gone: [contracts/orchestrator.md](../../../contracts/orchestrator.md).
+
 Extends [contracts/cli.md](../../../contracts/cli.md) and [contracts/api.md](../../../contracts/api.md)
 as 014 leaves them; at the close each gains a section "014: the stage surface" that says
 what this file says. **Everything not named here is as M13 left it.** Identifiers, exit

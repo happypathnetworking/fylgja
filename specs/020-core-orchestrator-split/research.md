@@ -1954,3 +1954,53 @@ made.
   `internal/server` 3.0 s). No tier 2 is named by T032: every contract test it names is
   deleted, and no contract-tagged test remains in `internal/server`, `internal/cli` or
   `cmd/fylgja`; `go vet -tags contract,fixture,e2e ./...` clean.
+
+### 5.24 The CLI's removal (T033, Run 30, 2026-10-30)
+
+- **The code.** `internal/cli`'s `rehearse.go`, `stages.go`, `schema.go` and `read.go` are
+  gone; `root.go` registers `twin`, `psp` and `run` alone. `twin create` takes `--snapshot`
+  (required, the server's `--snapshot is required` when left out), `--dry-run` and
+  `--detach`; `twin step` `--snapshot`, `--allow-restart`, `--dry-run`, `--wait` and
+  `--detach`; each help says the server reads no source of truth and names `fylgja-cli` for
+  a branch or a stage. Gone with them, as each served only a lost command or flag:
+  `snapshotConflicts`, `probesSent`, `readProbes`, `writeSnapshot` (`intent read --out`'s),
+  `given.scope`, `given.probes`, `scopeUsage`, `probesUsage`, and `--markdown` with
+  `options.markdown`, `result.markdown` and the markdown branches of `send` and `report`
+  (twin rehearse's alone; the API still accepts `render` `markdown`, answered as text,
+  §5.23). `takesInterrupts` names three operations.
+- **A departure, forced by FR-003**: cobra refuses an unknown command at the root alone; a
+  noun without a `Run` printed its help and exited 0 for any word, so `fylgja twin rehearse`
+  ended as if help were asked (found by running this tree's binary, before the fix). The
+  three nouns are now built by `noun()` (`root.go`): `Args: cobra.NoArgs` and a `RunE` that
+  prints the help, so a noun given no verb prints its help as before, exit 0, and one given a
+  word that is none of its verbs is cobra's `unknown command "rehearse" for "fylgja twin"`,
+  exit 2, as the root's `unknown command "stage" for "fylgja"` is. `operationOf` is empty for
+  a command with subcommands, as for the root, so a noun's failure (`fylgja twin --nope`) is
+  text on stderr, exit 2, with no document, where it was one naming the operation `twin`,
+  which the findings contract's enum does not hold. The help's usage gains `fylgja twin
+  [flags]` beside `fylgja twin [command]`, cobra's for a runnable command.
+- **The tests.** `gone_test.go` gains `TestTheOrchestratorsCommandsAreUnknown` (the five
+  commands, text and `--json`: exit 2, cobra's unknown command on stderr, nothing on stdout,
+  no request logged) and `TestTheOrchestratorsFlagsAreUnknown` (each of `--branch`, `--at`,
+  `--stage`, `--scope`, `--probes` on each of the eleven commands, `twin create` and `twin
+  step` beside a `--snapshot`: under `--json` one document naming the command's operation,
+  `operation.failed` `unknown flag: <flag>`, valid against the current contract; in text the
+  finding on stderr; exit 2 and no request logged either way), 65 cases. `main_test.go`'s
+  `TestRootRegistersEveryCommand` holds every `api.Operations` entry to a command resolving
+  to it under `AddCommands`, and `TestHelpNamesNoCommandTheOrchestratorTook` reads `fylgja
+  --help` (completion, help, psp, run, twin) and `fylgja twin --help` (the eight verbs) with
+  no server; `env_test.go`'s `TestVersionAndHelpReachNoServer` stands. The harness sets no
+  `INFRAHUB_*`, placeholder or other; `credential_test.go` loses
+  `TestCredentialNeverReachesOutput` (the read, the schema check and the read-then-dry-run
+  against an echoing Infrahub) and `echoingServer`; `probes_test.go` goes whole, its last
+  case (compile and provision take no `--probes`) now every command's in the flags test;
+  `files_test.go` loses `TestWriteSnapshotIsAtomic`; `TestNoCommandTakesTheFollowingFlags`
+  walks the API's operations alone; `clientCommands` and every hand-built root lose the
+  three nouns; `TestCreateHelpNamesTheServersTake` reads the new help and no lost flag.
+  `internal/cli` 225 top-level tests, 21.5 s. Left in the tests for T035: `marker_test.go`'s
+  and `twin_step_test.go`'s `stage.Compile`, and `show_test.go`'s and `verify_test.go`'s
+  `intent.EnvToken`, and `credential_test.go`'s `TestBundleCarriesNoCredential`'s
+  `intent.EnvAddress` and `intent.EnvToken`.
+- **Tier 1**: `make build`, `make test` (55.2 s wall at a load of 2.4–3.7; the Python half
+  1,134 passed in 18.2 s) and `make lint` (0 issues, ruff clean) green. No tier 2 is named:
+  no contract-tagged test is left in `internal/cli` or `cmd/fylgja`.

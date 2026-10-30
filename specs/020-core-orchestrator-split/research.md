@@ -1177,3 +1177,82 @@ made.
   `FylgjaStage`, `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` count 0.
 - **The gates**: `make build` static; `make test` green (711 Python tests, Go cached) in
   19.1 s wall; `make lint` 0 issues, ruff clean.
+
+### 5.16 The plan, rehearsal and deadline documents, held to the goldens (T022, Run 20, 2026-10-30)
+
+- **The goldens, byte for byte.** `documents/rehearsal.py` renders `tests/golden/rehearsal.json`
+  to `rehearsal.md` (the shortened form, 3,506 bytes with `fylgja-cli`), `rehearsal.full.md`
+  (the whole form, over the 4,092), `rehearsal.txt` (`stage_lines` then `closing`) and, through
+  `findings.Document.text`, `rehearsal.stderr.txt`, each equal but for `fylgja-cli` in the
+  reproduce lines (the fenced block, the indented lines, `rehearsal.reproduce`), whole lines
+  alone: `step.diverged`'s message, which names the core's `fylgja twin destroy`, keeps it, as
+  does the unread run's `fylgja twin show`, the core's command. The markdown takes `plan.json`'s
+  `steps` as they are (`Pair.from_dict`). The document re-written equals `rehearsal.json` but for
+  the README's one hand edit, `<state-root>`, which the encoder escapes as Go's does. `build`
+  re-made from the golden run (each stage's plan findings at resolve, read and compile, the
+  step's `push.refused` and `step.diverged` as the child's, the waits, counts, timings and loss
+  the core reported) gives the golden block. `documents/plan.py` rebuilds `plan.json` from its
+  stages and steps and prints `plan.txt` and `plan.stderr.txt` byte for byte.
+- **What the plan's text needs beyond its block**: the proposed change's destination (`→
+  main`) and each compiled stage's devices by package (`3 devices (nokia_srlinux 3)`), neither
+  in `$defs/plan`, so `PlanResult` carries the destination and `PlanStage` its `packages`, which
+  the stage-plan flow (T025) fills from the adapter's read (`packages.py` matches each device).
+  A stage's `status` and `rule` are `build`'s `stop` (`PlanStage.stop`): refused under the first
+  rejection's rule, failed when it is `operation.failed`.
+- **The step between two stages** is the core's `twin.diff` answer between their snapshots
+  (T010), whose sides it names `snapshot <8 hex>…`; `pair_of` gives them the stages' references,
+  or says which side was refused, as `pairOf` did. The answer's `step` block is the contract's
+  (`$defs/step`), whose `artifacts.changed` lists nodes on both sides alone, an artifact that
+  came or went with its node "going with the node": the plan's text (`n4 device-config added`)
+  and the rehearsal's drawing (`artifacts n2, n4`) name it, so `artifacts_moved` reads it from
+  the two compiled bundles' `manifest.json`s, as `step.Diff` lists it (an added node's artifact
+  and one a kept node gained; a removed node's and one a kept node lost; a host, which has
+  none, never), and `step_of_diff` joins the two. Without the manifests the step renders as the
+  contract carries it, those artifacts unnamed.
+- **The deadline's budgets (§4's "which file")**: §1.6 had them "in the bundle, no package
+  loaded"; they are not. `manifest.json` names each node's package (a device's `psp.id`, a
+  host's `probe.package.id`, the format) and no budget; `lab.NodePlans` loads the packages and
+  takes `image.deploy_timeout_s`, `image.destroy_timeout_s`, `readiness.timeout_s`, a device's
+  `config.push_timeout_s` and a host's `flow.start_timeout_s` and `flow.read_timeout_s`.
+  `deadline.node_plans` reads the manifest from `twin.compile`'s files and `load_budgets` the
+  packages from the files the core embeds, the shipped `psp/` (or `FYLGJA_PSP_SHIPPED`) then
+  `FYLGJA_PSP_DIR`, shadowing by id as `--psp-dir` does, and `probes/`; a node whose package is
+  not held is left out, as the host check leaves it. Should `twin.compile`'s document carry the
+  budgets instead: **not taken**, since the packages are the repository's own files, which the
+  adapter already reads for `platform.matches`, and a core started with a `--psp-dir` the flow
+  does not see would mismatch in `platform.matches` before the deadline; the residue, a deadline
+  summed from other budgets than the core's server holds, bounds the flow alone, each child's
+  activities keeping the core's own timeouts. The mechanism's eleven constants (`MECHANISM`)
+  are `provision.DeadlineMechanism`'s, a test holding them to `internal/provision/options.go`
+  and `internal/verify/wait.go`, which stay. `go_duration` writes `time.Duration.String` for
+  `rehearsal.deadline.unfit`'s message. The golden's 2,580 s comes back from the three-node
+  bundle's plans over its baseline and three rehearsed stages.
+- **The block's inputs** are the contract's shapes as dicts in the Go structs' key order:
+  `Input`, `Stage`, `Result`, `StageResult`, `Provision` and `StepRun` as `report.go` has them,
+  a wait as the core reports it with its `failing`, a push and the timings as `twin.step`'s
+  block carries them; `Provision` names `fylgja-provision` and `StepRun` `fylgja-step`, the
+  core's workflows the flow's `twin.create` and `twin.step` start; the run's own identity is the
+  flow's, given in `Result.run` (T026).
+- **Carried over by name** (`tests/unit/test_rehearsal.py`, 115; `test_plan.py`, 13;
+  `test_deadline.py`, 17): every case of `verdict_test.go` (`TestVerdict`'s sixteen and its
+  four phases, `TestNewFindings`, `TestStop`, `TestABurstFailedFailsTheStage`), of
+  `report_test.go` (the twelve examples in `tests/unit/rehearsal_examples.py`;
+  `TestBlockValidates` against `contracts/findings.schema.json` with `rehearsal.schema.json`
+  and `stages.schema.json` by `$id`, `TestBuildRolesAndVerdicts`,
+  `TestBuildFilesTheRehearsalsOwnFindings`, `TestBaselineWhoseProvisionDidNotStart`,
+  `TestReproduce`, `TestStageLinesAndClosing`, `TestBlockOfARunWhoseEndWasNotRead`,
+  `TestFindingsAreTheStagesInOrder`, `TestTheVerifyCellCountsTheBurst`,
+  `TestEachStageCarriesItsStepsLoss`), every case of `markdown_test.go` (`TestMarkdown` whole,
+  the seventeen others, the sweeps across both shortening boundaries included), and of
+  `deadline_test.go`; and `internal/step`'s `TestDiffNodeAdded`, `TestPairTextOrder`,
+  `TestPairTextOneLine` and `TestPairJSONSatisfiesTheContract`. `fylgja-cli` in every reproduce
+  line, `fylgja twin show` kept. `purity_test.go` has no counterpart beyond a test that the
+  three modules import nothing of the adapter, and `check_scope_test.go` and
+  `check_timeout_test.go` are the checks', T029's. Every byte length is Go's `len`, in UTF-8
+  bytes, `clip` cutting at a character's edge.
+- **The lane's venv**: the worktree was seeded without `orchestrator/.venv` (§5.7's dropped
+  last path), so the run's Python ran on the main tree's venv with this tree's `src` first on
+  `PYTHONPATH`, whose editable install names the main tree, and `make lint` with
+  `ORCH_VENV` pointed at it.
+- **The gates**: `make build` static; the orchestrator's tier 1 856 passed in 11.5 s (145 new);
+  `make lint` 0 issues, ruff clean. No Go changed, so no Go test is this run's.

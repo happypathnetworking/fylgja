@@ -29,17 +29,20 @@ func TestTheChecksPassNoScopeAndFailAnError(t *testing.T) {
 		}
 		return string(src)
 	}
-	// Each request is fylgja_api's call(address, token, path("<operation>"), RENDER_<form>,
-	// <args>, …): args is the request's arguments, the scope among them were one given.
-	request := regexp.MustCompile(`\bcall\(\s*address,\s*token,\s*path\("([a-z.]+)"\),\s*RENDER_[A-Z]+,\s*(\{[^{}]*\})`)
-	for name, op := range map[string]string{"fylgja_step.py": "stage.plan", "fylgja_twin.py": "twin.rehearse"} {
+	// Each request is fylgja_api's run(platform, FLOW_<name>, <parameters>, …): parameters are
+	// the flow run's, the scope among them were one given (020's T029). Each flow's name is
+	// fylgja_api's FLOW_<name>.
+	request := regexp.MustCompile(`\brun\(\s*platform,\s*(FLOW_[A-Z_]+),\s*(\{[^{}]*\})`)
+	shared := read("fylgja_api.py")
+	for name, flow := range map[string]string{"fylgja_step.py": "stage-plan", "fylgja_twin.py": "twin-rehearse"} {
 		src := read(name)
 		calls := request.FindAllStringSubmatch(src, -1)
-		if n := len(regexp.MustCompile(`\bcall\(`).FindAllString(src, -1)); len(calls) != 1 || n != 1 {
-			t.Fatalf("%s: %d requests read of %d calls; want its one request, read", name, len(calls), n)
+		if n := len(regexp.MustCompile(`\brun\(`).FindAllString(src, -1)); len(calls) != 1 || n != 1 {
+			t.Fatalf("%s: %d requests read of %d runs; want its one request, read", name, len(calls), n)
 		}
-		if got := calls[0]; got[1] != op || got[2] != `{"branch": self.branch_name}` {
-			t.Errorf("%s asks %s with %s; want %s with the branch alone, no scope", name, got[1], got[2], op)
+		named := regexp.MustCompile(`(?m)^` + calls[0][1] + ` = "([^"]*)"$`).FindStringSubmatch(shared)
+		if named == nil || named[1] != flow || calls[0][2] != `{"branch": self.branch_name}` {
+			t.Errorf("%s triggers %s (%v) with %s; want %s with the branch alone, no scope", name, calls[0][1], named, calls[0][2], flow)
 		}
 	}
 	for _, name := range []string{"fylgja_api.py", "fylgja_step.py", "fylgja_twin.py"} {

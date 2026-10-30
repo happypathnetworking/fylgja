@@ -29,6 +29,11 @@ from ..record import ChangeRef, RecordError, StageRef, Store, new_record, read_f
 ARTIFACT_TYPE = "fylgja-findings"
 """The type of the artifact every flow's run carries its document under (research §1.4)."""
 
+OUT_SUFFIX = "fylgja"
+"""The child of the run's logger a flow's out lines are logged under, `prefect.flow_runs.fylgja`
+in the run's log, so that a check reads them apart from Prefect's own lines there
+(`infrahub/checks/fylgja_api.py`'s OUT_LOGGER; research §5.21)."""
+
 RULE_RUN_DETACHED = "run.detached"
 
 
@@ -49,12 +54,13 @@ reaches it."""
 
 
 def out_line(line: str) -> None:
-    """One out line: to the sink, and to the run's log when a run is current, so the
-    platform's view of a runner's run shows what a hand command prints."""
+    """One out line: to the sink, and to the run's log under OUT_SUFFIX when a run is current,
+    so the platform's view of a runner's run shows what a hand command prints, and a check
+    reads it."""
     OUT.get()(line)
     logger = _run_logger()
     if logger is not None:
-        logger.info(line)
+        logger.getChild(OUT_SUFFIX).info(line)
 
 
 @dataclass

@@ -10,6 +10,16 @@ strings carry every character Go escapes otherwise than `json.dumps`, written by
 `go test ./internal/snapshot -run TestTheOrchestratorsEscapesFixture -update` and held
 to Go's encoder by the same test.
 
+`frames/` holds the core's answers as the API carries them, one frame a line, which
+`test_core.py`'s stub server answers (020's T023). A throwaway Go test in `internal/server`
+recorded them from the server's own test harness and was deleted: a create detached from
+the fixture's snapshot (`detachedAnswer`), a destroy detached, run.read of
+`cancel-during-push`'s recorded history running (cut at its twentieth event) and ended,
+run.interrupt of it running, run.read of a run the workflow service does not hold, and a
+create refused `run.flags.conflict`, each under `render: text`. Two edits: the replayed
+run's id is the detached create's (`…dp1`), so the read follows the start, and the test's
+temporary state root in the create's two lines is `/state`.
+
 `ctm/` holds copies of `testdata/ctm/`'s fixtures and defects (a test holds each copy to
 its original; `version-1.json` is left out, since no CTM `1` reaches the rules), and under
 `cases/` CTMs written from `three-node.json` with one change each, named by it.

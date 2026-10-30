@@ -1,0 +1,14 @@
+{"run":{"workflow_id":"fylgja-provision","run_id":"01a10000-0000-7000-8000-000000000dp1","state":"running"}}
+{"out":"run fylgja-provision 01a10000-0000-7000-8000-000000000dp1: running\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":false}}
+{"out":"step host check: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":true,"outcome":"done","duration_s":0.01716235}}
+{"out":"step host check: done in 0.0s\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"stage","finding_step":"stage","end":false}}
+{"out":"step stage: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"stage","finding_step":"stage","end":true,"outcome":"done","duration_s":0.01306421}}
+{"out":"step stage: done in 0.0s\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"deploy","finding_step":"deploy","end":false}}
+{"out":"step deploy: begins\n"}
+{"event":{"workflow_id":"fylgja-provision","step":"deploy","finding_step":"deploy","end":true,"outcome":"done","duration_s":0.016614172,"detail":"1 node"}}
+{"out":"step deploy: done in 0.0s (1 node)\n"}

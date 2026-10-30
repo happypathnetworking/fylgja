@@ -2171,3 +2171,71 @@ made.
   `CoreChangeThread` count 0. `internal/checks`' contract test changed in four constants'
   names only and compiles under the tag; it needs the platform on the bridge, so it was not
   run.
+
+### 5.27 The contracts' prose (T036, Run 33, 2026-10-30)
+
+- **`contracts/orchestrator.md`, new**, written from the code as it stands (`cli.py`,
+  `serve.py`, `flows/`, `core.py`, `record.py`, `documents/rules.py`, the adapter's
+  `__main__.py`, `comment.py`) and §5.13–§5.21: `fylgja-cli`'s seven commands with their
+  operations, flows and what each asks the core; the platform check and the ephemeral
+  fallback; the printing and exit rules; its own refusals; the departures from `fylgja`'s
+  text §5.13, §5.17 and §5.19 recorded; the identifiers (the retired families, the four of
+  its own with their sentences from `record.py` and `twin_rehearse.py`, the core's client's
+  four); the documents, `stages.schema.json` and `rehearsal.schema.json` named the
+  orchestrator's with their files and `$id`s unmoved (R-13); the adapter's three commands
+  and its start-up line; the platform's auth and the six deployments with their parameters,
+  the runner's start-up line and refusals, the artifact and the out-line logger; the
+  long-operation shape as the flows ask it; the rehearse flow's order, deadline, 4,020 s
+  timeout and post; the record's shape, its trust and when it is written; who reads which
+  variable. It defers to `cli.md`'s 014–018 sections for each command's text, as the
+  commands are unchanged there but for what it names. `contracts/checks.md` links it.
+- **`contracts/api.md`**: the operations table as `specs/020-…/contracts/README.md` draws
+  it; the five operations and the two runs' lost arguments named "Removed at 020" where the
+  history paragraph lists each feature's moves; the guards' and strict decode's examples on
+  `snapshot` (`twin.create's argument "snapshot" is not a string`, the server's
+  `checkArgs` wording), the `files` and `document` frames and the `render` table without
+  `intent.read` and `markdown` but as history; the transport on loopback alone, the bridge
+  from 015 to 020; a "Removed at 020" line atop the 014, 015, 017 and 016 sections and in
+  018's; and a last section, "020: the operations the orchestrator took": the table of
+  what left, the `404` and `400` wordings, `--snapshot is required` and
+  `step.target.unknown`'s new sentence, the server reading no source of truth, the frames
+  (the `run` frame's `state`, the detached answer and `run.read`'s EOF ending pointed back to
+  the section T012 wrote), the long operation as the orchestrator asks it, the documents and
+  retired rules, and the checks no longer the API's clients.
+- **`contracts/cli.md`**: the title and preface; `fylgja serve`'s report at 020 (the
+  snapshots store, the dial line `the workflow service (…), Docker, containerlab and the
+  nodes are dialled when a request needs them`, M13's Infrahub line kept as history); the
+  client commands' list, the runs' and the files' tables, the workflows paragraph (three)
+  and the environment table (the server reads no `INFRAHUB_*` and no scope); "Removed at
+  020" lines atop the 014, 015, 017, 018 and 016 sections; 015's "Moved at 019" workflow line
+  (T034's note) gaining "Moved at 020: it serves three"; the 020 section's step refusal at
+  its current sentence; and a last section, "020: the commands the orchestrator took": the
+  five commands' and five flags' refusals as `gone_test.go` pins them, `twin create`'s and
+  `twin step`'s guards and help sentences, the worker's no-twin refusal, `fylgja serve`
+  (no `INFRAHUB_*`, no scope, its report, loopback alone, `snapshot.unknown`'s sentence),
+  the retired identifiers, formats, three workflows, the environment and tier 3.
+- **The 014 and 015 contracts**: `stage-commands.md` and `rehearse-command.md` each open
+  with one line naming `contracts/orchestrator.md` as current; 015's `checks.md` the same,
+  naming `contracts/checks.md` (one line beyond the task's two, the same pointer).
+- **Beyond the prose, each a leftover an earlier run assigned here**:
+  - `show.schema.json`'s `in_flight[].child` and `verify.schema.json`'s `$defs/run.child`
+    gone (T035's note), each description gaining a 020 sentence; nothing writes either since
+    T034, and tier 1's schema tests stay green, earlier builds' documents being held to the
+    frozen copies.
+  - `snapshot.unknown`'s message (Run 29's note): `…; a snapshot id names one this server
+    filed when a create, a step, a dry run or a twin diff sent it its file`, where it named
+    `a plan or intent read --out on this server`, neither of which the core has; its three
+    tier-1 expectations follow (`internal/server/snapshot_test.go`,
+    `internal/cli/create_from_snapshot_test.go`, `twin_step_test.go`). `twin compile`'s help
+    says a snapshot is what the orchestrator's `fylgja-cli intent read --out` writes, the
+    wrap's JSON kept on one line as `TestCompileTakesNoCTM` reads it.
+- **`make linkcheck`** found thirteen links dangling before this run's edits, all in the
+  briefs of 016 to 020 at packages T032–T035 deleted (`internal/intent`, `stage`, `stages`,
+  `rehearsal`, `server/rehearse.go`). Each now points at the file or directory as
+  `origin/main` (`07b3d7f`, an ancestor of this branch) holds it, in this repository's
+  history, as 7a9be1e fixed 014's; the briefs' words are unchanged. Then `make linkcheck`:
+  127 files, 2,683 relative links, 0 broken.
+- **Tier 1**: `make build` static, `make test` green in 55.6 s wall, the Go packages this run
+  did not touch cached (`internal/server`, `internal/cli`, `internal/findings`, `internal/lab`
+  and `cmd/fylgja` green uncached beforehand, `internal/cli` 22.0 s), the Python half 1,120
+  passed in 17.8 s; `make lint` 0 issues and ruff clean. No tier-2 test is this task's.

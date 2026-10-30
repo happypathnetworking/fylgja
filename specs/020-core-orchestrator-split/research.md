@@ -2411,3 +2411,119 @@ made.
   EOS password, five characters each, are left to tier 3's word-bounded greps.
 - **Not run here**: tier 3 (`make test-e2e`) and tier 2 whole, which are Run 38's (T042,
   T043; the route's "what no run may do").
+
+### 5.29 Tier 2 whole, and tier 3 refused at its precheck (T042, T043, Run 38, 2026-10-30)
+
+- **The host before.** The worker and the core's server restarted from `784e35a` (`make
+  build` static, `vcs.modified=false`), each verified as `CLAUDE.md` says: `exe` not
+  `(deleted)`, both logins in each environment, the server on `127.0.0.1:7650` alone with no
+  `INFRAHUB_*` and no `FYLGJA_DEFAULT_SCOPE`, each report naming both packages and `ping`.
+  The platform's health `200`, the runner serving since Run 37 (its source unchanged), both
+  task workers holding `FYLGJA_ORCHESTRATOR_*` and the registration's checkout at
+  `504ec98`; `free -m` 18,960 MiB available; `clab inspect --all` `{}`, no `local/twin`, no
+  Schedule, T001's counts 0, `Branch` `main` and `fylgja-fixture`.
+- **Tier 2 whole (T042)**, `make test-contract` from 13:44:44 to 14:29:37 UTC, **2,692.6 s**,
+  with no twin up and none booted. **The Go half about 370 s**: the first `go test`'s 21
+  packages (`internal/cli` 21.2 s the longest, then `internal/lab` 11.9 s), then
+  `internal/checks` alone, **338.3 s**, green, `TestChecksInsideInfrahub` whole through the
+  platform on the bridge for the first time (the checks imported at `504ec98` by T039, the
+  task workers carrying the override's two variables since T040). That is the Go tier with
+  no `internal/stages`, against 016's 2,017 s whole of which `internal/stages` was 1,712.9
+  s (R-15). **`pytest -m contract` 2,322.3 s**: 43 passed and one failed,
+  `test_stage_plan_of_a_throwaway_change`, whose plan was right and whose last assertion,
+  `artifact_of(run.id) == doc`, read the plan of `…-composed`'s branch.
+  - **A test defect, not a lapse.** `flow_runs_of(name)[:1]`, "newest first" by its
+    docstring, took the first of `read_flow_runs`' answer, whose order is Prefect 3.8.8's
+    default `FlowRunSort.ID_DESC` (`prefect/server/api/flow_runs.py:587`) over ids that are
+    `uuid4` (`orm_models.py:119`): with two runs of one flow in the session's harness, the
+    composed rehearsal's plan before the plan test's own, either came first. Run alone, each
+    test holds one run of its flow, which is how Run 32 saw it green (§5.26). The twin-create
+    and stale-mark tests read through it too; the stale-mark test, after the composed
+    rehearsal's run of `twin-rehearse`, passed by the order's chance. Fixed in the helper,
+    `sort=FlowRunSort.START_TIME_DESC` (`a6f3fe3`), and the four re-run together in one
+    session, the composed rehearsal before the two that read its flows: **4 passed in
+    478.5 s** (the composed 162.5 s, the plan 149.1 s, the stale mark 124.1 s, the create
+    5.5 s after the harness's 31.8 s start). The other 40 read no flow run.
+  - Infrahub left as T001 found it after both: `CoreProposedChange`, `FylgjaStage`,
+    `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` 0, `Branch` `main` and
+    `fylgja-fixture`, `fylgja` at `504ec98`. Each task worker keeps a checkout directory of
+    `TestChecksInsideInfrahub`'s own registration (`18e3529e…`, at `92b4f10`) after the test
+    deleted the registration: Infrahub removes no clone of a deleted repository.
+- **Between the tiers.** `a6f3fe3` committed; `make build` from it; the worker and the
+  server restarted and verified again (`vcs.revision=a6f3fe3`, not modified). `free -m` read
+  18,033 MiB available with Infrahub's containers at about 6.5 GiB in all: a Compose
+  `restart` (12 s; the server healthy about 2.5 minutes on) gave 19,750 MiB, both task
+  workers kept their checkouts and answered the deployment `200`.
+- **Tier 3 (T043): refused twice, at its precheck, before any case.** `make test-e2e` at
+  14:43:01 and again at 14:44:48, each in seconds: `case 9 needs the checks the registration
+  fylgja imported, at commit 504ec980…, to be this tree's, and
+  infrahub/checks/fylgja_api.py differ here`. The difference is one comment, `67982ce`'s
+  (T035): the tree's names `test_checks_glue.py` where `main`'s names `internal/rehearsal`'s
+  Go test, which T035 deleted. T039's note (Run 36) judged `main`'s copy right without it,
+  and the operator cherry-picked `a24a0ff` alone; the precheck, 015's `git diff --quiet
+  "$IMPORTED" -- infrahub .infrahub.yml`, compares bytes. Nothing a session may do closes
+  it: the import takes `origin`'s `main`, which only the operator pushes, and a tree whose
+  comment read as `main`'s would name a deleted test.
+- **An evidence run, not T043's.** Since the script's 020 shape had never run whole (§5.22
+  left everything a twin proves to T043), a copy of `scripts/e2e.sh` under the git-ignored
+  `local/` (`local/e2e-t043-evidence.sh`, never committed) ran it, differing in that one
+  comparison alone: a file differing from the imported commit passes only as Python whose
+  `ast.dump` equals the imported file's, so in comments alone, and any other file is refused
+  (proved first: the comment-only difference passes, a changed constant fails). It said
+  `infrahub/checks/fylgja_api.py differs from 504ec980… in comments alone`, then ran every
+  other precheck as written and ended **`E2E-OK`, wall time 2,798.6 s** (14:45:27 to
+  15:32:05), its outputs kept in `local/e2e-020-t043-evidence.outputs`.
+  - **Each case**, from its outputs' times (each from the last output of the one before):
+    1 about 181 s (the prechecks and the script's core among them), 2 about 88 s, 3 about
+    62 s, 4 about 71 s, 5 about 641 s (its 330 s frozen wait), 6 about 175 s, 7 about 424
+    s, 8 about 555 s, 9 about 597 s. Creates 63.4, 44.1, 42.8, 58.3, 114.7, 69.2 and 110.8 s
+    (cases 1, 2, 4 to 8), the last node ready to the record written 2.7–3.5 s; the boot half
+    9.5 s (1), 11.3 s (5, `n1-loop-a` and `-b` not read) and 7.5 s (6); `twin verify` 3.9 s
+    (1, 15 held), 6.2 s (5, 18 held, 1 burst), 5.4 s (5a) and 2.7 s (6); case 1's second
+    create refused after 23.2 s; case 5's frozen 330.0 s with no run started, its steps by
+    file 10.9 s and by id 13.6 s, `n1-loop` 0/42 and 0/55 lost; case 7's proposed change
+    130.5 s, its plan 30.1 s (exit 1, `scope.empty` at the branch point), its steps 38.8 s
+    and 32.9 s; case 8's proposed change 46.8 s, its step refused `step.restart.required`
+    naming `e1`, then 108.3 s and 98.7 s, each wait settled after one read (5.879 s, 5.023
+    s), `e1-loop` 368/400 and 320/348 lost across `e1`'s restarts (gaps 73.6 s and 64 s).
+  - **Case 9**: seed 25.2 s, the draft 93.6 s and its checks 3.7 s after; the ready change's
+    checks 160.7 s, rehearsal `a7acc033…` passed in 88.3 s of its 2,130 s deadline, one
+    comment holding the table, the drawing and the stages; after `probe-port-down`, the
+    checks 268.4 s, rehearsal `ead523ac…` failed at `probe-port-down` on `n1-loop`'s burst,
+    206.5 s of 2,850 s, a second comment with the reproduce lines; both threads in the
+    overview 3.4 s on. **The flow's overhead**, from the platform's runs: the first created
+    15:25:03.540 and started 3.8 s on, beside `fylgja-step`'s plan (`085f61f8…`, 13.7 s),
+    the two reading Infrahub at once, the core's first request of either 13.9 s after
+    `create_flow_run` and the rehearsal's own `twin.show` and `twin.create` 18.1 s and
+    18.5 s after; the second created 15:27:39.488 and started 12.4 s on (a poll missed),
+    after `fylgja-step`'s plan (`f66b9c9c…`, 15:27:41.5–15:27:57.2), its first core request
+    23.0 s after `create_flow_run`; they ran 109.2 s and 228.7 s. Against `fylgja-twin`'s
+    4,260 s, tens of seconds, as Run 37 measured (§5.28). The operator's core was asked, in
+    case 9's window, `run.read` 141 times, `twin.compile` 14, `twin.diff` 10, `twin.show` 8,
+    `twin.create` 4, `twin.step` 4, `twin.verify` 2 and `twin.destroy` 2, and nothing else.
+  - **The greps**: `the core's servers were asked no operation that reads Infrahub` (SC-001,
+    SC-008); no credential and no marker in the run's outputs, `fylgja-cli`'s state root and
+    Prefect home, the bundle and snapshot stores, `local/server.log`, `local/prefect.log`,
+    `local/orchestrator.log` and the platform's home (`WORKER_LOG` unset). By hand over
+    `local/worker.log`, `local/server.log`, `local/orchestrator.log`, `local/prefect.log` and
+    this run's three outputs (`/usr/bin/grep -F`): the API's token, Infrahub's, the auth
+    string and its password, the SR Linux password and the Compose secrets, nothing; the two
+    logins' values and the EOS password, word-bounded, only in two worker-log lines of
+    2026-10-27, containerlab's own `su -s /bin/bash <account> -c sr_cli` in that day's
+    failed deploy, the image's account name equal to the login's default, none since.
+  - **Slower than 016's 2,236.6 s by 562 s**: every `fylgja-cli` command starts Prefect's
+    ephemeral server in its own process (§5.22, 17–40 s a start), case 1's refused second
+    create among them.
+- **Left clean**: `clab inspect --all` `{}`, no `clab-` container, no `local/twin`, no
+  orchestrator record, no Schedule, no running workflow, no platform run unended; T001's
+  counts 0, `Branch` `main` and `fylgja-fixture`, `fylgja` at `504ec98`. The worker and the
+  server left running on `a6f3fe3`'s build.
+- **What T043 needs, the operator's**: the tree's `infrahub/checks/fylgja_api.py` on
+  `origin`'s `main` (on `main`, `git checkout 020-core-orchestrator-split --
+  infrahub/checks/fylgja_api.py`, committed alone: the comment is the only difference, and it
+  reads true on `main` once this branch merges), pushed, then
+  `InfrahubReadOnlyRepositoryImportLastCommit(data: {id:
+  "18dc77bb-fb5b-a338-33be-c51f9f1f0502"})` on `/graphql/main` and both task workers'
+  `commits/` read for the new commit; then `make test-e2e` again, from a commit the running
+  binaries carry. The other road, the precheck comparing code rather than bytes as the copy
+  did, changes 015's rule and is the operator's to choose.

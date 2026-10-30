@@ -2239,3 +2239,175 @@ made.
   did not touch cached (`internal/server`, `internal/cli`, `internal/findings`, `internal/lab`
   and `cmd/fylgja` green uncached beforehand, `internal/cli` 22.0 s), the Python half 1,120
   passed in 17.8 s; `make lint` 0 issues and ruff clean. No tier-2 test is this task's.
+
+### 5.28 The host and the hand scenarios (T040, T041, Run 37, 2026-10-30)
+
+- **Before the live work, the two operator answers on Run 28's report** (T040's notes), each
+  its own commit: the rehearsal goldens' reproduce lines re-baselined by hand (`927561b`,
+  alone: `twin create` and `twin step` read `fylgja-cli`, `twin verify` and `twin destroy`
+  keep `fylgja`, nothing else moved, the README saying so); `reproduce()` naming the core's
+  client for the verify and the destroy, the golden tests comparing byte for byte with the
+  substitution gone, tier 3's case-9 check, `contracts/orchestrator.md`, the data model, the
+  README and `docs/development.md` with it (`9c5927f`); and `scripts/bring-up.sh` starting
+  the core with every `INFRAHUB_*` name removed, `CORE_UNSET` a pattern, a running core
+  holding any restarted, case 9's check on the operator's core refusing any, `SECURITY.md`'s
+  gap closed (`94489a5`). Tier 1 green (Python 1,120 passed), lint clean, `shellcheck`
+  clean, before the build.
+- **The host, T040.** `free -m` read 15,770 MiB available, well under `CLAUDE.md`'s figure:
+  a Compose `restart` of Infrahub's eight containers (12 s) gave 21,196 MiB, and the run held
+  about 19,000 MiB. `make build` static from `94489a5` (`vcs.modified=false`).
+  `scripts/bring-up.sh --part orchestrator` was not run: its preamble runs `sudo -v` for any
+  part, which a headless session cannot answer, so its steps were taken by hand.
+  - **`local/.env`** gained the four names by an append, its earlier bytes kept byte for byte
+    (`cmp` against a copy, removed after) and its mode `0600`: `FYLGJA_ORCHESTRATOR_ROOT` (the
+    absolute `local/orchestrator`), `PREFECT_API_URL` `http://172.17.0.1:4200/api`, and
+    `PREFECT_API_AUTH_STRING` and `FYLGJA_ORCHESTRATOR_AUTH` one value, `fylgja:` and 24
+    random bytes in URL-safe base64, as the script makes it. The venv was present (`make
+    orchestrator-venv` reinstalled nothing: Prefect 3.8.8, Python 3.14.4).
+  - **The Prefect server** as `ensure_platform` starts it: `prefect server start --host
+    172.17.0.1 --port 4200 --no-ui`, `PREFECT_HOME=local/orchestrator/prefect`,
+    `PREFECT_SERVER_API_AUTH_STRING` from the file, detached to `local/prefect.log`;
+    `/api/health` `200` after 23.6 s, `/api/admin/version` `"3.8.8"` to the auth string and
+    `401` without. `prefect config view` reads `PREFECT_RUNNER_POLL_FREQUENCY='10' (from
+    defaults)` and the auth strings from defaults: no profile persists one (the home holds no
+    `profiles.toml`).
+  - **The runner**, `fylgja-orchestrator serve` under the same home, detached to
+    `local/orchestrator.log`: its line `fylgja-orchestrator: serving intent-read/main,
+    twin-create/main, twin-step/main, stage-plan/main, twin-rehearse/main, schema-check/main
+    on the platform at http://172.17.0.1:4200/api` 4.1 s after the start; each of the six read
+    by an authenticated `GET /api/deployments/name/<flow>/main` with its parameters,
+    `/deployments/filter` six. Neither log holds the auth string, its password or its base64.
+  - **The worker** restarted from this tree as `CLAUDE.md` starts it: `/proc/<pid>/exe` not
+    `(deleted)`, both logins and the state root in its environment, its report naming the
+    task queue at `localhost:7233`, the state root with `bundles:`, `snapshots:` and `twin:`,
+    both platform packages with their logins set and `ping (embedded): image alpine:3.24.2
+    (public_registry, present on this host), flow ping every 0.2s, burst 5`.
+  - **The core's server** restarted on `--listen 127.0.0.1:7650` alone, started with the seven
+    names the pattern matches taken from the file's environment (`INFRAHUB_ADDRESS`,
+    `INFRAHUB_API_TOKEN`, `INFRAHUB_INITIAL_ADMIN_PASSWORD`, `INFRAHUB_INITIAL_ADMIN_TOKEN`,
+    `INFRAHUB_INITIAL_AGENT_TOKEN`, `INFRAHUB_SECURITY_SECRET_KEY`, `FYLGJA_DEFAULT_SCOPE`):
+    its environment holds the API's token, both logins and the state root, and no
+    `INFRAHUB_*`; `ss` shows `7650` on loopback alone. Its report: `listening on
+    127.0.0.1:7650 (API version 1, build 0.1.0-dev)`, the state root line, `the workflow
+    service (localhost:7233, namespace default), Docker, containerlab and the nodes are
+    dialled when a request needs them`, the memory budget, both packages and `ping`; no
+    default scope, no Infrahub and no bridge line (quickstart §2).
+  - **The task workers**, with no twin up and no tier running: the override copied into
+    `local/infrahub/` (its copy was 015's `FYLGJA_API_*`), then `up -d` recreated
+    `task-worker-1` and `-2` alone (16 s). Each holds `FYLGJA_ORCHESTRATOR_ADDRESS`
+    (`host.docker.internal:4200`) and `FYLGJA_ORCHESTRATOR_AUTH` and no `FYLGJA_API_*`; from
+    inside each, `GET …/api/deployments/name/twin-rehearse/main` with the auth is `200`
+    (`401` without, `/api/health` `200`), and `POST
+    http://host.docker.internal:7650/v1/twin/show` fails `ConnectError [Errno 111]
+    Connection refused` (quickstart §6's two commands).
+  - **Found live: a recreated task worker has no checkout, and Infrahub 1.11.2's user check
+    cannot make one for a read-only repository.** The task workers mount no volume, so `up
+    -d` empties `/opt/infrahub/git` (both held every commit to `504ec98` before). The minute's
+    `git_repositories_sync` reads `CoreRepository` alone and never clones a read-only
+    registration; a read-only `init` clones a missing directory on first use. But
+    `run_user_check` (`infrahub/git/tasks.py:1193`) passes `InfrahubKind.REPOSITORY`
+    hard-coded, so on a worker with no clone its `InfrahubRepository.init` asks
+    `CoreRepository` named `fylgja`, gets `NodeNotFoundError`, and the validator stays
+    `in_progress`: the first proposed change opened after the recreate (13:10) had both user
+    validators `in_progress` for ever and `-propose` lapsed its 6 minutes. The artifact
+    check, which passes the registration's own kind, cloned it on both workers by 13:11:40
+    (`Initialized the local directory for fylgja because it was missing`, worktree
+    `504ec98`), and `-run-checks user` then concluded both, `fylgja-step` success through the
+    platform and `fylgja-twin`'s draft skip, in 52.1 s. So after a recreate the first
+    change's user checks can hang until something else has cloned the registration on both
+    workers; once cloned, every later check ran (below). Nothing of Fylgja's was changed for
+    it; `docs/verified-facts.md` takes it at T044, and the bring-up script's `infrahub` part,
+    which recreates the workers whenever it copies a changed override, is the operator's to
+    judge.
+- **§4's measurements, on this host's platform.**
+  - **The runner's poll** is Prefect's default 10 s, unchanged. Four `schema-check` runs by
+    their deployment: `create_flow_run` answered in 0.05–0.08 s; `PENDING` seen 1.3–7.0 s
+    after it, `RUNNING` 4.4–9.6 s after (`created` to `start_time` 4.2–9.5 s), the 2.6–3.1 s
+    between the two the runner's subprocess starting; each ran 2.7–3.3 s, and its artifact
+    was visible within 0.02 s of the final state.
+  - **The flow's overhead to the core.** Two `twin-create` dry runs of `fylgja-fixture` by
+    the deployment: `create_flow_run` to the first core request 29.9 s, the first, whose
+    adapter read was Infrahub's first since its restart (23.3 s after the flow's start), and
+    9.3 s, the second (3.4 s after); the core's `twin.create` the flow's last act, 0.15 s
+    before its end. The checks' two rehearsals: picked up 6.4 s and 4.6 s after
+    `create_flow_run`, their first core request 9.0 s after the start each (the plan's
+    reads), 15.4 s and 13.6 s in all; they ran 96.7 s and 98.2 s. Against `fylgja-twin`'s
+    4,260 s and the flow's 4,020 s timeout, tens of seconds: no setting changed.
+  - **A destroy under a cancellation's grace.** A `twin-rehearse` started by its deployment
+    was cancelled (`set_state CANCELLING`, `force`, `ACCEPT`) 15 s after the baseline's create
+    was asked, the provision deploying and the lab present: `CANCELLING` at once; the core's
+    `twin.destroy` asked 0.5 s after (its request 6.3 s, the provision in flight cancelled
+    first, then torn down by its own cleanup, so the destroy's `teardown` and `unstage` read
+    `nothing`); the lab gone 6.3 s after; the destroy read `ok` 9.1 s after; the run
+    `CANCELLED` 15.7 s after, inside the runner's fixed 30 s grace (§5.18), its findings
+    artifact filed and its report posted (status `error`, `run.cancelled`, `seeded` error,
+    the rest not reached). The grace held the whole destroy, the read and the post.
+- **Quickstart §2, the core with no Infrahub.** `bin/fylgja twin create --snapshot
+  0940db93…` built the fixture's twin in 52.8 s at `c3872f5c…`; `twin show` names the snapshot,
+  `kind: snapshot 0940db93…`, and its document holds no `stage` key anywhere; `twin create
+  --branch fylgja-fixture` ends `operation.failed … unknown flag: --branch`, exit 2; `POST
+  /v1/stage/list` `404`, `API version 1 has no operation at this path; nothing was read or
+  done`. `twin destroy` 2.7 s.
+- **§3, a detached run.** `twin create --snapshot <id> --detach` answered in 0.2 s, exit 0,
+  `run.detached` naming `fylgja-provision 01a18cea-…`; `run read` 8 s on, exit 0, `running`
+  with its events to `step deploy: begins`; `run interrupt` exit 0, `run.cancel.requested`;
+  `run read --json` once ended: status `failed`, exit 3, `run.cancelled` at step `deploy`,
+  cleanup `teardown` and `unstage` done, the lab and the twin directory removed; `--run
+  00000000-…` `run.unknown`, exit 1.
+- **§4, the adapter.** `read --branch fylgja-fixture` 4.6 s, 4.3 s and 4.0 s wall, the
+  interpreter's start included: 3 devices, 15 interfaces, 3 links, 3 artifacts, schema
+  `8a4f3bee…`, `0940db93…` each time, the sha256 of the body without the four keys equal to
+  it. `stages --branch fylgja-fixture` exits 0, `branch fylgja-fixture: no open proposed
+  change`, as `fylgja stage list` did (014's `contracts/cli.md`, §5.13's byte-for-byte
+  compare): T041's and the quickstart's `stage.unknown`, exit 1, was a wrong expectation,
+  the quickstart corrected. `schema-check` exits 0, conformant. The `cmp` with the Go
+  reader is no longer possible; its last green compare is §5.15's
+  `test_adapter_matches_go_reader` (Go 3.3 s, the adapter 2.8 s, in process).
+- **§5, `fylgja-cli`.** `fylgja-test-qs-2726465` seeded (96.1 s), proposed (`18e350b4…`, the
+  checks' hang above), `seeded` marked, `-add-link`, `third-link` marked 0.3 s after:
+  `stage.artifact.stale` on n1 and n3, since `-add-link`'s generate returns before their
+  rewrite (as `scripts/e2e.sh` says at case 7), so `-generate` and `third-link`'s `as_of`
+  moved past it (`given`). Then: `stage plan --json` 17.8 s, 4 stages, 3 steps, the
+  seeded-to-third-link and third-link-to-head steps computed by the core's `twin.diff`
+  (n1 and n3 changed, the link `n1:ethernet-1/3|n3:ethernet-1/3` added, both artifacts
+  changed), the branch point's not computed (refused), status `rejected` on `scope.empty`,
+  exit 1, as the golden plan; `twin create --stage …/seeded` 70.4 s, exit 0, the record
+  written (`record_version` `1`, the stage, the proposed change, snapshot `4359e902…`, flow
+  `twin-create` and its run); `stage list` 7.4 s, `seeded` marked `← twin`; `twin step`, no
+  `--stage`, to `third-link` in 26.2 s, the record moved (flow `twin-step`); `bin/fylgja twin
+  step --snapshot 0940db93…` 11.0 s; `stage list` then `record.twin.stale`, no row marked;
+  `twin step` `step.target.required`, exit 1; `twin create --branch fylgja-fixture
+  --dry-run` refused, `host.lab.present` and `host.twin.present`, exit 1; `twin destroy` 2.4
+  s; the dry run again, its plan's lines, `verdict: clear`, exit 0.
+  `/api/flow_runs/filter` lists each run, `fylgja-cli`'s with no deployment (it runs its
+  flows in its own process, recorded on the platform) and the checks' with theirs; `grep -c
+  Bearer local/orchestrator.log` 0.
+- **§6, the rehearsal.** Marked ready; `-run-checks user` 141.1 s: `fylgja-step` success,
+  `fylgja-twin` success, a thread `ok` (2,175 characters). A stage SR Linux refuses was added
+  as the goldens' was (`-add-interface n1:ethernet-1/99 -generate`, `bad-port`): marked
+  before the rewrite, the first CLI rehearsal was refused (`stage.artifact.stale`, exit 1,
+  18.7 s), and posted its `did not rehearse` report as 015 posts a rejected one; `bad-port`'s
+  `as_of` moved past it. Then `fylgja-cli twin rehearse --branch … --markdown` 106.9 s, exit
+  5, `nonconforming`: baseline, `third-link` passed, `bad-port` diverged at the push
+  (`push.refused` on n1), head not reached; the markdown on stdout equals the thread it
+  posted (3,444 bytes), and its reproduce lines are `fylgja-cli twin create --stage
+  …/seeded --scope tag:fylgja`, two `fylgja-cli twin step --stage … --allow-restart`, `fylgja
+  twin verify` and `fylgja twin destroy`; `local/server.log` grew by the core's operations
+  alone (`run.read` 40, `twin.compile` 4, `twin.diff` 3, `twin.show` 4, `twin.create` 2, the
+  dry run and the baseline, `twin.step` 2, `twin.verify` 1, `twin.destroy` 1). Then
+  `-run-checks user` again, 135.3 s, rehearsing it through the bridge: `fylgja-step` success,
+  `fylgja-twin` failure (8,138 characters), its thread `nonconforming` with the same
+  reproduce block and the table's `loss` column. Two rehearsals through the bridge, a pass
+  then a failure, as case 9's. No probe was declared (`main` holds none, and writing one is
+  tier 3's), so each loss cell reads `—`.
+- **Left clean**: the branch deleted with its 3 stages and its proposed change (13.6 s);
+  `CoreProposedChange`, `FylgjaStage`, `FylgjaProbe`, `CoreChangeThread` and
+  `CoreUserValidator` 0; `Branch` `main` and `fylgja-fixture`; `fylgja` at `504ec98`,
+  `active`, its two checks; no Schedule, no running workflow; `clab inspect --all` `{}`, no
+  `local/twin`, no orchestrator record. The credential greps (`/usr/bin/grep -F`) over
+  `local/server.log`, `local/worker.log`, `local/orchestrator.log`, `local/prefect.log` and
+  `local/orchestrator/` for the API's token, Infrahub's, the auth string, its password and its
+  base64, the SR Linux password and the Compose secrets found nothing; the two logins and the
+  EOS password, five characters each, are left to tier 3's word-bounded greps.
+- **Not run here**: tier 3 (`make test-e2e`) and tier 2 whole, which are Run 38's (T042,
+  T043; the route's "what no run may do").

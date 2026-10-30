@@ -57,8 +57,10 @@ orchestrator/.venv/bin/python -m fylgja_orchestrator.adapters.infrahub read --br
 sha256sum < <(jq --indent 2 'del(.snapshot_version, .snapshot_id, .observed_at, .ctm.envelope.observed_at)' /tmp/s.json)   # 0940db93…
 bin/fylgja intent read --branch fylgja-fixture --out /tmp/go.json && cmp /tmp/s.json /tmp/go.json   # before the Go reader goes
 ```
-`… stages --branch fylgja-fixture` answers no proposed change (`stage.unknown`, exit 1);
-`… schema-check --branch fylgja-fixture` exits 0.
+`… stages --branch fylgja-fixture` answers `branch fylgja-fixture: no open proposed change`,
+exit 0, its rows empty, as `fylgja stage list` did (014's `contracts/cli.md`; `stage.unknown`,
+exit 1, is a stage reference's or `stage plan`'s); `… schema-check --branch fylgja-fixture`
+exits 0.
 
 ## 5. By hand: `fylgja-cli` creates, steps, lists and plans (US3, US6)
 

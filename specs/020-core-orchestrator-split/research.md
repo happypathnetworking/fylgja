@@ -1349,3 +1349,122 @@ made.
 - **The gates**: `make build` static; `make test` green, 951 Python tests in 14.1 s (41 new),
   73.7 s wall uncached at a load of 1.9–4.2, `internal/cli` 41.6 s of it; `make lint` 0
   issues, ruff clean.
+
+### 5.18 The rehearse flow (T026, Run 23, 2026-10-30)
+
+- **The shape.** `flows/twin_rehearse.py`: the body `rehearse(deps, branch, scope, probes_path)`
+  returns a `Rehearsed` (the document, its markdown, and the timeout or cancellation that
+  reached the run); `run(deps, …, markdown)` sends the markdown to the `MARKDOWN` sink (the out
+  sink when unset, `fylgja-cli --markdown`'s stdout once T027 sets it), files the document as
+  the run's artifact, then raises what reached the run, so the platform records it after the
+  document is filed; `@flow(name="twin-rehearse", timeout_seconds=4020)`. `Deps` gains
+  `flow_run` (`record.read_flow_run`), `post`, `budgets` (`deadline.load_budgets`), `now` and
+  `clock`. The plan is `stage_plan.plan(deps, op, …)`, `stage plan`'s body factored out
+  (`Planned`: the scope, the subject, the session, when resolution began, the result and each
+  compiled stage's file, manifest, snapshot id and resolution), printing nothing for a
+  rehearsal; `stage-plan`'s golden still renders byte for byte.
+- **Over the core's operations.** The baseline rule, `refusalStatus`, the deadline from each
+  compiled manifest's packages (§5.16), `rehearsal.deadline.unfit`, then the host: `twin.show`'s
+  `in_flight` (a provision, step, destroy or rehearsal run refuses, `run.in_flight` in
+  `InFlightRefusal`'s words); the reclaim (below); and the core's dry run of the baseline's
+  `twin.create`, its host check, whose refusal is the rehearsal's (its findings without the
+  plan's repeats), status error when it could not run. Then the run: the baseline by
+  `twin.create` of its snapshot file, detached and read every 2 s, then `twin.verify --wait
+  2m0s` (verify's default budget, `MECHANISM.wait`), the wait's failing assertions the verify
+  document's rejections; each rehearsed stage by `twin.step` of its snapshot file with
+  `allow_restart`, whose block's `wait`, `wait_counts`, `loss`, `pushed`, `timings` and
+  `reconcile` (restarted, recreated, added) are the stage's; `rehearsal.classify` against the
+  baseline findings; the stop at the first stage `rehearsal.stop` stops at; and the destroy in
+  a `finally`, unless the baseline's create could not start because a run holds its id. A
+  child's outcome comes from its run's document: `run.cancelled` first, then the step block's
+  `outcome`, then the status (ok ready, failed, rejected, else error); the step it stopped at
+  is its first rejection's. A child the core refuses at its start carries the core's refusal as
+  its stage's findings ("its step did not run"); one whose end cannot be read is
+  `operation.failed` on its run unless cut. The record follows the twin after each create and
+  step (`follow_record`, flow `twin-rehearse`, this run's id) and is removed after a clean
+  destroy when it is this run's, so a run that dies leaves a twin its own record names.
+- **The reclaim** (T024's rule): a twin standing whose snapshot the record names, the record's
+  flow `twin-rehearse` and its flow run read from the platform `FAILED`, `CRASHED`, `CANCELLED`
+  or `404`, is destroyed before the dry run, `rehearsal.twin.reclaimed` (warning, at destroy,
+  the dead run's id, 015's words naming the destroy run and what it removed) and the block's
+  `reclaimed`; a destroy that leaves something refuses the rehearsal unclean. No record, a
+  record of another flow, one `twin show` does not trust, one naming no flow run (a rehearsal
+  run with no platform), a run alive or `COMPLETED`, and a platform that cannot be asked all
+  leave the twin to the host check, which refuses it `host.twin.present`.
+- **The deadline is the flow's clock, not `timeout_seconds`** (T026 says "`timeout_seconds` the
+  deadline"): the deadline is known only once the plan has compiled every stage, and a flow's
+  `timeout_seconds` is fixed when its run starts; Prefect delivers a sync flow's timeout as an
+  exception between blocking calls (§1.5's 11.3 s for a 3 s timeout), so it cannot interrupt a
+  child gracefully. The flow keeps the deadline on its monotonic clock from the run's start, as
+  the workflow's timer was: `Core.read` gains `stop`, asked before each 2 s wait; once the
+  deadline has passed the child in progress is interrupted (`run.interrupt`) and read on to its
+  end, the stage is error, the run cut, `rehearsal.deadline.cut`, and the destroy follows,
+  never cut itself. `timeout_seconds` is 4,020 s, `fylgja-twin`'s `ALLOWANCE_S` 300, the ceiling
+  3,600 and its `DESTROY_S` 120: what its timeout less its 240 s margin covers. A timeout
+  reaching the body (`TimeoutError`) is the cut of the stage in progress, a cancellation
+  (Prefect's `TerminationSignal`, a `BaseException`, or `KeyboardInterrupt`) its cancellation,
+  `run.cancelled`; both destroy and report in the `finally`, and are raised once the document
+  is filed. A fault of the flow's own is `operation.failed` at the stage, status error.
+- **§4's grace question, measured.** A throwaway Prefect 3.8.8 server on `127.0.0.1:4299`
+  (`PREFECT_HOME` in the session's scratch, up in 32 s), a runner serving a flow whose
+  `finally` slept 60 s, cancelled by `set_state CANCELLING` with `force`: the `finally` began
+  0.09 s after the request, the run read `CANCELLED` within 31 s of it, and the 60 s never
+  ended: the runner sends SIGTERM, turned into `TerminationSignal` in the flow, then SIGKILL 30
+  s on. The 30 s is fixed in Prefect's source (`runner/_cancellation_manager.py:102`,
+  `runner/runner.py:1275`, `grace_seconds = 30.0`) and read from no setting, so **no setting is
+  changed**. It does not reach the twin: the destroy is a run of the core's, started detached
+  within one request of the cancellation, which the core's worker ends whatever becomes of
+  the flow's process, cancelling the child in flight first. What it can cut is the flow's read
+  of it, the report and the post, so after a cancellation the destroy is read for 20 s
+  (`CANCEL_READ_S`), one still running then reported under `cleanup.incomplete` as going on in
+  the core (status unclean), and the post makes no call 27 s after the cancellation
+  (`CANCEL_POST_S`). A timeout is not the runner's: the process lives, and the destroy is read
+  whole. The server and runner were stopped after. **§1.5's timeout half, on 3.8.8**: a flow
+  of `timeout_seconds=3` sleeping in 1 s steps, as a core read polls, on an ephemeral server
+  (startup about 31 s at the 180 s bound) got `prefect.flow_engine.FlowRunTimeoutError`, a
+  `TimeoutError`, inside the body 3 s after it began, between two sleeps; its `finally` ran and
+  the run ended `TimedOut`, type `FAILED`. §1.3's cancel (`set_state CANCELLING` answering
+  `ACCEPT`, the run `CANCELLED`) held on 3.8.8 too.
+- **The report and its post.** The block, the text and the markdown are T022's renderers,
+  the stages listed again after the run (`Session.stage_list`) for `rehearsal.stage.moved` and
+  `rehearsal.change.closed`; the block's `run` is `fylgja-rehearse` with the flow run's id,
+  the contract's enum unmoved, minted (`uuid4`) when the body runs with no platform. The
+  markdown is posted by `adapters/infrahub/comment.py` (`post_comment`, the check's code made
+  synchronous over the adapter's SDK client: a `CoreChangeThread` labelled `Conversation`, then
+  its `CoreThreadComment`, on `main`, the empty thread deleted when the comment fails, no call
+  once `by` has passed), `rehearsal.report.unposted` (warning, the proposed change's id) when
+  it fails, the status kept. `infrahub/checks/fylgja_api.py`'s `post_comment` stays until T029
+  rewrites `fylgja-twin`, its one caller.
+- **Departures**, each where the Go server's words named what the orchestrator does not do:
+  - A refusal because the host is held (every rejection but the passed-over branch point's of
+    `run.in_flight`, `host.lab.present`, `host.twin.present`) is **not posted**: `fylgja-twin`
+    asks again every 30 s while the host is held, and 015's check posted only its last answer;
+    a flow that posted each would leave a thread per ask. Every other report is posted,
+    refusals before any run included; nothing is posted before a proposed change is found.
+  - `run.cancelled`'s message says "by the operator's interrupt or the platform's
+    cancellation", since a `twin destroy` no longer cancels a rehearsal, which is no run of the
+    core's.
+  - The text prints `run fylgja-rehearse <flow run id>` and each child's run line, and not the
+    snapshot and bundle lines a create's or a step's start prints, which the plan printed;
+    a destroy's start lines are printed.
+  - A rehearsal refused before its proposed change is found renders the markdown of no block
+    and posts nothing.
+- **Tests** (`tests/unit/test_rehearse.py`, 71): the flow's name, parameters and timeout; **the
+  golden rehearsal replayed** from `plan.json`'s stages and `rehearsal.json`'s run as the core's
+  answers: the document byte for byte but for `fylgja-cli` and each stage's `took_s`, the
+  markdown posted and `rehearsal.out.txt` whole as printed, the deadline 2,580 s from the
+  packages; `workflow_rehearse_test.go`'s cases by name (every stage passes, stops at a failed
+  stage, new finding fails, baseline findings fail nothing, baseline not built, baseline ended
+  otherwise is error ×3, step rejected, wait incomplete ×3, the deadline cutting a step, never
+  the destroy, a step that finished anyway, the baseline, a wait, cancelled destroys ×3, destroy
+  unclean, one stage, child refused, baseline held touches nothing, destroy not started ×2,
+  child and destroy closed without a result, a cut child closed without a result); the
+  server's pure ones (the guards, the baseline rule, `refusalStatus`, a stale mark refused
+  before any run, over the ceiling, R-08's status table, the stages read again); the host (a
+  run in flight, not posted), the reclaim's four cases (a dead run ×3, past retention, not dead
+  ×5, a twin not the record's ×4) and an unclean reclaim; the record following the run; the
+  timeout as the cut; the grace's bounded read and post; the unposted report; the markdown
+  sink; and `post_comment`'s thread, empty-thread delete, bound and unset credentials.
+- **The gates**: `make build` static; `make test` green, 1,022 Python tests in 17.0 s (71 new),
+  80.1 s wall uncached at a load of 1.7–2.2, `internal/cli` 42.8 s of it; `make lint` 0 issues,
+  ruff clean. No tier-2 test is this task's (T028's); no twin, worker or server was touched.

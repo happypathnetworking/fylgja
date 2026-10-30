@@ -1856,3 +1856,101 @@ made.
   platform's logs and home; the operator's core log read from its offset; and the wall time,
   which grows by each `fylgja-cli` command's ephemeral start (about 17 s warm, about 30
   commands).
+
+### 5.23 The server's removal (T032, Run 29, 2026-10-30)
+
+- **The server.** `internal/server`'s `rehearse.go`, `stages.go`, `schema.go`, `scope.go`,
+  `read.go`, `resolve.go` and `probes.go` are gone with their tests (`rehearse_test.go`,
+  `rehearse_contract_test.go`, `schema_test.go`, `scope_test.go`, `read_test.go`,
+  `probes_test.go`, `probes_contract_test.go`, `snapshot_contract_test.go`). `handlers.go`'s
+  table and `api.Operations` hold eleven operations; `operationArgs` gives `twin.create`
+  `dry_run`, `snapshot`, `detach` and `twin.step` `snapshot`, `allow_restart`, `dry_run`,
+  `wait`, `detach`; `takesFiles` loses the three that took a probe file; `takesStream` loses
+  `twin.rehearse`. `Server` loses `Probes`, `RehearsalCeiling` and `DefaultScope`, `options`
+  its `rehearsalCeiling`, `call` its `steps` and the markdown frame (`render` `markdown` is
+  still accepted and answered as text). A create builds from `--snapshot` alone, refused
+  `--snapshot is required` (operation.failed, exit 2) before its files are looked at; a step
+  steps to `--snapshot` alone, `step.target.unknown` (`twin step names its target: give
+  --snapshot <id|file>`) when it names none, the id the core keeps for this case (§5.13).
+  `snapshot.flags.conflict`'s three callers (`snapshotGuards`, `snapshotConflict`,
+  `probesConflict`) are gone; the rule stays in `internal/findings` for T035. Gone with the
+  read: `runCreateDryRun`, `readTakeCompile`, `readFunc`, the dry run's `read:` line
+  (`readSummary`, `readCounts`), `stageTarget`, `carriesRule`, and `rehearsalHolds`, the
+  step's guard against a rehearsal in flight, since nothing in the core starts one now.
+  `takeSnapshot` is the tests' (`snapshot_test.go`): the server takes no snapshot, the
+  adapter does. A step's override package refused is at `compile` for every target (it was
+  at `read` for a stage). `contracts/api.schema.json`: the five operations' `args`, the two
+  runs' five arguments, the probe file and `intent.read`'s files frame out of the
+  descriptions, `fylgja-rehearse` out of the start frame's enum, a 020 sentence in the
+  top description; the findings contract's operation enum is T035's, so
+  `TestOperationsAreTheContractsAndTheirPaths` holds `api.Operations` to that enum less the
+  five. New `internal/server/gone_test.go`: each lost path `404` with no
+  `Fylgja-Api-Versions`, the version's sentence, valid against `$defs/problem`, logged as
+  `operation=unknown`, nothing run; each lost argument on `twin.create` and `twin.step`,
+  alone, beside a snapshot and with a file, `400` "takes no argument"; the two runs' argument
+  sets pinned.
+- **`fylgja serve`** reads no `INFRAHUB_*` and no `FYLGJA_DEFAULT_SCOPE`: the default scope's
+  check and report line are gone, a malformed value no longer refuses the start, and the
+  dial line reads `the workflow service (<address>, namespace <ns>), Docker, containerlab and
+  the nodes are dialled when a request needs them`; the "not a loopback address" warning
+  stays. `serve_test.go` starts every server with the three unset, and once with them set
+  (to a scope 017 refused) to the same report; the answer held open at the interrupt is
+  `run.read`'s against a workflow service that never answers (the SDK's 5 s dial bound) where
+  it was `schema.check`'s against an Infrahub that never answered.
+- **Live, no twin, nothing of the host's processes touched**: a throwaway `bin/fylgja serve
+  --listen 127.0.0.1:0` of this tree, its environment `PATH`, `HOME`, a token of its own and
+  a scratch state root alone: the report as above; `/v1/twin/rehearse`, `/v1/stage/list`,
+  `/v1/stage/plan`, `/v1/intent/read` and `/v1/schema/check` each `404`, no
+  `Fylgja-Api-Versions`, the sentence; each of `branch`, `at`, `stage`, `scope`, `probes` on
+  `twin.create` and `twin.step` `400` "takes no argument"; a create with no snapshot
+  `operation.failed: --snapshot is required`; the log `operation=unknown outcome=not_found`
+  five times and `outcome=unreadable` ten.
+- **Departures from the task's text**:
+  - **`probes.go` went whole**, not its kind's half alone: the file's half served the
+    `probes` argument, which the task removes, and left would be dead code.
+  - **The CLI's tests moved with the server** (T033 owns the CLI's code): the CLI's tests
+    drive the harness's in-process server, so the removal failed 147 of the package's 339.
+    The fourteen files T033 lists for deletion whole went now (`intent_test.go`,
+    `schema_test.go`, `schema_contract_test.go`, `stage_test.go`, `stage_create_test.go`,
+    `stage_list_test.go`, `stage_plan_test.go`, `stage_conformance_test.go`,
+    `stage_parity_test.go`, `stages_test.go`, `twin_rehearse_test.go`,
+    `twin_rehearse_host_test.go`, `infrahub_test.go`, `probes_contract_test.go`), with
+    `create_snapshot_test.go`'s stage and read cases and `credential_test.go`'s
+    `TestMissingCredentialSendsNoRequest`. The 58 others were moved onto snapshots rather
+    than dropped: the helpers the survivors use are in a new `twins_test.go`
+    (`executeTwin`, `decodeRecord`, `validateTwinJSON`, `provisionOnSuite`, `runRoot`,
+    `storedBundles`, `snapshotCTM`, `fixtureAt`); a create of the fixture branch's head is
+    `useFixtureSnapshot` and `--snapshot headSnapshotID` (the fake's unpinned read's id,
+    `0d37e2ec…`, reproduced from the fixture with no `at`, so every id the tests pin stands);
+    `twin_step_test.go`'s targets are the four stages' snapshots built from their CTMs
+    (`stepLabels`: sealed, linked, again, less, each at its at and observed at
+    `2026-10-16T12:30:00.000000Z`), filed by `stepHost` and stepped to by id (`stageID`), the
+    expected lines a `target: snapshot <s>… (branch change-1 at …)` line and `snapshot <s>…`
+    sides. Removed as the stage's alone: `TestStepBesideARehearsalNamesItBeforeAnyRead`,
+    `TestStepTargetErrorsExitTwo`, `TestStepReadsUnderTheRecordsScope`,
+    `TestStepToAStageOfAnotherProposedChange`, `TestStepStagelessTwinToAStage`,
+    `TestStepFromTheBranchPointToTheHead`, `TestStepTargetCurrentByResolvedReference`,
+    `TestStepToAStaleStageIsRefused`, `TestStepSnapshotBesideAStageIsRefused`,
+    `TestSnapshotFlagConflicts`, `TestCreateFromAStageTakesItsPinnedRead`,
+    `TestRefusedReadStartsNothingAndFilesNothing`, `TestUnreachableInfrahubFailsTheCreateAtRead`,
+    `TestCreateDryRunFromAStage`, the refusal tables' stage, scope and read rows, and the
+    answer table's five lost operations. `TestStepBackToAnEarlierMark` is
+    `TestStepBackToAnEarlierSnapshot`. Left for T033 with the code: the commands and flags
+    (and `TestNoCommandTakesTheFollowingFlags`' walk, which expects the five commands beside
+    `api.Operations` "until T033"), `executeClient`'s nouns, `probes_test.go`'s and
+    `env_test.go`'s client-only flag cases, `credential_test.go`'s remaining read cases, and
+    `gone_test.go`'s five commands and five flags. `internal/cli` now 228 top-level tests,
+    21.7 s.
+- **Left for later tasks, found here**: `snapshot.unknown`'s message still says a snapshot id
+  "comes from a create, a dry run, a plan or intent read --out on this server" (pinned by
+  tests and `contracts/cli.md`; T036's prose); the worker's `workflow_step.go` refusal still
+  names `fylgja twin create --branch, --stage or --snapshot` (T034); `show.go`, `destroy.go`,
+  `follow.go` and `verify.go` still read a `fylgja-rehearse` in flight, which goes with the
+  worker's rehearsal (T034); `internal/stage`'s `Compile` and `internal/intent`'s counts are
+  still the compile's and the twin-show code's (T035); the frozen `018-snapshots` copies are
+  read by no server test once `validateM10Document` went, unused with it.
+- **Tier 1**: `make build`, `make lint` (golangci-lint 0 issues, ruff clean) and `make test`
+  green, 49.95 s wall (the Python half 1,134 passed in 17.8 s, `internal/cli` 21.7 s,
+  `internal/server` 3.0 s). No tier 2 is named by T032: every contract test it names is
+  deleted, and no contract-tagged test remains in `internal/server`, `internal/cli` or
+  `cmd/fylgja`; `go vet -tags contract,fixture,e2e ./...` clean.

@@ -1,14 +1,16 @@
-"""The glue Fylgja's two Infrahub checks share (contracts/checks.md; research R-13, R-15, R-16).
+"""The glue Fylgja's two Infrahub checks share (contracts/checks.md; 020's research R-12, data-model §9).
 
 It decides nothing. It reads the check's two variables, finds the open proposed change by its
-source branch with the check's own client, asks Fylgja's API one operation and reads the
-answer's frames to its document (contracts/api.md), sends the operator's interrupt, and posts
-the report on the proposed change as a new thread holding one comment (D-049, D-053). Every
-verdict, deadline and wording of a report is the server's.
+source branch with the check's own client, triggers one flow's deployment on the
+orchestrator's platform (Prefect's API, over plain HTTP: 020's research §1.3), waits for the
+flow run, reads its document (the run's artifact fylgja-findings, §1.4) and its out lines (the
+run's log), and asks the run to cancel at the check's own deadline. Every verdict, deadline,
+wording and report is the orchestrator's; the rehearse flow posts the report itself (R-11).
 
-No sentence here carries the token, and none carries a variable's value but the address's: a
-fault names the variable, or the address it reached for. Stdlib and httpx alone, as Infrahub's
-task-worker image carries them (research §1.1). Importing it does nothing.
+No sentence here carries the credential, and none carries a variable's value but the
+address's: a fault names the variable, or the address it reached for. Stdlib and httpx alone,
+as Infrahub's task-worker image carries them (020's research §1.1): never Prefect's client,
+whose environment there points at Infrahub's own server. Importing it does nothing.
 """
 
 import asyncio
@@ -20,70 +22,78 @@ from typing import Any
 
 import httpx
 
-# The task worker's environment, given by the Compose override (research R-17).
-ENV_ADDRESS = "FYLGJA_API_ADDRESS"
-ENV_TOKEN = "FYLGJA_API_TOKEN"
+# The task worker's environment, given by the Compose override (020's data-model §10).
+ENV_ADDRESS = "FYLGJA_ORCHESTRATOR_ADDRESS"
+ENV_AUTH = "FYLGJA_ORCHESTRATOR_AUTH"
 
-# The API's version and headers, as internal/api/wire.go names them.
-API_VERSION = "1"
-HEADER_VERSION = "Fylgja-Api-Version"
-HEADER_VERSIONS = "Fylgja-Api-Versions"
-HEADER_STREAM = "Fylgja-Stream"
+# The flows the checks trigger, each served by the runner as the deployment main (R-08).
+FLOW_STAGE_PLAN = "stage-plan"
+FLOW_TWIN_REHEARSE = "twin-rehearse"
+DEPLOYMENT = "main"
 
-# The renderings a check asks for (contracts/api.md, "What render asks for").
-RENDER_TEXT = "text"
-RENDER_MARKDOWN = "markdown"
+# ARTIFACT_TYPE is the type of the artifact a flow files its document under, its data the
+# document's JSON (fylgja_orchestrator.flows.common's ARTIFACT_TYPE). OUT_LOGGER is the logger
+# a flow's out lines are logged under in its run's log (common's OUT_LOGGER), told apart from
+# Prefect's own lines in the same log (research §5.21).
+ARTIFACT_TYPE = "fylgja-findings"
+OUT_LOGGER = "prefect.flow_runs.fylgja"
 
-# The default branch, where the proposed change and its comments live (research §1.2).
+# The flow run's ended states: Prefect's terminal state types.
+ENDED = frozenset({"COMPLETED", "FAILED", "CANCELLED", "CRASHED"})
+
+# The default branch, where the proposed change lives (015's research §1.2).
 DEFAULT_BRANCH = "main"
 
-# THREAD_LABEL is the label the proposed change's view gives the thread it opens for a comment
-# written in its overview, and so the one a comment posted here carries (research §5.9).
-THREAD_LABEL = "Conversation"
-
-# DIAL_TIMEOUT bounds a connection, as the Go client's api.DialTimeout does; HEADER_TIMEOUT the
-# wait for an answer's headers, which the server sends before it works (api.HeaderTimeout).
-# Nothing bounds the answer once it has begun but a check's own close_by: a rehearsal's
-# frames come minutes apart.
+# DIAL_TIMEOUT bounds a connection, and REQUEST_TIMEOUT one request's answer: every request
+# here answers at once, the wait being the check's polls.
 DIAL_TIMEOUT = 5.0
-HEADER_TIMEOUT = 30.0
+REQUEST_TIMEOUT = 30.0
 
-# INTERRUPT_TIMEOUT bounds the blocking interrupt, which holds the task worker's event loop.
-INTERRUPT_TIMEOUT = 10.0
+# POLL_S is the wait between two reads of a flow run's state (R-12).
+POLL_S = 5.0
 
-# CLOSE_MARGIN_S is how long before its timeout a check stops reading an answer: whatever the
-# answer has not said by then is a cut, and the check concludes before Infrahub's timeout,
-# which would leave its validator in_progress (FR-021). It covers what the check does after
-# an answer that comes just before it: fylgja-twin's comment, a thread and its comment saved
-# by the SDK, each with its 60 s timeout. A third call, the empty thread's delete, has no room
-# of its own, so post_comment bounds every call by the time the check gives it (T110).
+# RETRY_503_S is the wait before the one retry of a request the platform answered 503, as it
+# answers the first create_flow_run just after its deployments appear (research §1.2).
+RETRY_503_S = 5.0
+
+# A run's log lands on the platform a second or so after its state ends (research §5.21): its
+# out lines are read until two reads LOG_SETTLE_S apart agree, at most LOG_READS reads, each a
+# page of LOG_PAGE records at a time.
+LOG_SETTLE_S = 1.0
+LOG_READS = 5
+LOG_PAGE = 200
+
+# CANCEL_TIMEOUT bounds the blocking cancellation, which holds the task worker's event loop.
+CANCEL_TIMEOUT = 10.0
+
+# CLOSE_MARGIN_S is how long before its timeout a check stops waiting for its flow run: a run
+# that has not ended by then is the check's own failure, and the check concludes before
+# Infrahub's timeout, which would leave its validator in_progress (FR-021). It covers what the
+# check does after a run that ends just before it: the document's read, the out lines' reads
+# and the conclusion. Nothing is posted by a check (R-11).
 CLOSE_MARGIN_S = 120
 
 # FR-017's one exception, the one rule the checks hold beside the status's mapping (D-052):
 # a branch point refused scope.empty at read, the scope selecting no device on main (017's
 # FR-015, R-20), is not a refusal of the change, and the other stages decide. It reads the
-# finding's rule and step and the stage's at_source and nothing else, as the server's
-# passedOver does: fylgja-step passes it over in the plan, and fylgja-twin in a refusal that
+# finding's rule and step and the stage's at_source and nothing else, as the orchestrator's
+# passed_over does: fylgja-step passes it over in the plan, and fylgja-twin in a refusal that
 # says the host is held. The three values are findings.RuleScopeEmpty, findings.StepRead and
 # stages.AtBranchPoint (internal/rehearsal's TestTheChecksExcuseTheBranchPointAsTheServerDoes).
 RULE_SCOPE_EMPTY = "scope.empty"
 STEP_READ = "read"
 AT_BRANCH_POINT = "branch_point"
 
-# MAX_PROBLEM_BYTES bounds what is read of a transport fault's body, as api.MaxProblemBytes.
-MAX_PROBLEM_BYTES = 64 * 1024
-
-# MAX_CAUSE_CHARS bounds an error of Infrahub's or the transport's quoted in a message.
+# MAX_CAUSE_CHARS bounds an error of Infrahub's, the platform's or the transport's quoted in
+# a message.
 MAX_CAUSE_CHARS = 500
 
-
-def path(operation: str) -> str:
-    """An operation's path under the API's version: stage.plan is /v1/stage/plan."""
-    return f"/v{API_VERSION}/" + operation.replace(".", "/")
+# The severities' order in a document's text, as WriteText orders them.
+RANK = {"rejection": 0, "warning": 1, "info": 2}
 
 
 class Fault(Exception):
-    """Why a check cannot conclude from Fylgja's answer, as one sentence for log_error."""
+    """Why a check cannot conclude from the orchestrator's answer, as one sentence for log_error."""
 
 
 class Unset(Fault):
@@ -91,56 +101,50 @@ class Unset(Fault):
 
     def __init__(self, name: str) -> None:
         super().__init__(
-            f"{name} is not set in this task worker's environment: the check cannot reach Fylgja, "
-            "and nothing was sent"
+            f"{name} is not set in this task worker's environment: the check cannot reach the orchestrator's "
+            "platform, and nothing was sent"
         )
         self.name = name
 
 
 class Unreachable(Fault):
-    """Nothing answers at the address, or what answers is not the API."""
+    """Nothing answers at the address."""
 
     def __init__(self, address: str, cause: str) -> None:
-        super().__init__(f"the API at {address} cannot be reached: {cause}")
+        super().__init__(f"the orchestrator's platform at {address} cannot be reached: {cause}")
 
 
-class TokenRefused(Fault):
-    """The API answered 401: the token is not the server's."""
+class CredentialRefused(Fault):
+    """The platform answered 401: the credential is not its own."""
 
     def __init__(self, address: str) -> None:
-        super().__init__(f"the API at {address} refused this check's token ({ENV_TOKEN})")
+        super().__init__(f"the orchestrator's platform at {address} refused this check's credential ({ENV_AUTH})")
 
 
-class VersionUnknown(Fault):
-    """The API answered 404 naming the versions it serves, and this one is not among them."""
+class NoDeployment(Fault):
+    """The platform answers, and serves no deployment of the flow: no runner serves it."""
 
-    def __init__(self, address: str, served: str) -> None:
-        super().__init__(f"the API at {address} serves version {served}; this check speaks version {API_VERSION}")
-
-
-class Unreadable(Fault):
-    """The API answered 400: it could not read the request."""
-
-    def __init__(self, address: str, message: str) -> None:
-        super().__init__(f"the API at {address} could not read this check's request: {message}")
+    def __init__(self, address: str, name: str) -> None:
+        super().__init__(
+            f"the orchestrator's platform at {address} serves no deployment {name}: "
+            "its runner, fylgja-orchestrator serve, has not served it"
+        )
 
 
 class Unexpected(Fault):
-    """Any other status: something at the address answered, but not with an answer."""
+    """Any other answer: something at the address answered, but not as the platform does."""
 
-    def __init__(self, address: str, status: str) -> None:
-        super().__init__(f"the API at {address} answered {status}")
+    def __init__(self, address: str, what: str) -> None:
+        super().__init__(f"the orchestrator's platform at {address} answered {what}")
 
 
-class Cut(Fault):
-    """The answer ended before its document: the server stopped, the connection was lost, or
-    the check stopped reading it at close_by, when late is set. answer holds what was read of
-    it, so a caller can tell a cut after the run's start."""
+class Lost(Fault):
+    """The platform could not be read once the flow run had been triggered: the run goes on, and
+    ran holds what was read of it."""
 
-    def __init__(self, address: str, cause: str, answer: "Answer", late: bool = False) -> None:
-        super().__init__(f"the API at {address} stopped answering before the command ended: {cause}")
-        self.answer = answer
-        self.late = late
+    def __init__(self, fault: Fault, ran: "Ran") -> None:
+        super().__init__(f"flow run {ran.flow_run_id} of {ran.flow}/{DEPLOYMENT} was triggered, then {fault}")
+        self.ran = ran
 
 
 @dataclass(frozen=True)
@@ -152,54 +156,81 @@ class ProposedChange:
     is_draft: bool
 
 
-@dataclass
-class Answer:
-    """One operation's answer, as far as it was read.
+@dataclass(frozen=True)
+class State:
+    """A flow run's state as the platform reads it: its type (SCHEDULED, RUNNING, COMPLETED,
+    FAILED, …), its name (Completed, TimedOut, …) and its message."""
 
-    out and err are the out and err frames' texts in the order they came, each one or more
-    whole lines. started is whether a start frame came, after which a run may exist; run is
-    the run frame's identity. document is the findings document, None until its frame; text
-    and markdown are the renderings that frame carried, "" when it carried none. interrupted
-    is whether the deadline passed with the answer open and the interrupt was sent, and
-    interrupt_failure why it was not delivered, None when it was.
+    type: str = ""
+    name: str = ""
+    message: str = ""
+
+    @property
+    def ended(self) -> bool:
+        return self.type in ENDED
+
+    def __str__(self) -> str:
+        said = self.type or "unread"
+        if self.name and self.name.upper() != self.type:
+            said += f" ({self.name})"
+        if self.message:
+            said += f": {_bounded(self.message)}"
+        return said
+
+
+@dataclass
+class Ran:
+    """One flow run, as far as the check read it.
+
+    state is the last state read; document the run's findings document, None when it filed
+    none; lines its out lines, in order; lines_failure why they could not be read, None when
+    they were. cancelled is whether the check's deadline passed with the run not ended and the
+    cancellation was asked, cancel_failure why it was not delivered, None when it was.
     """
 
-    out: list[str] = field(default_factory=list)
-    err: list[str] = field(default_factory=list)
-    started: bool = False
-    run: dict[str, Any] | None = None
+    flow: str
+    flow_run_id: str
+    state: State = field(default_factory=State)
     document: dict[str, Any] | None = None
-    text: str = ""
-    markdown: str = ""
-    interrupted: bool = False
-    interrupt_failure: str | None = None
+    lines: list[str] = field(default_factory=list)
+    lines_failure: str | None = None
+    cancelled: bool = False
+    cancel_failure: str | None = None
+
+    def heading(self) -> str:
+        """The run's identity and its state, for the check's message."""
+        return f"flow run {self.flow_run_id} of {self.flow}/{DEPLOYMENT}: {self.state}"
 
 
-def variables() -> tuple[str, str]:
-    """The API's address and token, from the task worker's environment.
+def variables() -> tuple[str, tuple[str, str]]:
+    """The platform's address, and its credential as basic auth's user and password, from the
+    task worker's environment.
 
-    An unset or empty one is Unset naming the variable, the address first; a token that no
-    request header can carry is a Fault naming the variable. Neither value is in either.
+    An unset or empty one is Unset naming the variable, the address first; a credential that
+    is not user:password, or holds a character a request header cannot carry, is a Fault
+    naming the variable. Neither value is in either.
     """
     address = os.environ.get(ENV_ADDRESS, "")
-    token = os.environ.get(ENV_TOKEN, "")
-    for name, value in ((ENV_ADDRESS, address), (ENV_TOKEN, token)):
+    auth = os.environ.get(ENV_AUTH, "")
+    for name, value in ((ENV_ADDRESS, address), (ENV_AUTH, auth)):
         if not value:
             raise Unset(name)
-    # A local/.env saved with CRLF line endings leaves a carriage return on every value, which
-    # httpx would refuse once the request was built (internal/api/client.go's ErrTokenUnsendable).
-    if token != token.strip() or any(ord(c) < 0x20 or ord(c) == 0x7F for c in token):
-        raise Fault(f"{ENV_TOKEN} holds a character a request header cannot carry: nothing was sent")
-    return address, token
+    # A local/.env saved with CRLF line endings leaves a carriage return on every value.
+    if auth != auth.strip() or any(ord(c) < 0x20 or ord(c) == 0x7F for c in auth):
+        raise Fault(f"{ENV_AUTH} holds a character a request header cannot carry: nothing was sent")
+    user, sep, password = auth.partition(":")
+    if not sep or not user or not password:
+        raise Fault(f"{ENV_AUTH} is not user:password: nothing was sent")
+    return address, (user, password)
 
 
 async def proposed_change(client: Any, branch: str) -> ProposedChange | None:
     """The open proposed change whose source branch is branch, or None when none is open.
 
-    It is read on the default branch with the check's own client (research §1.3): Infrahub
-    hands a check its source branch and never its proposed change's id (§1.2), and opens one
-    proposed change per source branch at most. The SDK raises on a GraphQL error, which
-    Infrahub answers 200; a read that fails is a Fault, never a proposed change missing.
+    It is read on the default branch with the check's own client (015's research §1.3):
+    Infrahub hands a check its source branch and never its proposed change's id (§1.2), and
+    opens one proposed change per source branch at most. The SDK raises on a GraphQL error,
+    which Infrahub answers 200; a read that fails is a Fault, never a proposed change missing.
     """
     try:
         nodes = await client.filters(
@@ -218,15 +249,15 @@ async def proposed_change(client: Any, branch: str) -> ProposedChange | None:
 
 def none_open(branch: str) -> str:
     """The sentence for a check run on a branch with no open proposed change."""
-    return f"no open proposed change has source branch {branch}: nothing was asked of Fylgja"
+    return f"no open proposed change has source branch {branch}: nothing was asked of the orchestrator"
 
 
 def rejections_past_branch_point(
     found: list[dict[str, Any]] | None, stages: list[dict[str, Any]] | None
 ) -> list[dict[str, Any]]:
     """A document's rejections, in order, but for the branch point's lone scope.empty at read
-    among stages (FR-017's exception): the plan's stages for stage.plan, the rehearsal block's
-    for twin.rehearse. Each stage's findings are also in the document's own list
+    among stages (FR-017's exception): the plan's stages for stage-plan, the rehearsal block's
+    for twin-rehearse. Each stage's findings are also in the document's own list
     (stages.schema.json, rehearsal.schema.json), where the one passed over is found by key."""
     rejections = [f for f in found or [] if f.get("severity") == "rejection"]
     for excused in branch_point_refusal(stages):
@@ -258,208 +289,309 @@ def finding_key(finding: dict[str, Any]) -> tuple[Any, ...]:
     return tuple(finding.get(k) for k in ("severity", "rule", "object", "step", "message"))
 
 
-async def call(
-    address: str,
-    token: str,
-    operation_path: str,
-    render: str,
-    args: dict[str, Any],
-    stream: str | None = None,
-    deadline: float | None = None,
-    close_by: float | None = None,
-) -> Answer:
-    """One POST of an operation to Fylgja's API, its answer read frame by frame to the document.
+def findings_text(document: dict[str, Any] | None) -> str:
+    """The document's findings as WriteText prints them: each on its line, rejections first,
+    then warnings, then info, each by rule then object, the order of equals kept, then the
+    summary when there is any; "" for none. The text a check's message carries, as 015's
+    answer's text frame carried it."""
+    found = [f for f in (document or {}).get("findings") or [] if isinstance(f, dict)]
+    ordered = sorted(found, key=lambda f: (RANK.get(f.get("severity"), 0), f.get("rule") or "", f.get("object") or ""))
+    lines = [finding_line(f) for f in ordered]
+    if found:
+        n = {s: sum(1 for f in found if f.get("severity") == s) for s in RANK}
+        lines.append(f"{len(found)} finding(s): {n['rejection']} rejection, {n['warning']} warning, {n['info']} info")
+    return "\n".join(lines)
 
-    The answer is the Answer with its document. A transport fault is the Fault the Go client
-    reports for it: Unreachable, TokenRefused, VersionUnknown, Unreadable, Unexpected, and Cut
-    for an answer that ends before its document.
 
-    With stream, 16 random bytes in hex, the request names its answer under Fylgja-Stream, and
-    from the run's start an interrupt reaches the run. If deadline (a time.monotonic() value)
-    passes with the answer still open, the interrupt is sent, and once more when it was not
-    delivered, since the server takes a second as its first or stops its wait on it; then the
-    answer is read on to its document or its cut, until close_by when it is given, past which
-    it is Cut: the check must conclude before Infrahub's timeout, which would leave its
-    validator in_progress (FR-021). An answer with no stream, which takes no interrupt, is read
-    until close_by when it is given, past which it is Cut, late, and closed, which ends the
-    request's work on the server. If the check is cancelled or timed out while an answer
-    named by stream has given no document, started or not, the interrupt is sent with a
-    blocking call, since nothing is awaited in that handler (research §1.4), and the
-    cancellation goes on: the server starts the run whatever becomes of the client once it
-    has written start, and answers 404, harmless, when nothing is open.
+def finding_line(finding: dict[str, Any]) -> str:
+    """One finding as WriteText prints it: `<severity> <rule>[ [step <step>]] <where>: <message>`,
+    where is the object, or the file (and line) with the object after it."""
+    where = finding.get("object") or ""
+    location = finding.get("location")
+    if isinstance(location, dict):
+        where = location.get("file") or ""
+        if (location.get("line") or 0) > 0:
+            where = f"{where}:{location['line']}"
+        if finding.get("object"):
+            where = f"{where} ({finding['object']})"
+    rule = finding.get("rule") or ""
+    if finding.get("step"):
+        rule = f"{rule} [step {finding['step']}]"
+    return f"{finding.get('severity')} {rule} {where}: {finding.get('message')}"
+
+
+class Platform:
+    """The orchestrator's platform, Prefect's API at the address, asked with the credential.
+
+    Each request goes to the address alone, with no proxy of the environment's and no
+    redirect followed, so the credential goes nowhere else (D-042's rule, the platform's
+    credential in the core token's place). transport replaces httpx's, for a test.
     """
-    base = _base(address)
-    body: dict[str, Any] = {"args": args}
-    if render:
-        body["render"] = render
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    if stream:
-        headers[HEADER_STREAM] = stream
-    answer = Answer()
-    # The address is the operator's, with no proxy of the environment's, and the API never
-    # redirects, so no redirect is followed and the token goes nowhere else (D-042).
-    timeout = httpx.Timeout(DIAL_TIMEOUT, read=None)
-    async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
-        request = _request(client, base + operation_path, body, headers)
-        sent = time.monotonic()
-        try:
-            response = await asyncio.wait_for(client.send(request, stream=True), HEADER_TIMEOUT)
-        except TimeoutError:
-            raise Unreachable(address, f"no answer within {HEADER_TIMEOUT:.0f}s of the request") from None
-        except httpx.HTTPError as exc:
-            raise Unreachable(address, cause(exc)) from None
-        try:
-            await _accept(response, address)
-            reader = asyncio.ensure_future(_read(response, address, answer))
-            try:
-                if deadline is not None and stream:
-                    done, _ = await asyncio.wait({reader}, timeout=max(0.0, deadline - time.monotonic()))
-                    if not done:
-                        answer.interrupted = True
-                        answer.interrupt_failure = interrupt_blocking(address, token, stream)
-                        if answer.interrupt_failure is not None:
-                            answer.interrupt_failure = interrupt_blocking(address, token, stream)
-                        if close_by is not None:
-                            interrupted_at = time.monotonic()
-                            done, _ = await asyncio.wait({reader}, timeout=max(0.0, close_by - interrupted_at))
-                            if not done:
-                                reader.cancel()
-                                waited = time.monotonic() - interrupted_at
-                                why = f"no document came within {waited:.0f} s of the interrupt"
-                                raise Cut(address, why, answer, late=True)
-                elif close_by is not None and not stream:
-                    done, _ = await asyncio.wait({reader}, timeout=max(0.0, close_by - time.monotonic()))
-                    if not done:
-                        reader.cancel()
-                        waited = time.monotonic() - sent
-                        raise Cut(address, f"no document came within {waited:.0f} s of the request", answer, late=True)
-                await reader
-            except Fault:
-                raise
-            except BaseException:
-                reader.cancel()
-                if stream and answer.document is None:
-                    interrupt_blocking(address, token, stream)
-                raise
-        finally:
-            await response.aclose()
-    return answer
 
+    def __init__(self, address: str, auth: tuple[str, str], transport: httpx.BaseTransport | None = None) -> None:
+        self.address = address
+        self._api = _base(address) + "/api"
+        self._auth = auth
+        self._transport = transport
 
-def interrupt_blocking(address: str, token: str, stream: str) -> str | None:
-    """The operator's interrupt, POST /v1/streams/{stream}/interrupt, as a blocking call.
+    async def trigger(self, flow: str, parameters: dict[str, Any]) -> str:
+        """A new run of the flow's deployment main with parameters: its id.
 
-    A check Infrahub has cut can still make it, where every await is cancelled (research
-    §1.4). None when delivered; otherwise why not, for the caller to log. It never raises,
-    since it runs inside the handler of another exception.
-    """
-    try:
-        base = _base(address)
-        with httpx.Client(timeout=INTERRUPT_TIMEOUT, trust_env=False, follow_redirects=False) as client:
-            response = client.post(
-                base + f"/v{API_VERSION}/streams/{stream}/interrupt",
-                headers={"Authorization": f"Bearer {token}"},
+        GET /api/deployments/name/<flow>/main for the deployment's id, then POST
+        /api/deployments/<id>/create_flow_run; a 503 to either is asked once more after
+        RETRY_503_S. A deployment the platform does not serve is NoDeployment.
+        """
+        name = f"{flow}/{DEPLOYMENT}"
+        async with self._client() as client:
+            response = await self._retried(client, "GET", f"/deployments/name/{flow}/{DEPLOYMENT}")
+            if response.status_code == 404:
+                raise NoDeployment(self.address, name)
+            deployment = self._field(response, 200, f"the read of deployment {name}", "id")
+            response = await self._retried(
+                client, "POST", f"/deployments/{deployment}/create_flow_run", {"parameters": parameters}
             )
-    except Fault as fault:
-        return str(fault)
-    except Exception as exc:  # noqa: BLE001 - a failed interrupt is reported, never raised
-        return str(Unreachable(address, cause(exc)))
-    if response.status_code == 204:
-        return None
-    if response.status_code == 404 and HEADER_VERSIONS not in response.headers:
-        return "the answer the interrupt names has ended"
-    if response.status_code == 401:
-        return str(TokenRefused(address))
-    return str(Unexpected(address, f"{response.status_code} {response.reason_phrase}"))
+            return str(self._field(response, 201, f"a run of deployment {name}", "id"))
 
+    async def wait(self, flow_run_id: str, deadline: float) -> State:
+        """The flow run's state once it has ended, or the last state read once deadline (a
+        time.monotonic() value) has passed with it not ended, read every POLL_S.
 
-class Unfinished(Exception):
-    """A call of post_comment's that the time it was given cut, or left no room for."""
+        A read that cannot reach the platform is asked again at the next poll, and is
+        Unreachable only when the last read before deadline failed; any other fault, a
+        refused credential or a run the platform does not hold, is raised at once.
+        """
+        state = State()
+        failure: Fault | None = None
+        async with self._client() as client:
+            while True:
+                try:
+                    state = await self._state(client, flow_run_id)
+                    failure = None
+                except Unreachable as fault:
+                    failure = fault
+                if failure is None and state.ended:
+                    return state
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                await asyncio.sleep(min(POLL_S, left))
+        if failure is not None:
+            raise failure
+        return state
 
-
-async def post_comment(client: Any, change_id: str, text: str, by: float | None = None) -> str | None:
-    """One comment on the proposed change, as its view's overview shows one and writes one: a
-    CoreChangeThread on the proposed change, then one CoreThreadComment in it whose text is the
-    report's markdown, both saved on the default branch. The overview lists the proposed
-    change's events, and only a thread's creation is one of them; a CoreChangeComment is
-    counted but never shown (research §5.9). The thread and its comment are the check's one
-    write (D-049; D-053 made it a thread). A thread whose comment cannot be saved is deleted,
-    as the view deletes its own, so that no empty thread is left. None when posted; otherwise
-    why not, for the caller to log as information, since a comment that cannot be posted
-    fails nothing (FR-019).
-
-    With by, a time.monotonic() value, every call to Infrahub is bounded by what remains
-    before it, so that the check concludes before its timeout (FR-021; T110): a call that
-    runs past it is cut, and one with no time left is not made, the empty thread's delete
-    among them, each named in what is returned.
-    """
-    thread = None
-    try:
-        thread = await _within(
-            client.create(
-                kind="CoreChangeThread",
-                branch=DEFAULT_BRANCH,
-                data={"change": change_id, "label": THREAD_LABEL, "resolved": False},
-            ),
-            by,
-            "the thread's creation",
-        )
-        await _within(thread.save(), by, "the thread's save")
-        comment = await _within(
-            client.create(
-                kind="CoreThreadComment",
-                branch=DEFAULT_BRANCH,
-                data={"text": text, "thread": thread.id},
-            ),
-            by,
-            "the comment's creation",
-        )
-        await _within(comment.save(), by, "the comment's save")
-    except Exception as exc:  # noqa: BLE001 - reported, and the conclusion stays the report's
-        failure = cause(exc)
-        if thread is not None and thread.id:
+    async def document(self, flow_run_id: str) -> dict[str, Any] | None:
+        """The run's findings document, its artifact fylgja-findings's data parsed, or None
+        when the run filed none (POST /api/artifacts/filter)."""
+        body = {
+            "artifacts": {"flow_run_id": {"any_": [flow_run_id]}, "type": {"any_": [ARTIFACT_TYPE]}},
+            "sort": "CREATED_DESC",
+            "limit": 1,
+        }
+        async with self._client() as client:
+            response = await self._send(client, "POST", "/artifacts/filter", body)
+            artifacts = self._json(response, 200, "the read of the run's artifacts")
+        if not isinstance(artifacts, list):
+            raise Unexpected(self.address, "the read of the run's artifacts with something not a list")
+        if not artifacts:
+            return None
+        data = artifacts[0].get("data") if isinstance(artifacts[0], dict) else None
+        if isinstance(data, str):
             try:
-                await _within(thread.delete(), by, "the delete")
-            except Unfinished as left:
-                failure += f"; its empty thread {thread.id} is left: {left}"
-            except Exception as left:  # noqa: BLE001 - reported beside the first
-                failure += f"; its empty thread {thread.id} could not be deleted: {cause(left)}"
-        return failure
-    return None
+                data = json.loads(data)
+            except ValueError as exc:
+                raise Unexpected(self.address, f"an artifact {ARTIFACT_TYPE} whose data is not JSON: {exc}") from None
+        if not isinstance(data, dict):
+            raise Unexpected(self.address, f"an artifact {ARTIFACT_TYPE} whose data is not a document")
+        return data
+
+    async def lines(self, flow_run_id: str) -> list[str]:
+        """The run's out lines, in order: the records of its log under OUT_LOGGER (POST
+        /api/logs/filter), read until two reads LOG_SETTLE_S apart agree or LOG_READS have
+        been made, since the log lands a little after the state."""
+        previous: list[str] | None = None
+        async with self._client() as client:
+            for read in range(LOG_READS):
+                got = await self._out_lines(client, flow_run_id)
+                if got == previous:
+                    return got
+                previous = got
+                if read < LOG_READS - 1:
+                    await asyncio.sleep(LOG_SETTLE_S)
+        return previous or []
+
+    def cancel(self, flow_run_id: str) -> str | None:
+        """The run asked to cancel, POST /api/flow_runs/<id>/set_state CANCELLING, as a blocking
+        call: a check Infrahub has cut can still make it, where every await is cancelled (015's
+        research §1.4). Without force, which would move a run that has just ended out of its
+        end (research §5.21): the platform accepts it of a running run, ends a scheduled one
+        cancelled at once, and aborts it for one already ended, which is no failure. None when
+        delivered or nothing was left to cancel; otherwise why not, for the caller to log. It
+        never raises, since it runs inside the handler of another exception."""
+        try:
+            with httpx.Client(
+                base_url=self._api,
+                auth=self._auth,
+                timeout=CANCEL_TIMEOUT,
+                trust_env=False,
+                follow_redirects=False,
+                transport=self._transport,
+            ) as client:
+                response = client.post(f"/flow_runs/{flow_run_id}/set_state", json={"state": {"type": "CANCELLING"}})
+        except Exception as exc:  # noqa: BLE001 - a failed cancellation is reported, never raised
+            return str(Unreachable(self.address, cause(exc)))
+        if response.status_code == 401:
+            return str(CredentialRefused(self.address))
+        if response.status_code == 404:
+            return f"the orchestrator's platform at {self.address} holds no flow run {flow_run_id}"
+        if response.status_code not in (200, 201):
+            return str(Unexpected(self.address, f"{response.status_code} {response.reason_phrase} to the cancellation"))
+        try:
+            status = response.json().get("status")
+        except (ValueError, AttributeError):
+            status = None
+        if status in ("ACCEPT", "REJECT", "ABORT"):
+            return None
+        return str(Unexpected(self.address, f"{status or 'no status'} to the cancellation"))
+
+    def _client(self) -> httpx.AsyncClient:
+        try:
+            return httpx.AsyncClient(
+                base_url=self._api,
+                auth=self._auth,
+                timeout=httpx.Timeout(REQUEST_TIMEOUT, connect=DIAL_TIMEOUT),
+                trust_env=False,
+                follow_redirects=False,
+                transport=self._transport,
+            )
+        except Exception:  # noqa: BLE001 - whatever httpx cannot read of the address is the variable's
+            raise Fault(f"{ENV_ADDRESS} cannot be used: httpx cannot read it as a URL; nothing was sent") from None
+
+    async def _send(self, client: httpx.AsyncClient, method: str, path: str, body: Any = None) -> httpx.Response:
+        """One request; a transport failure is Unreachable and a 401 CredentialRefused."""
+        try:
+            response = await client.request(method, path, json=body)
+        except httpx.HTTPError as exc:
+            raise Unreachable(self.address, cause(exc)) from None
+        if response.status_code == 401:
+            raise CredentialRefused(self.address)
+        return response
+
+    async def _retried(self, client: httpx.AsyncClient, method: str, path: str, body: Any = None) -> httpx.Response:
+        """One request, asked once more after RETRY_503_S when the platform answers 503."""
+        response = await self._send(client, method, path, body)
+        if response.status_code == 503:
+            await asyncio.sleep(RETRY_503_S)
+            response = await self._send(client, method, path, body)
+        return response
+
+    async def _state(self, client: httpx.AsyncClient, flow_run_id: str) -> State:
+        response = await self._send(client, "GET", f"/flow_runs/{flow_run_id}")
+        if response.status_code == 404:
+            raise Fault(f"the orchestrator's platform at {self.address} holds no flow run {flow_run_id}")
+        run = self._json(response, 200, f"the read of flow run {flow_run_id}")
+        state = run.get("state") if isinstance(run, dict) else None
+        if not isinstance(state, dict):
+            return State()
+        return State(str(state.get("type") or ""), str(state.get("name") or ""), str(state.get("message") or ""))
+
+    async def _out_lines(self, client: httpx.AsyncClient, flow_run_id: str) -> list[str]:
+        lines: list[str] = []
+        offset = 0
+        while True:
+            body = {
+                "logs": {"flow_run_id": {"any_": [flow_run_id]}},
+                "sort": "TIMESTAMP_ASC",
+                "limit": LOG_PAGE,
+                "offset": offset,
+            }
+            response = await self._send(client, "POST", "/logs/filter", body)
+            page = self._json(response, 200, "the read of the run's log")
+            if not isinstance(page, list):
+                raise Unexpected(self.address, "the read of the run's log with something not a list")
+            lines += [r.get("message", "") for r in page if isinstance(r, dict) and r.get("name") == OUT_LOGGER]
+            if len(page) < LOG_PAGE:
+                return lines
+            offset += LOG_PAGE
+
+    def _json(self, response: httpx.Response, status: int, what: str) -> Any:
+        """The answer's JSON when its status is status; otherwise Unexpected naming what was asked."""
+        if response.status_code != status:
+            raise Unexpected(self.address, f"{response.status_code} {response.reason_phrase} to {what}")
+        try:
+            return response.json()
+        except ValueError:
+            raise Unexpected(self.address, f"{what} with something not JSON") from None
+
+    def _field(self, response: httpx.Response, status: int, what: str, key: str) -> Any:
+        body = self._json(response, status, what)
+        if not isinstance(body, dict) or not body.get(key):
+            raise Unexpected(self.address, f"{what} with no {key}")
+        return body[key]
 
 
-async def _within(call: Any, by: float | None, what: str) -> Any:
-    """call awaited within what remains before by, or Unfinished naming what was cut or not
-    made; awaited whole without by."""
-    if by is None:
-        return await call
-    left = by - time.monotonic()
-    if left <= 0:
-        if hasattr(call, "close"):
-            call.close()
-        raise Unfinished(f"{what} was not made: no time remained before the check's timeout")
+async def run(
+    platform: Platform,
+    flow: str,
+    parameters: dict[str, Any],
+    deadline: float,
+    close_by: float | None = None,
+) -> Ran:
+    """One run of the flow, triggered, waited for to its end, then read: its document and its
+    out lines.
+
+    If deadline (a time.monotonic() value) passes with the run not ended, the run is asked to
+    cancel, and then waited for until close_by when it is given: a cancelled rehearsal still
+    destroys and files its document within the runner's grace (research §5.18). A run not
+    ended by then is returned as last read, with no document. A fault before the run exists
+    is raised as it is; one once it exists is Lost, the run going on. If the check is
+    cancelled or timed out while the run has not ended, the run is asked to cancel with a
+    blocking call, since nothing is awaited in that handler (015's research §1.4), and the
+    cancellation goes on.
+    """
+    ran = Ran(flow, await platform.trigger(flow, parameters))
     try:
-        return await asyncio.wait_for(call, left)
-    except TimeoutError:
-        raise Unfinished(f"{what} was cut after {left:.0f} s, at the check's timeout") from None
+        ran.state = await platform.wait(ran.flow_run_id, deadline)
+        if not ran.state.ended:
+            ran.cancelled = True
+            ran.cancel_failure = platform.cancel(ran.flow_run_id)
+            if close_by is not None:
+                ran.state = await platform.wait(ran.flow_run_id, close_by)
+        if ran.state.ended:
+            ran.document = await platform.document(ran.flow_run_id)
+    except Fault as fault:
+        raise Lost(fault, ran) from None
+    except BaseException:
+        if not ran.state.ended:
+            platform.cancel(ran.flow_run_id)
+        raise
+    if ran.state.ended:
+        try:
+            ran.lines = await platform.lines(ran.flow_run_id)
+        except Fault as fault:
+            ran.lines_failure = str(fault)
+    return ran
 
 
 def cause(exc: BaseException) -> str:
     """An error as one bounded line: a GraphQL error's messages, as the SDK carries them, rather
-    than its query, which would quote the comment's markdown; otherwise its first line."""
+    than its query; otherwise its first line, or its type when it says nothing."""
     errors = getattr(exc, "errors", None)
     if isinstance(errors, list) and errors:
         text = "; ".join(e.get("message", str(e)) if isinstance(e, dict) else str(e) for e in errors)
     else:
         lines = str(exc).strip().splitlines()
         text = lines[0] if lines else type(exc).__name__
+    return _bounded(text)
+
+
+def _bounded(text: str) -> str:
     return text if len(text) <= MAX_CAUSE_CHARS else text[: MAX_CAUSE_CHARS - 1] + "…"
 
 
 def _base(address: str) -> str:
-    """The server's root URL, from host:port or an http:// or https:// URL without a user or
-    password, its port 1 to 65535, as internal/api/client.go's baseURL takes it. An address
-    refused is named by its variable alone, since it may hold one."""
+    """The platform's root URL, from host:port or an http:// or https:// URL without a user or
+    password, its port 1 to 65535, as the core's client takes its address. An address refused
+    is named by its variable alone, since it may hold one."""
     if address.startswith(("http://", "https://")):
         try:
             url = httpx.URL(address)
@@ -480,101 +612,3 @@ def _base(address: str) -> str:
     if not sep or not host or not decimal or "/" in address or "@" in address:
         raise Fault(f"{ENV_ADDRESS} is not host:port or an http:// or https:// URL: nothing was sent")
     return "http://" + address
-
-
-def _request(client: httpx.AsyncClient, url: str, body: dict[str, Any], headers: dict[str, str]) -> httpx.Request:
-    """The operation's request, built before anything is sent. A failure is the Fault naming
-    the variable at fault alone: httpx's own error quotes the value, the address it cannot
-    read (a host such as [::1) or the token's character it cannot encode and its position."""
-    try:
-        target = httpx.URL(url)
-    except Exception:  # noqa: BLE001 - whatever httpx cannot read of the address is the variable's
-        raise Fault(f"{ENV_ADDRESS} cannot be used: httpx cannot read it as a URL; nothing was sent") from None
-    try:
-        held = httpx.Headers(headers)
-    except Exception:  # noqa: BLE001 - the token is the one header value not the check's own
-        raise Fault(
-            f"{ENV_TOKEN} cannot be used: it holds a character httpx cannot encode in a request header; "
-            "nothing was sent"
-        ) from None
-    return client.build_request("POST", target, json=body, headers=held)
-
-
-async def _accept(response: httpx.Response, address: str) -> None:
-    """Nothing for an answer of the API's; the Fault for any other status (contracts/api.md,
-    "The transport's statuses"), as internal/api/client.go's fault reads it."""
-    status = response.status_code
-    if status == 200:
-        if HEADER_VERSION not in response.headers:
-            raise Unreachable(address, f"what answers there is not the API: its answer names no {HEADER_VERSION}")
-        return
-    if status == 401:
-        raise TokenRefused(address)
-    if status == 404:
-        served = response.headers.get(HEADER_VERSIONS, "")
-        if served and API_VERSION not in (v.strip() for v in served.split(",")):
-            raise VersionUnknown(address, served)
-    if status == 400:
-        raise Unreadable(address, await _problem(response))
-    raise Unexpected(address, f"{status} {response.reason_phrase}")
-
-
-async def _problem(response: httpx.Response) -> str:
-    """A fault's body's message, as much of it as a problem can be."""
-    held = bytearray()
-    try:
-        async for chunk in response.aiter_bytes():
-            held += chunk
-            if len(held) > MAX_PROBLEM_BYTES:
-                break
-        message = json.loads(bytes(held[:MAX_PROBLEM_BYTES])).get("message", "")
-    except (httpx.HTTPError, ValueError, AttributeError):
-        message = ""
-    return message or "its answer gave no reason"
-
-
-async def _read(response: httpx.Response, address: str, answer: Answer) -> None:
-    """The answer's frames into answer, one JSON object a line, to the document frame. Lines are
-    split on newline alone, as the Go client splits them: a frame's JSON escapes every newline,
-    but not every character str.splitlines() would split on."""
-    held = bytearray()
-    try:
-        async for chunk in response.aiter_bytes():
-            held += chunk
-            while (end := held.find(b"\n")) >= 0:
-                line = bytes(held[:end])
-                del held[: end + 1]
-                if _frame(line, address, answer):
-                    return
-    except httpx.HTTPError as exc:
-        raise Cut(address, cause(exc), answer) from None
-    if held.strip() and _frame(bytes(held), address, answer):
-        return
-    raise Cut(address, "the connection closed", answer)
-
-
-def _frame(line: bytes, address: str, answer: Answer) -> bool:
-    """One frame into answer; True for the document, the last. A frame of a kind this check does
-    not use (event, files, one a later server adds) is passed over (contracts/api.md)."""
-    if not line.strip():
-        return False
-    try:
-        frame = json.loads(line)
-    except ValueError as exc:
-        raise Cut(address, f"a line of the answer is not a frame: {exc}", answer) from None
-    if not isinstance(frame, dict):
-        raise Cut(address, "a line of the answer is not a frame: not a JSON object", answer)
-    if "document" in frame:
-        answer.document = frame["document"]
-        answer.text = frame.get("text") or ""
-        answer.markdown = frame.get("markdown") or ""
-        return True
-    if "out" in frame:
-        answer.out.append(frame["out"])
-    elif "err" in frame:
-        answer.err.append(frame["err"])
-    elif "start" in frame:
-        answer.started = True
-    elif "run" in frame:
-        answer.run = frame["run"]
-    return False

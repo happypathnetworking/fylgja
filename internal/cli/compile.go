@@ -34,7 +34,8 @@ func newTwinCompileCmd(opts *options) *cobra.Command {
 			"packages. Files nothing and creates no runtime resource — this is the stage\n" +
 			"before anything is deployed.\n" +
 			"\n" +
-			"A snapshot is what intent read --out writes. A bare CTM is wrapped by hand as\n" +
+			"A snapshot is what the orchestrator's fylgja-cli intent read --out writes. A bare\n" +
+			"CTM is wrapped by hand as\n" +
 			"{\"snapshot_version\": \"2\", \"ctm\": <the CTM>, \"probes\": []}: the server\n" +
 			"computes the snapshot_id and fills the observed_at from the CTM.",
 		Args: cobra.NoArgs,

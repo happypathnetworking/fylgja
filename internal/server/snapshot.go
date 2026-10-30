@@ -71,7 +71,7 @@ func resolveSnapshot(ctx context.Context, paths lab.Paths, op string, subject *f
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
 			return refuse(findings.RuleSnapshotUnknown, id, fmt.Sprintf("the store under %s holds no snapshot %s; a snapshot id "+
-				"comes from a create, a dry run, a plan or intent read --out on this server", paths.Snapshots, id))
+				"names one this server filed when a create, a step, a dry run or a twin diff sent it its file", paths.Snapshots, id))
 		case errors.As(err, &mismatch):
 			return refuse(findings.RuleSnapshotIDMismatch, mismatch.Path, corruptEntry(mismatch, done))
 		}

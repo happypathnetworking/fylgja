@@ -2735,8 +2735,8 @@ func TestStepToASnapshotRefused(t *testing.T) {
 			arg:  func(*testing.T, *stepHostFixture, *snap.Snapshot) string { return unknown },
 			want: refusal(findings.RuleSnapshotUnknown, findings.StepResolve, unknown, ""),
 			fill: func(h *stepHostFixture, _ *snap.Snapshot, _ string, f *findings.Finding) {
-				f.Message = "the store under " + h.paths.Snapshots + " holds no snapshot " + unknown + "; a snapshot id comes " +
-					"from a create, a dry run, a plan or intent read --out on this server"
+				f.Message = "the store under " + h.paths.Snapshots + " holds no snapshot " + unknown + "; a snapshot id names one " +
+					"this server filed when a create, a step, a dry run or a twin diff sent it its file"
 			}},
 		{name: "a file declaring another id", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
 			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_id"] = declared })

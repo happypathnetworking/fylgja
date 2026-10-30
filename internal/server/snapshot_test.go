@@ -292,7 +292,7 @@ func TestResolveSnapshotByID(t *testing.T) {
 	code, doc := exitOf(t, err)
 	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotUnknown, Step: findings.StepResolve,
 		Object: fixtureSnapshotID, Message: "the store under " + paths.Snapshots + " holds no snapshot " + fixtureSnapshotID +
-			"; a snapshot id comes from a create, a dry run, a plan or intent read --out on this server"}
+			"; a snapshot id names one this server filed when a create, a step, a dry run or a twin diff sent it its file"}
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
 		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
 	}

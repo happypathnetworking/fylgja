@@ -17,7 +17,17 @@ import pytest
 
 from fylgja_core import platform_package, push_jsonrpc
 from fylgja_core.credentials import Credential
-from fylgja_core.push import RULE_REFUSED, RULE_UNREACHABLE, Pushed, Refused, Unreachable, lines, push
+from fylgja_core.push import (
+    RULE_REFUSED,
+    RULE_UNAUTHORIZED,
+    RULE_UNREACHABLE,
+    Pushed,
+    Refused,
+    Unauthorized,
+    Unreachable,
+    lines,
+    push,
+)
 from fylgja_core.push_jsonrpc import REASON_NOT_GIVEN, REASON_VALIDATES, commands, reason, request, validate_commands
 
 PSP = Path(__file__).resolve().parents[2] / "psp"
@@ -214,8 +224,21 @@ def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
         (httpx.Response(200, text="not json"), REASON_NOT_GIVEN),
         (httpx.ConnectError("refused"), REASON_NOT_GIVEN),
         (httpx.DecodingError("garbled"), REASON_NOT_GIVEN),
+        (httpx.Response(401), REASON_NOT_GIVEN),
+        (httpx.Response(403), REASON_NOT_GIVEN),
     ],
-    ids=["a-reason", "validates", "cut-again", "no-message", "http-500", "no-answer", "transport", "garbled"],
+    ids=[
+        "a-reason",
+        "validates",
+        "cut-again",
+        "no-message",
+        "http-500",
+        "no-answer",
+        "transport",
+        "garbled",
+        "http-401",
+        "http-403",
+    ],
 )
 def test_a_cut_refusal_asks_again_exactly_once_with_commit_validate(second: Answer, found: str) -> None:
     handler, seen = _answers(_error(CUT), second)
@@ -241,12 +264,11 @@ def test_a_cut_refusal_with_the_budget_spent_asks_nothing_more(monkeypatch: pyte
         httpx.ConnectError("refused"),
         httpx.ReadTimeout("slow"),
         httpx.Response(503),
-        httpx.Response(401),
         httpx.Response(200, text="<html>"),
         httpx.DecodingError("garbled"),
         httpx.Response(200, json={"jsonrpc": "2.0", "id": 1}),
     ],
-    ids=["connect", "timeout", "http-503", "http-401", "not-json", "garbled", "no-result-no-error"],
+    ids=["connect", "timeout", "http-503", "not-json", "garbled", "no-result-no-error"],
 )
 def test_a_node_that_gives_no_answer_is_unreachable_never_refused(failure: Answer) -> None:
     handler, seen = _answers(failure)
@@ -256,6 +278,16 @@ def test_a_node_that_gives_no_answer_is_unreachable_never_refused(failure: Answe
     assert "10.0.0.5" in str(e.value) and len(seen) == 1
     if isinstance(failure, httpx.Response) and failure.status_code != 200:
         assert str(failure.status_code) in str(e.value)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_refused_login_is_unauthorized_never_unreachable(status: int) -> None:
+    handler, seen = _answers(httpx.Response(status))
+    with pytest.raises(Unauthorized) as e:
+        _push(handler)
+    assert e.value.rule == RULE_UNAUTHORIZED == "push.unauthorized" and not isinstance(e.value, Unreachable)
+    assert "10.0.0.5" in str(e.value) and str(status) in str(e.value) and "s3cret" not in str(e.value)
+    assert len(seen) == 1
 
 
 def test_the_log_names_the_address_and_the_command_count_and_never_the_password_or_the_config(

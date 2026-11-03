@@ -18,7 +18,16 @@ import pytest
 from fylgja_core import platform_package, push_eapi
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
-from fylgja_core.push import RULE_REFUSED, RULE_UNREACHABLE, Pushed, Refused, Unreachable, push
+from fylgja_core.push import (
+    RULE_REFUSED,
+    RULE_UNAUTHORIZED,
+    RULE_UNREACHABLE,
+    Pushed,
+    Refused,
+    Unauthorized,
+    Unreachable,
+    push,
+)
 from fylgja_core.push_eapi import abort_commands, commands, request, session
 
 PSP = Path(__file__).resolve().parents[2] / "psp"
@@ -151,6 +160,17 @@ def test_a_refusal_names_the_command_and_the_nodes_errors_then_aborts_the_sessio
     assert abort.method == "POST" and abort.url == first.url and abort.headers["authorization"] == AUTH
 
 
+@pytest.mark.parametrize(
+    "entry",
+    [{"errors": []}, {"output": "% Invalid input\n"}, {"errors": [7]}, {"errors": "x"}, "x"],
+    ids=["empty", "absent", "not-strings", "not-a-list", "not-an-object"],
+)
+def test_a_refused_command_the_node_gives_no_reason_for_says_so(entry: object) -> None:
+    handler, seen = _answers(_refused([{"output": ""}] * REFUSED_AT + [entry]), _result([{}, {}, {}]))
+    assert _push(handler) == Refused("command 9 ('no such command') refused: the node named no reason")
+    assert len(seen) == 2
+
+
 @pytest.mark.parametrize("data", [None, [], [{}] * (len(SENT) + 1), "x"], ids=["absent", "empty", "too-long", "string"])
 def test_a_refusal_naming_no_command_is_still_refused_and_aborted(data: object) -> None:
     handler, seen = _answers(_refused(data), _result([{}, {}, {}]))
@@ -167,8 +187,10 @@ def test_a_refusal_naming_no_command_is_still_refused_and_aborted(data: object) 
         httpx.Response(200, text="not json"),
         httpx.DecodingError("garbled"),
         _refused([{}, {}, {"errors": ["No session"]}]),
+        httpx.Response(401),
+        httpx.Response(403),
     ],
-    ids=["connect", "timeout", "http-500", "not-json", "garbled", "refused"],
+    ids=["connect", "timeout", "http-500", "not-json", "garbled", "refused", "http-401", "http-403"],
 )
 def test_an_abort_that_fails_is_logged_and_never_raised(abort: Answer, caplog: pytest.LogCaptureFixture) -> None:
     handler, seen = _answers(_refusal(), abort)
@@ -185,12 +207,11 @@ def test_an_abort_that_fails_is_logged_and_never_raised(abort: Answer, caplog: p
         httpx.ConnectError("refused"),
         httpx.ReadTimeout("slow"),
         httpx.Response(503),
-        httpx.Response(401),
         httpx.Response(200, text="<html>"),
         httpx.DecodingError("garbled"),
         httpx.Response(200, json={"jsonrpc": "2.0", "id": "1"}),
     ],
-    ids=["connect", "timeout", "http-503", "http-401", "not-json", "garbled", "no-result-no-error"],
+    ids=["connect", "timeout", "http-503", "not-json", "garbled", "no-result-no-error"],
 )
 def test_a_node_that_gives_no_answer_is_unreachable_never_refused_and_nothing_is_aborted(failure: Answer) -> None:
     handler, seen = _answers(failure)
@@ -200,6 +221,16 @@ def test_a_node_that_gives_no_answer_is_unreachable_never_refused_and_nothing_is
     assert "10.0.0.6" in str(e.value) and len(seen) == 1
     if isinstance(failure, httpx.Response) and failure.status_code != 200:
         assert str(failure.status_code) in str(e.value)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_refused_login_is_unauthorized_never_unreachable_and_nothing_is_aborted(status: int) -> None:
+    handler, seen = _answers(httpx.Response(status))
+    with pytest.raises(Unauthorized) as e:
+        _push(handler)
+    assert e.value.rule == RULE_UNAUTHORIZED == "push.unauthorized" and not isinstance(e.value, Unreachable)
+    assert "10.0.0.6" in str(e.value) and str(status) in str(e.value) and "s3cret" not in str(e.value)
+    assert len(seen) == 1
 
 
 def test_the_log_names_the_address_and_the_command_count_and_never_the_password_or_the_config(

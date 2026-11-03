@@ -21,7 +21,7 @@ import httpx
 
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
-from fylgja_core.push import Pushed, Refused, Unreachable, lines, post
+from fylgja_core.push import Pushed, Refused, Unauthorized, Unreachable, lines, post
 
 ENABLE = "enable"
 ROLLBACK = "rollback clean-config"
@@ -31,6 +31,7 @@ COMMIT = "commit"
 ABORT = "abort"
 
 NO_COMMAND = "the node refused the push and named no command Fylgja can read"
+NO_REASON = "the node named no reason"
 
 _log = logging.getLogger("fylgja.push")
 
@@ -95,7 +96,7 @@ def _refusal(error: object, cmds: list[str]) -> str:
     entry = data[i]
     errors = entry.get("errors") if isinstance(entry, dict) else None
     reasons = [e for e in errors if isinstance(e, str)] if isinstance(errors, list) else []
-    return f"command {i + 1} ({cmds[i]!r}) refused: {'; '.join(reasons)}"
+    return f"command {i + 1} ({cmds[i]!r}) refused: {'; '.join(reasons) or NO_REASON}"
 
 
 async def _abort(
@@ -104,7 +105,7 @@ async def _abort(
     """Abort the refused session, once and best effort: a failure is logged, never raised."""
     try:
         answer = await post(client, url, request(abort_commands(name)), credential, timeout_s=timeout_s)
-    except Unreachable as err:
+    except (Unreachable, Unauthorized) as err:
         _log.warning("%s: the refused session %s was not aborted: %s", address, name, err.message)
         return
     if answer.get("error") is not None:

@@ -29,7 +29,7 @@ import httpx
 
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
-from fylgja_core.push import Pushed, Refused, Unreachable, lines, post
+from fylgja_core.push import Pushed, Refused, Unauthorized, Unreachable, lines, post
 
 ENTER = "enter candidate private"
 LOAD = "load startup"
@@ -116,7 +116,7 @@ async def _ask_again(
         return REASON_NOT_GIVEN
     try:
         answer = await post(client, url, request(validate_commands()), credential, timeout_s=remaining_s)
-    except Unreachable as err:
+    except (Unreachable, Unauthorized) as err:
         _log.warning("%s: commit validate got no answer: %s", address, err.message)
         return REASON_NOT_GIVEN
     error = answer.get("error")

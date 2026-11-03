@@ -23,6 +23,7 @@ from fylgja_core.platform_package import PlatformPackage
 
 RULE_REFUSED = "push.refused"
 RULE_UNREACHABLE = "push.unreachable"
+RULE_UNAUTHORIZED = "push.unauthorized"
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,19 @@ class Unreachable(Exception):
         super().__init__(f"{RULE_UNREACHABLE}: {message}")
 
 
+class Unauthorized(Exception):
+    """The node refused the push's login with HTTP 401 or 403: pushing again would not help.
+
+    A failure only a new spec can clear. The message names the URL, never the credential.
+    """
+
+    rule = RULE_UNAUTHORIZED
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(f"{RULE_UNAUTHORIZED}: {message}")
+
+
 def lines(config: str) -> list[str]:
     """The configuration's non-empty lines, each sent as it is."""
     return [line for line in config.split("\n") if line.strip()]
@@ -68,7 +82,9 @@ async def push(
     attempt: int = 1,
     client: httpx.AsyncClient | None = None,
 ) -> Pushed | Refused:
-    """Replace the node's configuration with `config` by the package's delivery; `Unreachable` on no answer.
+    """Replace the node's configuration with `config` by the package's delivery.
+
+    Raises `Unreachable` when the node gives no answer, and `Unauthorized` when it refuses the login.
 
     `attempt` numbers this push among the loop's tries of it; `eapi` names its session by it.
     """
@@ -91,7 +107,7 @@ async def post(
     """POST one JSON-RPC request with basic auth; the answer, a JSON object with an `error` or a `result`.
 
     A request that fails (a transport failure, an answer that cannot be decoded), a status other
-    than 200 or a body that is no such answer is `Unreachable`.
+    than 200 or a body that is no such answer is `Unreachable`; HTTP 401 or 403 is `Unauthorized`.
     """
     auth = httpx.BasicAuth(credential.username, credential.password)
     try:
@@ -99,6 +115,8 @@ async def post(
     except httpx.RequestError as err:
         detail = f": {err}" if str(err) else ""
         raise Unreachable(f"{url} gave no answer: {type(err).__name__}{detail}") from err
+    if response.status_code in (401, 403):
+        raise Unauthorized(f"{url} answered HTTP {response.status_code}: the node refused the login")
     if response.status_code != 200:
         raise Unreachable(f"{url} answered HTTP {response.status_code}")
     try:

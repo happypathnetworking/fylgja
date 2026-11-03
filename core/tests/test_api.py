@@ -842,3 +842,21 @@ def test_the_servers_shutdown_ends_every_open_stream(served: httpx.Client, core:
         core.closing.set()
         list(run_events)  # each stream ends, and is not cut: a cut one raises
         assert list(twin) == []
+
+
+def test_the_thin_cli_creates_shows_and_destroys_a_twin_through_the_served_api(
+    served: httpx.Client, core: Core, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from fylgja_core import cli
+
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", str(served.base_url))
+    monkeypatch.setenv("FYLGJA_API_TOKEN", ALICE)
+    assert cli.main(["twin", "create", "t", "--blueprint", str(THREE_NODE)]) == 0
+    capsys.readouterr()
+    assert cli.main(["twin", "show", "t", "--json"]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert schemas.validator("twin-record-1").is_valid(shown) and ready(shown) == ("True", "twin.ready")
+    assert cli.main(["twin", "destroy", "t"]) == 0
+    out = capsys.readouterr().out
+    assert "twin t deleted" in out and ALICE not in out
+    assert core.store.list_twins() == [] and "t" not in core.driver.labs

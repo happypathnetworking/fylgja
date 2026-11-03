@@ -2,6 +2,13 @@
 
 [![ci](https://github.com/happypathnetworking/fylgja/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/happypathnetworking/fylgja/actions/workflows/ci.yml)
 
+> **A refactor of the prototype.** This repository rebuilds Fylgja from scratch, in Python,
+> on a clean break in formats ([D-001](design/decisions.md#d-001),
+> [D-002](design/decisions.md#d-002)). The prototype it refactors, with the frozen Go core
+> that serves as the reference implementation and the orchestrator that drives it, is
+> [happypathnetworking/fylgja-prototype](https://github.com/happypathnetworking/fylgja-prototype):
+> the archived repository the design documents refer to.
+
 Fylgja builds a **twin** of a network from its intent, so that a change can be rehearsed
 before it reaches production.
 
@@ -28,11 +35,14 @@ It is being built ([design/core.md](design/core.md)):
   - [clabernetes](https://github.com/clabernetes/clabernetes) on Kubernetes, for production.
   - Real hardware, later.
 - **Done so far:** the formats ([formats/](formats/README.md)), the platform and probe
-  packages, and the blueprint's id and validation.
+  packages, a model type and a loader for every format, and the compiler, held to the
+  facts the prototype's compiler produced; its rules are catalogued in
+  [docs/rules.md](docs/rules.md).
 
 The **orchestrator** reads [Infrahub](https://github.com/opsmill/infrahub) into blueprints and
-rehearses proposed changes. It lives in this project's archived repository, and moves here
-once this core runs twins ([D-005](design/decisions.md#d-005)).
+rehearses proposed changes. It lives in the
+[prototype repository](https://github.com/happypathnetworking/fylgja-prototype), and moves
+here once this core runs twins ([D-005](design/decisions.md#d-005)).
 
 ## Read in this order
 

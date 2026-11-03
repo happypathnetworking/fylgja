@@ -53,7 +53,9 @@ relative to them.
    events. `status.phase` and `status.run_id` let a restarted core resume (constitution VIII).
 8. **A compile that fails answers 422 with a problem document**, rule `bundle.rejected`, and
    every fault in `findings`. It is not a verdict document. A plan the driver refuses
-   answers 422 the same way, rule `plan.rejected` ([D-045](../design/decisions.md#d-045)).
+   answers 422 the same way, rule `plan.rejected` ([D-045](../design/decisions.md#d-045)),
+   and so does a dry run's refused admission, under the refusal's rule with its finding, since
+   a refusal leaves no deployment for a `Plan`.
 9. **Verify is synchronous with no wait.** A waiting verify happens only inside a step's
    run, and the step's wait budget is the server's setting.
 10. **A twin's name is a DNS-1123 label of at most 40 characters.** Run ids are ULIDs. A
@@ -75,7 +77,8 @@ relative to them.
 15. **A package validation's verdict has an empty `subject`** since phase 4: no id applies to
     a package the request carried, so findings-1's `subject` may hold none.
 16. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
-    builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff.
+    builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff,
+    verify, and a step (a new spec on a twin that exists).
 
 ## Settled by measurement (2026-10-30)
 

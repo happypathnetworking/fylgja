@@ -6,6 +6,13 @@ Fylgja versions, with no model layer of the framework's (D-039). Anything malfor
 conflicting is a problem document (`problems`) with a stable rule; a fault is logged with its
 traceback and answered `500 server.error`, naming nothing of it. The reconcile loop starts and
 stops with the application's lifespan, so it runs on the event loop that serves the API.
+
+A twin is written by compare-and-set (D-025): a client writes `spec` and asks for deletion, and
+the loop alone writes `status`. Every write names its principal in the audit log and in the run
+it queues, and kicks the loop. A route reads, checks and writes with no `await` between, on the
+event loop's one thread, where the loop makes its own writes too, so no write of the loop's lands
+between a route's check and its write; the compare-and-set still guards each one, and a write it
+loses is answered `412`, the run queued for it withdrawn.
 """
 
 from __future__ import annotations
@@ -14,6 +21,7 @@ import contextlib
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from dataclasses import replace
 from typing import Any
 
 from starlette.applications import Starlette
@@ -27,6 +35,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from fylgja_core import (
     blueprint,
     bundle,
+    clock,
     compiler,
     deployment,
     documents,
@@ -34,17 +43,21 @@ from fylgja_core import (
     logs,
     platform_package,
     probe_package,
+    reconcile,
     schemas,
     store,
     twin_record,
 )
+from fylgja_core import run as runs
 from fylgja_core.documents import Rejected
-from fylgja_core.driver import Driver
-from fylgja_core.findings import Subject, Verdict
+from fylgja_core.driver import Driver, Unplannable
+from fylgja_core.findings import Finding, Subject, Verdict
 from fylgja_core.packages import Loaded
 from fylgja_core.reconcile import Reconciler
+from fylgja_core.run import Event, Run
 from fylgja_core.server import problems
 from fylgja_core.server.auth import AuthMiddleware, Tokens
+from fylgja_core.twin_record import Spec, Status, TwinRecord
 
 # Rule ids of the problems the API answers; the catalogue is docs/rules.md.
 RULE_INVALID = "request.invalid"
@@ -52,7 +65,15 @@ RULE_NOT_FOUND = "request.not_found"
 RULE_METHOD = "request.method"
 RULE_BLUEPRINT_NOT_FOUND = "blueprint.not_found"
 RULE_BUNDLE_NOT_FOUND = "bundle.not_found"
-RULE_BUNDLE_REJECTED = "bundle.rejected"
+RULE_BUNDLE_REJECTED = reconcile.RULE_BUNDLE_REJECTED
+RULE_PLAN_REJECTED = reconcile.RULE_PLAN_REJECTED
+RULE_TWIN_NOT_FOUND = "twin.not_found"
+RULE_RUN_NOT_FOUND = "run.not_found"
+RULE_CONFLICT = "twin.conflict"
+RULE_EXISTS = "twin.exists"
+RULE_DRIVER_FIXED = "twin.driver.fixed"
+RULE_DRIVER_UNKNOWN = reconcile.RULE_DRIVER_UNKNOWN
+RULE_DELETING = reconcile.REASON_DELETING
 RULE_UNBUILT = "api.unbuilt"
 RULE_SERVER = "server.error"
 
@@ -100,6 +121,43 @@ def _held(request: Request, validator: Any, doc: Any, what: str) -> None:
         found = [findings.Finding(rule=RULE_INVALID, severity="error", object=documents.pointer(e.absolute_path) or "/",
                                   message=e.message) for e in errors]
         raise _refuse(request, 400, RULE_INVALID, f"The body is not {what}.", findings=found)
+
+
+def _flag(request: Request, key: str) -> bool | None:
+    """A boolean query parameter, None when absent, or `400 request.invalid`."""
+    raw = request.query_params.get(key)
+    if raw is None:
+        return None
+    if raw not in ("true", "false"):
+        raise _refuse(request, 400, RULE_INVALID, f"The query parameter {key} is true or false.")
+    return raw == "true"
+
+
+def _twin_name(request: Request, value: str, status: int) -> str:
+    """A twin name, or the answer for one that is none: `400 request.invalid` where the request
+    names a twin to make or a filter, `404 twin.not_found` where it names one to read."""
+    try:
+        return store.check_twin_name(value)
+    except ValueError:
+        if status == 400:
+            raise _refuse(request, 400, RULE_INVALID,
+                          "A twin name is a DNS-1123 label of at most 40 characters.") from None
+        raise _refuse(request, 404, RULE_TWIN_NOT_FOUND,
+                      "No twin has that name: a twin name is a DNS-1123 label of at most 40 characters.") from None
+
+
+def _etag(record: TwinRecord) -> str:
+    return f'"{record.revision}"'
+
+
+def _matches(if_match: str, record: TwinRecord) -> bool:
+    """Whether an If-Match header holds the record's ETag, or `*` (RFC 9110's strong comparison)."""
+    tags = [tag.strip() for tag in if_match.split(",")]
+    return "*" in tags or _etag(record) in tags
+
+
+def _record(record: TwinRecord, status: int = 200, headers: Mapping[str, str] | None = None) -> Response:
+    return _json(documents.encode(record), status, {"ETag": _etag(record), **(headers or {})})
 
 
 def _id(request: Request, key: str, rule: str, what: str) -> str:
@@ -223,6 +281,204 @@ class _Api:
                           findings=findings.order(problems.findings_of(found)))
         return _json(documents.encode(verdict))
 
+    # twins: reads
+
+    def _twin(self, request: Request, name: str) -> TwinRecord:
+        try:
+            return self.store.get_twin(name)
+        except store.NotFound:
+            raise _refuse(request, 404, RULE_TWIN_NOT_FOUND, f"No twin is named {name}.") from None
+
+    async def list_twins(self, request: Request) -> Response:
+        return _json({"twins": [documents.encode(record) for record in self.store.list_twins()]})
+
+    async def get_twin(self, request: Request) -> Response:
+        return _record(self._twin(request, _twin_name(request, request.path_params["name"], 404)))
+
+    # twins: writes
+
+    def _filed(self, request: Request, given: Mapping[str, Any]) -> None:
+        """`404` for a spec naming a blueprint or bundle the store does not hold."""
+        if "blueprint_id" in given:
+            self._blueprint(request, given["blueprint_id"])
+            return
+        try:
+            self.store.get_bundle(given["bundle_id"])
+        except store.NotFound:
+            raise _refuse(request, 404, RULE_BUNDLE_NOT_FOUND, f"No bundle {given['bundle_id']} is filed.") from None
+
+    def _spec(
+        self,
+        request: Request,
+        name: str,
+        given: Mapping[str, Any],
+        record: TwinRecord | None,
+        if_match: str | None,
+        create_only: bool,
+    ) -> Spec:
+        """The whole spec a partial one asks for, the server filling what is absent (the twin's
+        driver, or the configured one for a new twin; no restart), once the request's
+        preconditions hold of `record` and nothing about the twin refuses it."""
+        if record is None:
+            if if_match is not None:
+                raise _refuse(request, 412, RULE_CONFLICT, f"Twin {name} does not exist, so If-Match holds of nothing.")
+            driver = given.get("driver", self.default_driver)
+        else:
+            if create_only:
+                raise _refuse(request, 412, RULE_EXISTS, f"Twin {name} exists, and If-None-Match asks for a create.")
+            if if_match is not None and not _matches(if_match, record):
+                raise _refuse(request, 412, RULE_CONFLICT,
+                              f"Twin {name} is at revision {record.revision}, which If-Match does not name.")
+            if record.deletion_requested_at is not None:
+                raise _refuse(request, 409, RULE_DELETING, f"Twin {name} is being deleted.")
+            driver = given.get("driver", record.spec.driver)
+            if driver != record.spec.driver:
+                raise _refuse(request, 409, RULE_DRIVER_FIXED,
+                              f"Twin {name} runs on {record.spec.driver}, fixed when it was created.")
+        spec = Spec(blueprint_id=given.get("blueprint_id"), bundle_id=given.get("bundle_id"), driver=driver,
+                    allow_restart=given.get("allow_restart", False))
+        if record is not None and spec != record.spec:
+            raise _refuse(request, 501, RULE_UNBUILT, "A change of an existing twin's spec is a step, which phase 5 "
+                                                      "builds; phase 4 creates and deletes twins.")
+        return spec
+
+    async def put_twin(self, request: Request) -> Response:
+        name = _twin_name(request, request.path_params["name"], 400)
+        dry_run = _flag(request, "dry_run") is True
+        if_match, if_none_match = request.headers.get("if-match"), request.headers.get("if-none-match")
+        if if_none_match is not None and if_none_match.strip() != "*":
+            raise _refuse(request, 400, RULE_INVALID, 'If-None-Match takes "*" alone.')
+        doc = await _body(request)
+        _held(request, schemas.api_validator("TwinApply"), doc, "a TwinApply document")
+        given: dict[str, Any] = doc["spec"]
+        if "driver" in given and given["driver"] not in self.drivers:
+            raise _refuse(request, 400, RULE_DRIVER_UNKNOWN,
+                          f"This core serves no driver {given['driver']}; it serves {', '.join(sorted(self.drivers))}.")
+        self._filed(request, given)
+        try:
+            record: TwinRecord | None = self.store.get_twin(name)
+        except store.NotFound:
+            record = None
+        spec = self._spec(request, name, given, record, if_match, if_none_match is not None)
+        if dry_run:
+            return await self._dry_run(request, name, spec)
+        principal: str = request.state.principal
+        if record is not None:
+            logs.audit(principal, "put", name, revision=record.revision, changed=False)
+            return _record(record)
+        run = runs.queued(name, "create", principal)
+        self.store.create_run(run)  # before the record: a pass between the two takes this run and makes none
+        created = TwinRecord(name=name, revision=1, generation=1, spec=spec,
+                             status=Status(observed_generation=0, conditions=(), nodes=()))
+        try:
+            self.store.create_twin(created)
+        except store.Conflict:
+            self._withdraw(run, "another request created the twin first")
+            raise _refuse(request, 412, RULE_EXISTS, f"Twin {name} was created by another request meanwhile.") from None
+        self.reconciler.kick(name)
+        logs.audit(principal, "put", name, run=run.id, revision=1, generation=1)
+        return _record(created, 201, {"Location": f"/v1/twins/{name}"})
+
+    async def _dry_run(self, request: Request, name: str, spec: Spec) -> Response:
+        """The plan a create of `spec` would make, written nowhere. What refuses it is a `422`
+        problem: a compile (`bundle.rejected`), the driver's plan (`plan.rejected`), or admission,
+        under the refusal's own rule, since a refusal reserves nothing to plan with."""
+        try:
+            planned, verdict = await self.reconciler.dry_run(name, spec)
+        except compiler.Uncompilable as e:
+            raise _refuse(request, 422, RULE_BUNDLE_REJECTED, "The spec's blueprint does not compile.",
+                          findings=e.findings) from None
+        except Unplannable as e:
+            raise _refuse(request, 422, RULE_PLAN_REJECTED, f"The driver {spec.driver} has no plan for the bundle.",
+                          findings=e.findings) from None
+        if planned is None:
+            refusal = verdict.findings[0]
+            raise _refuse(request, 422, refusal.rule, refusal.message, findings=verdict.findings)
+        return _json({"deployment": documents.encode(planned), "verdict": documents.encode(verdict)})
+
+    async def delete_twin(self, request: Request) -> Response:
+        name = _twin_name(request, request.path_params["name"], 404)
+        if_match = request.headers.get("if-match")
+        principal: str = request.state.principal
+        record = self._twin(request, name)
+        if if_match is not None and not _matches(if_match, record):
+            raise _refuse(request, 412, RULE_CONFLICT,
+                          f"Twin {name} is at revision {record.revision}, which If-Match does not name.")
+        if record.deletion_requested_at is not None:  # asked already: its destroy run is the loop's
+            self.reconciler.kick(name)
+            logs.audit(principal, "delete", name, revision=record.revision, changed=False)
+            return _json(documents.encode(record), 202)
+        waiting = [r for r in self.store.list_runs(name) if r.operation == "destroy" and r.state == "queued"]
+        run = waiting[0] if waiting else runs.queued(name, "destroy", principal)
+        if not waiting:
+            self.store.create_run(run)  # before the record, as a create's is
+        asked = replace(record, deletion_requested_at=clock.now(), generation=record.generation + 1)
+        try:
+            written = self.store.update_twin(asked, record.revision)
+        except store.Conflict:
+            if not waiting:
+                self._withdraw(run, "the twin moved before its deletion was written")
+            raise _refuse(request, 412, RULE_CONFLICT, f"Twin {name} moved while its deletion was asked.") from None
+        self._cancel_in_flight(written)
+        self.reconciler.kick(name)
+        logs.audit(principal, "delete", name, run=run.id, revision=written.revision, generation=written.generation)
+        return _json(documents.encode(written), 202)
+
+    def _cancel_in_flight(self, record: TwinRecord) -> None:
+        """Mark the create run the record names `cancelling`, if it has not ended, so the loop
+        stops it where it is (a call on the runtime in flight included); a `Conflict` is read
+        again once. A create run the record does not name never started: the loop ends it."""
+        if record.status.run_id is None:
+            return
+        try:
+            run = self.store.get_run(record.status.run_id)
+        except store.NotFound:
+            return
+        for _ in range(2):
+            if run.operation != "create" or run.state not in ("queued", "running"):
+                return
+            try:
+                self.store.update_run(replace(run, state="cancelling"), run.state)
+                return
+            except store.Conflict:
+                run = self.store.get_run(run.id)
+
+    def _withdraw(self, run: Run, why: str) -> None:
+        """End a run this request queued and could not hand to the loop, as the loop ends a create
+        it cancels before it started: `failed` with `run.cancelled`, then its cancel events."""
+        finding = Finding(rule=reconcile.RULE_CANCELLED, severity="error", object=run.twin,
+                          message=f"The run was cancelled before it started: {why}.")
+        verdict = Verdict(operation=run.operation, status="failed", subject=Subject(twin=run.twin, run_id=run.id),
+                          findings=(finding,))
+        self.store.update_run(runs.ended(run, verdict), "queued")
+        self.store.append_event(run.id, Event(seq=0, at=clock.now(), phase="cancel", outcome="started"))
+        self.store.append_event(run.id, Event(seq=0, at=clock.now(), phase="cancel", outcome="done", duration_s=0.0,
+                                              rule=reconcile.RULE_CANCELLED))
+        _log.info("%s: run %s withdrawn: %s", run.twin, run.id, why, **logs.fields(twin=run.twin, run=run.id))
+
+    async def verify_twin(self, request: Request) -> Response:
+        raise _refuse(request, 501, RULE_UNBUILT, "Verify is built in phase 5.")
+
+    # runs
+
+    def _run(self, request: Request) -> Run:
+        run_id: str = request.path_params["run_id"]
+        try:
+            return self.store.get_run(store.check_run_id(run_id))
+        except ValueError:
+            raise _refuse(request, 404, RULE_RUN_NOT_FOUND, "No run has that id: a run id is a ULID.") from None
+        except store.NotFound:
+            raise _refuse(request, 404, RULE_RUN_NOT_FOUND, f"No run {run_id} is in the store.") from None
+
+    async def list_runs(self, request: Request) -> Response:
+        twin = request.query_params.get("twin")
+        if twin is not None:
+            _twin_name(request, twin, 400)
+        return _json({"runs": [documents.encode(run) for run in self.store.list_runs(twin)]})
+
+    async def get_run(self, request: Request) -> Response:
+        return _json(documents.encode(self._run(request)))
+
 
 def _by_method(handlers: Mapping[str, Endpoint]) -> Endpoint:
     """One endpoint for a path's methods, so the router's `405` names every method the path takes."""
@@ -243,6 +499,11 @@ def _routes(api: _Api) -> list[Route]:
         "/v1/bundles/{bundle_id}/diff/{to_bundle_id}": {"GET": api.diff_bundles},
         "/v1/packages:validate": {"POST": api.validate_package},
         "/v1/drivers": {"GET": api.list_drivers},
+        "/v1/twins": {"GET": api.list_twins},
+        "/v1/twins/{name}": {"GET": api.get_twin, "PUT": api.put_twin, "DELETE": api.delete_twin},
+        "/v1/twins/{name}/verifications": {"POST": api.verify_twin},
+        "/v1/runs": {"GET": api.list_runs},
+        "/v1/runs/{run_id}": {"GET": api.get_run},
     }
     return [Route(path, _by_method(handlers), methods=list(handlers)) for path, handlers in table.items()]
 

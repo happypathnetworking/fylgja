@@ -139,7 +139,7 @@ The findings the loop files itself, each an error:
 |---|---|---|
 | `blueprint.missing` | `rejected` | the spec's blueprint is not in the store; the object is its id |
 | `bundle.missing` | `rejected` | the spec's bundle is not in the store; the object is its id |
-| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up |
+| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up; the API files it too, for a run it queued and withdrew before it started, its request's write lost to another |
 | `twin.driver.unknown` | `rejected` | the spec names a driver this core does not serve; the object is the twin. The API refuses such a spec with a problem of the same rule, so the loop meets one only when a core was started without a driver its records name: every run of the twin in flight ends `rejected`, and nothing is torn down |
 
 The `Ready` condition's reasons:
@@ -164,12 +164,20 @@ with every problem a finding whose object is its pointer.
 | `auth.token.missing` | 401 | the request has no `Authorization: Bearer <token>` header (`GET /v1/version` needs none) |
 | `auth.token.unknown` | 401 | the bearer token is not one a principal holds; the message never carries it |
 | `auth.forbidden` | 403 | the principal is known and is not allowed the call |
-| `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a parameter of the wrong form |
+| `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a twin name to write or filter by that is no DNS-1123 label, a query parameter of the wrong form, an `If-None-Match` other than `*` |
 | `request.not_found` | 404 | API 1 has no such path |
 | `request.method` | 405 | the path does not take the method; the `Allow` header names those it takes |
 | `blueprint.not_found` | 404 | no blueprint is filed under the id, or the id is not one (64 lowercase hex digits) |
 | `bundle.not_found` | 404 | no bundle is filed under the id, or the id is not one |
+| `twin.not_found` | 404 | no twin has the name, or the name is not one a twin can have |
+| `run.not_found` | 404 | no run has the id, or the id is no ULID |
+| `twin.conflict` | 412 | `If-Match` names a revision the record has moved past, or a twin that does not exist; or the write lost to another, and the run queued for it was withdrawn (`run.cancelled`) |
+| `twin.exists` | 412 | `If-None-Match: *` asks to create a twin that exists, or a create lost to another, its run withdrawn |
+| `twin.driver.unknown` | 400 | the spec names a driver this core does not serve; the message names those it serves |
+| `twin.driver.fixed` | 409 | the spec names another driver than the one the twin was created on |
+| `twin.deleting` | 409 | the twin's deletion was asked, so its spec is not written again |
 | `bundle.rejected` | 422 | the blueprint compiles to no bundle; the findings give every reason |
 | `plan.rejected` | 422 | the bundle has no plan on the driver; the findings give every reason |
-| `api.unbuilt` | 501 | what this core's phase does not build yet: the bundle diff; the detail names the phase that builds it |
+| an `admission.*` rule | 422 | a dry run's admission refused the twin; the one finding is the refusal's ([admission refused](#findings-admission-refused)), since a refusal reserves nothing to plan with |
+| `api.unbuilt` | 501 | what this core's phase does not build yet: the bundle diff, verify, and a step (a new spec on a twin that exists); the detail names the phase that builds it |
 | `server.error` | 500 | the server failed; the answer names nothing of the fault, which its log holds with the traceback |

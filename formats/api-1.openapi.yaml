@@ -298,7 +298,8 @@ paths:
         live, restarts or recreates nodes as the driver's plan says, refusing a restart without allow_restart.
         Writing the spec the twin already has changes nothing and answers 200. With dry_run=true it writes
         nothing: it compiles the blueprint, runs admission and the driver's pure plan, and answers what would
-        happen. Admission refusal is the run's verdict, status rejected, and also shown by a dry run.
+        happen. A refused admission is the run's verdict, status rejected; a dry run answers it as a 422
+        problem whose rule is the refusal's, since a refusal reserves nothing to plan with.
       parameters:
         - name: If-Match
           in: header
@@ -313,7 +314,9 @@ paths:
         - name: dry_run
           in: query
           required: false
-          description: Plan only; nothing is written and no run starts.
+          description: >-
+            Plan only; nothing is written and no run starts. A blueprint that does not compile, a bundle
+            the driver cannot plan and a refused admission each answer 422 (Unprocessable).
           schema: { type: boolean, default: false }
       requestBody:
         required: true
@@ -347,6 +350,7 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         "422": { $ref: "#/components/responses/Unprocessable" }
+        "501": { $ref: "#/components/responses/NotBuilt" }
     delete:
       tags: [twins]
       operationId: deleteTwin
@@ -363,7 +367,10 @@ paths:
           schema: { type: string }
       responses:
         "202":
-          description: Deletion requested; the record, its Ready condition False.
+          description: >-
+            Deletion requested; the record as written, deletion_requested_at set and generation
+            incremented. The loop sets Ready False (twin.deleting) as it begins the teardown, since the
+            API never writes status. Asked again, the record as it stands, with nothing written.
           content:
             application/json:
               schema: { $ref: "twin-record-1.schema.json" }
@@ -390,6 +397,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "501": { $ref: "#/components/responses/NotBuilt" }
 
   /v1/runs:
     get:
@@ -416,6 +424,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Run" }
                     description: Newest first; the CLI's run list and the orchestrator read it.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -567,19 +576,25 @@ components:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     PreconditionFailed:
-      description: The record moved since the client read it, or the twin exists under If-None-Match (twin.conflict, twin.exists).
+      description: >-
+        The record moved since the client read it, or If-Match names a twin that does not exist
+        (twin.conflict); the twin exists under If-None-Match (twin.exists).
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     Unprocessable:
-      description: Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected), every fault in findings.
+      description: >-
+        Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected),
+        every fault in findings; or, for a dry run, refused admission, under the refusal's rule
+        (admission.capacity, say) with its finding.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     NotBuilt:
       description: >-
-        What this core's phase does not build yet (api.unbuilt): a route, or a change it would make; the
-        detail names the phase that builds it. Clients show it and do not retry.
+        What this core's phase does not build yet (api.unbuilt): a route (the bundle diff, verify) or a
+        change (a step, a new spec on an existing twin); the detail names the phase that builds it.
+        Clients show it and do not retry.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
@@ -684,7 +699,9 @@ components:
           description: What applying the spec would deploy, with its fidelity; clients show it.
         verdict:
           $ref: "findings-1.schema.json"
-          description: Admission's and the step comparison's findings (operation plan); rejected when admission refuses or a step would need allow_restart.
+          description: >-
+            The step comparison's findings (operation plan); rejected when a step would need allow_restart. A
+            refused admission is a 422 problem instead, since it leaves no deployment to answer.
 
     WatchEvent:
       type: object

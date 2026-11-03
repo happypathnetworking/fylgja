@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import hashlib
 import io
 import json
 import logging
@@ -35,7 +36,7 @@ from fylgja_core.local_store import LocalStore
 from fylgja_core.reconcile import Reconciler
 from fylgja_core.run import Run, queued
 from fylgja_core.run import State as RunState
-from fylgja_core.store import Change, NotFound
+from fylgja_core.store import Change, Conflict, NotFound
 from fylgja_core.twin_record import Condition, Spec, Status, TwinRecord
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -781,9 +782,10 @@ def test_deleting_a_ready_twin_destroys_it_and_deletes_its_record(store: LocalSt
     new_twin(store, file_blueprint(store))
     driver = FakeDriver()
 
-    async def scenario() -> list[Change]:
+    async def scenario() -> tuple[list[Change], str | None]:
         r = make(store, driver)
         await r.reconcile("t")
+        deployment_id = store.get_twin("t").status.deployment_id
         with store.subscribe() as watch:
             request_deletion(store)
             await r.reconcile("t")
@@ -791,9 +793,9 @@ def test_deleting_a_ready_twin_destroys_it_and_deletes_its_record(store: LocalSt
             changes = []
             while not watch.queue.empty():
                 changes.append(watch.queue.get_nowait())
-        return changes
+        return changes, deployment_id
 
-    changes = asyncio.run(scenario())
+    changes, deployment_id = asyncio.run(scenario())
     with pytest.raises(NotFound):
         store.get_twin("t")
     assert driver.calls.count(("destroy", "t")) == 1 and "t" not in driver.labs
@@ -801,6 +803,7 @@ def test_deleting_a_ready_twin_destroys_it_and_deletes_its_record(store: LocalSt
     assert destroy.state == "ended" and destroy.principal == "bob"
     assert destroy.verdict is not None and destroy.verdict.status == "ok" and destroy.verdict.operation == "destroy"
     assert destroy.verdict.subject.twin == "t" and destroy.verdict.subject.run_id == destroy.id
+    assert deployment_id is not None and destroy.verdict.subject.deployment_id == deployment_id  # what it tore down
     assert seen(store, destroy.id) == [("destroy", "started", None), ("destroy", "done", None)]
     create = the_run(store, "create")
     assert create.verdict is not None and create.verdict.status == "ok"  # the create had ended: nothing cancelled
@@ -1093,7 +1096,11 @@ def test_a_dry_run_plans_against_the_live_reservations_and_writes_nothing(store:
     r = make(store, driver)
     asyncio.run(r.reconcile("held"))  # holds 10.0.1.0/24
     root = store.root
-    before = {p.relative_to(root) for p in root.rglob("*")}
+
+    def contents() -> dict[Path, str]:
+        return {p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob("*") if p.is_file()}
+
+    before = contents()
     revision = store.get_twin("held").revision
 
     planned, verdict = asyncio.run(r.dry_run("t", spec_of(blueprint_id)))
@@ -1103,7 +1110,7 @@ def test_a_dry_run_plans_against_the_live_reservations_and_writes_nothing(store:
     assert verdict.operation == "plan" and verdict.status == "ok" and verdict.findings == ()
     assert verdict.subject == Subject(twin="t", blueprint_id=blueprint_id, bundle_id=planned.bundle_id,
                                       deployment_id=planned.id)
-    assert {p.relative_to(root) for p in root.rglob("*")} == before  # no record, run, bundle or deployment
+    assert contents() == before  # no record, run, bundle or deployment written, and none changed
     assert store.get_twin("held").revision == revision
 
 
@@ -1214,6 +1221,9 @@ def test_no_credential_reaches_a_log_line_or_the_store(store: LocalStore) -> Non
     assert all(PASSWORD.encode() not in path.read_bytes() for path in store.root.rglob("*") if path.is_file())
 
 
+# The final review's fixes.
+
+
 def test_a_create_cancelled_as_it_ends_never_ends_ok_when_its_cleanup_must_wait(store: LocalStore) -> None:
     new_twin(store, file_blueprint(store))
     driver = FakeDriver()
@@ -1235,3 +1245,98 @@ def test_a_create_cancelled_as_it_ends_never_ends_ok_when_its_cleanup_must_wait(
                                    ("cancel", "started", None), ("cancel", "done", None)]
     assert_cleaned_up(store.get_twin("t"), "run.cancelled")
     assert "t" not in driver.labs
+
+
+def test_start_twice_is_refused_and_a_stopped_reconciler_starts_on_another_loop(
+    store: LocalStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    blueprint_id = file_blueprint(store)
+    new_twin(store, blueprint_id, "a")
+    driver = FakeDriver()
+    r = make(store, driver)
+    with pytest.raises(RuntimeError):
+        r.kick("a")  # before start, and with no loop running
+
+    async def first() -> None:
+        await r.start()
+        with pytest.raises(RuntimeError):
+            await r.start()
+        await until(lambda: is_ready(store, "a"))
+        await r.stop()
+
+    async def second() -> None:
+        await r.start()  # its workers wait on a queue of this loop, not the first's
+        await until(lambda: is_ready(store, "b"))
+        new_twin(store, blueprint_id, "c")
+        await asyncio.to_thread(r.kick, "c")  # a client's write, from another thread
+        await until(lambda: is_ready(store, "c"))
+        await r.stop()
+
+    asyncio.run(first())
+    new_twin(store, blueprint_id, "b")
+    asyncio.run(second())
+    # No worker failed to take a name: the queue it waits on is its own loop's.
+    assert [r.getMessage() for r in caplog.records if r.name == "fylgja.queue"] == []
+
+
+class FlakyStore(LocalStore):
+    """A local store whose next `get_twin` fails, as a disk would."""
+
+    fail_get = False
+
+    def get_twin(self, name: str) -> TwinRecord:
+        if self.fail_get:
+            self.fail_get = False
+            raise OSError("the disk is gone")
+        return super().get_twin(name)
+
+
+def test_a_transient_failure_outside_a_run_logs_no_run(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    s = FlakyStore.open(tmp_path / "store")
+    assert isinstance(s, FlakyStore)
+    try:
+        new_twin(s, file_blueprint(s))
+        s.fail_get = True
+        r = make(s, FakeDriver())
+        asyncio.run(r.reconcile("t"))
+    finally:
+        s.close()
+    (line,) = [record for record in caplog.records if record.name == "fylgja.reconcile"]
+    assert getattr(line, "fields", None) == {"twin": "t", "error": "OSError", "retry_s": 1.0}
+    assert r.backoff == {"t": 1.0}
+
+
+class LosingStore(LocalStore):
+    """A local store whose next update of the run `lose` loses its compare-and-set, as one the API
+    wrote meanwhile would."""
+
+    lose: str | None = None
+
+    def update_run(self, run: Run, expected_state: RunState) -> None:
+        if run.id == self.lose:
+            self.lose = None
+            raise Conflict(f"run {run.id} moved")
+        super().update_run(run, expected_state)
+
+
+def test_an_unstarted_run_whose_end_is_lost_is_ended_once_with_one_pair_of_events(tmp_path: Path) -> None:
+    s = LosingStore.open(tmp_path / "store")
+    assert isinstance(s, LosingStore)
+    try:
+        new_twin(s, file_blueprint(s))
+        driver = FakeDriver()
+        r = make(s, driver)
+        asyncio.run(r.reconcile("t"))
+        stray = queued("t", "create", "alice")
+        s.create_run(stray)
+        request_deletion(s, mark=False)
+        s.lose = stray.id
+        asyncio.run(r.reconcile("t"))  # the stray's end is lost: transient
+        assert s.events(stray.id) == [] and s.get_run(stray.id).state == "queued" and r.backoff == {"t": 1.0}
+        asyncio.run(r.reconcile("t"))
+        assert_cancelled(s.get_run(stray.id))
+        assert seen(s, stray.id) == [("cancel", "started", None), ("cancel", "done", None)]
+        with pytest.raises(NotFound):
+            s.get_twin("t")
+    finally:
+        s.close()

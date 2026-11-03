@@ -198,7 +198,14 @@ class _Pass:
 class Reconciler:
     """The loop over a store: the passes, the queue and workers they are scheduled by, the
     resync, and each twin's backoff. `cancel_poll_s` is how often a call on the runtime looks
-    for its run's cancellation."""
+    for its run's cancellation.
+
+    `start` runs it on the event loop that calls it: the queue, the admission lock and the
+    workers are made there, since asyncio's primitives bind to the first loop that waits on
+    them, so a reconciler stopped on one loop starts cleanly on another. `start` twice without
+    a `stop` is `RuntimeError`. `kick` may be called from any thread once started; before
+    `start`, only from a running loop. `reconcile` may be called directly, without `start`, on
+    one loop at a time."""
 
     def __init__(
         self,
@@ -231,12 +238,19 @@ class Reconciler:
         self._admission = asyncio.Lock()
         self._workers: Workers | None = None
         self._resync: asyncio.Task[None] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     # The schedule.
 
     async def start(self) -> None:
         """Queue every twin in the store, then start the workers and the resync, which queues
-        every twin again each `resync_s`, so a missed trigger is only late (D-023)."""
+        every twin again each `resync_s`, so a missed trigger is only late (D-023). A new queue
+        and admission lock are made on this loop; `RuntimeError` when already started."""
+        if self._workers is not None:
+            raise RuntimeError("the reconciler is started: stop it first")
+        self._loop = asyncio.get_running_loop()
+        self.queue = WorkQueue()
+        self._admission = asyncio.Lock()
         for record in self.store.list_twins():
             self.queue.put(record.name)
         self._workers = Workers(self.queue, self.reconcile, self.workers)
@@ -252,10 +266,21 @@ class Reconciler:
         if self._workers is not None:
             await self._workers.stop()
             self._workers = None
+        self._loop = None
 
     def kick(self, name: str) -> None:
-        """Queue the twin `name` at once: a client wrote its record."""
-        self.queue.put(name)
+        """Queue the twin `name` at once: a client wrote its record. From another thread (or
+        loop) than the one the reconciler runs on, the queue is handed the name on its own loop."""
+        try:
+            running: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if self._loop is not None and running is not self._loop:
+            self._loop.call_soon_threadsafe(self.queue.put, name)
+        elif running is None:
+            raise RuntimeError("kick before start needs a running event loop")
+        else:
+            self.queue.put(name)
 
     async def _resync_every(self) -> None:
         while True:
@@ -286,8 +311,9 @@ class Reconciler:
     def _retry(self, name: str, error: Exception, run_id: str | None) -> None:
         delay = next_backoff(self.backoff.get(name))
         self.backoff[name] = delay
+        known: dict[str, Any] = {"twin": name} if run_id is None else {"twin": name, "run": run_id}
         _log.warning("%s: %s: %s; trying again in %gs", name, type(error).__name__, error, delay,
-                     **logs.fields(twin=name, run=run_id, error=type(error).__name__, retry_s=delay))
+                     **logs.fields(**known, error=type(error).__name__, retry_s=delay))
         self.queue.put(name, delay_s=delay)
 
     async def _pass(self, name: str) -> None:
@@ -359,6 +385,7 @@ class Reconciler:
                 self._cancel_unstarted(record, stray, driver)
         record, run = self._take_run(record, "destroy", REASON_DELETING)
         p = _Pass(record=record, run=run, driver=driver)
+        subject = self._subject(p.record, p.run)  # before `destroyed` clears the deployment it names
         try:
             if p.record.status.phase != "destroyed":
                 async with self._step(p, "destroy"):
@@ -367,7 +394,7 @@ class Reconciler:
                         await driver.destroy(deployment, files, self.platforms, self.probe_packages)
                     p.record = self._write(p.record, p.run, phase="destroyed", nodes=(), deployment_id=None,
                                            allocation=None)
-            await self._end(p, "ok", (), None)
+            await self._end(p, "ok", (), None, subject)
         except TRANSIENT as e:
             raise _Retry(e, p.run.id) from e
 
@@ -503,24 +530,30 @@ class Reconciler:
     def _cancel_unstarted(self, record: TwinRecord, run: Run, driver: Driver) -> None:
         """A create run of a twin being deleted that never started: its cancel events and end;
         it built nothing, so it cleans nothing up."""
-        p = _Pass(record=record, run=run, driver=driver)
-        self._event(p, "cancel", "started")
-        self._event(p, "cancel", "done", duration_s=0.0, rule=RULE_CANCELLED)
         finding = Finding(rule=RULE_CANCELLED, severity="error", object=record.name,
                           message="The run was cancelled before it started: the twin's deletion was asked.")
         verdict = Verdict(operation=run.operation, status="failed", subject=Subject(twin=record.name, run_id=run.id),
                           findings=(finding,))
-        self.store.update_run(runs.ended(run, verdict), run.state)
+        self.store.update_run(runs.ended(run, verdict), run.state)  # first: a lost update repeats no events
+        p = _Pass(record=record, run=run, driver=driver)
+        self._event(p, "cancel", "started")
+        self._event(p, "cancel", "done", duration_s=0.0, rule=RULE_CANCELLED)
 
     async def _end(
-        self, p: _Pass, status: Literal["ok", "rejected", "failed"], found: tuple[Finding, ...], reason: str | None
+        self,
+        p: _Pass,
+        status: Literal["ok", "rejected", "failed"],
+        found: tuple[Finding, ...],
+        reason: str | None,
+        subject: Subject | None = None,
     ) -> None:
         """End the run with its verdict, then settle the record. A create whose run is marked
         cancelling (when it was taken, or by the API meanwhile) is decided again: cancelled, never
-        `ok`. A destroy completes all the same."""
+        `ok`. A destroy completes all the same. `subject` is the verdict's, when the record no
+        longer names what the run acted on."""
         if p.run.operation == "create" and p.run.state == "cancelling":
             raise _Cancelled
-        verdict = Verdict(operation=p.run.operation, status=status, subject=self._subject(p.record, p.run),
+        verdict = Verdict(operation=p.run.operation, status=status, subject=subject or self._subject(p.record, p.run),
                           findings=found)
         try:
             ended = runs.ended(p.run, verdict)

@@ -104,3 +104,16 @@ ends the run `rejected`; that arrives with the loop.
 | `push.unreachable` | the push | the node gave the push no answer: a refused connection, a TLS failure, an answer that cannot be decoded, an HTTP status other than 200, 401 and 403, or a body that is no JSON-RPC answer. Transient: the push is tried again. The message names the URL, never a body |
 | `push.timeout` | the push | the node did not answer one push request within the package's `push.timeout_s`. Transient, as `push.unreachable`: the push is tried again. The message names the URL and the budget, never a body |
 | `push.unauthorized` | the push | the node answered the push HTTP 401 or 403: the credential is refused, and pushing again would not help, so only a new spec clears it ([D-023](../design/decisions.md#d-023)). The message names the URL, never the credential |
+
+## Problems: the API
+
+Answered as problem documents by the server. The rest of the API's rules arrive with its routes.
+
+| Rule | Status | Means |
+|---|---|---|
+| `auth.token.missing` | 401 | the request has no `Authorization: Bearer <token>` header (`GET /v1/version` needs none) |
+| `auth.token.unknown` | 401 | the bearer token is not one a principal holds; the message never carries it |
+| `auth.forbidden` | 403 | the principal is known and is not allowed the call |
+| `request.invalid` | 400 | the request is malformed: a body that is not JSON, a parameter of the wrong form |
+| `bundle.rejected` | 422 | the blueprint compiles to no bundle; the findings give every reason |
+| `plan.rejected` | 422 | the bundle has no plan on the driver; the findings give every reason |

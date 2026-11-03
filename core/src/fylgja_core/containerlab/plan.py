@@ -1,0 +1,184 @@
+"""The local driver's plan: a bundle bound to a named twin as a containerlab lab (D-011,
+D-015, D-043, D-044).
+
+`plan` is the seam's one pure call (Constitution V and XIII): no I/O, clock or environment,
+which a test enforces through its imports. It renders `topology.clab.yml`: the lab named
+exactly the twin's name on its own management network, `clab-<twin>`, with the allocation's
+subnet; every container labelled as the twin's; a node per device with its package's kind,
+image and link mode, and no startup-config, bootstrap or pull option, since the kind's
+baseline is enough; a linux node per probe host, which sets its address and its route to the
+far host when it starts; and the links, the intent's and then the probes'. An endpoint is the
+production name where the kind has aliases and the package's rename of it where the kind has
+none (D-015). The deployment lists the file, and its id hashes the driver, the twin, the
+bundle id and the file list (D-044).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import math
+import shlex
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+import yaml
+
+from fylgja_core import blueprint, bundle, deployment, mapping
+from fylgja_core.containerlab import CAPABILITIES, NAME
+from fylgja_core.driver import Allocation, Planned
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.probe_package import ProbePackage
+
+TOPOLOGY = "topology.clab.yml"
+
+
+def plan(
+    manifest: bundle.Manifest,
+    bundle_id: str,
+    platforms: Mapping[str, PlatformPackage],
+    probe_packages: Mapping[str, ProbePackage],
+    twin: str,
+    allocation: Allocation,
+) -> Planned:
+    """The deployment of the bundle `bundle_id`, whose manifest is `manifest`, as the twin
+    `twin` on the allocation `admit` reserved for it, and the files the deployment lists."""
+    files = {TOPOLOGY: _topology(manifest, platforms, probe_packages, twin, allocation)}
+    listed = tuple(deployment.File(path=path, sha256=hashlib.sha256(files[path]).hexdigest()) for path in sorted(files))
+    omitted = [
+        deployment.Omitted(device=row.device, interface=row.interface, omission=row.omission)
+        for row in manifest.mapping
+        if row.omission is not None
+    ]
+    fidelity = deployment.Fidelity(
+        forwarding=CAPABILITIES.forwarding,
+        approximations=_approximations(manifest, platforms, probe_packages),
+        omitted=tuple(sorted(omitted, key=lambda o: (o.device, o.interface))),
+        synthesized=tuple(sorted(host for probe in manifest.probes for host, _, _ in _hosts(probe))),
+        lossy=deployment.Lossy(mappings=0, shared_ports=0),
+    )
+    planned = deployment.Deployment(
+        id=deployment_id(NAME, twin, bundle_id, listed),
+        driver=NAME,
+        twin=twin,
+        allocation=dict(allocation),
+        bundle_id=bundle_id,
+        files=listed,
+        demand=demand(manifest, platforms, probe_packages),
+        fidelity=fidelity,
+    )
+    return Planned(deployment=planned, files=files)
+
+
+def endpoint_port(package: PlatformPackage, row: bundle.Row) -> str:
+    """The topology's name for the port of a data row the twin represents: the production
+    name where the kind has aliases, else the rename of the row's rule rendered with what the
+    rule's match captures of the production name (D-015)."""
+    if package.runtime.containerlab.alias:
+        return row.interface
+    rule = next((r for r in package.interfaces.rules if r.name == row.rule), None)
+    rename = next((r for r in package.runtime.containerlab.rename or () if r.rule == row.rule), None)
+    captures = None if rule is None or rule.match is None else mapping.match(rule.match, row.interface)
+    if rename is None or captures is None:
+        raise ValueError(f"{row.device}:{row.interface} is no data row of a rule the package renames: {row.rule!r}")
+    return mapping.render(rename.port, captures)
+
+
+def demand(
+    manifest: bundle.Manifest, platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+) -> deployment.Demand:
+    """What the deployment needs: a node per device and per probe host, and the sum of their
+    packages' per-node resources."""
+    devices = [platforms[node.platform].runtime.containerlab.resources for node in manifest.nodes]
+    hosts = [probe_packages[probe.format].runtime.containerlab.resources for probe in manifest.probes for _ in "ab"]
+    resources = [(r.cpu, r.memory_mb) for r in devices] + [(r.cpu, r.memory_mb) for r in hosts]
+    return deployment.Demand(
+        nodes=len(resources), cpu=math.fsum(cpu for cpu, _ in resources), memory_mb=sum(mb for _, mb in resources)
+    )
+
+
+def deployment_id(driver_name: str, twin: str, bundle_id: str, files: Sequence[deployment.File]) -> str:
+    """The deployment's id: the SHA-256 of the RFC 8785 bytes of its driver, twin, bundle id
+    and files, the files sorted by path (D-044)."""
+    listed = [{"path": f.path, "sha256": f.sha256} for f in sorted(files, key=lambda f: f.path)]
+    body = {"driver": driver_name, "twin": twin, "bundle_id": bundle_id, "files": listed}
+    return hashlib.sha256(blueprint.canonical(body)).hexdigest()
+
+
+def _topology(
+    manifest: bundle.Manifest,
+    platforms: Mapping[str, PlatformPackage],
+    probe_packages: Mapping[str, ProbePackage],
+    twin: str,
+    allocation: Allocation,
+) -> bytes:
+    package_of = {node.name: platforms[node.platform] for node in manifest.nodes}
+    rows = {(row.device, row.interface): row for row in manifest.mapping}
+
+    def endpoint(device: str, interface: str) -> str:
+        return f"{device}:{endpoint_port(package_of[device], rows[(device, interface)])}"
+
+    nodes: dict[str, Any] = {}
+    for node in manifest.nodes:
+        containerlab = package_of[node.name].runtime.containerlab
+        nodes[node.name] = {
+            "kind": containerlab.kind,
+            "image": containerlab.image.ref,
+            "link-apply-mode": containerlab.link_apply_mode,
+        }
+    links = [
+        {"endpoints": [endpoint(link.a.device, link.a.interface), endpoint(link.b.device, link.b.interface)]}
+        for link in manifest.links
+    ]
+    for probe in manifest.probes:
+        package = probe_packages[probe.format]
+        for host, near, far in _hosts(probe):
+            values = {
+                "address": near.address,
+                "interface": package.host.interface,
+                "far_address": far.address.partition("/")[0],
+                "gateway": near.gateway,
+            }
+            nodes[host] = {
+                "kind": "linux",
+                "image": package.runtime.containerlab.image.ref,
+                "exec": [_command(package.host.address, values), _command(package.host.route, values)],
+            }
+            links.append({"endpoints": [f"{host}:{package.host.interface}", endpoint(near.device, near.interface)]})
+    doc = {
+        "name": twin,
+        "mgmt": {"network": f"clab-{twin}", "ipv4-subnet": allocation["mgmt_subnet"]},
+        "topology": {"defaults": {"labels": {"fylgja.twin": twin}}, "nodes": nodes, "links": links},
+    }
+    return yaml.safe_dump(doc, sort_keys=False).encode("utf-8")
+
+
+def _hosts(
+    probe: blueprint.Probe,
+) -> tuple[tuple[str, blueprint.ProbeEndpoint, blueprint.ProbeEndpoint], ...]:
+    """The probe's two hosts, a then b, each with its own endpoint and the far one."""
+    a, b = probe.endpoints
+    return (f"{probe.name}-a", a, b), (f"{probe.name}-b", b, a)
+
+
+def _command(words: Sequence[str], values: Mapping[str, str]) -> str:
+    """A probe package's command with its placeholders rendered, as one shell line for `exec`."""
+    return shlex.join(mapping.render(word, values) for word in words)
+
+
+def _approximations(
+    manifest: bundle.Manifest, platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+) -> tuple[deployment.Approximation, ...]:
+    """As the compiler builds them, so plan and compile agree: every used platform's, in
+    platform order, then every used probe format's."""
+    return tuple(
+        [
+            deployment.Approximation(package=platform, text=text)
+            for platform in sorted({node.platform for node in manifest.nodes})
+            for text in platforms[platform].fidelity.approximations
+        ]
+        + [
+            deployment.Approximation(package=probe_format, text=text)
+            for probe_format in sorted({probe.format for probe in manifest.probes})
+            for text in probe_packages[probe_format].fidelity.approximations
+        ]
+    )

@@ -156,6 +156,10 @@ no aliases (cEOS), that includes a *rename rule* from production names to the ki
 re-cabled with no restart, or `restart`. Set by the platform package, written on each node
 at create, and never changed on a running twin.
 
+**Lossy** — A rename that drops a placeholder of its rule's match, so that two production
+names can land on one runtime port. The plan counts lossy mappings and shared ports per
+deployment, and omits an uncabled interface whose port a cabled one holds (`shared`).
+
 **Mapping row** — One row of a bundle's mapping per blueprint interface: the device, the
 production interface name, the rule that matched, the *disposition* (`cabled`, `uncabled`,
 `management` or `omitted`), the node's own port name, and an omission's reason.

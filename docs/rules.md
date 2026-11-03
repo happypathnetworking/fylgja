@@ -64,9 +64,11 @@ endpoint as `probe/a` or `probe/b`.
 ## Findings: a plan refused
 
 Each is an error, and every fault is reported in one pass. A driver's plan with one is
-refused (`Unplannable`): the API answers it as the plan's verdict on a dry run, and as a
-rejected run's verdict otherwise; both arrive with the API. The object is an interface as
-`device:interface`.
+refused (`Unplannable`): the API answers a dry run with a 422 problem document, rule
+`plan.rejected`, carrying these findings, as it does for `bundle.rejected` (API 1's `Plan`
+shape requires a deployment, so a refusal cannot be a plan), and the loop ends such a run
+`rejected`; that rule arrives with the API, like `bundle.rejected`. The object is an interface
+as `device:interface`.
 
 | Rule | Means |
 |---|---|

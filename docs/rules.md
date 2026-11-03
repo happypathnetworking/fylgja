@@ -113,9 +113,12 @@ the compile, admission or the plan refuses (nothing was built), or `failed` when
 does not become ready, the push is refused or unauthorized, a credential is missing, or the
 run is cancelled; either way the loop cleans up and waits for the spec to be written again.
 Its verdict holds the findings, and the twin's `Ready` condition carries a **reason**, a
-rule id too, which is also the `rule` of the run's ending event (the failing phase's, or
-`cancel done`). A transient failure (the driver's runtime failure, an unreachable node, the
-store) ends no run: the loop tries again after a backoff.
+rule id too, which is also the `rule` of the run's ending event (the failing phase's
+`failed` or `timed_out`, a compile or plan refusal's being `bundle.rejected` or
+`plan.rejected`; or `cancel done`, carrying `run.cancelled`). A transient failure (the
+driver's runtime failure, an unreachable node, the store) ends no run: its phase's `failed`
+event carries the error's rule when it has one, no finding is filed, and the phase's next
+`started` is the loop's try again after a backoff.
 
 A cancelled create stops where it is, stopping a call on the runtime in flight, tears down
 what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels a create in
@@ -164,7 +167,7 @@ with every problem a finding whose object is its pointer.
 | `auth.token.missing` | 401 | the request has no `Authorization: Bearer <token>` header (`GET /v1/version` needs none) |
 | `auth.token.unknown` | 401 | the bearer token is not one a principal holds; the message never carries it |
 | `auth.forbidden` | 403 | the principal is known and is not allowed the call |
-| `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a twin name to write or filter by that is no DNS-1123 label, a query parameter of the wrong form, an `If-None-Match` other than `*` |
+| `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a twin name to write or filter by that is no DNS-1123 label, a query parameter of the wrong form (`watch` not `true` or `false`; `since_revision`, `after` or a `Last-Event-ID` not an integer of 0 or more), an `If-None-Match` other than `*` |
 | `request.not_found` | 404 | API 1 has no such path |
 | `request.method` | 405 | the path does not take the method; the `Allow` header names those it takes |
 | `blueprint.not_found` | 404 | no blueprint is filed under the id, or the id is not one (64 lowercase hex digits) |
@@ -176,6 +179,7 @@ with every problem a finding whose object is its pointer.
 | `twin.driver.unknown` | 400 | the spec names a driver this core does not serve; the message names those it serves |
 | `twin.driver.fixed` | 409 | the spec names another driver than the one the twin was created on |
 | `twin.deleting` | 409 | the twin's deletion was asked, so its spec is not written again |
+| `run.ended` | 409 | the run asked to cancel has ended; the message names its verdict's status |
 | `bundle.rejected` | 422 | the blueprint compiles to no bundle; the findings give every reason |
 | `plan.rejected` | 422 | the bundle has no plan on the driver; the findings give every reason |
 | an `admission.*` rule | 422 | a dry run's admission refused the twin; the one finding is the refusal's ([admission refused](#findings-admission-refused)), since a refusal reserves nothing to plan with |

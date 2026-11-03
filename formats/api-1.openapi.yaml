@@ -238,8 +238,9 @@ paths:
       responses:
         "200":
           description: >-
-            As JSON, the records sorted by name. As text/event-stream with watch=true, one WatchEvent per
-            change to any twin, in the order the store wrote them, after since_revision when given.
+            As JSON, the records sorted by name. As text/event-stream, a watch: every current record (those
+            beyond since_revision, when given), then one WatchEvent per change to any twin, in the order the
+            store wrote them.
           content:
             application/json:
               schema:
@@ -255,6 +256,7 @@ paths:
               schema:
                 type: string
                 description: SSE messages, each event named ADDED, MODIFIED or DELETED and each data line one WatchEvent as JSON.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -271,9 +273,12 @@ paths:
       responses:
         "200":
           description: >-
-            As JSON, the record. As text/event-stream with watch=true, one WatchEvent per write to the
-            record, the whole object each time, ending with DELETED once the twin is gone. A client that
-            reconnects with the last revision it saw misses nothing.
+            As JSON, the record. As text/event-stream, a watch: the record as it stands (ADDED at revision
+            1, else MODIFIED) unless since_revision is at or beyond it, then one WatchEvent per write to the
+            record, the whole object each time, each revision once, ending with DELETED once the twin is
+            gone. The store keeps no history, so a client that reconnects with the last revision it saw is
+            sent the record as it stands and every later write: it misses no change of state and is sent
+            none it saw. A twin that does not exist when the watch begins is 404.
           headers:
             ETag:
               description: The record's revision, quoted; a PUT or DELETE sends it back as If-Match.
@@ -285,6 +290,7 @@ paths:
               schema:
                 type: string
                 description: SSE messages, each event named ADDED, MODIFIED or DELETED and each data line one WatchEvent as JSON.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -462,7 +468,8 @@ paths:
         "200":
           description: >-
             The events so far. As text/event-stream, each event is one SSE message whose id is its seq and
-            whose data is one Event; the stream ends when the run ends, and Last-Event-ID resumes it.
+            whose data is one Event; the stream ends when the run ends, and Last-Event-ID resumes it (the
+            greater of it and after). An after or a Last-Event-ID that is no integer of 0 or more is 400.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EventPage" }
@@ -470,6 +477,7 @@ paths:
               schema:
                 type: string
                 description: SSE messages, each data line one Event as JSON.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -481,6 +489,9 @@ paths:
       tags: [runs]
       operationId: cancelRun
       summary: Ask a run to cancel; it cleans up and ends.
+      description: >-
+        A create stops where it is, tears down what it built and ends failed with run.cancelled. A destroy
+        run is never stopped halfway: it is marked cancelling and completes all the same.
       responses:
         "202":
           description: Cancellation requested; the run, state cancelling. Read it to see how it ends.
@@ -514,7 +525,9 @@ components:
       name: watch
       in: query
       required: false
-      description: With Accept text/event-stream, stream changes instead of answering once.
+      description: >-
+        true streams changes as server-sent events instead of answering once; with no watch, an Accept of
+        text/event-stream asks the same, and false answers JSON whatever the Accept.
       schema: { type: boolean, default: false }
     SinceRevision:
       name: since_revision
@@ -881,7 +894,12 @@ components:
           description: Seconds since the matching started event, on an end; metrics and clients read it.
         rule:
           $ref: "findings-1.schema.json#/$defs/rule"
-          description: On failed or timed_out, the finding's rule; clients show it, the verdict holds the finding.
+          description: >-
+            The rule of an ending other than plain success: on failed and timed_out, the failing finding's
+            rule, which is the Ready condition's reason too (a compile or plan refusal carries bundle.rejected
+            or plan.rejected, the verdict holding every finding); on the cancel phase's done, run.cancelled. A
+            transient failure's failed event carries the error's rule when it has one and no finding is
+            filed: the phase's next started is the retry. Clients show it; the verdict holds the findings.
 
     EventPage:
       type: object

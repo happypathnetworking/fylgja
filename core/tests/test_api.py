@@ -5,6 +5,7 @@ path API 1 does not have, to problem-1."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import threading
@@ -18,12 +19,14 @@ from typing import Any
 import fake_api
 import httpx
 import pytest
+import uvicorn
 import yaml
 from fakes import FakeDriver, fake_push, fake_ready
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from fylgja_core import blueprint, bundle, deployment, packages, schemas
+from fylgja_core.client import Message, messages
 from fylgja_core.credentials import Provider
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding
@@ -44,6 +47,7 @@ ENVIRON = {
     "FYLGJA_CREDENTIAL_EOS_PASSWORD": "admin",
 }
 THREE_NODE = ROOT / "testdata" / "blueprint" / "three-node.json"
+SSE = "text/event-stream"
 
 
 @dataclass
@@ -79,6 +83,28 @@ def api(core: Core) -> Iterator[TestClient]:
         yield client
 
 
+@pytest.fixture
+def served(core: Core) -> Iterator[httpx.Client]:
+    """The application served by uvicorn on a port of its own, lifespan and all, and a client of it
+    as alice. The TestClient answers a request once the application has ended it, so a watch that
+    has not ended is read here, as it streams, and closed from the client's side."""
+    config = uvicorn.Config(core.app, host="127.0.0.1", port=0, log_config=None, access_log=False,
+                            timeout_graceful_shutdown=1)
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, name="uvicorn")
+    thread.start()
+    try:
+        wait_for(lambda: True if server.started else None)
+        host, port = server.servers[0].sockets[0].getsockname()[:2]
+        with httpx.Client(base_url=f"http://{host}:{port}", headers={"Authorization": f"Bearer {ALICE}"},
+                          timeout=10.0, trust_env=False) as client:
+            yield client
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+    assert not thread.is_alive()
+
+
 def answered(response: httpx.Response, status: int) -> Any:
     """The answer's document, once its status is `status` and the operation its request names
     declares that status, its media type and its body's shape."""
@@ -112,7 +138,7 @@ def a_blueprint(path: Path = THREE_NODE) -> dict[str, Any]:
     return doc
 
 
-def file_blueprint(api: TestClient, doc: dict[str, Any] | None = None) -> str:
+def file_blueprint(api: httpx.Client, doc: dict[str, Any] | None = None) -> str:
     created = answered(api.post("/v1/blueprints", json=doc or a_blueprint()), 201)
     blueprint_id: str = created["id"]
     return blueprint_id
@@ -281,7 +307,7 @@ def wait_for[T](read: Callable[[], T | None], timeout_s: float = 10.0) -> T:
     return value
 
 
-def settled(api: TestClient, name: str) -> dict[str, Any]:
+def settled(api: httpx.Client, name: str) -> dict[str, Any]:
     """The twin's record once the loop has acted on its generation."""
 
     def read() -> dict[str, Any] | None:
@@ -291,7 +317,7 @@ def settled(api: TestClient, name: str) -> dict[str, Any]:
     return wait_for(read)
 
 
-def gone(api: TestClient, name: str) -> None:
+def gone(api: httpx.Client, name: str) -> None:
     """Return once the twin's record is deleted."""
     wait_for(lambda: True if api.get(f"/v1/twins/{name}").status_code == 404 else None)
 
@@ -301,17 +327,17 @@ def ready(record: dict[str, Any]) -> tuple[str, str | None]:
     return condition["status"], condition.get("reason")
 
 
-def runs_of(api: TestClient, name: str) -> list[dict[str, Any]]:
+def runs_of(api: httpx.Client, name: str) -> list[dict[str, Any]]:
     listed: list[dict[str, Any]] = answered(api.get("/v1/runs", params={"twin": name}), 200)["runs"]
     return listed
 
 
-def put(api: TestClient, name: str, spec: dict[str, Any], **headers: str) -> httpx.Response:
+def put(api: httpx.Client, name: str, spec: dict[str, Any], **headers: str) -> httpx.Response:
     response: httpx.Response = api.put(f"/v1/twins/{name}", json={"spec": spec}, headers=headers)
     return response
 
 
-def create(api: TestClient, name: str = "t", blueprint_id: str | None = None) -> dict[str, Any]:
+def create(api: httpx.Client, name: str = "t", blueprint_id: str | None = None) -> dict[str, Any]:
     """A twin made by PUT and settled by the loop."""
     answered(put(api, name, {"blueprint_id": blueprint_id or file_blueprint(api)}), 201)
     return settled(api, name)
@@ -617,3 +643,185 @@ def test_a_delete_whose_write_is_lost_withdraws_its_run(
     destroy, _ = runs_of(api, "t")
     assert (destroy["operation"], destroy["state"], destroy["verdict"]["status"]) == ("destroy", "ended", "failed")
     assert answered(api.get("/v1/twins/t"), 200) == record
+
+
+# Runs: events by cursor and as a stream.
+
+
+def streamed(response: httpx.Response) -> list[Message]:
+    """The server-sent events of an answer the operation declares as text/event-stream."""
+    assert response.status_code == 200, response.read()
+    fake_api.check_response(*fake_api.operation(response.request), response)
+    assert response.headers["content-type"].partition(";")[0] == SSE
+    return list(messages(response.iter_lines()))
+
+
+def run_events(api: TestClient, run_id: str, **headers: str) -> list[Message]:
+    with api.stream("GET", f"/v1/runs/{run_id}/events", headers={"Accept": SSE, **headers}) as r:
+        sent = streamed(r)
+    for message in sent:
+        fake_api.check_component("Event", json.loads(message.data))
+    return sent
+
+
+def test_an_ended_runs_event_page_lists_every_event_and_a_cursor_skips(api: TestClient) -> None:
+    create(api)
+    (run,) = runs_of(api, "t")
+    page = answered(api.get(f"/v1/runs/{run['id']}/events"), 200)
+    seqs = [e["seq"] for e in page["events"]]
+    assert seqs == list(range(1, len(seqs) + 1)) and len(seqs) > 3
+    assert (page["next"], page["ended"]) == (seqs[-1], True)
+    later = answered(api.get(f"/v1/runs/{run['id']}/events", params={"after": 3}), 200)
+    assert later == {"events": page["events"][3:], "next": seqs[-1], "ended": True}
+    none = answered(api.get(f"/v1/runs/{run['id']}/events", params={"after": seqs[-1]}), 200)
+    assert none == {"events": [], "next": seqs[-1], "ended": True}
+    refused(api.get(f"/v1/runs/{run['id']}/events", params={"after": "-1"}), 400, "request.invalid")
+    refused(api.get(f"/v1/runs/{'0' * 26}/events"), 404, "run.not_found")
+
+
+def test_a_run_in_flight_has_not_ended(api: TestClient, core: Core) -> None:
+    core.driver.block = "apply"
+    answered(put(api, "t", {"blueprint_id": file_blueprint(api)}), 201)
+    wait_for(lambda: True if answered(api.get("/v1/twins/t"), 200)["status"].get("phase") == "planned" else None)
+    (run,) = runs_of(api, "t")
+    page = answered(api.get(f"/v1/runs/{run['id']}/events"), 200)
+    assert page["ended"] is False and page["next"] == page["events"][-1]["seq"]
+    assert page["events"][-1]["phase"] == "apply" and page["events"][-1]["outcome"] == "started"
+
+
+def test_a_runs_event_stream_sends_each_event_by_its_seq_and_ends_with_the_run(api: TestClient) -> None:
+    answered(put(api, "t", {"blueprint_id": file_blueprint(api)}), 201)
+    (run,) = runs_of(api, "t")
+    sent = run_events(api, run["id"])  # answered once the run has ended and every event is sent
+    assert [m.id for m in sent] == [str(json.loads(m.data)["seq"]) for m in sent]
+    assert [int(m.id or 0) for m in sent] == list(range(1, len(sent) + 1))
+    assert answered(api.get(f"/v1/runs/{run['id']}"), 200)["state"] == "ended"
+    assert [json.loads(m.data) for m in sent] == answered(api.get(f"/v1/runs/{run['id']}/events"), 200)["events"]
+    resumed = run_events(api, run["id"], **{"Last-Event-ID": "3"})
+    assert [m.id for m in resumed] == [m.id for m in sent[3:]]
+    with api.stream("GET", f"/v1/runs/{run['id']}/events", headers={"Accept": SSE, "Last-Event-ID": "x"}) as r:
+        r.read()
+        refused(r, 400, "request.invalid")
+
+
+def test_a_run_is_cancelled_by_id(api: TestClient, core: Core, caplog: pytest.LogCaptureFixture) -> None:
+    core.driver.block = "admit"
+    answered(put(api, "t", {"blueprint_id": file_blueprint(api)}), 201)
+    (run,) = runs_of(api, "t")
+    with caplog.at_level(logging.INFO, logger="fylgja.audit"):
+        cancelling = answered(api.post(f"/v1/runs/{run['id']}/cancel", headers={"Authorization": f"Bearer {BOB}"}),
+                              202)
+    assert (cancelling["id"], cancelling["state"], cancelling["principal"]) == (run["id"], "cancelling", "alice")
+    assert [(line["principal"], line["run"]) for line in audited(caplog, "cancel")] == [("bob", run["id"])]
+    record = settled(api, "t")
+    assert ready(record) == ("False", "run.cancelled")
+    ended = answered(api.get(f"/v1/runs/{run['id']}"), 200)
+    assert (ended["state"], ended["verdict"]["status"]) == ("ended", "failed")
+    assert [f["rule"] for f in ended["verdict"]["findings"]] == ["run.cancelled"]
+    last = answered(api.get(f"/v1/runs/{run['id']}/events"), 200)["events"][-1]
+    assert (last["phase"], last["outcome"], last["rule"]) == ("cancel", "done", "run.cancelled")
+    refused(api.post(f"/v1/runs/{run['id']}/cancel"), 409, "run.ended")
+    refused(api.post(f"/v1/runs/{'0' * 26}/cancel"), 404, "run.not_found")
+
+
+# Twins: watches, read as they stream.
+
+
+@contextlib.contextmanager
+def watching(client: httpx.Client, path: str, **params: str) -> Iterator[Iterator[dict[str, Any]]]:
+    """A watch's WatchEvents as they come, each held to WatchEvent and named by its message."""
+    with client.stream("GET", path, params={"watch": "true", **params}, headers={"Accept": SSE}) as r:
+        assert r.status_code == 200, r.read()
+        fake_api.check_response(*fake_api.operation(r.request), r)
+
+        def events() -> Iterator[dict[str, Any]]:
+            for message in messages(r.iter_lines()):
+                event: dict[str, Any] = json.loads(message.data)
+                fake_api.check_component("WatchEvent", event)
+                assert message.event == event["type"] and message.id is None
+                yield event
+
+        yield events()
+
+
+def revisions(events: list[dict[str, Any]]) -> list[int]:
+    return [e["object"]["revision"] for e in events]
+
+
+def test_a_watch_from_before_a_put_sees_each_write_once_in_order(served: httpx.Client) -> None:
+    blueprint_id = file_blueprint(served)
+    seen = []
+    with watching(served, "/v1/twins") as events:
+        answered(put(served, "t", {"blueprint_id": blueprint_id}), 201)
+        for event in events:
+            seen.append(event)
+            if event["object"]["status"]["observed_generation"] == event["object"]["generation"]:
+                break
+    assert [e["type"] for e in seen] == ["ADDED"] + ["MODIFIED"] * (len(seen) - 1)
+    assert revisions(seen) == list(range(1, len(seen) + 1)) and len(seen) > 3
+    assert ready(seen[-1]["object"]) == ("True", "twin.ready")
+
+
+def test_a_watch_resumed_from_the_last_revision_seen_misses_nothing_and_repeats_nothing(served: httpx.Client) -> None:
+    blueprint_id = file_blueprint(served)
+    with watching(served, "/v1/twins") as events:
+        answered(put(served, "t", {"blueprint_id": blueprint_id}), 201)
+        first = [next(events) for _ in range(3)]
+    last = revisions(first)[-1]
+    record = settled(served, "t")
+    assert record["revision"] > last
+    with watching(served, "/v1/twins/t", since_revision=str(last)) as events:
+        now = next(events)
+        answered(served.delete("/v1/twins/t"), 202)
+        rest = list(events)  # the server ends the stream after DELETED
+    assert now == {"type": "MODIFIED", "object": record}  # the record as it stands: the store keeps no history
+    assert [e["type"] for e in rest][-1] == "DELETED" and {e["type"] for e in rest[:-1]} == {"MODIFIED"}
+    changed = revisions([now, *rest[:-1]])
+    assert changed == list(range(record["revision"], record["revision"] + len(changed)))
+    assert rest[-1]["object"]["revision"] == changed[-1]
+
+
+def test_a_watch_from_the_revision_a_twin_is_at_begins_with_its_next_write(served: httpx.Client) -> None:
+    record = create(served)
+    with watching(served, "/v1/twins/t", since_revision=str(record["revision"])) as events:
+        answered(served.delete("/v1/twins/t"), 202)
+        first = next(events)
+    assert first["type"] == "MODIFIED" and first["object"]["revision"] == record["revision"] + 1
+    assert first["object"]["deletion_requested_at"]
+
+
+def test_a_watch_of_every_twin_sends_each_current_record_first(served: httpx.Client) -> None:
+    blueprint_id = file_blueprint(served)
+    a, b = create(served, "a", blueprint_id), create(served, "b", blueprint_id)
+    with watching(served, "/v1/twins") as events:
+        current = [next(events), next(events)]
+    assert current == [{"type": "MODIFIED", "object": a}, {"type": "MODIFIED", "object": b}]
+    # Revisions are each twin's own: the list's since_revision skips the current records it reaches, and
+    # every change after the watch begins is sent, a new twin's first write too.
+    with watching(served, "/v1/twins", since_revision=str(max(a["revision"], b["revision"]))) as events:
+        answered(put(served, "c", {"blueprint_id": blueprint_id}), 201)
+        first = next(events)
+    assert (first["type"], first["object"]["name"], first["object"]["revision"]) == ("ADDED", "c", 1)
+
+
+def test_an_accept_of_server_sent_events_asks_for_a_watch(served: httpx.Client) -> None:
+    record = create(served)
+    with served.stream("GET", "/v1/twins/t", headers={"Accept": SSE}) as r:
+        first = json.loads(next(messages(r.iter_lines())).data)
+    assert first == {"type": "MODIFIED", "object": record}
+    r = served.get("/v1/twins/t", params={"watch": "false"}, headers={"Accept": SSE})
+    assert answered(r, 200) == record
+
+
+def test_a_watch_of_a_twin_that_does_not_exist_is_not_found(served: httpx.Client) -> None:
+    refused(served.get("/v1/twins/nope", params={"watch": "true"}, headers={"Accept": SSE}), 404, "twin.not_found")
+    refused(served.get("/v1/twins", params={"watch": "true", "since_revision": "x"}), 400, "request.invalid")
+    refused(served.get("/v1/twins/t", params={"watch": "maybe"}), 400, "request.invalid")
+
+
+def test_a_watch_the_client_closes_releases_what_it_held(served: httpx.Client, core: Core) -> None:
+    create(served)
+    with watching(served, "/v1/twins/t") as events:
+        next(events)
+        assert len(core.store._subscriptions) == 1
+    wait_for(lambda: True if core.store._subscriptions == [] else None)

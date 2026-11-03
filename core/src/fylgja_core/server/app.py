@@ -13,6 +13,9 @@ it queues, and kicks the loop. A route reads, checks and writes with no `await` 
 event loop's one thread, where the loop makes its own writes too, so no write of the loop's lands
 between a route's check and its write; the compare-and-set still guards each one, and a write it
 loses is answered `412`, the run queued for it withdrawn.
+
+A twin or the list of twins is watched, and a run's events followed, as server-sent events
+(`sse`), asked by `watch=true` or by an Accept of text/event-stream.
 """
 
 from __future__ import annotations
@@ -55,7 +58,7 @@ from fylgja_core.findings import Finding, Subject, Verdict
 from fylgja_core.packages import Loaded
 from fylgja_core.reconcile import Reconciler
 from fylgja_core.run import Event, Run
-from fylgja_core.server import problems
+from fylgja_core.server import problems, sse
 from fylgja_core.server.auth import AuthMiddleware, Tokens
 from fylgja_core.twin_record import Spec, Status, TwinRecord
 
@@ -74,6 +77,7 @@ RULE_EXISTS = "twin.exists"
 RULE_DRIVER_FIXED = "twin.driver.fixed"
 RULE_DRIVER_UNKNOWN = reconcile.RULE_DRIVER_UNKNOWN
 RULE_DELETING = reconcile.REASON_DELETING
+RULE_RUN_ENDED = "run.ended"
 RULE_UNBUILT = "api.unbuilt"
 RULE_SERVER = "server.error"
 
@@ -131,6 +135,30 @@ def _flag(request: Request, key: str) -> bool | None:
     if raw not in ("true", "false"):
         raise _refuse(request, 400, RULE_INVALID, f"The query parameter {key} is true or false.")
     return raw == "true"
+
+
+def _cursor(request: Request, raw: str | None, what: str) -> int | None:
+    """A cursor (a revision, a sequence number) from a parameter, None when absent, or `400`."""
+    if raw is None:
+        return None
+    try:
+        if raw.isascii() and raw.isdigit():
+            return int(raw)
+    except ValueError:  # more digits than an int is parsed from
+        pass
+    raise _refuse(request, 400, RULE_INVALID, f"{what} is an integer of 0 or more.")
+
+
+def _streams(request: Request) -> bool:
+    """Whether the request asks for server-sent events: `watch=true`, or, with no `watch`, an
+    Accept of text/event-stream."""
+    watch = _flag(request, "watch")
+    return _accepts_events(request) if watch is None else watch
+
+
+def _accepts_events(request: Request) -> bool:
+    ranges = request.headers.get("accept", "").split(",")
+    return any(r.partition(";")[0].strip().lower() == sse.MEDIA_TYPE for r in ranges)
 
 
 def _twin_name(request: Request, value: str, status: int) -> str:
@@ -290,10 +318,20 @@ class _Api:
             raise _refuse(request, 404, RULE_TWIN_NOT_FOUND, f"No twin is named {name}.") from None
 
     async def list_twins(self, request: Request) -> Response:
+        since = _cursor(request, request.query_params.get("since_revision"), "since_revision")
+        if _streams(request):
+            return sse.EventStream(sse.twin_stream(self.store, None, since))
         return _json({"twins": [documents.encode(record) for record in self.store.list_twins()]})
 
     async def get_twin(self, request: Request) -> Response:
-        return _record(self._twin(request, _twin_name(request, request.path_params["name"], 404)))
+        name = _twin_name(request, request.path_params["name"], 404)
+        since = _cursor(request, request.query_params.get("since_revision"), "since_revision")
+        if _streams(request):
+            try:
+                return sse.EventStream(sse.twin_stream(self.store, name, since))
+            except store.NotFound:
+                raise _refuse(request, 404, RULE_TWIN_NOT_FOUND, f"No twin is named {name}.") from None
+        return _record(self._twin(request, name))
 
     # twins: writes
 
@@ -438,10 +476,16 @@ class _Api:
             if run.operation != "create" or run.state not in ("queued", "running"):
                 return
             try:
-                self.store.update_run(replace(run, state="cancelling"), run.state)
+                self._mark_cancelling(run)
                 return
             except store.Conflict:
                 run = self.store.get_run(run.id)
+
+    def _mark_cancelling(self, run: Run) -> Run:
+        """The run marked `cancelling` by compare-and-set on the state it was read in."""
+        cancelling = replace(run, state="cancelling")
+        self.store.update_run(cancelling, run.state)
+        return cancelling
 
     def _withdraw(self, run: Run, why: str) -> None:
         """End a run this request queued and could not hand to the loop, as the loop ends a create
@@ -479,6 +523,37 @@ class _Api:
     async def get_run(self, request: Request) -> Response:
         return _json(documents.encode(self._run(request)))
 
+    async def run_events(self, request: Request) -> Response:
+        """The run's events after the cursor: an EventPage, or a stream that `Last-Event-ID`
+        resumes. The run is read before its events, so `ended` means none will follow."""
+        run = self._run(request)
+        after = _cursor(request, request.query_params.get("after"), "after") or 0
+        if _accepts_events(request):
+            last = _cursor(request, request.headers.get("last-event-id"), "Last-Event-ID") or 0
+            return sse.EventStream(sse.run_events_stream(self.store, run.id, max(after, last)))
+        events = self.store.events(run.id, after)
+        return _json({"events": [documents.encode(e) for e in events], "next": events[-1].seq if events else after,
+                      "ended": run.state == "ended"})
+
+    async def cancel_run(self, request: Request) -> Response:
+        """Mark the run `cancelling`; the loop stops it where it is, cleans up and ends it (a
+        destroy run completes all the same). A lost write is read again once."""
+        run = self._run(request)
+        if run.state not in ("ended", "cancelling"):
+            try:
+                run = self._mark_cancelling(run)
+            except store.Conflict:
+                run = self.store.get_run(run.id)
+                if run.state not in ("ended", "cancelling"):
+                    run = self._mark_cancelling(run)
+        if run.state == "ended":
+            assert run.verdict is not None
+            raise _refuse(request, 409, RULE_RUN_ENDED, f"Run {run.id} has ended {run.verdict.status}.")
+        principal: str = request.state.principal
+        self.reconciler.kick(run.twin)
+        logs.audit(principal, "cancel", run.twin, run=run.id)
+        return _json(documents.encode(run), 202)
+
 
 def _by_method(handlers: Mapping[str, Endpoint]) -> Endpoint:
     """One endpoint for a path's methods, so the router's `405` names every method the path takes."""
@@ -504,6 +579,8 @@ def _routes(api: _Api) -> list[Route]:
         "/v1/twins/{name}/verifications": {"POST": api.verify_twin},
         "/v1/runs": {"GET": api.list_runs},
         "/v1/runs/{run_id}": {"GET": api.get_run},
+        "/v1/runs/{run_id}/events": {"GET": api.run_events},
+        "/v1/runs/{run_id}/cancel": {"POST": api.cancel_run},
     }
     return [Route(path, _by_method(handlers), methods=list(handlers)) for path, handlers in table.items()]
 

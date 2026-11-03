@@ -5,16 +5,24 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 from collections.abc import Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from fylgja_core import blueprint, bundle, compiler, containerlab, platform_package, probe_package
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.containerlab.cli import TIMED_OUT, CommandFailed
-from fylgja_core.containerlab.driver import RULE_CAPACITY, RULE_IMAGE, ContainerlabDriver, deploy_budget
+from fylgja_core.containerlab.driver import (
+    RULE_CAPACITY,
+    RULE_IMAGE,
+    ContainerlabDriver,
+    deploy_budget,
+    destroy_budget,
+)
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
 from fylgja_core.driver import Allocation, Inspection, NodeState, Planned, Refusal
@@ -188,7 +196,7 @@ def test_a_hung_image_inspect_is_a_driver_error_not_an_absence(tmp_path: Path) -
     assert raised.value.returncode == TIMED_OUT
 
 
-DEPLOY = ("containerlab", "deploy")
+DEPLOY: tuple[str, ...] = ("containerlab", "deploy")
 
 
 def planned(name: str, twin: str = "t", subnet: str = "172.20.2.0/24") -> Planned:
@@ -285,3 +293,193 @@ def test_endpoints_are_the_running_nodes_addresses() -> None:
     driver = Inspected(Inspection(state="present", nodes=nodes))
     assert asyncio.run(driver.endpoints("t")) == {"n1": "172.20.2.2"}
     assert asyncio.run(Inspected(Inspection(state="absent", nodes=())).endpoints("t")) == {}
+
+
+# inspect and destroy. Docker's answers are canned in the shapes containerlab 0.79.0 gave
+# (verified-facts.md); Task 5 re-verifies them on 0.81.0.
+
+PS: tuple[str, ...] = ("docker", "ps", "-a", "--filter", "label=containerlab=t", "--format", "{{.Names}}")
+INSPECT: tuple[str, ...] = ("docker", "inspect", "--type", "container")
+NETWORK: tuple[str, ...] = ("docker", "network", "inspect", "clab-t")
+DESTROY: tuple[str, ...] = ("containerlab", "destroy")
+NETWORK_RM: tuple[str, ...] = ("docker", "network", "rm", "clab-t")
+
+
+def container(
+    node: str, running: bool = True, address: str = "", started: str = "2026-11-03T12:00:00.5Z"
+) -> dict[str, Any]:
+    """A `docker inspect` member of a containerlab node, as much of it as the driver reads."""
+    return {
+        "Id": f"{node}0123456789abcdef",
+        "Name": f"/clab-t-{node}",
+        "State": {"Status": "running" if running else "exited", "Running": running, "StartedAt": started},
+        "Config": {"Labels": {"containerlab": "t", "clab-node-name": node, "clab-node-kind": "nokia_srlinux",
+                              "fylgja.twin": "t"}},
+        "NetworkSettings": {"Networks": {"clab-t": {"IPAddress": address, "Gateway": "172.20.2.1"}}},
+    }
+
+
+def lab(*containers: dict[str, Any]) -> dict[tuple[str, ...], str]:
+    names = [c["Name"].lstrip("/") for c in containers]
+    return {PS: "".join(f"{n}\n" for n in names), (*INSPECT, *names): json.dumps(list(containers))}
+
+
+RUNNING = lab(container("n2", address="172.20.2.3", started="2026-11-03T12:00:01.25Z"),
+              container("n1", address="172.20.2.2"),
+              container("n3", address="172.20.2.4", started="2026-11-03T12:00:02Z"))
+NOTHING: dict[tuple[str, ...], str] = {PS: ""}
+
+
+def driver(tmp_path: Path, runner: FakeRunner) -> ContainerlabDriver:
+    """The driver with the host's residue staged under `tmp_path`: an empty hosts file and ssh config directory."""
+    hosts = tmp_path / "etc-hosts"
+    if not hosts.exists():
+        hosts.write_text("127.0.0.1 localhost\n")
+    ssh_config_dir = tmp_path / "ssh_config.d"
+    ssh_config_dir.mkdir(exist_ok=True)
+    return ContainerlabDriver(tmp_path / "root", runner=runner, hosts_path=hosts, ssh_config_dir=ssh_config_dir)
+
+
+def inspect(tmp_path: Path, runner: FakeRunner) -> Inspection:
+    return asyncio.run(driver(tmp_path, runner).inspect("t"))
+
+
+def test_inspect_reads_each_nodes_name_handle_incarnation_and_address(tmp_path: Path) -> None:
+    runner = FakeRunner(RUNNING)
+    assert inspect(tmp_path, runner) == Inspection(state="present", nodes=(
+        NodeState(name="n1", handle="clab-t-n1", incarnation="2026-11-03T12:00:00.5Z", address="172.20.2.2",
+                  running=True),
+        NodeState(name="n2", handle="clab-t-n2", incarnation="2026-11-03T12:00:01.25Z", address="172.20.2.3",
+                  running=True),
+        NodeState(name="n3", handle="clab-t-n3", incarnation="2026-11-03T12:00:02Z", address="172.20.2.4",
+                  running=True),
+    ))
+    assert runner.calls == [PS, (*INSPECT, "clab-t-n2", "clab-t-n1", "clab-t-n3")]
+
+
+def test_an_exited_container_is_present_not_running_and_without_an_address(tmp_path: Path) -> None:
+    exited = lab(container("n1", running=False, address="172.20.2.2"), container("n2", address="172.20.2.3"))
+    inspection = inspect(tmp_path, FakeRunner(exited))
+    assert inspection.state == "present"
+    assert [(n.name, n.running, n.address) for n in inspection.nodes] == [("n1", False, None),
+                                                                          ("n2", True, "172.20.2.3")]
+
+
+def test_a_node_never_started_has_no_incarnation(tmp_path: Path) -> None:
+    created = lab(container("n1", running=False, started="0001-01-01T00:00:00Z"))
+    assert inspect(tmp_path, FakeRunner(created)).nodes[0].incarnation is None
+
+
+def test_a_twin_the_runtime_holds_nothing_of_is_absent(tmp_path: Path) -> None:
+    runner = FakeRunner(NOTHING, fail=[NETWORK])
+    assert inspect(tmp_path, runner) == Inspection(state="absent", nodes=())
+    assert runner.calls == [PS, NETWORK]
+
+
+def test_host_entries_with_no_container_are_residue(tmp_path: Path) -> None:
+    (tmp_path / "etc-hosts").write_text("127.0.0.1 localhost\n###### CLAB-t-START ######\n172.20.2.2\tclab-t-n1\n"
+                                        "###### CLAB-t-END ######\n")
+    runner = FakeRunner(NOTHING, fail=[NETWORK])
+    assert inspect(tmp_path, runner) == Inspection(state="residue", nodes=())
+    assert runner.calls == [PS]
+
+
+def test_another_twins_host_entries_are_not_this_ones_residue(tmp_path: Path) -> None:
+    # The twin t-2's entries hold clab-t-2-n1, which begins with clab-t- but is no node of t.
+    (tmp_path / "etc-hosts").write_text("###### CLAB-t-2-START ######\n172.20.3.2\tclab-t-2-n1\n"
+                                        "###### CLAB-t-2-END ######\n")
+    assert inspect(tmp_path, FakeRunner(NOTHING, fail=[NETWORK])).state == "absent"
+
+
+def test_the_ssh_config_or_the_network_alone_is_residue(tmp_path: Path) -> None:
+    (tmp_path / "ssh_config.d").mkdir()
+    (tmp_path / "ssh_config.d" / "clab-t.conf").write_text("Host clab-t-n1\n")
+    assert inspect(tmp_path, FakeRunner(NOTHING, fail=[NETWORK])).state == "residue"
+    (tmp_path / "ssh_config.d" / "clab-t.conf").unlink()
+    assert inspect(tmp_path, FakeRunner({**NOTHING, NETWORK: "[]\n"})).state == "residue"
+
+
+def test_a_hung_network_inspect_is_a_driver_error_not_an_absence(tmp_path: Path) -> None:
+    with pytest.raises(CommandFailed):
+        inspect(tmp_path, FakeRunner(NOTHING, fail=[NETWORK], status=TIMED_OUT))
+
+
+def test_endpoints_read_the_running_lab(tmp_path: Path) -> None:
+    exited = lab(container("n1", address="172.20.2.2"), container("n2", running=False, address="172.20.2.3"))
+    assert asyncio.run(driver(tmp_path, FakeRunner(exited)).endpoints("t")) == {"n1": "172.20.2.2"}
+
+
+def destroy(tmp_path: Path, runner: FakeRunner, p: Planned | None = None) -> None:
+    p = p or planned("three-node")
+    asyncio.run(driver(tmp_path, runner).destroy(p.deployment, p.files, PLATFORMS, PROBES))
+
+
+def test_destroying_a_present_lab_destroys_it_with_cleanup_and_removes_the_twins_directory(tmp_path: Path) -> None:
+    runner = FakeRunner({**RUNNING, DEPLOY: "", DESTROY: ""}, fail=[NETWORK])
+    p = planned("three-node")
+    asyncio.run(driver(tmp_path, runner).apply(p.deployment, p.files, PLATFORMS, PROBES))
+    runner.calls.clear()
+    runner.budgets.clear()
+    destroy(tmp_path, runner, p)
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    assert runner.calls == [PS, (*INSPECT, "clab-t-n2", "clab-t-n1", "clab-t-n3"),
+                            ("containerlab", "destroy", "-t", topology, "--cleanup"), NETWORK]
+    assert runner.budgets[2] == 60 + 60
+    assert not (tmp_path / "root/containerlab/t").exists()
+
+
+def test_a_network_a_destroy_leaves_is_removed(tmp_path: Path) -> None:
+    runner = FakeRunner({**RUNNING, DESTROY: "", NETWORK: "[]\n", NETWORK_RM: ""})
+    destroy(tmp_path, runner)
+    assert runner.calls[-3:] == [("containerlab", "destroy", "-t", str(tmp_path / "root/containerlab/t" / TOPOLOGY),
+                                  "--cleanup"), NETWORK, NETWORK_RM]
+
+
+def test_root_owned_residue_is_deployed_then_destroyed(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    (tmp_path / "ssh_config.d").mkdir()
+    (tmp_path / "ssh_config.d" / "clab-t.conf").write_text("Host clab-t-n1\n")
+    runner = FakeRunner({**NOTHING, DEPLOY: "", DESTROY: ""}, fail=[NETWORK])
+    destroy(tmp_path, runner)
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    assert runner.calls == [PS, ("containerlab", "deploy", "-t", topology),
+                            ("containerlab", "destroy", "-t", topology, "--cleanup"), NETWORK]
+    assert runner.budgets[1:3] == [180 + 60, 60 + 60]
+    assert "destroy t: residue and no container: deploy, then destroy (D-023)" in caplog.messages
+    assert not (tmp_path / "root/containerlab/t").exists()
+
+
+def test_a_management_network_alone_is_removed_without_a_deploy(tmp_path: Path) -> None:
+    # A deploy refused at its start leaves only the network, which docker can remove (D-019);
+    # deploying that topology again would be refused again.
+    runner = FakeRunner({**NOTHING, NETWORK: "[]\n", NETWORK_RM: ""})
+    destroy(tmp_path, runner)
+    assert runner.calls == [PS, NETWORK, NETWORK, NETWORK_RM]
+
+
+def test_destroying_what_is_absent_does_nothing_but_remove_the_twins_directory(tmp_path: Path) -> None:
+    (tmp_path / "root/containerlab/t/clab-t").mkdir(parents=True)
+    runner = FakeRunner(NOTHING, fail=[NETWORK])
+    destroy(tmp_path, runner)
+    destroy(tmp_path, runner)
+    assert runner.calls == [PS, NETWORK] * 2
+    assert not (tmp_path / "root/containerlab/t").exists()
+    assert (tmp_path / "root/containerlab").is_dir()
+
+
+def test_destroy_refuses_files_that_are_not_the_deployments_before_any_command(tmp_path: Path) -> None:
+    p = planned("three-node")
+    runner = FakeRunner(RUNNING)
+    with pytest.raises(ValueError, match="is not the deployment's"):
+        asyncio.run(driver(tmp_path, runner).destroy(p.deployment, {TOPOLOGY: b"name: t\n"}, PLATFORMS, PROBES))
+    assert runner.calls == []
+
+
+def test_the_destroy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:
+    assert destroy_budget(planned("three-node").files, PLATFORMS, PROBES) == 60 + 60
+    assert destroy_budget(planned("three-node-probed").files, PLATFORMS, PROBES) == 60 + 60  # ping's is 30
+    srl = PLATFORMS["nokia_srlinux"]
+    clab = dataclasses.replace(srl.runtime.containerlab, destroy_timeout_s=90)
+    slow = {**PLATFORMS, "nokia_srlinux": dataclasses.replace(srl, runtime=dataclasses.replace(srl.runtime,
+                                                                                               containerlab=clab))}
+    assert destroy_budget(planned("mixed").files, slow, PROBES) == 90 + 60

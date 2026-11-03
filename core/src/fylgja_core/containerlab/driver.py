@@ -15,8 +15,18 @@ containerlab's to pull at deploy.
 
 `apply` writes the deployment's files, each checked against its hash, into the twin's
 directory and deploys the topology: on a running lab that is containerlab's own reconcile,
-and `reconfigure` is the loop's remedy for a partial lab (D-023). A deploy's budget is the
-slowest package the topology's nodes use, plus a minute.
+and `reconfigure` is the loop's remedy for a partial lab (D-023). A deploy's budget, and a
+destroy's, is the slowest package the topology's nodes use, plus a minute.
+
+`inspect` finds the twin's containers by containerlab's label `containerlab=<lab>` and reads
+each one's node name from the label `clab-node-name`, its incarnation from `State.StartedAt`
+and its address on the lab's management network, `clab-<twin>`. Those keys are the ones
+containerlab 0.79.0 was seen to set (verified-facts.md); the live tier verifies them on the
+running version. With no container, what a killed destroy leaves is residue: the lab's block
+of `/etc/hosts` entries, its ssh config `clab-<twin>.conf`, or its management network.
+`destroy` removes everything; the root-owned residue only containerlab can clear, so finding
+it and no container it deploys, then destroys (recovery rule 2, D-019, D-023), while a
+network left alone, as a deploy refused at its start leaves it, is removed with `docker`.
 """
 
 from __future__ import annotations
@@ -27,9 +37,11 @@ import json
 import logging
 import os
 import secrets
+import shutil
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -39,7 +51,7 @@ from fylgja_core.containerlab import cli, pool
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.deployment import Deployment
-from fylgja_core.driver import Allocation, Capabilities, Inspection, Planned, Refusal
+from fylgja_core.driver import Allocation, Capabilities, Inspection, NodeState, Planned, Refusal
 from fylgja_core.platform_package import Image, PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 from fylgja_core.store import check_file_key, check_twin_name
@@ -52,7 +64,10 @@ DOCKER_TIMEOUT_S = 30.0
 """The budget of one `docker` read."""
 
 MARGIN_S = 60.0
-"""What a deploy's budget adds to its slowest package's timeout, for containerlab's own work."""
+"""What a deploy's or a destroy's budget adds to its slowest package's timeout, for containerlab's own work."""
+
+NEVER_STARTED = "0001-01-01T00:00:00Z"
+"""Docker's `State.StartedAt` for a container created and never started: no incarnation."""
 
 _log = logging.getLogger("fylgja.containerlab")
 
@@ -60,7 +75,8 @@ _log = logging.getLogger("fylgja.containerlab")
 class ContainerlabDriver:
     """The local driver. `runner` runs a command line and answers its stdout, as `cli.run`
     does; `meminfo` and `cpus` are the host's capacity (`/proc/meminfo`'s `MemAvailable`, and
-    `os.cpu_count()` when None). All three are injectable, for the pure tier."""
+    `os.cpu_count()` when None); `hosts_path` and `ssh_config_dir` are where containerlab
+    writes a lab's host entries and ssh config. All are injectable, for the pure tier."""
 
     name = containerlab.NAME
 
@@ -72,12 +88,16 @@ class ContainerlabDriver:
         runner: Callable[..., Awaitable[str]] = cli.run,
         meminfo: Path = Path("/proc/meminfo"),
         cpus: int | None = None,
+        hosts_path: Path = Path("/etc/hosts"),
+        ssh_config_dir: Path = Path("/etc/ssh/ssh_config.d"),
     ) -> None:
         self.root = Path(root).absolute()
         self.pool = pool
         self._run = runner
         self._meminfo = meminfo
         self._cpus = cpus
+        self._hosts_path = hosts_path
+        self._ssh_config_dir = ssh_config_dir
 
     def capabilities(self) -> Capabilities:
         return containerlab.CAPABILITIES
@@ -150,8 +170,47 @@ class ContainerlabDriver:
         await self._run([*argv, "--reconfigure"] if reconfigure else argv, timeout_s=budget, cwd=directory)
 
     async def inspect(self, twin: str) -> Inspection:
-        """What the runtime holds of the twin."""
-        raise NotImplementedError("the local driver's inspect")
+        """The twin's containers, by node name, `present` when there is one; else `residue` when
+        the twin's host entries, ssh config or management network remain, and `absent`."""
+        names = (await self._run(
+            ["docker", "ps", "-a", "--filter", f"label=containerlab={twin}", "--format", "{{.Names}}"],
+            timeout_s=DOCKER_TIMEOUT_S)).split()
+        if names:
+            found = json.loads(await self._run(["docker", "inspect", "--type", "container", *names],
+                                               timeout_s=DOCKER_TIMEOUT_S))
+            nodes = sorted((_node(twin, doc) for doc in found), key=lambda n: n.name)
+            return Inspection(state="present", nodes=tuple(nodes))
+        residue = self._root_owned_residue(twin) or await self._network_exists(twin)
+        return Inspection(state="residue" if residue else "absent", nodes=())
+
+    async def destroy(
+        self,
+        deployment: Deployment,
+        files: Mapping[str, bytes],
+        platforms: Mapping[str, PlatformPackage],
+        probe_packages: Mapping[str, ProbePackage],
+    ) -> None:
+        """Remove everything the twin holds: its containers, host entries, ssh config and
+        management network, and the twin's directory. Root-owned residue with no container is
+        deployed, then destroyed (rule 2); nothing found is nothing done. `ValueError`, before
+        any command, for files that are not the deployment's."""
+        _check_files(deployment, files)
+        twin = deployment.twin
+        budget = destroy_budget(files, platforms, probe_packages)
+        inspection = await self.inspect(twin)
+        lab = inspection.state == "present"
+        if inspection.state == "residue" and self._root_owned_residue(twin):
+            _log.info("destroy %s: residue and no container: deploy, then destroy (D-023)", twin)
+            await self.apply(deployment, files, platforms, probe_packages)
+            lab = True
+        if lab:
+            directory = self._write(twin, files)
+            await self._run(["containerlab", "destroy", "-t", str(directory / TOPOLOGY), "--cleanup"],
+                            timeout_s=budget, cwd=directory)
+        if inspection.state != "absent" and await self._network_exists(twin):
+            await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
+        if self._directory(twin).exists():
+            shutil.rmtree(self._directory(twin))
 
     async def endpoints(self, twin: str) -> Mapping[str, str]:
         """Each running node's management address, by node name; a node without one is left out."""
@@ -170,6 +229,27 @@ class ContainerlabDriver:
             target.parent.mkdir(parents=True, exist_ok=True)
             _write_atomic(target, data)
         return directory
+
+    def _root_owned_residue(self, twin: str) -> bool:
+        """Whether the lab's block of host entries or its ssh config remains: what containerlab
+        writes as root, and only its destroy clears. A block is opened by a line naming its lab
+        exactly, so the twin `t-2`'s entries (`clab-t-2-n1`) are never taken for `t`'s; the
+        marker is the format string in the containerlab 0.81.0 binary, which the live tier
+        verifies on a running lab."""
+        start = f"###### CLAB-{twin}-START ######"
+        hosts = self._hosts_path.read_text() if self._hosts_path.exists() else ""
+        return any(line.strip() == start for line in hosts.splitlines()) or (
+            self._ssh_config_dir / f"clab-{twin}.conf").exists()
+
+    async def _network_exists(self, twin: str) -> bool:
+        """Whether the lab's management network exists; a hung `docker` is a driver error."""
+        try:
+            await self._run(["docker", "network", "inspect", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
+        except cli.CommandFailed as e:
+            if e.returncode == cli.TIMED_OUT:
+                raise
+            return False
+        return True
 
     async def _docker_subnets(self) -> list[IPv4Network]:
         """Every IPv4 subnet a Docker network on the host holds."""
@@ -211,6 +291,29 @@ def deploy_budget(
     """The budget of a deploy of `files`: the largest `deploy_timeout_s` of the packages the
     topology's nodes use, since nodes deploy in parallel, plus `MARGIN_S`."""
     return max(section.deploy_timeout_s for section in _sections(files, platforms, probe_packages)) + MARGIN_S
+
+
+def destroy_budget(
+    files: Mapping[str, bytes], platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+) -> float:
+    """The budget of a destroy of `files`: the largest `destroy_timeout_s` of the packages the
+    topology's nodes use, plus `MARGIN_S`."""
+    return max(section.destroy_timeout_s for section in _sections(files, platforms, probe_packages)) + MARGIN_S
+
+
+def _node(twin: str, doc: Mapping[str, Any]) -> NodeState:
+    """A node from its container's `docker inspect` member; its address is the one it holds
+    on the lab's management network while it runs."""
+    running = bool(doc["State"]["Running"])
+    started = doc["State"]["StartedAt"]
+    network = (doc["NetworkSettings"]["Networks"] or {}).get(f"clab-{twin}") or {}
+    return NodeState(
+        name=doc["Config"]["Labels"]["clab-node-name"],
+        handle=doc["Name"].lstrip("/"),
+        incarnation=None if started == NEVER_STARTED else started,
+        address=(network.get("IPAddress") or None) if running else None,
+        running=running,
+    )
 
 
 def _sections(

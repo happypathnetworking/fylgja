@@ -290,7 +290,9 @@ The seam has seven calls, and every call is idempotent ([D-017](decisions.md#d-0
   the reason. `plan` is pure, so its allocation must exist before it runs.
 - `plan(bundle, twin, allocation)`: pure; a runtime-specific deployment derived from the
   bundle, with its own id.
-- `apply(deployment)`, `inspect(twin)` and `destroy(twin)`.
+- `apply(deployment, files, packages, reconfigure)`, `inspect(twin)` and
+  `destroy(deployment, files, packages)`: the packages' measured timeouts bound a deploy
+  and a destroy, and `reconfigure` is the partial-lab remedy.
 - `endpoints(twin)`: the management addresses that push, readiness, verify and flows use.
 
 Push, readiness, verify and flows sit above the seam: they reach a node's management

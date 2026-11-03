@@ -174,9 +174,9 @@ A runtime is added by writing a driver, and nothing else
 | `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network. |
 | `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason. |
 | `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)). |
-| `apply(deployment)` | Makes the runtime match the deployment. |
+| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds what a partial apply left, the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)). |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
-| `destroy(twin)` | Removes everything the twin holds, and releases its allocation. |
+| `destroy(deployment, files, packages)` | Removes everything the twin holds, the residue of a killed destroy included, within its packages' measured destroy timeouts, and releases its allocation. |
 | `endpoints(twin)` | Returns each node's management address. |
 
 `plan` is the only step that binds a bundle to a twin and a runtime. It is pure, so what it

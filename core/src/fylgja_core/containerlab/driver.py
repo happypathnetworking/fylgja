@@ -12,25 +12,37 @@ pool exhausted, or the demand above the host's available memory or its CPU count
 whose account-gated image is not on the host (`admission.image.absent`), since locally a
 `pull_secret` is a presence check and the image is never pulled (D-015). An ungated image is
 containerlab's to pull at deploy.
+
+`apply` writes the deployment's files, each checked against its hash, into the twin's
+directory and deploys the topology: on a running lab that is containerlab's own reconcile,
+and `reconfigure` is the loop's remedy for a partial lab (D-023). A deploy's budget is the
+slowest package the topology's nodes use, plus a minute.
 """
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import logging
 import os
+import secrets
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
 
-from fylgja_core import containerlab
+import yaml
+
+from fylgja_core import containerlab, platform_package, probe_package
 from fylgja_core.bundle import Manifest
 from fylgja_core.containerlab import cli, pool
 from fylgja_core.containerlab import plan as clab_plan
-from fylgja_core.driver import Allocation, Capabilities, Planned, Refusal
+from fylgja_core.containerlab.plan import TOPOLOGY
+from fylgja_core.deployment import Deployment
+from fylgja_core.driver import Allocation, Capabilities, Inspection, Planned, Refusal
 from fylgja_core.platform_package import Image, PlatformPackage
 from fylgja_core.probe_package import ProbePackage
+from fylgja_core.store import check_file_key, check_twin_name
 
 # Rule ids. Clients and tests match on them; the catalogue is docs/rules.md.
 RULE_CAPACITY = "admission.capacity"
@@ -38,6 +50,9 @@ RULE_IMAGE = "admission.image.absent"
 
 DOCKER_TIMEOUT_S = 30.0
 """The budget of one `docker` read."""
+
+MARGIN_S = 60.0
+"""What a deploy's budget adds to its slowest package's timeout, for containerlab's own work."""
 
 _log = logging.getLogger("fylgja.containerlab")
 
@@ -113,6 +128,45 @@ class ContainerlabDriver:
                   twin, subnet, demand.nodes, demand.cpu, demand.memory_mb)
         return pool.allocation(twin, subnet)
 
+    async def apply(
+        self,
+        deployment: Deployment,
+        files: Mapping[str, bytes],
+        platforms: Mapping[str, PlatformPackage],
+        probe_packages: Mapping[str, ProbePackage],
+        reconfigure: bool = False,
+    ) -> None:
+        """Write the deployment's files under the twin's directory and deploy its topology, with
+        `--reconfigure` when asked; `ValueError`, before any write or command, for files that are
+        not the deployment's or a node no given package runs."""
+        _check_files(deployment, files)
+        budget = deploy_budget(files, platforms, probe_packages)
+        directory = self._write(deployment.twin, files)
+        argv = ["containerlab", "deploy", "-t", str(directory / TOPOLOGY)]
+        await self._run([*argv, "--reconfigure"] if reconfigure else argv, timeout_s=budget, cwd=directory)
+
+    async def inspect(self, twin: str) -> Inspection:
+        """What the runtime holds of the twin."""
+        raise NotImplementedError("the local driver's inspect")
+
+    async def endpoints(self, twin: str) -> Mapping[str, str]:
+        """Each running node's management address, by node name; a node without one is left out."""
+        inspection = await self.inspect(twin)
+        return {n.name: n.address for n in sorted(inspection.nodes, key=lambda n: n.name) if n.running and n.address}
+
+    def _directory(self, twin: str) -> Path:
+        """The twin's working directory; containerlab makes the lab's own, `clab-<twin>/`, inside it."""
+        return self.root / "containerlab" / check_twin_name(twin)
+
+    def _write(self, twin: str, files: Mapping[str, bytes]) -> Path:
+        """Write `files` under the twin's directory, each whole or not at all; the directory."""
+        directory = self._directory(twin)
+        for path, data in sorted(files.items()):
+            target = directory / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _write_atomic(target, data)
+        return directory
+
     async def _docker_subnets(self) -> list[IPv4Network]:
         """Every IPv4 subnet a Docker network on the host holds."""
         ids = (await self._run(["docker", "network", "ls", "--format", "{{.ID}}"], timeout_s=DOCKER_TIMEOUT_S)).split()
@@ -145,6 +199,69 @@ class ContainerlabDriver:
             if key == "MemAvailable":
                 return int(value.split()[0]) // 1024  # the kernel writes kB, which are KiB
         raise ValueError(f"{self._meminfo} has no MemAvailable")
+
+
+def deploy_budget(
+    files: Mapping[str, bytes], platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+) -> float:
+    """The budget of a deploy of `files`: the largest `deploy_timeout_s` of the packages the
+    topology's nodes use, since nodes deploy in parallel, plus `MARGIN_S`."""
+    return max(section.deploy_timeout_s for section in _sections(files, platforms, probe_packages)) + MARGIN_S
+
+
+def _sections(
+    files: Mapping[str, bytes], platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+) -> list[platform_package.Containerlab | probe_package.Containerlab]:
+    """The containerlab section of each package a node of the topology uses: a platform's by
+    the node's kind and image, a probe package's by a linux node's image. The deployment does
+    not name its packages, and its topology, the plan's render, does. `ValueError` for a node
+    no given package runs."""
+    used: list[platform_package.Containerlab | probe_package.Containerlab] = []
+    for name, node in yaml.safe_load(files[TOPOLOGY])["topology"]["nodes"].items():
+        kind, image = node["kind"], node["image"]
+        sections: list[platform_package.Containerlab | probe_package.Containerlab] = [
+            p.runtime.containerlab for p in platforms.values()
+            if (p.runtime.containerlab.kind, p.runtime.containerlab.image.ref) == (kind, image)]
+        if kind == "linux":
+            sections += [q.runtime.containerlab for q in probe_packages.values()
+                         if q.runtime.containerlab.image.ref == image]
+        if not sections:
+            raise ValueError(f"no package given runs the node {name} ({kind}, {image})")
+        used += sections
+    return used
+
+
+def _check_files(deployment: Deployment, files: Mapping[str, bytes]) -> None:
+    """`ValueError` unless `files` are exactly the deployment's, each with the SHA-256 it lists."""
+    listed = {f.path: f.sha256 for f in deployment.files}
+    if set(files) != set(listed):
+        raise ValueError(f"the files {sorted(files)} are not the deployment's {sorted(listed)}")
+    for path, data in files.items():
+        check_file_key(path)
+        if hashlib.sha256(data).hexdigest() != listed[path]:
+            raise ValueError(f"{path} is not the deployment's: its SHA-256 differs from the one {deployment.id} lists")
+    if TOPOLOGY not in files:
+        raise ValueError(f"the deployment {deployment.id} lists no {TOPOLOGY}")
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Replace `path` with `data`, whole or not at all, as the local store writes: a fsynced
+    temporary file beside it, renamed into place, and the directory fsynced."""
+    temp = path.parent / f".tmp-{secrets.token_hex(8)}"
+    try:
+        with temp.open("xb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, path)
+    except BaseException:
+        temp.unlink(missing_ok=True)
+        raise
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def _images(

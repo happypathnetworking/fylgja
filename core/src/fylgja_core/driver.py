@@ -89,7 +89,9 @@ class Inspection:
 
 
 class Driver(Protocol):
-    """A runtime behind the seam."""
+    """A runtime behind the seam. `apply` and `destroy` take the packages, as `admit` and
+    `plan` do: a deploy's and a destroy's budgets are the measured timeouts of the packages
+    the deployment's nodes use, which neither the deployment nor its files carry."""
 
     name: str
 
@@ -121,15 +123,29 @@ class Driver(Protocol):
         raise `Unplannable` with every fault."""
         ...
 
-    async def apply(self, deployment: Deployment, files: Mapping[str, bytes], reconfigure: bool = False) -> None:
-        """Make the runtime hold the deployment."""
+    async def apply(
+        self,
+        deployment: Deployment,
+        files: Mapping[str, bytes],
+        platforms: Mapping[str, PlatformPackage],
+        probe_packages: Mapping[str, ProbePackage],
+        reconfigure: bool = False,
+    ) -> None:
+        """Make the runtime hold the deployment; `reconfigure` rebuilds what a partial apply
+        left, the loop's remedy for a node that stays silent (D-023)."""
         ...
 
     async def inspect(self, twin: str) -> Inspection:
         """What the runtime holds of the twin."""
         ...
 
-    async def destroy(self, deployment: Deployment, files: Mapping[str, bytes]) -> None:
+    async def destroy(
+        self,
+        deployment: Deployment,
+        files: Mapping[str, bytes],
+        platforms: Mapping[str, PlatformPackage],
+        probe_packages: Mapping[str, ProbePackage],
+    ) -> None:
         """Remove the deployment and its residue from the runtime."""
         ...
 

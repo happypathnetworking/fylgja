@@ -4,6 +4,7 @@ stands for the two CLIs, recording each command line and answering canned output
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from collections.abc import Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
@@ -13,9 +14,10 @@ import pytest
 from fylgja_core import blueprint, bundle, compiler, containerlab, platform_package, probe_package
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.containerlab.cli import TIMED_OUT, CommandFailed
-from fylgja_core.containerlab.driver import RULE_CAPACITY, RULE_IMAGE, ContainerlabDriver
+from fylgja_core.containerlab.driver import RULE_CAPACITY, RULE_IMAGE, ContainerlabDriver, deploy_budget
+from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
-from fylgja_core.driver import Allocation, Refusal
+from fylgja_core.driver import Allocation, Inspection, NodeState, Planned, Refusal
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -184,3 +186,102 @@ def test_a_hung_image_inspect_is_a_driver_error_not_an_absence(tmp_path: Path) -
     with pytest.raises(CommandFailed) as raised:
         admit(tmp_path, FakeRunner(HOLDING_172_20_0, fail=[IMAGE_INSPECT], status=TIMED_OUT), "mixed")
     assert raised.value.returncode == TIMED_OUT
+
+
+DEPLOY = ("containerlab", "deploy")
+
+
+def planned(name: str, twin: str = "t", subnet: str = "172.20.2.0/24") -> Planned:
+    c = compiler.compile(blueprint.load(ROOT / f"testdata/blueprint/{name}.json"), PLATFORMS, PROBES)
+    return clab_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, twin, {"lab": twin, "mgmt_subnet": subnet})
+
+
+def apply(
+    tmp_path: Path, runner: FakeRunner, p: Planned, files: Mapping[str, bytes] | None = None, reconfigure: bool = False
+) -> None:
+    driver = ContainerlabDriver(tmp_path, runner=runner)
+    asyncio.run(driver.apply(p.deployment, p.files if files is None else files, PLATFORMS, PROBES, reconfigure))
+
+
+def test_apply_writes_the_deployments_files_under_the_twins_directory_and_deploys_them(tmp_path: Path) -> None:
+    p = planned("three-node")
+    runner = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, runner, p)
+    directory = tmp_path / "containerlab" / "t"
+    topology = directory / TOPOLOGY
+    assert topology.read_bytes() == p.files[TOPOLOGY]
+    assert [path.name for path in directory.iterdir()] == [TOPOLOGY]  # no temporary file left beside it
+    assert runner.calls == [("containerlab", "deploy", "-t", str(topology))]
+    assert runner.budgets == [180 + 60]
+    assert runner.cwds == [directory]
+
+
+def test_apply_with_reconfigure_deploys_with_reconfigure(tmp_path: Path) -> None:
+    runner = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, runner, planned("three-node"), reconfigure=True)
+    assert runner.calls == [("containerlab", "deploy", "-t", str(tmp_path / "containerlab/t" / TOPOLOGY),
+                             "--reconfigure")]
+
+
+def test_a_repeat_apply_replaces_the_files_and_deploys_again(tmp_path: Path) -> None:
+    # A repeat of a running lab is containerlab's own reconcile; a step's plan replaces the file.
+    runner = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, runner, planned("three-node"))
+    stepped = planned("three-node-probed")
+    apply(tmp_path, runner, stepped)
+    assert (tmp_path / "containerlab/t" / TOPOLOGY).read_bytes() == stepped.files[TOPOLOGY]
+    assert [path.name for path in (tmp_path / "containerlab/t").iterdir()] == [TOPOLOGY]
+    assert runner.calls == [("containerlab", "deploy", "-t", str(tmp_path / "containerlab/t" / TOPOLOGY))] * 2
+
+
+def test_files_that_are_not_the_deployments_are_refused_before_any_command_or_write(tmp_path: Path) -> None:
+    p = planned("three-node")
+    runner = FakeRunner({DEPLOY: ""})
+    with pytest.raises(ValueError, match=r"topology\.clab\.yml is not the deployment's: its SHA-256 differs"):
+        apply(tmp_path, runner, p, {TOPOLOGY: p.files[TOPOLOGY] + b"# changed\n"})
+    with pytest.raises(ValueError, match=r"the files \[\] are not the deployment's \['topology\.clab\.yml'\]"):
+        apply(tmp_path, runner, p, {})
+    with pytest.raises(ValueError, match="are not the deployment's"):
+        apply(tmp_path, runner, p, {**p.files, "extra.yml": b""})
+    assert runner.calls == []
+    assert not (tmp_path / "containerlab").exists()
+
+
+def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:
+    assert deploy_budget(planned("three-node").files, PLATFORMS, PROBES) == 180 + 60  # EOS's 300 s is not used
+    assert deploy_budget(planned("mixed").files, PLATFORMS, PROBES) == 300 + 60
+    assert deploy_budget(planned("three-node-probed").files, PLATFORMS, PROBES) == 180 + 60
+    ping = PROBES["ping"]
+    clab = dataclasses.replace(ping.runtime.containerlab, deploy_timeout_s=400)
+    slow = {"ping": dataclasses.replace(ping, runtime=dataclasses.replace(ping.runtime, containerlab=clab))}
+    assert deploy_budget(planned("three-node-probed").files, PLATFORMS, slow) == 400 + 60
+    assert deploy_budget(planned("three-node").files, PLATFORMS, slow) == 180 + 60
+
+
+def test_a_node_no_given_package_runs_has_no_budget() -> None:
+    with pytest.raises(ValueError, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
+        deploy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
+
+
+class Inspected(ContainerlabDriver):
+    """The driver over a canned inspection."""
+
+    def __init__(self, inspection: Inspection) -> None:
+        super().__init__(Path("unused"))
+        self.inspection = inspection
+
+    async def inspect(self, twin: str) -> Inspection:
+        return self.inspection
+
+
+def test_endpoints_are_the_running_nodes_addresses() -> None:
+    def node(name: str, address: str | None, running: bool) -> NodeState:
+        return NodeState(name=name, handle=f"clab-t-{name}", incarnation="2026-11-03T12:00:00Z", address=address,
+                         running=running)
+
+    # n4 is held to the rule as well: an address is a running node's alone.
+    nodes = (node("n3", None, False), node("n1", "172.20.2.2", True), node("n2", None, True),
+             node("n4", "172.20.2.5", False))
+    driver = Inspected(Inspection(state="present", nodes=nodes))
+    assert asyncio.run(driver.endpoints("t")) == {"n1": "172.20.2.2"}
+    assert asyncio.run(Inspected(Inspection(state="absent", nodes=())).endpoints("t")) == {}

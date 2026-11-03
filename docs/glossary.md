@@ -266,6 +266,10 @@ and whether the loop may restart nodes. Writing a new spec creates or steps the 
 blueprints, bundles and deployments live: a directory locally, S3-compatible object storage
 in production. No database
 ([Constitution IX](../design/constitution.md#ix-state-lives-behind-one-store-no-database)).
+The local store's files are `lock`, `blueprints/<id>.json`, `bundles/<id>/manifest.json` and
+`configs/<node>.cfg`, `deployments/<id>/deployment.json` with the rendered files beside it,
+`twins/<name>.json`, and `runs/<ulid>.json` with `runs/<ulid>.events.ndjson`
+([D-041](../design/decisions.md#d-041)).
 
 **Status** — The part of a twin record only the reconcile loop writes: conditions, phase,
 the running blueprint, bundle and deployment, the nodes, the last step and the observed
@@ -291,6 +295,10 @@ runtime, and the twin resource the API serves: its *spec* and *status*, its *gen
 and *revision*, changed only by compare-and-set
 ([`twin-record-1.schema.json`](../formats/twin-record-1.schema.json),
 [D-025](../design/decisions.md#d-025)).
+
+**ULID** — A 26-character, time-sortable id (48 bits of milliseconds, 80 random bits,
+Crockford base32), made in the core, which every run carries
+([D-040](../design/decisions.md#d-040)).
 
 **Verdict** — A findings document: what a compile, a package validation, a plan, a run or a
 verification concluded, with a status and every finding behind it

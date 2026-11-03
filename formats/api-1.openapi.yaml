@@ -571,7 +571,7 @@ components:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     Unprocessable:
-      description: Well-formed but not compilable (bundle.rejected), every fault in findings.
+      description: Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected), every fault in findings.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }

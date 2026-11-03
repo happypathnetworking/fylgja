@@ -3,7 +3,7 @@
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/problem-1.schema.json",
   "title": "Fylgja problem 1",
   "description": "An RFC 9457 problem document (application/problem+json): the core's one answer for a request that is malformed, unauthorised, refused or conflicting (every 4xx), and for a server fault (5xx). Clients map it to exit 2.",
-  "$comment": "type is a problem class, not a rule, so the rule is not stored twice: about:blank or one of https://github.com/happypathnetworking/fylgja/core/problems/{invalid,unauthenticated,forbidden,not-found,conflict,unprocessable,unavailable,internal}. rule is the stable id clients match on. findings is an extension member used where one request has several faults (a malformed blueprint, an uncompilable bundle at 422 with rule bundle.rejected), so they are all reported in one pass.",
+  "$comment": "type is a problem class, not a rule, so the rule is not stored twice: about:blank or one of https://github.com/happypathnetworking/fylgja/core/problems/{invalid,unauthenticated,forbidden,not-found,conflict,unprocessable,unavailable,internal}. rule is the stable id clients match on. findings is an extension member used where one request has several faults (a malformed blueprint, an uncompilable bundle at 422 with rule bundle.rejected, an unplannable one at 422 with rule plan.rejected), so they are all reported in one pass.",
   "type": "object",
   "additionalProperties": false,
   "required": ["type", "title", "status", "rule"],

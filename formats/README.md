@@ -52,7 +52,8 @@ relative to them.
    is a new spec, a dry run is `PUT …?dry_run=true`, and clients watch a twin by server-sent
    events. `status.phase` and `status.run_id` let a restarted core resume (constitution VIII).
 8. **A compile that fails answers 422 with a problem document**, rule `bundle.rejected`, and
-   every fault in `findings`. It is not a verdict document.
+   every fault in `findings`. It is not a verdict document. A plan the driver refuses
+   answers 422 the same way, rule `plan.rejected` ([D-045](../design/decisions.md#d-045)).
 9. **Verify is synchronous with no wait.** A waiting verify happens only inside a step's
    run, and the step's wait budget is the server's setting.
 10. **A twin's name is a DNS-1123 label of at most 40 characters.** Run ids are ULIDs. A

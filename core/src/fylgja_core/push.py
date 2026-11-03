@@ -38,7 +38,10 @@ class Pushed:
 
 @dataclass(frozen=True)
 class Refused:
-    """The node refused the replace, and nothing landed: `message` is the node's reason."""
+    """The node refused the replace, and nothing landed: `message` is the node's reason.
+
+    A failure only a new spec can clear (D-023): the same configuration is refused again.
+    """
 
     message: str
     rule: str = RULE_REFUSED

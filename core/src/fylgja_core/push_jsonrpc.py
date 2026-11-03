@@ -15,8 +15,8 @@ writes no empty line before it. The node cuts its message at about 1 KiB, which 
 echo outruns, so a refusal with no reason gets one more request, `commit validate`, which lands
 nothing. When that gives no reason either, the refusal is one of D-028's two sentences, quoting
 nothing. A reason has the recorded shape `At line N: …`; anything else, a message cut inside or
-just after the error code included, is no reason. Each shape is SR Linux 24.7.1's, recorded in
-design/verified-facts.md.
+just after the error code included, is no reason. Each shape is the node's own, as the facts
+file (design/verified-facts.md) records it for `json_rpc`.
 """
 
 from __future__ import annotations

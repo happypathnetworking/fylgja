@@ -24,7 +24,11 @@ _log = logging.getLogger("fylgja.readiness")
 
 
 class NotReady(Exception):
-    """A node did not become ready: `rule` is `readiness.timeout` or `readiness.unauthorized`."""
+    """A node did not become ready: `rule` is `readiness.timeout` or `readiness.unauthorized`.
+
+    `readiness.timeout` fails the ready phase. `readiness.unauthorized` will not clear by
+    waiting: the node refuses the login.
+    """
 
     def __init__(self, rule: str, message: str) -> None:
         self.rule = rule
@@ -69,8 +73,9 @@ async def await_transport(
     Raises `NotReady` at once on a refused login, and when the budget runs out.
 
     An attempt gives the connection `interval_s * 2`, since a port not yet open refuses at once,
-    and the answer the push's own per-request budget within what is left of the wait's: SR Linux
-    takes 3.2-4.4 s to answer `show version` over `cli` (design/verified-facts.md).
+    and the answer the push's own per-request budget within what is left of the wait's: a
+    `json_rpc` node takes 3.2-4.4 s to answer `show version` over `cli` (the facts file,
+    design/verified-facts.md).
     """
     budget = package.readiness.timeout_s if timeout_s is None else timeout_s
     path, body = probe_request(package, credential)

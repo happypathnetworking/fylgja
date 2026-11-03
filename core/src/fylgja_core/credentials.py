@@ -32,7 +32,11 @@ class Credential:
 
 
 class Missing(Exception):
-    """A credential variable is not set, or is empty; it is named, and nothing present is shown."""
+    """A credential variable is not set, or is empty; it is named, and nothing present is shown.
+
+    An operator-environment fault (D-042): neither a retry nor a new spec clears it, only
+    setting the variable where the core runs.
+    """
 
     rule = RULE_MISSING
 

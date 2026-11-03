@@ -23,6 +23,7 @@ REJECTED: dict[str, set[tuple[str, str]]] = {
     "format-unsupported.yaml": {("/format", RULE_FORMAT)},
     "command-unknown-placeholder.yaml": {("/host/route/3", RULE_PLACEHOLDERS)},
     "expect-unknown-placeholder.yaml": {("/readiness/expect", RULE_PLACEHOLDERS)},
+    "host-placeholder.yaml": {("/host/route/9", RULE_PLACEHOLDERS)},
     "several.yaml": {("/format", RULE_FORMAT), ("/host/route/3", RULE_PLACEHOLDERS)},
 }
 

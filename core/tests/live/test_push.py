@@ -11,6 +11,7 @@ import asyncio
 import dataclasses
 import json
 import os
+import secrets
 import time
 from collections.abc import Coroutine
 from pathlib import Path
@@ -19,10 +20,10 @@ from typing import Any
 import httpx
 import pytest
 
-from fylgja_core import platform_package, push_eapi, readiness
+from fylgja_core import node_http, platform_package, push_eapi, readiness
 from fylgja_core.credentials import Credential, Provider
 from fylgja_core.platform_package import PlatformPackage
-from fylgja_core.push import Pushed, Refused, Unreachable, post, push
+from fylgja_core.push import Pushed, Refused, Unauthorized, Unreachable, post, push
 from fylgja_core.push_jsonrpc import REASON_NOT_GIVEN, REASON_VALIDATES
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -37,7 +38,7 @@ VLAN_UNTAGGED = "set / interface ethernet-1/1 subinterface 0 vlan encap single-t
 EOS_REFUSED = ["interface Ethernet1", "no such command"]
 
 pytestmark = pytest.mark.skipif(
-    "FYLGJA_CREDENTIAL_SRLINUX_USERNAME" not in os.environ,
+    not os.environ.get("FYLGJA_CREDENTIAL_SRLINUX_USERNAME"),
     reason="the live tier reads the node logins from the environment: load local/.env first "
     "(set -a; . local/.env; set +a)",
 )
@@ -63,11 +64,36 @@ async def _sessions(address: str, credential: Credential) -> dict[str, Any]:
         "method": "runCmds",
         "params": {"version": 1, "cmds": ["show configuration sessions"], "format": "json"},
     }
-    url = f"https://{address}:{EOS.push.port}/command-api"
-    async with httpx.AsyncClient(verify=False) as client:  # boot-time certificate, unverified
+    url = node_http.url(address, EOS.push.port, "/command-api")
+    async with node_http.client() as client:
         answer = await post(client, url, body, credential, timeout_s=EOS.push.timeout_s)
     sessions: dict[str, Any] = answer["result"][0]["sessions"]
     return sessions
+
+
+async def _bad_login(address: str, package: PlatformPackage, credential: Credential) -> str:
+    """What the node answers the readiness request sent with `credential`: status, type and body.
+
+    The body is cut to 200 characters, the login's username and password replaced.
+    """
+    path, body = readiness.probe_request(package, credential)
+    auth = httpx.BasicAuth(credential.username, credential.password)
+    async with node_http.client() as client:
+        response = await client.post(node_http.url(address, package.push.port, path), json=body, auth=auth)
+    text = response.text.replace(credential.password, "<password>").replace(credential.username, "<username>")
+    kind = response.headers.get("content-type", "no content-type")
+    return f"HTTP {response.status_code}, {kind}, {len(response.content)}-byte body: {text[:200]!r}"
+
+
+async def _ready_counting(address: str, package: PlatformPackage, credential: Credential, seen: list[str]) -> float:
+    """Readiness for `credential`, counting the requests it sends, within 15 s."""
+
+    async def count(request: httpx.Request) -> None:
+        seen.append(request.url.path)
+
+    async with node_http.client() as client:
+        client.event_hooks = {"request": [count]}
+        return await readiness.await_transport(address, package, credential, timeout_s=15, client=client)
 
 
 @pytest.fixture(scope="session")
@@ -138,6 +164,25 @@ def test_an_eos_refusal_names_the_command_and_leaves_no_session(nodes: dict[str,
     assert refused.message.startswith(f"command {number} ('no such command') refused: ")
     sessions = _timed("e1 sessions", _sessions(nodes["e1"], credential))
     assert not [name for name in sessions if name.startswith("fylgja-")], sessions
+
+
+@pytest.mark.parametrize("name", list(PACKAGES))
+def test_a_wrong_password_is_refused_at_the_first_attempt_and_the_push_is_unauthorized(
+    name: str, nodes: dict[str, str], ready: dict[str, float]
+) -> None:
+    package, address = PACKAGES[name], nodes[name]
+    real = _login(package)
+    wrong = Credential(username=real.username, password=f"wrong-{secrets.token_hex(4)}")
+    print(f"\n{name} answered a wrong login: {_timed(f'{name} wrong login', _bad_login(address, package, wrong))}")
+    seen: list[str] = []
+    with pytest.raises(readiness.NotReady) as e:
+        _timed(f"{name} readiness, wrong login", _ready_counting(address, package, wrong, seen))
+    assert e.value.rule == readiness.RULE_UNAUTHORIZED == "readiness.unauthorized" and len(seen) == 1
+    with pytest.raises(Unauthorized) as refused:
+        _timed(f"{name} push, wrong login", push(address, package, CONFIG[name], wrong))
+    assert wrong.password not in str(refused.value)  # never the real one: a failed assert would print it
+    again = _timed(f"{name} readiness, the real login after", readiness.await_transport(address, package, real))
+    print(f"{name} still answers the real login: {again:.1f}s")
 
 
 @pytest.mark.parametrize("package", [SRLINUX, EOS], ids=["json_rpc", "eapi"])

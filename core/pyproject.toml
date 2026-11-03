@@ -42,7 +42,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 [tool.mypy]
 strict = true
 python_version = "3.14"
-files = ["src", "tests"]
+files = ["src", "tests", "../scripts"]
 
 [[tool.mypy.overrides]]
 module = ["jsonschema.*", "rfc8785.*", "referencing.*"]

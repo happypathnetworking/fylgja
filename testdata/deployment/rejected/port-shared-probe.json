@@ -1,0 +1,163 @@
+{
+ "blueprint_version": "1",
+ "network": {
+  "devices": [
+   {
+    "name": "c1",
+    "platform": "chassisos",
+    "interfaces": [
+     {
+      "name": "Ethernet1/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/49/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/49/2",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/53",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet2/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Management1",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "! c1: production configuration (illustrative, never deployed)\nhostname c1\ninterface Ethernet1/1\n   description to s1 ethernet-1/1\n   no switchport\ninterface Ethernet1/49/1\n   description to c2 Ethernet1/49/1\n   no switchport\ninterface Loopback0\n"
+   },
+   {
+    "name": "c2",
+    "platform": "chassisos",
+    "interfaces": [
+     {
+      "name": "Ethernet1/2",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/49/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/50",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/50/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet1/50/2",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet2/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Management1",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "! c2: production configuration (illustrative, never deployed)\nhostname c2\ninterface Ethernet1/49/1\n   description to c1 Ethernet1/49/1\n   no switchport\ninterface Ethernet2/1\n   description to s1 ethernet-1/2/1\n   no switchport\ninterface Loopback0\n"
+   },
+   {
+    "name": "s1",
+    "platform": "nokia_srlinux",
+    "interfaces": [
+     {
+      "name": "ethernet-1/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/2/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "mgmt0",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "# s1: production configuration (illustrative)\nset / system name host-name s1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to c1 Ethernet1/1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/2/1 description \"to c2 Ethernet2/1\"\nset / interface ethernet-1/2/1 admin-state enable\n"
+   }
+  ],
+  "links": [
+   {
+    "a": {
+     "device": "c1",
+     "interface": "Ethernet1/1"
+    },
+    "b": {
+     "device": "s1",
+     "interface": "ethernet-1/1"
+    }
+   },
+   {
+    "a": {
+     "device": "c1",
+     "interface": "Ethernet1/49/1"
+    },
+    "b": {
+     "device": "c2",
+     "interface": "Ethernet1/49/1"
+    }
+   },
+   {
+    "a": {
+     "device": "c2",
+     "interface": "Ethernet2/1"
+    },
+    "b": {
+     "device": "s1",
+     "interface": "ethernet-1/2/1"
+    }
+   }
+  ]
+ },
+ "probes": [
+  {
+   "name": "c1-loop",
+   "format": "ping",
+   "endpoints": [
+    {
+     "device": "c1",
+     "interface": "Ethernet2/1",
+     "address": "10.9.1.2/24",
+     "gateway": "10.9.1.1"
+    },
+    {
+     "device": "c2",
+     "interface": "Ethernet1/2",
+     "address": "10.9.2.2/24",
+     "gateway": "10.9.2.1"
+    }
+   ]
+  }
+ ],
+ "source": {
+  "rejection_fixture": "Probe c1-loop's host a is on c1:Ethernet2/1, which the chassisos rename puts on eth1, the port the cabled c1:Ethernet1/1 holds: interface.port.shared on c1:Ethernet1/1 and c1:Ethernet2/1. A plan rejection fixture: a valid blueprint 1 the compiler accepts and the containerlab driver's plan refuses; tests/test_containerlab_plan.py says what it must report."
+ }
+}

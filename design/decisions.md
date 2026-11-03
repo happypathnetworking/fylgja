@@ -68,6 +68,7 @@ already have been weighed.
 | [D-042](#d-042) | Configuration and credentials come from `FYLGJA_*` variables, with no configuration file | The API and its clients |
 | [D-043](#d-043) | The local driver's allocation and its reach into Docker | Runtimes and drivers |
 | [D-044](#d-044) | The deployment id hashes the driver, the twin, the bundle id and the files | The compiler and the bundle |
+| [D-045](#d-045) | The driver's plan refuses a runtime port two cabled interfaces share | The compiler and the bundle |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -729,6 +730,52 @@ as the `$comment` says; the allocation's description is corrected in the same ch
 
 - Planning the same bundle for the same twin with the same allocation gives the same id,
   which keeps `apply` idempotent.
+
+<a id="d-045"></a>
+### D-045 — The driver's plan refuses a runtime port two cabled interfaces share
+
+**Status:** Accepted 2026-11-03. Details [D-038](#d-038).
+
+#### Context
+
+A kind with no aliases (cEOS, the synthetic `chassisos`) takes renamed ports, one rename per
+data rule ([D-015](#d-015)). A rename that drops a placeholder of its rule's match can put
+two interfaces of one node on one runtime port, and when both are cabled, by a link's end or
+a probe's endpoint, the topology cables that port twice, which containerlab refuses only at
+deploy. The compiler is runtime-neutral and cannot know the rename, and [D-038](#d-038) made
+the ports two interfaces share the plan's to find. The frozen Go core refused this case in
+its compiler, as `interface.port.collision`.
+
+#### Options considered
+
+- **Refuse in the compiler.** Rejected: the rename is runtime-specific, since a kind with
+  aliases shares no port, and D-038 makes sharing the plan's finding.
+- **Refuse in `admit`.** Rejected: late, and impure, for a fact the pure plan computes.
+- **Answer a dry run with a `Plan` whose deployment is optional.** Rejected: API 1's `Plan`
+  requires a deployment, and a refusal is not a plan.
+- **The plan raises `Unplannable` with findings; the API answers a 422 problem
+  `plan.rejected`, and the loop ends the run `rejected`.** Chosen: a plan refuses as a
+  compile does, with every fault in one pass.
+
+#### Decision
+
+- `plan` raises `Unplannable` (`fylgja_core.driver`), holding every fault as a finding in a
+  verdict's order, as a compile raises `Uncompilable`.
+- On a kind with no aliases, each cabled interface the rename puts on a port with another
+  cabled interface of its node is one error finding, `interface.port.shared`; a probe's
+  endpoint is cabled. An uncabled interface on a cabled one's port stays an omission,
+  `shared`, which fidelity reports.
+- The API answers a dry run the plan refuses with a 422 problem document, rule
+  `plan.rejected`, carrying the findings, as it answers `bundle.rejected`; the reconcile loop
+  ends such a run `rejected`, the findings in its verdict.
+
+#### Consequences
+
+- The rule `interface.port.shared` is catalogued in [`docs/rules.md`](../docs/rules.md), its
+  object an interface as `device:interface`.
+- `testdata/deployment/rejected/` holds a rejection fixture for each way to reach it, a link
+  and a probe: a valid blueprint the compiler accepts and the plan refuses.
+- `plan.rejected` arrives with the API, as `bundle.rejected` does.
 
 
 

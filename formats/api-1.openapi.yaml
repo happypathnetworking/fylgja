@@ -571,7 +571,7 @@ components:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     Unprocessable:
-      description: Well-formed but not compilable (bundle.rejected), every fault in findings.
+      description: Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected), every fault in findings.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
@@ -679,7 +679,7 @@ components:
         capabilities:
           type: object
           additionalProperties: false
-          required: [nodes, relink, forwarding, access]
+          required: [nodes, relink, forwarding, access, isolation]
           properties:
             nodes:
               enum: [provisions, claims]
@@ -693,6 +693,9 @@ components:
             access:
               enum: [direct, proxied]
               description: Whether node addresses are reachable directly or through a twin record node's access host; clients branch on it.
+            isolation:
+              enum: [names, network]
+              description: Whether twins are kept apart by name alone (local labs whose management networks route to each other through the host) or by the network (a NetworkPolicy per namespace); clients show it (D-019).
 
     BundleDiff:
       type: object

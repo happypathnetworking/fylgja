@@ -1,0 +1,45 @@
+{
+ "allocation": {
+  "lab": "three-node",
+  "mgmt_subnet": "172.20.1.0/24"
+ },
+ "bundle_id": "6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31",
+ "demand": {
+  "cpu": 1.5,
+  "memory_mb": 6144,
+  "nodes": 3
+ },
+ "deployment_version": "1",
+ "driver": "containerlab",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 0,
+   "shared_ports": 0
+  },
+  "omitted": [],
+  "synthesized": []
+ },
+ "files": [
+  {
+   "path": "topology.clab.yml",
+   "sha256": "0fdf111cee483aacf9b29589fa9a480d63fd94320f3486ae00c68ade51224dbb"
+  }
+ ],
+ "id": "ea5bec45e47c677a365051ee341e69f4d2d639b630ad786cd5d3f7157d76acda",
+ "twin": "three-node"
+}

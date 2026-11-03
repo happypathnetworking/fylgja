@@ -26,7 +26,7 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 | `package.invalid` | both package loaders | the package violates its schema at the pointer |
 | `package.rule.name` | the platform package loader | two interface rules share a name |
 | `package.management.rule` | the platform package loader | no rule, or more than one, is the management rule |
-| `package.patterns.placeholders` | both package loaders | a template uses a placeholder its match does not capture (`node_name`, a rename's `port`), a match captures one twice, or a probe package's command or readiness text names a placeholder that does not exist |
+| `package.patterns.placeholders` | both package loaders | a template uses a placeholder its match does not capture (`node_name`, a rename's `port`), a match captures one twice, a probe package's command or readiness text names a placeholder that does not exist, or a host's start-up command (`host.address`, `host.route`) names one the plan does not render there: it may name `{address}`, `{interface}`, `{far_address}` and `{gateway}` alone |
 | `package.ranges.placeholder` | the platform package loader | a `ranges` key is no placeholder of the rule's match |
 | `package.rename.coverage` | the platform package loader | a rename names no data rule or names one twice, or a data rule has no rename while the kind has no aliases |
 | `package.format.unsupported` | the probe package loader | the format names a mechanism this build does not run ([D-014](../design/decisions.md#d-014)) |
@@ -60,3 +60,16 @@ endpoint as `probe/a` or `probe/b`.
 | `probe.interface.mgmt_only` | the endpoint is on the management port |
 | `probe.interface.cabled` | the endpoint is on a port that ends a link |
 | `probe.port.taken` | the endpoint is on a port an earlier probe's endpoint took |
+
+## Findings: a plan refused
+
+Each is an error, and every fault is reported in one pass. A driver's plan with one is
+refused (`Unplannable`): the API answers a dry run with a 422 problem document, rule
+`plan.rejected`, carrying these findings, as it does for `bundle.rejected` (API 1's `Plan`
+shape requires a deployment, so a refusal cannot be a plan), and the loop ends such a run
+`rejected`; that rule arrives with the API, like `bundle.rejected`. The object is an interface
+as `device:interface`.
+
+| Rule | Means |
+|---|---|
+| `interface.port.shared` | on a kind with no aliases, the rename puts this cabled interface (a link's end or a probe's endpoint) on a runtime port with another cabled interface of its node, and the twin can cable a port once. An uncabled interface the rename puts on a cabled one's port is an omission fidelity reports (`shared`), not a finding |

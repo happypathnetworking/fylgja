@@ -64,3 +64,14 @@ def test_a_measured_loss_without_its_counters_is_a_schema_fault() -> None:
     assert {p.pointer for p in found} == {"/loss/0", "/findings/0/rule"}
     with pytest.raises(Rejected):
         findings.decode(bad)
+
+
+def test_findings_sort_by_severity_then_rule_then_object() -> None:
+    info = Finding(rule="a.b", severity="info", object="x", message="i")
+    warning = Finding(rule="a.a", severity="warning", object="x", message="w")
+    error_y = Finding(rule="a.a", severity="error", object="y", message="e")
+    error_x = Finding(rule="a.a", severity="error", object="x", message="e")
+    error_none = Finding(rule="a.a", severity="error", message="e")
+    ordered = findings.order([info, warning, error_y, error_x, error_none])
+    assert ordered == (error_none, error_x, error_y, warning, info)
+    assert findings.SEVERITIES == ("error", "warning", "info")

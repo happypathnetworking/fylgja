@@ -139,9 +139,11 @@ def _jcs(value: Any) -> str:
     raise NotCanonical(f"{type(value).__name__} is not part of a blueprint's hashed body")
 
 
-def blueprint_id(doc: dict[str, Any]) -> str:
-    """The blueprint's id: lowercase hex SHA-256 over the canonical network and probes."""
-    return hashlib.sha256(canonical({"network": doc["network"], "probes": doc["probes"]})).hexdigest()
+def blueprint_id(doc: dict[str, Any] | Blueprint) -> str:
+    """The blueprint's id: lowercase hex SHA-256 over the canonical network and probes, of a
+    document or of its model."""
+    body: dict[str, Any] = documents.encode(doc) if isinstance(doc, Blueprint) else doc
+    return hashlib.sha256(canonical({"network": body["network"], "probes": body["probes"]})).hexdigest()
 
 
 def validate(doc: Any) -> list[Problem]:

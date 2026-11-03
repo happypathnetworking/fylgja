@@ -7,6 +7,7 @@ the door is a problem document (problem.py), never a verdict.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -18,6 +19,9 @@ VERSION = "1"
 # Rule ids. Clients and tests match on them.
 RULE_INVALID = "findings.invalid"
 RULE_VERSION = "findings.version.unsupported"
+
+# The severities, most serious first; findings sort by them.
+SEVERITIES: tuple[str, ...] = ("error", "warning", "info")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -83,6 +87,11 @@ class Verdict:
     counts: Counts | None = None
     wait: Wait | None = None
     loss: tuple[Loss, ...] | None = None
+
+
+def order(items: Iterable[Finding]) -> tuple[Finding, ...]:
+    """Findings as a verdict lists them: by severity, then rule, then object."""
+    return tuple(sorted(items, key=lambda f: (SEVERITIES.index(f.severity), f.rule, f.object or "")))
 
 
 def validate(doc: Any) -> list[Problem]:

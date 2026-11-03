@@ -330,6 +330,7 @@ class Reconciler:
                         await self._checkpoint(p)
                         await work[phase](p)
                         _log.info("%s: %s", p.name, recorded, **p.fields(phase=phase))
+                    await self._checkpoint(p)
                     await self._end(p, "ok", (), None)
                 except _Failed as failure:
                     await self._end(p, failure.status, failure.findings, failure.reason)
@@ -514,8 +515,11 @@ class Reconciler:
     async def _end(
         self, p: _Pass, status: Literal["ok", "rejected", "failed"], found: tuple[Finding, ...], reason: str | None
     ) -> None:
-        """End the run with its verdict, then settle the record. A create the API marked
-        cancelling meanwhile is decided again: cancelled. A destroy completes all the same."""
+        """End the run with its verdict, then settle the record. A create whose run is marked
+        cancelling (when it was taken, or by the API meanwhile) is decided again: cancelled, never
+        `ok`. A destroy completes all the same."""
+        if p.run.operation == "create" and p.run.state == "cancelling":
+            raise _Cancelled
         verdict = Verdict(operation=p.run.operation, status=status, subject=self._subject(p.record, p.run),
                           findings=found)
         try:

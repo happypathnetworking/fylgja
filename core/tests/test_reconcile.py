@@ -1212,3 +1212,26 @@ def test_no_credential_reaches_a_log_line_or_the_store(store: LocalStore) -> Non
     loop = [line for line in lines if line["logger"] in ("fylgja.reconcile", "fylgja.audit")]
     assert loop and all(line.get("twin") in run_of and line.get("run") == run_of[line["twin"]] for line in loop)
     assert all(PASSWORD.encode() not in path.read_bytes() for path in store.root.rglob("*") if path.is_file())
+
+
+def test_a_create_cancelled_as_it_ends_never_ends_ok_when_its_cleanup_must_wait(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    driver.fail_destroy = True
+    pusher = CancellingPush(store, driver, after=3)  # cancelled between `pushed` and the run's end
+
+    async def scenario() -> None:
+        r = make(store, driver, pusher=pusher)
+        await r.reconcile("t")  # the cancel path's teardown fails: transient
+        run, record = only_run(store), store.get_twin("t")
+        assert run.state == "cancelling" and record.status.phase == "pushed" and record.status.run_id == run.id
+        driver.fail_destroy = False
+        await r.reconcile("t")  # nothing is left to run, and the run is still cancelling
+
+    asyncio.run(scenario())
+    run = only_run(store)
+    assert_cancelled(run)
+    assert seen(store, run.id) == [*CREATE, ("cancel", "started", None), ("cancel", "failed", None),
+                                   ("cancel", "started", None), ("cancel", "done", None)]
+    assert_cleaned_up(store.get_twin("t"), "run.cancelled")
+    assert "t" not in driver.labs

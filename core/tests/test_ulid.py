@@ -1,6 +1,8 @@
 import re
 import time
 
+import pytest
+
 from fylgja_core import ulid
 
 PATTERN = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")  # twin-record-1 run_id
@@ -27,3 +29,11 @@ def test_a_second_ulid_in_the_same_millisecond_increments_the_random_part() -> N
     a = ulid.new_at(1_000, 7)
     b = ulid.new_at(1_000, 7)
     assert a < b and ulid.timestamp_ms(a) == ulid.timestamp_ms(b) == 1_000
+
+
+def test_a_clock_stepping_back_still_gives_a_later_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ulid.new()
+    ms = ulid.timestamp_ms(first)
+    monkeypatch.setattr(time, "time_ns", lambda: (ms - 5_000) * 1_000_000)
+    second = ulid.new()
+    assert second > first and ulid.timestamp_ms(second) == ms

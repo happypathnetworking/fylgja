@@ -18,7 +18,7 @@ ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 PATTERN = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 _RANDOM_BITS = 80
-_lock = threading.Lock()
+_lock = threading.RLock()
 _last_ms = -1
 _last_random = 0
 
@@ -45,8 +45,10 @@ def new_at(ms: int, random: int) -> str:
 
 
 def new() -> str:
-    """A new ULID for now."""
-    return new_at(time.time_ns() // 1_000_000, secrets.randbits(_RANDOM_BITS))
+    """A new ULID for now; should the clock step back, the time of the last one made is kept,
+    so that ids never sort backwards within a process."""
+    with _lock:
+        return new_at(max(time.time_ns() // 1_000_000, _last_ms), secrets.randbits(_RANDOM_BITS))
 
 
 def timestamp_ms(value: str) -> int:

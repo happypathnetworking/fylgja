@@ -4,16 +4,22 @@ The request enters the login's private candidate, loads the startup configuratio
 containerlab left, which also clears what a refused request left in the candidate), sends the
 configuration's lines, asks `diff flat` and commits with `commit now`: one atomic commit.
 
+Sent with no output-format, the request is answered with the node's text output as `{"text": …}`
+entries, as the archived Go core reads it: one entry holding every command's output, the reset's
+and the commit's lines around the device's diff. `Pushed.diff` is that text, the entries joined
+in order. The live tier settles the shape on a node.
+
 A refusal is HTTP 200 with a JSON-RPC error that echoes every command sent. The node's reason
 follows the echo, after `' failed with error '`, and ends at the message's first empty line. The
 node cuts its message at about 1 KiB, which a real replace's echo outruns, so a refusal with no
 reason gets one more request, `commit validate`, which lands nothing. When that gives no reason
-either, the refusal is one of D-028's two sentences, quoting nothing.
+either, the refusal is one of D-028's two sentences, quoting nothing. A reason has the recorded
+shape `At line N: …`; anything else, a message cut inside or just after the error code included,
+is no reason.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import time
@@ -43,6 +49,8 @@ REASON_NOT_GIVEN = (
 )
 
 _CODE = re.compile(r"^\s*\d+:\s*")  # the error code the node writes before its reason: `1: At line 11: …`
+_AT_LINE = re.compile(r"At line \d+: \S")  # the reason's recorded shape, with something after it
+_DIFF_LINES = ("insert /", "delete /", "update /", "replace /")  # `diff flat`'s lines: configuration
 
 _log = logging.getLogger("fylgja.push")
 
@@ -66,14 +74,18 @@ def reason(message: str) -> str:
     """The node's reason in a refusal's message, or "" when the message gives none.
 
     It follows the last `' failed with error '` before the message's first empty line, without
-    the error code the node writes first. What follows that line is the request's output, the
-    diff's configuration lines included, and is never read.
+    the error code the node writes first, and counts only in the recorded shape `At line N: …`.
+    What follows that line is the request's output, the diff's configuration lines included, and
+    is never read; a diff line before it is dropped too, so no configuration line is quoted.
     """
     head = _before_empty_line(message)
     at = head.rfind(MARKER)
     if at < 0:
         return ""
-    return _CODE.sub("", head[at + len(MARKER) :], count=1).strip()
+    rest = _CODE.sub("", head[at + len(MARKER) :], count=1)
+    if not _AT_LINE.match(rest):
+        return ""
+    return "\n".join(line for line in rest.split("\n") if not line.strip().startswith(_DIFF_LINES)).strip()
 
 
 async def replace(
@@ -89,7 +101,7 @@ async def replace(
     error = answer.get("error")
     if error is None:
         _log.info("pushed %s by json_rpc: %d commands in %.2fs", address, len(cmds), elapsed)
-        return Pushed(diff=_diff(answer["result"], len(cmds) - 2), duration_s=elapsed)
+        return Pushed(diff=_diff(answer["result"]), duration_s=elapsed)
     found = reason(_message(error)) or await _ask_again(client, url, credential, address, budget - elapsed)
     _log.info("%s refused the json_rpc replace of %d commands in %.2fs: %s", address, len(cmds), elapsed, found)
     return Refused(found)
@@ -127,15 +139,11 @@ def _message(error: object) -> str:
     return message if isinstance(message, str) else ""
 
 
-def _diff(result: object, index: int) -> str:
-    """The diff command's result entry as a string; "" when it is empty, null or absent.
+def _diff(result: object) -> str:
+    """The text of every `{"text": …}` entry of a list result, in order; "" for any other shape.
 
-    The commit landed whatever the entry's shape, so no shape fails the push.
+    The commit landed whatever the answer's shape, so no shape fails the push.
     """
-    entry = result[index] if isinstance(result, list) and 0 <= index < len(result) else None
-    if not entry:
+    if not isinstance(result, list):
         return ""
-    if isinstance(entry, str):
-        return entry
-    text = entry.get("text") if isinstance(entry, dict) else None
-    return text if isinstance(text, str) else json.dumps(entry)
+    return "".join(e["text"] for e in result if isinstance(e, dict) and isinstance(e.get("text"), str))

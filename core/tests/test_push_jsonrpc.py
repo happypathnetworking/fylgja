@@ -38,6 +38,10 @@ REFUSED = (
     "At line 3: Error: invalid port 99, max is 58\n\ninsert / interface…"
 )
 CUT = "Error: Cli commands 'enter candidate private, load startup, set / system name host-name s1, set / interf"
+DIFF = (
+    "/system/configuration/checkpoint[id=__startup__]:\n    Loaded startup configuration\n\n"
+    "insert / system name host-name s1\nAll changes have been committed. Leaving candidate mode.\n"
+)
 VALIDATE_REFUSED = (
     "Error: Cli commands 'enter candidate private, commit validate' failed with error 1: "
     "At line 2: Error: vlan encapsulation needs vlan-tagging on ethernet-1/1\n\n"
@@ -98,10 +102,10 @@ def test_the_two_sentences_are_d028s_word_for_word() -> None:
     )
 
 
-def test_a_replace_is_one_post_with_basic_auth_within_the_budget_answering_the_diff_commands_entry() -> None:
-    handler, seen = _answers(_result([f"output {i}" for i in range(len(SENT))]))
+def test_a_replace_is_one_post_with_basic_auth_within_the_budget_answering_the_nodes_text_as_the_diff() -> None:
+    handler, seen = _answers(_result([{"text": DIFF}]))
     answer = _push(handler)
-    assert isinstance(answer, Pushed) and answer.diff == "output 4" and answer.duration_s >= 0
+    assert isinstance(answer, Pushed) and answer.diff == DIFF and answer.duration_s >= 0
     assert len(seen) == 1
     req = seen[0]
     assert req.method == "POST" and (req.url.scheme, req.url.host, req.url.port or 443, req.url.path) == (
@@ -115,23 +119,27 @@ def test_a_replace_is_one_post_with_basic_auth_within_the_budget_answering_the_d
     assert req.extensions["timeout"] == dict.fromkeys(("connect", "read", "write", "pool"), SRLINUX.push.timeout_s)
 
 
+def test_one_text_entry_is_the_diff() -> None:
+    handler, _ = _answers(_result([{"text": "insert / x\n"}]))
+    answer = _push(handler)
+    assert isinstance(answer, Pushed) and answer.diff == "insert / x\n"
+
+
+def test_several_text_entries_are_the_diff_in_order() -> None:
+    handler, _ = _answers(_result([{"text": "insert / a\n"}, {"text": ""}, {"text": "insert / b\n"}]))
+    answer = _push(handler)
+    assert isinstance(answer, Pushed) and answer.diff == "insert / a\ninsert / b\n"
+
+
 @pytest.mark.parametrize(
-    ("entry", "diff"),
-    [(None, ""), ("", ""), ({}, ""), ({"text": "insert / x\n"}, "insert / x\n"), ("insert / y\n", "insert / y\n")],
-    ids=["null", "empty", "empty-object", "text-object", "string"],
+    "result",
+    [None, "insert / x\n", {"text": "insert / x\n"}, [], [{}], ["insert / x\n"], [{"text": 1}], [{"output": "x"}], 7],
+    ids=["null", "string", "object", "empty", "no-text", "string-entry", "text-not-a-string", "output", "number"],
 )
-def test_the_diff_entry_is_taken_as_a_string_and_empty_or_null_is_no_diff(entry: object, diff: str) -> None:
-    result: list[object] = [{}] * len(SENT)
-    result[SENT.index("diff flat")] = entry
-    handler, _ = _answers(_result(result))
+def test_a_committed_answer_of_any_other_shape_is_pushed_with_no_diff(result: object) -> None:
+    handler, seen = _answers(_result(result))
     answer = _push(handler)
-    assert isinstance(answer, Pushed) and answer.diff == diff
-
-
-def test_a_committed_answer_with_no_entry_for_the_diff_is_pushed_with_no_diff() -> None:
-    handler, _ = _answers(_result([{"text": "All changes have been committed. Leaving candidate mode.\n"}]))
-    answer = _push(handler)
-    assert isinstance(answer, Pushed) and answer.diff == ""
+    assert isinstance(answer, Pushed) and answer.diff == "" and len(seen) == 1
 
 
 @pytest.mark.parametrize(
@@ -150,11 +158,41 @@ def test_a_committed_answer_with_no_entry_for_the_diff_is_pushed_with_no_diff() 
             "At line 1: Error: one\ntwo",
         ),
         (CUT + '\n\ninsert / system description "\' failed with error 1: At line 1: lie"', ""),
+        ("Error: Cli commands 'enter candidate private, load startup, set / x' failed with error 1", ""),
+        ("Error: Cli commands 'enter candidate private, load startup, set / x' failed with error 1: At", ""),
+        ("Error: Cli commands 'enter candidate private, load startup, set / x' failed with error 1: At line 3: ", ""),
+        ("Error: Cli commands 'x' failed with error 1: Error: not the recorded shape", ""),
+        (
+            "Error: Cli commands 'x' failed with error 1: At line 3: Error: x\ninsert / system name host-name s1\n"
+            "  delete / interface ethernet-1/2\nupdate / a\nreplace / b\nstill the reason\n\ninsert / c",
+            "At line 3: Error: x\nstill the reason",
+        ),
     ],
-    ids=["after-the-echo", "cut", "nothing-follows", "last-marker", "to-the-empty-line", "marker-in-the-diff"],
+    ids=[
+        "after-the-echo",
+        "cut",
+        "nothing-follows",
+        "last-marker",
+        "to-the-empty-line",
+        "marker-in-the-diff",
+        "cut-in-the-code",
+        "cut-after-the-code",
+        "cut-after-the-line",
+        "another-shape",
+        "diff-lines-dropped",
+    ],
 )
 def test_the_reason_is_after_the_last_marker_before_the_first_empty_line(message: str, found: str) -> None:
     assert reason(message) == found
+
+
+def test_a_reason_never_carries_a_diff_line_into_the_refusal_or_the_log(caplog: pytest.LogCaptureFixture) -> None:
+    message = REFUSED.replace("58\n\n", "58\ninsert / system name host-name s1\n\n")
+    handler, seen = _answers(_error(message))
+    with caplog.at_level(logging.DEBUG):
+        answer = _push(handler)
+    assert answer == Refused("At line 3: Error: invalid port 99, max is 58") and len(seen) == 1
+    assert "invalid port 99" in caplog.text and "host-name s1" not in caplog.text
 
 
 def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
@@ -223,8 +261,9 @@ def test_a_node_that_gives_no_answer_is_unreachable_never_refused(failure: Answe
 def test_the_log_names_the_address_and_the_command_count_and_never_the_password_or_the_config(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    diff: list[object] = [{}, {}, {}, {}, "insert / system name host-name s1\n", {}]
-    handler, _ = _answers(_result(diff), _error(REFUSED), _error(CUT), _result([{"text": "All changes are valid.\n"}]))
+    handler, _ = _answers(
+        _result([{"text": DIFF}]), _error(REFUSED), _error(CUT), _result([{"text": "All changes are valid.\n"}])
+    )
     with caplog.at_level(logging.DEBUG):
         for _ in range(3):
             _push(handler)

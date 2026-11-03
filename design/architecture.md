@@ -111,9 +111,10 @@ A blueprint is the network and its probes, with a source envelope
 ([`blueprint-1.schema.json`](../formats/blueprint-1.schema.json),
 [D-006](decisions.md#d-006), [D-006](decisions.md#d-006)).
 
-- **Network.** Devices, each with a platform package id, its interfaces (name,
-  `mgmt_only`, `enabled`) and its configuration as one plain string; links, each with ends
-  `a` and `b`.
+- **Network.** Devices, each named by a DNS-1123 label (it becomes the node's host name,
+  its container or pod name and its file name; [D-038](decisions.md#d-038)), with a
+  platform package id, its interfaces (name, `mgmt_only`, `enabled`) and its configuration
+  as one plain string; links, each with ends `a` and `b`.
 - **Probes.** Each a name, a probe format and two endpoints, each a device, an uncabled
   port, an IPv4 address and a gateway ([D-008](decisions.md#d-008)).
 - **Id.** The SHA-256 of the RFC 8785 (JCS) canonical JSON of `{network, probes}` alone.
@@ -424,7 +425,8 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 ## 7. Open questions
 
 - A bastion or an ingress per twin, should LoadBalancer addresses run short.
-- Whether the blueprint should restrict node names, for example to DNS-1123, and whether the
-  40-character twin name fits every runtime's own limits.
+- Whether the 40-character twin name and 63-character device names fit every runtime's own
+  limits; clabernetes names a Service per node, and a Service name is a DNS-1035 label,
+  which begins with a letter.
 - Image pulls on the local driver, the local naming of `credentials`, and whether
   admission needs per-node requests as well as sums.

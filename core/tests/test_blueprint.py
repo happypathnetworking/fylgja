@@ -190,3 +190,20 @@ def test_a_lone_surrogate_in_the_hashed_body_is_refused_at_the_door() -> None:
     doc = load("three-node")
     doc["source"] = {"note": "\ud800 is the reader's business"}
     assert blueprint.validate(doc) == []
+
+
+@pytest.mark.parametrize("name", ["S1", "s1 ", ".s1", "s1/x", "-s1", "s1-", "s1\tx", "a" * 64, "sw_core"])
+def test_a_device_name_must_be_a_dns_1123_label(name: str) -> None:
+    # A device's name becomes the node's host name, its container or pod name and its bundle
+    # file name, so the blueprint requires the one form all of them accept.
+    doc = load("three-node")
+    doc["network"]["devices"][2]["name"] = name
+    found = blueprint.validate(doc)
+    assert ("/network/devices/2/name", blueprint.RULE_INVALID) in {(p.pointer, p.rule) for p in found}, found
+
+
+def test_a_dns_1123_label_of_63_characters_is_a_device_name() -> None:
+    doc = load("three-node")
+    doc["network"]["devices"][2]["name"] = "sw-core-01-" + "x" * 52
+    assert len(doc["network"]["devices"][2]["name"]) == 63
+    assert {p.rule for p in blueprint.validate(doc)} <= {blueprint.RULE_ENDPOINT_UNKNOWN}

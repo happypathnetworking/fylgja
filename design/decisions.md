@@ -640,8 +640,8 @@ intent look alike. Bundle 1 ([D-011](#d-011)) gave its mapping rows an omission 
 beside `out_of_range`, and the shipped packages' mapping rows name logical interfaces a
 source lists (`Port-Channel1`, `Vlan100`) as `no_rule`. Building the compiler (phase 3)
 also met inputs the formats were silent on: a network with no devices, a device with two
-management-only interfaces, a device name that is not a safe file name, and a string JSON
-admits but UTF-8 cannot encode.
+management-only interfaces, a device name that is not a safe host, container, pod or file
+name, and a string JSON admits but UTF-8 cannot encode.
 
 #### Options considered
 
@@ -661,6 +661,9 @@ admits but UTF-8 cannot encode.
   omission to report, as the Go core reported it.
 - **Map every management-only interface to the one management port.** Rejected: a
   production port the twin does not have would go unsaid (Constitution X).
+- **Refuse in the compiler only what breaks a file name** (a slash, NUL, another control
+  character, a leading dot, whitespace at an end). Rejected: piecemeal, and a name a file
+  system accepts may still be one a host name, a container or a pod refuses.
 - **Let the compiler crash or answer 500 on a lone surrogate.** Rejected: the blueprint
   loader can refuse it with a pointer, as it refuses everything else at the door.
 
@@ -674,10 +677,11 @@ admits but UTF-8 cannot encode.
   further one is an omission, `extra_management`, a value added to bundle 1's and
   deployment 1's omissions.
 - A network with no devices is refused (`network.empty`).
-- A device name that would not be a safe bundle file name is refused (`device.name.unsafe`):
-  one holding a slash, NUL or another control character, or beginning with a dot. A control
-  character would also make `sha256sum` escape the path, so the by-hand id check of
-  [D-010](#d-010) would not reproduce the id.
+- A device name is a DNS-1123 label of at most 63 characters, required by the blueprint
+  schema (`device_name`), since it becomes the node's host name, its container or pod name
+  and its bundle file name; a reader that renames a device to fit records it in its
+  fidelity rows. A label is also a path `sha256sum` never escapes, so the by-hand id check
+  of [D-010](#d-010) reproduces the id.
 - A blueprint whose hashed body holds a lone surrogate is refused at the door
   (`blueprint.unencodable`): UTF-8 cannot encode it and RFC 8785 has no form for it, so it
   could have no id.

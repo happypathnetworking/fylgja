@@ -3,7 +3,7 @@
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/bundle-1.schema.json",
   "title": "Fylgja bundle 1 manifest",
   "description": "The manifest of a runtime-neutral bundle: what the compiler made of one blueprint and the loaded packages. A driver's plan binds it to a twin and a runtime; nothing in it belongs to one twin, so one bundle can back many twins on any driver.",
-  "$comment": "LAYOUT. A bundle is a set of regular files in the state store, addressed by its id: manifest.json, this document as RFC 8785 (JCS) bytes with no trailing newline; configs/<node>.cfg, the blueprint device's config verbatim. Nothing else: the topology, the lab name, the images and the fidelity are a driver plan's output, not the bundle's. There is no bootstrap file (D-015): each kind's baseline holds the hostname, linked ports enabled, LLDP and gNMI. Node names become file names, so the compiler rejects a device name holding '/', NUL or another control character, or beginning with '.' (rule device.name.unsafe). ID. The bundle id is the lowercase-hex SHA-256 of a listing of every file: one line '<sha256 of the file's bytes, lowercase hex>  <path relative to the bundle root>\\n' (two spaces, as sha256sum writes) per file, in byte-wise path order. By hand: ( cd <bundle> && find . -type f | sed 's|^\\./||' | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1 ). The id is never written into the bundle. Since the manifest is JCS bytes, the same blueprint and packages give the same id on every machine; since fidelity and package wording are not in it, rewording a package moves no bundle id. On clabernetes the configs reach the nodes as ConfigMaps; locally they are files beside the rendered topology. ORDER. Every list is sorted as the blueprint's are; mapping by (device, interface).",
+  "$comment": "LAYOUT. A bundle is a set of regular files in the state store, addressed by its id: manifest.json, this document as RFC 8785 (JCS) bytes with no trailing newline; configs/<node>.cfg, the blueprint device's config verbatim. Nothing else: the topology, the lab name, the images and the fidelity are a driver plan's output, not the bundle's. There is no bootstrap file (D-015): each kind's baseline holds the hostname, linked ports enabled, LLDP and gNMI. Node names are DNS-1123 labels (blueprint 1's device_name), so each is a safe file name that sha256sum never escapes. ID. The bundle id is the lowercase-hex SHA-256 of a listing of every file: one line '<sha256 of the file's bytes, lowercase hex>  <path relative to the bundle root>\\n' (two spaces, as sha256sum writes) per file, in byte-wise path order. By hand: ( cd <bundle> && find . -type f | sed 's|^\\./||' | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1 ). The id is never written into the bundle. Since the manifest is JCS bytes, the same blueprint and packages give the same id on every machine; since fidelity and package wording are not in it, rewording a package moves no bundle id. On clabernetes the configs reach the nodes as ConfigMaps; locally they are files beside the rendered topology. ORDER. Every list is sorted as the blueprint's are; mapping by (device, interface).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -87,7 +87,7 @@
       ],
       "properties": {
         "name": {
-          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "$ref": "blueprint-1.schema.json#/$defs/device_name",
           "description": "The device's name; the plan names the runtime node by it, and the twin record's nodes key on it."
         },
         "platform": {
@@ -112,7 +112,7 @@
       ],
       "properties": {
         "device": {
-          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "$ref": "blueprint-1.schema.json#/$defs/device_name",
           "description": "The device, by name; part of the row's key."
         },
         "interface": {

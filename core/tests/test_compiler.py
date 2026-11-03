@@ -171,7 +171,6 @@ REJECTED_DIR = FACTS / "rejected"
 # Every rejection fixture, and the (rule, object) pairs the compiler must report for it:
 # exactly these, so a fixture with one fault yields one fault. several.json carries three.
 REJECTED: dict[str, set[tuple[str, str]]] = {
-    "device-name-unsafe.json": {(compiler.RULE_NAME_UNSAFE, ".s1")},
     "platform-unsupported.json": {(compiler.RULE_PLATFORM, "e1")},
     "config-missing.json": {(compiler.RULE_CONFIG, "s1")},
     "interface-unmappable-linked-range.json": {(compiler.RULE_UNMAPPABLE_LINKED, "s1:ethernet-1/59")},
@@ -185,7 +184,7 @@ REJECTED: dict[str, set[tuple[str, str]]] = {
     "probe-port-taken.json": {(compiler.RULE_PROBE_TAKEN, "s1-loop2/a")},
     "probe-host-collision.json": {(compiler.RULE_PROBE_HOST, "s1-loop/a")},
     "network-empty.json": {(compiler.RULE_NETWORK_EMPTY, "network")},
-    "device-name-control.json": {(compiler.RULE_NAME_UNSAFE, "s1\tx")},
+    "probe-port-twice.json": {(compiler.RULE_PROBE_TAKEN, "s1-loop/b")},
     "several.json": {
         (compiler.RULE_PLATFORM, "e1"),
         (compiler.RULE_CONFIG, "s1"),
@@ -200,9 +199,11 @@ def test_each_rejection_fixture_is_refused_for_its_fault_alone(name: str) -> Non
     with pytest.raises(compiler.Uncompilable) as caught:
         compiler.compile(bp, PLATFORMS, PROBES)
     found = caught.value.findings
-    assert {(f.rule, f.object) for f in found} == REJECTED[name], found
-    assert all(f.severity == "error" and f.message.endswith(".") for f in found)
-    assert found == tuple(sorted(found, key=lambda f: (f.rule, f.object or "")))
+    # The findings come ordered, so a list comparison also catches a fault filed twice.
+    assert [(f.rule, f.object) for f in found] == sorted(REJECTED[name]), found
+    for finding in found:
+        assert finding.severity == "error"
+        assert finding.message[0].isupper() and finding.message.endswith("."), finding.message
 
 
 def test_every_rejection_fixture_has_a_row() -> None:
@@ -221,6 +222,11 @@ def test_a_refusal_names_what_is_loaded_and_what_links() -> None:
         compiler.compile(bp, PLATFORMS, PROBES)
     (finding,) = caught.value.findings
     assert "59" in finding.message and "probe s1-loop endpoint b" in finding.message
+    bp = blueprint.load(REJECTED_DIR / "probe-port-twice.json")
+    with pytest.raises(compiler.Uncompilable) as caught:
+        compiler.compile(bp, PLATFORMS, PROBES)
+    (finding,) = caught.value.findings
+    assert "two ports" in finding.message and "endpoint a" not in finding.message
 
 
 def with_interface(name: str, device: int, interface: dict[str, Any]) -> blueprint.Blueprint:

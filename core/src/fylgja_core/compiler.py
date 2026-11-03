@@ -29,7 +29,6 @@ from fylgja_core.probe_package import ProbePackage
 
 # Rule ids. Clients and tests match on them; the catalogue is docs/rules.md.
 RULE_NETWORK_EMPTY = "network.empty"
-RULE_NAME_UNSAFE = "device.name.unsafe"
 RULE_PLATFORM = "platform.unsupported"
 RULE_CONFIG = "config.missing"
 RULE_UNMAPPABLE_LINKED = "interface.unmappable.linked"
@@ -75,10 +74,6 @@ def compile(
         found.append(_error(RULE_NETWORK_EMPTY, "network", "The network has no devices, and a twin of nothing cannot "
                                                            "be built."))
     for device in bp.network.devices:
-        if _unsafe(device.name):
-            found.append(_error(RULE_NAME_UNSAFE, device.name, "A device name becomes a file name, so it may not hold "
-                                                               "a slash, NUL or another control character, or begin "
-                                                               "with a dot."))
         if device.platform not in platforms:
             found.append(_error(RULE_PLATFORM, device.name, f"No loaded platform package is {device.platform!r}; "
                                                             f"loaded: {_listed(platforms)}."))
@@ -91,7 +86,7 @@ def compile(
         cabled[(link.a.device, link.a.interface)] = description
         cabled[(link.b.device, link.b.interface)] = description
 
-    taken: dict[tuple[str, str], str] = {}
+    taken: dict[tuple[str, str], tuple[str, str]] = {}
     hosts: list[str] = []
     for probe in bp.probes:
         if probe.format not in probe_packages:
@@ -109,18 +104,21 @@ def compile(
             interface = next((i for i in target.interfaces if i.name == endpoint.interface), None)
             port, key = _port(endpoint.device, endpoint.interface), (endpoint.device, endpoint.interface)
             if interface is None:
-                message = f"{endpoint.device} has no interface {endpoint.interface!r}."
+                message = f"Device {endpoint.device} has no interface {endpoint.interface!r}."
                 found.append(_error(RULE_PROBE_INTERFACE, where, message))
             elif interface.mgmt_only:
-                found.append(_error(RULE_PROBE_MGMT, where, f"{port} is the management port."))
+                found.append(_error(RULE_PROBE_MGMT, where, f"Port {port} is the management port."))
             elif key in cabled:
-                message = f"{port} ends {cabled[key]}; a probe takes an uncabled port."
+                message = f"Port {port} ends {cabled[key]}; a probe takes an uncabled port."
                 found.append(_error(RULE_PROBE_CABLED, where, message))
+            elif key in taken and taken[key][0] == probe.name:
+                message = f"Port {port} is host a's too; a probe's two hosts take two ports."
+                found.append(_error(RULE_PROBE_TAKEN, where, message))
             elif key in taken:
-                message = f"{port} is taken by {taken[key]}; a port is one probe's."
+                message = f"Port {port} is taken by {_endpoint(*taken[key])}; a port is one probe's."
                 found.append(_error(RULE_PROBE_TAKEN, where, message))
             else:
-                taken[key] = f"probe {probe.name} endpoint {side}"
+                taken[key] = (probe.name, side)
 
     rows: list[bundle.Row] = []
     omitted: list[deployment.Omitted] = []
@@ -131,11 +129,11 @@ def compile(
         has_management = False
         for interface in device.interfaces:
             key = (device.name, interface.name)
-            linked = cabled.get(key) or taken.get(key)
+            linked = cabled.get(key) or (_endpoint(*taken[key]) if key in taken else None)
             decision = mapping.decide(package, interface.name, interface.mgmt_only)
             if isinstance(decision, mapping.Unmappable):
                 if linked is not None:
-                    message = f"{decision.detail}, and it ends {linked}."
+                    message = f"Port {_port(*key)} ends {linked}, but the platform has no such port: {decision.detail}."
                     found.append(_error(RULE_UNMAPPABLE_LINKED, _port(*key), message))
                 rows.append(_omitted(device.name, interface, decision.rule, decision.omission))
                 omitted.append(deployment.Omitted(device=device.name, interface=interface.name,
@@ -184,11 +182,8 @@ def _omitted(device: str, interface: blueprint.Interface, rule: str | None, omis
                       disposition="omitted", omission=omission)
 
 
-def _unsafe(name: str) -> bool:
-    """Whether a device name would not be a safe bundle file name: a slash, a control character
-    (NUL included; sha256sum escapes a newline, so the by-hand id check would not reproduce the
-    id) or a leading dot."""
-    return "/" in name or name.startswith(".") or any(ord(c) < 0x20 or ord(c) == 0x7F for c in name)
+def _endpoint(probe: str, side: str) -> str:
+    return f"probe {probe} endpoint {side}"
 
 
 def _error(rule: str, obj: str, message: str) -> Finding:

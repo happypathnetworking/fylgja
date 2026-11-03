@@ -142,7 +142,7 @@
       ],
       "properties": {
         "device": {
-          "$ref": "blueprint-1.schema.json#/$defs/name",
+          "$ref": "blueprint-1.schema.json#/$defs/device_name",
           "description": "The device the omitted interface is on; a client names it."
         },
         "interface": {

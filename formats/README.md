@@ -59,6 +59,10 @@ relative to them.
     problem's `type` is a class, and `rule` is the specific id, so no fact is stored twice.
 11. **Findings hold the core's rules alone.** Rules for readers, stages and rehearsals are
     the orchestrator's ([D-003](../design/decisions.md#d-003)).
+12. **A device name is a DNS-1123 label** of at most 63 characters
+    ([D-038](../design/decisions.md#d-038)). It becomes the node's host name, its container
+    or pod name and its bundle file name, so the blueprint requires the one form all of them
+    accept; a reader that renames a device to fit records it in its fidelity rows.
 
 ## Settled by measurement (2026-10-30)
 
@@ -83,9 +87,10 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
 
 ## Still open
 
-- **Node names.** Device names become container names, pod names and bundle file names.
-  Should the blueprint restrict them, for example to DNS-1123? Should the 40-character twin
-  name be checked against clabernetes's and containerlab's limits?
+- **Name lengths.** Device names are DNS-1123 labels of at most 63 characters and the twin
+  name one of at most 40. Should both be checked against clabernetes's and containerlab's
+  limits? clabernetes names a Service per node, and a Service name is a DNS-1035 label,
+  which begins with a letter.
 - **Image acquisition locally.** With `pull_secret` set, the image must be present. Without
   it, may the local driver pull a platform or probe image?
 - **The credential provider's local naming.** How does a `credentials` name map to

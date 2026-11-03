@@ -13,7 +13,7 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 | Rule | Filed by | Means |
 |---|---|---|
 | `blueprint.version.unsupported` | the blueprint loader | `blueprint_version` is not `1` |
-| `blueprint.invalid` | the blueprint loader | the document violates its schema at the pointer |
+| `blueprint.invalid` | the blueprint loader | the document violates its schema at the pointer; a device name that is not a DNS-1123 label is one such fault ([D-038](../design/decisions.md#d-038)) |
 | `blueprint.unencodable` | the blueprint loader | a string of the hashed body holds a lone surrogate, which UTF-8 cannot encode, so the blueprint could have no id |
 | `blueprint.unsorted` | the blueprint loader | a list the format sorts arrives out of order, or a link's `a` sorts after its `b`; the core never sorts for a client |
 | `blueprint.duplicate` | the blueprint loader | a list the format keeps unique holds a key twice |
@@ -50,7 +50,6 @@ endpoint as `probe/a` or `probe/b`.
 | Rule | Means |
 |---|---|
 | `network.empty` | the network has no devices, and a twin of nothing cannot be built |
-| `device.name.unsafe` | the device's name would not be a safe bundle file name: it holds a slash, NUL or another control character, or begins with a dot |
 | `platform.unsupported` | no loaded platform package has the device's platform id |
 | `config.missing` | the device's configuration is empty |
 | `interface.unmappable.linked` | a link or a probe ends on an interface the platform has no port for: out of its rule's range, or matched by no rule. An unmappable interface nothing touches is an omission fidelity reports, not a finding |

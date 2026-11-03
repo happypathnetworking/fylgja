@@ -9,11 +9,14 @@ behind this same interface. The interface is synchronous.
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from fylgja_core.deployment import Deployment
+from fylgja_core.twin_record import TwinRecord
 
 
 class StoreError(Exception):
@@ -42,6 +45,26 @@ class Locked(StoreError):
     def __init__(self, detail: str) -> None:
         self.detail = detail
         super().__init__(detail)
+
+
+@dataclass(frozen=True)
+class Change:
+    """One twin write, as a watcher sees it: the record as written (as last stored, for a delete)."""
+
+    type: Literal["ADDED", "MODIFIED", "DELETED"]
+    record: TwinRecord
+
+
+class Subscription:
+    """A watcher's queue of every twin change written while it is open, in write order."""
+
+    def __init__(self, on_close: Callable[[Subscription], None]) -> None:
+        self.queue: asyncio.Queue[Change] = asyncio.Queue()
+        self._on_close = on_close
+
+    def close(self) -> None:
+        """Stop delivering to the queue."""
+        self._on_close(self)
 
 
 class Store(ABC):
@@ -74,7 +97,33 @@ class Store(ABC):
     def get_deployment(self, deployment_id: str) -> tuple[Deployment, dict[str, bytes]]:
         """The deployment and its rendered files by path, or `NotFound`."""
 
-    # Twin and run methods follow (Tasks 4 and 5).
+    @abstractmethod
+    def list_twins(self) -> list[TwinRecord]:
+        """Every twin record, sorted by name."""
+
+    @abstractmethod
+    def get_twin(self, name: str) -> TwinRecord:
+        """The twin record, or `NotFound`."""
+
+    @abstractmethod
+    def create_twin(self, record: TwinRecord) -> TwinRecord:
+        """Store a new twin record, whose revision must be 1 (`ValueError` otherwise);
+        `Conflict` when the name exists."""
+
+    @abstractmethod
+    def update_twin(self, record: TwinRecord, expected_revision: int) -> TwinRecord:
+        """Store `record` at revision `expected_revision + 1` only if the stored revision is
+        `expected_revision` (`Conflict` otherwise, `NotFound` when absent); returns it as stored."""
+
+    @abstractmethod
+    def delete_twin(self, name: str, expected_revision: int) -> None:
+        """Remove the twin record under the same check as `update_twin`."""
+
+    @abstractmethod
+    def subscribe(self) -> Subscription:
+        """A queue that every later twin create, update and delete is put on, in write order."""
+
+    # Run methods follow (Task 5).
 
     @abstractmethod
     def close(self) -> None:

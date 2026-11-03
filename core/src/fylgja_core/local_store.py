@@ -15,17 +15,21 @@ multi-file document is built in a temporary directory and renamed into place.
 
 from __future__ import annotations
 
+import dataclasses
 import errno
+import fcntl
 import json
 import os
 import secrets
+import threading
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from fylgja_core import blueprint, deployment, documents
+from fylgja_core import blueprint, deployment, documents, twin_record
 from fylgja_core.deployment import Deployment
-from fylgja_core.store import NotFound, Store
+from fylgja_core.store import Change, Conflict, Locked, NotFound, Store, Subscription
+from fylgja_core.twin_record import TwinRecord
 
 _DIRECTORIES = ("blueprints", "bundles", "deployments", "twins", "runs")
 
@@ -133,16 +137,29 @@ def _json(doc: Any) -> bytes:
 class LocalStore(Store):
     """The state store as a directory."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, lock_fd: int | None = None) -> None:
         self.root = Path(root)
+        self._lock_fd = lock_fd
+        self._mutex = threading.Lock()  # compare-and-set, and the order of notifications
+        self._subscriptions: list[Subscription] = []
 
     @classmethod
     def open(cls, root: Path) -> LocalStore:
-        """The store in `root`, its layout created."""
+        """The store in `root`, its layout created and held by this process until `close`;
+        `Locked`, naming the holder's pid, when another core holds it."""
         root = Path(root)
         for name in _DIRECTORIES:
             (root / name).mkdir(parents=True, exist_ok=True)
-        return cls(root)
+        fd = os.open(root / "lock", os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            holder = os.pread(fd, 32, 0).decode().strip() or "unknown"
+            os.close(fd)
+            raise Locked(f"the store {root} is held by pid {holder}") from None
+        os.ftruncate(fd, 0)
+        os.pwrite(fd, str(os.getpid()).encode(), 0)
+        return cls(root, fd)
 
     def put_blueprint(self, doc: Mapping[str, Any]) -> tuple[str, bool]:
         bid = blueprint.blueprint_id(dict(doc))
@@ -172,5 +189,75 @@ class LocalStore(Store):
         doc = json.loads(files.pop("deployment.json"))
         return deployment.decode(doc), files
 
+    def _twin_path(self, name: str) -> Path:
+        return self.root / "twins" / f"{name}.json"
+
+    def _read_twin(self, name: str) -> TwinRecord:
+        try:
+            return twin_record.decode(json.loads(self._twin_path(name).read_bytes()))
+        except FileNotFoundError:
+            raise NotFound(name) from None
+
+    def _notify(self, change: Change) -> None:
+        for subscription in self._subscriptions:
+            subscription.queue.put_nowait(change)
+
+    def list_twins(self) -> list[TwinRecord]:
+        names = sorted(p.stem for p in (self.root / "twins").glob("*.json"))
+        twins = []
+        for name in names:
+            try:
+                twins.append(self._read_twin(name))
+            except NotFound:  # deleted since the listing began
+                continue
+        return twins
+
+    def get_twin(self, name: str) -> TwinRecord:
+        return self._read_twin(name)
+
+    def create_twin(self, record: TwinRecord) -> TwinRecord:
+        if record.revision != 1:
+            raise ValueError(f"a new twin record is at revision 1, not {record.revision}")
+        with self._mutex:
+            if not _write_new(self._twin_path(record.name), _json(documents.encode(record))):
+                raise Conflict(f"twin {record.name} exists")
+            self._notify(Change("ADDED", record))
+        return record
+
+    def _check(self, name: str, expected_revision: int) -> TwinRecord:
+        current = self._read_twin(name)
+        if current.revision != expected_revision:
+            raise Conflict(f"twin {name} is at revision {current.revision}, not {expected_revision}")
+        return current
+
+    def update_twin(self, record: TwinRecord, expected_revision: int) -> TwinRecord:
+        with self._mutex:
+            self._check(record.name, expected_revision)
+            written = dataclasses.replace(record, revision=expected_revision + 1)
+            _write_atomic(self._twin_path(record.name), _json(documents.encode(written)))
+            self._notify(Change("MODIFIED", written))
+        return written
+
+    def delete_twin(self, name: str, expected_revision: int) -> None:
+        with self._mutex:
+            current = self._check(name, expected_revision)
+            self._twin_path(name).unlink()
+            _fsync_directory(self.root / "twins")
+            self._notify(Change("DELETED", current))
+
+    def subscribe(self) -> Subscription:
+        subscription = Subscription(self._unsubscribe)
+        with self._mutex:
+            self._subscriptions.append(subscription)
+        return subscription
+
+    def _unsubscribe(self, subscription: Subscription) -> None:
+        with self._mutex:
+            if subscription in self._subscriptions:
+                self._subscriptions.remove(subscription)
+
     def close(self) -> None:
-        pass
+        """Release the store's lock; closing twice is harmless."""
+        if self._lock_fd is not None:
+            os.close(self._lock_fd)  # closing the descriptor drops the flock
+            self._lock_fd = None

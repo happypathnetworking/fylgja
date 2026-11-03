@@ -27,10 +27,22 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from fylgja_core import blueprint, deployment, documents, twin_record
+from fylgja_core import blueprint, bundle, deployment, documents, twin_record
 from fylgja_core.deployment import Deployment
-from fylgja_core.run import Event, Run
-from fylgja_core.store import Change, Conflict, Locked, NotFound, Store, Subscription
+from fylgja_core.run import Event, Run, State
+from fylgja_core.store import (
+    Change,
+    Conflict,
+    Locked,
+    NotFound,
+    Store,
+    StoreError,
+    Subscription,
+    check_file_key,
+    check_id,
+    check_run_id,
+    check_twin_name,
+)
 from fylgja_core.twin_record import TwinRecord
 
 _TAIL = 64 * 1024  # how much of an events file is read to find its last sequence number
@@ -156,6 +168,7 @@ class LocalStore(Store):
         self._lock_fd = lock_fd
         self._mutex = threading.Lock()  # compare-and-set, and the order of notifications
         self._subscriptions: list[Subscription] = []
+        self._closed = False
 
     @classmethod
     def open(cls, root: Path) -> LocalStore:
@@ -178,8 +191,9 @@ class LocalStore(Store):
             os.ftruncate(fd, 0)
             os.pwrite(fd, str(os.getpid()).encode(), 0)
             # No other core holds the store, so no temporary file is in use: sweep what a killed one left.
-            for leftover in root.rglob(".tmp-*"):
-                _remove_tree(leftover)
+            for name in _DIRECTORIES:
+                for leftover in (root / name).glob(".tmp-*"):
+                    _remove_tree(leftover)
         except BaseException:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
@@ -187,23 +201,44 @@ class LocalStore(Store):
         return cls(root, fd)
 
     def put_blueprint(self, doc: Mapping[str, Any]) -> tuple[str, bool]:
+        self._live()
         bid = blueprint.blueprint_id(dict(doc))
         return bid, _write_new(self.root / "blueprints" / f"{bid}.json", _json(doc))
 
     def get_blueprint(self, blueprint_id: str) -> dict[str, Any]:
+        self._live()
+        check_id(blueprint_id)
         try:
             doc: dict[str, Any] = json.loads((self.root / "blueprints" / f"{blueprint_id}.json").read_bytes())
         except FileNotFoundError:
             raise NotFound(blueprint_id) from None
         return doc
 
+    def _live(self) -> None:
+        if self._closed:
+            raise StoreError("closed")
+
     def put_bundle(self, bundle_id: str, files: Mapping[str, bytes]) -> bool:
+        self._live()
+        check_id(bundle_id)
+        for key in files:
+            check_file_key(key)
+        if "manifest.json" not in files:
+            raise ValueError("a bundle holds manifest.json")
+        if bundle.bundle_id(files) != bundle_id:
+            raise ValueError(f"bundle {bundle_id} is not the id of its files")
         return _write_tree(self.root / "bundles" / bundle_id, files)
 
     def get_bundle(self, bundle_id: str) -> dict[str, bytes]:
+        self._live()
+        check_id(bundle_id)
         return _read_tree(self.root / "bundles" / bundle_id, bundle_id)
 
     def put_deployment(self, deployment: Deployment, files: Mapping[str, bytes]) -> bool:
+        self._live()
+        check_id(deployment.id)
+        for key in files:
+            check_file_key(key)
         if "deployment.json" in files:
             raise ValueError("deployment.json is the deployment's own document, not a rendered file")
         return _write_tree(
@@ -212,11 +247,15 @@ class LocalStore(Store):
         )
 
     def get_deployment(self, deployment_id: str) -> tuple[Deployment, dict[str, bytes]]:
+        self._live()
+        check_id(deployment_id)
         files = _read_tree(self.root / "deployments" / deployment_id, deployment_id)
         doc = json.loads(files.pop("deployment.json"))
         return deployment.decode(doc), files
 
     def _twin_path(self, name: str) -> Path:
+        self._live()
+        check_twin_name(name)
         return self.root / "twins" / f"{name}.json"
 
     def _read_twin(self, name: str) -> TwinRecord:
@@ -228,10 +267,16 @@ class LocalStore(Store):
     def _notify(self, change: Change) -> None:
         # Always through the watcher's loop, never a direct put: a write from any thread wakes
         # the loop, and a write on the loop thread cannot overtake one already scheduled.
-        for subscription in self._subscriptions:
-            subscription.loop.call_soon_threadsafe(subscription.queue.put_nowait, change)
+        for subscription in list(self._subscriptions):
+            try:
+                if subscription.loop.is_closed():
+                    raise RuntimeError("closed")
+                subscription.loop.call_soon_threadsafe(subscription.queue.put_nowait, change)
+            except RuntimeError:  # the watcher's loop is gone: drop it, the write is committed
+                self._subscriptions.remove(subscription)
 
     def list_twins(self) -> list[TwinRecord]:
+        self._live()
         names = sorted(p.stem for p in (self.root / "twins").glob("*.json"))
         twins = []
         for name in names:
@@ -245,6 +290,8 @@ class LocalStore(Store):
         return self._read_twin(name)
 
     def create_twin(self, record: TwinRecord) -> TwinRecord:
+        self._live()
+        check_twin_name(record.name)
         if record.revision != 1:
             raise ValueError(f"a new twin record is at revision 1, not {record.revision}")
         with self._mutex:
@@ -275,6 +322,7 @@ class LocalStore(Store):
             self._notify(Change("DELETED", current))
 
     def subscribe(self) -> Subscription:
+        self._live()
         subscription = Subscription(asyncio.get_running_loop(), self._unsubscribe)
         with self._mutex:
             self._subscriptions.append(subscription)
@@ -286,9 +334,13 @@ class LocalStore(Store):
                 self._subscriptions.remove(subscription)
 
     def _run_path(self, run_id: str) -> Path:
+        self._live()
+        check_run_id(run_id)
         return self.root / "runs" / f"{run_id}.json"
 
     def _events_path(self, run_id: str) -> Path:
+        self._live()
+        check_run_id(run_id)
         return self.root / "runs" / f"{run_id}.events.ndjson"
 
     def create_run(self, run: Run) -> None:
@@ -301,13 +353,15 @@ class LocalStore(Store):
         except FileNotFoundError:
             raise NotFound(run_id) from None
 
-    def update_run(self, run: Run) -> None:
+    def update_run(self, run: Run, expected_state: State) -> None:
         with self._mutex:
-            if not self._run_path(run.id).exists():
-                raise NotFound(run.id)
+            current = self.get_run(run.id)
+            if current.state != expected_state:
+                raise Conflict(f"run {run.id} is {current.state}, not {expected_state}")
             _write_atomic(self._run_path(run.id), _json(documents.encode(run)))
 
     def list_runs(self, twin: str | None = None) -> list[Run]:
+        self._live()
         ids = sorted((p.stem for p in (self.root / "runs").glob("*.json")), reverse=True)
         runs = [self.get_run(i) for i in ids]
         return [r for r in runs if twin is None or r.twin == twin]
@@ -355,6 +409,7 @@ class LocalStore(Store):
 
     def close(self) -> None:
         """Release the store's lock; closing twice is harmless."""
+        self._closed = True
         if self._lock_fd is not None:
             fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
             os.close(self._lock_fd)

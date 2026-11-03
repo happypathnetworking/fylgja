@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from fylgja_core import blueprint, deployment, documents, store
+from fylgja_core import blueprint, bundle, deployment, documents, store
 from fylgja_core.local_store import LocalStore
 from fylgja_core.run import Event, Run
 from fylgja_core.twin_record import Spec, Status, TwinRecord
@@ -72,10 +72,11 @@ def test_a_filed_document_is_never_overwritten(tmp_path: Path) -> None:
 def test_a_bundle_is_its_files_under_its_id(tmp_path: Path) -> None:
     s = LocalStore.open(tmp_path)
     files = {"manifest.json": b"{}", "configs/n1.cfg": b"set / system\n"}
-    assert s.put_bundle("a" * 64, files) is True
-    assert s.put_bundle("a" * 64, {"manifest.json": b"other"}) is False
-    assert s.get_bundle("a" * 64) == files
-    assert (tmp_path / "bundles" / ("a" * 64) / "configs" / "n1.cfg").read_bytes() == b"set / system\n"
+    bid = bundle.bundle_id(files)
+    assert s.put_bundle(bid, files) is True
+    assert s.put_bundle(bid, files) is False
+    assert s.get_bundle(bid) == files
+    assert (tmp_path / "bundles" / bid / "configs" / "n1.cfg").read_bytes() == b"set / system\n"
     assert not list((tmp_path / "bundles").glob(".tmp*"))
     with pytest.raises(store.NotFound):
         s.get_bundle("b" * 64)
@@ -229,12 +230,15 @@ def test_runs_are_kept_by_id_and_listed_newest_first(tmp_path: Path) -> None:
         s.create_run(run_("01ARZ3NDEKTSV4RRFFQ69G5FAV"))
     assert [r.id[:3] for r in s.list_runs()] == ["01B", "01A"]
     assert [r.twin for r in s.list_runs(twin="a")] == ["a"]
-    s.update_run(dataclasses.replace(s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV"), state="running"))
+    s.update_run(dataclasses.replace(s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV"), state="running"), expected_state="queued")
+    with pytest.raises(store.Conflict):  # the stored run is no longer queued
+        ended = dataclasses.replace(s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV"), state="ended")
+        s.update_run(ended, expected_state="queued")
     assert s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV").state == "running"
     with pytest.raises(store.NotFound):
         s.get_run("01CRZ3NDEKTSV4RRFFQ69G5FAV")
     with pytest.raises(store.NotFound):
-        s.update_run(run_("01CRZ3NDEKTSV4RRFFQ69G5FAV"))
+        s.update_run(run_("01CRZ3NDEKTSV4RRFFQ69G5FAV"), expected_state="queued")
 
 
 def test_events_are_appended_one_line_each_with_the_stores_sequence(tmp_path: Path) -> None:
@@ -283,13 +287,15 @@ def test_a_write_from_a_worker_thread_reaches_a_waiting_watcher(tmp_path: Path) 
 def test_a_bundle_whose_paths_collide_raises_and_leaves_nothing(tmp_path: Path) -> None:
     s = LocalStore.open(tmp_path)
     with pytest.raises(OSError):
-        s.put_bundle("a" * 64, {"configs": b"x", "configs/n1.cfg": b"y"})
+        collide = {"manifest.json": b"{}", "configs": b"x", "configs/n1.cfg": b"y"}
+        s.put_bundle(bundle.bundle_id(collide), collide)
     assert list((tmp_path / "bundles").iterdir()) == []
 
 
 def test_a_bundle_that_appears_during_the_build_is_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     s = LocalStore.open(tmp_path)
-    final = tmp_path / "bundles" / ("a" * 64)
+    mine = {"manifest.json": b"mine"}
+    final = tmp_path / "bundles" / bundle.bundle_id(mine)
     real = os.rename
 
     def racing(src: object, dst: object) -> None:
@@ -298,7 +304,7 @@ def test_a_bundle_that_appears_during_the_build_is_present(tmp_path: Path, monke
         real(src, dst)  # type: ignore[arg-type]
 
     monkeypatch.setattr(os, "rename", racing)
-    assert s.put_bundle("a" * 64, {"manifest.json": b"mine"}) is False
+    assert s.put_bundle(bundle.bundle_id(mine), mine) is False
     monkeypatch.undo()
     assert (final / "manifest.json").read_bytes() == b"theirs" and not list((tmp_path / "bundles").glob(".tmp*"))
 
@@ -311,7 +317,7 @@ def test_a_rename_failure_other_than_present_raises(tmp_path: Path, monkeypatch:
 
     monkeypatch.setattr(os, "rename", broken)
     with pytest.raises(OSError):
-        s.put_bundle("a" * 64, {"manifest.json": b"{}"})
+        s.put_bundle(bundle.bundle_id({"manifest.json": b"{}"}), {"manifest.json": b"{}"})
     monkeypatch.undo()
     assert not list((tmp_path / "bundles").glob(".tmp*"))
 
@@ -392,3 +398,91 @@ def test_a_fragment_longer_than_the_tail_window_is_cut_cleanly(tmp_path: Path) -
     assert s.append_event(run_().id, first).seq == 2
     lines = path.read_text().splitlines()
     assert len(lines) == 2 and [json.loads(line)["seq"] for line in lines] == [1, 2]
+
+
+def test_a_subscription_whose_loop_closed_is_dropped_and_writes_still_succeed(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+
+    async def subscribe() -> store.Subscription:
+        return s.subscribe()
+
+    sub = asyncio.run(subscribe())  # its loop is closed on return
+    s.create_twin(record())
+    s.update_twin(record(generation=2), expected_revision=1)
+    assert s._subscriptions == [] and sub.queue.empty()
+
+
+def test_a_subscription_is_a_context_manager(tmp_path: Path) -> None:
+    async def scenario() -> int:
+        s = LocalStore.open(tmp_path)
+        with s.subscribe() as sub:
+            s.create_twin(record())
+            await asyncio.sleep(0)
+            assert sub.queue.qsize() == 1
+        return len(s._subscriptions)
+
+    assert asyncio.run(scenario()) == 0
+
+
+@pytest.mark.parametrize("bad", ["..", "", "A" * 64, "a" * 63, "../" + "a" * 61])
+def test_ids_are_64_lowercase_hex(tmp_path: Path, bad: str) -> None:
+    s = LocalStore.open(tmp_path)
+    for call in (s.get_blueprint, s.get_bundle, s.get_deployment):
+        with pytest.raises(ValueError):
+            call(bad)
+
+
+@pytest.mark.parametrize("bad", ["..", "", "T", "A_b", "-a", "a-", "a" * 41, "../x"])
+def test_twin_names_are_checked(tmp_path: Path, bad: str) -> None:
+    s = LocalStore.open(tmp_path)
+    with pytest.raises(ValueError):
+        s.get_twin(bad)
+    with pytest.raises(ValueError):
+        s.create_twin(record(bad))
+
+
+@pytest.mark.parametrize("bad", ["..", "x", "01ARZ3NDEKTSV4RRFFQ69G5FAI", "01arz3ndektsv4rrffq69g5fav", "../x"])
+def test_run_ids_are_ulids(tmp_path: Path, bad: str) -> None:
+    s = LocalStore.open(tmp_path)
+    with pytest.raises(ValueError):
+        s.get_run(bad)
+    with pytest.raises(ValueError):
+        s.events(bad)
+    with pytest.raises(ValueError):
+        s.append_event(bad, Event(seq=0, at="2026-11-03T10:00:00.000000Z", phase="compile", outcome="started"))
+
+
+@pytest.mark.parametrize("bad", ["../../twins/evil.json", "/abs", "a//b", "a/./b", "a/..", "", "a\\b"])
+def test_file_keys_are_relative_paths(tmp_path: Path, bad: str) -> None:
+    s = LocalStore.open(tmp_path)
+    files = {"manifest.json": b"{}", bad: b"x"}
+    with pytest.raises(ValueError):
+        s.put_bundle(bundle.bundle_id(files), files)
+    assert not list(tmp_path.rglob("evil*")) and not list((tmp_path / "bundles").iterdir())
+
+
+def test_a_bundle_needs_its_own_id_and_a_manifest(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    with pytest.raises(ValueError):
+        s.put_bundle("a" * 64, {"manifest.json": b"{}"})
+    with pytest.raises(ValueError):
+        s.put_bundle(bundle.bundle_id({"configs/n.cfg": b"x"}), {"configs/n.cfg": b"x"})
+
+
+def test_a_committed_file_named_like_a_temp_survives_open(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    files = {"manifest.json": b"{}", ".tmp-keep": b"x"}
+    bid = bundle.bundle_id(files)
+    s.put_bundle(bid, files)
+    s.close()
+    LocalStore.open(tmp_path)
+    assert (tmp_path / "bundles" / bid / ".tmp-keep").exists()
+
+
+def test_operations_after_close_raise(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.close()
+    with pytest.raises(store.StoreError, match="closed"):
+        s.list_twins()
+    with pytest.raises(store.StoreError, match="closed"):
+        s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV")

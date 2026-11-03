@@ -10,13 +10,15 @@ behind this same interface. The interface is synchronous.
 from __future__ import annotations
 
 import asyncio
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from fylgja_core import ulid
 from fylgja_core.deployment import Deployment
-from fylgja_core.run import Event, Run
+from fylgja_core.run import Event, Run, State
 from fylgja_core.twin_record import TwinRecord
 
 
@@ -48,6 +50,38 @@ class Locked(StoreError):
         super().__init__(detail)
 
 
+_ID = re.compile(r"^[0-9a-f]{64}$")
+_TWIN_NAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
+
+
+def check_id(key: str) -> str:
+    """`key` if it is a content-addressed id (64 lowercase hex digits), else `ValueError`."""
+    if not _ID.fullmatch(key):
+        raise ValueError(f"{key!r} is not an id (64 lowercase hex digits)")
+    return key
+
+
+def check_run_id(key: str) -> str:
+    """`key` if it is a ULID, else `ValueError`."""
+    if not ulid.PATTERN.fullmatch(key):
+        raise ValueError(f"{key!r} is not a run id (a ULID)")
+    return key
+
+
+def check_twin_name(key: str) -> str:
+    """`key` if it is a twin name (twin-record-1's pattern), else `ValueError`."""
+    if not _TWIN_NAME.fullmatch(key):
+        raise ValueError(f"{key!r} is not a twin name")
+    return key
+
+
+def check_file_key(key: str) -> str:
+    """`key` if it is a relative, `/`-separated path with no empty, `.` or `..` segment, else `ValueError`."""
+    if not key or any(part in ("", ".", "..") for part in key.split("/")) or "\\" in key or "\0" in key:
+        raise ValueError(f"{key!r} is not a relative file path")
+    return key
+
+
 @dataclass(frozen=True)
 class Change:
     """One twin write, as a watcher sees it: the record as written (as last stored, for a delete)."""
@@ -68,9 +102,16 @@ class Subscription:
         """Stop delivering to the queue."""
         self._on_close(self)
 
+    def __enter__(self) -> Subscription:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
 
 class Store(ABC):
-    """Every record the core keeps."""
+    """Every record the core keeps. Keys are checked at this boundary (`check_*`, `ValueError`);
+    compare-and-set is thread-safe; after `close` every operation raises `StoreError`."""
 
     @abstractmethod
     def put_blueprint(self, doc: Mapping[str, Any]) -> tuple[str, bool]:
@@ -84,11 +125,12 @@ class Store(ABC):
     @abstractmethod
     def put_bundle(self, bundle_id: str, files: Mapping[str, bytes]) -> bool:
         """File a bundle's files (`manifest.json`, `configs/<node>.cfg`) under its id;
-        returns whether it was created."""
+        returns whether it was created. `ValueError` when the id is not the files' own
+        (`bundle.bundle_id`), `manifest.json` is missing or a path is not a relative path."""
 
     @abstractmethod
     def get_bundle(self, bundle_id: str) -> dict[str, bytes]:
-        """The bundle's files by path, or `NotFound`."""
+        """The bundle's files by path, or `NotFound`; a reader sees every file or `NotFound`."""
 
     @abstractmethod
     def put_deployment(self, deployment: Deployment, files: Mapping[str, bytes]) -> bool:
@@ -97,7 +139,8 @@ class Store(ABC):
 
     @abstractmethod
     def get_deployment(self, deployment_id: str) -> tuple[Deployment, dict[str, bytes]]:
-        """The deployment and its rendered files by path, or `NotFound`."""
+        """The deployment and its rendered files by path, or `NotFound`; a reader sees every
+        file or `NotFound`."""
 
     @abstractmethod
     def list_twins(self) -> list[TwinRecord]:
@@ -135,8 +178,9 @@ class Store(ABC):
         """The run, or `NotFound`."""
 
     @abstractmethod
-    def update_run(self, run: Run) -> None:
-        """Replace the run's whole document; `NotFound` when it does not exist."""
+    def update_run(self, run: Run, expected_state: State) -> None:
+        """Replace the run's whole document only if the stored run's state is `expected_state`
+        (`Conflict` otherwise, `NotFound` when it does not exist)."""
 
     @abstractmethod
     def list_runs(self, twin: str | None = None) -> list[Run]:
@@ -149,7 +193,8 @@ class Store(ABC):
 
     @abstractmethod
     def events(self, run_id: str, after: int = 0) -> list[Event]:
-        """The run's events with `seq` greater than `after`, in order."""
+        """The run's events with `seq` greater than `after`, in order; `NotFound` when the run
+        has no record."""
 
     @abstractmethod
     def close(self) -> None:

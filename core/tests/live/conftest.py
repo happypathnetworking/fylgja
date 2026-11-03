@@ -1,10 +1,11 @@
 """The live tier: booted images on the local containerlab driver (CONTRIBUTING.md, Test tiers).
 
 Every test under tests/live is marked `live`: `make test` deselects them and `make live` runs
-them. The session's lab, `push-live`, is one SR Linux node and one cEOS node, deployed under a
-temporary directory and destroyed at the session's end. They share mixed.json's own link
-(`e1:Ethernet1` to `s1:ethernet-1/1`): a cEOS node with no Ethernet port refuses `ip routing`,
-which mixed.json's `e1` configuration carries (design/verified-facts.md).
+them. The driver's module boots and destroys its own labs. The push module's session lab,
+`push-live`, is one SR Linux node and one cEOS node, deployed under a temporary directory and
+destroyed at the session's end. They share mixed.json's own link (`e1:Ethernet1` to
+`s1:ethernet-1/1`): a cEOS node with no Ethernet port refuses `ip routing`, which mixed.json's
+`e1` configuration carries (design/verified-facts.md).
 """
 
 from __future__ import annotations

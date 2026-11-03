@@ -99,6 +99,10 @@ old bundle and part on its new one. It can be shown, verified and destroyed
 `containerlab`, `clabernetes`, and `hardware` later ([D-017](../design/decisions.md#d-017),
 [Constitution XIII](../design/constitution.md#xiii-runtimes-are-drivers)).
 
+**Driver registry** — `fylgja_core.drivers`, the one module above the *driver seam* that
+names a runtime: it lists the drivers the core serves, makes one by name, and answers a
+driver's capabilities ([D-046](../design/decisions.md#d-046)).
+
 **Driver seam** — The seven calls every driver implements: `capabilities`, `admit`, `plan`,
 `apply`, `inspect`, `destroy` and `endpoints`. Each is idempotent.
 
@@ -234,6 +238,11 @@ pointer or object it must report, and nothing else.
 **Replace** — The push that resets a node to its *baseline*, the configuration its kind
 left at deploy (host name, linked ports, LLDP, gNMI), and applies the whole configuration in
 one atomic commit ([D-027](../design/decisions.md#d-027)).
+
+**Residue** — What a killed or hand-removed lab leaves on the host with no node left: its
+block of `/etc/hosts` entries, its ssh config and its management network. It is an
+`Inspection` state. Recovery rule 2 clears the root-owned part, the host entries and the ssh
+config, by deploying, then destroying ([D-023](../design/decisions.md#d-023)).
 
 **Resync** — The loop's periodic re-queueing of every twin, so a missed runtime event is
 only late, never lost ([D-023](../design/decisions.md#d-023)).

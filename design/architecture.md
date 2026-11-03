@@ -174,9 +174,9 @@ A runtime is added by writing a driver, and nothing else
 | `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network. |
 | `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason. |
 | `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)). |
-| `apply(deployment)` | Makes the runtime match the deployment. |
+| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)). |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
-| `destroy(twin)` | Removes everything the twin holds, and releases its allocation. |
+| `destroy(deployment, files, packages)` | Removes everything the twin holds, the residue of a killed destroy included, within its packages' measured destroy timeouts, and releases its allocation. |
 | `endpoints(twin)` | Returns each node's management address. |
 
 `plan` is the only step that binds a bundle to a twin and a runtime. It is pure, so what it
@@ -202,10 +202,12 @@ in software and hardware in silicon, so it is computed per deployment and never 
   production interface names where the kind has aliases and renamed ports where it does
   not. The clabernetes driver wraps it in a `Topology` resource.
 - Account-gated images, such as cEOS, live in a private registry the cluster trusts
-  ([D-021](decisions.md#d-021)). kind is the cluster for developing the clabernetes driver
-  ([D-022](decisions.md#d-022)). The production cluster is three k3s servers with embedded
-  etcd on SSD, MetalLB in layer 2, and the registry on a host outside the cluster
-  ([D-036](decisions.md#d-036)).
+  ([D-021](decisions.md#d-021)). Locally, a gated image is a presence check at admission
+  (`admission.image.absent`) and is never pulled; an ungated one is containerlab's to pull
+  at deploy ([D-015](decisions.md#d-015)). kind is the cluster for developing the
+  clabernetes driver ([D-022](decisions.md#d-022)). The production cluster is three k3s
+  servers with embedded etcd on SSD, MetalLB in layer 2, and the registry on a host outside
+  the cluster ([D-036](decisions.md#d-036)).
 - The hardware driver is not built; its paper shape checks the seam. The local driver
   stays sufficient for development and the live tier, so neither needs Kubernetes.
 
@@ -430,5 +432,4 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 - Whether the 40-character twin name and 63-character device names fit every runtime's own
   limits; clabernetes names a Service per node, and a Service name is a DNS-1035 label,
   which begins with a letter.
-- Image pulls on the local driver, and whether admission needs per-node requests as well as
-  sums.
+- Whether admission needs per-node requests as well as sums.

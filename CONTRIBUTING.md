@@ -65,7 +65,7 @@ inside the tree carries a `.gitignore` of `*`.
 | `make venv` | The core's venv |
 | `make lint` | ruff over `core/` and `scripts/`, then mypy in strict mode |
 | `make test` | The pure tier: no infrastructure. Gates every pull request |
-| `make live` | The live tier: boots an SR Linux node and a cEOS node under containerlab, waits for each to be ready and pushes to it, then destroys the lab. Load `local/.env` first |
+| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them. Load `local/.env` first |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
 
 ## Test tiers

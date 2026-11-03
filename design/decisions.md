@@ -69,6 +69,7 @@ already have been weighed.
 | [D-043](#d-043) | The local driver's allocation and its reach into Docker | Runtimes and drivers |
 | [D-044](#d-044) | The deployment id hashes the driver, the twin, the bundle id and the files | The compiler and the bundle |
 | [D-045](#d-045) | The driver's plan refuses a runtime port two cabled interfaces share | The compiler and the bundle |
+| [D-046](#d-046) | The driver registry is the one module above the seam that names a runtime | Runtimes and drivers |
 | [D-047](#d-047) | A refusal `commit validate` passes names both its possible causes in one sentence | Pushing, stepping and verifying |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
@@ -1334,6 +1335,43 @@ CLI as a subprocess ([D-018](#d-018)).
 
 - An operator reproduces anything the driver did with the two CLIs it logged.
 - The pool's size bounds concurrent labs locally; admission refuses when it is exhausted.
+
+<a id="d-046"></a>
+### D-046 — The driver registry is the one module above the seam that names a runtime
+
+**Status:** Accepted 2026-11-03. Details [D-017](#d-017).
+
+#### Context
+
+[Constitution XIII](constitution.md#xiii-runtimes-are-drivers) flags code above the seam
+that names a runtime, and a flagged gate returns only through a decision. Yet something
+above the seam must name the drivers: `GET /v1/drivers` lists them, and `FYLGJA_DRIVER`
+([D-042](#d-042)) names the one the core runs.
+
+#### Options considered
+
+- **Name the drivers in the server's configuration code.** Rejected: two places, the API's
+  listing and `FYLGJA_DRIVER`'s reading, would each name them.
+- **Entry points, or another plugin discovery.** Rejected: a dependency and an indirection
+  for two drivers.
+- **One registry module, `fylgja_core.drivers`.** Chosen.
+
+#### Decision
+
+`fylgja_core.drivers` is the one module above the seam that names a runtime. It lists the
+drivers the core serves (`NAMES`), makes one by name over a working directory (`make`), and
+answers a driver's capabilities without making it (`capabilities`). It is the registry, not
+a branch: nothing else above the seam names a runtime, and what branches does so on a
+declared capability.
+
+#### Consequences
+
+- `GET /v1/drivers` and `FYLGJA_DRIVER` read the registry; an unknown name is a `KeyError`
+  that names the drivers served.
+- A new driver is one line there, beside its own module behind the seam.
+- A boundary test (`core/tests/test_boundary_seam.py`) scans every module's imports: none
+  outside `fylgja_core.containerlab` imports it or any of its modules, the registry alone
+  excepted.
 
 
 ## The reconcile loop and state

@@ -74,6 +74,18 @@ as `device:interface`.
 |---|---|
 | `interface.port.shared` | on a kind with no aliases, the rename puts this cabled interface (a link's end or a probe's endpoint) on a runtime port with another cabled interface of its node, and the twin can cable a port once. An uncabled interface the rename puts on a cabled one's port is an omission fidelity reports (`shared`), not a finding |
 
+## Findings: admission refused
+
+`admit` refuses a twin with one of these rules and a message naming every shortfall or
+every absent image ([D-019](../design/decisions.md#d-019)); nothing is reserved. The loop
+files the refusal as the run's one finding, an error whose object is the twin by name, and
+ends the run `rejected`; that arrives with the loop.
+
+| Rule | Filed by | Means |
+|---|---|---|
+| `admission.capacity` | the local driver | the host cannot fit the twin: the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)), or the deployment's demand exceeds the host's available memory (`/proc/meminfo`'s `MemAvailable`) or its CPU count |
+| `admission.image.absent` | the local driver | a package the twin's nodes use has an account-gated image (one with a `pull_secret`) that is not on the host, which the local driver never pulls ([D-015](../design/decisions.md#d-015)); an ungated image is containerlab's to pull at deploy |
+
 ## Problems and findings: the credential provider, readiness and the push
 
 | Rule | Raised by | Means |

@@ -153,6 +153,7 @@ class _Failed(Exception):
         self.reason = reason
         self.findings = findings.order(found)
         self.outcome = outcome
+        self.recorded = False  # whether a step wrote its ending event
         super().__init__(reason)
 
 
@@ -345,6 +346,7 @@ class Reconciler:
     async def _create(self, record: TwinRecord, driver: Driver) -> None:
         record, run = self._take_run(record, "create", REASON_CREATING)
         p = _Pass(record=record, run=run, driver=driver)
+        current: runs.Phase | None = None
         work: Mapping[runs.Phase, Callable[[_Pass], Awaitable[None]]] = {
             "compile": self._compile, "admit": self._admit, "plan": self._plan,
             "apply": self._apply, "ready": self._ready, "push": self._push,
@@ -353,12 +355,15 @@ class Reconciler:
             try:
                 try:
                     for recorded, phase in self._phases_after(p.record.status.phase):
+                        current = phase
                         await self._checkpoint(p)
                         await work[phase](p)
                         _log.info("%s: %s", p.name, recorded, **p.fields(phase=phase))
                     await self._checkpoint(p)
                     await self._end(p, "ok", (), None)
                 except _Failed as failure:
+                    if not failure.recorded and current is not None:  # failed outside a step: its ending event
+                        self._event(p, current, failure.outcome, rule=failure.reason)
                     await self._end(p, failure.status, failure.findings, failure.reason)
             except _Cancelled:
                 await self._cancel(p)
@@ -383,6 +388,10 @@ class Reconciler:
         for stray in self.store.list_runs(record.name):
             if stray.operation == "create" and stray.state != "ended":
                 self._cancel_unstarted(record, stray, driver)
+        lacking = self._lacking(record)
+        if lacking:  # the deployment cannot be torn down without its packages: wait for a core that has them
+            await self._refuse(record, RULE_BUNDLE_REJECTED, lacking)
+            return
         record, run = self._take_run(record, "destroy", REASON_DELETING)
         p = _Pass(record=record, run=run, driver=driver)
         subject = self._subject(p.record, p.run)  # before `destroyed` clears the deployment it names
@@ -400,28 +409,38 @@ class Reconciler:
 
     async def _unserved(self, record: TwinRecord) -> None:
         """A spec naming a driver this core does not serve: a failure only a new spec (or a core
-        serving that driver) can clear. Every run of the twin in flight ends `rejected` with the
-        finding, and Ready is False for it; a twin with nothing asked of it is left alone."""
+        serving that driver) can clear, refused with `twin.driver.unknown`; a twin with nothing
+        asked of it is left alone."""
         status = record.status
-        in_flight = [r for r in self.store.list_runs(record.name) if r.state != "ended"]
         asked = record.deletion_requested_at is not None or record.generation != status.observed_generation
-        if not in_flight and (not asked or (ready_reason(status.conditions) == RULE_DRIVER_UNKNOWN
-                                             and status.run_id is None
-                                             and status.observed_generation == record.generation)):
+        if not asked and not any(r.state != "ended" for r in self.store.list_runs(record.name)):
             return
         served = ", ".join(sorted(self.drivers)) or "none"
         finding = Finding(rule=RULE_DRIVER_UNKNOWN, severity="error", object=record.name,
                           message=f"The spec's driver {record.spec.driver!r} is not one this core serves ({served}).")
+        await self._refuse(record, RULE_DRIVER_UNKNOWN, [finding])
+
+    async def _refuse(self, record: TwinRecord, reason: str, found: Iterable[Finding]) -> None:
+        """What this core cannot do for the twin at all, whatever is asked (a driver it does not
+        serve, a teardown without the packages): every run of the twin in flight ends `rejected`
+        with `found`, and Ready is False for `reason`, once; nothing is torn down."""
+        status = record.status
+        in_flight = [r for r in self.store.list_runs(record.name) if r.state != "ended"]
+        settled = (ready_reason(status.conditions) == reason and status.run_id is None
+                   and status.observed_generation == record.generation)
+        if not in_flight and settled:
+            return
+        ordered = findings.order(found)
         for run in in_flight:
             verdict = Verdict(operation=run.operation, status="rejected", subject=self._subject(record, run),
-                              findings=(finding,))
+                              findings=ordered)
             self.store.update_run(runs.ended(run, verdict), run.state)
-            _log.warning("%s: run %s ended rejected: %s", record.name, run.id, finding.message,
-                         **logs.fields(twin=record.name, run=run.id, reason=RULE_DRIVER_UNKNOWN))
-        principal = in_flight[0].principal if in_flight else "core"
-        self._write_as(record, principal, None, conditions=ready_condition(status.conditions, "False",
-                                                                           RULE_DRIVER_UNKNOWN),
-                       observed_generation=record.generation, run_id=None)
+            _log.warning("%s: run %s ended rejected: %s", record.name, run.id, reason,
+                         **logs.fields(twin=record.name, run=run.id, reason=reason))
+        if not settled:
+            principal = in_flight[0].principal if in_flight else "core"
+            self._write_as(record, principal, None, conditions=ready_condition(status.conditions, "False", reason),
+                           observed_generation=record.generation, run_id=None)
 
     # The run.
 
@@ -515,7 +534,7 @@ class Reconciler:
         subject = self._subject(p.record, p.run)
         async with self._step(p, "cancel") as step:
             step.rule = RULE_CANCELLED
-            if p.record.status.deployment_id is not None:
+            if p.record.status.deployment_id is not None and not self._lacking(p.record):
                 deployment, files = self._deployment(p)
                 await p.driver.destroy(deployment, files, self.platforms, self.probe_packages)
                 p.record = self._write(p.record, p.run, nodes=(), deployment_id=None, allocation=None, phase=None)
@@ -588,6 +607,14 @@ class Reconciler:
             return
         reason = reason if reason is not None else self._failing_rule(run)
         conditions = ready_condition(record.status.conditions, "False", reason)
+        lacking = self._lacking(record)
+        if lacking:
+            _log.error("%s: its deployment %s cannot be torn down without the packages its bundle names (%s): it is "
+                       "kept, and so is its allocation", record.name, record.status.deployment_id,
+                       ", ".join(str(f.object) for f in lacking), **logs.fields(twin=record.name, run=run.id))
+            self._write(record, run, conditions=conditions, observed_generation=record.generation, run_id=None,
+                        phase=None)
+            return
         if record.status.deployment_id is not None:
             deployment, files = self.store.get_deployment(record.status.deployment_id)
             try:
@@ -666,6 +693,7 @@ class Reconciler:
             yield step
         except _Failed as failure:
             self._event(p, phase, failure.outcome, node, time.monotonic() - start, failure.reason)
+            failure.recorded = True
             raise
         except _Cancelled:
             self._event(p, phase, "cancelled", node, time.monotonic() - start)
@@ -686,9 +714,24 @@ class Reconciler:
         return p.files
 
     def _manifest(self, p: _Pass) -> Manifest:
+        """The bundle's manifest, refused (`bundle.rejected`) when it names a package this core
+        has not loaded: a bundle compiled elsewhere, or a resume on a core started without a
+        package the run began with."""
         if p.manifest is None:
-            p.manifest = bundle.decode(json.loads(self._files(p)["manifest.json"]))
+            manifest = bundle.decode(json.loads(self._files(p)["manifest.json"]))
+            unloaded = self._unloaded(manifest)
+            if unloaded:
+                raise _Failed("rejected", RULE_BUNDLE_REJECTED, unloaded)
+            p.manifest = manifest
         return p.manifest
+
+    def _lacking(self, record: TwinRecord) -> list[Finding]:
+        """What this core lacks to tear the record's deployment down: the packages its bundle
+        names that are not loaded, since a driver's `destroy` takes them. Empty without a deployment."""
+        if record.status.deployment_id is None or record.status.bundle_id is None:
+            return []
+        files = self.store.get_bundle(record.status.bundle_id)
+        return self._unloaded(bundle.decode(json.loads(files["manifest.json"])))
 
     def _deployment(self, p: _Pass) -> tuple[Deployment, Mapping[str, bytes]]:
         if p.deployment is None or p.deployment_files is None:
@@ -745,21 +788,28 @@ class Reconciler:
                     raise _Failed("rejected", RULE_BUNDLE_MISSING, [Finding(
                         rule=RULE_BUNDLE_MISSING, severity="error", object=bundle_id,
                         message=f"The spec's bundle {bundle_id} is not in the store.")]) from None
-                p.manifest = bundle.decode(json.loads(p.files["manifest.json"]))
-                unloaded = self._unloaded(p.manifest)
-                if unloaded:
-                    raise _Failed("rejected", RULE_BUNDLE_REJECTED, unloaded)
-            p.record = self._write(p.record, p.run, phase="compiled", blueprint_id=p.manifest.blueprint_id,
+                p.manifest = None
+            manifest = self._manifest(p)
+            p.record = self._write(p.record, p.run, phase="compiled", blueprint_id=manifest.blueprint_id,
                                    bundle_id=bundle_id)
 
     def _unloaded(self, manifest: Manifest) -> list[Finding]:
-        """A bundle compiled elsewhere may name a package this core has not loaded; the compile's rules say so."""
-        return [Finding(rule=compiler.RULE_PLATFORM, severity="error", object=node.name,
-                        message=f"No loaded platform package is {node.platform!r}.")
-                for node in manifest.nodes if node.platform not in self.platforms] + [
-                Finding(rule=compiler.RULE_PROBE_FORMAT, severity="error", object=probe.name,
-                        message=f"No loaded probe package runs {probe.format!r}.")
-                for probe in manifest.probes if probe.format not in self.probe_packages]
+        """One finding, in the compile's rules, for each package the manifest names that this
+        core has not loaded; the object is the package, and the message names who uses it."""
+        platforms: dict[str, list[str]] = {}
+        for node in manifest.nodes:
+            if node.platform not in self.platforms:
+                platforms.setdefault(node.platform, []).append(node.name)
+        formats: dict[str, list[str]] = {}
+        for probe in manifest.probes:
+            if probe.format not in self.probe_packages:
+                formats.setdefault(probe.format, []).append(probe.name)
+        return [Finding(rule=compiler.RULE_PLATFORM, severity="error", object=platform,
+                        message=f"No loaded platform package is {platform!r}, which {', '.join(nodes)} run.")
+                for platform, nodes in platforms.items()] + [
+                Finding(rule=compiler.RULE_PROBE_FORMAT, severity="error", object=probe_format,
+                        message=f"No loaded probe package runs {probe_format!r}, which {', '.join(probes)} use.")
+                for probe_format, probes in formats.items()]
 
     def _reserved(self, twin: str) -> list[Mapping[str, Any]]:
         """Every other twin's recorded allocation, for admission."""

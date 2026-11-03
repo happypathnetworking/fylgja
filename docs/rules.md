@@ -117,6 +117,13 @@ and a destroy run is never stopped halfway. In the partial-lab probe a node that
 login is not silent: the run fails at once with `readiness.unauthorized`, since a reconfigure
 would not help.
 
+A bundle naming a package this core has not loaded (one compiled elsewhere, or a run resumed
+by a core started without a package it began with) is refused with `bundle.rejected`: one
+`platform.unsupported` or `probe.format.unknown` finding per package, its object the package
+and its message naming who uses it. A driver's `destroy` takes the packages, so a deployment
+this core lacks them for is not torn down: the record keeps it, and its allocation, and a
+deletion of the twin is refused the same way, until a core that has them takes over.
+
 The findings the loop files itself, each an error:
 
 | Rule | Ends the run | Means |

@@ -1306,6 +1306,65 @@ def test_a_transient_failure_outside_a_run_logs_no_run(tmp_path: Path, caplog: p
     assert r.backoff == {"t": 1.0}
 
 
+def test_a_resume_on_a_core_without_a_package_the_bundle_names_is_rejected(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing, "testdata/blueprint/lossy.json"))
+    driver = FakeDriver()
+    killing.kill_at = "admitted"
+    killed(make(killing, driver))
+    run = only_run(killing)
+
+    lacking = {k: v for k, v in PLATFORMS.items() if k != "chassisos"}
+    without = Reconciler(killing, {driver.name: driver}, lacking, PROBES, Provider(ENVIRON),
+                         pusher=fake_push(driver=driver), readiness=fake_ready(driver=driver))
+    before = len(driver.calls)
+    asyncio.run(without.reconcile("t"))  # raises nothing: no KeyError
+    run = killing.get_run(run.id)
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "rejected"
+    (finding,) = run.verdict.findings
+    assert (finding.rule, finding.object) == ("platform.unsupported", "chassisos") and "c1, c2" in finding.message
+    assert seen(killing, run.id)[-2:] == [("plan", "started", None), ("plan", "failed", None)]
+    assert killing.events(run.id)[-1].rule == "bundle.rejected"
+    assert driver.calls[before:] == []
+    assert_cleaned_up(killing.get_twin("t"), "bundle.rejected")
+
+
+def test_a_deployment_a_core_lacks_the_packages_for_is_kept_not_torn_down(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing, "testdata/blueprint/lossy.json"))
+    driver = FakeDriver()
+    killing.kill_at = "applied"
+    killed(make(killing, driver))
+    deployment_id = killing.get_twin("t").status.deployment_id
+    without = {k: v for k, v in PLATFORMS.items() if k != "chassisos"}
+
+    def lacking() -> Reconciler:
+        return Reconciler(killing, {driver.name: driver}, without, PROBES, Provider(ENVIRON),
+                          pusher=fake_push(driver=driver), readiness=fake_ready(driver=driver))
+
+    asyncio.run(lacking().reconcile("t"))  # the ready phase needs the package: rejected, and no teardown
+    run = only_run(killing)
+    assert run.verdict is not None and run.verdict.status == "rejected"
+    assert seen(killing, run.id)[-1] == ("ready", "failed", None)
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "bundle.rejected")
+    assert record.status.deployment_id == deployment_id and record.status.allocation is not None  # kept, reserved
+    assert record.status.run_id is None and record.status.observed_generation == 1
+    assert ("destroy", "t") not in driver.calls and "t" in driver.labs
+
+    destroy = request_deletion(killing)
+    asyncio.run(lacking().reconcile("t"))  # nor can it be deleted here: refused, and the record stays
+    verdict = killing.get_run(destroy.id).verdict
+    assert verdict is not None and verdict.status == "rejected"
+    assert [f.object for f in verdict.findings] == ["chassisos"]
+    revision = killing.get_twin("t").revision
+    asyncio.run(lacking().reconcile("t"))  # said once: no new run, no write
+    assert killing.get_twin("t").revision == revision and len(killing.list_runs("t")) == 2
+
+    asyncio.run(make(killing, driver).reconcile("t"))  # a core with the package tears it down
+    with pytest.raises(NotFound):
+        killing.get_twin("t")
+    assert "t" not in driver.labs and driver.calls.count(("destroy", "t")) == 1
+
+
 class LosingStore(LocalStore):
     """A local store whose next update of the run `lose` loses its compare-and-set, as one the API
     wrote meanwhile would."""

@@ -171,9 +171,9 @@ A runtime is added by writing a driver, and nothing else
 
 | Call | What it does |
 |---|---|
-| `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy. |
+| `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network. |
 | `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason. |
-| `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment. |
+| `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)). |
 | `apply(deployment)` | Makes the runtime match the deployment. |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
 | `destroy(twin)` | Removes everything the twin holds, and releases its allocation. |

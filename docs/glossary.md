@@ -47,8 +47,8 @@ the other, held when every reply comes back ([D-008](../design/decisions.md#d-00
 
 **`capabilities`** — The driver call that says what a driver can do: provision nodes or
 claim them, change links on a running twin, forward in software or hardware, reach nodes
-directly or by proxy. Code above the *driver seam* may branch on a capability, never on a
-runtime.
+directly or by proxy, and keep twins apart by names alone or by the network. Code above the
+*driver seam* may branch on a capability, never on a runtime.
 
 **clabernetes** — containerlab on Kubernetes, one pod per node. The production *driver*,
 with a namespace and a NetworkPolicy per twin and a LoadBalancer per node
@@ -179,7 +179,8 @@ recorded before the next begins, so a restarted core resumes
 
 **`plan`** — The pure driver call that binds a bundle to a twin and a runtime, given its
 allocation, and returns a *deployment*. It is the only binding step
-([D-011](../design/decisions.md#d-011)).
+([D-011](../design/decisions.md#d-011)). It refuses a runtime port two cabled interfaces
+share (`interface.port.shared`, [D-045](../design/decisions.md#d-045)).
 
 **Platform package** — The data that makes one network operating system supported:
 interface rules, push, readiness, gNMI paths, conformance, fidelity, and a section per

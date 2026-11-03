@@ -60,3 +60,14 @@ endpoint as `probe/a` or `probe/b`.
 | `probe.interface.mgmt_only` | the endpoint is on the management port |
 | `probe.interface.cabled` | the endpoint is on a port that ends a link |
 | `probe.port.taken` | the endpoint is on a port an earlier probe's endpoint took |
+
+## Findings: a plan refused
+
+Each is an error, and every fault is reported in one pass. A driver's plan with one is
+refused (`Unplannable`): the API answers it as the plan's verdict on a dry run, and as a
+rejected run's verdict otherwise; both arrive with the API. The object is an interface as
+`device:interface`.
+
+| Rule | Means |
+|---|---|
+| `interface.port.shared` | on a kind with no aliases, the rename puts this cabled interface (a link's end or a probe's endpoint) on a runtime port with another cabled interface of its node, and the twin can cable a port once. An uncabled interface the rename puts on a cabled one's port is an omission fidelity reports (`shared`), not a finding |

@@ -6,14 +6,17 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from fylgja_core import blueprint, compiler, deployment, documents, platform_package, probe_package
 from fylgja_core.containerlab import plan as clab_plan
-from fylgja_core.driver import Planned
+from fylgja_core.driver import Planned, Unplannable
+from fylgja_core.findings import Finding
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "core" / "src" / "fylgja_core"
@@ -130,6 +133,7 @@ def test_the_lossy_fixtures_counts_and_shared_ports_are_the_go_compilers() -> No
         f"{o.device}:{o.interface}" for o in p.deployment.fidelity.omitted)
     assert {f"{o.device}:{o.interface}" for o in p.deployment.fidelity.omitted} == {
         o["object"] for o in facts["omissions"]}
+    assert deployment.validate(documents.encode(p.deployment)) == []
 
 
 def test_lossy_answers_the_plans_counts_and_the_ports_the_go_compiler_saw_shared() -> None:
@@ -159,21 +163,66 @@ def test_kinds_with_aliases_are_never_lossy() -> None:
     assert p.deployment.fidelity.lossy == deployment.Lossy(mappings=0, shared_ports=0)
 
 
+def a_link_on_the_shared_port(doc: dict[str, Any]) -> None:
+    links = doc["network"]["links"]
+    links.append({"a": {"device": "c1", "interface": "Ethernet2/1"}, "b": {"device": "c2", "interface": "Ethernet1/2"}})
+    links.sort(key=lambda lk: (lk["a"]["device"], lk["a"]["interface"], lk["b"]["device"], lk["b"]["interface"]))
+
+
+def a_probe_on_the_shared_port(doc: dict[str, Any]) -> None:
+    doc["probes"].append({"name": "c1-loop", "format": "ping", "endpoints": [
+        {"device": "c1", "interface": "Ethernet2/1", "address": "10.9.1.2/24", "gateway": "10.9.1.1"},
+        {"device": "c2", "interface": "Ethernet1/2", "address": "10.9.2.2/24", "gateway": "10.9.2.1"}]})
+
+
+@pytest.mark.parametrize("change", [a_link_on_the_shared_port, a_probe_on_the_shared_port], ids=["link", "probe"])
+def test_two_cabled_interfaces_renamed_onto_one_port_are_unplannable(change: Callable[[dict[str, Any]], None]) -> None:
+    # Ethernet2/1 renames to eth1 as Ethernet1/1 does, which already ends a link: cabling it
+    # too, by a link or by a probe host, would cable c1's eth1 twice.
+    doc = json.loads((ROOT / "testdata/blueprint/lossy.json").read_text())
+    change(doc)
+    c = compiler.compile(blueprint.decode(doc), PLATFORMS, PROBES)
+    with pytest.raises(Unplannable) as caught:
+        clab_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "t", ALLOCATION)
+    assert caught.value.findings == (
+        Finding(rule="interface.port.shared", severity="error", object="c1:Ethernet1/1",
+                message="Port c1:Ethernet1/1 is cabled, and the rename puts it on eth1 with Ethernet2/1 (cabled); "
+                        "the twin can cable a port once."),
+        Finding(rule="interface.port.shared", severity="error", object="c1:Ethernet2/1",
+                message="Port c1:Ethernet2/1 is cabled, and the rename puts it on eth1 with Ethernet1/1 (cabled); "
+                        "the twin can cable a port once."),
+    )
+    assert "interface.port.shared on c1:Ethernet1/1" in str(caught.value)
+
+
 PURE_IMPORTS = {"__future__", "hashlib", "math", "shlex", "collections.abc", "typing", "yaml"}
 MODEL_IMPORTS = {f"fylgja_core.{m}" for m in ("blueprint", "bundle", "containerlab", "deployment", "driver",
-                                              "mapping", "platform_package", "probe_package")}
+                                              "findings", "mapping", "platform_package", "probe_package")}
+
+
+def imports(source: str) -> set[str]:
+    """Every module `source` imports. A from-import that names a module of a package records
+    that module, not the package, so an impure sibling cannot hide behind its package."""
+    imported = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            imported |= {alias.name for alias in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            assert node.module is not None and node.level == 0
+            for alias in node.names:
+                name = f"{node.module}.{alias.name}"
+                path = SRC.parent.joinpath(*name.split("."))
+                is_module = path.with_suffix(".py").is_file() or (path / "__init__.py").is_file()
+                imported.add(name if is_module else node.module)
+    return imported
+
+
+def test_a_from_import_of_a_submodule_names_the_submodule() -> None:
+    assert imports("from fylgja_core.containerlab import pool, NAME\nfrom fylgja_core import bundle") == {
+        "fylgja_core.containerlab.pool", "fylgja_core.containerlab", "fylgja_core.bundle"}
 
 
 def test_plan_is_pure() -> None:
     """Constitution V: no I/O, clock or environment. The imports say so, as the compiler's do."""
-    imported = set()
-    for node in ast.walk(ast.parse((SRC / "containerlab" / "plan.py").read_text())):
-        if isinstance(node, ast.Import):
-            imported |= {alias.name for alias in node.names}
-        elif isinstance(node, ast.ImportFrom):
-            assert node.module is not None
-            if node.module == "fylgja_core":
-                imported |= {f"fylgja_core.{alias.name}" for alias in node.names}
-            else:
-                imported.add(node.module)
+    imported = imports((SRC / "containerlab" / "plan.py").read_text())
     assert imported <= PURE_IMPORTS | MODEL_IMPORTS, imported - (PURE_IMPORTS | MODEL_IMPORTS)

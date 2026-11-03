@@ -15,7 +15,9 @@ bundle id and the file list (D-044).
 Only the plan renders the rename, so the facts of a rename that maps many production names
 onto one port are its own (`lossy`): the renames that drop a placeholder, the ports two
 interfaces of one node land on, and the uncabled interfaces such a port omits because a
-cabled one holds it.
+cabled one holds it. A port two cabled interfaces land on would be cabled twice, so the plan
+refuses it (`Unplannable`, rule `interface.port.shared`), as a compile refuses what it cannot
+build; the compiler cannot, since the rename is the runtime's (D-038).
 """
 
 from __future__ import annotations
@@ -30,11 +32,15 @@ import yaml
 
 from fylgja_core import blueprint, bundle, deployment, mapping
 from fylgja_core.containerlab import CAPABILITIES, NAME
-from fylgja_core.driver import Allocation, Planned
+from fylgja_core.driver import Allocation, Planned, Unplannable
+from fylgja_core.findings import Finding
 from fylgja_core.platform_package import PlatformPackage, placeholders
 from fylgja_core.probe_package import ProbePackage
 
 TOPOLOGY = "topology.clab.yml"
+
+# Rule ids. Clients and tests match on them; the catalogue is docs/rules.md.
+RULE_PORT_SHARED = "interface.port.shared"
 
 
 def plan(
@@ -46,10 +52,11 @@ def plan(
     allocation: Allocation,
 ) -> Planned:
     """The deployment of the bundle `bundle_id`, whose manifest is `manifest`, as the twin
-    `twin` on the allocation `admit` reserved for it, and the files the deployment lists."""
+    `twin` on the allocation `admit` reserved for it, and the files the deployment lists; or
+    `Unplannable` with every fault."""
+    counts, shared = lossy(manifest, platforms)
     files = {TOPOLOGY: _topology(manifest, platforms, probe_packages, twin, allocation)}
     listed = tuple(deployment.File(path=path, sha256=hashlib.sha256(files[path]).hexdigest()) for path in sorted(files))
-    counts, shared = lossy(manifest, platforms)
     omitted = [
         deployment.Omitted(device=row.device, interface=row.interface, omission=row.omission)
         for row in manifest.mapping
@@ -95,8 +102,9 @@ def lossy(
     renamed. A rename is lossy when its template names fewer placeholders than its rule's
     match captures; a port is shared when two or more rows of one node are renamed onto it.
     An uncabled row whose port a cabled row of its node holds is omitted as `shared`: the
-    twin has that port once, and it is the cabled interface's. A kind with aliases
-    contributes nothing."""
+    twin has that port once, and it is the cabled interface's. Two or more cabled rows on one
+    port (a link's end or a probe's endpoint each) raise `Unplannable`, one finding for each,
+    since the topology would cable the port twice. A kind with aliases contributes nothing."""
     package_of = {node.name: platforms[node.platform] for node in manifest.nodes}
     mappings = 0
     onto: dict[tuple[str, str], list[bundle.Row]] = {}
@@ -108,10 +116,19 @@ def lossy(
         if dropped:
             mappings += 1
         onto.setdefault((row.device, port), []).append(row)
-    shared_ports = [rows for rows in onto.values() if len(rows) > 1]
+    shared_ports = {key: rows for key, rows in onto.items() if len(rows) > 1}
+    refused = [
+        _port_shared(port, row, rows)
+        for (_, port), rows in shared_ports.items()
+        if sum(r.disposition == "cabled" for r in rows) > 1
+        for row in rows
+        if row.disposition == "cabled"
+    ]
+    if refused:
+        raise Unplannable(refused)
     omitted = [
         deployment.Omitted(device=row.device, interface=row.interface, omission="shared")
-        for rows in shared_ports
+        for rows in shared_ports.values()
         if any(r.disposition == "cabled" for r in rows)
         for row in rows
         if row.disposition == "uncabled"
@@ -186,7 +203,8 @@ def _topology(
         "mgmt": {"network": f"clab-{twin}", "ipv4-subnet": allocation["mgmt_subnet"]},
         "topology": {"defaults": {"labels": {"fylgja.twin": twin}}, "nodes": nodes, "links": links},
     }
-    return yaml.safe_dump(doc, sort_keys=False).encode("utf-8")
+    # A wide line, so that no long scalar (an exec line) is folded onto the next.
+    return yaml.safe_dump(doc, sort_keys=False, width=1000).encode("utf-8")
 
 
 def _rename(package: PlatformPackage, row: bundle.Row) -> tuple[str, bool]:
@@ -197,6 +215,14 @@ def _rename(package: PlatformPackage, row: bundle.Row) -> tuple[str, bool]:
     if rename is None or captures is None:
         raise ValueError(f"{row.device}:{row.interface} is no data row of a rule the package renames: {row.rule!r}")
     return mapping.render(rename.port, captures), len(set(placeholders(rename.port))) < len(captures)
+
+
+def _port_shared(port: str, row: bundle.Row, rows: Sequence[bundle.Row]) -> Finding:
+    """The finding for a cabled row the rename puts on `port` with other cabled rows."""
+    others = ", ".join(f"{r.interface} ({r.disposition})" for r in rows if r is not row)
+    message = (f"Port {row.device}:{row.interface} is cabled, and the rename puts it on {port} with {others}; "
+               "the twin can cable a port once.")
+    return Finding(rule=RULE_PORT_SHARED, severity="error", object=f"{row.device}:{row.interface}", message=message)
 
 
 def _hosts(

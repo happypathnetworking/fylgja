@@ -3,17 +3,20 @@
 Everything above the seam calls these and nothing else; nothing above it names a runtime.
 Every call is idempotent. `plan` is synchronous and pure: it is the only binding of a bundle
 to a twin and a runtime (D-011), and returns the `Deployment` and the rendered files it
-describes. The other calls act on the runtime and are `async`.
+describes, or raises `Unplannable` when the runtime cannot hold the bundle as compiled. The
+other calls act on the runtime and are `async`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
+from fylgja_core import findings
 from fylgja_core.bundle import Manifest
 from fylgja_core.deployment import Deployment
+from fylgja_core.findings import Finding
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 
@@ -39,6 +42,18 @@ class Refusal:
 
     rule: str
     message: str
+
+
+class Unplannable(Exception):
+    """The bundle cannot be planned on this runtime; `findings` holds every fault, in a
+    verdict's order. A plan refuses as a compile does (`compiler.Uncompilable`)."""
+
+    def __init__(self, found: Iterable[Finding]) -> None:
+        self.findings = findings.order(found)
+        super().__init__(self.findings)
+
+    def __str__(self) -> str:
+        return "; ".join(f"{f.rule} on {f.object}: {f.message}" for f in self.findings)
 
 
 @dataclass(frozen=True)
@@ -101,7 +116,8 @@ class Driver(Protocol):
         twin: str,
         allocation: Allocation,
     ) -> Planned:
-        """Pure: bind the bundle (named by its content address `bundle_id`) to the twin."""
+        """Pure: bind the bundle (named by its content address `bundle_id`) to the twin, or
+        raise `Unplannable` with every fault."""
         ...
 
     async def apply(self, deployment: Deployment, files: Mapping[str, bytes], reconfigure: bool = False) -> None:

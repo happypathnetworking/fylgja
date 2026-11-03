@@ -30,7 +30,8 @@ fylgja_core = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-p no:cacheprovider"
+markers = ["live: boots images on the local containerlab driver; run with make live"]
+addopts = "-p no:cacheprovider -m 'not live'"
 
 [tool.ruff]
 line-length = 120

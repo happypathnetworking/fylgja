@@ -296,8 +296,9 @@ def test_endpoints_are_the_running_nodes_addresses() -> None:
     assert asyncio.run(Inspected(Inspection(state="absent", nodes=())).endpoints("t")) == {}
 
 
-# inspect and destroy. Docker's answers are canned in the shapes containerlab 0.79.0 gave
-# (verified-facts.md); Task 5 re-verifies them on 0.81.0.
+# inspect and destroy. Docker's answers are canned in the shapes Docker 29.8.1 gave for
+# containerlab 0.81.0's labs (verified-facts.md): an exited container keeps its last StartedAt
+# and its IPAM address, and loses its IPAddress.
 
 PS: tuple[str, ...] = ("docker", "ps", "-a", "--filter", "label=containerlab=t", "--format", "{{.Names}}")
 INSPECT: tuple[str, ...] = ("docker", "inspect", "--type", "container")
@@ -307,16 +308,19 @@ NETWORK_RM: tuple[str, ...] = ("docker", "network", "rm", "clab-t")
 
 
 def container(
-    node: str, running: bool = True, address: str = "", started: str = "2026-11-03T12:00:00.5Z"
+    node: str, running: bool = True, address: str = "", started: str = "2026-11-03T12:00:00.416491086Z"
 ) -> dict[str, Any]:
-    """A `docker inspect` member of a containerlab node, as much of it as the driver reads."""
+    """A `docker inspect` member of a containerlab node, the members the driver reads in their
+    real shape; `address` is the one containerlab assigned it."""
+    network = {"IPAMConfig": {"IPv4Address": address} if address else None, "IPAddress": address if running else "",
+               "Gateway": "172.20.2.1" if running else ""}
     return {
         "Id": f"{node}0123456789abcdef",
         "Name": f"/clab-t-{node}",
         "State": {"Status": "running" if running else "exited", "Running": running, "StartedAt": started},
         "Config": {"Labels": {"containerlab": "t", "clab-node-name": node, "clab-node-kind": "nokia_srlinux",
-                              "fylgja.twin": "t"}},
-        "NetworkSettings": {"Networks": {"clab-t": {"IPAddress": address, "Gateway": "172.20.2.1"}}},
+                              "clab-node-longname": f"clab-t-{node}", "fylgja.twin": "t"}},
+        "NetworkSettings": {"Networks": {"clab-t": network}},
     }
 
 
@@ -325,9 +329,9 @@ def lab(*containers: dict[str, Any]) -> dict[tuple[str, ...], str]:
     return {PS: "".join(f"{n}\n" for n in names), (*INSPECT, *names): json.dumps(list(containers))}
 
 
-RUNNING = lab(container("n2", address="172.20.2.3", started="2026-11-03T12:00:01.25Z"),
+RUNNING = lab(container("n2", address="172.20.2.3", started="2026-11-03T12:00:01.418188892Z"),
               container("n1", address="172.20.2.2"),
-              container("n3", address="172.20.2.4", started="2026-11-03T12:00:02Z"))
+              container("n3", address="172.20.2.4", started="2026-11-03T12:00:02.414991394Z"))
 NOTHING: dict[tuple[str, ...], str] = {PS: ""}
 
 
@@ -348,12 +352,12 @@ def inspect(tmp_path: Path, runner: FakeRunner) -> Inspection:
 def test_inspect_reads_each_nodes_name_handle_incarnation_and_address(tmp_path: Path) -> None:
     runner = FakeRunner(RUNNING)
     assert inspect(tmp_path, runner) == Inspection(state="present", nodes=(
-        NodeState(name="n1", handle="clab-t-n1", incarnation="2026-11-03T12:00:00.5Z", address="172.20.2.2",
-                  running=True),
-        NodeState(name="n2", handle="clab-t-n2", incarnation="2026-11-03T12:00:01.25Z", address="172.20.2.3",
-                  running=True),
-        NodeState(name="n3", handle="clab-t-n3", incarnation="2026-11-03T12:00:02Z", address="172.20.2.4",
-                  running=True),
+        NodeState(name="n1", handle="clab-t-n1", incarnation="2026-11-03T12:00:00.416491086Z",
+                  address="172.20.2.2", running=True),
+        NodeState(name="n2", handle="clab-t-n2", incarnation="2026-11-03T12:00:01.418188892Z",
+                  address="172.20.2.3", running=True),
+        NodeState(name="n3", handle="clab-t-n3", incarnation="2026-11-03T12:00:02.414991394Z",
+                  address="172.20.2.4", running=True),
     ))
     assert runner.calls == [PS, (*INSPECT, "clab-t-n2", "clab-t-n1", "clab-t-n3")]
 
@@ -378,7 +382,8 @@ def test_a_twin_the_runtime_holds_nothing_of_is_absent(tmp_path: Path) -> None:
 
 
 def test_host_entries_with_no_container_are_residue(tmp_path: Path) -> None:
-    (tmp_path / "etc-hosts").write_text("127.0.0.1 localhost\n###### CLAB-t-START ######\n172.20.2.2\tclab-t-n1\n"
+    (tmp_path / "etc-hosts").write_text("127.0.0.1 localhost\n###### CLAB-t-START ######\n"
+                                        "172.20.2.2\tclab-t-n1 dbc5223ecae4\t# Kind: nokia_srlinux\n"
                                         "###### CLAB-t-END ######\n")
     runner = FakeRunner(NOTHING, fail=[NETWORK])
     assert inspect(tmp_path, runner) == Inspection(state="residue", nodes=())
@@ -387,7 +392,8 @@ def test_host_entries_with_no_container_are_residue(tmp_path: Path) -> None:
 
 def test_another_twins_host_entries_are_not_this_ones_residue(tmp_path: Path) -> None:
     # The twin t-2's entries hold clab-t-2-n1, which begins with clab-t- but is no node of t.
-    (tmp_path / "etc-hosts").write_text("###### CLAB-t-2-START ######\n172.20.3.2\tclab-t-2-n1\n"
+    (tmp_path / "etc-hosts").write_text("###### CLAB-t-2-START ######\n"
+                                        "172.20.3.2\tclab-t-2-n1 b85f77e7fa3a\t# Kind: nokia_srlinux\n"
                                         "###### CLAB-t-2-END ######\n")
     assert inspect(tmp_path, FakeRunner(NOTHING, fail=[NETWORK])).state == "absent"
 

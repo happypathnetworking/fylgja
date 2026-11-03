@@ -59,7 +59,8 @@ class Change:
 class Subscription:
     """A watcher's queue of every twin change written while it is open, in write order."""
 
-    def __init__(self, on_close: Callable[[Subscription], None]) -> None:
+    def __init__(self, loop: asyncio.AbstractEventLoop, on_close: Callable[[Subscription], None]) -> None:
+        self.loop = loop  # the loop the watcher runs on: changes are delivered through it
         self.queue: asyncio.Queue[Change] = asyncio.Queue()
         self._on_close = on_close
 
@@ -122,7 +123,8 @@ class Store(ABC):
 
     @abstractmethod
     def subscribe(self) -> Subscription:
-        """A queue that every later twin create, update and delete is put on, in write order."""
+        """A queue that every later twin create, update and delete is put on, in write order.
+        Called on the watcher's event loop; a write may come from any thread."""
 
     @abstractmethod
     def create_run(self, run: Run) -> None:

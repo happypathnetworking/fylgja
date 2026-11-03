@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import errno
 import json
 import os
 import subprocess
@@ -192,6 +193,7 @@ def test_subscribers_see_every_change_in_write_order(tmp_path: Path) -> None:
         s.delete_twin("t", expected_revision=2)
         sub.close()
         s.create_twin(record("u"))  # after close: not delivered
+        await asyncio.sleep(0)  # deliveries are scheduled on the loop
         seen: list[tuple[str, int]] = []
         while not sub.queue.empty():
             c = sub.queue.get_nowait()
@@ -261,3 +263,109 @@ def test_a_trailing_partial_line_is_skipped_and_the_sequence_continues(tmp_path:
     assert [e.seq for e in s.events(run_().id)] == [1]
     e = s.append_event(run_().id, Event(seq=0, at="2026-11-03T10:00:02.000000Z", phase="compile", outcome="done"))
     assert e.seq == 2 and [x.seq for x in s.events(run_().id)] == [1, 2]
+
+
+def test_a_write_from_a_worker_thread_reaches_a_waiting_watcher(tmp_path: Path) -> None:
+    async def scenario() -> tuple[str, int]:
+        s = LocalStore.open(tmp_path)
+        s.create_twin(record())
+        sub = s.subscribe()
+        waiter = asyncio.create_task(sub.queue.get())
+        await asyncio.sleep(0)  # the task is now parked on the empty queue
+        await asyncio.to_thread(s.update_twin, record(generation=2), 1)
+        change = await asyncio.wait_for(waiter, timeout=5)
+        sub.close()
+        return change.type, change.record.revision
+
+    assert asyncio.run(scenario()) == ("MODIFIED", 2)
+
+
+def test_a_bundle_whose_paths_collide_raises_and_leaves_nothing(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    with pytest.raises(OSError):
+        s.put_bundle("a" * 64, {"configs": b"x", "configs/n1.cfg": b"y"})
+    assert list((tmp_path / "bundles").iterdir()) == []
+
+
+def test_a_bundle_that_appears_during_the_build_is_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    s = LocalStore.open(tmp_path)
+    final = tmp_path / "bundles" / ("a" * 64)
+    real = os.rename
+
+    def racing(src: object, dst: object) -> None:
+        final.mkdir()
+        (final / "manifest.json").write_bytes(b"theirs")
+        real(src, dst)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "rename", racing)
+    assert s.put_bundle("a" * 64, {"manifest.json": b"mine"}) is False
+    monkeypatch.undo()
+    assert (final / "manifest.json").read_bytes() == b"theirs" and not list((tmp_path / "bundles").glob(".tmp*"))
+
+
+def test_a_rename_failure_other_than_present_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    s = LocalStore.open(tmp_path)
+
+    def broken(src: object, dst: object) -> None:
+        raise OSError(errno.EIO, "io")
+
+    monkeypatch.setattr(os, "rename", broken)
+    with pytest.raises(OSError):
+        s.put_bundle("a" * 64, {"manifest.json": b"{}"})
+    monkeypatch.undo()
+    assert not list((tmp_path / "bundles").glob(".tmp*"))
+
+
+def test_a_rendered_file_cannot_be_named_for_the_deployment_document(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    d = deployment.Deployment(
+        id="c" * 64,
+        driver="containerlab",
+        twin="t",
+        allocation={},
+        bundle_id="a" * 64,
+        files=(),
+        demand=deployment.Demand(nodes=1, cpu=0.5, memory_mb=2048),
+        fidelity=deployment.Fidelity(
+            forwarding="software",
+            approximations=(),
+            omitted=(),
+            synthesized=(),
+            lossy=deployment.Lossy(mappings=0, shared_ports=0),
+        ),
+    )
+    with pytest.raises(ValueError):
+        s.put_deployment(d, {"deployment.json": b"{}"})
+    assert not (tmp_path / "deployments" / ("c" * 64)).exists()
+
+
+def test_a_failed_temp_write_leaves_no_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    s = LocalStore.open(tmp_path)
+
+    def full(fd: int) -> None:
+        raise OSError(errno.ENOSPC, "full")
+
+    monkeypatch.setattr(os, "fsync", full)
+    with pytest.raises(OSError):
+        s.create_twin(record())
+    monkeypatch.undo()
+    assert not list((tmp_path / "twins").glob(".tmp*"))
+
+
+def test_open_sweeps_what_a_killed_core_left(tmp_path: Path) -> None:
+    LocalStore.open(tmp_path).close()
+    (tmp_path / "twins" / ".tmp-dead").write_bytes(b"half")
+    (tmp_path / "bundles" / ".tmp-dir" / "configs").mkdir(parents=True)
+    (tmp_path / "bundles" / ".tmp-dir" / "configs" / "n.cfg").write_bytes(b"x")
+    LocalStore.open(tmp_path)
+    assert not list(tmp_path.rglob(".tmp-*"))
+
+
+def test_a_long_events_file_continues_its_sequence_from_the_tail(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.create_run(run_())
+    event = Event(seq=0, at="2026-11-03T10:00:00.000000Z", phase="compile", outcome="started", node="n" * 500)
+    for _ in range(300):  # well over 64 KiB
+        s.append_event(run_().id, event)
+    assert (tmp_path / "runs" / f"{run_().id}.events.ndjson").stat().st_size > 64 * 1024
+    assert s.append_event(run_().id, event).seq == 301

@@ -15,6 +15,7 @@ multi-file document is built in a temporary directory and renamed into place.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import errno
 import fcntl
@@ -32,6 +33,7 @@ from fylgja_core.run import Event, Run
 from fylgja_core.store import Change, Conflict, Locked, NotFound, Store, Subscription
 from fylgja_core.twin_record import TwinRecord
 
+_TAIL = 64 * 1024  # how much of an events file is read to find its last sequence number
 _DIRECTORIES = ("blueprints", "bundles", "deployments", "twins", "runs")
 
 
@@ -50,10 +52,14 @@ def _fsync_directory(directory: Path) -> None:
 def _write_temp(directory: Path, data: bytes) -> Path:
     """`data` in a new fsynced temporary file in `directory`."""
     temp = _temp_name(directory)
-    with temp.open("xb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
+    try:
+        with temp.open("xb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        temp.unlink(missing_ok=True)
+        raise
     return temp
 
 
@@ -103,6 +109,10 @@ def _write_tree(final: Path, files: Mapping[str, bytes]) -> bool:
             if path.parent != temp:
                 _fsync_directory(path.parent)
         _fsync_directory(temp)
+    except BaseException:
+        _remove_tree(temp)
+        raise
+    try:
         os.rename(temp, final)
     except OSError as e:
         _remove_tree(temp)
@@ -117,6 +127,9 @@ def _write_tree(final: Path, files: Mapping[str, bytes]) -> bool:
 
 
 def _remove_tree(directory: Path) -> None:
+    if not directory.is_dir():
+        directory.unlink(missing_ok=True)
+        return
     for path in sorted(directory.rglob("*"), reverse=True):
         if path.is_dir():
             path.rmdir()
@@ -158,8 +171,19 @@ class LocalStore(Store):
             holder = os.pread(fd, 32, 0).decode().strip() or "unknown"
             os.close(fd)
             raise Locked(f"the store {root} is held by pid {holder}") from None
-        os.ftruncate(fd, 0)
-        os.pwrite(fd, str(os.getpid()).encode(), 0)
+        except BaseException:
+            os.close(fd)
+            raise
+        try:
+            os.ftruncate(fd, 0)
+            os.pwrite(fd, str(os.getpid()).encode(), 0)
+            # No other core holds the store, so no temporary file is in use: sweep what a killed one left.
+            for leftover in root.rglob(".tmp-*"):
+                _remove_tree(leftover)
+        except BaseException:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+            raise
         return cls(root, fd)
 
     def put_blueprint(self, doc: Mapping[str, Any]) -> tuple[str, bool]:
@@ -180,6 +204,8 @@ class LocalStore(Store):
         return _read_tree(self.root / "bundles" / bundle_id, bundle_id)
 
     def put_deployment(self, deployment: Deployment, files: Mapping[str, bytes]) -> bool:
+        if "deployment.json" in files:
+            raise ValueError("deployment.json is the deployment's own document, not a rendered file")
         return _write_tree(
             self.root / "deployments" / deployment.id,
             {"deployment.json": _json(documents.encode(deployment)), **files},
@@ -200,8 +226,10 @@ class LocalStore(Store):
             raise NotFound(name) from None
 
     def _notify(self, change: Change) -> None:
+        # Always through the watcher's loop, never a direct put: a write from any thread wakes
+        # the loop, and a write on the loop thread cannot overtake one already scheduled.
         for subscription in self._subscriptions:
-            subscription.queue.put_nowait(change)
+            subscription.loop.call_soon_threadsafe(subscription.queue.put_nowait, change)
 
     def list_twins(self) -> list[TwinRecord]:
         names = sorted(p.stem for p in (self.root / "twins").glob("*.json"))
@@ -247,7 +275,7 @@ class LocalStore(Store):
             self._notify(Change("DELETED", current))
 
     def subscribe(self) -> Subscription:
-        subscription = Subscription(self._unsubscribe)
+        subscription = Subscription(asyncio.get_running_loop(), self._unsubscribe)
         with self._mutex:
             self._subscriptions.append(subscription)
         return subscription
@@ -288,19 +316,27 @@ class LocalStore(Store):
         with self._mutex:
             if not self._run_path(run_id).exists():
                 raise NotFound(run_id)
-            with self._events_path(run_id).open("a+b") as f:
-                f.seek(0)
+            path = self._events_path(run_id)
+            created = not path.exists()
+            with path.open("a+b") as f:
+                size = f.seek(0, os.SEEK_END)
+                start = max(0, size - _TAIL)
+                f.seek(start)
                 data = f.read()
-                whole = data[: data.rfind(b"\n") + 1]
-                if len(whole) != len(data):  # a core killed mid-append left a fragment: cut it
-                    f.truncate(len(whole))
-                lines = whole.splitlines()
+                cut = data.rfind(b"\n") + 1
+                if cut != len(data):  # a core killed mid-append left a fragment: cut it
+                    f.truncate(start + cut)
+                lines = data[:cut].splitlines()
+                if start and lines:
+                    lines = lines[1:]  # the first line of the tail may be partial
                 last = json.loads(lines[-1])["seq"] if lines else 0
                 stored = dataclasses.replace(event, seq=last + 1)
                 f.seek(0, os.SEEK_END)
                 f.write((json.dumps(documents.encode(stored), sort_keys=True) + "\n").encode())
                 f.flush()
                 os.fsync(f.fileno())
+            if created:
+                _fsync_directory(path.parent)
             return stored
 
     def events(self, run_id: str, after: int = 0) -> list[Event]:
@@ -317,5 +353,6 @@ class LocalStore(Store):
     def close(self) -> None:
         """Release the store's lock; closing twice is harmless."""
         if self._lock_fd is not None:
-            os.close(self._lock_fd)  # closing the descriptor drops the flock
+            fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+            os.close(self._lock_fd)
             self._lock_fd = None

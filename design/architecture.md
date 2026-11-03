@@ -331,7 +331,9 @@ stored, so there is one representation of a twin.
 - **Audit.** Every request's principal is written to the audit log and to the runs it
   starts, so every change to a twin is attributable.
 - **Node logins** come from one **credential provider**: the environment locally, Secrets
-  on a cluster. A platform package names its login by a `credentials` name, never a value.
+  on a cluster. A platform package names its login by a `credentials` name, never a value;
+  the provider reads `FYLGJA_CREDENTIAL_<NAME>_USERNAME` and `_PASSWORD`
+  ([D-042](decisions.md#d-042)).
 - **No credential** appears in a blueprint, bundle, deployment, record, finding or log
   ([Constitution X](constitution.md#x-report-honestly)).
 
@@ -428,5 +430,5 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 - Whether the 40-character twin name and 63-character device names fit every runtime's own
   limits; clabernetes names a Service per node, and a Service name is a DNS-1035 label,
   which begins with a letter.
-- Image pulls on the local driver, the local naming of `credentials`, and whether
-  admission needs per-node requests as well as sums.
+- Image pulls on the local driver, and whether admission needs per-node requests as well as
+  sums.

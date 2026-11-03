@@ -394,6 +394,32 @@ cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-0
   `internal/lab/push_jsonrpc.go`, `push_eapi.go`, `gnmi_get.go`, `internal/verify`,
   `internal/step` and `lab/flows.go`.
 
+## Phase 4: one named twin on the local driver (settled 2026-11-03)
+
+Phase 4 is six plans, each a branch and a pull request useful on its own, in this order:
+the local store ([D-041](decisions.md#d-041)); the containerlab driver's pure half
+(`capabilities`, the allocation `admit` reserves, and `plan`, which renders
+`topology.clab.yml` and takes over the lossy and shared-port facts the compiler leaves to
+it; [D-043](decisions.md#d-043), [D-044](decisions.md#d-044)); the driver's live half
+(`admit`, `apply`, `inspect`, `destroy`, `endpoints`, the two recovery rules, each fact
+re-verified on containerlab 0.81.0); push and readiness (the credential provider, the two
+replace mechanisms of [D-027](decisions.md#d-027)); the reconcile loop with runs and events
+([D-023](decisions.md#d-023), [D-040](decisions.md#d-040)); and API 1 with the thin CLI
+([D-025](decisions.md#d-025), [D-026](decisions.md#d-026)). The live half and the push can
+proceed in parallel once the pure half is in.
+
+What the phase settled before code: its libraries ([D-039](decisions.md#d-039)), its
+configuration and the credential provider's naming ([D-042](decisions.md#d-042)), and the
+entries above. **Logging** is the standard library's, one JSON object per line on stderr,
+each with the time, the level, the logger, the message and the fields it carries (a twin,
+a run, a phase); the **audit log** is the same stream, each write to a twin carrying the
+principal and the action, so no second sink is run. No credential reaches a line
+(Constitution X): the credential provider logs names, never values.
+
+The phase is done when `fylgja-core twin create`, `show` and `destroy` run end to end on a
+fixture through the API, a kill at each phase boundary resumes to the desired state, and
+every containerlab behaviour the driver relies on is recorded for 0.81.0.
+
 ## Sequence
 
 0. **The baseline.** *Done.* The decision log ([decisions.md](decisions.md)), the

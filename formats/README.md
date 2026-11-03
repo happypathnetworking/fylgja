@@ -93,10 +93,5 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
   which begins with a letter.
 - **Image acquisition locally.** With `pull_secret` set, the image must be present. Without
   it, may the local driver pull a platform or probe image?
-- **The credential provider's local naming.** How does a `credentials` name map to
-  environment variables?
 - **Admission's demand.** Are `cpu` and `memory_mb` sums enough, or does clabernetes need
   per-node requests in the deployment?
-- **The deployment id and the allocation.** The deployment schema's `$comment` hashes
-  `{driver, twin, bundle_id, files}`, while the `allocation` description says it is hashed
-  with the rest. The driver's `plan` settles which, and the id function waits for it.

@@ -62,6 +62,12 @@ already have been weighed.
 | [D-036](#d-036) | The production cluster: three k3s servers with embedded etcd on SSD, MetalLB in layer 2, the registry off the cluster | Runtimes and drivers |
 | [D-037](#d-037) | Each node's LoadBalancer keeps the client's address: `externalTrafficPolicy: Local`, set by the clabernetes driver | Runtimes and drivers |
 | [D-038](#d-038) | What the compiler refuses and what it omits | The compiler and the bundle |
+| [D-039](#d-039) | Phase 4's libraries: Starlette on uvicorn, httpx, and nothing else | The API and its clients |
+| [D-040](#d-040) | Run ids are ULIDs made in the core | The reconcile loop and state |
+| [D-041](#d-041) | The local store's layout and how it writes | The reconcile loop and state |
+| [D-042](#d-042) | Configuration and credentials come from `FYLGJA_*` variables, with no configuration file | The API and its clients |
+| [D-043](#d-043) | The local driver's allocation and its reach into Docker | Runtimes and drivers |
+| [D-044](#d-044) | The deployment id hashes the driver, the twin, the bundle id and the files | The compiler and the bundle |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -696,6 +702,35 @@ name, and a string JSON admits but UTF-8 cannot encode.
 - [`docs/rules.md`](../docs/rules.md) catalogues each rule, and `testdata/compiler/rejected/`
   holds a fixture per refusal.
 
+<a id="d-044"></a>
+### D-044 — The deployment id hashes the driver, the twin, the bundle id and the files
+
+**Status:** Accepted 2026-11-03. Details [D-011](#d-011).
+
+#### Context
+
+Deployment 1's `$comment` hashes `{driver, twin, bundle_id, files}`, while its `allocation`
+description said the allocation was hashed too; the plan could not be built on both.
+
+#### Options considered
+
+- **Hash the allocation as a fifth member.** Rejected: an allocation detail no rendered file
+  carries would move the id with no change on the runtime.
+- **Hash the four members; the allocation reaches the id through the files it shapes.**
+  Chosen: the management subnet is in the rendered topology, so a different allocation is a
+  different file.
+
+#### Decision
+
+The deployment id is the SHA-256 of the RFC 8785 bytes of `{driver, twin, bundle_id, files}`,
+as the `$comment` says; the allocation's description is corrected in the same change.
+
+#### Consequences
+
+- Planning the same bundle for the same twin with the same allocation gives the same id,
+  which keeps `apply` idempotent.
+
+
 
 ## Platforms and packages
 
@@ -1218,6 +1253,41 @@ and not others.
   every pod, whatever the policy. The driver conformance suite tests isolation over TCP,
   from a pod that has run for at least 15 s.
 
+<a id="d-043"></a>
+### D-043 — The local driver's allocation and its reach into Docker
+
+**Status:** Accepted 2026-11-03. Details [D-018](#d-018) and [D-019](#d-019).
+
+#### Context
+
+`admit` reserves a lab name and a management subnet for a twin, since two labs on one host
+need disjoint subnets ([D-017](#d-017)). The loop needs each container's incarnation and
+Docker's events for the twin's containers ([D-023](#d-023)). The driver runs the containerlab
+CLI as a subprocess ([D-018](#d-018)).
+
+#### Options considered
+
+- **docker-py**, or the daemon's HTTP API by hand. Rejected: a second way to reach Docker
+  beside the CLI, and a dependency for two reads.
+- **A prefixed lab name** (`fylgja-<twin>`). Rejected: the twin name is already a DNS-1123
+  label kept to 40 characters for exactly this, and containerlab prefixes `clab-` itself.
+- **The twin's name as the lab's name, a /24 from a pool, and the `docker` CLI.** Chosen.
+
+#### Decision
+
+- The lab is named exactly the twin's name; containers are `clab-<twin>-<node>`.
+- `admit` takes a /24 for the lab's management network from a pool, by default
+  `172.20.0.0/16`, skipping any subnet a Docker network already holds, and records
+  `{lab, mgmt_subnet}` as the allocation; `destroy` releases it.
+- Incarnations (`State.StartedAt`) and the twin's container events come from `docker inspect`
+  and `docker events`, run as subprocesses like containerlab, with no SDK.
+
+#### Consequences
+
+- An operator reproduces anything the driver did with the two CLIs it logged.
+- The pool's size bounds concurrent labs locally; admission refuses when it is exhausted.
+
+
 ## The reconcile loop and state
 
 <a id="d-023"></a>
@@ -1338,6 +1408,73 @@ are written once and read by id. The same core runs on a development host and a 
 
 - Compare-and-set keeps concurrent runs on two twins from colliding.
 - Run history is the store's run records and events, read with a cursor.
+
+<a id="d-040"></a>
+### D-040 — Run ids are ULIDs made in the core
+
+**Status:** Accepted 2026-11-03.
+
+#### Context
+
+Every long operation is a run with an id that sorts by start
+([D-023](#d-023), [D-025](#d-025)); twin record 1 fixes the id's form as a ULID. The core
+has two runtime dependencies.
+
+#### Options considered
+
+- **The `python-ulid` package.** Rejected: a dependency for about thirty lines, and its
+  current release is too new to pin.
+- **UUIDv7.** Rejected: the format already names ULIDs, and the Crockford form is what
+  clients and tests match.
+- **A ULID written in the core.** Chosen.
+
+#### Decision
+
+`fylgja_core.ulid` makes a ULID: 48 bits of milliseconds since the epoch and 80 random bits,
+Crockford base32, monotonic within a process, tested against the format's pattern and for
+ordering.
+
+#### Consequences
+
+- No new dependency; the id's form is the format's, not a library's.
+
+<a id="d-041"></a>
+### D-041 — The local store's layout and how it writes
+
+**Status:** Accepted 2026-11-03. Details [D-024](#d-024).
+
+#### Context
+
+The local store is a directory holding twin records changed by compare-and-set, documents
+kept by id and never overwritten, and runs with appended events; one core holds it at a
+time ([D-023](#d-023)). A killed core must leave every file whole.
+
+#### Options considered
+
+- **One JSON file for everything.** Rejected: every write rewrites every twin.
+- **SQLite.** Rejected: a database by another name (Constitution IX).
+- **One file per record, written through a temp file and an atomic rename.** Chosen.
+
+#### Decision
+
+- Layout: `lock` at the root; `blueprints/<id>.json`; `bundles/<id>/manifest.json` and
+  `configs/<node>.cfg`; `deployments/<id>/deployment.json` with the rendered files beside
+  it; `twins/<name>.json`; `runs/<ulid>.json` and `runs/<ulid>.events.ndjson`, one JSON
+  line per event carrying its sequence number.
+- Every write goes to a temporary file in the same directory, is fsynced, and is renamed into
+  place, so a reader sees the old file or the new one and never a partial one. A
+  content-addressed document is linked into place rather than renamed, so an existing id is
+  never overwritten.
+- Compare-and-set is the revision check and the write under one in-process lock per store;
+  the exclusive lock on `lock` (held by the running core) already makes one core per store.
+- Events are appended and fsynced one line at a time; a reader by cursor skips a trailing
+  partial line.
+
+#### Consequences
+
+- Nothing in the layout assumes one twin; a record is reached by its name alone.
+- The object store implements the same interface with keys of the same shape.
+
 
 ## The API and its clients
 
@@ -1481,6 +1618,88 @@ compiles to"), and is a client of the API ([D-025](#d-025)).
 #### Consequences
 
 - The CLI holds no rule of its own: every refusal is the server's.
+
+<a id="d-039"></a>
+### D-039 — Phase 4's libraries: Starlette on uvicorn, httpx, and nothing else
+
+**Status:** Accepted 2026-11-03.
+
+#### Context
+
+API 1 serves JSON documents validated by the schemas in `formats/`, streams a twin's changes
+as server-sent events, and runs in one process with the reconcile loop's asyncio workers
+([D-023](#d-023)). The push and readiness are HTTPS requests to a node's management address
+([D-027](#d-027)). The core has two runtime dependencies so far, and every pin is a release
+at least two weeks old.
+
+#### Options considered
+
+- **FastAPI.** Rejected: its pydantic models would be a second representation of every
+  document the formats already define, and its generated OpenAPI would compete with the
+  hand-written `api-1.openapi.yaml`.
+- **aiohttp**, server and client. Rejected: the core would use half of a bundle, and its
+  server is not ASGI.
+- **The standard library's `http.server`.** Rejected: synchronous, no streaming response.
+- **Starlette on uvicorn**, plain ASGI with streaming responses. Chosen.
+- **The client: `urllib` in a thread.** Rejected: the loop is asynchronous, and a blocking
+  push would hold a worker. **httpx's async client.** Chosen.
+
+#### Decision
+
+- **Starlette 1.9.0 on uvicorn 0.54.0** serve API 1; the server validates every request body
+  against its format's schema and answers documents, with no model layer of the
+  framework's.
+- **httpx 0.28.1** carries the push, readiness and, later, any HTTP read of a node, with the
+  node's boot-time certificate accepted unverified as the packages state.
+- No other library enters phase 4; what else it needs (ULIDs, logging, the store) is written
+  in the core.
+
+#### Consequences
+
+- The pins move only by a decision's rule for dependencies: a release at least two weeks old.
+- The API's test suite is written from the OpenAPI document and runs against the service,
+  so no framework-generated schema is ever the reference.
+
+<a id="d-042"></a>
+### D-042 — Configuration and credentials come from `FYLGJA_*` variables, with no configuration file
+
+**Status:** Accepted 2026-11-03. Answers the credential provider's local naming, open since
+the baseline.
+
+#### Context
+
+The core runs on a development host and on a cluster. Credentials come from one provider:
+the environment locally, Secrets on a cluster (Constitution X). A platform package names its
+login by a `credentials` name, never a value, and `.env.example` listed provisional variable
+names.
+
+#### Options considered
+
+- **A configuration file** (YAML or TOML) beside the store. Rejected: a second place for
+  values that on a cluster come from Secrets as environment variables anyway, and a file an
+  operator could commit.
+- **Command-line flags.** Rejected: a credential on a command line is visible in the process
+  list.
+- **Environment variables alone, one naming rule.** Chosen.
+
+#### Decision
+
+- The server reads `FYLGJA_STORE` (the store directory), `FYLGJA_LISTEN` (default
+  `127.0.0.1:7650`), `FYLGJA_DRIVER` (the default driver), `FYLGJA_WORKERS` (the pool's
+  size), `FYLGJA_PACKAGES` (directories of platform and probe packages, colon-separated) and
+  `FYLGJA_TOKENS` (a file of per-client token hashes with their principals).
+- A node login is `FYLGJA_CREDENTIAL_<NAME>_USERNAME` and `FYLGJA_CREDENTIAL_<NAME>_PASSWORD`,
+  where `<NAME>` is the package's `credentials` value upper-cased with dashes as
+  underscores: `srlinux` is `FYLGJA_CREDENTIAL_SRLINUX_USERNAME`.
+- A client reads `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`.
+- On a cluster the same variables are set from Secrets; the provider's interface is the same
+  on both.
+
+#### Consequences
+
+- `.env.example` is the list of names, and `local/.env` the one place values live.
+- A missing variable is refused at start, naming the variable and never its value.
+
 
 ## Pushing, stepping and verifying
 

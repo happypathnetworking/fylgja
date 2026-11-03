@@ -1368,7 +1368,9 @@ declared capability.
 - `GET /v1/drivers` and `FYLGJA_DRIVER` read the registry; an unknown name is a `KeyError`
   that names the drivers served.
 - A new driver is one line there, beside its own module behind the seam.
-- The purity and boundary tests treat the registry as above the seam.
+- A boundary test (`core/tests/test_boundary_seam.py`) scans every module's imports: none
+  outside `fylgja_core.containerlab` imports it or any of its modules, the registry alone
+  excepted.
 
 
 ## The reconcile loop and state

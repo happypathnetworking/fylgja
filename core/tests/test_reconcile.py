@@ -7,20 +7,21 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 
 import pytest
 from fakes import FakeDriver, FakePush, FakeReady, fake_push, fake_ready
 
-from fylgja_core import bundle, platform_package, probe_package, push, reconcile
-from fylgja_core.credentials import Provider
+from fylgja_core import bundle, clock, compiler, deployment, documents, platform_package, probe_package, push, reconcile
+from fylgja_core.credentials import Credential, Provider
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding, Subject
 from fylgja_core.local_store import LocalStore
 from fylgja_core.reconcile import Reconciler
 from fylgja_core.run import Run, queued
 from fylgja_core.run import State as RunState
+from fylgja_core.store import Change, NotFound
 from fylgja_core.twin_record import Condition, Spec, Status, TwinRecord
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,8 +54,10 @@ def file_blueprint(store: LocalStore, path: str = "testdata/blueprint/three-node
     return blueprint_id
 
 
-def new_twin(store: LocalStore, blueprint_id: str | None, name: str = "t", *, bundle_id: str | None = None) -> None:
-    spec = Spec(blueprint_id=blueprint_id, bundle_id=bundle_id, driver="fake", allow_restart=False)
+def new_twin(
+    store: LocalStore, blueprint_id: str | None, name: str = "t", *, bundle_id: str | None = None, driver: str = "fake"
+) -> None:
+    spec = Spec(blueprint_id=blueprint_id, bundle_id=bundle_id, driver=driver, allow_restart=False)
     store.create_twin(TwinRecord(name=name, revision=1, generation=1, spec=spec,
                                  status=Status(observed_generation=0, conditions=(), nodes=())))
 
@@ -65,10 +68,13 @@ def make(
     ready: FakeReady | None = None,
     pusher: FakePush | None = None,
     environ: Mapping[str, str] = ENVIRON,
+    *,
+    workers: int = 4,
+    resync_s: float = 300.0,
 ) -> Reconciler:
-    return Reconciler(store, {driver.name: driver}, PLATFORMS, PROBES, Provider(environ),
-                      pusher=pusher if pusher is not None else fake_push(driver=driver),
-                      readiness=ready if ready is not None else fake_ready(driver=driver))
+    return Reconciler(store, {driver.name: driver}, PLATFORMS, PROBES, Provider(environ), workers=workers,
+                      resync_s=resync_s, pusher=pusher if pusher is not None else fake_push(driver=driver),
+                      readiness=ready if ready is not None else fake_ready(driver=driver), cancel_poll_s=0.01)
 
 
 def ready_of(record: TwinRecord) -> Condition:
@@ -707,3 +713,439 @@ def test_a_record_naming_a_queued_run_marks_it_running_and_runs_it(store: LocalS
     asyncio.run(make(store, FakeDriver()).reconcile("t"))
     assert only_run(store).id == run.id and ready_of(store.get_twin("t")).status == "True"
     assert seen(store, run.id) == CREATE
+
+
+# Deletion, cancellation, the dry run, start and resync (Task 6).
+
+
+def request_deletion(store: LocalStore, name: str = "t", *, mark: bool = True, principal: str = "bob") -> Run:
+    """What the API's DELETE does (plan 6): `deletion_requested_at` set and `generation` bumped,
+    a run in flight marked cancelling (unless `mark` is False), and a destroy run queued."""
+    record = store.get_twin(name)
+    store.update_twin(dataclasses.replace(record, deletion_requested_at=clock.now(), generation=record.generation + 1),
+                      record.revision)
+    for run in store.list_runs(name):
+        if mark and run.state in ("queued", "running"):
+            store.update_run(dataclasses.replace(run, state="cancelling"), run.state)
+    destroy = queued(name, "destroy", principal)
+    store.create_run(destroy)
+    return destroy
+
+
+def mark_cancelling(store: LocalStore, run_id: str) -> None:
+    """What the API's cancel does (plan 6)."""
+    run = store.get_run(run_id)
+    store.update_run(dataclasses.replace(run, state="cancelling"), run.state)
+
+
+def the_run(store: LocalStore, operation: str, twin: str = "t") -> Run:
+    (run,) = [r for r in store.list_runs(twin) if r.operation == operation]
+    return run
+
+
+def assert_cancelled(run: Run) -> None:
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "failed"
+    assert [(f.rule, f.object) for f in run.verdict.findings] == [("run.cancelled", run.twin)]
+
+
+async def until(condition: Callable[[], bool], timeout_s: float = 5.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout_s
+    while not condition():
+        assert asyncio.get_running_loop().time() < deadline, "the condition never held"
+        await asyncio.sleep(0.01)
+
+
+def is_ready(store: LocalStore, name: str) -> bool:
+    try:
+        record = store.get_twin(name)
+    except NotFound:
+        return False
+    return record.status.observed_generation == record.generation and ready_of(record).status == "True"
+
+
+def test_deleting_a_ready_twin_destroys_it_and_deletes_its_record(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+
+    async def scenario() -> list[Change]:
+        r = make(store, driver)
+        await r.reconcile("t")
+        with store.subscribe() as watch:
+            request_deletion(store)
+            await r.reconcile("t")
+            await asyncio.sleep(0)  # a change is delivered through the loop
+            changes = []
+            while not watch.queue.empty():
+                changes.append(watch.queue.get_nowait())
+        return changes
+
+    changes = asyncio.run(scenario())
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+    assert driver.calls.count(("destroy", "t")) == 1 and "t" not in driver.labs
+    destroy = the_run(store, "destroy")
+    assert destroy.state == "ended" and destroy.principal == "bob"
+    assert destroy.verdict is not None and destroy.verdict.status == "ok" and destroy.verdict.operation == "destroy"
+    assert destroy.verdict.subject.twin == "t" and destroy.verdict.subject.run_id == destroy.id
+    assert seen(store, destroy.id) == [("destroy", "started", None), ("destroy", "done", None)]
+    create = the_run(store, "create")
+    assert create.verdict is not None and create.verdict.status == "ok"  # the create had ended: nothing cancelled
+    assert [c.type for c in changes][-1] == "DELETED"
+    deleting = [c.record for c in changes if c.type == "MODIFIED" and ready_of(c.record).reason == "twin.deleting"]
+    assert deleting and deleting[0].status.run_id == destroy.id
+    assert changes[-1].record.status.phase == "destroyed" and changes[-1].record.status.deployment_id is None
+
+
+def test_deleting_a_twin_whose_admission_was_refused_destroys_nothing(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver(refuse=Refusal("admission.capacity", "no room"))
+    r = make(store, driver)
+    asyncio.run(r.reconcile("t"))
+    request_deletion(store)
+    asyncio.run(r.reconcile("t"))
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+    assert ("destroy", "t") not in driver.calls
+    destroy = the_run(store, "destroy")
+    assert destroy.verdict is not None and destroy.verdict.status == "ok"
+    assert seen(store, destroy.id) == [("destroy", "started", None), ("destroy", "done", None)]
+
+
+def test_a_deletion_with_no_destroy_run_queued_runs_one_of_the_cores(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    r = make(store, driver)
+    asyncio.run(r.reconcile("t"))
+    record = store.get_twin("t")
+    store.update_twin(dataclasses.replace(record, deletion_requested_at=clock.now(), generation=2), record.revision)
+    asyncio.run(r.reconcile("t"))
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+    destroy = the_run(store, "destroy")
+    assert destroy.principal == "core" and destroy.verdict is not None and destroy.verdict.status == "ok"
+
+
+def test_a_failed_teardown_is_transient_and_the_next_pass_completes_it(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+
+    async def scenario() -> None:
+        r = make(store, driver)
+        await r.reconcile("t")
+        destroy = request_deletion(store)
+        driver.fail_destroy = True
+        await r.reconcile("t")
+        record = store.get_twin("t")
+        assert record.status.run_id == destroy.id and store.get_run(destroy.id).state == "running"
+        assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.deleting")
+        assert record.status.deployment_id is not None and r.backoff == {"t": 1.0}
+        assert seen(store, destroy.id) == [("destroy", "started", None), ("destroy", "failed", None)]
+        driver.fail_destroy = False
+        await r.reconcile("t")
+        with pytest.raises(NotFound):
+            store.get_twin("t")
+        assert seen(store, destroy.id)[-2:] == [("destroy", "started", None), ("destroy", "done", None)]
+        assert len(store.list_runs("t")) == 2 and r.backoff == {}
+
+    asyncio.run(scenario())
+
+
+def test_killed_after_destroyed_a_resume_deletes_the_record_without_a_second_destroy(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    asyncio.run(make(killing, driver).reconcile("t"))
+    destroy = request_deletion(killing)
+    killing.kill_at = "destroyed"
+    killed(make(killing, driver))
+    assert killing.get_twin("t").status.phase == "destroyed"
+    asyncio.run(make(killing, driver).reconcile("t"))
+    with pytest.raises(NotFound):
+        killing.get_twin("t")
+    assert driver.calls.count(("destroy", "t")) == 1
+    assert killing.get_run(destroy.id).verdict is not None
+    assert seen(killing, destroy.id) == [("destroy", "started", None)]  # the kill came before its end
+
+
+def test_killed_after_the_destroy_run_ended_the_next_pass_deletes_the_record(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    asyncio.run(make(killing, driver).reconcile("t"))
+    destroy = request_deletion(killing)
+    killing.kill_at = "ended"
+    killed(make(killing, driver))
+    assert killing.get_run(destroy.id).state == "ended" and killing.get_twin("t").status.run_id == destroy.id
+    asyncio.run(make(killing, driver).reconcile("t"))
+    with pytest.raises(NotFound):
+        killing.get_twin("t")
+    assert driver.calls.count(("destroy", "t")) == 1 and len(killing.list_runs("t")) == 2
+
+
+class CancellingPush(FakePush):
+    """A push that marks the twin's create run cancelling once it has pushed `after` nodes, or
+    asks for the twin's deletion then, as a client would meanwhile."""
+
+    def __init__(self, store: LocalStore, driver: FakeDriver, *, after: int = 1, delete: bool = False) -> None:
+        super().__init__(None, None, None, driver)
+        self.store, self.after, self.delete = store, after, delete
+
+    async def __call__(
+        self, address: str, package: platform_package.PlatformPackage, config: str, credential: Credential
+    ) -> push.Pushed | push.Refused:
+        answer = await super().__call__(address, package, config, credential)
+        if len(self.calls) == self.after:
+            if self.delete:
+                request_deletion(self.store)
+            else:
+                mark_cancelling(self.store, the_run(self.store, "create").id)
+        return answer
+
+
+def test_a_cancelled_create_stops_cleans_up_and_ends_cancelled(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    pusher = CancellingPush(store, driver)
+    asyncio.run(make(store, driver, pusher=pusher).reconcile("t"))
+
+    run = only_run(store)
+    assert_cancelled(run)
+    assert [node for node, _ in pusher.calls] == ["n1"]
+    assert seen(store, run.id) == [*CREATE[:-4], ("cancel", "started", None), ("cancel", "done", None)]
+    assert store.events(run.id)[-1].rule == "run.cancelled"
+    assert driver.calls[-1] == ("destroy", "t") and "t" not in driver.labs
+    assert_cleaned_up(store.get_twin("t"), "run.cancelled")
+
+
+def test_a_cancel_stops_a_call_the_runtime_never_answers(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    driver.block = "apply"
+
+    async def scenario() -> None:
+        r = make(store, driver)
+        pass_ = asyncio.create_task(r.reconcile("t"))
+        await until(lambda: ("apply", "t") in driver.calls)
+        mark_cancelling(store, only_run(store).id)
+        await asyncio.wait_for(pass_, timeout=5)
+
+    asyncio.run(scenario())
+    run = only_run(store)
+    assert_cancelled(run)
+    assert seen(store, run.id) == [*UP_TO_APPLY[:-1], ("apply", "cancelled", None), ("cancel", "started", None),
+                                   ("cancel", "done", None)]
+    assert driver.calls[-1] == ("destroy", "t")
+    assert_cleaned_up(store.get_twin("t"), "run.cancelled")
+
+
+def test_a_run_cancelled_before_it_started_ends_cancelled_having_done_nothing(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    asked = queued("t", "create", "alice")
+    store.create_run(asked)
+    mark_cancelling(store, asked.id)
+    driver = FakeDriver()
+    asyncio.run(make(store, driver).reconcile("t"))
+    run = only_run(store)
+    assert run.id == asked.id
+    assert_cancelled(run)
+    assert seen(store, run.id) == [("cancel", "started", None), ("cancel", "done", None)]
+    assert driver.calls == []
+    assert_cleaned_up(store.get_twin("t"), "run.cancelled")
+
+
+def test_a_create_whose_run_is_cancelled_while_it_ends_is_cancelled(store: LocalStore) -> None:
+    # The API marks the run cancelling between the last push and the run's end: the loop decides again.
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    pusher = CancellingPush(store, driver, after=3)
+    asyncio.run(make(store, driver, pusher=pusher).reconcile("t"))
+    run = only_run(store)
+    assert_cancelled(run)
+    assert seen(store, run.id) == [*CREATE, ("cancel", "started", None), ("cancel", "done", None)]
+    assert_cleaned_up(store.get_twin("t"), "run.cancelled")
+    assert "t" not in driver.labs
+
+
+def test_a_deletion_during_a_create_cancels_it_then_tears_the_twin_down(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    pusher = CancellingPush(store, driver, delete=True)
+
+    async def scenario() -> None:
+        r = make(store, driver, pusher=pusher)
+        await r.reconcile("t")  # the create, cancelled by the deletion's mark
+        create = the_run(store, "create")
+        assert_cancelled(create)
+        # The deletion's write mid-pass did not fail the push: the loop's status was written over it.
+        assert seen(store, create.id) == [*CREATE[:-4], ("cancel", "started", None), ("cancel", "done", None)]
+        assert store.get_twin("t").status.deployment_id is None
+        await r.reconcile("t")  # the kick the deletion queued
+
+    asyncio.run(scenario())
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+    destroy = the_run(store, "destroy")
+    assert destroy.verdict is not None and destroy.verdict.status == "ok"
+    assert driver.calls.count(("destroy", "t")) == 1 and "t" not in driver.labs  # the create's cleanup tore it down
+
+
+def test_a_deletion_finding_a_create_left_running_cancels_it_first(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "applied"
+    killed(make(killing, driver))  # a core that stopped mid-create
+    create = the_run(killing, "create")
+    stray = queued("t", "create", "alice")  # and a create run that never started
+    killing.create_run(stray)
+    destroy = request_deletion(killing, mark=False)
+    asyncio.run(make(killing, driver).reconcile("t"))
+    with pytest.raises(NotFound):
+        killing.get_twin("t")
+    assert_cancelled(killing.get_run(create.id))
+    assert seen(killing, create.id)[-2:] == [("cancel", "started", None), ("cancel", "done", None)]
+    assert_cancelled(killing.get_run(stray.id))
+    assert seen(killing, stray.id) == [("cancel", "started", None), ("cancel", "done", None)]
+    verdict = killing.get_run(destroy.id).verdict
+    assert verdict is not None and verdict.status == "ok"
+    assert driver.calls.count(("destroy", "t")) == 1 and "t" not in driver.labs
+
+
+def test_a_cancel_after_a_transient_failure_is_read_back_as_cancelled(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    asyncio.run(make(killing, driver, pusher=fake_push(unreachable={"n1"}, driver=driver)).reconcile("t"))
+    run = only_run(killing)
+    assert killing.events(run.id)[-1].rule == "push.unreachable"
+    mark_cancelling(killing, run.id)
+    killing.kill_at = "ended"
+    killed(make(killing, driver))  # stopped between the run's end and the record's last write
+    asyncio.run(make(killing, driver).reconcile("t"))
+    assert_cleaned_up(killing.get_twin("t"), "run.cancelled")  # not push.unreachable
+    assert killing.events(run.id)[-1].rule == "run.cancelled"
+
+
+def test_a_node_refusing_the_login_in_the_partial_lab_probe_fails_at_once(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "planned"
+    killed(make(killing, driver))
+    asyncio.run(deploy_as_killed(killing, driver))
+
+    before = len(driver.calls)
+    ready = fake_ready(refuse_login={"n2"}, driver=driver)
+    asyncio.run(make(killing, driver, ready=ready).reconcile("t"))
+    assert driver.calls[before:] == [("inspect", "t"), ("destroy", "t")]  # no reconfigure: it would not help
+    run = only_run(killing)
+    assert run.verdict is not None and [(f.rule, f.object) for f in run.verdict.findings] == [
+        ("readiness.unauthorized", "n2")]
+    assert seen(killing, run.id)[-2:] == [("apply", "started", None), ("apply", "failed", None)]
+    assert killing.events(run.id)[-1].rule == "readiness.unauthorized"
+    assert_cleaned_up(killing.get_twin("t"), "readiness.unauthorized")
+
+
+def test_a_driver_this_core_does_not_serve_rejects_the_run_and_raises_nothing(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store), driver="elsewhere")
+    asked = queued("t", "create", "alice")
+    store.create_run(asked)
+    driver = FakeDriver()
+    r = make(store, driver)
+    asyncio.run(r.reconcile("t"))
+    run = only_run(store)
+    assert run.id == asked.id and run.state == "ended" and run.verdict is not None
+    assert run.verdict.status == "rejected"
+    (finding,) = run.verdict.findings
+    assert (finding.rule, finding.object) == ("twin.driver.unknown", "t") and "'elsewhere'" in finding.message
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.driver.unknown")
+    assert record.status.observed_generation == 1 and record.status.run_id is None
+    assert driver.calls == []
+    asyncio.run(r.reconcile("t"))
+    assert store.get_twin("t").revision == record.revision and len(store.list_runs("t")) == 1
+
+
+def test_a_driver_this_core_does_not_serve_with_no_run_queued_makes_none(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store), driver="elsewhere")
+    asyncio.run(make(store, FakeDriver()).reconcile("t"))
+    assert store.list_runs("t") == []
+    assert ready_of(store.get_twin("t")).reason == "twin.driver.unknown"
+
+
+def spec_of(blueprint_id: str, driver: str = "fake") -> Spec:
+    return Spec(blueprint_id=blueprint_id, driver=driver, allow_restart=False)
+
+
+def test_a_dry_run_plans_against_the_live_reservations_and_writes_nothing(store: LocalStore) -> None:
+    blueprint_id = file_blueprint(store)
+    new_twin(store, blueprint_id, "held")
+    driver = FakeDriver()
+    r = make(store, driver)
+    asyncio.run(r.reconcile("held"))  # holds 10.0.1.0/24
+    root = store.root
+    before = {p.relative_to(root) for p in root.rglob("*")}
+    revision = store.get_twin("held").revision
+
+    planned, verdict = asyncio.run(r.dry_run("t", spec_of(blueprint_id)))
+    assert planned is not None and planned.twin == "t"
+    assert planned.allocation == {"lab": "t", "mgmt_subnet": "10.0.2.0/24"}
+    assert deployment.validate(documents.encode(planned)) == []
+    assert verdict.operation == "plan" and verdict.status == "ok" and verdict.findings == ()
+    assert verdict.subject == Subject(twin="t", blueprint_id=blueprint_id, bundle_id=planned.bundle_id,
+                                      deployment_id=planned.id)
+    assert {p.relative_to(root) for p in root.rglob("*")} == before  # no record, run, bundle or deployment
+    assert store.get_twin("held").revision == revision
+
+
+def test_a_dry_run_a_driver_refuses_is_rejected(store: LocalStore) -> None:
+    blueprint_id = file_blueprint(store)
+    r = make(store, FakeDriver(refuse=Refusal("admission.capacity", "no room")))
+    planned, verdict = asyncio.run(r.dry_run("t", spec_of(blueprint_id)))
+    assert planned is None and verdict.operation == "plan" and verdict.status == "rejected"
+    assert verdict.findings == (Finding(rule="admission.capacity", severity="error", object="t", message="no room"),)
+    unserved, verdict = asyncio.run(r.dry_run("t", spec_of(blueprint_id, driver="elsewhere")))
+    assert unserved is None and [f.rule for f in verdict.findings] == ["twin.driver.unknown"]
+
+
+def test_a_dry_run_raises_what_the_api_answers_422(store: LocalStore) -> None:
+    rejected = file_blueprint(store, "testdata/compiler/rejected/network-empty.json")
+    with pytest.raises(compiler.Uncompilable):
+        asyncio.run(make(store, FakeDriver()).dry_run("t", spec_of(rejected)))
+    with pytest.raises(Unplannable):
+        asyncio.run(make(store, UnplannableDriver()).dry_run("t", spec_of(file_blueprint(store))))
+    with pytest.raises(NotFound):
+        asyncio.run(make(store, FakeDriver()).dry_run("t", spec_of("f" * 64)))
+
+
+def test_start_serves_every_twin_kick_serves_one_and_stop_ends_cleanly(store: LocalStore) -> None:
+    blueprint_id = file_blueprint(store)
+    for name in ("a", "b"):
+        new_twin(store, blueprint_id, name)
+    driver = FakeDriver()
+
+    async def scenario() -> None:
+        r = make(store, driver, workers=2)
+        await r.start()
+        await until(lambda: is_ready(store, "a") and is_ready(store, "b"))
+        new_twin(store, blueprint_id, "c")
+        r.kick("c")
+        await until(lambda: is_ready(store, "c"))
+        request_deletion(store, "a")
+        r.kick("a")
+        await until(lambda: "a" not in [t.name for t in store.list_twins()])
+        await r.stop()
+        await r.stop()  # stopping twice is harmless
+        assert {t for t in asyncio.all_tasks() if not t.done()} == {asyncio.current_task()}
+
+    asyncio.run(scenario())
+    assert [t.name for t in store.list_twins()] == ["b", "c"]
+
+
+def test_the_resync_serves_a_twin_nothing_kicked(store: LocalStore) -> None:
+    blueprint_id = file_blueprint(store)
+    driver = FakeDriver()
+
+    async def scenario() -> None:
+        r = make(store, driver, resync_s=0.05)
+        await r.start()
+        new_twin(store, blueprint_id)
+        await until(lambda: is_ready(store, "t"))
+        await r.stop()
+
+    asyncio.run(scenario())

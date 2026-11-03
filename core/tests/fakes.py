@@ -21,7 +21,7 @@ from fylgja_core.deployment import Deployment
 from fylgja_core.driver import Allocation, Capabilities, DriverFailed, Inspection, NodeState, Planned, Refusal
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.probe_package import ProbePackage
-from fylgja_core.readiness import RULE_TIMEOUT, NotReady
+from fylgja_core.readiness import RULE_TIMEOUT, RULE_UNAUTHORIZED, NotReady
 
 PLAN = "plan.txt"
 CAPABILITIES = Capabilities(nodes="provisions", relink=False, forwarding="software", access="direct", isolation="names")
@@ -39,7 +39,8 @@ class FakeDriver:
     or `reconfigure` is asked, and changes nothing over a lab that exists, as containerlab's
     plain redeploy does (D-023). `fail_apply` and `fail_destroy` raise `DriverFailed` with
     nothing changed. `fail_after` names a call after which, once it has taken effect, a kill is
-    raised (`RuntimeError("killed")`), once. `residue` holds the twins whose lab was removed
+    raised (`RuntimeError("killed")`), once. `block` names a call that, once recorded, waits
+    until it is cancelled, as a runtime that never answers. `residue` holds the twins whose lab was removed
     by hand and left leftovers: `inspect` answers `residue` for them, and `apply` and `destroy`
     clear it. `silent` holds `(twin, node)` pairs whose transport never answers until a
     reconfigure makes the twin's nodes anew."""
@@ -50,6 +51,7 @@ class FakeDriver:
         self.fail_apply = fail_apply
         self.fail_destroy = False
         self.fail_after: str | None = None
+        self.block: str | None = None
         self.labs: dict[str, dict[str, NodeState]] = {}
         self.residue: set[str] = set()
         self.silent: set[tuple[str, str]] = set()
@@ -68,7 +70,7 @@ class FakeDriver:
         reserved: Sequence[Allocation],
     ) -> Allocation | Refusal:
         self.calls.append(("admit", twin))
-        await asyncio.sleep(0)  # a runtime call yields, so two admissions can interleave
+        await self._held("admit")  # a runtime call yields, so two admissions can interleave
         if self.refuse is not None:
             return self.refuse
         taken = {a.get("mgmt_subnet") for a in reserved}
@@ -116,7 +118,7 @@ class FakeDriver:
     ) -> None:
         twin = deployment.twin
         self.calls.append(("apply", twin, "reconfigure") if reconfigure else ("apply", twin))
-        await asyncio.sleep(0)
+        await self._held("apply")
         if self.fail_apply:
             raise DriverFailed(f"the deploy of {twin} failed")
         if reconfigure or not self.labs.get(twin):
@@ -136,6 +138,7 @@ class FakeDriver:
 
     async def inspect(self, twin: str) -> Inspection:
         self.calls.append(("inspect", twin))
+        await self._held("inspect")
         lab = self.labs.get(twin)
         if lab:
             return Inspection(state="present", nodes=tuple(lab[name] for name in sorted(lab)))
@@ -150,7 +153,7 @@ class FakeDriver:
     ) -> None:
         twin = deployment.twin
         self.calls.append(("destroy", twin))
-        await asyncio.sleep(0)
+        await self._held("destroy")
         if self.fail_destroy:
             raise DriverFailed(f"the destroy of {twin} failed")
         self.labs.pop(twin, None)
@@ -176,6 +179,11 @@ class FakeDriver:
         at = self.node_at(address)
         return at is not None and at not in self.silent and self.labs[at[0]][at[1]].running
 
+    async def _held(self, call: str) -> None:
+        await asyncio.sleep(0)
+        if self.block == call:
+            await asyncio.get_running_loop().create_future()  # never answered: waits until cancelled
+
     def _killed_after(self, call: str) -> None:
         if self.fail_after == call:
             self.fail_after = None
@@ -184,13 +192,15 @@ class FakeDriver:
 
 class FakeReady:
     """A readiness wait: a node answers when it is in `answers` (every node, when None) and,
-    given the driver, the driver's node at the address runs and is not silent. Each call is
-    recorded as `(node, timeout_s)`, the node by name when the driver knows the address."""
+    given the driver, the driver's node at the address runs and is not silent; a node in
+    `refuse_login` refuses the login (`readiness.unauthorized`). Each call is recorded as
+    `(node, timeout_s)`, the node by name when the driver knows the address."""
 
-    def __init__(self, answers: set[str] | None, driver: FakeDriver | None) -> None:
-        if answers is not None and driver is None:
+    def __init__(self, answers: set[str] | None, refuse_login: set[str] | None, driver: FakeDriver | None) -> None:
+        if (answers is not None or refuse_login) and driver is None:
             raise ValueError("naming the nodes that answer needs the driver that knows their addresses")
         self.answers = answers
+        self.refuse_login = set(refuse_login or ())
         self.driver = driver
         self.calls: list[tuple[str, float | None]] = []
 
@@ -200,6 +210,8 @@ class FakeReady:
         node = _name(self.driver, address)
         self.calls.append((node, timeout_s))
         await asyncio.sleep(0)
+        if node in self.refuse_login:
+            raise NotReady(RULE_UNAUTHORIZED, f"{address}:{package.push.port} refused the login")
         answering = self.answers is None or node in self.answers
         if self.driver is not None:
             answering = answering and self.driver.answers(address)
@@ -243,9 +255,11 @@ class FakePush:
         return push.Pushed(diff=f"+ {node}\n", duration_s=0.0)
 
 
-def fake_ready(answers: set[str] | None = None, *, driver: FakeDriver | None = None) -> FakeReady:
+def fake_ready(
+    answers: set[str] | None = None, *, refuse_login: set[str] | None = None, driver: FakeDriver | None = None
+) -> FakeReady:
     """A `ReadyFn` that records its calls; see `FakeReady`."""
-    return FakeReady(answers, driver)
+    return FakeReady(answers, refuse_login, driver)
 
 
 def fake_push(

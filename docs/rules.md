@@ -106,9 +106,16 @@ the compile, admission or the plan refuses (nothing was built), or `failed` when
 does not become ready, the push is refused or unauthorized, a credential is missing, or the
 run is cancelled; either way the loop cleans up and waits for the spec to be written again.
 Its verdict holds the findings, and the twin's `Ready` condition carries a **reason**, a
-rule id too, which is also the `rule` of the run's failing event. A transient failure (the
-driver's runtime failure, an unreachable node, the store) ends no run: the loop tries again
-after a backoff.
+rule id too, which is also the `rule` of the run's ending event (the failing phase's, or
+`cancel done`). A transient failure (the driver's runtime failure, an unreachable node, the
+store) ends no run: the loop tries again after a backoff.
+
+A cancelled create stops where it is, stopping a call on the runtime in flight, tears down
+what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels a create in
+flight that way, then a destroy run tears the twin down and deletes its record; it ends `ok`,
+and a destroy run is never stopped halfway. In the partial-lab probe a node that refuses the
+login is not silent: the run fails at once with `readiness.unauthorized`, since a reconfigure
+would not help.
 
 The findings the loop files itself, each an error:
 
@@ -117,6 +124,7 @@ The findings the loop files itself, each an error:
 | `blueprint.missing` | `rejected` | the spec's blueprint is not in the store; the object is its id |
 | `bundle.missing` | `rejected` | the spec's bundle is not in the store; the object is its id |
 | `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up |
+| `twin.driver.unknown` | `rejected` | the spec names a driver this core does not serve; the object is the twin. The API refuses such a spec with a problem of the same rule, so the loop meets one only when a core was started without a driver its records name: every run of the twin in flight ends `rejected`, and nothing is torn down |
 
 The `Ready` condition's reasons:
 
@@ -127,4 +135,4 @@ The `Ready` condition's reasons:
 | `twin.deleting` | `False` | the twin's deletion was asked, and the loop tears it down |
 | `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)) |
 | `plan.rejected` | `False` | the driver's plan refused the bundle; the run's verdict holds every finding ([a plan refused](#findings-a-plan-refused)) |
-| a finding's rule | `False` | the run ended with that one finding: `blueprint.missing`, `bundle.missing`, `run.cancelled`, an `admission.*` rule, `readiness.timeout`, `readiness.unauthorized`, `credential.missing`, `push.refused` or `push.unauthorized` |
+| a finding's rule | `False` | the run ended with that one finding: `blueprint.missing`, `bundle.missing`, `run.cancelled`, `twin.driver.unknown`, an `admission.*` rule, `readiness.timeout`, `readiness.unauthorized`, `credential.missing`, `push.refused` or `push.unauthorized` |

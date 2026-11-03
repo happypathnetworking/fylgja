@@ -355,7 +355,7 @@ class Reconciler:
             record = self.store.get_twin(record.name)
         for stray in self.store.list_runs(record.name):
             if stray.operation == "create" and stray.state != "ended":
-                self._cancel_unstarted(record, stray)
+                self._cancel_unstarted(record, stray, driver)
         record, run = self._take_run(record, "destroy", REASON_DELETING)
         p = _Pass(record=record, run=run, driver=driver)
         try:
@@ -499,10 +499,10 @@ class Reconciler:
         _log.info("%s: run %s cancelled", p.name, ended.id, **p.fields(status="failed", reason=RULE_CANCELLED))
         await self._settle(p.record, ended, p.driver, RULE_CANCELLED)
 
-    def _cancel_unstarted(self, record: TwinRecord, run: Run) -> None:
+    def _cancel_unstarted(self, record: TwinRecord, run: Run, driver: Driver) -> None:
         """A create run of a twin being deleted that never started: its cancel events and end;
         it built nothing, so it cleans nothing up."""
-        p = _Pass(record=record, run=run, driver=self.drivers[record.spec.driver])
+        p = _Pass(record=record, run=run, driver=driver)
         self._event(p, "cancel", "started")
         self._event(p, "cancel", "done", duration_s=0.0, rule=RULE_CANCELLED)
         finding = Finding(rule=RULE_CANCELLED, severity="error", object=record.name,

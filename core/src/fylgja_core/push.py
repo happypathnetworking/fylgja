@@ -70,16 +70,16 @@ async def push(
 ) -> Pushed | Refused:
     """Replace the node's configuration with `config` by the package's delivery; `Unreachable` on no answer.
 
-    `attempt` numbers this push among the loop's tries of it.
+    `attempt` numbers this push among the loop's tries of it; `eapi` names its session by it.
     """
-    from fylgja_core import push_jsonrpc  # the mechanisms import this module's types
+    from fylgja_core import push_eapi, push_jsonrpc  # the mechanisms import this module's types
 
     own = client is None
     http = client if client is not None else httpx.AsyncClient(verify=False)  # boot-time certificate, unverified
     try:
         if package.push.delivery == "json_rpc":
             return await push_jsonrpc.replace(address, package, config, credential, client=http)
-        raise NotImplementedError(f"the {package.push.delivery} replace is not built yet")
+        return await push_eapi.replace(address, package, config, credential, attempt=attempt, client=http)
     finally:
         if own:
             await http.aclose()
@@ -90,12 +90,13 @@ async def post(
 ) -> dict[str, Any]:
     """POST one JSON-RPC request with basic auth; the answer, a JSON object with an `error` or a `result`.
 
-    A transport failure, a status other than 200 or a body that is no such answer is `Unreachable`.
+    A request that fails (a transport failure, an answer that cannot be decoded), a status other
+    than 200 or a body that is no such answer is `Unreachable`.
     """
     auth = httpx.BasicAuth(credential.username, credential.password)
     try:
         response = await client.post(url, json=body, auth=auth, timeout=timeout_s)
-    except httpx.TransportError as err:
+    except httpx.RequestError as err:
         detail = f": {err}" if str(err) else ""
         raise Unreachable(f"{url} gave no answer: {type(err).__name__}{detail}") from err
     if response.status_code != 200:

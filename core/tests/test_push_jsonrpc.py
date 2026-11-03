@@ -17,13 +17,11 @@ import pytest
 
 from fylgja_core import platform_package, push_jsonrpc
 from fylgja_core.credentials import Credential
-from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.push import RULE_REFUSED, RULE_UNREACHABLE, Pushed, Refused, Unreachable, lines, push
 from fylgja_core.push_jsonrpc import REASON_NOT_GIVEN, REASON_VALIDATES, commands, reason, request, validate_commands
 
 PSP = Path(__file__).resolve().parents[2] / "psp"
 SRLINUX = platform_package.load(PSP / "nokia_srlinux.yaml")
-EOS = platform_package.load(PSP / "arista_eos.yaml")
 CRED = Credential(username="admin", password="s3cret")
 AUTH = "Basic " + base64.b64encode(b"admin:s3cret").decode()
 CONFIG = "set / system name host-name s1\n\nset / interface ethernet-1/1 admin-state enable\n"
@@ -45,28 +43,28 @@ VALIDATE_REFUSED = (
     "At line 2: Error: vlan encapsulation needs vlan-tagging on ethernet-1/1\n\n"
 )
 
-Answer = httpx.Response | httpx.TransportError
+Answer = httpx.Response | httpx.HTTPError
 Handler = Callable[[httpx.Request], httpx.Response]
 
 
 def _answers(*answers: Answer) -> tuple[Handler, list[httpx.Request]]:
-    """A handler giving each answer in turn, raising a transport error, and the requests it saw."""
+    """A handler giving each answer in turn, raising an error, and the requests it saw."""
     seen: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
         seen.append(req)
         answer = answers[len(seen) - 1]
-        if isinstance(answer, httpx.TransportError):
+        if isinstance(answer, httpx.HTTPError):
             raise answer
         return answer
 
     return handler, seen
 
 
-def _push(handler: Handler, package: PlatformPackage = SRLINUX, config: str = CONFIG) -> Pushed | Refused:
+def _push(handler: Handler, config: str = CONFIG) -> Pushed | Refused:
     async def run() -> Pushed | Refused:
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            return await push("10.0.0.5", package, config, CRED, client=client)
+            return await push("10.0.0.5", SRLINUX, config, CRED, client=client)
 
     return asyncio.run(run())
 
@@ -177,8 +175,9 @@ def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
         (httpx.Response(500), REASON_NOT_GIVEN),
         (httpx.Response(200, text="not json"), REASON_NOT_GIVEN),
         (httpx.ConnectError("refused"), REASON_NOT_GIVEN),
+        (httpx.DecodingError("garbled"), REASON_NOT_GIVEN),
     ],
-    ids=["a-reason", "validates", "cut-again", "no-message", "http-500", "no-answer", "transport"],
+    ids=["a-reason", "validates", "cut-again", "no-message", "http-500", "no-answer", "transport", "garbled"],
 )
 def test_a_cut_refusal_asks_again_exactly_once_with_commit_validate(second: Answer, found: str) -> None:
     handler, seen = _answers(_error(CUT), second)
@@ -206,9 +205,10 @@ def test_a_cut_refusal_with_the_budget_spent_asks_nothing_more(monkeypatch: pyte
         httpx.Response(503),
         httpx.Response(401),
         httpx.Response(200, text="<html>"),
+        httpx.DecodingError("garbled"),
         httpx.Response(200, json={"jsonrpc": "2.0", "id": 1}),
     ],
-    ids=["connect", "timeout", "http-503", "http-401", "not-json", "no-result-no-error"],
+    ids=["connect", "timeout", "http-503", "http-401", "not-json", "garbled", "no-result-no-error"],
 )
 def test_a_node_that_gives_no_answer_is_unreachable_never_refused(failure: Answer) -> None:
     handler, seen = _answers(failure)
@@ -232,10 +232,3 @@ def test_the_log_names_the_address_and_the_command_count_and_never_the_password_
     assert "invalid port 99" in caplog.text and REASON_VALIDATES in caplog.text
     for secret in ("s3cret", AUTH, AUTH.removeprefix("Basic "), "host-name s1", "ethernet-1/1 admin-state"):
         assert secret not in caplog.text
-
-
-def test_eapi_is_not_yet_a_mechanism_this_build_pushes_by() -> None:
-    handler, seen = _answers()
-    with pytest.raises(NotImplementedError):
-        _push(handler, EOS)
-    assert seen == []

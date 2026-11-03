@@ -43,18 +43,39 @@ SENT = [
     "diff flat",
     "commit now",
 ]
+# The node's own answers, SR Linux 24.7.1 (design/verified-facts.md): the echo is one command per
+# line, and the request's output follows the reason.
+CHECKPOINT = "/system/configuration/checkpoint[id=__startup__]:\n    Loaded startup configuration\n\n"
+COMMITTED = "All changes have been committed. Leaving candidate mode.\n"
 REFUSED = (
-    "Error: Cli commands 'enter candidate private, load startup, set / x' failed with error 1: "
-    "At line 3: Error: invalid port 99, max is 58\n\ninsert / interface…"
+    "Error: Cli commands 'enter candidate private\nload startup\nset / system name host-name s1\n"
+    "set / interface ethernet-1/99 admin-state enable\ndiff flat\ncommit now' failed with error 1: "
+    'At line 6: Error: Error in path: .interface{.name=="ethernet-1/99"}\n'
+    "    [InvalidArgument] invalid port 99, max is 58\n\n" + CHECKPOINT + "delete / interface ethernet-1/1\n"
+    "insert / interface ethernet-1/99 admin-state enable\n"
 )
-CUT = "Error: Cli commands 'enter candidate private, load startup, set / system name host-name s1, set / interf"
-DIFF = (
-    "/system/configuration/checkpoint[id=__startup__]:\n    Loaded startup configuration\n\n"
-    "insert / system name host-name s1\nAll changes have been committed. Leaving candidate mode.\n"
+REFUSED_REASON = (
+    'At line 6: Error: Error in path: .interface{.name=="ethernet-1/99"}\n'
+    "    [InvalidArgument] invalid port 99, max is 58"
 )
+PARSE_REFUSED = (
+    "Error: Cli commands 'enter candidate private\nload startup\nset / system name host-name s1\n"
+    "set / bogus thing\ndiff flat\ncommit now' failed with error 1: At line 4: Parsing error: Unknown token "
+    "'bogus'. Options are ['!!', '#', 'interface', 'system', '|']\n" + CHECKPOINT
+)
+CUT = (
+    "Error: Cli commands 'enter candidate private\nload startup\n# s1: production configuration\n"
+    "set / system name host-name s1\nset / interface ethernet-1/11 subinterface 0 ipv4 a..."
+)
+DIFF = CHECKPOINT + "insert / system name host-name s1\n" + COMMITTED
 VALIDATE_REFUSED = (
-    "Error: Cli commands 'enter candidate private, commit validate' failed with error 1: "
-    "At line 2: Error: vlan encapsulation needs vlan-tagging on ethernet-1/1\n\n"
+    "Error: Cli commands 'enter candidate private\ncommit validate' failed with error 1: At line 2: Error in "
+    "/interface[name=ethernet-1/1]/subinterface[index=0]/vlan/encap/single-tagged/vlan-id::\n"
+    "    vlan-id only configurable if vlan-tagging enabled on parent interface\nError: Validate failed\n"
+)
+VALIDATE_REASON = (
+    "At line 2: Error in /interface[name=ethernet-1/1]/subinterface[index=0]/vlan/encap/single-tagged/vlan-id::\n"
+    "    vlan-id only configurable if vlan-tagging enabled on parent interface\nError: Validate failed"
 )
 
 Answer = httpx.Response | httpx.HTTPError
@@ -112,10 +133,11 @@ def test_the_two_sentences_are_d028s_word_for_word() -> None:
     )
 
 
-def test_a_replace_is_one_post_with_basic_auth_within_the_budget_answering_the_nodes_text_as_the_diff() -> None:
+def test_a_replace_is_one_post_with_basic_auth_within_the_budget_answering_the_devices_diff() -> None:
     handler, seen = _answers(_result([{"text": DIFF}]))
     answer = _push(handler)
-    assert isinstance(answer, Pushed) and answer.diff == DIFF and answer.duration_s >= 0
+    assert isinstance(answer, Pushed) and answer.diff == "insert / system name host-name s1\n"
+    assert answer.duration_s >= 0
     assert len(seen) == 1
     req = seen[0]
     assert req.method == "POST" and (req.url.scheme, req.url.host, req.url.port or 443, req.url.path) == (
@@ -129,16 +151,24 @@ def test_a_replace_is_one_post_with_basic_auth_within_the_budget_answering_the_n
     assert req.extensions["timeout"] == dict.fromkeys(("connect", "read", "write", "pool"), SRLINUX.push.timeout_s)
 
 
-def test_one_text_entry_is_the_diff() -> None:
-    handler, _ = _answers(_result([{"text": "insert / x\n"}]))
+def test_the_diff_is_diff_flats_lines_without_the_reset_and_the_commit() -> None:
+    text = CHECKPOINT + 'delete / interface ethernet-1/2\ninsert / interface ethernet-1/1 description "x"\n' + COMMITTED
+    handler, _ = _answers(_result([{"text": text}]))
     answer = _push(handler)
-    assert isinstance(answer, Pushed) and answer.diff == "insert / x\n"
+    assert isinstance(answer, Pushed)
+    assert answer.diff == 'delete / interface ethernet-1/2\ninsert / interface ethernet-1/1 description "x"\n'
 
 
-def test_several_text_entries_are_the_diff_in_order() -> None:
-    handler, _ = _answers(_result([{"text": "insert / a\n"}, {"text": ""}, {"text": "insert / b\n"}]))
+def test_a_repeat_push_changes_nothing_so_its_diff_is_empty() -> None:
+    handler, _ = _answers(_result([{"text": CHECKPOINT + COMMITTED}]))
     answer = _push(handler)
-    assert isinstance(answer, Pushed) and answer.diff == "insert / a\ninsert / b\n"
+    assert isinstance(answer, Pushed) and answer.diff == ""
+
+
+def test_several_text_entries_are_read_in_order() -> None:
+    handler, _ = _answers(_result([{"text": "insert / a\n"}, {"text": ""}, {"text": "delete / b\n"}]))
+    answer = _push(handler)
+    assert isinstance(answer, Pushed) and answer.diff == "insert / a\ndelete / b\n"
 
 
 @pytest.mark.parametrize(
@@ -155,7 +185,12 @@ def test_a_committed_answer_of_any_other_shape_is_pushed_with_no_diff(result: ob
 @pytest.mark.parametrize(
     ("message", "found"),
     [
-        (REFUSED, "At line 3: Error: invalid port 99, max is 58"),
+        (REFUSED, REFUSED_REASON),
+        (
+            PARSE_REFUSED,
+            "At line 4: Parsing error: Unknown token 'bogus'. Options are ['!!', '#', 'interface', 'system', '|']",
+        ),
+        (VALIDATE_REFUSED, VALIDATE_REASON),
         (CUT, ""),
         ("Error: Cli commands 'enter candidate private' failed with error 1: ", ""),
         (
@@ -180,6 +215,8 @@ def test_a_committed_answer_of_any_other_shape_is_pushed_with_no_diff(result: ob
     ],
     ids=[
         "after-the-echo",
+        "to-the-output",
+        "validate",
         "cut",
         "nothing-follows",
         "last-marker",
@@ -192,7 +229,9 @@ def test_a_committed_answer_of_any_other_shape_is_pushed_with_no_diff(result: ob
         "diff-lines-dropped",
     ],
 )
-def test_the_reason_is_after_the_last_marker_before_the_first_empty_line(message: str, found: str) -> None:
+def test_the_reason_is_after_the_last_marker_before_the_first_empty_line_or_the_output(
+    message: str, found: str
+) -> None:
     assert reason(message) == found
 
 
@@ -201,14 +240,14 @@ def test_a_reason_never_carries_a_diff_line_into_the_refusal_or_the_log(caplog: 
     handler, seen = _answers(_error(message))
     with caplog.at_level(logging.DEBUG):
         answer = _push(handler)
-    assert answer == Refused("At line 3: Error: invalid port 99, max is 58") and len(seen) == 1
+    assert answer == Refused(REFUSED_REASON) and len(seen) == 1
     assert "invalid port 99" in caplog.text and "host-name s1" not in caplog.text
 
 
 def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
     handler, seen = _answers(_error(REFUSED))
     answer = _push(handler)
-    assert answer == Refused("At line 3: Error: invalid port 99, max is 58")
+    assert answer == Refused(REFUSED_REASON)
     assert isinstance(answer, Refused) and answer.rule == RULE_REFUSED == "push.refused"
     assert len(seen) == 1
 
@@ -216,7 +255,7 @@ def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
 @pytest.mark.parametrize(
     ("second", "found"),
     [
-        (_error(VALIDATE_REFUSED), "At line 2: Error: vlan encapsulation needs vlan-tagging on ethernet-1/1"),
+        (_error(VALIDATE_REFUSED), VALIDATE_REASON),
         (_result([{"text": "All changes are valid.\n"}]), REASON_VALIDATES),
         (_error(CUT), REASON_NOT_GIVEN),
         (_error(""), REASON_NOT_GIVEN),

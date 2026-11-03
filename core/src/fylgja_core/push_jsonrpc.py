@@ -4,18 +4,19 @@ The request enters the login's private candidate, loads the startup configuratio
 containerlab left, which also clears what a refused request left in the candidate), sends the
 configuration's lines, asks `diff flat` and commits with `commit now`: one atomic commit.
 
-Sent with no output-format, the request is answered with the node's text output as `{"text": …}`
-entries, as the archived Go core reads it: one entry holding every command's output, the reset's
-and the commit's lines around the device's diff. `Pushed.diff` is that text, the entries joined
-in order. The live tier settles the shape on a node.
+Sent with no output-format, the request is answered with one `{"text": …}` entry holding every
+command's output in order: the reset's checkpoint lines, `diff flat`'s lines and the commit's
+line. `Pushed.diff` is `diff flat`'s lines alone, the device's diff, so a repeat push's is empty.
 
-A refusal is HTTP 200 with a JSON-RPC error that echoes every command sent. The node's reason
-follows the echo, after `' failed with error '`, and ends at the message's first empty line. The
-node cuts its message at about 1 KiB, which a real replace's echo outruns, so a refusal with no
-reason gets one more request, `commit validate`, which lands nothing. When that gives no reason
-either, the refusal is one of D-028's two sentences, quoting nothing. A reason has the recorded
-shape `At line N: …`; anything else, a message cut inside or just after the error code included,
-is no reason.
+A refusal is HTTP 200 with a JSON-RPC error that echoes every command sent, one per line. The
+node's reason follows the echo, after `' failed with error '`, and ends at the message's first
+empty line or where the request's output begins, at the reset's checkpoint line: a parse error
+writes no empty line before it. The node cuts its message at about 1 KiB, which a real replace's
+echo outruns, so a refusal with no reason gets one more request, `commit validate`, which lands
+nothing. When that gives no reason either, the refusal is one of D-028's two sentences, quoting
+nothing. A reason has the recorded shape `At line N: …`; anything else, a message cut inside or
+just after the error code included, is no reason. Each shape is SR Linux 24.7.1's, recorded in
+design/verified-facts.md.
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ REASON_NOT_GIVEN = (
 _CODE = re.compile(r"^\s*\d+:\s*")  # the error code the node writes before its reason: `1: At line 11: …`
 _AT_LINE = re.compile(r"At line \d+: \S")  # the reason's recorded shape, with something after it
 _DIFF_LINES = ("insert /", "delete /", "update /", "replace /")  # `diff flat`'s lines: configuration
+_OUTPUT = "/system/configuration/checkpoint["  # the reset's output, the first line of the request's output
 
 _log = logging.getLogger("fylgja.push")
 
@@ -73,12 +75,13 @@ def request(commands: list[str]) -> dict[str, Any]:
 def reason(message: str) -> str:
     """The node's reason in a refusal's message, or "" when the message gives none.
 
-    It follows the last `' failed with error '` before the message's first empty line, without
-    the error code the node writes first, and counts only in the recorded shape `At line N: …`.
+    It follows the last `' failed with error '` before the message's first empty line or the
+    request's output, without the error code the node writes first, and counts only in the
+    recorded shape `At line N: …`.
     What follows that line is the request's output, the diff's configuration lines included, and
     is never read; a diff line before it is dropped too, so no configuration line is quoted.
     """
-    head = _before_empty_line(message)
+    head = _before_output(message)
     at = head.rfind(MARKER)
     if at < 0:
         return ""
@@ -125,10 +128,10 @@ async def _ask_again(
     return reason(_message(error)) or REASON_NOT_GIVEN
 
 
-def _before_empty_line(text: str) -> str:
+def _before_output(text: str) -> str:
     kept: list[str] = []
     for line in text.split("\n"):
-        if not line.strip():
+        if not line.strip() or line.startswith(_OUTPUT):
             break
         kept.append(line)
     return "\n".join(kept)
@@ -140,10 +143,13 @@ def _message(error: object) -> str:
 
 
 def _diff(result: object) -> str:
-    """The text of every `{"text": …}` entry of a list result, in order; "" for any other shape.
+    """`diff flat`'s lines in the text of a list result's `{"text": …}` entries; "" for any other shape.
 
-    The commit landed whatever the answer's shape, so no shape fails the push.
+    The text also holds the reset's checkpoint lines and the commit's line, which are no diff.
+    `diff flat` writes `insert /` and `delete /` lines. The commit landed whatever the answer's
+    shape, so no shape fails the push.
     """
     if not isinstance(result, list):
         return ""
-    return "".join(e["text"] for e in result if isinstance(e, dict) and isinstance(e.get("text"), str))
+    text = "".join(e["text"] for e in result if isinstance(e, dict) and isinstance(e.get("text"), str))
+    return "".join(line for line in text.splitlines(keepends=True) if line.startswith(_DIFF_LINES))

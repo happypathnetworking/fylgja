@@ -48,6 +48,7 @@ pull request** ([D-033](design/decisions.md#d-033)).
 |---|---|---|
 | Python | 3.14 | [D-001](design/decisions.md#d-001) |
 | jsonschema, PyYAML | 4.26.0, 6.0.3 | The core's runtime dependencies so far |
+| httpx | 0.28.1 | The readiness wait and the push ([D-039](design/decisions.md#d-039)) |
 | pytest, ruff, mypy | 9.2.0, 0.17.3, 2.4.0 | mypy in strict mode (Constitution I) |
 | rfc8785 | 0.1.4 | Tests only: an independent RFC 8785 implementation that the blueprint id is checked against |
 | containerlab, Docker | 0.81.0, 29.8.1 | The local driver and the live tier. containerlab is pinned to the version clabernetes 0.10.1 embeds, so the kinds behave alike on both drivers |

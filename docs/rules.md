@@ -66,3 +66,5 @@ endpoint as `probe/a` or `probe/b`.
 | Rule | Raised by | Means |
 |---|---|---|
 | `credential.missing` | the credential provider | a `FYLGJA_CREDENTIAL_<NAME>_USERNAME` or `_PASSWORD` variable a package's credential names is not set; the message names the variable, never a value ([D-042](../design/decisions.md#d-042)) |
+| `readiness.timeout` | readiness | a node's push transport did not answer an authenticated request within the budget (the package's `readiness.timeout_s` unless a caller gives one); the message names the address, the port and the budget |
+| `readiness.unauthorized` | readiness | the node's push transport answered HTTP 401 or 403: the credential is refused, and waiting longer would not help |

@@ -11,6 +11,11 @@ far host when it starts; and the links, the intent's and then the probes'. An en
 production name where the kind has aliases and the package's rename of it where the kind has
 none (D-015). The deployment lists the file, and its id hashes the driver, the twin, the
 bundle id and the file list (D-044).
+
+Only the plan renders the rename, so the facts of a rename that maps many production names
+onto one port are its own (`lossy`): the renames that drop a placeholder, the ports two
+interfaces of one node land on, and the uncabled interfaces such a port omits because a
+cabled one holds it.
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ import yaml
 from fylgja_core import blueprint, bundle, deployment, mapping
 from fylgja_core.containerlab import CAPABILITIES, NAME
 from fylgja_core.driver import Allocation, Planned
-from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.platform_package import PlatformPackage, placeholders
 from fylgja_core.probe_package import ProbePackage
 
 TOPOLOGY = "topology.clab.yml"
@@ -44,17 +49,18 @@ def plan(
     `twin` on the allocation `admit` reserved for it, and the files the deployment lists."""
     files = {TOPOLOGY: _topology(manifest, platforms, probe_packages, twin, allocation)}
     listed = tuple(deployment.File(path=path, sha256=hashlib.sha256(files[path]).hexdigest()) for path in sorted(files))
+    counts, shared = lossy(manifest, platforms)
     omitted = [
         deployment.Omitted(device=row.device, interface=row.interface, omission=row.omission)
         for row in manifest.mapping
         if row.omission is not None
-    ]
+    ] + list(shared)
     fidelity = deployment.Fidelity(
         forwarding=CAPABILITIES.forwarding,
         approximations=_approximations(manifest, platforms, probe_packages),
         omitted=tuple(sorted(omitted, key=lambda o: (o.device, o.interface))),
         synthesized=tuple(sorted(host for probe in manifest.probes for host, _, _ in _hosts(probe))),
-        lossy=deployment.Lossy(mappings=0, shared_ports=0),
+        lossy=counts,
     )
     planned = deployment.Deployment(
         id=deployment_id(NAME, twin, bundle_id, listed),
@@ -75,12 +81,43 @@ def endpoint_port(package: PlatformPackage, row: bundle.Row) -> str:
     rule's match captures of the production name (D-015)."""
     if package.runtime.containerlab.alias:
         return row.interface
-    rule = next((r for r in package.interfaces.rules if r.name == row.rule), None)
-    rename = next((r for r in package.runtime.containerlab.rename or () if r.rule == row.rule), None)
-    captures = None if rule is None or rule.match is None else mapping.match(rule.match, row.interface)
-    if rename is None or captures is None:
-        raise ValueError(f"{row.device}:{row.interface} is no data row of a rule the package renames: {row.rule!r}")
-    return mapping.render(rename.port, captures)
+    port, _ = _rename(package, row)
+    return port
+
+
+def lossy(
+    manifest: bundle.Manifest, platforms: Mapping[str, PlatformPackage]
+) -> tuple[deployment.Lossy, tuple[deployment.Omitted, ...]]:
+    """The counts of the rename's many-to-one mappings, and the interfaces it omits as
+    `shared`, sorted by (device, interface).
+
+    On a kind with no aliases every data row the twin represents, cabled or uncabled, is
+    renamed. A rename is lossy when its template names fewer placeholders than its rule's
+    match captures; a port is shared when two or more rows of one node are renamed onto it.
+    An uncabled row whose port a cabled row of its node holds is omitted as `shared`: the
+    twin has that port once, and it is the cabled interface's. A kind with aliases
+    contributes nothing."""
+    package_of = {node.name: platforms[node.platform] for node in manifest.nodes}
+    mappings = 0
+    onto: dict[tuple[str, str], list[bundle.Row]] = {}
+    for row in manifest.mapping:
+        package = package_of[row.device]
+        if package.runtime.containerlab.alias or row.disposition not in ("cabled", "uncabled"):
+            continue
+        port, dropped = _rename(package, row)
+        if dropped:
+            mappings += 1
+        onto.setdefault((row.device, port), []).append(row)
+    shared_ports = [rows for rows in onto.values() if len(rows) > 1]
+    omitted = [
+        deployment.Omitted(device=row.device, interface=row.interface, omission="shared")
+        for rows in shared_ports
+        if any(r.disposition == "cabled" for r in rows)
+        for row in rows
+        if row.disposition == "uncabled"
+    ]
+    counts = deployment.Lossy(mappings=mappings, shared_ports=len(shared_ports))
+    return counts, tuple(sorted(omitted, key=lambda o: (o.device, o.interface)))
 
 
 def demand(
@@ -150,6 +187,16 @@ def _topology(
         "topology": {"defaults": {"labels": {"fylgja.twin": twin}}, "nodes": nodes, "links": links},
     }
     return yaml.safe_dump(doc, sort_keys=False).encode("utf-8")
+
+
+def _rename(package: PlatformPackage, row: bundle.Row) -> tuple[str, bool]:
+    """A data row's port on a kind with no aliases, and whether the rename is lossy."""
+    rule = next((r for r in package.interfaces.rules if r.name == row.rule), None)
+    rename = next((r for r in package.runtime.containerlab.rename or () if r.rule == row.rule), None)
+    captures = None if rule is None or rule.match is None else mapping.match(rule.match, row.interface)
+    if rename is None or captures is None:
+        raise ValueError(f"{row.device}:{row.interface} is no data row of a rule the package renames: {row.rule!r}")
+    return mapping.render(rename.port, captures), len(set(placeholders(rename.port))) < len(captures)
 
 
 def _hosts(

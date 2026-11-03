@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +116,47 @@ def test_the_probed_deployments_fidelity_is_the_compiles_with_the_runtimes_forwa
     assert f.approximations == c.fidelity.approximations
     assert f.omitted == c.fidelity.omitted
     assert f.synthesized == c.fidelity.synthesized == ("n1-loop-a", "n1-loop-b")
+
+
+def test_the_lossy_fixtures_counts_and_shared_ports_are_the_go_compilers() -> None:
+    _, p = planned("lossy")
+    facts = json.loads((ROOT / "testdata/compiler/lossy.facts.json").read_text())
+    lossy_rows = [r for r in facts["lossy"] if r["lossy"]]
+    assert p.deployment.fidelity.lossy == deployment.Lossy(mappings=len(lossy_rows), shared_ports=3)
+    assert len(lossy_rows) == facts["counts"]["lossy"] == 7
+    shared = {f"{o.device}:{o.interface}" for o in p.deployment.fidelity.omitted if o.omission == "shared"}
+    assert shared == {o["object"] for o in facts["omissions"] if o["rule"] == "omit.interface.shared"}
+    assert [f"{o.device}:{o.interface}" for o in p.deployment.fidelity.omitted] == sorted(
+        f"{o.device}:{o.interface}" for o in p.deployment.fidelity.omitted)
+    assert {f"{o.device}:{o.interface}" for o in p.deployment.fidelity.omitted} == {
+        o["object"] for o in facts["omissions"]}
+
+
+def test_lossy_answers_the_plans_counts_and_the_ports_the_go_compiler_saw_shared() -> None:
+    c, p = planned("lossy")
+    facts = json.loads((ROOT / "testdata/compiler/lossy.facts.json").read_text())
+    rows = {(r.device, r.interface): r for r in c.manifest.mapping}
+    counts, shared = clab_plan.lossy(c.manifest, PLATFORMS)
+    assert counts == p.deployment.fidelity.lossy
+    assert shared == tuple(o for o in p.deployment.fidelity.omitted if o.omission == "shared")
+    assert all(rows[(o.device, o.interface)].disposition == "uncabled" for o in shared)
+    chassisos = PLATFORMS["chassisos"]
+    ports = {(r["device"], clab_plan.endpoint_port(chassisos, rows[(r["device"], r["interface"])]))
+             for r in facts["lossy"] if r["shares"]}
+    assert ports == {("c1", "eth1"), ("c1", "eth49"), ("c2", "eth50")}
+
+
+def test_shared_and_omitted_interfaces_render_nowhere_and_cabled_ones_render_once() -> None:
+    _, p = planned("lossy")
+    links = topology(p)["topology"]["links"]
+    assert links == [{"endpoints": ["c1:eth1", "s1:ethernet-1/1"]},
+                     {"endpoints": ["c1:eth49", "c2:eth49"]},
+                     {"endpoints": ["c2:eth1", "s1:ethernet-1/2/1"]}]
+
+
+def test_kinds_with_aliases_are_never_lossy() -> None:
+    _, p = planned("three-node-probed")
+    assert p.deployment.fidelity.lossy == deployment.Lossy(mappings=0, shared_ports=0)
 
 
 PURE_IMPORTS = {"__future__", "hashlib", "math", "shlex", "collections.abc", "typing", "yaml"}

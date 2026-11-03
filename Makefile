@@ -18,7 +18,7 @@ test:
 
 # The live tier: booted images on the local driver, on demand (CONTRIBUTING.md). Load local/.env first.
 live:
-	cd core && .venv/bin/pytest -q -m live tests/live
+	cd core && .venv/bin/pytest -q -rA -m live tests/live
 
 lint:
 	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts && .venv/bin/mypy

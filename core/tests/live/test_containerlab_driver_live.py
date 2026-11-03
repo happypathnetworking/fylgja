@@ -195,6 +195,11 @@ def test_6_the_residue_containers_removed_by_hand_leave_is_deployed_then_destroy
     print(f"\n[live] docker rm -f of three nodes: {time.monotonic() - start:.2f} s")
     left = leftovers(TWIN)
     print(f"[live] what docker rm -f left: {left}")
+    # No container, and the root-owned residue whole: the hosts block (its two markers and a
+    # line per node), the ssh config, and the network.
+    assert left["containers"] == []
+    assert f"###### CLAB-{TWIN}-START ######" in left["hosts"] and len(left["hosts"]) == 2 + len(NODES)
+    assert left["ssh_config"] and left["network"]
     assert inspect(lab) == Inspection(state="residue", nodes=())
     destroy(lab)
     assert leftovers(TWIN) == CLEAN

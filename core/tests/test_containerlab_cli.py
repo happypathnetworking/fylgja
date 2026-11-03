@@ -75,11 +75,21 @@ def test_a_hanging_commands_children_are_killed_with_it(tmp_path: Path) -> None:
     # A wrapper's child holds the pipes: killing the wrapper alone would leave the call
     # waiting on them, and the child running past the budget.
     pidfile = tmp_path / "pid"
-    start = time.monotonic()
-    with pytest.raises(CommandFailed) as raised:
-        asyncio.run(cli.run(["sh", "-c", f"sleep 5 & echo $! > {pidfile}; wait"], timeout_s=0.2))
-    assert time.monotonic() - start < 1.0
-    assert raised.value.returncode == TIMED_OUT
+    budget = 1.0  # room for a loaded runner to start the child before the budget runs out
+
+    async def scenario() -> tuple[CommandFailed, float]:
+        start = time.monotonic()
+        task = asyncio.create_task(cli.run(["sh", "-c", f"sleep 5 & echo $! > {pidfile}; wait"], timeout_s=budget))
+        while not task.done() and not (pidfile.exists() and pidfile.read_text().strip()):
+            await asyncio.sleep(0.01)
+        with pytest.raises(CommandFailed) as raised:
+            await task
+        return raised.value, time.monotonic() - start
+
+    failed, elapsed = asyncio.run(scenario())
+    assert elapsed < budget + 1.0
+    assert failed.returncode == TIMED_OUT
+    assert pidfile.read_text().strip(), "the child never started"
     assert gone_within(int(pidfile.read_text()), 1.0)
 
 

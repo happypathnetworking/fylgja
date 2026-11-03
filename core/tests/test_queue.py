@@ -72,6 +72,37 @@ def test_a_name_put_while_active_is_served_again_once_after_done() -> None:
     asyncio.run(scenario())
 
 
+def test_a_delay_asked_while_active_is_kept_when_the_worker_lets_go() -> None:
+    # The loop requeues a twin with a backoff from inside its own pass: the delay must hold.
+    async def scenario() -> float:
+        q = WorkQueue()
+        q.put("a")
+        name = await q.get()
+        q.put("a", delay_s=0.3)
+        q.done(name)
+        assert q.waiting() == ["a"]
+        start = time.monotonic()
+        await q.get()
+        return time.monotonic() - start
+
+    assert asyncio.run(scenario()) >= 0.25
+
+
+def test_the_earlier_deadline_asked_while_active_wins() -> None:
+    async def scenario() -> float:
+        q = WorkQueue()
+        q.put("a")
+        name = await q.get()
+        q.put("a", delay_s=5.0)
+        q.put("a")
+        q.done(name)
+        start = time.monotonic()
+        await q.get()
+        return time.monotonic() - start
+
+    assert asyncio.run(scenario()) < 1.0
+
+
 def test_an_active_name_is_not_served_to_a_second_worker() -> None:
     async def scenario() -> bool:
         q = WorkQueue()

@@ -141,9 +141,17 @@ core/.venv/bin/fylgja-core-server
 ```
 
 It logs one JSON object per line on stderr, the principal on every write, never a token or a
-password. A start refused is one line naming the variable or the file at fault: it exits 2 for
-settings that are not whole, 1 for a store another core holds. SIGTERM or Ctrl-C ends open
-watches and stops the loop; a create cut short resumes at the next start.
+password. A start refused is one line naming the variable or the file at fault. SIGTERM or
+Ctrl-C ends open watches and stops the loop; a create cut short resumes at the next start. Its
+exit status:
+
+| Status | Means |
+|---|---|
+| 0 | stopped cleanly |
+| 130 | stopped by Ctrl-C (SIGINT) |
+| 143 | stopped by SIGTERM: uvicorn ends the process by the signal after its graceful shutdown |
+| 1 | the store is held by another core, or the application failed to start |
+| 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, a package refused, a token file it cannot read, or an address it cannot listen on (`FYLGJA_LISTEN`) |
 
 **The thin CLI** reads `FYLGJA_API_ADDRESS` (the server's `host:port` or URL) and
 `FYLGJA_API_TOKEN`:

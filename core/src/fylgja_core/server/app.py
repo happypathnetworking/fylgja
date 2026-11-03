@@ -413,9 +413,13 @@ class _Api:
                              status=Status(observed_generation=0, conditions=(), nodes=()))
         try:
             self.store.create_twin(created)
-        except store.Conflict:
-            self._withdraw(run, "another request created the twin first")
-            raise _refuse(request, 412, RULE_EXISTS, f"Twin {name} was created by another request meanwhile.") from None
+        except Exception as e:
+            lost = isinstance(e, store.Conflict)
+            self._withdraw(run, "another request created the twin first" if lost else "its record could not be written")
+            if lost:
+                raise _refuse(request, 412, RULE_EXISTS,
+                              f"Twin {name} was created by another request meanwhile.") from None
+            raise
         self.reconciler.kick(name)
         logs.audit(principal, "put", name, run=run.id, revision=1, generation=1)
         return _record(created, 201, {"Location": f"/v1/twins/{name}"})
@@ -456,10 +460,14 @@ class _Api:
         asked = replace(record, deletion_requested_at=clock.now(), generation=record.generation + 1)
         try:
             written = self.store.update_twin(asked, record.revision)
-        except store.Conflict:
+        except Exception as e:
+            lost = isinstance(e, store.Conflict)
             if not waiting:
-                self._withdraw(run, "the twin moved before its deletion was written")
-            raise _refuse(request, 412, RULE_CONFLICT, f"Twin {name} moved while its deletion was asked.") from None
+                self._withdraw(run, "the twin moved before its deletion was written" if lost
+                               else "the deletion could not be written")
+            if lost:
+                raise _refuse(request, 412, RULE_CONFLICT, f"Twin {name} moved while its deletion was asked.") from None
+            raise
         self._cancel_in_flight(written)
         self.reconciler.kick(name)
         logs.audit(principal, "delete", name, run=run.id, revision=written.revision, generation=written.generation)
@@ -492,15 +500,22 @@ class _Api:
 
     def _withdraw(self, run: Run, why: str) -> None:
         """End a run this request queued and could not hand to the loop, as the loop ends a create
-        it cancels before it started: `failed` with `run.cancelled`, then its cancel events."""
+        it cancels before it started: `failed` with `run.cancelled`, then its cancel events. Best
+        effort: the write that failed may be the store's own, and this one is logged if it fails
+        too, so the request's own failure is the one answered."""
         finding = Finding(rule=reconcile.RULE_CANCELLED, severity="error", object=run.twin,
                           message=f"The run was cancelled before it started: {why}.")
         verdict = Verdict(operation=run.operation, status="failed", subject=Subject(twin=run.twin, run_id=run.id),
                           findings=(finding,))
-        self.store.update_run(runs.ended(run, verdict), "queued")
-        self.store.append_event(run.id, Event(seq=0, at=clock.now(), phase="cancel", outcome="started"))
-        self.store.append_event(run.id, Event(seq=0, at=clock.now(), phase="cancel", outcome="done", duration_s=0.0,
-                                              rule=reconcile.RULE_CANCELLED))
+        try:
+            self.store.update_run(runs.ended(run, verdict), "queued")
+            self.store.append_event(run.id, Event(seq=0, at=clock.now(), phase="cancel", outcome="started"))
+            self.store.append_event(run.id, Event(seq=0, at=clock.now(), phase="cancel", outcome="done",
+                                                  duration_s=0.0, rule=reconcile.RULE_CANCELLED))
+        except Exception:
+            _log.exception("%s: run %s could not be withdrawn", run.twin, run.id,
+                           **logs.fields(twin=run.twin, run=run.id))
+            return
         _log.info("%s: run %s withdrawn: %s", run.twin, run.id, why, **logs.fields(twin=run.twin, run=run.id))
 
     async def verify_twin(self, request: Request) -> Response:
@@ -668,9 +683,11 @@ def create_app(
         finally:
             await reconciler.stop()
 
-    return Starlette(
+    app = Starlette(
         routes=_routes(api),
         middleware=[Middleware(_Faults), Middleware(AuthMiddleware, tokens=tokens)],
         exception_handlers={_Refused: _answer_refused, HTTPException: _answer_http},
         lifespan=lifespan,
     )
+    app.router.redirect_slashes = False  # a path with a slash too many is no path of API 1: 404, not a 307
+    return app

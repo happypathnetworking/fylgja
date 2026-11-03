@@ -2,13 +2,22 @@
 (D-023, D-039, D-042).
 
 Everything it runs with comes from `FYLGJA_*` variables (`config`): the store, held locked for
-one core; the packages, loaded once; the driver; the token file; the address. The loop starts
-and stops with the application's lifespan. SIGTERM and SIGINT are uvicorn's own to handle: as
-it begins to shut down, the application's open streams are told to end, so a watch ends rather
-than waiting out `GRACE_S` to be cut; then the loop stops, and the process ends by the signal it
-was sent, as uvicorn ends it. A start refused is one log line, naming the variable or the file
-at fault and never a value: exit 2 for settings that are not whole, 1 for a store another core
-holds.
+one core; the packages, loaded once; the driver; the token file; the address, which it binds
+itself before uvicorn serves on it. The loop starts and stops with the application's lifespan.
+SIGTERM and SIGINT are uvicorn's own to handle: as it begins to shut down, the application's
+open streams are told to end, so a watch ends rather than waiting out `GRACE_S` to be cut; then
+the loop stops. A start refused is one log line, naming the variable or the file at fault and
+never a value.
+
+Its exit status:
+
+- 0, stopped cleanly (uvicorn told to exit);
+- 130, stopped by SIGINT (Ctrl-C), with no traceback and the store closed;
+- 143, stopped by SIGTERM: uvicorn ends the process by the signal it was sent, after the
+  graceful shutdown, and the kernel releases the store's lock;
+- 1, the store held by another core, or the application's lifespan failing to start;
+- 2, a misconfiguration: settings not whole, a package refused, a token file it cannot read, a
+  driver it does not serve, an address it cannot listen on (`FYLGJA_LISTEN`).
 """
 
 from __future__ import annotations
@@ -85,8 +94,15 @@ def _refused(message: str, *args: object, **kw: object) -> None:
     _log.error(message, *args, **logs.fields(**kw))
 
 
+def _listener(host: str, port: int) -> socket.socket:
+    """A socket listening on `host:port`, its family the host's; `OSError` (a `gaierror` for a
+    host that does not resolve) when it cannot be had."""
+    family, _, _, _, address = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM, flags=socket.AI_PASSIVE)[0]
+    return socket.create_server(address[:2], family=family)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Serve API 1 until uvicorn is stopped; the exit status."""
+    """Serve API 1 until uvicorn is stopped; the exit status (the module's docstring lists them)."""
     argparse.ArgumentParser(
         prog="fylgja-core-server",
         description="Serve API 1 and run the reconcile loop over one store. Every setting is a FYLGJA_* "
@@ -118,13 +134,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         _refused("cannot start: %s", e, error=type(e).__name__)
         return 2
     host, port = settings.listen
+    try:
+        listener = _listener(host, port)
+    except OSError as e:  # uvicorn would exit 3 for it: it is the address's fault, so the settings'
+        store.close()
+        _refused("cannot start: FYLGJA_LISTEN names an address it cannot listen on: %s", e.strerror or e,
+                 variable="FYLGJA_LISTEN", error=type(e).__name__)
+        return 2
     _log.info("serving API 1 on %s:%d over the store %s, driver %s, %d workers", host, port, settings.store,
               settings.driver, settings.workers, **logs.fields(driver=settings.driver, workers=settings.workers))
     config_ = uvicorn.Config(app, host=host, port=port, log_config=None, access_log=False,
                              timeout_graceful_shutdown=GRACE_S)
     try:
-        _Server(config_, closing).run()
+        _Server(config_, closing).run(sockets=[listener])
+    except KeyboardInterrupt:  # uvicorn shut down gracefully, then raised the SIGINT it caught
+        _log.info("stopped by SIGINT")
+        return 130
+    except SystemExit:  # uvicorn's startup failure, once the address is bound: the lifespan's, logged above
+        _refused("cannot start: the application did not start; the lines above say why")
+        return 1
     finally:
+        listener.close()
         store.close()
     return 0
 

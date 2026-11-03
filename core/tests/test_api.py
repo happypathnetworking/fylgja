@@ -6,12 +6,14 @@ path API 1 does not have, to problem-1."""
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import logging
 import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from dataclasses import replace as dataclasses_replace
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -25,13 +27,15 @@ from fakes import FakeDriver, fake_push, fake_ready
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
-from fylgja_core import blueprint, bundle, deployment, packages, schemas
+from fylgja_core import blueprint, bundle, deployment, packages, run, schemas
 from fylgja_core.client import Message, messages
 from fylgja_core.credentials import Provider
 from fylgja_core.driver import Planned, Refusal, Unplannable
-from fylgja_core.findings import Finding
+from fylgja_core.findings import Finding, Subject, Verdict
 from fylgja_core.local_store import LocalStore
 from fylgja_core.reconcile import Reconciler
+from fylgja_core.run import Run
+from fylgja_core.run import State as RunState
 from fylgja_core.server import auth
 from fylgja_core.server.app import create_app
 from fylgja_core.store import Conflict
@@ -278,6 +282,13 @@ def test_a_path_api_1_does_not_have_is_not_found(api: TestClient) -> None:
     assert stray(api.get("/v1/nothing"), 404, "request.not_found")["instance"] == "/v1/nothing"
 
 
+def test_a_path_with_a_slash_too_many_is_not_found_and_not_redirected(api: TestClient) -> None:
+    r = api.get("/v1/version/", follow_redirects=False)
+    stray(r, 404, "request.not_found")
+    assert "location" not in r.headers
+    stray(api.get("/v1/twins/", follow_redirects=False), 404, "request.not_found")
+
+
 def test_a_method_a_path_does_not_take_is_refused(api: TestClient) -> None:
     r = api.delete("/v1/version")
     stray(r, 405, "request.method")
@@ -475,9 +486,17 @@ def test_verify_is_not_built_yet(api: TestClient) -> None:
 # Twins: the dry run.
 
 
-def test_a_dry_run_answers_the_plan_and_writes_nothing(api: TestClient) -> None:
+def stored(store: LocalStore) -> dict[str, str]:
+    """Every file the store holds, by path, with its content's hash."""
+    return {p.relative_to(store.root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(store.root.rglob("*")) if p.is_file()}
+
+
+def test_a_dry_run_answers_the_plan_and_writes_nothing(api: TestClient, core: Core) -> None:
     blueprint_id = file_blueprint(api)
+    before = stored(core.store)
     r = api.put("/v1/twins/t", params={"dry_run": "true"}, json={"spec": {"blueprint_id": blueprint_id}})
+    assert stored(core.store) == before  # no bundle, deployment, record or run, and nothing changed
     plan = answered(r, 200)
     assert set(plan) == {"deployment", "verdict"} and deployment.validate(plan["deployment"]) == []
     assert (plan["verdict"]["operation"], plan["verdict"]["status"], plan["verdict"]["findings"]) == ("plan", "ok", [])
@@ -860,3 +879,125 @@ def test_the_thin_cli_creates_shows_and_destroys_a_twin_through_the_served_api(
     out = capsys.readouterr().out
     assert "twin t deleted" in out and ALICE not in out
     assert core.store.list_twins() == [] and "t" not in core.driver.labs
+
+
+# A write that fails between the run it queues and the record: the run is withdrawn.
+
+
+def test_a_create_whose_record_cannot_be_written_withdraws_its_run(
+    api: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing(record: TwinRecord) -> TwinRecord:
+        raise OSError(28, "No space left on device")
+
+    blueprint_id = file_blueprint(api)
+    monkeypatch.setattr(core.store, "create_twin", failing)
+    stray(put(api, "t", {"blueprint_id": blueprint_id}), 500, "server.error")
+    (withdrawn,) = runs_of(api, "t")
+    assert (withdrawn["state"], withdrawn["verdict"]["status"]) == ("ended", "failed")
+    assert [f["rule"] for f in withdrawn["verdict"]["findings"]] == ["run.cancelled"]
+
+
+def test_a_delete_whose_record_cannot_be_written_withdraws_its_run(
+    api: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = create(api)
+
+    def failing(record: TwinRecord, expected_revision: int) -> TwinRecord:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(core.store, "update_twin", failing)
+    stray(api.delete("/v1/twins/t"), 500, "server.error")
+    destroy, _ = runs_of(api, "t")
+    assert (destroy["operation"], destroy["state"], destroy["verdict"]["status"]) == ("destroy", "ended", "failed")
+    assert answered(api.get("/v1/twins/t"), 200) == record
+
+
+# A cancelling mark that loses its compare-and-set is read again once. These run with no lifespan,
+# so the loop never takes the runs and each answer is the API's alone.
+
+
+@pytest.fixture
+def idle(core: Core) -> TestClient:
+    """A client as alice of the application with its lifespan not run: the loop is not started."""
+    return TestClient(core.app, headers={"Authorization": f"Bearer {ALICE}"})
+
+
+def lose_the_first_mark(
+    monkeypatch: pytest.MonkeyPatch, store: LocalStore, meanwhile: Callable[[], None] | None = None
+) -> list[tuple[RunState, bool]]:
+    """Make the first write of a `cancelling` mark lose its compare-and-set (after `meanwhile`
+    makes the write that beat it); each mark's expected state and whether it was written."""
+    real = store.update_run
+    marks: list[tuple[RunState, bool]] = []
+
+    def update_run(r: Run, expected_state: RunState) -> None:
+        if r.state == "cancelling":
+            if not marks:
+                marks.append((expected_state, False))
+                if meanwhile is not None:
+                    meanwhile()
+                raise Conflict(f"run {r.id} moved")
+            marks.append((expected_state, True))
+        real(r, expected_state)
+
+    monkeypatch.setattr(store, "update_run", update_run)
+    return marks
+
+
+def ended_ok(r: Run) -> Run:
+    return run.ended(r, Verdict(operation=r.operation, status="ok", subject=Subject(twin=r.twin, run_id=r.id),
+                                findings=()))
+
+
+def test_a_cancel_that_loses_its_write_reads_the_run_again_and_marks_it(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    queued = run.queued("t", "create", "alice")
+    core.store.create_run(queued)
+    marks = lose_the_first_mark(monkeypatch, core.store)
+    assert answered(idle.post(f"/v1/runs/{queued.id}/cancel"), 202)["state"] == "cancelling"
+    assert marks == [("queued", False), ("queued", True)]
+
+
+def test_a_cancel_of_a_run_that_ended_meanwhile_is_refused(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    queued = run.queued("t", "create", "alice")
+    core.store.create_run(queued)
+    real = core.store.update_run
+    marks = lose_the_first_mark(monkeypatch, core.store, lambda: real(ended_ok(queued), "queued"))
+    refused(idle.post(f"/v1/runs/{queued.id}/cancel"), 409, "run.ended")
+    assert marks == [("queued", False)] and core.store.get_run(queued.id).state == "ended"
+
+
+def in_flight(core: Core, blueprint_id: str) -> Run:
+    """A twin `t` whose record names a create run that is running, as the loop leaves it mid-create."""
+    running = run.queued("t", "create", "alice")
+    core.store.create_run(running)
+    core.store.update_run(running := dataclasses_replace(running, state="running"), "queued")
+    spec = Spec(blueprint_id=blueprint_id, driver="fake", allow_restart=False)
+    core.store.create_twin(TwinRecord(name="t", revision=1, generation=1, spec=spec,
+                                      status=Status(observed_generation=0, conditions=(), nodes=(),
+                                                    run_id=running.id, phase="compiled")))
+    return running
+
+
+def test_a_delete_whose_cancelling_mark_loses_reads_the_run_again_and_marks_it(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    running = in_flight(core, file_blueprint(idle))
+    marks = lose_the_first_mark(monkeypatch, core.store)
+    answered(idle.delete("/v1/twins/t"), 202)
+    assert marks == [("running", False), ("running", True)]
+    assert core.store.get_run(running.id).state == "cancelling"
+
+
+def test_a_delete_leaves_a_run_that_ended_meanwhile_as_it_ended(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    running = in_flight(core, file_blueprint(idle))
+    real = core.store.update_run
+    marks = lose_the_first_mark(monkeypatch, core.store, lambda: real(ended_ok(running), "running"))
+    answered(idle.delete("/v1/twins/t"), 202)
+    assert marks == [("running", False)] and core.store.get_run(running.id).state == "ended"

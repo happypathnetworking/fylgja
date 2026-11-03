@@ -35,6 +35,7 @@ RULE_INTERFACE_TWICE = "blueprint.link.interface.shared"
 RULE_LINK_MGMT = "blueprint.link.mgmt_only"
 RULE_GATEWAY_OUTSIDE = "blueprint.probe.gateway.outside"
 RULE_ADDRESS_SHARED = "blueprint.probe.address.shared"
+RULE_UNENCODABLE = "blueprint.unencodable"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -165,6 +166,7 @@ def validate(doc: Any) -> list[Problem]:
     problems += _order(probes, lambda p: p["name"], "/probes")
     problems += _links(network)
     problems += probe_problems(probes, "/probes", RULE_GATEWAY_OUTSIDE, RULE_ADDRESS_SHARED)
+    problems += _unencodable({"network": network, "probes": probes})
     return sorted(set(problems))
 
 
@@ -179,6 +181,27 @@ def decode(doc: Any) -> Blueprint:
 def load(path: Path) -> Blueprint:
     """The `Blueprint` in a file, or `Rejected` naming the file."""
     return documents.load(path, RULE_INVALID, decode)
+
+
+def _unencodable(body: Any) -> list[Problem]:
+    """Every string of the hashed body that UTF-8 cannot encode: JSON admits a lone surrogate,
+    but RFC 8785 has no form for it, so such a blueprint could have no id and no config file."""
+    found: list[Problem] = []
+
+    def walk(value: Any, parts: list[Any]) -> None:
+        if isinstance(value, str):
+            if any(0xD800 <= ord(c) <= 0xDFFF for c in value):
+                detail = "a lone surrogate, which UTF-8 cannot encode"
+                found.append(Problem(documents.pointer(parts), RULE_UNENCODABLE, detail))
+        elif isinstance(value, dict):
+            for key, member in value.items():
+                walk(member, [*parts, key])
+        elif isinstance(value, list):
+            for i, member in enumerate(value):
+                walk(member, [*parts, i])
+
+    walk(body, [])
+    return found
 
 
 def _end(endpoint: dict[str, str]) -> tuple[str, str]:

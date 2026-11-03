@@ -28,6 +28,7 @@ from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 
 # Rule ids. Clients and tests match on them; the catalogue is docs/rules.md.
+RULE_NETWORK_EMPTY = "network.empty"
 RULE_NAME_UNSAFE = "device.name.unsafe"
 RULE_PLATFORM = "platform.unsupported"
 RULE_CONFIG = "config.missing"
@@ -70,10 +71,14 @@ def compile(
     """The bundle of `bp` with the loaded packages, by id and by format, or `Uncompilable`."""
     found: list[Finding] = []
     devices = {device.name: device for device in bp.network.devices}
+    if not devices:
+        found.append(_error(RULE_NETWORK_EMPTY, "network", "The network has no devices, and a twin of nothing cannot "
+                                                           "be built."))
     for device in bp.network.devices:
-        if "/" in device.name or "\0" in device.name or device.name.startswith("."):
+        if _unsafe(device.name):
             found.append(_error(RULE_NAME_UNSAFE, device.name, "A device name becomes a file name, so it may not hold "
-                                                               "a slash or NUL, or begin with a dot."))
+                                                               "a slash, NUL or another control character, or begin "
+                                                               "with a dot."))
         if device.platform not in platforms:
             found.append(_error(RULE_PLATFORM, device.name, f"No loaded platform package is {device.platform!r}; "
                                                             f"loaded: {_listed(platforms)}."))
@@ -123,6 +128,7 @@ def compile(
         package = platforms.get(device.platform)
         if package is None:
             continue
+        has_management = False
         for interface in device.interfaces:
             key = (device.name, interface.name)
             linked = cabled.get(key) or taken.get(key)
@@ -131,15 +137,19 @@ def compile(
                 if linked is not None:
                     message = f"{decision.detail}, and it ends {linked}."
                     found.append(_error(RULE_UNMAPPABLE_LINKED, _port(*key), message))
-                rows.append(bundle.Row(device=device.name, interface=interface.name, rule=decision.rule,
-                                       enabled=interface.enabled, disposition="omitted",
-                                       omission=decision.omission))
+                rows.append(_omitted(device.name, interface, decision.rule, decision.omission))
                 omitted.append(deployment.Omitted(device=device.name, interface=interface.name,
                                                   omission=decision.omission))
                 continue
+            if interface.mgmt_only and has_management:
+                # The twin has one management port: the device's first, by name.
+                rows.append(_omitted(device.name, interface, decision.rule, "extra_management"))
+                omitted.append(deployment.Omitted(device=device.name, interface=interface.name,
+                                                  omission="extra_management"))
+                continue
             disposition: bundle.Disposition = "uncabled" if linked is None else "cabled"
             if interface.mgmt_only:
-                disposition = "management"
+                disposition, has_management = "management", True
             rows.append(bundle.Row(device=device.name, interface=interface.name, rule=decision.rule,
                                    enabled=interface.enabled, disposition=disposition, node_name=decision.node_name))
     if found:
@@ -167,6 +177,18 @@ def compile(
     fidelity = deployment.CompileFidelity(approximations=tuple(approximations), omitted=tuple(omitted),
                                           synthesized=tuple(sorted(hosts)))
     return Compiled(id=bundle.bundle_id(files), manifest=manifest, files=files, fidelity=fidelity, findings=())
+
+
+def _omitted(device: str, interface: blueprint.Interface, rule: str | None, omission: bundle.Omission) -> bundle.Row:
+    return bundle.Row(device=device, interface=interface.name, rule=rule, enabled=interface.enabled,
+                      disposition="omitted", omission=omission)
+
+
+def _unsafe(name: str) -> bool:
+    """Whether a device name would not be a safe bundle file name: a slash, a control character
+    (NUL included; sha256sum escapes a newline, so the by-hand id check would not reproduce the
+    id) or a leading dot."""
+    return "/" in name or name.startswith(".") or any(ord(c) < 0x20 or ord(c) == 0x7F for c in name)
 
 
 def _error(rule: str, obj: str, message: str) -> Finding:

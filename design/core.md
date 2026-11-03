@@ -419,9 +419,14 @@ cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-0
    a rename are the driver plan's facts, since only the plan renders the rename, and are
    checked when the plan is built in phase 4. The defect fixtures became rejection tests:
    the compiler's under `testdata/compiler/rejected/`, and a test over imports enforces
-   purity. Two choices bundle 1 made differ from the Go core: an interface no rule matches,
-   and no link touches, is an omission fidelity reports rather than a refusal, and sharing
-   is the plan's finding. The rule catalogue starts at [`docs/rules.md`](../docs/rules.md).
+   purity. What the compiler refuses and what it omits is [D-038](decisions.md#d-038): two
+   choices bundle 1 made differ from the Go core (an interface no rule matches, and no link
+   touches, is an omission fidelity reports rather than a refusal, and sharing is the
+   plan's finding), a network with no devices is refused, a device's second management-only
+   interface is an omission (`extra_management`), a device name a file system or
+   `sha256sum` would mangle is refused, and a blueprint whose hashed body UTF-8 cannot
+   encode is refused at the door. The rule catalogue starts at
+   [`docs/rules.md`](../docs/rules.md).
 4. **One named twin on the local driver**: the reconcile loop, the local store, create,
    readiness, push, show and destroy, through the API and the thin CLI. **No Kubernetes
    anywhere in this phase.**

@@ -14,6 +14,7 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 |---|---|---|
 | `blueprint.version.unsupported` | the blueprint loader | `blueprint_version` is not `1` |
 | `blueprint.invalid` | the blueprint loader | the document violates its schema at the pointer |
+| `blueprint.unencodable` | the blueprint loader | a string of the hashed body holds a lone surrogate, which UTF-8 cannot encode, so the blueprint could have no id |
 | `blueprint.unsorted` | the blueprint loader | a list the format sorts arrives out of order, or a link's `a` sorts after its `b`; the core never sorts for a client |
 | `blueprint.duplicate` | the blueprint loader | a list the format keeps unique holds a key twice |
 | `blueprint.link.endpoint.unknown` | the blueprint loader | a link's end names no device's interface |
@@ -40,13 +41,16 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 
 ## Findings: a compile refused
 
-Each is an error, and one makes the compile's verdict `rejected`; every fault is reported
-in one pass. The object is a device by name, an interface as `device:interface`, a probe
-by name, or a probe endpoint as `probe/a` or `probe/b`.
+Each is an error, and every fault is reported in one pass. A compile with one is refused:
+the API answers a 422 problem document, rule `bundle.rejected`, carrying these findings
+([`formats/README.md`](../formats/README.md), note 8); that rule arrives with the API. The
+object is a device by name, an interface as `device:interface`, a probe by name, or a probe
+endpoint as `probe/a` or `probe/b`.
 
 | Rule | Means |
 |---|---|
-| `device.name.unsafe` | the device's name would not be a safe bundle file name: it holds a slash or NUL, or begins with a dot |
+| `network.empty` | the network has no devices, and a twin of nothing cannot be built |
+| `device.name.unsafe` | the device's name would not be a safe bundle file name: it holds a slash, NUL or another control character, or begins with a dot |
 | `platform.unsupported` | no loaded platform package has the device's platform id |
 | `config.missing` | the device's configuration is empty |
 | `interface.unmappable.linked` | a link or a probe ends on an interface the platform has no port for: out of its rule's range, or matched by no rule. An unmappable interface nothing touches is an omission fidelity reports, not a finding |

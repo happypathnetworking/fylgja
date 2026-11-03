@@ -25,8 +25,9 @@ VERSION = "1"
 RULE_INVALID = "bundle.invalid"
 RULE_VERSION = "bundle.version.unsupported"
 
-# What the twin makes of an interface.
+# What the twin makes of an interface, and why it makes nothing of one.
 Disposition = Literal["cabled", "uncabled", "management", "omitted"]
+Omission = Literal["out_of_range", "no_rule", "extra_management"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,7 +57,7 @@ class Row:
     enabled: bool
     disposition: Disposition
     node_name: str | None = None
-    omission: Literal["out_of_range", "no_rule"] | None = None
+    omission: Omission | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

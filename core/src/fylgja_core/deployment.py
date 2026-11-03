@@ -53,7 +53,7 @@ class Omitted:
 
     device: str
     interface: str
-    omission: Literal["out_of_range", "no_rule", "shared"]
+    omission: Literal["out_of_range", "no_rule", "extra_management", "shared"]
 
 
 @dataclass(frozen=True, kw_only=True)

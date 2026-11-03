@@ -153,9 +153,10 @@
           "enum": [
             "out_of_range",
             "no_rule",
+            "extra_management",
             "shared"
           ],
-          "description": "Why: out of the rule's range, no rule matched (both from the bundle's mapping), or its renamed port is held by a cabled interface (this deployment's rename)."
+          "description": "Why: out of the rule's range, no rule matched, a further management-only interface where the twin has one management port (all three from the bundle's mapping), or its renamed port is held by a cabled interface (this deployment's rename)."
         }
       }
     },

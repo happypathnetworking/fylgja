@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from fylgja_core import blueprint, bundle, compiler, documents, platform_package, probe_package
+from fylgja_core import blueprint, bundle, compiler, deployment, documents, platform_package, probe_package
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "core" / "src" / "fylgja_core"
@@ -123,11 +123,12 @@ def test_the_probes_and_the_fidelity_are_the_go_compilers(name: str) -> None:
     assert len(c.fidelity.synthesized) == f["counts"]["probe_hosts"]
 
 
-def test_the_manifest_is_a_valid_bundle_whose_id_is_the_files() -> None:
-    c = compiled("three-node-probed")
+@pytest.mark.parametrize("name", NAMES)
+def test_the_manifest_is_a_valid_bundle_whose_id_is_the_files(name: str) -> None:
+    c = compiled(name)
     assert bundle.validate(documents.encode(c.manifest)) == []
     assert c.files["manifest.json"] == bundle.manifest_bytes(c.manifest)
-    assert set(c.files) == {"manifest.json", "configs/n1.cfg", "configs/n2.cfg", "configs/n3.cfg"}
+    assert set(c.files) == {"manifest.json", *(f"configs/{n.name}.cfg" for n in c.manifest.nodes)}
     assert c.id == bundle.bundle_id(c.files)
     assert c.findings == ()
 
@@ -183,6 +184,8 @@ REJECTED: dict[str, set[tuple[str, str]]] = {
     "probe-interface-mgmt-only.json": {(compiler.RULE_PROBE_MGMT, "s1-loop/b")},
     "probe-port-taken.json": {(compiler.RULE_PROBE_TAKEN, "s1-loop2/a")},
     "probe-host-collision.json": {(compiler.RULE_PROBE_HOST, "s1-loop/a")},
+    "network-empty.json": {(compiler.RULE_NETWORK_EMPTY, "network")},
+    "device-name-control.json": {(compiler.RULE_NAME_UNSAFE, "s1\tx")},
     "several.json": {
         (compiler.RULE_PLATFORM, "e1"),
         (compiler.RULE_CONFIG, "s1"),
@@ -218,3 +221,44 @@ def test_a_refusal_names_what_is_loaded_and_what_links() -> None:
         compiler.compile(bp, PLATFORMS, PROBES)
     (finding,) = caught.value.findings
     assert "59" in finding.message and "probe s1-loop endpoint b" in finding.message
+
+
+def with_interface(name: str, device: int, interface: dict[str, Any]) -> blueprint.Blueprint:
+    doc = json.loads((FIXTURES / f"{name}.json").read_text())
+    interfaces = doc["network"]["devices"][device]["interfaces"]
+    interfaces.append(interface)
+    interfaces.sort(key=lambda i: str(i["name"]))
+    return blueprint.decode(doc)
+
+
+def test_an_unlinked_interface_no_rule_matches_is_omitted_not_refused() -> None:
+    bp = with_interface("mixed", 0, {"name": "Port-Channel1", "mgmt_only": False, "enabled": True})
+    c = compiler.compile(bp, PLATFORMS, PROBES)
+    row = next(r for r in c.manifest.mapping if (r.device, r.interface) == ("e1", "Port-Channel1"))
+    assert row == bundle.Row(device="e1", interface="Port-Channel1", enabled=True, disposition="omitted",
+                             omission="no_rule")
+    assert deployment.Omitted(device="e1", interface="Port-Channel1", omission="no_rule") in c.fidelity.omitted
+    assert bundle.validate(documents.encode(c.manifest)) == []
+
+
+def test_a_second_management_interface_is_omitted_and_said() -> None:
+    bp = with_interface("mixed", 0, {"name": "Management2", "mgmt_only": True, "enabled": True})
+    c = compiler.compile(bp, PLATFORMS, PROBES)
+    rows = {r.interface: r for r in c.manifest.mapping if r.device == "e1"}
+    assert rows["Management1"].disposition == "management" and rows["Management1"].node_name == "Management0"
+    assert rows["Management2"] == bundle.Row(device="e1", interface="Management2", rule="management", enabled=True,
+                                             disposition="omitted", omission="extra_management")
+    assert deployment.Omitted(device="e1", interface="Management2", omission="extra_management") in c.fidelity.omitted
+    assert bundle.validate(documents.encode(c.manifest)) == []
+    assert deployment.validate(documents.encode(deployment_with(c.fidelity))) == []
+
+
+def deployment_with(fidelity: deployment.CompileFidelity) -> deployment.Deployment:
+    return deployment.Deployment(
+        id="a" * 64, driver="containerlab", twin="t", allocation={"lab": "t"}, bundle_id="b" * 64,
+        files=(deployment.File(path="topology.clab.yml", sha256="c" * 64),),
+        demand=deployment.Demand(nodes=1, cpu=1.0, memory_mb=1),
+        fidelity=deployment.Fidelity(forwarding="software", approximations=fidelity.approximations,
+                                     omitted=fidelity.omitted, synthesized=fidelity.synthesized,
+                                     lossy=deployment.Lossy(mappings=0, shared_ports=0)),
+    )

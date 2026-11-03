@@ -174,3 +174,19 @@ def test_load_reads_a_file_and_names_it_when_it_refuses(tmp_path: Path) -> None:
         blueprint.load(path)
     assert caught.value.subject == str(path)
     assert [p.rule for p in caught.value.problems] == [blueprint.RULE_VERSION]
+
+
+def test_a_lone_surrogate_in_the_hashed_body_is_refused_at_the_door() -> None:
+    # JSON admits "\ud800", UTF-8 cannot encode it, and RFC 8785 has no form for it: without
+    # this rule the blueprint would have no id and its config no file.
+    doc = load("three-node")
+    doc["network"]["devices"][0]["config"] = "set / system name host-name \ud800\n"
+    doc["network"]["devices"][1]["interfaces"][1]["name"] = "ethernet-1/10\udfff"
+    detail = "a lone surrogate, which UTF-8 cannot encode"
+    assert blueprint.validate(doc) == [
+        Problem("/network/devices/0/config", blueprint.RULE_UNENCODABLE, detail),
+        Problem("/network/devices/1/interfaces/1/name", blueprint.RULE_UNENCODABLE, detail),
+    ]
+    doc = load("three-node")
+    doc["source"] = {"note": "\ud800 is the reader's business"}
+    assert blueprint.validate(doc) == []

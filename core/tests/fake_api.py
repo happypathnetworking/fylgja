@@ -169,10 +169,12 @@ def check_response(template: str, method: str, response: httpx.Response) -> None
 
 class FakeAPI:
     """Answers each request from the answers given for its method and path, in turn, the last
-    one repeated; every request carries the test token."""
+    one repeated; every request carries the test token. A check that fails is raised and also
+    kept in `failures`, since the CLI turns anything a transport raises into an exit code."""
 
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
+        self.failures: list[str] = []
         self._answers: dict[tuple[str, str], list[Answer]] = {}
         self.on("GET", "/v1/version", ok(VERSION))
 
@@ -182,6 +184,13 @@ class FakeAPI:
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        try:
+            return self._answer(request)
+        except AssertionError as e:
+            self.failures.append(str(e))
+            raise
+
+    def _answer(self, request: httpx.Request) -> httpx.Response:
         assert request.headers.get("authorization") == f"Bearer {TOKEN}"
         template, method = check_request(request)
         answers = self._answers.get((request.method, request.url.path))

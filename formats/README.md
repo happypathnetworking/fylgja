@@ -64,6 +64,10 @@ relative to them.
     ([D-038](../design/decisions.md#d-038)). It becomes the node's host name, its container
     or pod name and its bundle file name, so the blueprint requires the one form all of them
     accept; a reader that renames a device to fit records it in its fidelity rows.
+13. **`TwinApply` takes a partial spec** since phase 4. A client names one of the two ids,
+    and `driver` and `allow_restart` only when it sets them. The server fills what is absent
+    (its configured driver, `false`) and writes the whole spec, which the twin record still
+    requires.
 
 ## Settled by measurement (2026-10-30)
 

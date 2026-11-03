@@ -184,9 +184,11 @@ def _twin_create(ctx: Context, args: argparse.Namespace) -> int:
         spec["blueprint_id"] = ctx.client.put_blueprint(_blueprint_file(args.blueprint))
     else:
         spec["bundle_id"] = args.bundle
-    # API 1's TwinApply requires the driver: with none named, the one the server says is its default.
-    spec["driver"] = args.driver or _default_driver(ctx.client)
-    spec["allow_restart"] = args.allow_restart
+    # A partial spec: what is not named here, the server fills (its driver, no restart).
+    if args.driver is not None:
+        spec["driver"] = args.driver
+    if args.allow_restart:
+        spec["allow_restart"] = True
     record, _ = ctx.client.apply_twin(args.name, spec, if_none_match="*")
     if args.no_wait:
         ctx.show(record, _twin_lines(record))
@@ -328,7 +330,7 @@ def _verdict(run: Mapping[str, Any]) -> Verdict:
         raise Failure(f"run {run['id']}'s verdict is no findings 1 document:", *_problem_lines(e)) from None
 
 
-# Files and the server's defaults.
+# Files.
 
 
 def _blueprint_file(path: Path) -> dict[str, Any]:
@@ -345,14 +347,6 @@ def _blueprint_file(path: Path) -> dict[str, Any]:
         raise Failure(f"{path} is not a valid blueprint:", *_problem_lines(Rejected(problems)))
     loaded: dict[str, Any] = doc
     return loaded
-
-
-def _default_driver(client: Client) -> str:
-    for driver in client.list_drivers():
-        if driver["default"]:
-            name: str = driver["name"]
-            return name
-    raise Failure("the server names no default driver; name one with --driver")
 
 
 # Text.

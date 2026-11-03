@@ -638,8 +638,33 @@ components:
       required: [spec]
       properties:
         spec:
-          $ref: "twin-record-1.schema.json#/properties/spec"
-          description: What the twin should be; written to the record's spec. Unknown fields are refused.
+          type: object
+          additionalProperties: false
+          properties:
+            blueprint_id:
+              $ref: "bundle-1.schema.json#/$defs/id"
+              description: The blueprint to run, when the client names one; the loop compiles it to a bundle.
+            bundle_id:
+              $ref: "bundle-1.schema.json#/$defs/id"
+              description: The bundle to run, when the client names one directly; the loop plans it with no compile.
+            driver:
+              $ref: "deployment-1.schema.json#/$defs/driver"
+              description: >-
+                The driver the twin runs on, fixed at creation; the server's configured driver when absent. A PUT
+                naming another than the twin's is refused (twin.driver.fixed).
+            allow_restart:
+              type: boolean
+              default: false
+              description: Whether the loop may restart or recreate nodes to reach this spec; false when absent.
+          oneOf:
+            - required: [blueprint_id]
+              not: { required: [bundle_id] }
+            - required: [bundle_id]
+              not: { required: [blueprint_id] }
+          description: >-
+            What the twin should be, as a partial spec: exactly one of the two ids, and driver and allow_restart
+            when the client sets them. The server fills what is absent and writes the whole spec to the record,
+            whose spec requires both. Unknown fields are refused.
 
     Plan:
       type: object

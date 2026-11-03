@@ -23,7 +23,6 @@ from fake_api import (
     BUNDLE_ID,
     COMPILE_RESULT,
     DESTROY_RUN_ID,
-    DRIVERS,
     ENDED_AT,
     EVENTS,
     PUSH_REFUSED,
@@ -82,9 +81,11 @@ def environment(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def fylgja(capsys: pytest.CaptureFixture[str], api: FakeAPI | None, *argv: str) -> Result:
-    """Run the CLI against `api` and capture what it wrote; the token is in neither stream."""
+    """Run the CLI against `api` and capture what it wrote; the token is in neither stream, and
+    every request and answer held to the OpenAPI document."""
     code = cli.main(list(argv), transport=api.transport if api is not None else None)
     captured = capsys.readouterr()
+    assert api is None or api.failures == [], api.failures
     assert TOKEN not in captured.out and TOKEN not in captured.err
     return Result(code, captured.out, captured.err)
 
@@ -324,18 +325,16 @@ def test_twin_create_files_the_blueprint_writes_the_spec_create_only_and_waits(
 ) -> None:
     api = FakeAPI()
     api.on("POST", "/v1/blueprints", ok({"id": BLUEPRINT_ID}, 201, {"Location": f"/v1/blueprints/{BLUEPRINT_ID}"}))
-    api.on("GET", "/v1/drivers", ok(DRIVERS))
     creating(api, record(2, 1, 0, phase="compiled", run_id=RUN_ID), record(3, 1, 0, phase="pushed", run_id=RUN_ID),
              READY)
     r = fylgja(capsys, api, "twin", "create", TWIN, "--blueprint", str(BLUEPRINT_FILE))
     assert r.code == 0
-    assert api.calls() == ["POST /v1/blueprints", "GET /v1/drivers", f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}",
-                           f"GET {RUN_PATH}"]
+    assert api.calls() == ["POST /v1/blueprints", f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {RUN_PATH}"]
     assert json.loads(api.last("POST", "/v1/blueprints").content) == BLUEPRINT
     put = api.last("PUT", TWIN_PATH)
     assert put.headers["if-none-match"] == "*" and "if-match" not in put.headers
-    assert json.loads(put.content) == {"spec": {"blueprint_id": BLUEPRINT_ID, "driver": "containerlab",
-                                                "allow_restart": False}}
+    # A partial spec: the server fills the driver and allow_restart.
+    assert json.loads(put.content) == {"spec": {"blueprint_id": BLUEPRINT_ID}}
     watched = api.last("GET", TWIN_PATH)
     assert watched.url.params.multi_items() == [("watch", "true"), ("since_revision", "1")]
     assert r.lines() == [*TWIN_TEXT, f"run {RUN_ID}: create of twin three-node, ended",
@@ -353,8 +352,7 @@ def test_twin_creates_exit_code_is_its_runs_verdict(capsys: pytest.CaptureFixtur
     assert r.code == code
     assert api.calls() == [f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {RUN_PATH}"]
     assert json.loads(api.last("PUT", TWIN_PATH).content) == {"spec": {"bundle_id": BUNDLE_ID,
-                                                                       "driver": "containerlab",
-                                                                       "allow_restart": False}}
+                                                                       "driver": "containerlab"}}
     assert r.lines()[-1 if status == "ok" else -2] == f"verdict: {status}"
     if status != "ok":
         assert r.lines()[-1] == "  error push.refused n1: The node refused the configuration: commit failed."
@@ -422,14 +420,6 @@ def test_a_twin_that_exists_is_the_servers_refusal(capsys: pytest.CaptureFixture
     api = FakeAPI().on("PUT", TWIN_PATH, refuse(412, "twin.exists", "A twin named three-node exists."))
     r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
     assert (r.code, r.err) == (2, "412 twin.exists: A twin named three-node exists.\n")
-
-
-def test_a_server_that_names_no_default_driver_asks_for_one(capsys: pytest.CaptureFixture[str]) -> None:
-    drivers = {"drivers": [{**d, "default": False} for d in DRIVERS["drivers"]]}
-    api = FakeAPI().on("GET", "/v1/drivers", ok(drivers))
-    r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID)
-    assert (r.code, r.err) == (2, "the server names no default driver; name one with --driver\n")
-    assert api.calls() == ["GET /v1/drivers"]
 
 
 def test_a_blueprint_file_the_loader_refuses_exits_2_with_every_problem_and_sends_nothing(

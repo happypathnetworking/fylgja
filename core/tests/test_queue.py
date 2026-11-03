@@ -181,7 +181,42 @@ def test_a_handler_that_raises_does_not_stop_the_pool(caplog: pytest.LogCaptureF
         return handled
 
     assert asyncio.run(scenario()) == ["good"]
-    assert any("bad" in r.getMessage() and r.exc_info for r in caplog.records)
+    (line,) = [r for r in caplog.records if "bad" in r.getMessage()]
+    assert line.exc_info and getattr(line, "fields", None) == {"twin": "bad"}
+
+
+class FailingOnce(WorkQueue):
+    """A queue whose first `get` fails, as one bound to another event loop would."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.failed = False
+
+    async def get(self) -> str:
+        if not self.failed:
+            self.failed = True
+            raise RuntimeError("bound to a different event loop")
+        return await super().get()
+
+
+def test_a_get_that_fails_is_logged_and_the_worker_goes_on(caplog: pytest.LogCaptureFixture) -> None:
+    async def scenario() -> list[str]:
+        q = FailingOnce()
+        handled: list[str] = []
+
+        async def handle(name: str) -> None:
+            handled.append(name)
+
+        workers = Workers(q, handle, size=1, retry_s=0.01)
+        await workers.start()
+        q.put("a")
+        while not handled:
+            await asyncio.sleep(0.01)
+        await workers.stop()
+        return handled
+
+    assert asyncio.run(scenario()) == ["a"]
+    assert any("could not take a name" in r.getMessage() and r.exc_info for r in caplog.records)
 
 
 def test_stop_ends_every_task() -> None:

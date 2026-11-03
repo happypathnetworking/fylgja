@@ -14,6 +14,8 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 
+from fylgja_core import logs
+
 _log = logging.getLogger("fylgja.queue")
 
 
@@ -92,12 +94,17 @@ class WorkQueue:
 
 
 class Workers:
-    """`size` tasks, each looping `get`, `handle`, `done`; a handler's exception is logged."""
+    """`size` tasks, each looping `get`, `handle`, `done`. A handler's exception is logged with
+    the twin's name, and a `get` that fails (other than `Closed`) is logged and tried again after
+    `retry_s`, so no failure ends a worker silently."""
 
-    def __init__(self, queue: WorkQueue, handle: Callable[[str], Awaitable[None]], size: int) -> None:
+    def __init__(
+        self, queue: WorkQueue, handle: Callable[[str], Awaitable[None]], size: int, *, retry_s: float = 1.0
+    ) -> None:
         self._queue = queue
         self._handle = handle
         self._size = size
+        self._retry_s = retry_s
         self.tasks: list[asyncio.Task[None]] = []
 
     async def start(self) -> None:
@@ -116,9 +123,13 @@ class Workers:
                 name = await self._queue.get()
             except Closed:
                 return
+            except Exception:
+                _log.exception("a worker could not take a name from the queue; trying again in %gs", self._retry_s)
+                await asyncio.sleep(self._retry_s)
+                continue
             try:
                 await self._handle(name)
             except Exception:
-                _log.exception("handling %s failed", name)
+                _log.exception("handling %s failed", name, **logs.fields(twin=name))
             finally:
                 self._queue.done(name)

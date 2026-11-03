@@ -79,7 +79,11 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   - A deploy followed by a destroy clears all of it. *(0.81.0, 2026-11-03)* The deploy over
     that residue reuses the management network left behind; the driver's residue rule
     took 25.0 s, the deploy 24 s of it, where a fresh deploy took about 40 s.
-  - A deploy refused at its start leaves only the management network.
+  - A deploy refused at its start leaves only the management network. *(0.81.0,
+    2026-11-03)* A node image that no registry serves (`fylgja.invalid/none:0`) was refused
+    at its pull, status 1 in 0.55 s. containerlab creates the network before it pulls, and
+    no lab directory, host entry or ssh config yet. The driver's `inspect` reads it as
+    `residue` that is not root-owned, and `docker network rm` alone clears it.
 
 **What the local driver reads and runs** *(0.81.0, Docker 29.8.1, 2026-11-03)*
 
@@ -148,12 +152,22 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 **A killed or partial deploy**
 
 - `/usr/bin/containerlab` is setuid root: it runs with the user's real uid and effective
-  uid 0. *(2026-09-15; 26.04, 2026-10-08, 2026-10-30)*
+  uid 0. *(2026-09-15; 26.04, 2026-10-08, 2026-10-30; 0.81.0, 2026-11-03: a running
+  deploy's `/proc/<pid>/status` reads `Uid: 1000 0 0 0`)*
   - The kernel clears `Pdeathsig` when it starts, so a `clab deploy` outlives a parent
-    killed with `kill -9`: stop a stray `clab` before acting.
-  - `kill -9` from the user kills it.
+    killed with `kill -9`: stop a stray `clab` before acting. *(0.81.0, 2026-11-03)* A
+    deploy whose wrapping shell was killed with `kill -9` ran on and completed.
+  - `kill -9` from the user kills it. *(0.81.0, 2026-11-03)* A deploy of one SR Linux node,
+    killed 4 s in, exited 137 at once. So did the local driver's budget kill, which sends
+    `SIGKILL` to the command's process group (`cli.run`, with the command started in a
+    session of its own): `CommandFailed` with status -1 after 4 s, and no `containerlab`
+    process left.
 - **A deploy killed in post-deploy** leaves running nodes that never answer, the network
-  and the lab directory. *(2026-10-30)*
+  and the lab directory. *(2026-10-30)* *(0.81.0, 2026-11-03)* One SR Linux node killed
+  4 s in, in its post-deploy, left the node running, the network and the lab directory, and
+  no host entries or ssh config. containerlab creates the network, then the lab directory,
+  then the containers; it writes the host entries and the ssh config only after the nodes'
+  post-deploy. Whether that node ever answered was not checked.
 - **A plain re-deploy of a partial lab skips containerlab's post-deploy** and leaves the
   bootstrap unapplied: after a killed deploy it returned 0 in 0.6 s and fixed nothing.
   Deploy over a partial lab with `--reconfigure`, which recovered the lab in 51.7 s.

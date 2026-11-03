@@ -52,6 +52,9 @@ writes them.
   the cross-field rules, and the order rules; and the loaders for platform packages, probe
   packages and probe declarations, each refusing a document with every problem in one pass,
   and each tested by a rejection fixture per fault.
+- **The compiler** (section 4.2): pure, held to the facts the frozen Go compiler produced
+  for the four fixtures, and refusing an uncompilable blueprint with every fault in one
+  pass; its rules are in the catalogue, [`docs/rules.md`](../docs/rules.md).
 
 **Designed, not yet built:** everything else in section 4. It is built in the phases of
 [design/core.md](core.md#sequence): the compiler, then one named twin on the local
@@ -137,6 +140,9 @@ no I/O, no clock and no environment, and a test enforces that
 - It places each probe's two hosts, checking each endpoint against the mapping.
 - It answers a compile result: the bundle id, the manifest, the runtime-independent part of
   fidelity and the findings.
+- An interface the platform has no port for (out of its rule's range, or matched by no
+  rule) is an omission fidelity reports when nothing touches it, and a refusal when a link
+  or a probe does. Ports two interfaces are renamed onto are the driver plan's to find.
 - A blueprint that does not compile answers `422` with a problem document, rule
   `bundle.rejected`, carrying every fault found in one pass.
 
@@ -402,17 +408,17 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 
 | Path | What it holds |
 |---|---|
-| `core/` | The core, the Python package `fylgja_core`. Today the model package: a module per format, the blueprint id and rules, and the package and declaration loaders |
+| `core/` | The core, the Python package `fylgja_core`. Today the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler |
 | `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README |
 | `psp/` | The platform packages, SR Linux and EOS |
 | `probes/` | The probe package `ping` |
 | `testdata/blueprint/` | The four blueprint fixtures, converted once from the earlier format at the repository's start |
 | `testdata/packages/` | Test-only packages, the interface mapping rows each shipped package must decide, and the rejection fixtures for the package loaders |
-| `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match |
+| `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match, and the compiler's rejection fixtures |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
 | `scripts/` | The link checker (`linkcheck.py`) |
 | `design/` | How the project is governed and designed: the constitution, the decisions, this architecture, the verified facts, and design documents ([core.md](core.md) is the core's) |
-| `docs/` | Documentation for people using Fylgja; today the glossary |
+| `docs/` | Documentation for people using Fylgja; today the glossary and the rule catalogue |
 | `CONTRIBUTING.md` | How to set up, build, test and change Fylgja |
 
 ## 7. Open questions

@@ -164,3 +164,57 @@ def test_the_compiler_is_pure(module: str) -> None:
             else:
                 imported.add(node.module)
     assert imported <= PURE_IMPORTS | MODEL_IMPORTS, imported - (PURE_IMPORTS | MODEL_IMPORTS)
+
+
+REJECTED_DIR = FACTS / "rejected"
+# Every rejection fixture, and the (rule, object) pairs the compiler must report for it:
+# exactly these, so a fixture with one fault yields one fault. several.json carries three.
+REJECTED: dict[str, set[tuple[str, str]]] = {
+    "device-name-unsafe.json": {(compiler.RULE_NAME_UNSAFE, ".s1")},
+    "platform-unsupported.json": {(compiler.RULE_PLATFORM, "e1")},
+    "config-missing.json": {(compiler.RULE_CONFIG, "s1")},
+    "interface-unmappable-linked-range.json": {(compiler.RULE_UNMAPPABLE_LINKED, "s1:ethernet-1/59")},
+    "interface-unmappable-linked-no-rule.json": {(compiler.RULE_UNMAPPABLE_LINKED, "e1:Port-Channel1")},
+    "probe-interface-unmappable.json": {(compiler.RULE_UNMAPPABLE_LINKED, "s1:ethernet-1/59")},
+    "probe-format-unknown.json": {(compiler.RULE_PROBE_FORMAT, "s1-loop")},
+    "probe-device-unknown.json": {(compiler.RULE_PROBE_DEVICE, "s1-loop/b")},
+    "probe-interface-unknown.json": {(compiler.RULE_PROBE_INTERFACE, "s1-loop/b")},
+    "probe-interface-cabled.json": {(compiler.RULE_PROBE_CABLED, "s1-loop/a")},
+    "probe-interface-mgmt-only.json": {(compiler.RULE_PROBE_MGMT, "s1-loop/b")},
+    "probe-port-taken.json": {(compiler.RULE_PROBE_TAKEN, "s1-loop2/a")},
+    "probe-host-collision.json": {(compiler.RULE_PROBE_HOST, "s1-loop/a")},
+    "several.json": {
+        (compiler.RULE_PLATFORM, "e1"),
+        (compiler.RULE_CONFIG, "s1"),
+        (compiler.RULE_PROBE_DEVICE, "s1-loop/b"),
+    },
+}
+
+
+@pytest.mark.parametrize("name", sorted(REJECTED))
+def test_each_rejection_fixture_is_refused_for_its_fault_alone(name: str) -> None:
+    bp = blueprint.load(REJECTED_DIR / name)
+    with pytest.raises(compiler.Uncompilable) as caught:
+        compiler.compile(bp, PLATFORMS, PROBES)
+    found = caught.value.findings
+    assert {(f.rule, f.object) for f in found} == REJECTED[name], found
+    assert all(f.severity == "error" and f.message.endswith(".") for f in found)
+    assert found == tuple(sorted(found, key=lambda f: (f.rule, f.object or "")))
+
+
+def test_every_rejection_fixture_has_a_row() -> None:
+    assert {p.name for p in REJECTED_DIR.glob("*.json")} == set(REJECTED)
+
+
+def test_a_refusal_names_what_is_loaded_and_what_links() -> None:
+    bp = blueprint.load(REJECTED_DIR / "several.json")
+    with pytest.raises(compiler.Uncompilable) as caught:
+        compiler.compile(bp, PLATFORMS, PROBES)
+    by_rule = {f.rule: f.message for f in caught.value.findings}
+    assert "junos" in by_rule[compiler.RULE_PLATFORM] and "nokia_srlinux" in by_rule[compiler.RULE_PLATFORM]
+    assert "s9" in by_rule[compiler.RULE_PROBE_DEVICE]
+    bp = blueprint.load(REJECTED_DIR / "probe-interface-unmappable.json")
+    with pytest.raises(compiler.Uncompilable) as caught:
+        compiler.compile(bp, PLATFORMS, PROBES)
+    (finding,) = caught.value.findings
+    assert "59" in finding.message and "probe s1-loop endpoint b" in finding.message

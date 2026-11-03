@@ -6,8 +6,9 @@ it.
 
 - **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
   measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
-  (2026-11-02); and phase 2: the formats, their model types and the loaders (2026-11-03).
-- **Next:** the compiler.
+  (2026-11-02); phase 2: the formats, their model types and the loaders (2026-11-03); and
+  phase 3: the compiler (2026-11-03).
+- **Next:** one named twin on the local driver.
 - **Meanwhile:** the orchestrator stays in the archived repository and drives the frozen Go
   core there, the reference implementation. It moves here at cut-over
   ([D-005](decisions.md#d-005)). Until then the core is built and tested from blueprint
@@ -410,10 +411,17 @@ cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-0
    build has no mechanism for is refused at load ([D-014](decisions.md#d-014)), and a
    declaration's probe formats are checked against the loaded probe packages. The
    registry-level rule, two loaded packages with one id, is the server's, in phase 4.
-3. **Compiler.** Blueprint plus packages to bundle 1. Check it against the four fixtures for
-   the **same facts** as the Go core's goldens: nodes, links, mapping rows, configurations,
-   probes and lossy counts. Byte equality is not the target, since the formats changed. The
-   pure conformance suite and the defect fixtures become rejection tests.
+3. **Compiler.** *Done on 2026-11-03.* Blueprint plus packages to bundle 1
+   (`fylgja_core.compiler`, with `fylgja_core.mapping` deciding each interface by its
+   package's rules). It is checked against the four fixtures for the **same facts** as the
+   Go core's goldens: nodes, links, mapping rows, configurations, probes and omissions. Byte
+   equality is not the target, since the formats changed. Lossy counts and ports shared by
+   a rename are the driver plan's facts, since only the plan renders the rename, and are
+   checked when the plan is built in phase 4. The defect fixtures became rejection tests:
+   the compiler's under `testdata/compiler/rejected/`, and a test over imports enforces
+   purity. Two choices bundle 1 made differ from the Go core: an interface no rule matches,
+   and no link touches, is an omission fidelity reports rather than a refusal, and sharing
+   is the plan's finding. The rule catalogue starts at [`docs/rules.md`](../docs/rules.md).
 4. **One named twin on the local driver**: the reconcile loop, the local store, create,
    readiness, push, show and destroy, through the API and the thin CLI. **No Kubernetes
    anywhere in this phase.**

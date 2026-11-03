@@ -74,7 +74,7 @@ Development and the live tier never need Kubernetes (Constitution XIII).
 | Path | Holds |
 |---|---|
 | `testdata/blueprint/` | Four blueprints: `three-node`, `mixed`, `lossy`, `three-node-probed` |
-| `testdata/compiler/` | The facts the frozen Go compiler produced for each, which the new compiler is held to |
+| `testdata/compiler/` | The facts the frozen Go compiler produced for each, which the new compiler is held to; and under `rejected/`, valid blueprints the compiler must refuse, one fault each |
 | `testdata/packages/` | `chassisos`, a synthetic lossy platform; the interface mapping rows each package must produce; and under `invalid/`, the rejection fixtures for the platform and probe package loaders |
 | `testdata/probes/` | Probe declaration files, valid and, under `invalid/`, the rejection fixtures for the declaration loader |
 
@@ -100,7 +100,10 @@ On Ubuntu, SR Linux's `rsyslogd` needs an AppArmor widening ([verified-facts.md]
   never by code ([D-013](design/decisions.md#d-013), [D-015](design/decisions.md#d-015)).
 - **Fixtures change in a commit of their own,** with the diff reviewed: the blueprints, the
   compiler facts and any golden file.
-- **A rejection fixture carries one fault,** named in its file name and its header comment,
-  and the loader's test holds a row per fixture saying the rule and pointer it must report:
-  exactly those, so that nothing else is reported, and a fixture without a row fails.
+- **A rejection fixture carries one fault,** named in its file name and its header comment
+  (a blueprint's in its `source` envelope), and the loader's or the compiler's test holds a
+  row per fixture saying the rule and the pointer or object it must report: exactly those,
+  so that nothing else is reported, and a fixture without a row fails.
+- **A new rule goes in [`docs/rules.md`](docs/rules.md)** in the same change as the code
+  that files it.
 - **No credential in any output**: not in a blueprint, bundle, finding, answer or log line.

@@ -221,9 +221,10 @@ desired state through its driver, phase by phase ([D-023](../design/decisions.md
 to each later stage and verified after each, destroyed whatever happened, with the report
 posted on the proposed change.
 
-**Rejection fixture** — A document under `testdata/` that a loader must refuse, carrying one
-fault, named in its file name and header comment; the loader's test holds a row per fixture
-saying the rule and JSON pointer it must report, and nothing else.
+**Rejection fixture** — A document under `testdata/` that a loader or the compiler must
+refuse, carrying one fault, named in its file name and its header comment or `source`
+envelope; the test beside the code holds a row per fixture saying the rule and the JSON
+pointer or object it must report, and nothing else.
 
 **Replace** — The push that resets a node to its *baseline*, the configuration its kind
 left at deploy (host name, linked ports, LLDP, gNMI), and applies the whole configuration in

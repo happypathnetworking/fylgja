@@ -11,8 +11,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from fylgja_core import drivers
+
 # Rule id. Clients and tests match on it.
-RULE_MISSING = "config.missing"
+RULE_MISSING = "settings.missing"
 
 DEFAULT_LISTEN = "127.0.0.1:7650"
 DEFAULT_DRIVER = "containerlab"
@@ -24,6 +26,7 @@ class Misconfigured(Exception):
 
     def __init__(self, variable: str, message: str) -> None:
         self.variable = variable
+        self.rule = RULE_MISSING
         super().__init__(f"{variable}: {message}")
 
 
@@ -59,6 +62,12 @@ def _workers(text: str) -> int:
     return int(text)
 
 
+def _driver(name: str) -> str:
+    if name not in drivers.NAMES:
+        raise Misconfigured("FYLGJA_DRIVER", f"is not a driver this build serves: {', '.join(drivers.NAMES)}")
+    return name
+
+
 def from_environ(environ: Mapping[str, str]) -> Settings:
     """The `Settings` an environment holds, or `Misconfigured` naming the first fault."""
     store = _required(environ, "FYLGJA_STORE")
@@ -69,7 +78,7 @@ def from_environ(environ: Mapping[str, str]) -> Settings:
     return Settings(
         store=Path(store),
         listen=_listen(environ.get("FYLGJA_LISTEN") or DEFAULT_LISTEN),
-        driver=environ.get("FYLGJA_DRIVER") or DEFAULT_DRIVER,
+        driver=_driver(environ.get("FYLGJA_DRIVER") or DEFAULT_DRIVER),
         workers=_workers(environ.get("FYLGJA_WORKERS") or str(DEFAULT_WORKERS)),
         packages=packages,
         tokens=Path(tokens),

@@ -44,7 +44,7 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 | Rule | Filed by | Means |
 |---|---|---|
 | `package.id.duplicate` | the packages registry | two packages under `FYLGJA_PACKAGES` share an id (platform) or a format (probe); the message names both files |
-| `config.missing` | the settings | a `FYLGJA_*` variable the server needs is not set, or is empty ([D-042](../design/decisions.md#d-042)); the message names the variable, never a value. Distinct from the finding of the same id below, which is a device's empty configuration |
+| `settings.missing` | the settings | a `FYLGJA_*` variable the server needs is not set, or is empty ([D-042](../design/decisions.md#d-042)); the message names the variable, never a value |
 
 ## Findings: a compile refused
 

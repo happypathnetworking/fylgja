@@ -9,6 +9,7 @@ The tokens file holds one `<sha256 hex of the token> <principal>` per line, blan
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,7 @@ RULE_MISSING = "auth.token.missing"
 RULE_UNKNOWN = "auth.token.unknown"
 
 # The one call that needs no token: a client asks which API version it speaks.
+_HASH = re.compile(r"[0-9a-f]{64}")
 EXEMPT = ("GET", "/v1/version")
 
 
@@ -36,15 +38,21 @@ class Tokens:
 
     @classmethod
     def load(cls, path: Path) -> Tokens:
-        """The tokens file at `path`; a line that is not `<hash> <principal>` is a ValueError naming its number."""
+        """The tokens file at `path`; a bad line is a ValueError naming the file and line, never the content."""
         principals: dict[str, str] = {}
-        for number, line in enumerate(path.read_text().splitlines(), 1):
+        seen: dict[str, int] = {}
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
             parts = line.split()
             if len(parts) != 2:
                 raise ValueError(f"{path} line {number}: expected a token hash and a principal")
+            if not _HASH.fullmatch(parts[0]):
+                raise ValueError(f"{path} line {number}: the first field is not a sha256 hash in lowercase hex")
+            if parts[0] in seen:
+                raise ValueError(f"{path} lines {seen[parts[0]]} and {number}: the same token hash twice")
+            seen[parts[0]] = number
             principals[parts[0]] = parts[1]
         return cls(principals)
 
@@ -61,8 +69,13 @@ class AuthMiddleware:
         self.tokens = tokens
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or (scope["method"], scope["path"]) == EXEMPT:
+        if scope["type"] == "lifespan" or (scope["type"] == "http" and (scope["method"], scope["path"]) == EXEMPT):
             await self.app(scope, receive, send)
+            return
+        if scope["type"] != "http":
+            # Fail closed: no other scope (a websocket) is authenticated, so none is served.
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
             return
         headers = dict(scope["headers"])
         scheme, _, token = headers.get(b"authorization", b"").decode("latin-1").partition(" ")

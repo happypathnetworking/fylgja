@@ -88,3 +88,50 @@ def test_a_right_token_sets_the_principal(client: TestClient) -> None:
 
 def test_version_needs_no_token(client: TestClient) -> None:
     assert client.get("/v1/version").status_code == 200
+
+
+def test_a_plaintext_token_in_place_of_a_hash_is_refused_without_echoing_it(tmp_path: Path) -> None:
+    path = tmp_path / "tokens"
+    path.write_text(f"# c\n{ALPHA} alice\n")
+    with pytest.raises(ValueError, match="line 2") as e:
+        auth.Tokens.load(path)
+    assert ALPHA not in str(e.value)
+
+
+def test_an_uppercase_hash_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "tokens"
+    path.write_text(f"{auth.hash_token(ALPHA).upper()} alice\n")
+    with pytest.raises(ValueError, match="line 1"):
+        auth.Tokens.load(path)
+
+
+def test_a_duplicate_hash_is_refused_naming_both_lines(tmp_path: Path) -> None:
+    path = tmp_path / "tokens"
+    h = auth.hash_token(ALPHA)
+    path.write_text(f"{h} alice\n\n{h} bob\n")
+    with pytest.raises(ValueError, match="lines 1 and 3"):
+        auth.Tokens.load(path)
+
+
+def test_only_lifespan_and_http_are_served_and_a_websocket_is_closed(tokens: auth.Tokens) -> None:
+    import asyncio
+    from typing import Any
+
+    reached: list[str] = []
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:
+        reached.append(scope["type"])
+
+    sent: list[dict[str, Any]] = []
+
+    async def send(message: Any) -> None:
+        sent.append(message)
+
+    async def receive() -> dict[str, Any]:
+        return {}
+
+    mw = auth.AuthMiddleware(app, tokens)
+    asyncio.run(mw({"type": "lifespan"}, receive, send))
+    asyncio.run(mw({"type": "websocket", "path": "/v1/x", "headers": []}, receive, send))
+    assert reached == ["lifespan"]
+    assert sent == [{"type": "websocket.close", "code": 1008}]

@@ -65,3 +65,17 @@ def test_listen_must_be_host_and_port(listen: str) -> None:
         config.from_environ({**FULL, "FYLGJA_LISTEN": listen})
     assert e.value.variable == "FYLGJA_LISTEN"
     assert listen not in str(e.value)
+
+
+def test_an_unknown_driver_is_refused_naming_the_variable_and_the_served_names() -> None:
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ({**FULL, "FYLGJA_DRIVER": "zz9"})
+    assert e.value.variable == "FYLGJA_DRIVER"
+    assert "containerlab" in str(e.value)
+    assert "zz9" not in str(e.value)
+
+
+def test_a_missing_variable_files_settings_missing() -> None:
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ({})
+    assert e.value.rule == "settings.missing"

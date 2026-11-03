@@ -202,10 +202,12 @@ in software and hardware in silicon, so it is computed per deployment and never 
   production interface names where the kind has aliases and renamed ports where it does
   not. The clabernetes driver wraps it in a `Topology` resource.
 - Account-gated images, such as cEOS, live in a private registry the cluster trusts
-  ([D-021](decisions.md#d-021)). kind is the cluster for developing the clabernetes driver
-  ([D-022](decisions.md#d-022)). The production cluster is three k3s servers with embedded
-  etcd on SSD, MetalLB in layer 2, and the registry on a host outside the cluster
-  ([D-036](decisions.md#d-036)).
+  ([D-021](decisions.md#d-021)). Locally, a gated image is a presence check at admission
+  (`admission.image.absent`) and is never pulled; an ungated one is containerlab's to pull
+  at deploy ([D-015](decisions.md#d-015)). kind is the cluster for developing the
+  clabernetes driver ([D-022](decisions.md#d-022)). The production cluster is three k3s
+  servers with embedded etcd on SSD, MetalLB in layer 2, and the registry on a host outside
+  the cluster ([D-036](decisions.md#d-036)).
 - The hardware driver is not built; its paper shape checks the seam. The local driver
   stays sufficient for development and the live tier, so neither needs Kubernetes.
 
@@ -430,5 +432,4 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 - Whether the 40-character twin name and 63-character device names fit every runtime's own
   limits; clabernetes names a Service per node, and a Service name is a DNS-1035 label,
   which begins with a letter.
-- Image pulls on the local driver, and whether admission needs per-node requests as well as
-  sums.
+- Whether admission needs per-node requests as well as sums.

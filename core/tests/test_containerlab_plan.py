@@ -112,6 +112,16 @@ def test_the_same_plan_has_the_same_id_and_another_allocation_another() -> None:
     assert other.deployment.id != a.deployment.id
 
 
+def test_an_allocation_for_another_lab_is_refused() -> None:
+    # The lab is named exactly the twin's name (D-043), so an allocation admit made for
+    # another twin is a caller's error, never a plan.
+    c = planned("three-node")[0]
+    with pytest.raises(ValueError, match="the lab 'u', not the twin 't'"):
+        clab_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "t", {"lab": "u", "mgmt_subnet": "172.20.3.0/24"})
+    with pytest.raises(ValueError, match="the lab None, not the twin 't'"):
+        clab_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "t", {"mgmt_subnet": "172.20.3.0/24"})
+
+
 def test_the_probed_deployments_fidelity_is_the_compiles_with_the_runtimes_forwarding() -> None:
     c, p = planned("three-node-probed")
     f = p.deployment.fidelity

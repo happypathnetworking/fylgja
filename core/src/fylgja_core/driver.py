@@ -78,13 +78,14 @@ class NodeState:
 
 @dataclass(frozen=True)
 class Inspection:
-    """What the runtime holds of a twin. `present` when it holds any node of the twin;
-    `residue` when it holds leftovers of a destroyed or killed lab with no node (the local
-    driver's host entries, ssh config or management network)."""
+    """What the runtime holds of a twin, and its nodes. `state` is `absent` when the runtime
+    holds nothing of the twin; `present` when it holds at least one of the twin's nodes; and
+    `residue` when it holds no node, but leftovers of the twin's isolation unit from a
+    destroyed or killed lab (the local driver's host entries, ssh config or management
+    network)."""
 
-    present: bool
+    state: Literal["absent", "present", "residue"]
     nodes: tuple[NodeState, ...]
-    residue: bool
 
 
 class Driver(Protocol):

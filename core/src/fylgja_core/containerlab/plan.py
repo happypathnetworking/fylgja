@@ -53,7 +53,10 @@ def plan(
 ) -> Planned:
     """The deployment of the bundle `bundle_id`, whose manifest is `manifest`, as the twin
     `twin` on the allocation `admit` reserved for it, and the files the deployment lists; or
-    `Unplannable` with every fault."""
+    `Unplannable` with every fault. An allocation for another lab than the twin's is the
+    caller's error, a `ValueError`: the lab is named exactly the twin's name (D-043)."""
+    if allocation.get("lab") != twin:
+        raise ValueError(f"the allocation is for the lab {allocation.get('lab')!r}, not the twin {twin!r}")
     counts, shared = lossy(manifest, platforms)
     files = {TOPOLOGY: _topology(manifest, platforms, probe_packages, twin, allocation)}
     listed = tuple(deployment.File(path=path, sha256=hashlib.sha256(files[path]).hexdigest()) for path in sorted(files))

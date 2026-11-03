@@ -66,6 +66,10 @@ async def await_transport(
     """Wait until the node's push transport answers; return the seconds until the first answer.
 
     Raises `NotReady` at once on a refused login, and when the budget runs out.
+
+    An attempt gives the connection `interval_s * 2`, since a port not yet open refuses at once,
+    and the answer the push's own per-request budget within what is left of the wait's: SR Linux
+    takes 3.2-4.4 s to answer `show version` over `cli` (design/verified-facts.md).
     """
     budget = package.readiness.timeout_s if timeout_s is None else timeout_s
     path, body = probe_request(package, credential)
@@ -78,8 +82,11 @@ async def await_transport(
     try:
         while True:
             attempt += 1
+            answer_s = max(interval_s, min(package.push.timeout_s, budget - (time.monotonic() - start)))
             try:
-                response = await http.post(url, json=body, auth=auth, timeout=interval_s * 2)
+                response = await http.post(
+                    url, json=body, auth=auth, timeout=httpx.Timeout(answer_s, connect=interval_s * 2)
+                )
             except httpx.HTTPError as err:
                 _log.debug("attempt %d to %s: %s", attempt, url, type(err).__name__)
             else:

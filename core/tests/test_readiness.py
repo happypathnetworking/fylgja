@@ -73,6 +73,37 @@ def test_an_attempt_posts_the_probe_with_basic_auth_and_ready_is_a_200_with_a_re
     assert req.headers["authorization"] == "Basic " + base64.b64encode(b"admin:s3cret").decode()
 
 
+@pytest.mark.parametrize("package", [SRLINUX, EOS], ids=["json_rpc", "eapi"])
+def test_an_attempt_waits_two_intervals_to_connect_and_as_long_as_a_push_for_the_answer(
+    package: PlatformPackage,
+) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"result": []})
+
+    _wait(package, httpx.MockTransport(handler), interval_s=0.5)
+    assert seen[0].extensions["timeout"] == {
+        "connect": 1.0,
+        "read": package.push.timeout_s,
+        "write": package.push.timeout_s,
+        "pool": package.push.timeout_s,
+    }
+
+
+def test_an_attempt_never_waits_for_an_answer_past_the_budget() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with pytest.raises(NotReady):
+        _wait(SRLINUX, httpx.MockTransport(handler), timeout_s=0.3, interval_s=0.1)
+    assert seen and all(0.1 <= r.extensions["timeout"]["read"] <= 0.3 for r in seen)
+
+
 def test_connection_errors_are_retried_until_the_node_answers() -> None:
     attempts: list[int] = []
 

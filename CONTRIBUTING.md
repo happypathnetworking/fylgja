@@ -65,6 +65,7 @@ inside the tree carries a `.gitignore` of `*`.
 | `make venv` | The core's venv |
 | `make lint` | ruff over `core/` and `scripts/`, then mypy in strict mode |
 | `make test` | The pure tier: no infrastructure. Gates every pull request |
+| `make live` | The live tier: boots an SR Linux node and a cEOS node under containerlab, waits for each to be ready and pushes to it, then destroys the lab. Load `local/.env` first |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
 
 ## Test tiers
@@ -72,7 +73,7 @@ inside the tree carries a `.gitignore` of `*`.
 | Tier | Needs | Runs |
 |---|---|---|
 | **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures |
-| **Live** | Booted images on the local containerlab driver | On demand, once the local driver exists |
+| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded. `make test` deselects it (the `live` marker) |
 | **Driver conformance** | Each driver's own runtime: a cluster for clabernetes | On demand, per driver |
 
 Development and the live tier never need Kubernetes (Constitution XIII).

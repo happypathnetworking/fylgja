@@ -4,7 +4,8 @@ as a subprocess, never through an SDK (D-018, D-043).
 Every command line is logged at INFO on `fylgja.containerlab` before it runs, so an operator
 can repeat it by hand; no command's stdout is ever logged, since it can hold a node's
 configuration. A command that fails or outruns its budget raises `CommandFailed`, and one
-whose caller is cancelled is killed: none outlives the call that ran it.
+whose caller is cancelled is killed. Each command leads a process group of its own, which is
+killed whole, so neither it nor a child it spawned outlives the call that ran it.
 """
 
 from __future__ import annotations
@@ -13,7 +14,9 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import shlex
+import signal
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -23,10 +26,15 @@ _log = logging.getLogger("fylgja.containerlab")
 TIMED_OUT = -1
 """The status `run` reports for a command it killed at its budget."""
 
+STDERR_KEPT = 4096
+"""How many bytes of a failed command's stderr `CommandFailed` keeps: the last, where a CLI
+writes its error."""
+
 
 class CommandFailed(Exception):
     """A command exited with a non-zero status, or ran past its budget (status `TIMED_OUT`,
-    stderr saying so). Its message names the command and the status, never stdout."""
+    stderr saying so). `stderr` is the last `STDERR_KEPT` bytes of the command's. Its message
+    names the command and the status, never its output."""
 
     def __init__(self, argv: Sequence[str], returncode: int, stderr: str) -> None:
         self.argv = tuple(argv)
@@ -51,6 +59,7 @@ async def run(
         stderr=asyncio.subprocess.PIPE,
         env=None if env is None else dict(env),
         cwd=cwd,
+        start_new_session=True,  # its own process group, so that its children are killed with it
     )
     try:
         async with asyncio.timeout(timeout_s):
@@ -62,8 +71,8 @@ async def run(
         await _kill(process)
         raise
     if process.returncode:
-        raise CommandFailed(args, process.returncode, stderr.decode(errors="replace"))
-    return stdout.decode()
+        raise CommandFailed(args, process.returncode, stderr[-STDERR_KEPT:].decode(errors="replace"))
+    return stdout.decode(errors="replace")
 
 
 async def run_json(
@@ -74,7 +83,11 @@ async def run_json(
 
 
 async def _kill(process: asyncio.subprocess.Process) -> None:
-    """Kill `process` and reap it."""
-    with contextlib.suppress(ProcessLookupError):
-        process.kill()
+    """Kill `process`'s whole group, so that no child of it holds the pipes open, and reap it.
+    When the group is gone, the process is killed alone, if it is there at all."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
     await process.wait()

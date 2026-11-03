@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from fylgja_core.containerlab import cli
-from fylgja_core.containerlab.cli import CommandFailed
+from fylgja_core.containerlab.cli import TIMED_OUT, CommandFailed
 
 
 def test_run_answers_the_commands_stdout() -> None:
@@ -53,6 +53,62 @@ def test_a_cancelled_run_kills_its_command(tmp_path: Path) -> None:
     asyncio.run(scenario())
     with pytest.raises(ProcessLookupError):
         os.kill(int(pidfile.read_text()), 0)
+
+
+def gone_within(pid: int, seconds: float) -> bool:
+    """Whether `pid` exits within `seconds`; a zombie has exited, its reaping its new parent's."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text()
+        except FileNotFoundError:
+            return True
+        if stat.rpartition(")")[2].split()[0] == "Z":
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_a_hanging_commands_children_are_killed_with_it(tmp_path: Path) -> None:
+    # A wrapper's child holds the pipes: killing the wrapper alone would leave the call
+    # waiting on them, and the child running past the budget.
+    pidfile = tmp_path / "pid"
+    start = time.monotonic()
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(cli.run(["sh", "-c", f"sleep 5 & echo $! > {pidfile}; wait"], timeout_s=0.2))
+    assert time.monotonic() - start < 1.0
+    assert raised.value.returncode == TIMED_OUT
+    assert gone_within(int(pidfile.read_text()), 1.0)
+
+
+def test_a_cancelled_runs_children_are_killed_with_it(tmp_path: Path) -> None:
+    pidfile = tmp_path / "pid"
+
+    async def scenario() -> None:
+        task = asyncio.create_task(cli.run(["sh", "-c", f"sleep 5 & echo $! > {pidfile}; wait"], timeout_s=10))
+        while not pidfile.exists() or not pidfile.read_text().strip():
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 1.0)
+
+    asyncio.run(scenario())
+    assert gone_within(int(pidfile.read_text()), 1.0)
+
+
+def test_a_failures_stderr_is_bounded_to_its_last_4_kib() -> None:
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(cli.run(["sh", "-c", "head -c 10000 /dev/zero | tr '\\0' x >&2; printf end >&2; exit 1"],
+                            timeout_s=5))
+    assert len(raised.value.stderr) == 4096
+    assert raised.value.stderr.endswith("xxend")
+
+
+def test_output_that_is_not_utf8_is_decoded_with_replacements() -> None:
+    assert asyncio.run(cli.run(["sh", "-c", "printf 'a\\377b'"], timeout_s=5)) == "a\ufffdb"
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(cli.run(["sh", "-c", "printf 'a\\377b' >&2; exit 1"], timeout_s=5))
+    assert raised.value.stderr == "a\ufffdb"
 
 
 def test_run_takes_the_environment_and_the_directory(tmp_path: Path) -> None:

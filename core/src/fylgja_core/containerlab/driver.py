@@ -102,7 +102,11 @@ class ContainerlabDriver:
         reserved: Sequence[Allocation],
     ) -> Allocation | Refusal:
         """The first free /24 of the pool as the twin's allocation, or a refusal naming every
-        shortfall (`admission.capacity`) or every absent gated image (`admission.image.absent`)."""
+        shortfall (`admission.capacity`) or every absent gated image (`admission.image.absent`).
+
+        The contract: the loop admits a twin once and records the allocation in its record; a
+        resume plans with the recorded allocation and never admits again. So the twin's own
+        management network, which holds its subnet once deployed, never counts against it."""
         taken = await self._docker_subnets() + [IPv4Network(a["mgmt_subnet"]) for a in reserved]
         subnet = pool.choose(self.pool, taken)
         demand = clab_plan.demand(manifest, platforms, probe_packages)

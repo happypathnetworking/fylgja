@@ -35,8 +35,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 - `clab deploy` creates `clab-<lab>/` beside the topology file, or under
   `CLAB_LABDIR_BASE` when it is set, mostly root-owned; `clab destroy --cleanup` removes
   it without root in about 1 s. *(2026-09-15; 26.04, 2026-10-08; 0.81.0, 2026-11-03)* On
-  0.81.0 the destroy of a two-node lab took 1.26–1.32 s, six times.
-- **A one-SR Linux, one-cEOS lab joined by one link deploys in 49.1–51.5 s** (four
+  0.81.0 the destroy of a two-node lab took 1.26–1.4 s, eight times, once after a failed
+  deploy.
+- **A one-SR Linux, one-cEOS lab joined by one link deploys in 49.1–55.5 s** (five
   deploys, an otherwise idle host). The same two nodes with no link took 87.6 s, the cEOS
   node's post-deploy holding the deploy for 84 s. *(0.81.0, 2026-11-03)*
 - containerlab applies an SR Linux `.cli` startup snippet over the default configuration
@@ -77,7 +78,7 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   - `destroy --name` refuses a lab with no containers.
   - A deploy followed by a destroy clears all of it. *(0.81.0, 2026-11-03)*: no
     container, no `/etc/hosts` line, no `/etc/ssh/ssh_config.d/clab-<lab>.conf` and no
-    management network was left after any of six labs.
+    management network was left after any of eight labs, a failed deploy among them.
   - A deploy refused at its start leaves only the management network.
 
 **Interface names**
@@ -352,7 +353,8 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   `nokia_srlinux`. Its front ports are `ethernet-1/1` to `ethernet-1/58`, beside `lo0` and
   `mgmt0`. A push naming `ethernet-1/99` is refused `invalid port 99, max is 58`, and one
   naming `ethernet-2/1` `invalid slot 2`, on that node alone. *(2026-09-19; 26.04, 2026-10-19,
-  2026-10-20)*
+  2026-10-20)* The port-99 refusal was re-exercised on 0.81.0, not the slot's.
+  *(0.81.0, 2026-11-03)*
 - The node's name for a port is `ethernet-1/1`, not containerlab's endpoint name `e1-1`:
   `set / interface e1-1 admin-state enable` is refused. *(2026-09-15)*
 - Every LLDP adjacency forms before `clab deploy` returns, so a read after the twin is
@@ -367,6 +369,11 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   10.2 GiB available at a load of 5–6, one node's `sr_cli` segfaulted in containerlab's
   post-deploy (`python3.11` in the kernel log), containerlab cancelled the other two
   nodes' post-deploy and the deploy failed; the run after a rest passed.
+  *(0.81.0, 2026-11-03)* CPU contention alone does it too: with 22 GiB available and the
+  load at 33, another live tier booting six nodes beside it, `sr_cli` segfaulted in
+  containerlab's post-deploy 31 s in (`Segmentation fault (core dumped)` in its bootstrap),
+  the deploy failed at 65.9 s with rc 1, and `destroy --cleanup` left nothing. The run on a
+  quiet host passed.
 
 **gNMI**
 
@@ -393,12 +400,17 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   `result` of one JSON object, `{"basic system info": {…}}`, not text: `Hostname`, `Chassis
   Type` (`7220 IXR-D2L`), `Software Version` (`v24.7.1`), `Build Number`
   (`330-g38f237abfe`), `Last Booted` and memory among its members.
-- **It answered at the first attempt, 3.2–3.5 s after `clab deploy` returned** (three
-  runs, the cEOS node booting beside it): the request itself took those seconds.
+- **It answered at the first attempt, 3.2–3.5 s after the addresses were read from
+  `inspect`**, 0.12–0.24 s after the deploy returned (four runs, the cEOS node booting
+  beside it): the request itself took those seconds.
 - **Every `cli` request costs seconds.** Twelve `show version` requests in a row on a
   fresh node took 3.2–4.4 s each, three of them over 4 s. A replace took 2.0–3.4 s and
   `commit validate` 1.6–2.3 s. A readiness attempt cut at 4 s would miss about one answer
   in four.
+- **A wrong password is answered HTTP 401 at once**, in 0.31 s, with a 32-byte body,
+  `AuthenticationFailed (status: 1)`, as `text/html; charset=utf-8`. Readiness got it at
+  its first attempt and the push got it too (`Unauthorized`). Three refused logins locked
+  nothing: the real login answered right after.
 
 **The push (JSON-RPC)**
 
@@ -454,12 +466,15 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
     request's own line, never the configuration's.
 - `delete /` as a replace darkens the management plane when the rendered config does not
   restate it; `load startup` resets to the baseline containerlab left and does not.
-  *(2026-09-18, 2026-10-01)*
+  *(2026-09-18, 2026-10-01)* The `load startup` half was re-exercised on 0.81.0: the node
+  answered every request after each replace. *(0.81.0, 2026-11-03)*
 - **A port's address lines are accepted in the replace**: `subinterface 0 ipv4
   admin-state enable` and `subinterface 0 ipv4 address <a/l>` after `subinterface 0
   admin-state enable`. Pushes took 2.8–2.9 s, and `info from running` reads `ipv4 {
   admin-state enable address 10.1.10.1/24 { } }`. A second address is a second plain
-  `address` line. *(2026-10-29)*
+  `address` line. *(2026-10-29)* Re-exercised on 0.81.0 by mixed.json's `s1`, whose two
+  addressed ports landed (the diff's `insert / … ipv4 address` lines); `info from running`
+  was not read again. *(0.81.0, 2026-11-03)*
 
 ---
 
@@ -494,10 +509,16 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   a `result` of one object: `mfgName` `Arista`, `modelName` `cEOSLab`, `version`
   `4.32.0.2F-41889544.43202F (engineering build)`, `uptime` among its members.
   *(0.81.0, 2026-11-03)*
-  - It first answered 12.2–17.4 s after `clab deploy` returned (three runs).
+  - It first answered 8.1–17.4 s after the addresses were read from `inspect`, 0.12–0.24 s
+    after the deploy returned (four runs).
   - In the run read with the core's debug log, the port refused connections for about
     14 s, then `/command-api` answered HTTP 404 once; the next attempt, 2 s later, got the
     first answer, which took about 1.3 s. Later answers took 0.08–0.13 s.
+- **A wrong password is answered HTTP 401 at once**, in 0.09–0.10 s, with a 62-byte body,
+  `Unable to authenticate user: Bad username/password combination`, as `text/plain`.
+  Readiness got it at its first attempt and the push got it too (`Unauthorized`). Three
+  refused logins locked nothing: the real login answered right after. *(0.81.0,
+  2026-11-03)*
 - **A replace's answer** is one `{"output": …}` entry per command, the diff's the entry
   before the commit's (`{"output": ""}`). The diff opens `--- system:/running-config` and
   `+++ session:/<session>-session-config`, then unified lines. **A repeat push's diff
@@ -505,7 +526,9 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
 - **A port the node lacks is accepted in the session with a warning**: its `interface`
   entry carries `warnings`, `Interface does not exist. The configuration will not take
   effect until the module is inserted.`, and its lines appear in the diff.
-  *(0.81.0, 2026-11-03)*
+  *(0.81.0, 2026-11-03)* This differs from the `arista_eos` package's `hot_add_ports` note,
+  which says a push naming such a port is accepted silently: the node does warn, in an
+  answer the push does not read, and the push lands.
 - **A refused command** answers HTTP 200 with an error. *(0.81.0, 2026-11-03)*
   - `code` is `1002` and `message` `CLI command 25 of 27 'no such command' failed:
     invalid command`.
@@ -517,11 +540,14 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   `maxOpenSessions` `5`). `configure session <name>` then `abort` removes it, and no
   session is left. A committed session is not listed: `sessions` was `{}` after two
   commits. *(0.81.0, 2026-11-03)*
-- `#` is refused at token 0, and `!` is read as a comment. *(2026-09-20)*
+- `#` is refused at token 0, and `!` is read as a comment. *(2026-09-20)* The `!` half was
+  re-exercised on 0.81.0: mixed.json's `e1` carries three `!` lines, and its push lands.
+  *(0.81.0, 2026-11-03)*
 - `show session-config diffs` has no JSON model: `format: "json"` fails the whole request
   with code 1003 and leaves the session pending, and `format: "text"` answers. The diff
   carries its own bare `!` separators, never the rendered config's `!` comment.
-  *(2026-10-01, 2026-10-02)*
+  *(2026-10-01, 2026-10-02)* The `format: "text"` half was re-exercised on 0.81.0, its bare
+  `!` separators with it; the `json` failure was not tried again. *(0.81.0, 2026-11-03)*
 - **Address lines are accepted in the eAPI replace**: `ip routing` after `hostname`, and
   on each addressed port `no switchport` and `ip address <a/l>` after `no shutdown`.
   Pushes took 2.3–2.5 s, and `show running-config` reads them. A second address needs

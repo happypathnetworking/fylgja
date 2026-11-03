@@ -240,6 +240,7 @@ class Reconciler:
         self._workers: Workers | None = None
         self._resync: asyncio.Task[None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._stopped = False  # whether `stop` ran since the last `start`
 
     # The schedule.
 
@@ -250,6 +251,7 @@ class Reconciler:
         if self._workers is not None:
             raise RuntimeError("the reconciler is started: stop it first")
         self._loop = asyncio.get_running_loop()
+        self._stopped = False
         self.queue = WorkQueue()
         self._admission = asyncio.Lock()
         for record in self.store.list_twins():
@@ -268,6 +270,7 @@ class Reconciler:
             await self._workers.stop()
             self._workers = None
         self._loop = None
+        self._stopped = True
 
     def kick(self, name: str) -> None:
         """Queue the twin `name` at once: a client wrote its record. From another thread (or
@@ -279,7 +282,8 @@ class Reconciler:
         if self._loop is not None and running is not self._loop:
             self._loop.call_soon_threadsafe(self.queue.put, name)
         elif running is None:
-            raise RuntimeError("kick before start needs a running event loop")
+            when = "after stop" if self._stopped else "before start"
+            raise RuntimeError(f"kick {when} needs a running event loop: the reconciler runs on none")
         else:
             self.queue.put(name)
 
@@ -344,6 +348,13 @@ class Reconciler:
             await self._create(record, driver)
 
     async def _create(self, record: TwinRecord, driver: Driver) -> None:
+        if record.status.run_id is None:
+            lacking = self._lacking(record)
+            if lacking:
+                # A deployment this core cannot tear down is kept: a new spec over it would compile over its
+                # bundle, admit over its allocation, and leave a cleanup no one here can do. Refused, untouched.
+                await self._refuse(record, RULE_BUNDLE_REJECTED, lacking)
+                return
         record, run = self._take_run(record, "create", REASON_CREATING)
         p = _Pass(record=record, run=run, driver=driver)
         current: runs.Phase | None = None
@@ -532,13 +543,19 @@ class Reconciler:
         runs the path again."""
         p.run = self.store.get_run(p.run.id)
         subject = self._subject(p.record, p.run)
+        message = "The run was cancelled before it had built anything."
         async with self._step(p, "cancel") as step:
             step.rule = RULE_CANCELLED
-            if p.record.status.deployment_id is not None and not self._lacking(p.record):
-                deployment, files = self._deployment(p)
-                await p.driver.destroy(deployment, files, self.platforms, self.probe_packages)
-                p.record = self._write(p.record, p.run, nodes=(), deployment_id=None, allocation=None, phase=None)
-        message = "The run was cancelled, and what it had built was torn down."
+            if p.record.status.deployment_id is not None:
+                if self._lacking(p.record):
+                    message = ("The run was cancelled; what it had built is kept, since this core lacks the "
+                               "packages to tear it down.")
+                else:
+                    deployment, files = self._deployment(p)
+                    await p.driver.destroy(deployment, files, self.platforms, self.probe_packages)
+                    p.record = self._write(p.record, p.run, nodes=(), deployment_id=None, allocation=None,
+                                           phase=None)
+                    message = "The run was cancelled, and what it had built was torn down."
         verdict = Verdict(operation=p.run.operation, status="failed", subject=subject,
                           findings=(Finding(rule=RULE_CANCELLED, severity="error", object=p.name, message=message),))
         ended = runs.ended(p.run, verdict)
@@ -726,11 +743,14 @@ class Reconciler:
         return p.manifest
 
     def _lacking(self, record: TwinRecord) -> list[Finding]:
-        """What this core lacks to tear the record's deployment down: the packages its bundle
-        names that are not loaded, since a driver's `destroy` takes them. Empty without a deployment."""
-        if record.status.deployment_id is None or record.status.bundle_id is None:
+        """What this core lacks to tear the record's deployment down: the packages the
+        deployment's own bundle names that are not loaded, since a driver's `destroy` takes them.
+        The deployment's, not the record's `bundle_id`, which a newer compile may have written.
+        Empty without a deployment."""
+        if record.status.deployment_id is None:
             return []
-        files = self.store.get_bundle(record.status.bundle_id)
+        deployed, _ = self.store.get_deployment(record.status.deployment_id)
+        files = self.store.get_bundle(deployed.bundle_id)
         return self._unloaded(bundle.decode(json.loads(files["manifest.json"])))
 
     def _deployment(self, p: _Pass) -> tuple[Deployment, Mapping[str, bytes]]:

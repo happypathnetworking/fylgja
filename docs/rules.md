@@ -121,8 +121,10 @@ A bundle naming a package this core has not loaded (one compiled elsewhere, or a
 by a core started without a package it began with) is refused with `bundle.rejected`: one
 `platform.unsupported` or `probe.format.unknown` finding per package, its object the package
 and its message naming who uses it. A driver's `destroy` takes the packages, so a deployment
-this core lacks them for is not torn down: the record keeps it, and its allocation, and a
-deletion of the twin is refused the same way, until a core that has them takes over.
+this core lacks them for is not torn down: the lab stays, with its record, which keeps the
+deployment, its allocation and its nodes, until a deletion or a new spec is handled by a core
+that has the packages. Here, both are refused the same way, once, and a new spec starts no
+create: nothing is compiled, admitted or destroyed over the kept deployment.
 
 The findings the loop files itself, each an error:
 

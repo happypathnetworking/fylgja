@@ -18,6 +18,7 @@ import pytest
 from fakes import FakeDriver, FakePush, FakeReady, fake_push, fake_ready
 
 from fylgja_core import (
+    blueprint,
     bundle,
     clock,
     compiler,
@@ -925,6 +926,7 @@ def test_a_cancelled_create_stops_cleans_up_and_ends_cancelled(store: LocalStore
 
     run = only_run(store)
     assert_cancelled(run)
+    assert run.verdict is not None and run.verdict.findings[0].message.endswith("was torn down.")
     assert [node for node, _ in pusher.calls] == ["n1"]
     assert seen(store, run.id) == [*CREATE[:-4], ("cancel", "started", None), ("cancel", "done", None)]
     assert store.events(run.id)[-1].rule == "run.cancelled"
@@ -963,6 +965,7 @@ def test_a_run_cancelled_before_it_started_ends_cancelled_having_done_nothing(st
     run = only_run(store)
     assert run.id == asked.id
     assert_cancelled(run)
+    assert run.verdict is not None and "before it had built anything" in run.verdict.findings[0].message
     assert seen(store, run.id) == [("cancel", "started", None), ("cancel", "done", None)]
     assert driver.calls == []
     assert_cleaned_up(store.get_twin("t"), "run.cancelled")
@@ -1254,7 +1257,7 @@ def test_start_twice_is_refused_and_a_stopped_reconciler_starts_on_another_loop(
     new_twin(store, blueprint_id, "a")
     driver = FakeDriver()
     r = make(store, driver)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="before start"):
         r.kick("a")  # before start, and with no loop running
 
     async def first() -> None:
@@ -1273,6 +1276,8 @@ def test_start_twice_is_refused_and_a_stopped_reconciler_starts_on_another_loop(
         await r.stop()
 
     asyncio.run(first())
+    with pytest.raises(RuntimeError, match="after stop"):
+        r.kick("a")
     new_twin(store, blueprint_id, "b")
     asyncio.run(second())
     # No worker failed to take a name: the queue it waits on is its own loop's.
@@ -1399,3 +1404,83 @@ def test_an_unstarted_run_whose_end_is_lost_is_ended_once_with_one_pair_of_event
             s.get_twin("t")
     finally:
         s.close()
+
+
+def kept_without_chassisos(killing: KillingStore, driver: FakeDriver) -> Callable[[], Reconciler]:
+    """`lossy` killed after `applied`, then resumed by a core without `chassisos`: the run rejected,
+    and the deployment kept. Answers the maker of such a core."""
+    new_twin(killing, file_blueprint(killing, "testdata/blueprint/lossy.json"))
+    killing.kill_at = "applied"
+    killed(make(killing, driver))
+    lacking = {k: v for k, v in PLATFORMS.items() if k != "chassisos"}
+
+    def without() -> Reconciler:
+        return Reconciler(killing, {driver.name: driver}, lacking, PROBES, Provider(ENVIRON),
+                          pusher=fake_push(driver=driver), readiness=fake_ready(driver=driver))
+
+    asyncio.run(without().reconcile("t"))
+    assert killing.get_twin("t").status.deployment_id is not None
+    return without
+
+
+def test_a_new_spec_over_a_kept_deployment_starts_no_create(killing: KillingStore) -> None:
+    driver = FakeDriver()
+    without = kept_without_chassisos(killing, driver)
+    kept = killing.get_twin("t").status
+    three_node = file_blueprint(killing)
+    record = killing.get_twin("t")  # a client's PUT: a new spec, and its queued create run
+    killing.update_twin(dataclasses.replace(record, generation=2, spec=dataclasses.replace(
+        record.spec, blueprint_id=three_node)), record.revision)
+    asked = queued("t", "create", "alice")
+    killing.create_run(asked)
+    driver.refuse = Refusal("admission.capacity", "no room")  # had admission run, its cleanup would destroy
+
+    before = len(driver.calls)
+    asyncio.run(without().reconcile("t"))
+    assert driver.calls[before:] == []  # no admit, no destroy
+    run = killing.get_run(asked.id)
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "rejected"
+    assert [(f.rule, f.object) for f in run.verdict.findings] == [("platform.unsupported", "chassisos")]
+    assert killing.events(asked.id) == []  # it never started
+    status = killing.get_twin("t").status
+    assert (status.deployment_id, status.allocation, status.nodes, status.bundle_id) == (
+        kept.deployment_id, kept.allocation, kept.nodes, kept.bundle_id)  # no compile overwrote it
+    assert (ready_of(killing.get_twin("t")).reason, status.observed_generation) == ("bundle.rejected", 2)
+    revision = killing.get_twin("t").revision
+    asyncio.run(without().reconcile("t"))  # said once
+    assert killing.get_twin("t").revision == revision and driver.calls[before:] == []
+
+
+def test_what_a_core_lacks_to_tear_down_is_read_from_the_deployment_itself(killing: KillingStore) -> None:
+    driver = FakeDriver()
+    without = kept_without_chassisos(killing, driver)
+    # A record whose bundle is no longer the kept deployment's: the deployment's own decides.
+    other = compiler.compile(blueprint.load(ROOT / "testdata/blueprint/three-node.json"), PLATFORMS, PROBES)
+    killing.put_bundle(other.id, other.files)
+    record = killing.get_twin("t")
+    killing.update_twin(dataclasses.replace(record, status=dataclasses.replace(record.status, bundle_id=other.id)),
+                        record.revision)
+    destroy = request_deletion(killing)
+    asyncio.run(without().reconcile("t"))
+    assert ("destroy", "t") not in driver.calls and "t" in driver.labs
+    verdict = killing.get_run(destroy.id).verdict
+    assert verdict is not None and verdict.status == "rejected"
+    assert [f.object for f in verdict.findings] == ["chassisos"]
+
+
+def test_a_cancel_whose_teardown_this_core_cannot_do_says_it_kept_the_lab(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing, "testdata/blueprint/lossy.json"))
+    driver = FakeDriver()
+    killing.kill_at = "applied"
+    killed(make(killing, driver))
+    run = only_run(killing)
+    mark_cancelling(killing, run.id)
+    lacking = {k: v for k, v in PLATFORMS.items() if k != "chassisos"}
+    without = Reconciler(killing, {driver.name: driver}, lacking, PROBES, Provider(ENVIRON),
+                         pusher=fake_push(driver=driver), readiness=fake_ready(driver=driver))
+    asyncio.run(without.reconcile("t"))
+    run = killing.get_run(run.id)
+    assert_cancelled(run)
+    assert run.verdict is not None and "kept" in run.verdict.findings[0].message
+    assert "torn down" not in run.verdict.findings[0].message.replace("to tear it down", "")
+    assert ("destroy", "t") not in driver.calls and killing.get_twin("t").status.deployment_id is not None

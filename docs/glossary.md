@@ -306,6 +306,12 @@ restart a node needs `allow_restart` in the spec.
 text and exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport failure,
 and 3 for a twin left dirty.
 
+**Token file** — The server's file of client tokens, named by `FYLGJA_TOKENS`: one
+`<sha256 hex of the token> <principal>` per line, so it never holds a token itself and several
+are valid at once ([D-025](../design/decisions.md#d-025)). A client holds its token in
+`FYLGJA_API_TOKEN` and sends it as a bearer token; the server hashes it, looks up the
+*principal* and discards it.
+
 **Twin** — A running copy of a network's intent: its operating system images, wired as the
 blueprint says and configured as the source rendered, named and in its own isolation unit.
 

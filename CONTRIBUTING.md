@@ -105,6 +105,55 @@ Development and the live tier never need Kubernetes (Constitution XIII).
 
 On Ubuntu, SR Linux's `rsyslogd` needs an AppArmor widening ([verified-facts.md](design/verified-facts.md)).
 
+## Running the core
+
+`fylgja-core-server` is one process: API 1 on uvicorn and the reconcile loop, over one store
+it holds locked for one core ([D-023](design/decisions.md#d-023), [D-039](design/decisions.md#d-039)).
+Everything it runs with is a `FYLGJA_*` variable ([D-042](design/decisions.md#d-042)), listed
+in [`.env.example`](.env.example):
+
+| Variable | Default | Holds |
+|---|---|---|
+| `FYLGJA_STORE` | required | The store's directory, created on first start; the driver's working files live under it |
+| `FYLGJA_PACKAGES` | required | Colon-separated directories of platform and probe packages, loaded once at start: `psp:probes` |
+| `FYLGJA_TOKENS` | required | The token file (below) |
+| `FYLGJA_LISTEN` | `127.0.0.1:7650` | The address it serves on, `host:port` |
+| `FYLGJA_DRIVER` | `containerlab` | The driver twins run on |
+| `FYLGJA_WORKERS` | `4` | How many twins the loop works on at once |
+| `FYLGJA_CREDENTIAL_<NAME>_USERNAME`, `_PASSWORD` | none | Each package's node login, `<NAME>` its `credentials` value upper-cased; a run needing one not set fails with `credential.missing` |
+
+**The token file** holds one `<sha256 hex of the token> <principal>` per line, `#` comments
+and blank lines skipped. It never holds a token itself, and several tokens may be valid at
+once, one per client. Make a client's token and add its line:
+
+```sh
+token=$(head -c 24 /dev/urandom | base64)   # the client's FYLGJA_API_TOKEN, in local/.env
+printf '%s %s\n' "$(printf %s "$token" | sha256sum | cut -d' ' -f1)" alice >> local/tokens
+```
+
+`printf %s "$FYLGJA_API_TOKEN" | sha256sum` gives the hash of a token already set.
+
+**Start it** with the environment loaded:
+
+```sh
+set -a; . local/.env; set +a
+core/.venv/bin/fylgja-core-server
+```
+
+It logs one JSON object per line on stderr, the principal on every write, never a token or a
+password. A start refused is one line naming the variable or the file at fault: it exits 2 for
+settings that are not whole, 1 for a store another core holds. SIGTERM or Ctrl-C ends open
+watches and stops the loop; a create cut short resumes at the next start.
+
+**The thin CLI** reads `FYLGJA_API_ADDRESS` (the server's `host:port` or URL) and
+`FYLGJA_API_TOKEN`:
+
+```sh
+core/.venv/bin/fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json
+core/.venv/bin/fylgja-core twin show demo
+core/.venv/bin/fylgja-core twin destroy demo
+```
+
 ## Conventions
 
 - **Platforms are data.** A platform is added by writing a platform package under `psp/`,

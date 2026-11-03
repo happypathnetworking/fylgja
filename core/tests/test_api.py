@@ -58,6 +58,7 @@ class Core:
     store: LocalStore
     driver: FakeDriver
     reconciler: Reconciler
+    closing: threading.Event
 
 
 @pytest.fixture
@@ -70,9 +71,11 @@ def core(tmp_path: Path) -> Iterator[Core]:
     reconciler = Reconciler(store, {driver.name: driver}, loaded.platforms, loaded.probes, Provider(ENVIRON),
                             workers=1, pusher=fake_push(driver=driver), readiness=fake_ready(driver=driver),
                             cancel_poll_s=0.01)
+    closing = threading.Event()
     app = create_app(store=store, loaded=loaded, drivers={driver.name: driver}, default_driver=driver.name,
-                     reconciler=reconciler, tokens=auth.Tokens.load(tokens), build=version("fylgja-core"))
-    yield Core(app=app, store=store, driver=driver, reconciler=reconciler)
+                     reconciler=reconciler, tokens=auth.Tokens.load(tokens), build=version("fylgja-core"),
+                     closing=closing)
+    yield Core(app=app, store=store, driver=driver, reconciler=reconciler, closing=closing)
     store.close()
 
 
@@ -825,3 +828,17 @@ def test_a_watch_the_client_closes_releases_what_it_held(served: httpx.Client, c
         next(events)
         assert len(core.store._subscriptions) == 1
     wait_for(lambda: True if core.store._subscriptions == [] else None)
+
+
+def test_the_servers_shutdown_ends_every_open_stream(served: httpx.Client, core: Core) -> None:
+    record = create(served)
+    core.driver.block = "apply"
+    answered(put(served, "u", {"blueprint_id": record["spec"]["blueprint_id"]}), 201)
+    (run,) = runs_of(served, "u")
+    with watching(served, "/v1/twins/t") as twin, \
+            served.stream("GET", f"/v1/runs/{run['id']}/events", headers={"Accept": SSE}) as events:
+        run_events = messages(events.iter_lines())
+        next(twin), next(run_events)
+        core.closing.set()
+        list(run_events)  # each stream ends, and is not cut: a cut one raises
+        assert list(twin) == []

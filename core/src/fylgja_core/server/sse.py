@@ -13,13 +13,15 @@ change to any twin.
 A run's stream polls the store and sends each event with its `seq` as the message's id, so
 `Last-Event-ID` resumes it, and ends once the run has ended and every event is sent. An idle
 stream sends a comment each `KEEPALIVE_S`, so a client gone without a word is found when the
-write fails.
+write fails. Every stream ends, within `POLL_S`, once its `closing` event is set: the server
+sets it as it begins to shut down, so an open watch ends and is not cut.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from typing import Any
 
@@ -69,7 +71,12 @@ class Watch(AsyncIterator[bytes]):
 
 
 def twin_stream(
-    store: Store, name: str | None, since_revision: int | None, *, keepalive_s: float = KEEPALIVE_S
+    store: Store,
+    name: str | None,
+    since_revision: int | None,
+    *,
+    closing: threading.Event | None = None,
+    keepalive_s: float = KEEPALIVE_S,
 ) -> Watch:
     """The watch of the twin `name`, or of every twin when None, subscribed and read at once on
     the running event loop: `store.NotFound` is raised here, before any stream begins, for a twin
@@ -80,7 +87,8 @@ def twin_stream(
     except BaseException:
         subscription.close()
         raise
-    return Watch(subscription, _twin_messages(subscription, name, since_revision, current, keepalive_s))
+    messages = _twin_messages(subscription, name, since_revision, current, closing or threading.Event(), keepalive_s)
+    return Watch(subscription, messages)
 
 
 async def _twin_messages(
@@ -88,6 +96,7 @@ async def _twin_messages(
     name: str | None,
     since_revision: int | None,
     current: Sequence[TwinRecord],
+    closing: threading.Event,
     keepalive_s: float,
 ) -> AsyncGenerator[bytes]:
     seen: dict[str, int] = {}  # each twin's revision the client has, sent now or before
@@ -96,12 +105,17 @@ async def _twin_messages(
             seen[record.name] = record.revision
             if since_revision is None or record.revision > since_revision:
                 yield _watch_event("ADDED" if record.revision == 1 else "MODIFIED", record)
-        while True:
+        quiet = 0.0
+        while not closing.is_set():
             try:
-                change = await asyncio.wait_for(subscription.queue.get(), keepalive_s)
+                change = await asyncio.wait_for(subscription.queue.get(), min(POLL_S, keepalive_s))
             except TimeoutError:
-                yield _KEEPALIVE
+                quiet += min(POLL_S, keepalive_s)
+                if quiet >= keepalive_s:
+                    quiet = 0.0
+                    yield _KEEPALIVE
                 continue
+            quiet = 0.0
             record = change.record
             if name is not None and record.name != name:
                 continue
@@ -118,12 +132,19 @@ async def _twin_messages(
 
 
 async def run_events_stream(
-    store: Store, run_id: str, after: int, poll_s: float = POLL_S, *, keepalive_s: float = KEEPALIVE_S
+    store: Store,
+    run_id: str,
+    after: int,
+    poll_s: float = POLL_S,
+    *,
+    closing: threading.Event | None = None,
+    keepalive_s: float = KEEPALIVE_S,
 ) -> AsyncIterator[bytes]:
     """Each event of the run with `seq` beyond `after`, polled each `poll_s`, until the run has
     ended. Its state is read before its events, so once it reads ended every event is in."""
     quiet = 0.0
-    while True:
+    closing = closing or threading.Event()
+    while not closing.is_set():
         ended = store.get_run(run_id).state == "ended"
         events = store.events(run_id, after)
         for event in events:

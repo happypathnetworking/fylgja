@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import threading
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import replace
 from typing import Any
@@ -208,12 +209,14 @@ class _Api:
         default_driver: str,
         reconciler: Reconciler,
         build: str,
+        closing: threading.Event,
     ) -> None:
         self.store = store
         self.loaded = loaded
         self.drivers = drivers
         self.default_driver = default_driver
         self.reconciler = reconciler
+        self.closing = closing
         self.version_doc = {
             "api": API,
             "build": build,
@@ -320,7 +323,7 @@ class _Api:
     async def list_twins(self, request: Request) -> Response:
         since = _cursor(request, request.query_params.get("since_revision"), "since_revision")
         if _streams(request):
-            return sse.EventStream(sse.twin_stream(self.store, None, since))
+            return sse.EventStream(sse.twin_stream(self.store, None, since, closing=self.closing))
         return _json({"twins": [documents.encode(record) for record in self.store.list_twins()]})
 
     async def get_twin(self, request: Request) -> Response:
@@ -328,7 +331,7 @@ class _Api:
         since = _cursor(request, request.query_params.get("since_revision"), "since_revision")
         if _streams(request):
             try:
-                return sse.EventStream(sse.twin_stream(self.store, name, since))
+                return sse.EventStream(sse.twin_stream(self.store, name, since, closing=self.closing))
             except store.NotFound:
                 raise _refuse(request, 404, RULE_TWIN_NOT_FOUND, f"No twin is named {name}.") from None
         return _record(self._twin(request, name))
@@ -530,7 +533,8 @@ class _Api:
         after = _cursor(request, request.query_params.get("after"), "after") or 0
         if _accepts_events(request):
             last = _cursor(request, request.headers.get("last-event-id"), "Last-Event-ID") or 0
-            return sse.EventStream(sse.run_events_stream(self.store, run.id, max(after, last)))
+            stream = sse.run_events_stream(self.store, run.id, max(after, last), closing=self.closing)
+            return sse.EventStream(stream)
         events = self.store.events(run.id, after)
         return _json({"events": [documents.encode(e) for e in events], "next": events[-1].seq if events else after,
                       "ended": run.state == "ended"})
@@ -643,12 +647,14 @@ def create_app(
     reconciler: Reconciler,
     tokens: Tokens,
     build: str,
+    closing: threading.Event | None = None,
 ) -> Starlette:
     """API 1 over `store`, the packages `loaded`, the `drivers` by name (`default_driver` among
-    them) and `reconciler`, which its lifespan starts and stops: one reconciler per lifespan."""
+    them) and `reconciler`, which its lifespan starts and stops: one reconciler per lifespan.
+    Every open stream ends once `closing` is set, as the server begins to shut down."""
     if default_driver not in drivers:
         raise ValueError(f"the default driver {default_driver!r} is not one of the drivers given")
-    api = _Api(store, loaded, drivers, default_driver, reconciler, build)
+    api = _Api(store, loaded, drivers, default_driver, reconciler, build, closing or threading.Event())
 
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:

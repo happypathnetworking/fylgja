@@ -74,8 +74,9 @@ Each is an error, and every fault is reported in one pass. A driver's plan with 
 refused (`Unplannable`): the API answers a dry run with a 422 problem document, rule
 `plan.rejected`, carrying these findings, as it does for `bundle.rejected` (API 1's `Plan`
 shape requires a deployment, so a refusal cannot be a plan), and the loop ends such a run
-`rejected`; that rule arrives with the API, like `bundle.rejected`. The object is an interface
-as `device:interface`.
+`rejected`, the twin's Ready condition False with the reason `plan.rejected`; the API's
+problem rule arrives with the API, like `bundle.rejected`. The object is an interface as
+`device:interface`.
 
 | Rule | Means |
 |---|---|
@@ -86,7 +87,7 @@ as `device:interface`.
 `admit` refuses a twin with one of these rules and a message naming every shortfall or
 every absent image ([D-019](../design/decisions.md#d-019)); nothing is reserved. The loop
 files the refusal as the run's one finding, an error whose object is the twin by name, and
-ends the run `rejected`; that arrives with the loop.
+ends the run `rejected` ([Conditions and runs](#conditions-and-runs)).
 
 | Rule | Filed by | Means |
 |---|---|---|
@@ -104,6 +105,53 @@ ends the run `rejected`; that arrives with the loop.
 | `push.unreachable` | the push | the node gave the push no answer: a refused connection, a TLS failure, an answer that cannot be decoded, an HTTP status other than 200, 401 and 403, or a body that is no JSON-RPC answer. Transient: the push is tried again. The message names the URL, never a body |
 | `push.timeout` | the push | the node did not answer one push request within the package's `push.timeout_s`. Transient, as `push.unreachable`: the push is tried again. The message names the URL and the budget, never a body |
 | `push.unauthorized` | the push | the node answered the push HTTP 401 or 403: the credential is refused, and pushing again would not help, so only a new spec clears it ([D-023](../design/decisions.md#d-023)). The message names the URL, never the credential |
+
+## Conditions and runs
+
+A create is a run ([D-023](../design/decisions.md#d-023)). It ends `ok`, or `rejected` when
+the compile, admission or the plan refuses (nothing was built), or `failed` when a node
+does not become ready, the push is refused or unauthorized, a credential is missing, or the
+run is cancelled; either way the loop cleans up and waits for the spec to be written again.
+Its verdict holds the findings, and the twin's `Ready` condition carries a **reason**, a
+rule id too, which is also the `rule` of the run's ending event (the failing phase's, or
+`cancel done`). A transient failure (the driver's runtime failure, an unreachable node, the
+store) ends no run: the loop tries again after a backoff.
+
+A cancelled create stops where it is, stopping a call on the runtime in flight, tears down
+what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels a create in
+flight that way, then a destroy run tears the twin down and deletes its record; it ends `ok`,
+and a destroy run is never stopped halfway. In the partial-lab probe a node that refuses the
+login is not silent: the run fails at once with `readiness.unauthorized`, since a reconfigure
+would not help.
+
+A bundle naming a package this core has not loaded (one compiled elsewhere, or a run resumed
+by a core started without a package it began with) is refused with `bundle.rejected`: one
+`platform.unsupported` or `probe.format.unknown` finding per package, its object the package
+and its message naming who uses it. A driver's `destroy` takes the packages, so a deployment
+this core lacks them for is not torn down: the lab stays, with its record, which keeps the
+deployment, its allocation and its nodes, until a deletion or a new spec is handled by a core
+that has the packages. Here, both are refused the same way, once, and a new spec starts no
+create: nothing is compiled, admitted or destroyed over the kept deployment.
+
+The findings the loop files itself, each an error:
+
+| Rule | Ends the run | Means |
+|---|---|---|
+| `blueprint.missing` | `rejected` | the spec's blueprint is not in the store; the object is its id |
+| `bundle.missing` | `rejected` | the spec's bundle is not in the store; the object is its id |
+| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up |
+| `twin.driver.unknown` | `rejected` | the spec names a driver this core does not serve; the object is the twin. The API refuses such a spec with a problem of the same rule, so the loop meets one only when a core was started without a driver its records name: every run of the twin in flight ends `rejected`, and nothing is torn down |
+
+The `Ready` condition's reasons:
+
+| Reason | Status | Means |
+|---|---|---|
+| `twin.ready` | `True` | the create reached `pushed`: every device node holds the bundle and answered |
+| `twin.creating` | `False` | a create runs |
+| `twin.deleting` | `False` | the twin's deletion was asked, and the loop tears it down |
+| `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)) |
+| `plan.rejected` | `False` | the driver's plan refused the bundle; the run's verdict holds every finding ([a plan refused](#findings-a-plan-refused)) |
+| a finding's rule | `False` | the run ended with that one finding: `blueprint.missing`, `bundle.missing`, `run.cancelled`, `twin.driver.unknown`, an `admission.*` rule, `readiness.timeout`, `readiness.unauthorized`, `credential.missing`, `push.refused` or `push.unauthorized` |
 
 ## Problems: the API
 

@@ -9,9 +9,10 @@ OpenAPI document.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
+from fylgja_core import clock, ulid
 from fylgja_core.findings import Verdict
 
 Operation = Literal["create", "step", "destroy"]
@@ -45,3 +46,14 @@ class Event:
     node: str | None = None
     duration_s: float | None = None
     rule: str | None = None
+
+
+def queued(twin: str, operation: Operation, principal: str) -> Run:
+    """A new run, queued by `principal` for `twin`, with a new ULID and the time it was made."""
+    return Run(id=ulid.new(), twin=twin, operation=operation, state="queued", principal=principal,
+               created_at=clock.now())
+
+
+def ended(run: Run, verdict: Verdict) -> Run:
+    """`run` as it ends, with its verdict and the time."""
+    return replace(run, state="ended", ended_at=clock.now(), verdict=verdict)

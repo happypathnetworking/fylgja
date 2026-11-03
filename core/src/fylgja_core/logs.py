@@ -15,26 +15,29 @@ _audit_log = logging.getLogger("fylgja.audit")
 
 
 class JsonFormatter(logging.Formatter):
-    """A record as one JSON object, keys sorted."""
+    """A record as one JSON object, keys sorted. The core members (`time`, `level`, `logger`,
+    `message`, and `exception` when one is logged) win over a field of the same name, so no
+    field can forge what a line says of itself."""
 
     def format(self, record: logging.LogRecord) -> str:
         time = datetime.datetime.fromtimestamp(record.created, datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        line: dict[str, Any] = {
+        core: dict[str, Any] = {
             "time": time,
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
         }
-        line.update(getattr(record, "fields", {}))
         if record.exc_info:
-            line["exception"] = self.formatException(record.exc_info)
+            core["exception"] = self.formatException(record.exc_info)
+        line: dict[str, Any] = {**getattr(record, "fields", {}), **core}
         # `repr` for what JSON cannot hold: a Credential's repr hides its password.
         return json.dumps(line, sort_keys=True, default=repr)
 
 
-def configure(level: int = logging.INFO, stream: TextIO = sys.stderr) -> None:
-    """Install one JSON handler on the root logger, replacing any."""
-    handler = logging.StreamHandler(stream)
+def configure(level: int = logging.INFO, stream: TextIO | None = None) -> None:
+    """Install one JSON handler on the root logger, replacing any; `stream` is `sys.stderr`
+    as it is when called, unless another is given."""
+    handler = logging.StreamHandler(sys.stderr if stream is None else stream)
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers[:] = [handler]

@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import re
+import sys
 from collections.abc import Iterator
 from typing import Any
 
@@ -18,15 +19,28 @@ from fylgja_core.credentials import Credential
 TIME = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$")
 
 
-@pytest.fixture
-def stream() -> Iterator[io.StringIO]:
+QUIETED = ("httpx", "httpcore")
+
+
+@pytest.fixture(autouse=True)
+def _restore_logging() -> Iterator[None]:
+    """Put back the root logger's handlers and level, and the HTTP clients' levels, that
+    `configure` changes."""
     root = logging.getLogger()
     saved, level = root.handlers[:], root.level
-    out = io.StringIO()
-    logs.configure(stream=out)
-    yield out
+    quieted = {name: logging.getLogger(name).level for name in QUIETED}
+    yield
     root.handlers[:] = saved
     root.setLevel(level)
+    for name, was in quieted.items():
+        logging.getLogger(name).setLevel(was)
+
+
+@pytest.fixture
+def stream() -> io.StringIO:
+    out = io.StringIO()
+    logs.configure(stream=out)
+    return out
 
 
 def lines(stream: io.StringIO) -> list[dict[str, Any]]:
@@ -67,8 +81,40 @@ def test_a_credential_field_renders_through_its_repr(stream: io.StringIO) -> Non
     assert lines(stream)[0]["credential"] == "Credential(username='admin', password='***')"
 
 
-def test_configure_replaces_the_handlers_and_quiets_the_http_clients(stream: io.StringIO) -> None:
-    logs.configure(stream=stream)
-    assert len(logging.getLogger().handlers) == 1
+def test_a_field_never_overrides_a_core_member(stream: io.StringIO) -> None:
+    forged = logs.fields(time="then", level="DEBUG", logger="fylgja.audit", message="forged", twin="t")
+    logging.getLogger("fylgja.x").warning("real", **forged)
+    (line,) = lines(stream)
+    assert TIME.match(line["time"])
+    assert (line["level"], line["logger"], line["message"], line["twin"]) == ("WARNING", "fylgja.x", "real", "t")
+
+
+def test_a_field_never_overrides_a_logged_exception(stream: io.StringIO) -> None:
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        logging.getLogger("fylgja.x").exception("failed", **logs.fields(exception="forged"))
+    (line,) = lines(stream)
+    assert "ValueError: boom" in line["exception"]
+
+
+def test_configure_replaces_the_handlers_and_quiets_the_http_clients() -> None:
+    root = logging.getLogger()
+    foreign = logging.StreamHandler(io.StringIO())
+    root.handlers[:] = [foreign, logging.NullHandler()]
+    logging.getLogger("httpx").setLevel(logging.DEBUG)
+    out = io.StringIO()
+    logs.configure(stream=out)
+    (handler,) = root.handlers
+    assert handler is not foreign and isinstance(handler, logging.StreamHandler) and handler.stream is out
+    assert isinstance(handler.formatter, logs.JsonFormatter)
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
+
+
+def test_configure_writes_to_stderr_as_it_is_when_called(monkeypatch: pytest.MonkeyPatch) -> None:
+    err = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", err)
+    logs.configure()
+    logging.getLogger("fylgja.x").info("hello")
+    assert json.loads(err.getvalue())["message"] == "hello"

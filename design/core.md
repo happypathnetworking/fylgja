@@ -4,9 +4,10 @@ This is the design of the new core: a Python rebuild of `fylgja-core` with a cle
 formats, many named twins, and runtimes behind a driver seam. Phases 2–8 are planned from
 it.
 
-- **Done:** phase 0 (the decisions, the constitution, this repository) and phase 1 (the
-  measurements on both runtimes, 2026-10-30), except the multi-host stage.
-- **Next:** the rest of phase 2, then the compiler; the multi-host stage when hosts are ready.
+- **Done:** phase 0 (the decisions, the constitution, this repository) and phase 1: the
+  measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
+  (2026-11-02).
+- **Next:** the rest of phase 2, then the compiler.
 - **Meanwhile:** the orchestrator stays in the archived repository and drives the frozen Go
   core there, the reference implementation. It moves here at cut-over
   ([D-005](decisions.md#d-005)). Until then the core is built and tested from blueprint
@@ -81,10 +82,10 @@ Measured on containerlab 0.79 locally and on clabernetes 0.10.1 in a kind cluste
 | Isolation | A lab or a namespace per twin works, with concurrent creates. Management reach between twins is closed on clabernetes by a NetworkPolicy per twin, and accepted locally | [D-019](decisions.md#d-019) |
 | Orphans | Locally, swept only through containerlab, since it leaves root-owned host entries. On clabernetes, the namespace delete sweeps the twin (49 s) | [D-019](decisions.md#d-019) |
 | clabernetes 0.10.1 | Installs from one pinned chart in 20 s. Fixture twins are Ready in 70–240 s | [D-017](decisions.md#d-017), [D-022](decisions.md#d-022) |
-| Node access | A LoadBalancer per node: SSH, gNMI and the push work through it. Auto-expose off, ports from the package | [D-020](decisions.md#d-020) |
+| Node access | A LoadBalancer per node: SSH, gNMI and the push work through it. Auto-expose off, ports from the package. Across hosts, each Service needs `externalTrafficPolicy: Local` (below) | [D-020](decisions.md#d-020), [D-037](decisions.md#d-037) |
 | Account-gated images | A private registry the cluster trusts, with a pull secret per namespace | [D-021](decisions.md#d-021) |
 | Memory | About 1.6–2 GiB per SR Linux node and 0.9–1.5 GiB per cEOS node, on both drivers. clabernetes' default request (512 Mi) is too low, so requests come from the package | [D-015](decisions.md#d-015), [D-022](decisions.md#d-022) |
-| Still open | The multi-host stage (below). One unexplained reading: an SR Linux marker read as present after its pod was replaced by a link-mode switch | — |
+| Still open | One unexplained reading: an SR Linux marker read as present after its pod was replaced by a link-mode switch. Scheduling at the packages' requests | [Open questions](decisions.md#open-questions) |
 
 ## The formats
 
@@ -331,12 +332,14 @@ cluster on 2026-10-30 unless marked "from its docs".
 | The `mgmt` block is ignored and binds are rejected (from its docs) | `plan` relies on neither. Per-twin management networks are the local driver's alone |
 | The controller fetches the image manifest from a registry before creating a pod | The account-gated cEOS image lives in a private registry, pulled through `Topology.spec.imagePull.pullSecrets` with the CA trusted by the controller's config ([D-021](decisions.md#d-021)) |
 | The default request is 200m CPU and 512 Mi per node | Requests come from the package's `cpu` and `memory_mb` |
+| Each node's Service is `externalTrafficPolicy: Cluster`, with no setting to change it; a patched value is kept across steps, pod replacements and a drain | `apply` patches each Service to `Local`, and `inspect` reports one that is not as drift ([D-037](decisions.md#d-037)) |
+| A drain moves a host's nodes to the other hosts as new pods, at the same LoadBalancer addresses | The loop sees each moved node's new incarnation and re-pushes it ([D-036](decisions.md#d-036)) |
 | No in-place upgrade from before 0.9; Kubernetes 1.31 or later, VXLAN and nftables required (from its docs) | Pin the clabernetes version in the driver's capabilities, and document the cluster prerequisites |
 | containerlab 0.81 inside clabernetes; 0.79 on the development host | Version skew between the two drivers: pin the local driver's containerlab to the version the clabernetes release embeds, so the kinds behave alike |
 
 The clabernetes driver is one driver behind the seam ([D-017](decisions.md#d-017)). Its
-development cluster is kind on one host; the production cluster is k3s on 2–3 hosts
-([D-022](decisions.md#d-022)).
+development cluster is kind on one host ([D-022](decisions.md#d-022)); the production
+cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-036)).
 
 ### Durability and state
 
@@ -387,8 +390,8 @@ development cluster is kind on one host; the production cluster is k3s on 2–3 
 0. **The baseline.** *Done.* The decision log ([decisions.md](decisions.md)), the
    constitution (`design/constitution.md`), the process (`CONTRIBUTING.md`) and this
    repository; the Go core frozen in the archived repository.
-1. **Measure both runtimes.** *Done on 2026-10-30, except the multi-host stage.* See "What
-   the measurements settled".
+1. **Measure both runtimes.** *Done on 2026-10-30, and the multi-host stage on 2026-11-02.*
+   See "What the measurements settled" and "The multi-host stage".
 2. **Formats 1.** *Started.* The schemas are current in [`formats/`](../formats/README.md),
    the packages are converted, and the fixtures are blueprints. The blueprint module
    (`core/src/fylgja_core/blueprint.py`) holds the id, the order rules and the cross-field
@@ -435,49 +438,61 @@ development cluster is kind on one host; the production cluster is k3s on 2–3 
 - **Orchestrator**: its pure and contract suites stay green, and a rehearsal passes on the
   new core.
 
-## Next: the multi-host stage
+## The multi-host stage (2026-11-02)
 
-The clabernetes measurements so far ran on a kind cluster on one host. The multi-host stage
-repeats them on 2–3 separate hosts running k3s, and decides the production cluster's shape
-([D-022](decisions.md#d-022)) and clabernetes for production
-([D-017](decisions.md#d-017)).
+The clabernetes measurements of 2026-10-30 ran on a kind cluster on one host. The
+multi-host stage repeated them on three Proxmox VMs running k3s v1.37.1+k3s1, each with
+8 vCPU, 24 GiB and 80 GB on spinning disks. It decided the production cluster's shape
+([D-036](decisions.md#d-036)) and confirmed clabernetes for production
+([D-017](decisions.md#d-017)). The facts are in
+[verified-facts.md](verified-facts.md#k3s-v1371k3s1-three-servers-with-clabernetes-0101).
 
-**Set-up:** k3s pinned by version, its server installed with `--disable servicelb
---disable traefik`, and MetalLB on the LAN. Agents join with `K3S_URL` and a token read from
-a file. The private registry's CA goes in `/etc/rancher/k3s/registries.yaml`.
+| Question | Answer | Decision |
+|---|---|---|
+| The cluster | Three k3s servers with embedded etcd, MetalLB 0.16.0 in layer 2, clabernetes 0.10.1, and the private registry under Podman on one host | [D-036](decisions.md#d-036) |
+| etcd | **Lost its leader on spinning disks** when three hosts unpacked an image at once, and k3s restarted on two servers. Relaxed timings and pulls one host at a time cut it to blips of 2–3 s. Production puts etcd on SSD | [D-036](decisions.md#d-036) |
+| Spread | The default scheduler put each three-node twin one node per host, so every link crossed hosts over VXLAN | — |
+| Steps across hosts | As on kind: default modes replace the cEOS pods (136–138 s); switching to `live` replaces every pod; `live` replaces none (25 s) | [D-015](decisions.md#d-015) |
+| Node access over the LAN | **Refused for some nodes** by the twin's NetworkPolicy, until each Service was set to `externalTrafficPolicy: Local` | [D-037](decisions.md#d-037) |
+| Isolation | Holds over TCP. Ping is no test: k3s's policy controller accepts ICMP echo into every pod | [D-019](decisions.md#d-019), [D-037](decisions.md#d-037) |
+| Five twins | Three created at once were Ready in 89–119 s with the images present. 15 nodes, 15 addresses; every node's push transport, SSH and gNMI answered | — |
+| Use | About 6.8 cores and 23 GiB for the five twins. Per node: SR Linux 0.35–0.5 core and 1.6 GiB, cEOS 0.2–0.45 core and 0.9 GiB. The packages' `cpu` is now 0.5 | [D-015](decisions.md#d-015) |
+| Drain | One host drained in 6 s; every twin Ready again in 94–114 s on the other two, at the same addresses, its moved nodes new pods. Nothing moved back after the uncordon | [D-036](decisions.md#d-036) |
+| Teardown | 13–14 s for an SR Linux twin, 46–48 s for a mixed one; nothing left by label | [D-019](decisions.md#d-019) |
 
-**What it tests:**
-- the install, the private registry, both fixtures, link and node steps under each
-  `link_apply_mode`, two twins in two namespaces, node access and memory, as on kind;
-- pod spread across hosts;
-- a cross-host link (VXLAN) under link and node steps;
-- five concurrent twins, the first scale;
-- node access from off the cluster, over the LAN.
+The twins ran on clabernetes' default requests (200m CPU, 512 Mi), not the packages'. The
+packages' `cpu: 0.5` is set from what the nodes used. The scheduler has not yet placed
+twins at the packages' requests ([open questions](decisions.md#open-questions)).
 
-**Host sizing.** Five concurrent twins: three three-node SR Linux twins and two mixed ones,
-which is 11 SR Linux and 4 cEOS nodes.
+### Production cluster sizing
 
-| Per host | Minimum | Recommended | Why |
-|---|---|---|---|
-| vCPU | 4 | 8 | The packages request 1 CPU per node: 15 nodes plus k3s, clabernetes and MetalLB is about 17 across 3 hosts. Lower `cpu` if real use is well below it |
-| Memory | 12 GiB | 16 GiB | About 2 GiB per SR Linux node and 1.5 GiB per cEOS node is 28 GiB, plus about 2 GiB per host (OS, k3s, clabernetes). 16 GiB absorbs an uneven spread |
-| Disk | 60 GB | 80 GB | SR Linux 5.2 GB and cEOS 2.9 GB, stored compressed and unpacked by containerd. The registry's host needs 10 GB more |
-| Count | 2 | 3 | Three hosts test spread and cross-host VXLAN properly, and leave a host to drain |
+Five twins of 20 nodes is 100 nodes. At the packages' requests (SR Linux 2 GiB and 0.5 CPU,
+cEOS 1.5 GiB and 0.5 CPU) that is up to 200 GiB and 50 CPUs, which two hosts must hold
+while the third is drained. So: **three hosts of 128 GiB and 32 vCPU each**, with etcd on
+SSD ([D-036](decisions.md#d-036)). The trial's three hosts of 8 vCPU and 24 GiB held five
+three-node twins with a host drained, with 10–11 GiB to spare on each remaining host.
 
-Also needed on each host:
+### Cluster prerequisites
+
+On each host:
 - x86_64, with no nested virtualization;
+- SSD for etcd, or else `etcd-arg` `heartbeat-interval=500` and `election-timeout=5000` in
+  `/etc/rancher/k3s/config.yaml`, with images pulled one host at a time;
+- k3s pinned by version, installed with `--disable servicelb --disable traefik`;
+- the private registry's CA in `/etc/rancher/k3s/registries.yaml`;
 - the `vxlan` and `nf_tables` modules;
 - on Ubuntu, the AppArmor widening for SR Linux's `rsyslogd` (`design/verified-facts.md`);
 - inotify limits of at least 512 instances and 524,288 watches;
 - time sync.
 
-And between them:
-- one L2 segment for MetalLB, with at least 32 free LAN addresses (one per node);
-- open: TCP 6443 and 10250, UDP 8472 (flannel), UDP 14789–14790 and TCP 14791
-  (clabernetes).
+Between them:
+- one L2 segment for MetalLB, with a pool outside DHCP of one address per node of every twin
+  at once;
+- open: TCP 6443 and 10250, TCP 2379–2380 (etcd between servers), UDP 8472 (flannel),
+  UDP 14789–14790 and TCP 14791 (clabernetes).
 
-Production's projection, five twins of 20 nodes (about 180 GiB of nodes), is about three
-hosts of 96 GiB and 32 or more vCPU each. The multi-host stage refines it.
+And beside them, the private registry on a host outside the cluster, which is never drained
+with it.
 
 ## Risks to watch
 
@@ -502,4 +517,10 @@ hosts of 96 GiB and 32 or more vCPU each. The multi-host stage refines it.
 - **A seam shaped by containers alone.** Hardware claims rather than creates. The paper
   `hardware` driver above checks the seam before it sets.
 - **An unexplained reading.** An SR Linux marker read as present after its pod was replaced
-  by a link-mode switch. Re-check it on the multi-host stage.
+  by a link-mode switch. The multi-host stage pushed no marker, so it is still open; the
+  driver conformance suite's step scenarios re-check it.
+- **etcd's disks.** On spinning disks, etcd lost its leader under parallel image pulls.
+  Production needs SSD; relaxed timings are only a fallback ([D-036](decisions.md#d-036)).
+- **The Services' traffic policy is a patch.** clabernetes has no setting for
+  `externalTrafficPolicy`, so the driver patches it and watches for drift
+  ([D-037](decisions.md#d-037)). Worth asking upstream for a field.

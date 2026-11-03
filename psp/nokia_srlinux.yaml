@@ -64,7 +64,7 @@ runtime:
     image:
       ref: ghcr.io/nokia/srlinux:24.7.1   # the image every value here was measured on; public, so either driver may pull it
     resources:
-      cpu: 1
+      cpu: 0.5                        # 0.35-0.5 core measured per node, five twins on three k3s hosts (2026-11-02); clabernetes requests it, so it sizes the cluster
       memory_mb: 2048                 # 1641 MiB measured, three nodes, steady over a minute; x1.25. About 1.6-2 GiB per node on both containerlab drivers
     deploy_timeout_s: 180             # 39.4s measured, three nodes, host swapping; x4.5. An image pull counts against it
     destroy_timeout_s: 60             # 0.8-2.0s measured, one to three nodes, ready or half-deployed; x30

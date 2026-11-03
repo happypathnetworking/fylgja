@@ -185,7 +185,7 @@ in software and hardware in silicon, so it is computed per deployment and never 
 | Driver | Use | Isolation unit | Node access |
 |---|---|---|---|
 | `containerlab` (local) | development, the live tier, a single lab host | a lab named for the twin, with its own management network and subnet | the host's management network |
-| `clabernetes` | production, on Kubernetes | a namespace per twin, with a NetworkPolicy | a LoadBalancer per node ([D-020](decisions.md#d-020)) |
+| `clabernetes` | production, on Kubernetes | a namespace per twin, with a NetworkPolicy | a LoadBalancer per node, `externalTrafficPolicy: Local` ([D-020](decisions.md#d-020), [D-037](decisions.md#d-037)) |
 | `hardware` | a later release | a reservation of devices from a pool | the devices' own management addresses |
 
 - Both containerlab drivers render the same `topology.clab.yml`, named for the twin, with
@@ -193,7 +193,9 @@ in software and hardware in silicon, so it is computed per deployment and never 
   not. The clabernetes driver wraps it in a `Topology` resource.
 - Account-gated images, such as cEOS, live in a private registry the cluster trusts
   ([D-021](decisions.md#d-021)). kind is the cluster for developing the clabernetes driver
-  ([D-022](decisions.md#d-022)).
+  ([D-022](decisions.md#d-022)). The production cluster is three k3s servers with embedded
+  etcd on SSD, MetalLB in layer 2, and the registry on a host outside the cluster
+  ([D-036](decisions.md#d-036)).
 - The hardware driver is not built; its paper shape checks the seam. The local driver
   stays sufficient for development and the live tier, so neither needs Kubernetes.
 
@@ -336,9 +338,12 @@ Every twin has a name and its own isolation unit
   found by a label sweep: through containerlab locally, and by deleting the namespace on
   clabernetes.
 - A twin that cannot fit is refused at admission (`admission.capacity`), with the reason.
-- On clabernetes, a NetworkPolicy per namespace keeps other twins' pods out. Locally, two
-  labs' management networks reach each other through the host. That is accepted for
-  development and the live tier, and the local driver declares it (`isolation: names`).
+- On clabernetes, a NetworkPolicy per namespace keeps other twins' pods out. Each node's
+  LoadBalancer is set to `externalTrafficPolicy: Local` so the policy sees the client's own
+  address ([D-037](decisions.md#d-037)).
+- Locally, two labs' management networks reach each other through the host. That is
+  accepted for development and the live tier, and the local driver declares it
+  (`isolation: names`).
 
 ### 4.10 Platform and probe packages
 
@@ -406,8 +411,6 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 
 ## 7. Open questions
 
-- A cluster of two or three separate hosts is still to be tried (the clabernetes driver is
-  verified on a kind cluster on one host).
 - A bastion or an ingress per twin, should LoadBalancer addresses run short.
 - Whether the blueprint should restrict node names, for example to DNS-1123, and whether the
   40-character twin name fits every runtime's own limits.

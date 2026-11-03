@@ -202,7 +202,8 @@ Terms are the [glossary](../docs/glossary.md)'s. Dates are written in full, `YYY
 
 ## clabernetes 0.10.1
 
-On kind v0.33.0 (below).
+On kind v0.33.0 (below), unless marked; on three k3s hosts in
+[its own section](#k3s-v1371k3s1-three-servers-with-clabernetes-0101).
 
 - **Install.** Helm OCI `oci://ghcr.io/clabernetes/clabernetes/clabernetes`, version
   `0.10.1` (no `v`; digest `sha256:d98a5b25…`), installs with `--wait` in 20 s: 3
@@ -237,6 +238,8 @@ On kind v0.33.0 (below).
 - **Reach between twins.** The pod network lets one twin's node reach another twin's pod.
   A NetworkPolicy refuses it and keeps the push, the links and Ready. The policy admits the
   twin's own pods, the `c9s` namespace and `0.0.0.0/0` except the pod CIDR. *(2026-10-30)*
+  On k3s across hosts it also needs each LoadBalancer at `externalTrafficPolicy: Local`
+  (below). *(2026-11-02)*
 - **A private registry** (registry 3.0.0, TLS by a private CA, htpasswd) on loopback and
   the kind network. *(2026-10-30)*
   - The controller trusts it via `Config.spec.imagePull.registryMetadataTrust`.
@@ -253,6 +256,66 @@ On kind v0.33.0 (below).
 - **kind needs no root.** The `vxlan` module loaded on demand. *(2026-10-30)*
 - **kindnet enforces NetworkPolicy** (clabernetes, above). *(2026-10-30)*
 - The empty three-node cluster holds about 1 GiB. *(2026-10-30)*
+
+---
+
+## k3s v1.37.1+k3s1, three servers, with clabernetes 0.10.1
+
+Three Proxmox VMs, each 8 vCPU, 24 GiB and 80 GB on spinning disks the VMs share; Ubuntu
+26.04.1, kernel 7.0.0-42; k3s with embedded etcd, containerd 2.3.4-k3s1, flannel VXLAN and
+k3s's embedded network policy controller (kube-router v2.6.3); MetalLB 0.16.0 in layer 2 on
+the LAN; clabernetes 0.10.1 at its default requests (200m CPU, 512 Mi). Five twins: three
+three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
+
+- **etcd on spinning disks shared by the hosts** loses its leader when the three hosts
+  unpack a 5.2 GB image at once. Applies took 5 s against an expected 100 ms, and k3s
+  restarted on two servers, cancelling the pulls. With `etcd-arg` `heartbeat-interval=500`
+  and `election-timeout=5000` in `/etc/rancher/k3s/config.yaml`, and images pulled one host
+  at a time, the outages fell to blips of 2–3 s. *(2026-11-02)*
+- **A private registry is trusted** by `configs."<host:port>".tls.ca_file` in
+  `/etc/rancher/k3s/registries.yaml`, after a k3s restart (about 31 s a host). *(2026-11-02)*
+- **First pulls.** A three-node SR Linux twin from ghcr was Ready 257 s after its apply, its
+  three hosts pulling at once. cEOS pulled from the private registry in 107–111 s per host.
+  With the images present, a mixed twin was Ready in 107 s, and three twins created at once
+  in 89–119 s. *(2026-11-02)*
+- **Spread.** The default scheduler put each three-node twin's nodes one per host, so every
+  link crossed hosts over VXLAN. *(2026-11-02)*
+- **Steps across hosts** behave as on kind. *(2026-11-02)*
+  - Default modes: a cEOS link change replaced both cEOS pods (136–138 s); the SR Linux pod
+    was kept.
+  - Switching to `live` replaced every pod (137 s).
+  - `live`: no pod was replaced (25 s), and cEOS ports went `notconnect` and `connected`
+    across hosts.
+- **A LoadBalancer with `externalTrafficPolicy: Cluster`** reaches a pod on another host with
+  its source rewritten to the announcing host's flannel address (`10.42.N.0`), inside the
+  pod CIDR. *(2026-11-02)*
+  - A policy admitting `0.0.0.0/0` except the pod CIDR then refuses it. That hits whichever
+    nodes MetalLB announces from a host other than the pod's.
+  - `Local` keeps the client's address, and MetalLB then announces from the pod's host.
+  - clabernetes has no setting for it. It keeps a patched value across Topology updates, pod
+    replacements and a drain.
+- **k3s's network policy controller accepts ICMP echo into every pod**, whatever the policy
+  (its `KUBE-NWPLCY-COMMON` chain). It refuses other traffic with REJECT, which a client sees
+  as connection refused. A pod started a few seconds before is not yet in the controller's
+  sets. Test isolation over TCP, from a pod that has run for 15 s. Over TCP, a twin's pod
+  could not reach another twin's node on 22 or 57400, and a pod of the same twin
+  could. *(2026-11-02)*
+- **Five twins at once** (11 SR Linux and 4 cEOS nodes) took 15 LoadBalancer addresses.
+  Every node's push transport, SSH and gNMI answered from off the cluster. *(2026-11-02)*
+- **Use per node**, by `kubectl top`: SR Linux 0.35–0.5 core and 1.58–1.63 GiB; cEOS
+  0.2–0.45 core and 0.89–0.96 GiB. The five twins used about 6.8 cores and 23 GiB, leaving
+  14.4–15.2 GiB available on each host. *(2026-11-02)*
+- **Drain.** *(2026-11-02)*
+  - Draining a host holding one node of each of the five twins evicted in 6 s.
+  - Each twin was Ready again on the other two hosts in 94–114 s, each node at its same
+    LoadBalancer address. The moved nodes are new pods.
+  - The two remaining hosts held 10.1 and 11.4 GiB available, with about 2.5 of 8 cores busy
+    on each.
+  - etcd stayed in quorum, with one blip of 2–3 s just after the evictions.
+  - Nothing moved back after the uncordon.
+  - A drain refuses a pod with no controller, until it is deleted.
+- **Namespace delete** removed an SR Linux twin in 13–14 s and a mixed one in 46–48 s,
+  leaving nothing by its label and releasing its LoadBalancer addresses. *(2026-11-02)*
 
 ---
 

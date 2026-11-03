@@ -78,7 +78,7 @@ runtime:
       ref: ceos:4.32.0.2F             # obtained from Arista with an account and imported under this tag
       pull_secret: arista-ceos        # account-gated: the local driver requires the image present and never pulls it; clabernetes pulls it with this secret
     resources:
-      cpu: 1
+      cpu: 0.5                        # 0.2-0.45 core measured per node, five twins on three k3s hosts (2026-11-02); clabernetes requests it, so it sizes the cluster
       memory_mb: 1536                 # 889-1541 MiB measured over four labs, steady across readings minutes apart; the highest reading
     deploy_timeout_s: 300             # 95.5s measured, three mixed nodes, the host swapping and the kind's post-deploy holding the deploy open; x3
     destroy_timeout_s: 60             # 1.47s for one node, 2.08s for the three-node mixed lab; x28

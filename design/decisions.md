@@ -7,9 +7,11 @@ paths not taken and why. Check the rejected alternatives here before proposing o
 already have been weighed.
 
 - **Append-only from this baseline (2026-10-31).** A changed decision is a new entry that
-  supersedes the old one, and a number is never reused. The constitution is amended only by
-  citing an entry.
-- **Every entry here is in force.** Decisions taken before the baseline, and the
+  supersedes the old one, and a number is never reused. The old entry keeps its text, and
+  its status line names the entry that superseded it, the date, and the part, when only a
+  part. The constitution is amended only by citing an entry.
+- **Every entry here is in force**, except where its status line says a later entry
+  superseded it. Decisions taken before the baseline, and the
   orchestrator's own (reading Infrahub, stages, the checks, the rehearsal's report), are
   recorded in the project's archived repository. The orchestrator's decisions return here,
   restated, when it moves here.
@@ -57,6 +59,8 @@ already have been weighed.
 | [D-033](#d-033) | A lighter process: design document, decision entry, pull request | Process and repository |
 | [D-034](#d-034) | Tests are tiered by cost | Process and repository |
 | [D-035](#d-035) | The schemas' `$id` namespace is the repository's GitHub URL | Process and repository |
+| [D-036](#d-036) | The production cluster: three k3s servers with embedded etcd on SSD, MetalLB in layer 2, the registry off the cluster | Runtimes and drivers |
+| [D-037](#d-037) | Each node's LoadBalancer keeps the client's address: `externalTrafficPolicy: Local`, set by the clabernetes driver | Runtimes and drivers |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -915,7 +919,9 @@ the first target is about five at once, of tens of nodes each.
 <a id="d-020"></a>
 ### D-020 — Node access on clabernetes: a LoadBalancer per node
 
-**Status:** Accepted at the baseline (2026-10-31).
+**Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-037](#d-037) on
+2026-11-02, which sets each Service's `externalTrafficPolicy` to `Local`. A LoadBalancer
+per node, auto-expose off and `endpoints()` stand.
 
 #### Context
 
@@ -975,7 +981,9 @@ image present on a host is not enough.
 <a id="d-022"></a>
 ### D-022 — kind is the cluster for the clabernetes driver's development
 
-**Status:** Accepted at the baseline (2026-10-31).
+**Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-036](#d-036) on
+2026-11-02, which decides the production cluster's shape that this entry left to the
+multi-host trial. kind for development stands.
 
 #### Context
 
@@ -1003,6 +1011,141 @@ hosts. The production cluster's shape needs separate hosts to decide.
 
 - Memory sizes a cluster: about 1.6–2 GiB per SR Linux node and 0.9–1.5 GiB per cEOS node,
   as locally. Five twins of 20 nodes need about 180 GiB.
+
+<a id="d-036"></a>
+### D-036 — The production cluster: three k3s servers with embedded etcd on SSD, MetalLB in layer 2, the registry off the cluster
+
+**Status:** Accepted 2026-11-02. Supersedes [D-022](#d-022) in the production cluster's
+shape, which D-022 left to the multi-host trial.
+
+#### Context
+
+The multi-host trial ran on 2026-11-02 on three Proxmox VMs, each with 8 vCPU, 24 GiB and
+80 GB on spinning disks the VMs share. It used k3s v1.37.1+k3s1, MetalLB 0.16.0 and
+clabernetes 0.10.1. It ran five twins at once (11 SR Linux and 4 cEOS nodes), steps across
+hosts, a drain of one host, and teardown ([verified-facts.md](verified-facts.md)).
+
+- **Spread.** The default scheduler put each three-node twin's nodes one per host, so every
+  link crossed hosts over VXLAN. Steps behaved as on kind.
+- **etcd.** The three hosts unpacked the 5.2 GB SR Linux image at once. etcd's applies took
+  5 s against an expected 100 ms, the leader was lost, and k3s restarted on two servers,
+  cancelling the pulls.
+- **Drain.** One host drained in 6 s. Every twin was Ready again on the other two within
+  94–114 s, each node at the same LoadBalancer address. etcd stayed in quorum, with one
+  blip of 2–3 s.
+- **Use.** The five twins used about 6.8 cores and 23 GiB.
+
+#### Options considered
+
+- **The control plane.**
+  - *One server and agents.* Rejected: draining or losing the server stops the API that the
+    core and clabernetes both need.
+  - *An external datastore for k3s.* Rejected: one more service to run, for nothing
+    embedded etcd lacks at this size.
+  - *Three servers with embedded etcd.* Chosen: quorum survives one host drained, which the
+    trial did.
+- **etcd's disks.**
+  - *Spinning disks, with etcd's timings relaxed.* `heartbeat-interval=500` and
+    `election-timeout=5000`, with images pulled one host at a time, cut the outages to blips
+    of 2–3 s. Kept as the fallback for a cluster without SSD, not as the production shape:
+    the blips remain, and a pull the operator did not stagger brings the outages back.
+  - *SSD.* Chosen.
+- **LoadBalancer addresses.**
+  - *k3s's own service load balancer.* Rejected: it binds host ports, so every SR Linux
+    node's 22 and 57400 would collide on each host.
+  - *MetalLB in BGP mode.* Rejected for now: one LAN segment needs no routing.
+  - *MetalLB in layer 2, one address per node from a pool outside DHCP.* Chosen
+    ([D-020](#d-020)).
+- **Where the private registry runs** ([D-021](#d-021)).
+  - *In the cluster.* Rejected: clabernetes reads an image's manifest from the registry
+    before it creates a pod, so the registry must answer while pods move. A registry pod on
+    the drained host would be unreachable just when the evicted pods need it.
+  - *On one cluster host, outside Kubernetes.* What the trial did, under Podman on one host.
+    Rejected for production: that host can never be drained.
+  - *On a host outside the cluster*, or an existing private registry. Chosen.
+
+#### Decision
+
+- **Three k3s servers with embedded etcd**, k3s pinned by version, installed with
+  `--disable servicelb --disable traefik`. Flannel VXLAN and k3s's embedded network policy
+  controller stay: the controller enforces [D-019](#d-019)'s NetworkPolicy.
+- **etcd on SSD.** A cluster on spinning disks needs the relaxed timings above, with images
+  pulled one host at a time.
+- **MetalLB in layer 2**, its pool outside DHCP, one address per node.
+- **The private registry on a host outside the cluster.** Each node trusts its CA through
+  `/etc/rancher/k3s/registries.yaml`, and clabernetes through
+  `Config.spec.imagePull.registryMetadataTrust`.
+- **Host size, projected from the trial.** Five twins of 20 nodes is 100 nodes. At the
+  packages' requests (SR Linux 2 GiB and 0.5 CPU, cEOS 1.5 GiB and 0.5 CPU), that is up to
+  200 GiB and 50 CPUs. Two hosts must hold it all while the third is drained. So: **three
+  hosts of 128 GiB and 32 vCPU each**.
+
+#### Consequences
+
+- **Drain one host at a time.** A drained host's nodes come back as new pods on the others,
+  each with a new incarnation and without its pushed configuration. The core re-pushes
+  them on the changed incarnation ([D-023](#d-023)). Nothing moves back after the uncordon.
+- **A drain refuses a pod with no controller.** Nothing of a twin's is one, but a
+  diagnostic pod left in a twin's namespace blocks the drain until it is deleted.
+- **The cluster's prerequisites are the operator's**, listed in [core.md](core.md): the
+  modules, the ports between hosts, the AppArmor widening and the address pool.
+- The relaxed etcd timings and the staggered pulls are an operating note for a cluster
+  without SSD, not something the core does.
+
+<a id="d-037"></a>
+### D-037 — Each node's LoadBalancer keeps the client's address: `externalTrafficPolicy: Local`, set by the clabernetes driver
+
+**Status:** Accepted 2026-11-02. Supersedes [D-020](#d-020) in the Services' traffic
+policy; its LoadBalancer per node, auto-expose off and `endpoints()` stand.
+
+#### Context
+
+On the multi-host trial, [D-019](#d-019)'s NetworkPolicy refused LAN access to some nodes
+and not others.
+
+- clabernetes 0.10.1 creates each node's Service with `externalTrafficPolicy: Cluster`, and
+  has no setting for it.
+- MetalLB in layer 2 announces each address from one host, chosen per Service, often not the
+  host running the pod.
+- kube-proxy then forwards from the announcing host to the pod's host, with the source
+  rewritten to the announcing host's flannel address (`10.42.N.0`). That address is inside
+  the pod CIDR, which the policy's `except` refuses.
+- So a node was unreachable whenever MetalLB announced its address from another host.
+  kind's single host had not shown it.
+
+#### Options considered
+
+- **Admit the hosts' flannel addresses in the policy.** Rejected: it ties `plan` to one
+  CNI's addressing, and admits whatever any host sends, host-network pods included.
+- **No NetworkPolicy on clabernetes.** Rejected: twins would reach each other's nodes
+  ([D-019](#d-019)).
+- **`externalTrafficPolicy: Local`.** Chosen.
+  - The source is not rewritten, so the policy sees the client's LAN address.
+  - MetalLB announces from the pod's host.
+  - The node sees who connected, which an audit trail wants
+    ([Constitution X](constitution.md#x-report-honestly)).
+  - Its cost, dropping traffic that arrives on a host without the pod, does not arise: each
+    Service has one pod, and MetalLB announces from its host only.
+- **A field in clabernetes for it.** Worth asking upstream. It replaces the patch only once
+  a release has it.
+
+#### Decision
+
+- **The clabernetes driver's `apply` patches each of a twin's Services** to
+  `externalTrafficPolicy: Local`, once the controller has created them.
+- **`inspect` reports a Service that is not `Local` as drift**, and the loop patches it
+  again.
+- Verified on the trial: clabernetes keeps the patched value across Topology updates, pod
+  replacements and a drain, and a node keeps its address through a drain.
+
+#### Consequences
+
+- The driver's service account needs `patch` on `services` in twin namespaces.
+- A Service clabernetes deletes and re-creates, for a node removed and added again, comes
+  back `Cluster` until the next reconcile patches it.
+- **Ping is no test of the policy.** k3s's network policy controller accepts ICMP echo into
+  every pod, whatever the policy. The driver conformance suite tests isolation over TCP,
+  from a pod that has run for at least 15 s.
 
 ## The reconcile loop and state
 
@@ -1723,11 +1866,14 @@ becomes an entry then.
 <a id="open-questions"></a>
 ## Open questions
 
-- **The production cluster's shape** ([D-017](#d-017), [D-022](#d-022)). It waits for the
-  multi-host trial on two or three separate hosts with k3s, which has not run.
 - **An SR Linux configuration marker after a pod replacement** on clabernetes
   ([D-015](#d-015)). In one reading the marker was present after a link-mode switch to
   `restart` or `recreate` replaced the pod, and absent after the switch to `live`.
-  Unexplained; to be re-checked on the multi-host trial.
+  Unexplained. The multi-host trial pushed no marker, so it was not re-checked there; the
+  driver conformance suite's step scenarios read it.
+- **Scheduling at the packages' requests.** The multi-host trial ran on clabernetes' default
+  requests (200m CPU, 512 Mi), so neither the spread nor the drain was exercised with the
+  packages' 0.5 CPU and 1.5–2 GiB ([D-036](#d-036)). The driver conformance suite's
+  five-twin scenario does.
 - **The Temporal fallback** ([D-023](#d-023)). Whether the core killed mid-run on
   clabernetes resumes without a manual step.

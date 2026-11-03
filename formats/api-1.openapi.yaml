@@ -173,6 +173,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "501": { $ref: "#/components/responses/NotBuilt" }
 
   /v1/packages:validate:
     post:
@@ -572,6 +573,13 @@ components:
           schema: { $ref: "problem-1.schema.json" }
     Unprocessable:
       description: Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected), every fault in findings.
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    NotBuilt:
+      description: >-
+        What this core's phase does not build yet (api.unbuilt): a route, or a change it would make; the
+        detail names the phase that builds it. Clients show it and do not retry.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }

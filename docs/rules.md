@@ -155,13 +155,21 @@ The `Ready` condition's reasons:
 
 ## Problems: the API
 
-Answered as problem documents by the server. The rest of the API's rules arrive with its routes.
+Answered as problem documents by the server. A blueprint its loader refuses is `400`, under
+the first problem's rule ([a document refused by its loader](#problems-a-document-refused-by-its-loader)),
+with every problem a finding whose object is its pointer.
 
 | Rule | Status | Means |
 |---|---|---|
 | `auth.token.missing` | 401 | the request has no `Authorization: Bearer <token>` header (`GET /v1/version` needs none) |
 | `auth.token.unknown` | 401 | the bearer token is not one a principal holds; the message never carries it |
 | `auth.forbidden` | 403 | the principal is known and is not allowed the call |
-| `request.invalid` | 400 | the request is malformed: a body that is not JSON, a parameter of the wrong form |
+| `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a parameter of the wrong form |
+| `request.not_found` | 404 | API 1 has no such path |
+| `request.method` | 405 | the path does not take the method; the `Allow` header names those it takes |
+| `blueprint.not_found` | 404 | no blueprint is filed under the id, or the id is not one (64 lowercase hex digits) |
+| `bundle.not_found` | 404 | no bundle is filed under the id, or the id is not one |
 | `bundle.rejected` | 422 | the blueprint compiles to no bundle; the findings give every reason |
 | `plan.rejected` | 422 | the bundle has no plan on the driver; the findings give every reason |
+| `api.unbuilt` | 501 | what this core's phase does not build yet: the bundle diff; the detail names the phase that builds it |
+| `server.error` | 500 | the server failed; the answer names nothing of the fault, which its log holds with the traceback |

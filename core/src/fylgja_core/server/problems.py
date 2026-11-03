@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from starlette.responses import Response
 
 from fylgja_core import documents
-from fylgja_core.documents import Rejected
+from fylgja_core.documents import Problem, Rejected
 from fylgja_core.findings import Finding
 from fylgja_core.problem import ProblemDocument
 
@@ -69,9 +69,13 @@ def problem(
     return Response(json.dumps(documents.encode(doc)), status_code=status, media_type=MEDIA_TYPE)
 
 
+def findings_of(found: Sequence[Problem]) -> list[Finding]:
+    """A loader's problems as findings: each an error at its pointer (`/` for the whole document)."""
+    return [Finding(rule=p.rule, severity="error", object=p.pointer or "/", message=p.detail) for p in found]
+
+
 def from_rejected(status: int, e: Rejected, *, instance: str | None = None) -> Response:
     """The problem response for a refused document: its first problem's rule and detail, and
     every problem as a finding at its pointer."""
     first = e.problems[0]
-    findings = [Finding(rule=p.rule, severity="error", object=p.pointer or "/", message=p.detail) for p in e.problems]
-    return problem(status, first.rule, first.detail, findings=findings, instance=instance)
+    return problem(status, first.rule, first.detail, findings=findings_of(e.problems), instance=instance)

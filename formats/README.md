@@ -72,6 +72,10 @@ relative to them.
     and `driver` and `allow_restart` only when it sets them. The server fills what is absent
     (its configured driver, `false`) and writes the whole spec, which the twin record still
     requires.
+15. **A package validation's verdict has an empty `subject`** since phase 4: no id applies to
+    a package the request carried, so findings-1's `subject` may hold none.
+16. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
+    builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff.
 
 ## Settled by measurement (2026-10-30)
 

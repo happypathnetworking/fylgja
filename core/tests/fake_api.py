@@ -82,6 +82,13 @@ def _templates() -> list[tuple[re.Pattern[str], str]]:
     return found
 
 
+def operation(request: httpx.Request) -> tuple[str, str]:
+    """The path template and the method, lowercase, of the API 1 operation a request names; its
+    parameters and body unchecked, so a test of a malformed request can hold the answer to it."""
+    template, _ = _operation(request)
+    return template, request.method.lower()
+
+
 def _operation(request: httpx.Request) -> tuple[str, dict[str, str]]:
     raw = request.url.raw_path.decode().partition("?")[0]
     for pattern, template in _templates():

@@ -226,3 +226,16 @@ def test_plan_is_pure() -> None:
     """Constitution V: no I/O, clock or environment. The imports say so, as the compiler's do."""
     imported = imports((SRC / "containerlab" / "plan.py").read_text())
     assert imported <= PURE_IMPORTS | MODEL_IMPORTS, imported - (PURE_IMPORTS | MODEL_IMPORTS)
+
+
+GOLDEN = ROOT / "testdata" / "deployment" / "containerlab"
+
+
+@pytest.mark.parametrize("name", ["three-node", "mixed", "lossy", "three-node-probed"])
+def test_the_plan_is_the_golden_deployment(name: str) -> None:
+    c = compiler.compile(blueprint.load(ROOT / f"testdata/blueprint/{name}.json"), PLATFORMS, PROBES)
+    p = clab_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, name, {"lab": name, "mgmt_subnet": "172.20.1.0/24"})
+    assert p.files["topology.clab.yml"] == (GOLDEN / name / "topology.clab.yml").read_bytes()
+    encoded = documents.encode(p.deployment)
+    assert encoded == json.loads((GOLDEN / name / "deployment.json").read_text())
+    assert deployment.validate(encoded) == []

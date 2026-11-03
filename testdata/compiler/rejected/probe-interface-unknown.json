@@ -1,0 +1,96 @@
+{
+ "blueprint_version": "1",
+ "network": {
+  "devices": [
+   {
+    "name": "e1",
+    "platform": "arista_eos",
+    "interfaces": [
+     {
+      "name": "Ethernet1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet10",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Management1",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "hostname e1\ninterface Ethernet1\n   no shutdown\n"
+   },
+   {
+    "name": "s1",
+    "platform": "nokia_srlinux",
+    "interfaces": [
+     {
+      "name": "ethernet-1/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/10",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/11",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/12",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "mgmt0",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "set / system name host-name s1\nset / interface ethernet-1/1 admin-state enable\n"
+   }
+  ],
+  "links": [
+   {
+    "a": {
+     "device": "e1",
+     "interface": "Ethernet1"
+    },
+    "b": {
+     "device": "s1",
+     "interface": "ethernet-1/1"
+    }
+   }
+  ]
+ },
+ "probes": [
+  {
+   "name": "s1-loop",
+   "format": "ping",
+   "endpoints": [
+    {
+     "device": "s1",
+     "interface": "ethernet-1/10",
+     "address": "10.1.10.2/24",
+     "gateway": "10.1.10.1"
+    },
+    {
+     "device": "s1",
+     "interface": "ethernet-1/13",
+     "address": "10.1.11.2/24",
+     "gateway": "10.1.11.1"
+    }
+   ]
+  }
+ ],
+ "source": {
+  "rejection_fixture": "Host b names s1:ethernet-1/13, which s1 lacks: probe.interface.unknown on s1-loop/b. A compiler rejection fixture: a valid blueprint 1 the compiler refuses; tests/test_compiler.py says what it must report."
+ }
+}

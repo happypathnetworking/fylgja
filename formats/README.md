@@ -92,3 +92,6 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
   environment variables?
 - **Admission's demand.** Are `cpu` and `memory_mb` sums enough, or does clabernetes need
   per-node requests in the deployment?
+- **The deployment id and the allocation.** The deployment schema's `$comment` hashes
+  `{driver, twin, bundle_id, files}`, while the `allocation` description says it is hashed
+  with the rest. The driver's `plan` settles which, and the id function waits for it.

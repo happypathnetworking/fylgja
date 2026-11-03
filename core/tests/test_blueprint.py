@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 import rfc8785
 
-from fylgja_core import blueprint
-from fylgja_core.blueprint import Problem
+from fylgja_core import blueprint, documents
+from fylgja_core.documents import Problem, Rejected
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "testdata" / "blueprint"
@@ -134,3 +134,43 @@ def test_every_problem_is_reported_in_one_pass() -> None:
     doc["probes"][0]["endpoints"][0]["gateway"] = "10.9.9.1"
     found = rules(blueprint.validate(doc))
     assert {blueprint.RULE_UNSORTED, blueprint.RULE_GATEWAY_OUTSIDE} <= found
+
+
+def test_a_fixture_decodes_to_its_model_and_encodes_back_unchanged() -> None:
+    doc = load("three-node-probed")
+    bp = blueprint.decode(doc)
+    assert isinstance(bp, blueprint.Blueprint)
+    assert [d.name for d in bp.network.devices] == ["n1", "n2", "n3"]
+    assert bp.network.devices[0].interfaces[-1] == blueprint.Interface(name="mgmt0", mgmt_only=True, enabled=True)
+    assert bp.network.links[0] == blueprint.Link(
+        a=blueprint.Endpoint(device="n1", interface="ethernet-1/1"),
+        b=blueprint.Endpoint(device="n2", interface="ethernet-1/1"),
+    )
+    assert bp.probes[0].name == "n1-loop" and bp.probes[0].endpoints[1].gateway == "10.1.11.1"
+    assert bp.source is not None and bp.source["envelope"]["branch"] == "fylgja-fixture"
+    assert documents.encode(bp) == doc
+
+
+def test_a_blueprint_without_a_source_encodes_without_one() -> None:
+    doc = load("three-node")
+    del doc["source"]
+    assert documents.encode(blueprint.decode(doc)) == doc
+
+
+def test_decode_refuses_an_invalid_document_with_every_problem() -> None:
+    doc = load("three-node-probed")
+    doc["network"]["devices"].reverse()
+    doc["probes"][0]["endpoints"][0]["gateway"] = "10.9.9.1"
+    with pytest.raises(Rejected) as caught:
+        blueprint.decode(doc)
+    assert {p.rule for p in caught.value.problems} >= {blueprint.RULE_UNSORTED, blueprint.RULE_GATEWAY_OUTSIDE}
+
+
+def test_load_reads_a_file_and_names_it_when_it_refuses(tmp_path: Path) -> None:
+    assert blueprint.load(FIXTURES / "three-node.json") == blueprint.decode(load("three-node"))
+    path = tmp_path / "two.json"
+    path.write_text(json.dumps({**load("three-node"), "blueprint_version": "2"}))
+    with pytest.raises(Rejected) as caught:
+        blueprint.load(path)
+    assert caught.value.subject == str(path)
+    assert [p.rule for p in caught.value.problems] == [blueprint.RULE_VERSION]

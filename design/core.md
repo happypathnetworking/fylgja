@@ -4,10 +4,10 @@ This is the design of the new core: a Python rebuild of `fylgja-core` with a cle
 formats, many named twins, and runtimes behind a driver seam. Phases 2–8 are planned from
 it.
 
-- **Done:** phase 0 (the decisions, the constitution, this repository) and phase 1: the
+- **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
   measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
-  (2026-11-02).
-- **Next:** the rest of phase 2, then the compiler.
+  (2026-11-02); and phase 2: the formats, their model types and the loaders (2026-11-03).
+- **Next:** the compiler.
 - **Meanwhile:** the orchestrator stays in the archived repository and drives the frozen Go
   core there, the reference implementation. It moves here at cut-over
   ([D-005](decisions.md#d-005)). Until then the core is built and tested from blueprint
@@ -262,8 +262,16 @@ Schema: [`api-1.openapi.yaml`](../formats/api-1.openapi.yaml);
 - **`core/`**: a Python 3.14 package, `fylgja_core`, with ruff, pytest and mypy in strict
   mode, the same tooling the orchestrator uses.
 - **A shared model package** (blueprint 1, the JCS id, network types, validation, package
-  loading), imported by both deployables once the orchestrator moves here. It starts as
-  `fylgja_core.blueprint` and `fylgja_core.schemas`.
+  loading), imported by both deployables once the orchestrator moves here. It is one module
+  per format, named for the schema's stem: `blueprint`, `platform_package`,
+  `probe_package`, `probes` (the declaration), `bundle`, `deployment`, `twin_record`,
+  `findings` and `problem`, with what they share in `documents` and the schemas in
+  `schemas`. Each follows one pattern: `validate` reports every problem in one pass, the
+  version first, then the schema, then the rules the schema cannot state, each with a stable
+  rule id and a JSON pointer; `decode` builds the model type or raises `Rejected`; a
+  loader's `load` reads a file. A model type encodes back to its document unchanged, so a
+  document has one representation (Constitution XII). The API's own response shapes (a
+  run, an event, a driver, the bundle diff) are built with the server in phase 4.
 
 ### Runtimes behind one driver seam
 
@@ -392,11 +400,16 @@ cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-0
    repository; the Go core frozen in the archived repository.
 1. **Measure both runtimes.** *Done on 2026-10-30, and the multi-host stage on 2026-11-02.*
    See "What the measurements settled" and "The multi-host stage".
-2. **Formats 1.** *Started.* The schemas are current in [`formats/`](../formats/README.md),
-   the packages are converted, and the fixtures are blueprints. The blueprint module
-   (`core/src/fylgja_core/blueprint.py`) holds the id, the order rules and the cross-field
-   rules. Still to come: the model types for every format, and the loaders for packages
-   and declarations, with their rejection fixtures.
+2. **Formats 1.** *Done on 2026-11-03.* The schemas are current in
+   [`formats/`](../formats/README.md), the packages are converted, and the fixtures are
+   blueprints. Every format has a model type in `core/src/fylgja_core/`; the blueprint
+   module holds the id, the order rules and the cross-field rules; and the loaders for
+   platform packages, probe packages and probe declarations hold each document to its
+   schema and to the cross-field rules its schema names, with a rejection fixture per fault
+   under `testdata/`. Two rules are the loaders' own: a probe package whose format this
+   build has no mechanism for is refused at load ([D-014](decisions.md#d-014)), and a
+   declaration's probe formats are checked against the loaded probe packages. The
+   registry-level rule, two loaded packages with one id, is the server's, in phase 4.
 3. **Compiler.** Blueprint plus packages to bundle 1. Check it against the four fixtures for
    the **same facts** as the Go core's goldens: nodes, links, mapping rows, configurations,
    probes and lossy counts. Byte equality is not the target, since the formats changed. The

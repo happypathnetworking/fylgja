@@ -47,8 +47,11 @@ writes them.
 - **The formats**, version 1, under [`formats/`](../formats/README.md). They were designed
   before the code that reads them; a change found while building is made there, in the
   same change.
-- **The blueprint module** in `core/` (the Python package `fylgja_core`): the blueprint id,
-  validation against the schema and the cross-field rules, and the order rules.
+- **The model package** in `core/` (the Python package `fylgja_core`): a model type for
+  every format, one module per schema; the blueprint id, validation against the schema and
+  the cross-field rules, and the order rules; and the loaders for platform packages, probe
+  packages and probe declarations, each refusing a document with every problem in one pass,
+  and each tested by a rejection fixture per fault.
 
 **Designed, not yet built:** everything else in section 4. It is built in the phases of
 [design/core.md](core.md#sequence): the compiler, then one named twin on the local
@@ -367,6 +370,9 @@ package ([Constitution II](constitution.md#ii-platforms-are-data-never-code),
   ([`probe-package-1.schema.json`](../formats/probe-package-1.schema.json)) holds one probe
   format's host image and set-up commands, its readiness, and its flow and burst commands.
   The one shipped format is `ping`.
+- A package is held to its schema and to the cross-field rules its schema names when it is
+  loaded, and refused with every fault at once; a probe package whose format this build
+  has no mechanism for is refused there too ([D-014](decisions.md#d-014)).
 - A platform is supported only when its package passes the conformance suite.
 
 The shipped packages, in platform package 1 and probe package 1, are
@@ -396,12 +402,12 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 
 | Path | What it holds |
 |---|---|
-| `core/` | The core, the Python package `fylgja_core`. Today the blueprint module: the id, validation and order rules |
+| `core/` | The core, the Python package `fylgja_core`. Today the model package: a module per format, the blueprint id and rules, and the package and declaration loaders |
 | `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README |
 | `psp/` | The platform packages, SR Linux and EOS |
 | `probes/` | The probe package `ping` |
 | `testdata/blueprint/` | The four blueprint fixtures, converted once from the earlier format at the repository's start |
-| `testdata/packages/` | Test-only packages and the interface mapping rows each shipped package must decide |
+| `testdata/packages/` | Test-only packages, the interface mapping rows each shipped package must decide, and the rejection fixtures for the package loaders |
 | `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
 | `scripts/` | The link checker (`linkcheck.py`) |

@@ -1,4 +1,4 @@
-"""Blueprint 1: the core's one input (formats/blueprint-1.schema.json, D-006, D-006).
+"""Blueprint 1: the core's one input (formats/blueprint-1.schema.json, D-006).
 
 A blueprint is the network (devices, interfaces, links, each device's rendered config) and
 its probes. Its id is the SHA-256 of the RFC 8785 (JCS) canonical form of
@@ -7,7 +7,7 @@ Every list in the hashed body arrives sorted and unique, and the core never sort
 client's behalf.
 
 `validate` reports every problem in one pass (Constitution III), each with a stable rule id
-and a JSON pointer.
+and a JSON pointer; `decode` builds the `Blueprint` model from a valid document.
 """
 
 from __future__ import annotations
@@ -15,23 +15,15 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from fylgja_core import schemas
+from fylgja_core import documents
+from fylgja_core.documents import Problem, Rejected
 
 VERSION = "1"
-
-
-@dataclass(frozen=True, order=True)
-class Problem:
-    """One reason a document is not a valid blueprint."""
-
-    pointer: str
-    rule: str
-    detail: str
-
 
 # Rule ids. Clients and tests match on them.
 RULE_INVALID = "blueprint.invalid"
@@ -43,6 +35,79 @@ RULE_INTERFACE_TWICE = "blueprint.link.interface.shared"
 RULE_LINK_MGMT = "blueprint.link.mgmt_only"
 RULE_GATEWAY_OUTSIDE = "blueprint.probe.gateway.outside"
 RULE_ADDRESS_SHARED = "blueprint.probe.address.shared"
+
+
+@dataclass(frozen=True, kw_only=True)
+class Interface:
+    """A device's physical port, by its production name."""
+
+    name: str
+    mgmt_only: bool
+    enabled: bool
+
+
+@dataclass(frozen=True, kw_only=True)
+class Device:
+    """One device in scope, with the configuration its source rendered."""
+
+    name: str
+    platform: str
+    interfaces: tuple[Interface, ...]
+    config: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class Endpoint:
+    """One end of a link: a device and one of its interfaces."""
+
+    device: str
+    interface: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class Link:
+    """A cable with two ends in scope; `a` sorts before `b`."""
+
+    a: Endpoint
+    b: Endpoint
+
+
+@dataclass(frozen=True, kw_only=True)
+class Network:
+    """The intent the compiler compiles: devices and the links between them."""
+
+    devices: tuple[Device, ...]
+    links: tuple[Link, ...]
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProbeEndpoint:
+    """Where one probe host is cabled, and its IPv4 address and gateway."""
+
+    device: str
+    interface: str
+    address: str
+    gateway: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class Probe:
+    """A probe: two hosts of one format on two uncabled ports. The same definition serves the
+    probe declaration (formats/probes-1.schema.json)."""
+
+    name: str
+    format: str
+    endpoints: tuple[ProbeEndpoint, ProbeEndpoint]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Blueprint:
+    """A blueprint 1 document as a model. `source` is the opaque envelope, carried unread."""
+
+    blueprint_version: str = VERSION
+    network: Network
+    probes: tuple[Probe, ...]
+    source: Mapping[str, Any] | None = None
 
 
 class NotCanonical(ValueError):
@@ -79,18 +144,14 @@ def blueprint_id(doc: dict[str, Any]) -> str:
     return hashlib.sha256(canonical({"network": doc["network"], "probes": doc["probes"]})).hexdigest()
 
 
-def _pointer(parts: Iterable[Any]) -> str:
-    return "".join("/" + str(p).replace("~", "~0").replace("/", "~1") for p in parts)
-
-
 def validate(doc: Any) -> list[Problem]:
     """Every problem with `doc` as a blueprint, sorted; an empty list means it is valid."""
-    if isinstance(doc, dict) and "blueprint_version" in doc and doc["blueprint_version"] != VERSION:
-        return [Problem("/blueprint_version", RULE_VERSION, f"version {doc['blueprint_version']!r}; this core reads 1")]
-    schema_errors = schemas.validator("blueprint-1").iter_errors(doc)
-    problems = [Problem(_pointer(e.absolute_path), RULE_INVALID, e.message) for e in schema_errors]
+    problems = documents.unsupported_version(doc, "blueprint_version", VERSION, RULE_VERSION)
     if problems:
-        return sorted(set(problems))
+        return problems
+    problems = documents.schema_problems("blueprint-1", doc, RULE_INVALID)
+    if problems:
+        return problems
     network, probes = doc["network"], doc["probes"]
     problems += _order(network["devices"], lambda d: d["name"], "/network/devices")
     for i, device in enumerate(network["devices"]):
@@ -101,8 +162,21 @@ def validate(doc: Any) -> list[Problem]:
     problems += _order(network["links"], lambda lk: (*_end(lk["a"]), *_end(lk["b"])), "/network/links")
     problems += _order(probes, lambda p: p["name"], "/probes")
     problems += _links(network)
-    problems += _probes(probes)
+    problems += probe_problems(probes, "/probes", RULE_GATEWAY_OUTSIDE, RULE_ADDRESS_SHARED)
     return sorted(set(problems))
+
+
+def decode(doc: Any) -> Blueprint:
+    """The `Blueprint` a document holds, or `Rejected` with every problem."""
+    problems = validate(doc)
+    if problems:
+        raise Rejected(problems)
+    return documents.decode(Blueprint, doc)
+
+
+def load(path: Path) -> Blueprint:
+    """The `Blueprint` in a file, or `Rejected` naming the file."""
+    return documents.load(path, RULE_INVALID, decode)
 
 
 def _end(endpoint: dict[str, str]) -> tuple[str, str]:
@@ -139,16 +213,19 @@ def _links(network: dict[str, Any]) -> list[Problem]:
     return found
 
 
-def _probes(probes: list[dict[str, Any]]) -> list[Problem]:
+def probe_problems(probes: list[dict[str, Any]], pointer: str, gateway_rule: str, address_rule: str) -> list[Problem]:
+    """The cross-field rules every list of probes keeps, in a blueprint and in a declaration
+    alike: a gateway inside its address's prefix, and no two hosts on one address. The rule
+    ids are the caller's, since each format names them."""
     found, hosts = [], set()
     for i, probe in enumerate(probes):
         for j, endpoint in enumerate(probe["endpoints"]):
-            pointer = f"/probes/{i}/endpoints/{j}"
+            where = f"{pointer}/{i}/endpoints/{j}"
             address = ipaddress.ip_interface(endpoint["address"])
             if ipaddress.ip_address(endpoint["gateway"]) not in address.network:
-                found.append(Problem(f"{pointer}/gateway", RULE_GATEWAY_OUTSIDE,
-                                     f"{endpoint['gateway']} is outside {address.network}"))
+                detail = f"{endpoint['gateway']} is outside {address.network}"
+                found.append(Problem(f"{where}/gateway", gateway_rule, detail))
             if address.ip in hosts:
-                found.append(Problem(f"{pointer}/address", RULE_ADDRESS_SHARED, f"{address.ip} is another host's"))
+                found.append(Problem(f"{where}/address", address_rule, f"{address.ip} is another host's"))
             hosts.add(address.ip)
     return found

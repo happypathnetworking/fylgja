@@ -33,7 +33,10 @@ to add before it is data. Within the format, every value is the package's.
 
 Commands are argument vectors, run without a shell. Placeholders: `{interface}`,
 `{address}` (with its prefix), `{far_address}` (without one), `{gateway}`, `{interval}`,
-`{count}` and `{wait}`. Format 1 is IPv4 only.
+`{count}` and `{wait}`. Format 1 is IPv4 only. The loader refuses a package whose format
+this build has no mechanism for (`package.format.unsupported`), and a command or
+readiness text naming any other placeholder (`package.patterns.placeholders`), with every
+fault at once.
 
 ## `ping`
 

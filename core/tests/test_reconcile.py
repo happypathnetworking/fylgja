@@ -5,15 +5,29 @@ driver, a fake readiness wait and a fake push."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
+import io
 import json
+import logging
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 
 import pytest
 from fakes import FakeDriver, FakePush, FakeReady, fake_push, fake_ready
 
-from fylgja_core import bundle, clock, compiler, deployment, documents, platform_package, probe_package, push, reconcile
+from fylgja_core import (
+    bundle,
+    clock,
+    compiler,
+    deployment,
+    documents,
+    logs,
+    platform_package,
+    probe_package,
+    push,
+    reconcile,
+)
 from fylgja_core.credentials import Credential, Provider
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding, Subject
@@ -1149,3 +1163,52 @@ def test_the_resync_serves_a_twin_nothing_kicked(store: LocalStore) -> None:
         await r.stop()
 
     asyncio.run(scenario())
+
+
+# No credential in any line (Task 7, Constitution X).
+
+PASSWORD = "s3cret-never-logged"
+
+
+@contextlib.contextmanager
+def json_logs(level: int = logging.DEBUG) -> Iterator[io.StringIO]:
+    """The core's JSON logging into a buffer for the test's body, and the root logger and the HTTP
+    clients' levels as they were afterwards."""
+    root = logging.getLogger()
+    saved, was = root.handlers[:], root.level
+    quieted = {name: logging.getLogger(name).level for name in ("httpx", "httpcore")}
+    out = io.StringIO()
+    logs.configure(level=level, stream=out)
+    try:
+        yield out
+    finally:
+        root.handlers[:] = saved
+        root.setLevel(was)
+        for name, level_was in quieted.items():
+            logging.getLogger(name).setLevel(level_was)
+
+
+def test_no_credential_reaches_a_log_line_or_the_store(store: LocalStore) -> None:
+    blueprint_id = file_blueprint(store)
+    for name in ("refused", "silent"):
+        new_twin(store, blueprint_id, name)
+    environ = {**ENVIRON, "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD": PASSWORD}
+    driver = FakeDriver()
+    with json_logs() as out:
+        refusing = make(store, driver, pusher=fake_push(refuse={"n2"}, driver=driver), environ=environ)
+        asyncio.run(refusing.reconcile("refused"))
+        timing_out = make(store, driver, ready=fake_ready(answers={"n1", "n2"}, driver=driver), environ=environ)
+        asyncio.run(timing_out.reconcile("silent"))
+
+    verdicts = {r.twin: r.verdict for r in store.list_runs()}
+    assert [(t, v.findings[0].rule) for t, v in sorted(verdicts.items()) if v is not None] == [
+        ("refused", "push.refused"), ("silent", "readiness.timeout")]
+    text = out.getvalue()
+    assert PASSWORD not in text
+    lines = [json.loads(line) for line in text.splitlines()]
+    assert lines and all({"time", "level", "logger", "message"} <= set(line) for line in lines)
+    assert any(line["logger"] == "fylgja.credentials" for line in lines)  # the provider logged, by variable name
+    run_of = {r.twin: r.id for r in store.list_runs()}
+    loop = [line for line in lines if line["logger"] in ("fylgja.reconcile", "fylgja.audit")]
+    assert loop and all(line.get("twin") in run_of and line.get("run") == run_of[line["twin"]] for line in loop)
+    assert all(PASSWORD.encode() not in path.read_bytes() for path in store.root.rglob("*") if path.is_file())

@@ -40,11 +40,14 @@ from fylgja_core.client import (
     EVENT_STREAM,
     JSON_TYPES,
     Client,
+    InvalidAddress,
+    InvalidToken,
     Message,
     ProblemError,
     TransportError,
     UnsupportedVersion,
     base_url,
+    bearer,
     messages,
 )
 from fylgja_core.findings import Finding
@@ -86,11 +89,41 @@ def test_an_address_is_an_http_url_or_host_and_port(address: str, url: str) -> N
     assert base_url(address) == url
 
 
-@pytest.mark.parametrize("address", ["", "ftp://core.example", "http://", "https://admin:s3cret@core.example"])
+@pytest.mark.parametrize(
+    "address",
+    ["", "ftp://core.example", "http://", "https://admin:s3cret@core.example", "a b:80", "a%20b:80", "http://[::1",
+     "http://core.example:x", "http://core.example:99999", "http://core.example:0", "core..example:80"],
+)
 def test_an_address_that_is_not_one_is_refused_without_repeating_it(address: str) -> None:
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(InvalidAddress) as e:
         base_url(address)
-    assert "s3cret" not in str(e.value) and "admin" not in str(e.value)
+    assert isinstance(e.value, ValueError)
+    assert "s3cret" not in str(e.value) and "admin" not in str(e.value) and "core" not in str(e.value)
+
+
+@pytest.mark.parametrize("token", ["q83vEjRWeJA=", "a.b-c_d~e+f/g==", TOKEN])
+def test_a_bearer_token_is_rfc_6750s_b64token(token: str) -> None:
+    assert bearer(token) == f"Bearer {token}"
+
+
+@pytest.mark.parametrize(
+    "token",
+    ["sekrit\r\nX-Evil: 1", "sekrit\r", "sekrit\n", "sekrit\x00", "sekrit-t\u00f6k", "sekrit with space", "sekrit=x",
+     ""],
+    ids=["crlf", "cr", "lf", "nul", "non-ascii", "space", "inner-equals", "empty"],
+)
+def test_a_token_that_is_no_bearer_token_is_refused_before_any_request_without_repeating_it(token: str) -> None:
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=VERSION)
+
+    with pytest.raises(InvalidToken) as e:
+        Client(ADDRESS, token, transport=httpx.MockTransport(handle))
+    assert isinstance(e.value, ValueError)
+    assert "sekrit" not in str(e.value) and str(e.value).startswith("is not an RFC 6750 bearer token")
+    assert seen == []
 
 
 def test_every_request_carries_the_token_and_asks_for_json() -> None:
@@ -311,6 +344,23 @@ def test_a_refusal_with_no_problem_document_is_a_transport_error(answer: httpx.R
 
 
 @pytest.mark.parametrize(
+    ("path", "body", "call", "missing"),
+    [
+        ("/v1/twins", {"twns": []}, lambda c: c.list_twins(), "twins list"),
+        ("/v1/runs", {"runs": {}}, lambda c: c.list_runs(), "runs list"),
+        ("/v1/drivers", {}, lambda c: c.list_drivers(), "drivers list"),
+        ("/v1/blueprints", {"id": 5}, lambda c: c.put_blueprint(BLUEPRINT), "id str"),
+    ],
+    ids=["twins", "runs", "drivers", "id"],
+)
+def test_a_success_missing_a_member_the_client_answers_is_a_transport_error(
+    path: str, body: dict[str, object], call: Callable[[Client], object], missing: str
+) -> None:
+    with pytest.raises(TransportError, match=f"answered a document with no {missing}$"):
+        call(raw({path: httpx.Response(200, json=body)}))
+
+
+@pytest.mark.parametrize(
     "answer",
     [httpx.Response(200, text="ok", headers={"content-type": "text/plain"}), httpx.Response(200, json=[1, 2])],
     ids=["text", "array"],
@@ -329,6 +379,24 @@ def test_an_unreachable_server_is_a_transport_error_naming_the_call_and_not_the_
     with pytest.raises(TransportError, match=re.escape("GET http://127.0.0.1:7650/v1/version failed")) as e:
         raw(transport=httpx.MockTransport(unreachable)).list_twins()
     assert TOKEN not in str(e.value)
+
+
+def test_a_local_protocol_error_is_named_by_its_type_and_never_quoted() -> None:
+    # The library's refusal of a header quotes the header, and that may be the Authorization one.
+    def refuse_header(request: httpx.Request) -> httpx.Response:
+        raise httpx.LocalProtocolError(f"Illegal header value b'Bearer {TOKEN}\\r\\n'")
+
+    with pytest.raises(TransportError) as e:
+        raw(transport=httpx.MockTransport(refuse_header)).list_twins()
+    assert str(e.value) == "GET http://127.0.0.1:7650/v1/version failed: LocalProtocolError"
+
+
+def test_a_transport_error_with_no_text_is_named_by_its_type() -> None:
+    def silent(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("", request=request)
+
+    with pytest.raises(TransportError, match=r"/v1/version failed: ReadTimeout$"):
+        raw(transport=httpx.MockTransport(silent)).list_twins()
 
 
 # Server-sent events.

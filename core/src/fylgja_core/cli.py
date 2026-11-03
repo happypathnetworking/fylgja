@@ -25,7 +25,7 @@ from typing import Any
 import httpx
 
 from fylgja_core import blueprint, documents, findings
-from fylgja_core.client import Client, ProblemError, TransportError, UnsupportedVersion
+from fylgja_core.client import Client, ProblemError, TransportError, UnsupportedVersion, base_url, bearer
 from fylgja_core.documents import Malformed, Rejected
 from fylgja_core.findings import Verdict
 
@@ -75,16 +75,35 @@ def main(argv: Sequence[str] | None = None, *, transport: httpx.BaseTransport | 
         args = _parser().parse_args(argv)
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else EXIT_FAILURE
-    missing = [name for name in (ADDRESS, TOKEN) if not os.environ.get(name)]
-    for name in missing:
-        _error(f"{name} is not set")
-    if missing:
-        return EXIT_FAILURE
     try:
-        client = Client(os.environ[ADDRESS], os.environ[TOKEN], transport=transport)
-    except ValueError as e:
-        _error(f"{ADDRESS} {e}")
+        return _run(args, transport)
+    except KeyboardInterrupt:
         return EXIT_FAILURE
+    except Exception as e:
+        # The last resort: one line, never a traceback, and never the token, whatever quoted it.
+        token = os.environ.get(TOKEN)
+        line = f"{type(e).__name__}: {e}"
+        _error(line.replace(token, "<token>") if token else line)
+        return EXIT_FAILURE
+
+
+def _run(args: argparse.Namespace, transport: httpx.BaseTransport | None) -> int:
+    # Both variables are checked in one pass; a refusal names the variable, never its value.
+    refused = False
+    for name, check in ((ADDRESS, base_url), (TOKEN, bearer)):
+        value = os.environ.get(name)
+        if not value:
+            _error(f"{name} is not set")
+            refused = True
+            continue
+        try:
+            check(value)
+        except ValueError as e:
+            _error(f"{name} {e}")
+            refused = True
+    if refused:
+        return EXIT_FAILURE
+    client = Client(os.environ[ADDRESS], os.environ[TOKEN], transport=transport)
     command: Command = args.command
     try:
         with client:

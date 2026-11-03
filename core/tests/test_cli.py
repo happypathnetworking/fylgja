@@ -122,12 +122,52 @@ def test_an_empty_token_is_not_set(capsys: pytest.CaptureFixture[str], monkeypat
     assert fylgja(capsys, FakeAPI(), "twin", "list") == Result(2, "", "FYLGJA_API_TOKEN is not set\n")
 
 
-def test_an_address_that_is_not_one_exits_2(
+@pytest.mark.parametrize(
+    ("address", "line"),
+    [
+        ("https://admin:s3cret@core.example",
+         "FYLGJA_API_ADDRESS holds a login; the client's one credential is its token"),
+        ("a b:80", "FYLGJA_API_ADDRESS is not an http(s):// URL or host:port"),
+        ("http://[::1", "FYLGJA_API_ADDRESS is not an http(s):// URL or host:port"),
+        ("http://core.example:x", "FYLGJA_API_ADDRESS is not an http(s):// URL or host:port"),
+    ],
+    ids=["login", "space", "unclosed", "port"],
+)
+def test_an_address_that_is_not_one_exits_2_without_repeating_it(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, address: str, line: str
+) -> None:
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", address)
+    api = FakeAPI()
+    assert fylgja(capsys, api, "twin", "list") == Result(2, "", f"{line}\n")
+    assert api.requests == []
+
+
+BAD_TOKEN = "FYLGJA_API_TOKEN is not an RFC 6750 bearer token: letters, digits and -._~+/ with trailing ="
+
+
+@pytest.mark.parametrize(
+    "token",
+    ["sekrit\r\nX-Evil: 1", "sekrit\r", "sekrit\n", "sekrit-t\u00f6k\u00e9n", "sekrit with space"],
+    ids=["crlf", "cr", "lf", "non-ascii", "space"],
+)
+def test_a_token_that_is_no_bearer_token_exits_2_and_no_part_of_it_is_shown(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, token: str
+) -> None:
+    # A NUL cannot be in the environment; the client refuses one (test_client.py).
+    monkeypatch.setenv("FYLGJA_API_TOKEN", token)
+    api = FakeAPI()
+    r = fylgja(capsys, api, "--json", "twin", "create", TWIN, "--bundle", BUNDLE_ID)
+    assert r == Result(2, "", f"{BAD_TOKEN}\n")
+    assert "sekrit" not in r.out + r.err and api.requests == []
+
+
+def test_an_address_and_a_token_are_both_refused_in_one_pass(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FYLGJA_API_ADDRESS", "https://admin:s3cret@core.example")
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", "a b:80")
+    monkeypatch.setenv("FYLGJA_API_TOKEN", "sekrit\n")
     r = fylgja(capsys, FakeAPI(), "twin", "list")
-    assert (r.code, r.err) == (2, "FYLGJA_API_ADDRESS holds a login; the client's one credential is its token\n")
+    assert (r.code, r.err.splitlines()) == (2, ["FYLGJA_API_ADDRESS is not an http(s):// URL or host:port", BAD_TOKEN])
 
 
 @pytest.mark.parametrize(
@@ -190,6 +230,22 @@ def test_an_unreachable_server_exits_2(capsys: pytest.CaptureFixture[str]) -> No
     r = fylgja(capsys, api, "twin", "list")
     assert (r.code, r.out) == (2, "")
     assert r.err == "GET http://127.0.0.1:7650/v1/version failed: [Errno 111] Connection refused\n"
+
+
+def test_anything_unforeseen_is_one_line_exit_2_and_never_the_token(capsys: pytest.CaptureFixture[str]) -> None:
+    def boom(request: httpx.Request) -> httpx.Response:
+        raise RuntimeError(f"boom while holding {TOKEN}")
+
+    code = cli.main(["twin", "list"], transport=httpx.MockTransport(boom))
+    assert (code, capsys.readouterr().err) == (2, "RuntimeError: boom while holding <token>\n")
+
+
+def test_an_interrupt_exits_2_quietly(capsys: pytest.CaptureFixture[str]) -> None:
+    def interrupted(request: httpx.Request) -> httpx.Response:
+        raise KeyboardInterrupt
+
+    code = cli.main(["twin", "list"], transport=httpx.MockTransport(interrupted))
+    assert (code, *capsys.readouterr()) == (2, "", "")
 
 
 def test_a_server_of_another_api_exits_2(capsys: pytest.CaptureFixture[str]) -> None:

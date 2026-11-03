@@ -19,6 +19,7 @@ from typing import Any
 
 import httpx
 
+from fylgja_core import node_http
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.push import Pushed, Refused, Unauthorized, Unreachable, lines, post
@@ -73,7 +74,7 @@ async def replace(
     """Replace the node's configuration in one request; a refused session is aborted."""
     name = session(attempt, time.time_ns())
     cmds = commands(config, name)
-    url = f"https://{address}:{package.push.port}/command-api"
+    url = node_http.url(address, package.push.port, "/command-api")
     start = time.monotonic()
     answer = await post(client, url, request(cmds), credential, timeout_s=package.push.timeout_s)
     elapsed = time.monotonic() - start

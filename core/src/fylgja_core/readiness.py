@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from fylgja_core import node_http
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
 
@@ -73,10 +74,11 @@ async def await_transport(
     """
     budget = package.readiness.timeout_s if timeout_s is None else timeout_s
     path, body = probe_request(package, credential)
-    url = f"https://{address}:{package.push.port}{path}"
+    url = node_http.url(address, package.push.port, path)
+    where = node_http.authority(address, package.push.port)
     auth = httpx.BasicAuth(credential.username, credential.password)
     own = client is None
-    http = client if client is not None else httpx.AsyncClient(verify=False)  # boot-time certificate, unverified
+    http = client if client is not None else node_http.client()
     start = time.monotonic()
     attempt = 0
     try:
@@ -91,14 +93,14 @@ async def await_transport(
                 _log.debug("attempt %d to %s: %s", attempt, url, type(err).__name__)
             else:
                 if response.status_code in (401, 403):
-                    raise NotReady(RULE_UNAUTHORIZED, f"{address}:{package.push.port} refused the login")
+                    raise NotReady(RULE_UNAUTHORIZED, f"{where} refused the login")
                 if _answered(response):
                     return time.monotonic() - start
                 _log.debug("attempt %d to %s: HTTP %d", attempt, url, response.status_code)
             if time.monotonic() - start + interval_s > budget:
                 raise NotReady(
                     RULE_TIMEOUT,
-                    f"{address}:{package.push.port} did not answer within {budget:g}s",
+                    f"{where} did not answer within {budget:g}s",
                 )
             await asyncio.sleep(interval_s)
     finally:

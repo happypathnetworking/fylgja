@@ -28,6 +28,7 @@ from typing import Any
 
 import httpx
 
+from fylgja_core import node_http
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.push import Pushed, Refused, Unauthorized, Unreachable, lines, post
@@ -96,7 +97,7 @@ async def replace(
 ) -> Pushed | Refused:
     """Replace the node's configuration in one request; a refusal with no reason asks once more."""
     cmds = commands(config)
-    url = f"https://{address}:{package.push.port}/jsonrpc"
+    url = node_http.url(address, package.push.port, "/jsonrpc")
     budget = package.push.timeout_s
     start = time.monotonic()
     answer = await post(client, url, request(cmds), credential, timeout_s=budget)

@@ -18,11 +18,13 @@ from typing import Any
 
 import httpx
 
+from fylgja_core import node_http
 from fylgja_core.credentials import Credential
 from fylgja_core.platform_package import PlatformPackage
 
 RULE_REFUSED = "push.refused"
 RULE_UNREACHABLE = "push.unreachable"
+RULE_TIMEOUT = "push.timeout"
 RULE_UNAUTHORIZED = "push.unauthorized"
 
 
@@ -43,7 +45,7 @@ class Refused:
 
 
 class Unreachable(Exception):
-    """The node gave the push no answer: refused connection, TLS failure, timeout, no JSON-RPC answer.
+    """The node gave the push no answer: refused connection, TLS failure, no JSON-RPC answer.
 
     Transient: the loop pushes again. The message names the URL, never a body.
     """
@@ -52,7 +54,16 @@ class Unreachable(Exception):
 
     def __init__(self, message: str) -> None:
         self.message = message
-        super().__init__(f"{RULE_UNREACHABLE}: {message}")
+        super().__init__(f"{self.rule}: {message}")
+
+
+class Timeout(Unreachable):
+    """The node did not answer one push request within the package's `push.timeout_s`.
+
+    Transient, as `Unreachable` is: the loop pushes again. The message names the URL and the budget.
+    """
+
+    rule = RULE_TIMEOUT
 
 
 class Unauthorized(Exception):
@@ -84,14 +95,15 @@ async def push(
 ) -> Pushed | Refused:
     """Replace the node's configuration with `config` by the package's delivery.
 
-    Raises `Unreachable` when the node gives no answer, and `Unauthorized` when it refuses the login.
+    Raises `Unreachable` when the node gives no answer (`Timeout` when none comes within the
+    package's budget), and `Unauthorized` when it refuses the login.
 
     `attempt` numbers this push among the loop's tries of it; `eapi` names its session by it.
     """
     from fylgja_core import push_eapi, push_jsonrpc  # the mechanisms import this module's types
 
     own = client is None
-    http = client if client is not None else httpx.AsyncClient(verify=False)  # boot-time certificate, unverified
+    http = client if client is not None else node_http.client()
     try:
         if package.push.delivery == "json_rpc":
             return await push_jsonrpc.replace(address, package, config, credential, client=http)
@@ -106,12 +118,15 @@ async def post(
 ) -> dict[str, Any]:
     """POST one JSON-RPC request with basic auth; the answer, a JSON object with an `error` or a `result`.
 
-    A request that fails (a transport failure, an answer that cannot be decoded), a status other
-    than 200 or a body that is no such answer is `Unreachable`; HTTP 401 or 403 is `Unauthorized`.
+    A request with no answer within `timeout_s` is `Timeout`. A request that fails otherwise (a
+    transport failure, an answer that cannot be decoded), a status other than 200 or a body that
+    is no such answer is `Unreachable`; HTTP 401 or 403 is `Unauthorized`.
     """
     auth = httpx.BasicAuth(credential.username, credential.password)
     try:
         response = await client.post(url, json=body, auth=auth, timeout=timeout_s)
+    except httpx.TimeoutException as err:
+        raise Timeout(f"{url} did not answer within {timeout_s:g}s: {type(err).__name__}") from err
     except httpx.RequestError as err:
         detail = f": {err}" if str(err) else ""
         raise Unreachable(f"{url} gave no answer: {type(err).__name__}{detail}") from err

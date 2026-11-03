@@ -19,10 +19,12 @@ from fylgja_core import platform_package, push_jsonrpc
 from fylgja_core.credentials import Credential
 from fylgja_core.push import (
     RULE_REFUSED,
+    RULE_TIMEOUT,
     RULE_UNAUTHORIZED,
     RULE_UNREACHABLE,
     Pushed,
     Refused,
+    Timeout,
     Unauthorized,
     Unreachable,
     lines,
@@ -262,6 +264,7 @@ def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
         (httpx.Response(500), REASON_NOT_GIVEN),
         (httpx.Response(200, text="not json"), REASON_NOT_GIVEN),
         (httpx.ConnectError("refused"), REASON_NOT_GIVEN),
+        (httpx.ReadTimeout("slow"), REASON_NOT_GIVEN),
         (httpx.DecodingError("garbled"), REASON_NOT_GIVEN),
         (httpx.Response(401), REASON_NOT_GIVEN),
         (httpx.Response(403), REASON_NOT_GIVEN),
@@ -274,6 +277,7 @@ def test_a_refusal_answers_the_nodes_reason_and_asks_nothing_more() -> None:
         "http-500",
         "no-answer",
         "transport",
+        "timeout",
         "garbled",
         "http-401",
         "http-403",
@@ -301,22 +305,44 @@ def test_a_cut_refusal_with_the_budget_spent_asks_nothing_more(monkeypatch: pyte
     "failure",
     [
         httpx.ConnectError("refused"),
-        httpx.ReadTimeout("slow"),
         httpx.Response(503),
         httpx.Response(200, text="<html>"),
         httpx.DecodingError("garbled"),
         httpx.Response(200, json={"jsonrpc": "2.0", "id": 1}),
     ],
-    ids=["connect", "timeout", "http-503", "not-json", "garbled", "no-result-no-error"],
+    ids=["connect", "http-503", "not-json", "garbled", "no-result-no-error"],
 )
 def test_a_node_that_gives_no_answer_is_unreachable_never_refused(failure: Answer) -> None:
     handler, seen = _answers(failure)
     with pytest.raises(Unreachable) as e:
         _push(handler)
-    assert e.value.rule == RULE_UNREACHABLE == "push.unreachable"
+    assert e.value.rule == RULE_UNREACHABLE == "push.unreachable" and not isinstance(e.value, Timeout)
     assert "10.0.0.5" in str(e.value) and len(seen) == 1
     if isinstance(failure, httpx.Response) and failure.status_code != 200:
         assert str(failure.status_code) in str(e.value)
+
+
+@pytest.mark.parametrize(
+    "failure", [httpx.ReadTimeout("slow"), httpx.ConnectTimeout("slow"), httpx.PoolTimeout("slow")]
+)
+def test_no_answer_within_the_budget_is_push_timeout_and_transient_as_unreachable(failure: httpx.HTTPError) -> None:
+    handler, seen = _answers(failure)
+    with pytest.raises(Timeout) as e:
+        _push(handler)
+    assert e.value.rule == RULE_TIMEOUT == "push.timeout" and isinstance(e.value, Unreachable)
+    assert str(e.value).startswith("push.timeout: https://10.0.0.5")
+    assert f"within {SRLINUX.push.timeout_s}s" in e.value.message and len(seen) == 1
+
+
+def test_an_ipv6_address_is_bracketed_in_the_url() -> None:
+    handler, seen = _answers(_result([{"text": DIFF}]))
+
+    async def run() -> Pushed | Refused:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await push("fd00::5", SRLINUX, CONFIG, CRED, client=client)
+
+    assert isinstance(asyncio.run(run()), Pushed)
+    assert (seen[0].url.host, seen[0].url.path) == ("fd00::5", "/jsonrpc")
 
 
 @pytest.mark.parametrize("status", [401, 403])

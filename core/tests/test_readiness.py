@@ -145,6 +145,23 @@ def test_a_refused_login_fails_at_once_and_is_not_retried(status: int) -> None:
     assert e.value.rule == RULE_UNAUTHORIZED == "readiness.unauthorized" and len(attempts) == 1
 
 
+def test_an_ipv6_address_is_bracketed_in_the_url_and_the_message() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(401)
+
+    async def run() -> float:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await await_transport("fd00::5", SRLINUX, CRED, interval_s=0.01, client=client)
+
+    with pytest.raises(NotReady) as e:
+        asyncio.run(run())
+    assert (seen[0].url.host, seen[0].url.path) == ("fd00::5", "/jsonrpc")
+    assert "[fd00::5]:443 refused the login" in e.value.message
+
+
 def test_a_node_that_never_answers_times_out_naming_the_address_the_port_and_the_budget() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused", request=request)

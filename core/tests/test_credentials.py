@@ -30,6 +30,15 @@ def test_a_missing_variable_is_refused_by_name_and_the_present_value_is_never_sh
     assert "admin" not in str(e.value)
 
 
+@pytest.mark.parametrize("part", ["USERNAME", "PASSWORD"])
+def test_an_empty_variable_counts_as_missing(part: str) -> None:
+    env = {**ENV, f"FYLGJA_CREDENTIAL_SRLINUX_{part}": ""}
+    with pytest.raises(Missing) as e:
+        Provider(env).login("srlinux")
+    assert e.value.variable == f"FYLGJA_CREDENTIAL_SRLINUX_{part}" and "s3cret" not in str(e.value)
+    assert str(e.value).endswith("is not set, or is empty")
+
+
 def test_the_password_never_appears_in_a_repr_or_a_log(caplog: pytest.LogCaptureFixture) -> None:
     c = Credential(username="admin", password="s3cret")
     assert "s3cret" not in repr(c) and "s3cret" not in str(c) and "***" in repr(c)

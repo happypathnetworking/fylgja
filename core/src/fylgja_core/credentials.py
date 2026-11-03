@@ -2,7 +2,8 @@
 
 A platform package names a credential; the provider reads `FYLGJA_CREDENTIAL_<NAME>_USERNAME`
 and `FYLGJA_CREDENTIAL_<NAME>_PASSWORD`, with `<NAME>` upper-cased and dashes as underscores.
-A password never reaches a repr, a message or a log line: logs name variables, never values.
+A variable set to the empty string counts as not set. A password never reaches a repr, a
+message or a log line: logs name variables, never values.
 """
 
 from __future__ import annotations
@@ -31,13 +32,13 @@ class Credential:
 
 
 class Missing(Exception):
-    """A credential variable is not set; it is named, and nothing present is shown."""
+    """A credential variable is not set, or is empty; it is named, and nothing present is shown."""
 
     rule = RULE_MISSING
 
     def __init__(self, variable: str) -> None:
         self.variable = variable
-        super().__init__(f"{RULE_MISSING}: the environment variable {variable} is not set")
+        super().__init__(f"{RULE_MISSING}: the environment variable {variable} is not set, or is empty")
 
 
 def variable(name: str, part: Literal["USERNAME", "PASSWORD"]) -> str:
@@ -52,11 +53,11 @@ class Provider:
         self._environ = environ
 
     def login(self, name: str) -> Credential:
-        """The credential called `name`; `Missing` names the first variable that is not set."""
+        """The credential called `name`; `Missing` names the first variable not set, or empty."""
         values: dict[str, str] = {}
         for part in ("USERNAME", "PASSWORD"):
             var = variable(name, part)
-            if var not in self._environ:
+            if not self._environ.get(var):
                 raise Missing(var)
             _log.debug("read %s", var)
             values[part] = self._environ[var]

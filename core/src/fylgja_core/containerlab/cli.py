@@ -21,6 +21,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from fylgja_core.driver import DriverFailed
+
 _log = logging.getLogger("fylgja.containerlab")
 
 TIMED_OUT = -1
@@ -31,10 +33,10 @@ STDERR_KEPT = 4096
 writes its error."""
 
 
-class CommandFailed(Exception):
+class CommandFailed(DriverFailed):
     """A command exited with a non-zero status, or ran past its budget (status `TIMED_OUT`,
-    stderr saying so). `stderr` is the last `STDERR_KEPT` bytes of the command's. Its message
-    names the command and the status, never its output."""
+    stderr saying so): the local driver's `DriverFailed`. `stderr` is the last `STDERR_KEPT`
+    bytes of the command's. Its message names the command and the status, never its output."""
 
     def __init__(self, argv: Sequence[str], returncode: int, stderr: str) -> None:
         self.argv = tuple(argv)

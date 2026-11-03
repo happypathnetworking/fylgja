@@ -51,7 +51,7 @@ from fylgja_core.containerlab import cli, pool
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.deployment import Deployment
-from fylgja_core.driver import Allocation, Capabilities, Inspection, NodeState, Planned, Refusal
+from fylgja_core.driver import Allocation, Capabilities, DriverFailed, Inspection, NodeState, Planned, Refusal
 from fylgja_core.platform_package import Image, PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 from fylgja_core.store import check_file_key, check_twin_name
@@ -195,9 +195,9 @@ class ContainerlabDriver:
         deployed, then destroyed (rule 2); nothing found is nothing done. `ValueError`, before
         any command, for files that are not the deployment's.
 
-        A command that fails (the destroy, or rule 2's deploy) raises `CommandFailed`, logged
-        at WARNING, and leaves the rest undone: the next destroy finds what is left and goes on
-        from there. A twin's directory that cannot be removed, such as a root-owned lab
+        A command that fails (the destroy, rule 2's deploy, or the network's removal) raises
+        `CommandFailed`, logged at WARNING, and leaves the rest undone: the next destroy finds
+        what is left and goes on from there. A twin's directory that cannot be removed, such as a root-owned lab
         directory containerlab left, is logged at WARNING and left, so that it never wedges
         a destroy."""
         _check_files(deployment, files)
@@ -214,11 +214,11 @@ class ContainerlabDriver:
                 directory = self._write(twin, files)
                 await self._run(["containerlab", "destroy", "-t", str(directory / TOPOLOGY), "--cleanup"],
                                 timeout_s=budget, cwd=directory)
+            if inspection.state != "absent" and await self._network_exists(twin):
+                await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
         except cli.CommandFailed as e:
             _log.warning("destroy %s failed, and the next destroy finds what is left: %s", twin, e)
             raise
-        if inspection.state != "absent" and await self._network_exists(twin):
-            await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
         directory = self._directory(twin)
         if directory.exists():
             try:
@@ -322,13 +322,18 @@ def destroy_budget(
 
 def _node(twin: str, doc: Mapping[str, Any]) -> NodeState:
     """A node from its container's `docker inspect` member; its address is the one it holds
-    on the lab's management network while it runs."""
+    on the lab's management network while it runs. `DriverFailed` for a container of the lab
+    with no node name, which only containerlab labels."""
+    handle = doc["Name"].lstrip("/")
+    name = (doc["Config"]["Labels"] or {}).get("clab-node-name")
+    if not name:
+        raise DriverFailed(f"the container {handle} of the lab {twin} has no clab-node-name label")
     running = bool(doc["State"]["Running"])
     started = doc["State"]["StartedAt"]
     network = (doc["NetworkSettings"]["Networks"] or {}).get(f"clab-{twin}") or {}
     return NodeState(
-        name=doc["Config"]["Labels"]["clab-node-name"],
-        handle=doc["Name"].lstrip("/"),
+        name=name,
+        handle=handle,
         incarnation=None if started == NEVER_STARTED else started,
         address=(network.get("IPAddress") or None) if running else None,
         running=running,

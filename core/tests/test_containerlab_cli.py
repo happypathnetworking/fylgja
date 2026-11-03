@@ -13,6 +13,7 @@ import pytest
 
 from fylgja_core.containerlab import cli
 from fylgja_core.containerlab.cli import TIMED_OUT, CommandFailed
+from fylgja_core.driver import DriverFailed
 
 
 def test_run_answers_the_commands_stdout() -> None:
@@ -23,6 +24,7 @@ def test_a_failing_command_raises_with_its_status_and_stderr_and_never_its_stdou
     with pytest.raises(CommandFailed) as raised:
         asyncio.run(cli.run(["sh", "-c", "echo printed; echo complaint >&2; exit 3"], timeout_s=5))
     e = raised.value
+    assert isinstance(e, DriverFailed)  # the seam's runtime-neutral failure: the loop names no runtime to catch it
     assert e.argv == ("sh", "-c", "echo printed; echo complaint >&2; exit 3")
     assert e.returncode == 3
     assert e.stderr == "complaint\n"

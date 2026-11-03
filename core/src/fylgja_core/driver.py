@@ -36,6 +36,15 @@ class Capabilities:
     isolation: Literal["names", "network"]
 
 
+class DriverFailed(Exception):
+    """A runtime failure of `admit`, `apply`, `inspect` or `destroy` (and of `endpoints`,
+    which inspects): a command or a request the runtime failed or did not answer in time, or
+    an answer it should not have given. It is transient: the loop backs off and retries.
+    Each driver's own failures subclass it, so nothing above the seam names a runtime to
+    catch one. A caller's error, such as files that are not the deployment's, is a
+    `ValueError` instead."""
+
+
 @dataclass(frozen=True)
 class Refusal:
     """What `admit` answers when it refuses; `rule` is `admission.capacity` or another `admission.*` rule."""
@@ -91,7 +100,9 @@ class Inspection:
 class Driver(Protocol):
     """A runtime behind the seam. `apply` and `destroy` take the packages, as `admit` and
     `plan` do: a deploy's and a destroy's budgets are the measured timeouts of the packages
-    the deployment's nodes use, which neither the deployment nor its files carry."""
+    the deployment's nodes use, which neither the deployment nor its files carry. The four
+    calls that act on the runtime, `admit`, `apply`, `inspect` and `destroy`, raise
+    `DriverFailed` for a runtime failure."""
 
     name: str
 
@@ -131,8 +142,9 @@ class Driver(Protocol):
         probe_packages: Mapping[str, ProbePackage],
         reconfigure: bool = False,
     ) -> None:
-        """Make the runtime hold the deployment; `reconfigure` rebuilds what a partial apply
-        left, the loop's remedy for a node that stays silent (D-023)."""
+        """Make the runtime hold the deployment. `reconfigure` rebuilds the whole lab: every
+        node is made anew, so every node's incarnation changes and every node's `holds` is
+        void. It is the loop's remedy for a node that stays silent (D-023)."""
         ...
 
     async def inspect(self, twin: str) -> Inspection:

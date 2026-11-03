@@ -26,7 +26,7 @@ from fylgja_core.containerlab.driver import (
 )
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
-from fylgja_core.driver import Allocation, Inspection, NodeState, Planned, Refusal
+from fylgja_core.driver import Allocation, DriverFailed, Inspection, NodeState, Planned, Refusal
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -555,3 +555,23 @@ def test_a_twins_directory_that_cannot_be_removed_is_left_and_never_wedges_destr
                    for r in caplog.records)
     finally:
         locked.chmod(0o700)
+
+
+def test_a_container_without_its_node_name_label_is_a_driver_failure_naming_it(tmp_path: Path) -> None:
+    unnamed = container("n1", address="172.20.2.2")
+    del unnamed["Config"]["Labels"]["clab-node-name"]
+    with pytest.raises(DriverFailed, match="the container clab-t-n1 of the lab t has no clab-node-name label"):
+        inspect(tmp_path, FakeRunner(lab(unnamed)))
+
+
+def test_a_failed_network_removal_is_logged_and_raised_and_leaves_the_directory(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    p = planned("three-node")
+    runner = FakeRunner({**RUNNING, DEPLOY: "", DESTROY: "", NETWORK: "[]\n"}, fail=[NETWORK_RM])
+    asyncio.run(driver(tmp_path, runner).apply(p.deployment, p.files, PLATFORMS, PROBES))
+    with pytest.raises(CommandFailed):
+        destroy(tmp_path, runner, p)
+    assert runner.calls[-1] == NETWORK_RM
+    assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
+    assert any(r.levelname == "WARNING" and "destroy t failed" in r.getMessage() for r in caplog.records)

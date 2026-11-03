@@ -1,0 +1,141 @@
+"""The `json_rpc` replace: one JSON-RPC `cli` request (D-027), asked again when its reason is cut (D-028).
+
+The request enters the login's private candidate, loads the startup configuration (the baseline
+containerlab left, which also clears what a refused request left in the candidate), sends the
+configuration's lines, asks `diff flat` and commits with `commit now`: one atomic commit.
+
+A refusal is HTTP 200 with a JSON-RPC error that echoes every command sent. The node's reason
+follows the echo, after `' failed with error '`, and ends at the message's first empty line. The
+node cuts its message at about 1 KiB, which a real replace's echo outruns, so a refusal with no
+reason gets one more request, `commit validate`, which lands nothing. When that gives no reason
+either, the refusal is one of D-028's two sentences, quoting nothing.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from typing import Any
+
+import httpx
+
+from fylgja_core.credentials import Credential
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.push import Pushed, Refused, Unreachable, lines, post
+
+ENTER = "enter candidate private"
+LOAD = "load startup"
+DIFF = "diff flat"
+COMMIT = "commit now"
+VALIDATE = "commit validate"
+MARKER = "' failed with error "
+
+# D-028's two sentences, part of the core's contract word for word.
+REASON_VALIDATES = (
+    "the node's message ends before any reason Fylgja can read, and the candidate it refused passes "
+    "`commit validate`, which does not run every check a commit does (D-028)"
+)
+REASON_NOT_GIVEN = (
+    "the node's message ends before any reason Fylgja can read, and asking again with `commit validate` "
+    "gave none (D-028)"
+)
+
+_CODE = re.compile(r"^\s*\d+:\s*")  # the error code the node writes before its reason: `1: At line 11: …`
+
+_log = logging.getLogger("fylgja.push")
+
+
+def commands(config: str) -> list[str]:
+    """The replace's commands: the reset to the baseline, the configuration's lines, the diff, the commit."""
+    return [ENTER, LOAD, *lines(config), DIFF, COMMIT]
+
+
+def validate_commands() -> list[str]:
+    """The request that asks a refused candidate for its reason; it lands nothing."""
+    return [ENTER, VALIDATE]
+
+
+def request(commands: list[str]) -> dict[str, Any]:
+    """The JSON-RPC `cli` request that runs `commands` in order."""
+    return {"jsonrpc": "2.0", "id": 1, "method": "cli", "params": {"commands": commands}}
+
+
+def reason(message: str) -> str:
+    """The node's reason in a refusal's message, or "" when the message gives none.
+
+    It follows the last `' failed with error '` before the message's first empty line, without
+    the error code the node writes first. What follows that line is the request's output, the
+    diff's configuration lines included, and is never read.
+    """
+    head = _before_empty_line(message)
+    at = head.rfind(MARKER)
+    if at < 0:
+        return ""
+    return _CODE.sub("", head[at + len(MARKER) :], count=1).strip()
+
+
+async def replace(
+    address: str, package: PlatformPackage, config: str, credential: Credential, *, client: httpx.AsyncClient
+) -> Pushed | Refused:
+    """Replace the node's configuration in one request; a refusal with no reason asks once more."""
+    cmds = commands(config)
+    url = f"https://{address}:{package.push.port}/jsonrpc"
+    budget = package.push.timeout_s
+    start = time.monotonic()
+    answer = await post(client, url, request(cmds), credential, timeout_s=budget)
+    elapsed = time.monotonic() - start
+    error = answer.get("error")
+    if error is None:
+        _log.info("pushed %s by json_rpc: %d commands in %.2fs", address, len(cmds), elapsed)
+        return Pushed(diff=_diff(answer["result"], len(cmds) - 2), duration_s=elapsed)
+    found = reason(_message(error)) or await _ask_again(client, url, credential, address, budget - elapsed)
+    _log.info("%s refused the json_rpc replace of %d commands in %.2fs: %s", address, len(cmds), elapsed, found)
+    return Refused(found)
+
+
+async def _ask_again(
+    client: httpx.AsyncClient, url: str, credential: Credential, address: str, remaining_s: float
+) -> str:
+    """The reason `commit validate` gives, inside what is left of the push's budget, or a D-028 sentence."""
+    if remaining_s <= 0:
+        _log.info("%s: the push's budget is spent, so commit validate is not asked", address)
+        return REASON_NOT_GIVEN
+    try:
+        answer = await post(client, url, request(validate_commands()), credential, timeout_s=remaining_s)
+    except Unreachable as err:
+        _log.warning("%s: commit validate got no answer: %s", address, err.message)
+        return REASON_NOT_GIVEN
+    error = answer.get("error")
+    if error is None:
+        return REASON_VALIDATES
+    return reason(_message(error)) or REASON_NOT_GIVEN
+
+
+def _before_empty_line(text: str) -> str:
+    kept: list[str] = []
+    for line in text.split("\n"):
+        if not line.strip():
+            break
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def _message(error: object) -> str:
+    message = error.get("message") if isinstance(error, dict) else None
+    return message if isinstance(message, str) else ""
+
+
+def _diff(result: object, index: int) -> str:
+    """The diff command's result entry as a string; "" when it is empty, null or absent.
+
+    The commit landed whatever the entry's shape, so no shape fails the push.
+    """
+    entry = result[index] if isinstance(result, list) and 0 <= index < len(result) else None
+    if not entry:
+        return ""
+    if isinstance(entry, str):
+        return entry
+    text = entry.get("text") if isinstance(entry, dict) else None
+    return text if isinstance(text, str) else json.dumps(entry)

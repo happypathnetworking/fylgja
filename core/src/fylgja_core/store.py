@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from fylgja_core.deployment import Deployment
+from fylgja_core.run import Event, Run
 from fylgja_core.twin_record import TwinRecord
 
 
@@ -123,7 +124,30 @@ class Store(ABC):
     def subscribe(self) -> Subscription:
         """A queue that every later twin create, update and delete is put on, in write order."""
 
-    # Run methods follow (Task 5).
+    @abstractmethod
+    def create_run(self, run: Run) -> None:
+        """Store a new run; `Conflict` when its id exists."""
+
+    @abstractmethod
+    def get_run(self, run_id: str) -> Run:
+        """The run, or `NotFound`."""
+
+    @abstractmethod
+    def update_run(self, run: Run) -> None:
+        """Replace the run's whole document; `NotFound` when it does not exist."""
+
+    @abstractmethod
+    def list_runs(self, twin: str | None = None) -> list[Run]:
+        """Every run, or those of one twin, newest first."""
+
+    @abstractmethod
+    def append_event(self, run_id: str, event: Event) -> Event:
+        """Append the event with the next sequence number, whatever its `seq` says; returns
+        it as stored. `NotFound` when the run has no record."""
+
+    @abstractmethod
+    def events(self, run_id: str, after: int = 0) -> list[Event]:
+        """The run's events with `seq` greater than `after`, in order."""
 
     @abstractmethod
     def close(self) -> None:

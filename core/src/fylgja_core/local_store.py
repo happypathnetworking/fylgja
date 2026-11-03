@@ -28,6 +28,7 @@ from typing import Any
 
 from fylgja_core import blueprint, deployment, documents, twin_record
 from fylgja_core.deployment import Deployment
+from fylgja_core.run import Event, Run
 from fylgja_core.store import Change, Conflict, Locked, NotFound, Store, Subscription
 from fylgja_core.twin_record import TwinRecord
 
@@ -255,6 +256,63 @@ class LocalStore(Store):
         with self._mutex:
             if subscription in self._subscriptions:
                 self._subscriptions.remove(subscription)
+
+    def _run_path(self, run_id: str) -> Path:
+        return self.root / "runs" / f"{run_id}.json"
+
+    def _events_path(self, run_id: str) -> Path:
+        return self.root / "runs" / f"{run_id}.events.ndjson"
+
+    def create_run(self, run: Run) -> None:
+        if not _write_new(self._run_path(run.id), _json(documents.encode(run))):
+            raise Conflict(f"run {run.id} exists")
+
+    def get_run(self, run_id: str) -> Run:
+        try:
+            return documents.decode(Run, json.loads(self._run_path(run_id).read_bytes()))
+        except FileNotFoundError:
+            raise NotFound(run_id) from None
+
+    def update_run(self, run: Run) -> None:
+        with self._mutex:
+            if not self._run_path(run.id).exists():
+                raise NotFound(run.id)
+            _write_atomic(self._run_path(run.id), _json(documents.encode(run)))
+
+    def list_runs(self, twin: str | None = None) -> list[Run]:
+        ids = sorted((p.stem for p in (self.root / "runs").glob("*.json")), reverse=True)
+        runs = [self.get_run(i) for i in ids]
+        return [r for r in runs if twin is None or r.twin == twin]
+
+    def append_event(self, run_id: str, event: Event) -> Event:
+        with self._mutex:
+            if not self._run_path(run_id).exists():
+                raise NotFound(run_id)
+            with self._events_path(run_id).open("a+b") as f:
+                f.seek(0)
+                data = f.read()
+                whole = data[: data.rfind(b"\n") + 1]
+                if len(whole) != len(data):  # a core killed mid-append left a fragment: cut it
+                    f.truncate(len(whole))
+                lines = whole.splitlines()
+                last = json.loads(lines[-1])["seq"] if lines else 0
+                stored = dataclasses.replace(event, seq=last + 1)
+                f.seek(0, os.SEEK_END)
+                f.write((json.dumps(documents.encode(stored), sort_keys=True) + "\n").encode())
+                f.flush()
+                os.fsync(f.fileno())
+            return stored
+
+    def events(self, run_id: str, after: int = 0) -> list[Event]:
+        if not self._run_path(run_id).exists():
+            raise NotFound(run_id)
+        try:
+            data = self._events_path(run_id).read_bytes()
+        except FileNotFoundError:
+            return []
+        lines = data.split(b"\n")[:-1]  # the last fragment has no newline: not yet whole
+        events = [documents.decode(Event, json.loads(line)) for line in lines]
+        return [e for e in events if e.seq > after]
 
     def close(self) -> None:
         """Release the store's lock; closing twice is harmless."""

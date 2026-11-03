@@ -4,6 +4,7 @@ compare-and-set, runs and their events, in a directory."""
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import os
 import subprocess
@@ -16,6 +17,7 @@ import pytest
 
 from fylgja_core import blueprint, deployment, documents, store
 from fylgja_core.local_store import LocalStore
+from fylgja_core.run import Event, Run
 from fylgja_core.twin_record import Spec, Status, TwinRecord
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -209,3 +211,53 @@ def test_a_second_core_is_refused_naming_the_holder(tmp_path: Path) -> None:
     assert done.returncode == 3 and str(os.getpid()) in done.stdout
     s.close()
     assert subprocess.run([sys.executable, "-c", code, str(tmp_path)]).returncode == 0
+
+
+def run_(id_: str = "01ARZ3NDEKTSV4RRFFQ69G5FAV", twin: str = "t") -> Run:
+    return Run(
+        id=id_, twin=twin, operation="create", state="queued", principal="p", created_at="2026-11-03T10:00:00.000000Z"
+    )
+
+
+def test_runs_are_kept_by_id_and_listed_newest_first(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.create_run(run_("01ARZ3NDEKTSV4RRFFQ69G5FAV", "a"))
+    s.create_run(run_("01BRZ3NDEKTSV4RRFFQ69G5FAV", "b"))
+    with pytest.raises(store.Conflict):
+        s.create_run(run_("01ARZ3NDEKTSV4RRFFQ69G5FAV"))
+    assert [r.id[:3] for r in s.list_runs()] == ["01B", "01A"]
+    assert [r.twin for r in s.list_runs(twin="a")] == ["a"]
+    s.update_run(dataclasses.replace(s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV"), state="running"))
+    assert s.get_run("01ARZ3NDEKTSV4RRFFQ69G5FAV").state == "running"
+    with pytest.raises(store.NotFound):
+        s.get_run("01CRZ3NDEKTSV4RRFFQ69G5FAV")
+    with pytest.raises(store.NotFound):
+        s.update_run(run_("01CRZ3NDEKTSV4RRFFQ69G5FAV"))
+
+
+def test_events_are_appended_one_line_each_with_the_stores_sequence(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.create_run(run_())
+    e1 = s.append_event(run_().id, Event(seq=99, at="2026-11-03T10:00:00.000000Z", phase="compile", outcome="started"))
+    e2 = s.append_event(
+        run_().id,
+        Event(seq=99, at="2026-11-03T10:00:01.000000Z", phase="compile", outcome="done", duration_s=1.0),
+    )
+    assert (e1.seq, e2.seq) == (1, 2)
+    lines = (tmp_path / "runs" / f"{run_().id}.events.ndjson").read_text().splitlines()
+    assert len(lines) == 2 and json.loads(lines[0])["seq"] == 1
+    assert [e.seq for e in s.events(run_().id)] == [1, 2] and s.events(run_().id, after=1) == [e2]
+    with pytest.raises(store.NotFound):
+        s.append_event("01CRZ3NDEKTSV4RRFFQ69G5FAV", e1)
+
+
+def test_a_trailing_partial_line_is_skipped_and_the_sequence_continues(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.create_run(run_())
+    s.append_event(run_().id, Event(seq=0, at="2026-11-03T10:00:00.000000Z", phase="compile", outcome="started"))
+    path = tmp_path / "runs" / f"{run_().id}.events.ndjson"
+    with path.open("a") as f:
+        f.write('{"seq": 2, "at": "2026-11-03T10:00:01.0')  # a core killed mid-append
+    assert [e.seq for e in s.events(run_().id)] == [1]
+    e = s.append_event(run_().id, Event(seq=0, at="2026-11-03T10:00:02.000000Z", phase="compile", outcome="done"))
+    assert e.seq == 2 and [x.seq for x in s.events(run_().id)] == [1, 2]

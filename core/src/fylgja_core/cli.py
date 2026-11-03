@@ -193,9 +193,9 @@ def _twin_create(ctx: Context, args: argparse.Namespace) -> int:
     if args.no_wait:
         ctx.show(record, _twin_lines(record))
         return 0
-    record, seen = _settle(ctx, record)
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, "create", seen))
-    ctx.show(run, _twin_lines(record) + _run_lines(run))
+    settled = _settle(ctx, record)
+    run = _ended(ctx.client, _run_of(ctx.client, args.name, "create", settled.run_id))
+    ctx.show(run, _twin_lines(settled.record) + _run_lines(run))
     return EXIT[_verdict(run).status]
 
 
@@ -221,15 +221,17 @@ def _twin_destroy(ctx: Context, args: argparse.Namespace) -> int:
     if args.no_wait:
         ctx.show(record, _twin_lines(record))
         return 0
-    seen = record["status"].get("run_id")
     try:
-        _, seen = _settle(ctx, record)
+        settled = _settle(ctx, record)
     except ProblemError as e:
         # Gone before the watch began: the destroy run says how it went.
         if e.status != 404:
             raise
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, "destroy", seen))
-    ctx.show(run, [f"twin {args.name} deleted", *_run_lines(run)])
+        settled = Settled(record, record["status"].get("run_id"), gone=True)
+    run = _ended(ctx.client, _run_of(ctx.client, args.name, "destroy", settled.run_id))
+    # Deleted only when the twin is gone; a teardown that kept the record shows where it stands.
+    head = [f"twin {args.name} deleted"] if settled.gone else _twin_lines(settled.record)
+    ctx.show(run, head + _run_lines(run))
     return EXIT[_verdict(run).status]
 
 
@@ -248,6 +250,10 @@ def _run_watch(ctx: Context, args: argparse.Namespace) -> int:
     run = _ended(ctx.client, ctx.client.get_run(args.id))
     if ctx.json:
         print(json.dumps(events, indent=2))
+    else:
+        # The exit code is the verdict's, so the text says which and why.
+        for line in _verdict_lines(run):
+            print(line)
     return EXIT[_verdict(run).status]
 
 
@@ -282,12 +288,21 @@ def _bundle_get(ctx: Context, args: argparse.Namespace) -> int:
 # Waiting.
 
 
-def _settle(ctx: Context, record: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
-    """Watch a twin until the loop has acted on its generation or the twin is gone: the last
-    record seen, and the last run the records named."""
+@dataclass(frozen=True)
+class Settled:
+    """How a wait for a twin ended: the last record seen, the last run the records named, and
+    whether the twin is gone."""
+
+    record: dict[str, Any]
+    run_id: str | None
+    gone: bool = False
+
+
+def _settle(ctx: Context, record: dict[str, Any]) -> Settled:
+    """Watch a twin until the loop has acted on its generation or the twin is gone."""
     seen: str | None = record["status"].get("run_id")
     if record["status"]["observed_generation"] == record["generation"]:
-        return record, seen
+        return Settled(record, seen)
     name, phase = record["name"], record["status"].get("phase")
     for event in ctx.client.watch_twin(name, since_revision=record["revision"]):
         record = event["object"]
@@ -295,8 +310,10 @@ def _settle(ctx: Context, record: dict[str, Any]) -> tuple[dict[str, Any], str |
         if record["status"].get("phase", phase) != phase:
             phase = record["status"]["phase"]
             ctx.progress(f"{name}: {phase}")
-        if event["type"] == "DELETED" or record["status"]["observed_generation"] == record["generation"]:
-            return record, seen
+        if event["type"] == "DELETED":
+            return Settled(record, seen, gone=True)
+        if record["status"]["observed_generation"] == record["generation"]:
+            return Settled(record, seen)
     raise Failure(f"the watch of twin {name} ended before the loop acted on generation {record['generation']}")
 
 
@@ -377,16 +394,20 @@ def _ready(status: Mapping[str, Any]) -> str:
 
 def _run_lines(run: Mapping[str, Any]) -> list[str]:
     ended = f", ended at {run['ended_at']}" if "ended_at" in run else ""
-    lines = [f"run {run['id']}: {run['operation']} of twin {run['twin']}, {run['state']}",
-             f"asked by {run['principal']} at {run['created_at']}{ended}"]
-    if "verdict" in run:
-        verdict = _verdict(run)
-        lines.append(f"verdict: {verdict.status}")
-        if verdict.counts is not None:
-            c = verdict.counts
-            lines.append(f"  held {c.held}, failed {c.failed}, skipped {c.skipped}")
-        lines += [f"  {_finding(documents.encode(f))}" for f in verdict.findings]
-    return lines
+    return [f"run {run['id']}: {run['operation']} of twin {run['twin']}, {run['state']}",
+            f"asked by {run['principal']} at {run['created_at']}{ended}", *_verdict_lines(run)]
+
+
+def _verdict_lines(run: Mapping[str, Any]) -> list[str]:
+    """A run's verdict and each of its findings; none before the run has ended."""
+    if "verdict" not in run:
+        return []
+    verdict = _verdict(run)
+    lines = [f"verdict: {verdict.status}"]
+    if verdict.counts is not None:
+        c = verdict.counts
+        lines.append(f"  held {c.held}, failed {c.failed}, skipped {c.skipped}")
+    return lines + [f"  {_finding(documents.encode(f))}" for f in verdict.findings]
 
 
 def _event_line(event: Mapping[str, Any]) -> str:

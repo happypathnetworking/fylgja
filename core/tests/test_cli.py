@@ -494,8 +494,30 @@ def test_twin_destroys_exit_code_is_its_runs_verdict(
 def test_twin_destroy_of_a_twin_already_gone_reads_the_destroy_run(capsys: pytest.CaptureFixture[str]) -> None:
     api = destroying(FakeAPI()).on("GET", TWIN_PATH, refuse(404, "twin.not_found", "No twin is named three-node."))
     r = fylgja(capsys, api, "twin", "destroy", TWIN)
-    assert (r.code, r.err) == (0, "")
+    assert (r.code, r.err, r.lines()[0]) == (0, "", "twin three-node deleted")
     assert api.calls() == [f"DELETE {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
+
+
+def test_twin_destroy_whose_teardown_kept_the_record_shows_it_and_does_not_say_deleted(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    kept = record(6, 2, 2, deleting=True, ready=("False", "destroy.failed"), run_id=DESTROY_RUN_ID)
+    api = destroying(FakeAPI(), status="unclean").on("GET", TWIN_PATH, watch(kept))
+    r = fylgja(capsys, api, "twin", "destroy", TWIN)
+    assert r.code == 3 and "deleted" not in r.out
+    assert r.lines() == [
+        "twin three-node: generation 2, observed 2",
+        f"deletion requested at {ENDED_AT}",
+        "Ready: False (destroy.failed)",
+        "phase: none",
+        "bundle: none",
+        f"run: {DESTROY_RUN_ID}",
+        "nodes: none",
+        f"run {DESTROY_RUN_ID}: destroy of twin three-node, ended",
+        f"asked by alice at {AT}, ended at {ENDED_AT}",
+        "verdict: unclean",
+        "  error push.refused n1: The node refused the configuration: commit failed.",
+    ]
 
 
 def test_twin_destroy_during_a_create_finds_the_destroy_run_among_the_twins(
@@ -580,6 +602,8 @@ def test_run_watch_prints_each_event_and_exits_by_the_verdict(capsys: pytest.Cap
         f"1 {AT} compile started",
         f"2 {AT} compile done 0.25s",
         f"3 {ENDED_AT} push failed n1 1.5s push.refused",
+        "verdict: failed",
+        "  error push.refused n1: The node refused the configuration: commit failed.",
     ])
     assert api.calls() == [f"GET {RUN_PATH}/events", f"GET {RUN_PATH}"]
     assert api.last("GET", f"{RUN_PATH}/events").headers["accept"] == "text/event-stream"

@@ -6,7 +6,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -173,28 +172,40 @@ def test_kinds_with_aliases_are_never_lossy() -> None:
     assert p.deployment.fidelity.lossy == deployment.Lossy(mappings=0, shared_ports=0)
 
 
-def a_link_on_the_shared_port(doc: dict[str, Any]) -> None:
-    links = doc["network"]["links"]
-    links.append({"a": {"device": "c1", "interface": "Ethernet2/1"}, "b": {"device": "c2", "interface": "Ethernet1/2"}})
-    links.sort(key=lambda lk: (lk["a"]["device"], lk["a"]["interface"], lk["b"]["device"], lk["b"]["interface"]))
+REJECTED_DIR = ROOT / "testdata" / "deployment" / "rejected"
+# Every plan rejection fixture, and the (rule, object) pairs the plan must report for it:
+# exactly these. Ethernet2/1 renames to eth1 as Ethernet1/1 does, which already ends a link,
+# so cabling it too, by a link or by a probe's host, would cable c1's eth1 twice.
+SHARED_ETH1 = {(clab_plan.RULE_PORT_SHARED, "c1:Ethernet1/1"), (clab_plan.RULE_PORT_SHARED, "c1:Ethernet2/1")}
+REJECTED: dict[str, set[tuple[str, str]]] = {
+    "port-shared-link.json": SHARED_ETH1,
+    "port-shared-probe.json": SHARED_ETH1,
+}
 
 
-def a_probe_on_the_shared_port(doc: dict[str, Any]) -> None:
-    doc["probes"].append({"name": "c1-loop", "format": "ping", "endpoints": [
-        {"device": "c1", "interface": "Ethernet2/1", "address": "10.9.1.2/24", "gateway": "10.9.1.1"},
-        {"device": "c2", "interface": "Ethernet1/2", "address": "10.9.2.2/24", "gateway": "10.9.2.1"}]})
-
-
-@pytest.mark.parametrize("change", [a_link_on_the_shared_port, a_probe_on_the_shared_port], ids=["link", "probe"])
-def test_two_cabled_interfaces_renamed_onto_one_port_are_unplannable(change: Callable[[dict[str, Any]], None]) -> None:
-    # Ethernet2/1 renames to eth1 as Ethernet1/1 does, which already ends a link: cabling it
-    # too, by a link or by a probe host, would cable c1's eth1 twice.
-    doc = json.loads((ROOT / "testdata/blueprint/lossy.json").read_text())
-    change(doc)
-    c = compiler.compile(blueprint.decode(doc), PLATFORMS, PROBES)
+def refused(name: str) -> tuple[Finding, ...]:
+    c = compiler.compile(blueprint.load(REJECTED_DIR / name), PLATFORMS, PROBES)
     with pytest.raises(Unplannable) as caught:
         clab_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "t", ALLOCATION)
-    assert caught.value.findings == (
+    return caught.value.findings
+
+
+@pytest.mark.parametrize("name", sorted(REJECTED))
+def test_each_rejection_fixture_is_refused_for_its_fault_alone(name: str) -> None:
+    found = refused(name)
+    # The findings come ordered, so a list comparison also catches a fault filed twice.
+    assert [(f.rule, f.object) for f in found] == sorted(REJECTED[name]), found
+    for finding in found:
+        assert finding.severity == "error"
+        assert finding.message[0].isupper() and finding.message.endswith("."), finding.message
+
+
+def test_every_rejection_fixture_has_a_row() -> None:
+    assert {p.name for p in REJECTED_DIR.glob("*.json")} == set(REJECTED)
+
+
+def test_a_refusal_names_the_port_and_the_other_interfaces_on_it() -> None:
+    assert refused("port-shared-link.json") == (
         Finding(rule="interface.port.shared", severity="error", object="c1:Ethernet1/1",
                 message="Port c1:Ethernet1/1 is cabled, and the rename puts it on eth1 with Ethernet2/1 (cabled); "
                         "the twin can cable a port once."),
@@ -202,7 +213,7 @@ def test_two_cabled_interfaces_renamed_onto_one_port_are_unplannable(change: Cal
                 message="Port c1:Ethernet2/1 is cabled, and the rename puts it on eth1 with Ethernet1/1 (cabled); "
                         "the twin can cable a port once."),
     )
-    assert "interface.port.shared on c1:Ethernet1/1" in str(caught.value)
+    assert "interface.port.shared on c1:Ethernet1/1" in str(Unplannable(refused("port-shared-probe.json")))
 
 
 PURE_IMPORTS = {"__future__", "collections.abc", "dataclasses", "hashlib", "ipaddress", "math", "shlex", "typing",

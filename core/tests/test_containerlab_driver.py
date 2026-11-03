@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import os
 from collections.abc import Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
@@ -483,3 +484,68 @@ def test_the_destroy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute()
     slow = {**PLATFORMS, "nokia_srlinux": dataclasses.replace(srl, runtime=dataclasses.replace(srl.runtime,
                                                                                                containerlab=clab))}
     assert destroy_budget(planned("mixed").files, slow, PROBES) == 90 + 60
+
+
+def test_a_failed_destroy_leaves_the_rest_for_the_next_destroy(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    p = planned("three-node")
+    failing = FakeRunner({**RUNNING, DEPLOY: "", NETWORK: "[]\n", NETWORK_RM: ""}, fail=[DESTROY])
+    asyncio.run(driver(tmp_path, failing).apply(p.deployment, p.files, PLATFORMS, PROBES))
+    failing.calls.clear()
+    with pytest.raises(CommandFailed):
+        destroy(tmp_path, failing, p)
+    assert failing.calls[-1][:2] == DESTROY  # no network check or removal after it
+    assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
+    assert [(r.levelname, r.getMessage().split(":")[0]) for r in caplog.records if r.levelname == "WARNING"] == [
+        ("WARNING", "destroy t failed, and the next destroy finds what is left")]
+    again = FakeRunner({**RUNNING, DESTROY: "", NETWORK: "[]\n", NETWORK_RM: ""})
+    destroy(tmp_path, again, p)
+    assert [c[:2] for c in again.calls] == [PS[:2], INSPECT[:2], DESTROY, NETWORK[:2], NETWORK_RM[:2]]
+    assert not (tmp_path / "root/containerlab/t").exists()
+
+
+def test_a_failed_rule_2_deploy_is_raised_and_destroys_nothing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    (tmp_path / "ssh_config.d").mkdir()
+    (tmp_path / "ssh_config.d" / "clab-t.conf").write_text("Host clab-t-n1\n")
+    runner = FakeRunner({**NOTHING, DESTROY: ""}, fail=[DEPLOY, NETWORK])
+    with pytest.raises(CommandFailed):
+        destroy(tmp_path, runner)
+    assert [c[:2] for c in runner.calls] == [PS[:2], DEPLOY]
+    assert any(r.levelname == "WARNING" and "destroy t failed" in r.getMessage() for r in caplog.records)
+
+
+def test_an_unreadable_hosts_file_holds_no_residue(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    unreadable = tmp_path / "hosts-is-a-directory"
+    unreadable.mkdir()
+    (tmp_path / "ssh_config.d").mkdir()
+    d = ContainerlabDriver(tmp_path / "root", runner=FakeRunner(NOTHING, fail=[NETWORK]), hosts_path=unreadable,
+                           ssh_config_dir=tmp_path / "ssh_config.d")
+    assert asyncio.run(d.inspect("t")).state == "absent"
+    assert any(r.levelname == "WARNING" and "cannot be read" in r.getMessage() for r in caplog.records)
+
+
+def test_a_hosts_file_that_is_not_utf8_is_still_read(tmp_path: Path) -> None:
+    (tmp_path / "etc-hosts").write_bytes(b"127.0.0.1 h\xf6st\n###### CLAB-t-START ######\n")
+    assert inspect(tmp_path, FakeRunner(NOTHING, fail=[NETWORK])).state == "residue"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root removes a read-only directory's entries")
+def test_a_twins_directory_that_cannot_be_removed_is_left_and_never_wedges_destroy(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # As containerlab leaves a root-owned lab directory: its entries cannot be unlinked.
+    locked = tmp_path / "root/containerlab/t/clab-t"
+    locked.mkdir(parents=True)
+    (locked / "topology-data.json").write_text("{}")
+    locked.chmod(0o500)
+    try:
+        destroy(tmp_path, FakeRunner(NOTHING, fail=[NETWORK]))
+        assert locked.is_dir()
+        assert any(r.levelname == "WARNING" and "its directory" in r.getMessage() and "is left" in r.getMessage()
+                   for r in caplog.records)
+    finally:
+        locked.chmod(0o700)

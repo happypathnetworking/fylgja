@@ -1,4 +1,4 @@
-"""The driver registry: the drivers this core serves, by name (Constitution XIII, D-017).
+"""The driver registry: the drivers this core serves, by name (Constitution XIII, D-017, D-046).
 
 This is the one module above the seam that names a runtime, and it is the registry, not a
 branch: the server lists `NAMES` (GET /v1/drivers) and makes the driver `FYLGJA_DRIVER` names

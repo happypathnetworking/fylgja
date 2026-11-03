@@ -193,24 +193,38 @@ class ContainerlabDriver:
         """Remove everything the twin holds: its containers, host entries, ssh config and
         management network, and the twin's directory. Root-owned residue with no container is
         deployed, then destroyed (rule 2); nothing found is nothing done. `ValueError`, before
-        any command, for files that are not the deployment's."""
+        any command, for files that are not the deployment's.
+
+        A command that fails (the destroy, or rule 2's deploy) raises `CommandFailed`, logged
+        at WARNING, and leaves the rest undone: the next destroy finds what is left and goes on
+        from there. A twin's directory that cannot be removed, such as a root-owned lab
+        directory containerlab left, is logged at WARNING and left, so that it never wedges
+        a destroy."""
         _check_files(deployment, files)
         twin = deployment.twin
         budget = destroy_budget(files, platforms, probe_packages)
         inspection = await self.inspect(twin)
         lab = inspection.state == "present"
-        if inspection.state == "residue" and self._root_owned_residue(twin):
-            _log.info("destroy %s: residue and no container: deploy, then destroy (D-023)", twin)
-            await self.apply(deployment, files, platforms, probe_packages)
-            lab = True
-        if lab:
-            directory = self._write(twin, files)
-            await self._run(["containerlab", "destroy", "-t", str(directory / TOPOLOGY), "--cleanup"],
-                            timeout_s=budget, cwd=directory)
+        try:
+            if inspection.state == "residue" and self._root_owned_residue(twin):
+                _log.info("destroy %s: residue and no container: deploy, then destroy (D-023)", twin)
+                await self.apply(deployment, files, platforms, probe_packages)
+                lab = True
+            if lab:
+                directory = self._write(twin, files)
+                await self._run(["containerlab", "destroy", "-t", str(directory / TOPOLOGY), "--cleanup"],
+                                timeout_s=budget, cwd=directory)
+        except cli.CommandFailed as e:
+            _log.warning("destroy %s failed, and the next destroy finds what is left: %s", twin, e)
+            raise
         if inspection.state != "absent" and await self._network_exists(twin):
             await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
-        if self._directory(twin).exists():
-            shutil.rmtree(self._directory(twin))
+        directory = self._directory(twin)
+        if directory.exists():
+            try:
+                shutil.rmtree(directory)
+            except OSError as e:
+                _log.warning("destroy %s: its directory %s is left: %s", twin, directory, e)
 
     async def endpoints(self, twin: str) -> Mapping[str, str]:
         """Each running node's management address, by node name; a node without one is left out."""
@@ -235,9 +249,14 @@ class ContainerlabDriver:
         writes as root, and only its destroy clears. A block is opened by a line naming its lab
         exactly, so the twin `t-2`'s entries (`clab-t-2-n1`) are never taken for `t`'s; the
         marker is the format string in the containerlab 0.81.0 binary, which the live tier
-        verifies on a running lab."""
+        verifies on a running lab. A hosts file that cannot be read is logged at WARNING and
+        holds no residue; one that is not UTF-8 is read with replacements."""
         start = f"###### CLAB-{twin}-START ######"
-        hosts = self._hosts_path.read_text() if self._hosts_path.exists() else ""
+        try:
+            hosts = self._hosts_path.read_text(errors="replace")
+        except OSError as e:
+            _log.warning("%s cannot be read, so no host entry counts as residue: %s", self._hosts_path, e)
+            hosts = ""
         return any(line.strip() == start for line in hosts.splitlines()) or (
             self._ssh_config_dir / f"clab-{twin}.conf").exists()
 

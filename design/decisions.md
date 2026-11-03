@@ -69,6 +69,7 @@ already have been weighed.
 | [D-043](#d-043) | The local driver's allocation and its reach into Docker | Runtimes and drivers |
 | [D-044](#d-044) | The deployment id hashes the driver, the twin, the bundle id and the files | The compiler and the bundle |
 | [D-045](#d-045) | The driver's plan refuses a runtime port two cabled interfaces share | The compiler and the bundle |
+| [D-047](#d-047) | A refusal `commit validate` passes names both its possible causes in one sentence | Pushing, stepping and verifying |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -1842,7 +1843,9 @@ configuration and commits**, in one request with one atomic commit.
 <a id="d-028"></a>
 ### D-028 — A refused SR Linux replace asks the node again for its reason
 
-**Status:** Accepted at the baseline (2026-10-31).
+**Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-047](#d-047) on
+2026-11-03, which rewrites the first sentence, for a candidate that validates. The second
+request, the second sentence and the rest stand.
 
 #### Context
 
@@ -2081,6 +2084,44 @@ the step, and a bound for its waiting form.
   ([Constitution X](constitution.md#x-report-honestly)).
 - **Revisit** if a consumer needs a gate inside Fylgja: that is a new entry, not a flag.
 
+<a id="d-047"></a>
+### D-047 — A refusal `commit validate` passes names both its possible causes in one sentence
+
+**Status:** Accepted 2026-11-03. Supersedes [D-028](#d-028) in its first sentence, the one
+for a candidate that validates.
+
+#### Context
+
+D-028's first sentence says a refused SR Linux candidate passes `commit validate`, "which
+does not run every check a commit does": it implies a check made as the commit applied. On
+containerlab 0.81.0 the live tier showed that a parse-time refusal in a configuration whose
+echo is cut gets the same answer, `All changes are valid.`, because the refused line never
+entered the candidate ([verified-facts.md](verified-facts.md)). For a typo, the sentence
+points at a commit-time check that never happened.
+
+#### Options considered
+
+- **Keep the sentence.** Rejected: it misleads on a typo.
+- **A third sentence for parse errors.** Rejected: the cut message does not say which case
+  it is, so Fylgja cannot choose between the two.
+- **One honest sentence covering both.** Chosen.
+
+#### Decision
+
+- **When `commit validate` gives a cut refusal no reason, the finding's message is
+  exactly:** `the node's message ends before any reason Fylgja can read, and `commit
+  validate` finds nothing wrong with what reached the candidate: the line it refused was
+  either checked only as the commit applied, or never entered the candidate (D-047)`.
+- D-028's second request, its second sentence and the rest of it stand.
+
+#### Consequences
+
+- The sentence is part of the core's contract, held word for word by the pure tier, as
+  D-028's are.
+- An operator reading it looks for a typo in the configuration as well as a value outside
+  the package's ranges.
+- **Revisit** with D-028.
+
 ## Process and repository
 
 <a id="d-033"></a>
@@ -2214,3 +2255,7 @@ becomes an entry then.
   five-twin scenario does.
 - **The Temporal fallback** ([D-023](#d-023)). Whether the core killed mid-run on
   clabernetes resumes without a manual step.
+- **A cEOS node with no data link refuses `ip routing`**: its forwarding agent never starts
+  ([verified-facts.md](verified-facts.md)), so the push of a configuration carrying it is
+  refused. Whether the compiler reports it as a finding, or the driver gives such a node a
+  port, is open.

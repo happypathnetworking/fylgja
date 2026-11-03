@@ -205,7 +205,8 @@ def test_two_cabled_interfaces_renamed_onto_one_port_are_unplannable(change: Cal
     assert "interface.port.shared on c1:Ethernet1/1" in str(caught.value)
 
 
-PURE_IMPORTS = {"__future__", "hashlib", "math", "shlex", "collections.abc", "typing", "yaml"}
+PURE_IMPORTS = {"__future__", "collections.abc", "dataclasses", "hashlib", "ipaddress", "math", "shlex", "typing",
+                "yaml"}
 MODEL_IMPORTS = {f"fylgja_core.{m}" for m in ("blueprint", "bundle", "containerlab", "deployment", "driver",
                                               "findings", "mapping", "platform_package", "probe_package")}
 
@@ -232,9 +233,12 @@ def test_a_from_import_of_a_submodule_names_the_submodule() -> None:
         "fylgja_core.containerlab.pool", "fylgja_core.containerlab", "fylgja_core.bundle"}
 
 
-def test_plan_is_pure() -> None:
-    """Constitution V: no I/O, clock or environment. The imports say so, as the compiler's do."""
-    imported = imports((SRC / "containerlab" / "plan.py").read_text())
+@pytest.mark.parametrize("module", ["containerlab/plan.py", "containerlab/__init__.py", "containerlab/pool.py",
+                                    "driver.py"])
+def test_plan_is_pure(module: str) -> None:
+    """Constitution V: no I/O, clock or environment. The imports say so, as the compiler's do:
+    the plan's own and those of the modules it reaches through, so that none re-exports one."""
+    imported = imports((SRC / module).read_text())
     assert imported <= PURE_IMPORTS | MODEL_IMPORTS, imported - (PURE_IMPORTS | MODEL_IMPORTS)
 
 

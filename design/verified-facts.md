@@ -34,7 +34,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 
 - `clab deploy` creates `clab-<lab>/` beside the topology file, or under
   `CLAB_LABDIR_BASE` when it is set, mostly root-owned; `clab destroy --cleanup` removes
-  it without root in about 1 s. *(2026-09-15; 26.04, 2026-10-08)*
+  it without root in about 1 s. *(2026-09-15; 26.04, 2026-10-08; 0.81.0, 2026-11-03)* On
+  0.81.0 the directory itself is root's, and `destroy -t <file> --cleanup` removed it with a
+  three-node lab in 1.5 s.
 - containerlab applies an SR Linux `.cli` startup snippet over the default configuration
   and commits it itself, so the snippet carries no `commit` line; LLDP and gNMI are on by
   default. *(0.77, 2026-09-15; 26.04, 2026-10-08)*
@@ -50,20 +52,83 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   decode `absLabPath`. *(2026-09-16; 26.04, 2026-10-08)*
 - `inspect` reports an exited container's address as `N/A`. *(2026-10-03; 26.04, 2026-10-08)*
 - A lab's node management addresses are reassigned at each deploy: read them after the
-  deploy, never from an earlier one. *(2026-10-29)*
+  deploy, never from an earlier one. *(2026-10-29; 0.81.0, 2026-11-03: a lab destroyed and
+  deployed again gave `n1` `.4`, where its first deploy had given it `.2`)*
 - **Labels.** The topology's `defaults.labels` reach every container, beside
-  containerlab's own (`containerlab=<lab>`, `clab-node-*`, `clab-owner`). *(2026-10-30)*
+  containerlab's own (`containerlab=<lab>`, `clab-node-*`, `clab-owner`). *(2026-10-30;
+  0.81.0, 2026-11-03)* On 0.81.0 an SR Linux node carries exactly `clab-mgmt-net-bridge`,
+  `clab-node-group`, `clab-node-kind`, `clab-node-lab-dir`, `clab-node-longname`,
+  `clab-node-name` (the node's name in the topology), `clab-node-type`, `clab-owner`,
+  `clab-topo-file` and `containerlab` (the lab's name); then the topology's `fylgja.twin`,
+  and the image's own `description` and `org.opencontainers.image.*`.
 - **Two labs at once**, each with its own `mgmt.network` and `ipv4-subnet`, deploy
   concurrently in 48–50 s, with distinct names, labels and hosts entries. Destroying one
   (1.6 s) leaves the other running. **Their management networks route to each other
-  through the host** (3 ms ping between two labs' nodes). *(2026-10-30)*
+  through the host** (3 ms ping between two labs' nodes). *(2026-10-30)* Re-exercised on
+  0.81.0, all but the route *(0.81.0, 2026-11-03)*: `drv-live` and `drv-live-2`, three SR
+  Linux nodes each, deployed at once through the driver in 53.1 s; destroying `drv-live`
+  (1.6 s) left `drv-live-2` running, with its hosts block whole.
 - **Residue.** *(2026-10-30)*
   - `docker rm` of a lab's containers, followed by `destroy --cleanup`, leaves the
     management network, the `/etc/hosts` lines and
-    `/etc/ssh/ssh_config.d/clab-<lab>.conf`.
-  - `destroy --name` refuses a lab with no containers.
-  - A deploy followed by a destroy clears all of it.
+    `/etc/ssh/ssh_config.d/clab-<lab>.conf`. *(0.81.0, 2026-11-03)* `docker rm -f` of a
+    three-node lab's containers (0.84 s) leaves the same three: the network, the whole
+    hosts block (both markers and every node's line) and the ssh config.
+  - `destroy --name` refuses a lab with no containers. *(0.81.0, 2026-11-03: `Lab '<lab>'
+    not found - no running containers.`, status 1)*
+  - A deploy followed by a destroy clears all of it. *(0.81.0, 2026-11-03)* The deploy over
+    that residue reuses the management network left behind; the driver's residue rule
+    took 25.0 s, the deploy 24 s of it, where a fresh deploy took about 40 s.
   - A deploy refused at its start leaves only the management network.
+
+**What the local driver reads and runs** *(0.81.0, Docker 29.8.1, 2026-11-03)*
+
+- **A lab's containers** are listed by
+  `docker ps -a --filter label=containerlab=<lab> --format '{{.Names}}'`. The label's value
+  is the lab's name exactly, so `drv-live`'s listing never holds `drv-live-2`'s containers.
+- **`docker inspect --type container <names…>`** answers a JSON array. The driver reads:
+  - `Name`, with a leading `/`;
+  - `State.Running`;
+  - `State.StartedAt`, RFC 3339 with nanoseconds (`2026-11-03T19:55:43.416491086Z`);
+  - `Config.Labels["clab-node-name"]`;
+  - `NetworkSettings.Networks["clab-<lab>"].IPAddress`, the node's address in the lab's
+    management subnet.
+- **An exited container** keeps its last `StartedAt` and its `IPAMConfig.IPv4Address`; its
+  `IPAddress`, `Gateway` and `MacAddress` are empty, and `State.Running` is false.
+- **`/etc/hosts`** holds each lab's entries in a block between
+  `###### CLAB-<lab>-START ######` and `###### CLAB-<lab>-END ######`, one line per node:
+  `<ipv4>\tclab-<lab>-<node> <short id>\t# Kind: <kind>`.
+  - An IPv4-only management network's block held no IPv6 line.
+  - `clab-<lab>-` also begins another lab's names (`clab-drv-live-2-n1`), so the driver
+    finds a lab's residue by its start marker.
+- **`docker network inspect --format '{{json .IPAM.Config}}' <ids…>`** prints one line per
+  network: a list of `{"Subnet", "Gateway"}` objects, or `null` for `host` and `none`.
+  `docker image inspect` of an absent image (`No such image`) and `docker network inspect`
+  of an absent network each exit 1.
+- **`destroy -t <file> --cleanup` needs the topology file.** Without it, it exits 1
+  (`Stat <file>: no such file or directory`) and removes nothing.
+  - `destroy --name <lab> --cleanup` needs no file. It removes the containers, the hosts
+    block, the network and the lab directory, but leaves
+    `/etc/ssh/ssh_config.d/clab-<lab>.conf`: it removes `clab-.conf`, an empty lab name.
+  - So the driver writes the topology and destroys with `-t`.
+- **`destroy -t <file> --cleanup` of a running lab removes its management network too**: the
+  driver's `docker network rm` found nothing to remove in any run.
+- **Timings through the driver** for `three-node`, three SR Linux 24.7.1 nodes, on a host
+  with 27 GiB available:
+
+  | Operation | Time |
+  |---|---|
+  | Deploy | 44.1 s and 39.9 s |
+  | Repeat deploy | 0.73 s |
+  | `--reconfigure` | 40.1 s |
+  | Destroy | 1.5 s |
+  | Two labs at once | 53.1 s |
+  | The residue rule (deploy, then destroy) | 25.0 s |
+  | `inspect` (one `docker ps`, one `docker inspect`) | 0.07–0.17 s |
+  | Two `admit`s | 0.18 s |
+
+  The whole live tier, seven tests, took 212 s twice. A one-node `linux` lab (alpine)
+  deploys in 1.6 s.
 
 **Interface names**
 
@@ -93,6 +158,8 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   bootstrap unapplied: after a killed deploy it returned 0 in 0.6 s and fixed nothing.
   Deploy over a partial lab with `--reconfigure`, which recovered the lab in 51.7 s.
   *(2026-09-15; 26.04, 2026-10-08, 2026-10-30)*
+- **`--reconfigure` over a healthy lab recreates every node**: three SR Linux nodes in
+  40.1 s, every container's `State.StartedAt` moved. *(0.81.0, 2026-11-03)*
 
 **The dry run**
 
@@ -118,7 +185,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
     (3.5–14.6 s for the apply).
   - A node added is created with containerlab's post-deploy (31.3 s).
   - An image or kind change is a recreate (20.3 s, 58.7 s with a far cEOS end's restart).
-  - A node removed is deleted (0.85 s); nothing to do takes 0.39 s.
+  - A node removed is deleted (0.85 s); nothing to do takes 0.39 s. *(0.81.0,
+    2026-11-03)* A repeat deploy of a running three-node lab, with nothing to do, took
+    0.73 s and moved no node's `State.StartedAt`.
   - On Ubuntu 26.04: an SR Linux link added in 0.66 s and removed in 0.59 s, live, with
     neither node's `StartedAt` moved; a link between cEOS and SR Linux 3.2 s; a node added
     37.0 s; a kind change 53.6 s; a node removed 1.04 s; nothing to do 0.53 s.

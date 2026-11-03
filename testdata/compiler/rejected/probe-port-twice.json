@@ -25,7 +25,7 @@
     "config": "hostname e1\ninterface Ethernet1\n   no shutdown\n"
    },
    {
-    "name": "s1\tx",
+    "name": "s1",
     "platform": "nokia_srlinux",
     "interfaces": [
      {
@@ -64,7 +64,7 @@
      "interface": "Ethernet1"
     },
     "b": {
-     "device": "s1\tx",
+     "device": "s1",
      "interface": "ethernet-1/1"
     }
    }
@@ -76,14 +76,14 @@
    "format": "ping",
    "endpoints": [
     {
-     "device": "s1\tx",
+     "device": "s1",
      "interface": "ethernet-1/10",
      "address": "10.1.10.2/24",
      "gateway": "10.1.10.1"
     },
     {
-     "device": "s1\tx",
-     "interface": "ethernet-1/11",
+     "device": "s1",
+     "interface": "ethernet-1/10",
      "address": "10.1.11.2/24",
      "gateway": "10.1.11.1"
     }
@@ -91,6 +91,6 @@
   }
  ],
  "source": {
-  "rejection_fixture": "A device name holding a tab would be a file name sha256sum escapes, so the id could not be checked by hand: device.name.unsafe on it. A compiler rejection fixture: a valid blueprint 1 the compiler refuses; tests/test_compiler.py says what it must report."
+  "rejection_fixture": "The probe's two hosts are on one port, s1:ethernet-1/10: probe.port.taken on s1-loop/b. A compiler rejection fixture: a valid blueprint 1 the compiler refuses; tests/test_compiler.py says what it must report."
  }
 }

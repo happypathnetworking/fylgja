@@ -13,8 +13,8 @@ node's reason follows the echo, after `' failed with error '`, and ends at the m
 empty line or where the request's output begins, at the reset's checkpoint line: a parse error
 writes no empty line before it. The node cuts its message at about 1 KiB, which a real replace's
 echo outruns, so a refusal with no reason gets one more request, `commit validate`, which lands
-nothing. When that gives no reason either, the refusal is one of D-028's two sentences, quoting
-nothing. A reason has the recorded shape `At line N: …`; anything else, a message cut inside or
+nothing. When that gives no reason either, the refusal is one of two sentences (D-028, D-047),
+quoting nothing. A reason has the recorded shape `At line N: …`; anything else, a message cut inside or
 just after the error code included, is no reason. Each shape is the node's own, as the facts
 file (design/verified-facts.md) records it for `json_rpc`.
 """
@@ -40,10 +40,11 @@ COMMIT = "commit now"
 VALIDATE = "commit validate"
 MARKER = "' failed with error "
 
-# D-028's two sentences, part of the core's contract word for word.
+# D-028's two sentences, the first as D-047 rewrote it: part of the core's contract word for word.
 REASON_VALIDATES = (
-    "the node's message ends before any reason Fylgja can read, and the candidate it refused passes "
-    "`commit validate`, which does not run every check a commit does (D-028)"
+    "the node's message ends before any reason Fylgja can read, and `commit validate` finds nothing wrong "
+    "with what reached the candidate: the line it refused was either checked only as the commit applied, "
+    "or never entered the candidate (D-047)"
 )
 REASON_NOT_GIVEN = (
     "the node's message ends before any reason Fylgja can read, and asking again with `commit validate` "

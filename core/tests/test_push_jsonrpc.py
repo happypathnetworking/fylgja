@@ -124,10 +124,11 @@ def test_a_replace_resets_to_the_baseline_sends_the_lines_asks_the_diff_and_comm
     assert request(["x"]) == {"jsonrpc": "2.0", "id": 1, "method": "cli", "params": {"commands": ["x"]}}
 
 
-def test_the_two_sentences_are_d028s_word_for_word() -> None:
+def test_the_two_sentences_are_d047s_and_d028s_word_for_word() -> None:
     assert REASON_VALIDATES == (
-        "the node's message ends before any reason Fylgja can read, and the candidate it refused passes "
-        "`commit validate`, which does not run every check a commit does (D-028)"
+        "the node's message ends before any reason Fylgja can read, and `commit validate` finds nothing wrong "
+        "with what reached the candidate: the line it refused was either checked only as the commit applied, "
+        "or never entered the candidate (D-047)"
     )
     assert REASON_NOT_GIVEN == (
         "the node's message ends before any reason Fylgja can read, and asking again with `commit validate` "

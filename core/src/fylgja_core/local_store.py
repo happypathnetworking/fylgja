@@ -320,16 +320,19 @@ class LocalStore(Store):
             created = not path.exists()
             with path.open("a+b") as f:
                 size = f.seek(0, os.SEEK_END)
-                start = max(0, size - _TAIL)
-                f.seek(start)
-                data = f.read()
-                cut = data.rfind(b"\n") + 1
+                window = _TAIL
+                while True:  # widen until the last whole line is known whole, or the file's start is reached
+                    start = max(0, size - window)
+                    f.seek(start)
+                    data = f.read()
+                    cut = data.rfind(b"\n") + 1
+                    before = data[: max(cut - 1, 0)].rfind(b"\n") + 1  # where the last whole line starts
+                    if start == 0 or (cut and data.find(b"\n") < cut - 1):
+                        break
+                    window *= 2
                 if cut != len(data):  # a core killed mid-append left a fragment: cut it
                     f.truncate(start + cut)
-                lines = data[:cut].splitlines()
-                if start and lines:
-                    lines = lines[1:]  # the first line of the tail may be partial
-                last = json.loads(lines[-1])["seq"] if lines else 0
+                last = json.loads(data[before:cut])["seq"] if cut else 0
                 stored = dataclasses.replace(event, seq=last + 1)
                 f.seek(0, os.SEEK_END)
                 f.write((json.dumps(documents.encode(stored), sort_keys=True) + "\n").encode())

@@ -369,3 +369,26 @@ def test_a_long_events_file_continues_its_sequence_from_the_tail(tmp_path: Path)
         s.append_event(run_().id, event)
     assert (tmp_path / "runs" / f"{run_().id}.events.ndjson").stat().st_size > 64 * 1024
     assert s.append_event(run_().id, event).seq == 301
+
+
+def test_a_last_line_longer_than_the_tail_window_still_gives_the_next_seq(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.create_run(run_())
+    long = Event(seq=0, at="2026-11-03T10:00:00.000000Z", phase="compile", outcome="failed", rule="r" * 100_000)
+    assert s.append_event(run_().id, long).seq == 1
+    assert s.append_event(run_().id, long).seq == 2  # the only whole line in the window is the last one
+    assert s.append_event(run_().id, long).seq == 3
+    assert [e.seq for e in s.events(run_().id)] == [1, 2, 3]
+
+
+def test_a_fragment_longer_than_the_tail_window_is_cut_cleanly(tmp_path: Path) -> None:
+    s = LocalStore.open(tmp_path)
+    s.create_run(run_())
+    first = Event(seq=0, at="2026-11-03T10:00:00.000000Z", phase="compile", outcome="started")
+    s.append_event(run_().id, first)
+    path = tmp_path / "runs" / f"{run_().id}.events.ndjson"
+    with path.open("a") as f:
+        f.write('{"seq": 2, "rule": "' + "x" * 150_000)  # killed mid-append, longer than the window
+    assert s.append_event(run_().id, first).seq == 2
+    lines = path.read_text().splitlines()
+    assert len(lines) == 2 and [json.loads(line)["seq"] for line in lines] == [1, 2]

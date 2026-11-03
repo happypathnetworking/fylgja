@@ -25,6 +25,11 @@ Terms are the [glossary](../docs/glossary.md)'s. Dates are written in full, `YYY
 
 ## containerlab 0.79.0
 
+The development host moved to containerlab 0.81.0 on 2026-11-03, the version clabernetes
+0.10.1 embeds, so that both drivers run one containerlab. The facts below were verified on
+0.79.0 and stand until each is re-exercised on 0.81.0, which phase 4 does as it builds the
+local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
+
 **Deploy, inspect and destroy**
 
 - `clab deploy` creates `clab-<lab>/` beside the topology file, or under

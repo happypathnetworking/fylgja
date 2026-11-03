@@ -344,7 +344,7 @@ cluster on 2026-10-30 unless marked "from its docs".
 | Each node's Service is `externalTrafficPolicy: Cluster`, with no setting to change it; a patched value is kept across steps, pod replacements and a drain | `apply` patches each Service to `Local`, and `inspect` reports one that is not as drift ([D-037](decisions.md#d-037)) |
 | A drain moves a host's nodes to the other hosts as new pods, at the same LoadBalancer addresses | The loop sees each moved node's new incarnation and re-pushes it ([D-036](decisions.md#d-036)) |
 | No in-place upgrade from before 0.9; Kubernetes 1.31 or later, VXLAN and nftables required (from its docs) | Pin the clabernetes version in the driver's capabilities, and document the cluster prerequisites |
-| containerlab 0.81 inside clabernetes; 0.79 on the development host | Version skew between the two drivers: pin the local driver's containerlab to the version the clabernetes release embeds, so the kinds behave alike |
+| containerlab 0.81.0 inside clabernetes (its `go.mod`); the development host moved from 0.79.0 to 0.81.0 on 2026-11-03 | No version skew between the two drivers: the local driver's containerlab is pinned to the version the clabernetes release embeds, so the kinds behave alike. The facts measured on 0.79 stand until phase 4 re-exercises them |
 
 The clabernetes driver is one driver behind the seam ([D-017](decisions.md#d-017)). Its
 development cluster is kind on one host ([D-022](decisions.md#d-022)); the production

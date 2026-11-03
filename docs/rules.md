@@ -60,3 +60,9 @@ endpoint as `probe/a` or `probe/b`.
 | `probe.interface.mgmt_only` | the endpoint is on the management port |
 | `probe.interface.cabled` | the endpoint is on a port that ends a link |
 | `probe.port.taken` | the endpoint is on a port an earlier probe's endpoint took |
+
+## Problems and findings: the credential provider, readiness and the push
+
+| Rule | Raised by | Means |
+|---|---|---|
+| `credential.missing` | the credential provider | a `FYLGJA_CREDENTIAL_<NAME>_USERNAME` or `_PASSWORD` variable a package's credential names is not set; the message names the variable, never a value ([D-042](../design/decisions.md#d-042)) |

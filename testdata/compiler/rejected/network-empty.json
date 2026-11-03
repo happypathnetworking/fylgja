@@ -1,0 +1,11 @@
+{
+ "blueprint_version": "1",
+ "network": {
+  "devices": [],
+  "links": []
+ },
+ "probes": [],
+ "source": {
+  "rejection_fixture": "A network with no devices: a twin of nothing cannot be built, network.empty on network. A compiler rejection fixture: a valid blueprint 1 the compiler refuses; tests/test_compiler.py says what it must report."
+ }
+}

@@ -1,0 +1,64 @@
+# A rename's port uses {lane}, which the rule's match does not capture: package.patterns.placeholders.
+# A platform package 1 rejection fixture (formats/platform-package-1.schema.json): the
+# synthetic platform testos, never deployed, with this one fault; tests/test_platform_package.py
+# says what the loader must report.
+platform_package_version: "1"
+id: testos
+versions: ["0"]
+credentials: testos
+
+interfaces:
+  rules:
+    - name: ethernet
+      match: "ethernet-{slot}/{port}"
+      ranges: { slot: [1, 1], port: [1, 58] }
+    - name: breakout
+      match: "ethernet-{slot}/{port}/{sub}"
+      ranges: { slot: [1, 1], port: [1, 58], sub: [1, 4] }
+    - name: management
+      management: true
+      node_name: mgmt0
+
+push:
+  delivery: json_rpc
+  port: 443
+  timeout_s: 30
+
+readiness:
+  timeout_s: 60
+
+gnmi:
+  port: 57400
+  tls: true
+
+conformance:
+  host_name: /system/name/host-name
+  version: /system/information/version
+  port:
+    enabled: { path: "/interface[name={node_name}]/admin-state", value: enable }
+    discovering: { path: "/system/lldp/interface[name={node_name}]/admin-state", value: enable }
+    neighbor:
+      path: "/system/lldp/interface[name={node_name}]/neighbor"
+      system_name: system-name
+      port_id: port-id
+
+fidelity:
+  approximations:
+    - Synthetic test platform; nothing about it is measured
+
+runtime:
+  containerlab:
+    kind: testos
+    image:
+      ref: example.invalid/testos:0
+    resources:
+      cpu: 0.5
+      memory_mb: 1024
+    deploy_timeout_s: 180
+    destroy_timeout_s: 60
+    link_apply_mode: live
+    alias: false
+    rename:
+      - { rule: ethernet, port: "e{slot}-{lane}" }
+      - { rule: breakout, port: "e{slot}-{port}-{sub}" }
+    hot_add_ports: true

@@ -1,0 +1,40 @@
+# host.route uses {far}, which no command may use: package.patterns.placeholders at /host/route/3.
+# A probe package 1 rejection fixture (formats/probe-package-1.schema.json), never run, with
+# this one fault; tests/test_probe_package.py says what the loader must report.
+probe_package_version: "1"
+format: ping
+
+host:
+  interface: eth1
+  address: ["ip", "addr", "add", "{address}", "dev", "{interface}"]
+  route: ["ip", "route", "add", "{far}/32", "via", "{gateway}", "dev", "{interface}"]
+
+readiness:
+  command: ["ip", "-4", "-o", "addr", "show", "dev", "{interface}"]
+  expect: "{address}"
+  timeout_s: 30
+
+flow:
+  interval_s: 0.2
+  command: ["ping", "-i", "{interval}", "{far_address}"]
+  start_timeout_s: 30
+  read_timeout_s: 30
+
+burst:
+  count: 5
+  wait_s: 2
+  command: ["ping", "-c", "{count}", "-i", "{interval}", "-W", "{wait}", "{far_address}"]
+
+fidelity:
+  approximations:
+    - A copy of the ping package's shape, never run
+
+runtime:
+  containerlab:
+    image:
+      ref: example.invalid/probe:0
+    resources:
+      cpu: 0.1
+      memory_mb: 32
+    deploy_timeout_s: 60
+    destroy_timeout_s: 30

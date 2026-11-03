@@ -5,7 +5,8 @@ A package is YAML under probes/. `validate` holds it to the schema and to two ru
 loader's: its `format` names a mechanism this build runs, since a value this build has no
 mechanism for is refused at load, naming the values there are (D-014); and every command,
 and the readiness text, uses only the placeholders the drivers' plan, readiness, flows and
-verify render. `decode` builds the `ProbePackage` model.
+verify render, a host's two start-up commands only the four the plan renders into them.
+`decode` builds the `ProbePackage` model.
 """
 
 from __future__ import annotations
@@ -26,6 +27,9 @@ MECHANISMS = frozenset({"ping"})
 
 # What a command or the readiness text may name; each is rendered where the schema says.
 PLACEHOLDERS = frozenset({"interface", "address", "far_address", "gateway", "interval", "count", "wait"})
+
+# What a host's start-up commands (host.address, host.route) may name: the four the plan renders.
+HOST_PLACEHOLDERS = frozenset({"interface", "address", "far_address", "gateway"})
 
 # Rule ids. Those a platform package shares are its: both are packages.
 RULE_INVALID = platform_package.RULE_INVALID
@@ -128,9 +132,10 @@ def validate(doc: Any) -> list[Problem]:
     if doc["format"] not in MECHANISMS:
         detail = f"no mechanism runs {doc['format']!r}; this build runs {', '.join(sorted(MECHANISMS))}"
         problems.append(Problem("/format", RULE_FORMAT, detail))
+    for pointer, words in (("/host/address", doc["host"]["address"]), ("/host/route", doc["host"]["route"])):
+        for i, word in enumerate(words):
+            problems += _placeholders(f"{pointer}/{i}", word, host=True)
     for pointer, words in (
-        ("/host/address", doc["host"]["address"]),
-        ("/host/route", doc["host"]["route"]),
         ("/readiness/command", doc["readiness"]["command"]),
         ("/flow/command", doc["flow"]["command"]),
         ("/burst/command", doc["burst"]["command"]),
@@ -154,10 +159,15 @@ def load(path: Path) -> ProbePackage:
     return documents.load(path, RULE_INVALID, decode)
 
 
-def _placeholders(pointer: str, text: str) -> list[Problem]:
-    known = ", ".join("{" + name + "}" for name in sorted(PLACEHOLDERS))
+def _placeholders(pointer: str, text: str, host: bool = False) -> list[Problem]:
+    allowed = HOST_PLACEHOLDERS if host else PLACEHOLDERS
+    known = ", ".join("{" + name + "}" for name in sorted(allowed))
+    if host:
+        why = f"no placeholder a host command may name; it may name {known}"
+    else:
+        why = f"no placeholder; there are {known}"
     return [
-        Problem(pointer, RULE_PLACEHOLDERS, f"{{{name}}} is no placeholder; there are {known}")
+        Problem(pointer, RULE_PLACEHOLDERS, f"{{{name}}} is {why}")
         for name in placeholders(text)
-        if name not in PLACEHOLDERS
+        if name not in allowed
     ]

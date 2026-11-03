@@ -65,5 +65,16 @@ def test_a_refused_format_names_the_mechanisms_there_are() -> None:
     assert "traceroute" in problem.detail and "ping" in problem.detail
 
 
+@pytest.mark.parametrize("field", ["address", "route"])
+def test_a_host_command_may_name_only_the_four_placeholders_the_plan_renders(field: str) -> None:
+    doc = yaml.safe_load((ROOT / "probes" / "ping.yaml").read_text())
+    doc["host"][field].append("{interval}")
+    (problem,) = probe_package.validate(doc)
+    assert (problem.pointer, problem.rule) == (f"/host/{field}/{len(doc['host'][field]) - 1}", RULE_PLACEHOLDERS)
+    assert problem.detail == ("{interval} is no placeholder a host command may name; "
+                              "it may name {address}, {far_address}, {gateway}, {interface}")
+    assert probe_package.HOST_PLACEHOLDERS < probe_package.PLACEHOLDERS
+
+
 def test_every_rejection_fixture_has_a_row() -> None:
     assert {p.name for p in INVALID.glob("*.yaml")} == set(REJECTED)

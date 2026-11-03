@@ -5,6 +5,7 @@ driver, a fake readiness wait and a fake push."""
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 from collections.abc import Iterator, Mapping
 from pathlib import Path
@@ -12,13 +13,14 @@ from pathlib import Path
 import pytest
 from fakes import FakeDriver, FakePush, FakeReady, fake_push, fake_ready
 
-from fylgja_core import platform_package, probe_package, push, reconcile
+from fylgja_core import bundle, platform_package, probe_package, push, reconcile
 from fylgja_core.credentials import Provider
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding, Subject
 from fylgja_core.local_store import LocalStore
 from fylgja_core.reconcile import Reconciler
 from fylgja_core.run import Run, queued
+from fylgja_core.run import State as RunState
 from fylgja_core.twin_record import Condition, Spec, Status, TwinRecord
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -463,3 +465,245 @@ def test_the_ready_condition_keeps_its_since_while_its_status_holds(store: Local
     assert creating.since is not None and done.since is not None and done.since > creating.since
     (refused,) = reconcile.ready_condition((creating,), "False", "push.refused")
     assert (refused.reason, refused.since) == ("push.refused", creating.since)  # the status held: so does since
+
+
+# Resumption (Task 5): a kill is an exception raised at a phase boundary, after the record was
+# written; a fresh Reconciler over the same store, driver and lab is the restarted core.
+
+
+class KillingStore(LocalStore):
+    """A local store that kills the core once, right after writing a twin record whose phase is
+    `kill_at`, or, for `kill_at == "ended"`, right after ending a run."""
+
+    kill_at: str | None = None
+
+    def update_twin(self, record: TwinRecord, expected_revision: int) -> TwinRecord:
+        written = super().update_twin(record, expected_revision)
+        if self.kill_at is not None and written.status.phase == self.kill_at:
+            self.kill_at = None
+            raise RuntimeError("killed")
+        return written
+
+    def update_run(self, run: Run, expected_state: RunState) -> None:
+        super().update_run(run, expected_state)
+        if self.kill_at == "ended" and run.state == "ended":
+            self.kill_at = None
+            raise RuntimeError("killed")
+
+
+@pytest.fixture
+def killing(tmp_path: Path) -> Iterator[KillingStore]:
+    s = KillingStore.open(tmp_path / "store")
+    assert isinstance(s, KillingStore)  # `open` makes the class it is called on
+    yield s
+    s.close()
+
+
+def killed(r: Reconciler) -> None:
+    with pytest.raises(RuntimeError, match="killed"):
+        asyncio.run(r.reconcile("t"))
+
+
+def resumed(store: LocalStore, run_id: str) -> list[Seen]:
+    """The run's events, after checking it is still the twin's one run and its events have no gap."""
+    assert [r.id for r in store.list_runs("t")] == [run_id]
+    events = store.events(run_id)
+    assert [e.seq for e in events] == list(range(1, len(events) + 1))
+    return seen(store, run_id)
+
+
+def assert_ready_once_each(store: LocalStore, pusher: FakePush) -> TwinRecord:
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert record.status.observed_generation == 1 and record.status.run_id is None
+    assert all(n.holds == record.status.bundle_id for n in record.status.nodes)
+    run = only_run(store)
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "ok"
+    assert sorted(node for node, _ in pusher.calls) == DEVICES
+    return record
+
+
+def test_killed_after_applied_a_resume_never_deploys_again_and_pushes_each_node_once(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "applied"
+    killed(make(killing, driver))
+    record, run = killing.get_twin("t"), only_run(killing)
+    assert record.status.phase == "applied" and record.status.run_id == run.id and run.state == "running"
+
+    before = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(killing, driver, ready=ready, pusher=pusher).reconcile("t"))
+    assert driver.calls[before:] == []  # no inspect, no apply: the record says applied
+    assert_ready_once_each(killing, pusher)
+    assert [node for node, _ in ready.calls] == DEVICES
+    # The killed phase's end was never written; the resume continues the run with the next phase.
+    assert resumed(killing, run.id) == [*UP_TO_APPLY[:-1], *pairs("ready", DEVICES), *pairs("push", DEVICES)]
+
+
+def test_killed_after_the_deploy_and_before_applied_the_answering_lab_is_not_deployed_again(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    driver.fail_after = "apply"
+    killed(make(store, driver))
+    assert store.get_twin("t").status.phase == "planned" and "t" in driver.labs
+
+    before = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(store, driver, ready=ready, pusher=pusher).reconcile("t"))
+    assert driver.calls[before:] == [("inspect", "t"), ("inspect", "t")]  # probed, and every node answered
+    record = assert_ready_once_each(store, pusher)
+    assert {n.incarnation for n in record.status.nodes} == {"boot-1"}
+    assert [node for node, _ in ready.calls] == DEVICES + DEVICES  # the probe, then the ready phase
+    run = only_run(store)
+    assert resumed(store, run.id) == [*UP_TO_APPLY[:-1], ("apply", "started", None), ("apply", "skipped", None),
+                                      *pairs("ready", DEVICES), *pairs("push", DEVICES)]
+    (skipped,) = [e for e in store.events(run.id) if e.outcome == "skipped"]
+    assert skipped.duration_s is not None and skipped.duration_s >= 0
+
+
+async def deploy_as_killed(store: LocalStore, driver: FakeDriver) -> None:
+    """Deploy the twin's recorded deployment, as a deploy the kill interrupted would have."""
+    deployment_id = store.get_twin("t").status.deployment_id
+    assert deployment_id is not None
+    deployment, files = store.get_deployment(deployment_id)
+    await driver.apply(deployment, files, PLATFORMS, PROBES)
+
+
+def silence(driver: FakeDriver, how: str) -> None:
+    lab = driver.labs["t"]
+    if how == "not answering":
+        driver.silent.add(("t", "n3"))
+    elif how == "stopped":
+        lab["n3"] = dataclasses.replace(lab["n3"], running=False, address=None)
+    elif how == "every node stopped":
+        for name in list(lab):
+            lab[name] = dataclasses.replace(lab[name], running=False, address=None)
+    elif how == "without an address":
+        lab["n3"] = dataclasses.replace(lab["n3"], address=None)
+    else:
+        assert how == "missing"
+        del lab["n3"]
+
+
+@pytest.mark.parametrize("how", ["not answering", "stopped", "every node stopped", "without an address", "missing"])
+def test_killed_after_planned_with_a_silent_node_in_the_lab_a_resume_reconfigures(
+    killing: KillingStore, how: str
+) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "planned"
+    killed(make(killing, driver))
+    asyncio.run(deploy_as_killed(killing, driver))
+    silence(driver, how)
+
+    before = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(killing, driver, ready=ready, pusher=pusher).reconcile("t"))
+    assert driver.calls[before:] == [("inspect", "t"), ("apply", "t", "reconfigure"), ("inspect", "t")]
+    record = assert_ready_once_each(killing, pusher)
+    assert {n.incarnation for n in record.status.nodes} == {"boot-2"}  # every node made anew
+    probed = {"not answering": DEVICES}.get(how, [])  # a node with no running address is silent without a call
+    assert [node for node, _ in ready.calls] == probed + DEVICES
+    # Killed after planned was written and before its end: the resume goes on with apply.
+    assert resumed(killing, only_run(killing).id) == [*UP_TO_APPLY[:5], *UP_TO_APPLY[6:], *pairs("ready", DEVICES),
+                                                      *pairs("push", DEVICES)]
+
+
+@pytest.mark.parametrize("left", ["absent", "residue"])
+def test_killed_after_planned_with_no_lab_a_resume_deploys_plainly(killing: KillingStore, left: str) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "planned"
+    killed(make(killing, driver))
+    if left == "residue":
+        driver.residue.add("t")  # the lab removed by hand, its leftovers not
+
+    before = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(killing, driver, ready=ready, pusher=pusher).reconcile("t"))
+    assert driver.calls[before:] == [("inspect", "t"), ("apply", "t"), ("inspect", "t")]
+    assert "t" not in driver.residue
+    assert_ready_once_each(killing, pusher)
+    assert [node for node, _ in ready.calls] == DEVICES
+
+
+def test_killed_after_two_pushes_a_resume_pushes_only_the_third(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    killed(make(store, driver, pusher=fake_push(kill_after=2, driver=driver)))
+    record, run = store.get_twin("t"), only_run(store)
+    assert record.status.phase == "ready"
+    assert [(n.name, n.holds == record.status.bundle_id) for n in record.status.nodes] == [
+        ("n1", True), ("n2", True), ("n3", False)]
+
+    before = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(store, driver, ready=ready, pusher=pusher).reconcile("t"))
+    assert [node for node, _ in pusher.calls] == ["n3"] and ready.calls == [] and driver.calls[before:] == []
+    record = store.get_twin("t")
+    assert ready_of(record).status == "True" and all(n.holds == record.status.bundle_id for n in record.status.nodes)
+    assert resumed(store, run.id) == [*CREATE[:-2], ("push", "started", "n3"), *pairs("push", ["n3"])]
+
+
+def test_killed_after_admitted_a_resume_plans_with_the_recorded_allocation(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "admitted"
+    killed(make(killing, driver))
+    status = killing.get_twin("t").status
+    assert status.phase == "admitted" and status.allocation == {"lab": "t", "mgmt_subnet": "10.0.1.0/24"}
+    assert status.bundle_id is not None
+
+    driver.refuse = Refusal("admission.capacity", "a second admission would be refused")
+    before = len(driver.calls)
+    asyncio.run(make(killing, driver).reconcile("t"))
+    assert driver.calls[before:] == [("plan", "t"), ("inspect", "t"), ("apply", "t"), ("inspect", "t")]
+    record = killing.get_twin("t")
+    assert ready_of(record).status == "True" and record.status.allocation == status.allocation
+    manifest = bundle.decode(json.loads(killing.get_bundle(status.bundle_id)["manifest.json"]))
+    expected = driver.plan(manifest, status.bundle_id, PLATFORMS, PROBES, "t", status.allocation)
+    assert record.status.deployment_id == expected.deployment.id
+    assert resumed(killing, only_run(killing).id) == [*UP_TO_APPLY[:3], *UP_TO_APPLY[4:], *pairs("ready", DEVICES),
+                                                      *pairs("push", DEVICES)]
+
+
+def test_killed_after_the_run_ended_ok_the_next_pass_completes_the_record(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "ended"
+    killed(make(killing, driver))
+    record, run = killing.get_twin("t"), only_run(killing)
+    assert run.state == "ended" and record.status.run_id == run.id and record.status.observed_generation == 0
+
+    before, events = len(driver.calls), len(killing.events(run.id))
+    asyncio.run(make(killing, driver).reconcile("t"))
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert record.status.observed_generation == 1 and record.status.run_id is None and record.status.phase == "pushed"
+    assert driver.calls[before:] == [] and len(killing.events(run.id)) == events and only_run(killing).id == run.id
+
+
+def test_killed_after_a_failed_run_ended_the_next_pass_cleans_up(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "ended"
+    killed(make(killing, driver, pusher=fake_push(refuse={"n2"}, driver=driver)))
+    assert "t" in driver.labs and killing.get_twin("t").status.deployment_id is not None
+
+    asyncio.run(make(killing, driver).reconcile("t"))
+    assert_cleaned_up(killing.get_twin("t"), "push.refused")  # the reason read back from the failing event
+    assert "t" not in driver.labs and driver.calls[-1] == ("destroy", "t") and len(killing.list_runs("t")) == 1
+
+
+def test_a_record_naming_a_queued_run_marks_it_running_and_runs_it(store: LocalStore) -> None:
+    # A core killed after the record named its new run and before marking it running.
+    new_twin(store, file_blueprint(store))
+    run = queued("t", "create", "core")
+    store.create_run(run)
+    record = store.get_twin("t")
+    store.update_twin(dataclasses.replace(record, status=dataclasses.replace(record.status, run_id=run.id)),
+                      record.revision)
+    asyncio.run(make(store, FakeDriver()).reconcile("t"))
+    assert only_run(store).id == run.id and ready_of(store.get_twin("t")).status == "True"
+    assert seen(store, run.id) == CREATE

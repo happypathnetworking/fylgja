@@ -139,6 +139,18 @@
           "$ref": "bundle-1.schema.json#/$defs/id",
           "description": "The driver's plan applied; a step compares the new plan with it, show reports its fidelity."
         },
+        "allocation": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "What admit() reserved for this twin, recorded here by compare-and-set (D-017): a resumed plan reads it back as its input so the pure plan stays pure, and destroy releases it. Its shape is the driver's, as in the deployment's allocation: containerlab {lab, mgmt_subnet}, clabernetes {namespace}, hardware {reservation, devices}. Absent before admit.",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "array",
+              "object"
+            ]
+          }
+        },
         "nodes": {
           "type": "array",
           "items": {

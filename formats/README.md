@@ -64,6 +64,10 @@ relative to them.
     ([D-038](../design/decisions.md#d-038)). It becomes the node's host name, its container
     or pod name and its bundle file name, so the blueprint requires the one form all of them
     accept; a reader that renames a device to fit records it in its fidelity rows.
+13. **The twin record carries `status.allocation` since phase 4.** `admit` reserves into the
+    record by compare-and-set ([D-017](../design/decisions.md#d-017)), a resumed plan reads it
+    back so that plan stays pure, and destroy releases it. Its shape is the driver's, as in the
+    deployment.
 
 ## Settled by measurement (2026-10-30)
 

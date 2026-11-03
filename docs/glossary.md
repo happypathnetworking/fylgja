@@ -24,6 +24,14 @@ documents ([`api-1.openapi.yaml`](../formats/api-1.openapi.yaml),
 [D-025](../design/decisions.md#d-025)). The frozen Go core's API is also version 1; they share
 nothing else.
 
+**Audit log** — The log lines, on the same stream as every other, that carry the principal and
+the action of every write to a twin, so that every change is attributable
+([Constitution X](../design/constitution.md#x-report-honestly)).
+
+**Backoff** — The loop's growing delay before it retries a twin after a transient failure:
+doubling from 1 s to a 60 s ceiling, reset by a pass that completes
+([D-023](../design/decisions.md#d-023)).
+
 **Blueprint** — The core's one input: the network (devices, interfaces, links, each
 device's rendered configuration) and the probes declared beside it, with an opaque *source
 envelope* ([`blueprint-1.schema.json`](../formats/blueprint-1.schema.json),

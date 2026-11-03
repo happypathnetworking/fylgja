@@ -83,3 +83,20 @@ def test_a_spec_naming_both_a_blueprint_and_a_bundle_is_a_schema_fault() -> None
     assert {p.pointer for p in found} == {"/spec", "/name"}
     with pytest.raises(Rejected):
         twin_record.decode(bad)
+
+
+def test_a_record_carries_the_allocation_admit_reserved() -> None:
+    allocated = TwinRecord(
+        name="t", revision=2, generation=1, spec=Spec(bundle_id=ID_B, driver="containerlab", allow_restart=False),
+        status=Status(observed_generation=1, conditions=(), nodes=(),
+                      allocation={"lab": "t", "mgmt_subnet": "172.20.1.0/24"}))
+    encoded = documents.encode(allocated)
+    assert encoded["status"]["allocation"] == {"lab": "t", "mgmt_subnet": "172.20.1.0/24"}
+    assert twin_record.validate(encoded) == []
+    assert twin_record.decode(encoded) == allocated
+
+
+def test_an_empty_allocation_is_a_schema_fault() -> None:
+    bad = doc()
+    bad["status"]["allocation"] = {}
+    assert {p.pointer for p in twin_record.validate(bad)} == {"/status/allocation"}

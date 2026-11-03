@@ -105,27 +105,28 @@ async def _twin_messages(
             seen[record.name] = record.revision
             if since_revision is None or record.revision > since_revision:
                 yield _watch_event("ADDED" if record.revision == 1 else "MODIFIED", record)
-        quiet = 0.0
+        clock = asyncio.get_running_loop().time
+        sent = clock()  # when the last message went: another twin's change sends none
         while not closing.is_set():
+            if clock() - sent >= keepalive_s:
+                sent = clock()
+                yield _KEEPALIVE
             try:
                 change = await asyncio.wait_for(subscription.queue.get(), min(POLL_S, keepalive_s))
             except TimeoutError:
-                quiet += min(POLL_S, keepalive_s)
-                if quiet >= keepalive_s:
-                    quiet = 0.0
-                    yield _KEEPALIVE
                 continue
-            quiet = 0.0
             record = change.record
             if name is not None and record.name != name:
                 continue
             if change.type == "DELETED":
                 seen.pop(record.name, None)
+                sent = clock()
                 yield _watch_event("DELETED", record)
                 if name is not None:
                     return
             elif record.revision > seen.get(record.name, 0):  # a write the current record already held is not sent
                 seen[record.name] = record.revision
+                sent = clock()
                 yield _watch_event(change.type, record)
     finally:
         subscription.close()

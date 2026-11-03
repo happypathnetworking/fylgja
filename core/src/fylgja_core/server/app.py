@@ -31,7 +31,7 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
-from starlette.requests import Request
+from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -123,8 +123,8 @@ def _held(request: Request, validator: Any, doc: Any, what: str) -> None:
     """`400 request.invalid` with a finding per violation when `doc` is not valid by `validator`."""
     errors = sorted(validator.iter_errors(doc), key=lambda e: (documents.pointer(e.absolute_path), e.message))
     if errors:
-        found = [findings.Finding(rule=RULE_INVALID, severity="error", object=documents.pointer(e.absolute_path) or "/",
-                                  message=e.message) for e in errors]
+        found = [Finding(rule=RULE_INVALID, severity="error", object=documents.pointer(e.absolute_path) or "/",
+                         message=e.message) for e in errors]
         raise _refuse(request, 400, RULE_INVALID, f"The body is not {what}.", findings=found)
 
 
@@ -611,7 +611,8 @@ def _answer_http(request: Request, exc: Exception) -> Response:
 class _Faults:
     """A pure ASGI middleware: any exception a route raises is logged with its traceback and
     answered `500 server.error`, naming nothing of the fault. Once a response has begun (a
-    stream), the fault is logged and the response cut short."""
+    stream), the fault is logged and the response cut short. A client gone before its request
+    was read is no fault, and is left unanswered."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -629,6 +630,9 @@ class _Faults:
 
         try:
             await self.app(scope, receive, tracked)
+        except ClientDisconnect:
+            _log.info("%s %s: the client left before its request was read", scope["method"], scope["path"],
+                      **logs.fields(method=scope["method"], path=scope["path"]))
         except Exception:
             _log.exception("%s %s failed", scope["method"], scope["path"],
                            **logs.fields(method=scope["method"], path=scope["path"]))

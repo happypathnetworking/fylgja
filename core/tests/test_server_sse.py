@@ -57,6 +57,30 @@ def test_an_idle_watch_sends_a_comment_then_the_next_change(store: LocalStore) -
     assert store._subscriptions == []
 
 
+def test_another_twins_changes_do_not_hold_back_a_watchs_keepalive(store: LocalStore) -> None:
+    a_twin(store)
+    other = a_twin(store, "u")
+
+    async def watch() -> bytes:
+        stream = sse.twin_stream(store, "t", None, keepalive_s=0.05)
+        await anext(stream)  # t as it stands
+
+        async def busy() -> None:
+            record = other
+            for _ in range(400):  # 2 s of writes, longer than the wait
+                record = store.update_twin(record, record.revision)
+                await asyncio.sleep(0.005)
+
+        writes = asyncio.create_task(busy())
+        try:
+            return await asyncio.wait_for(anext(stream), 0.5)
+        finally:
+            writes.cancel()
+            await stream.aclose()
+
+    assert asyncio.run(watch()) == b": keepalive\n\n"
+
+
 def test_a_watch_never_read_releases_its_subscription(store: LocalStore) -> None:
     a_twin(store)
 

@@ -39,6 +39,13 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 | `bundle.version.unsupported`, `deployment.version.unsupported`, `twin_record.version.unsupported`, `findings.version.unsupported` | the store's and clients' readers | a stored or received document is of a version this core does not read |
 | `bundle.invalid`, `deployment.invalid`, `twin_record.invalid`, `findings.invalid`, `problem.invalid` | the store's and clients' readers | the document violates its schema at the pointer |
 
+## Problems: the server's start
+
+| Rule | Filed by | Means |
+|---|---|---|
+| `package.id.duplicate` | the packages registry | two packages under `FYLGJA_PACKAGES` share an id (platform) or a format (probe); the message names both files |
+| `config.missing` | the settings | a `FYLGJA_*` variable the server needs is not set, or is empty ([D-042](../design/decisions.md#d-042)); the message names the variable, never a value. Distinct from the finding of the same id below, which is a device's empty configuration |
+
 ## Findings: a compile refused
 
 Each is an error, and every fault is reported in one pass. A compile with one is refused:

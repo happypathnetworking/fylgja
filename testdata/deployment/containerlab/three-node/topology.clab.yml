@@ -1,0 +1,31 @@
+name: three-node
+mgmt:
+  network: clab-three-node
+  ipv4-subnet: 172.20.1.0/24
+topology:
+  defaults:
+    labels:
+      fylgja.twin: three-node
+  nodes:
+    n1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+    n2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+    n3:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+  links:
+  - endpoints:
+    - n1:ethernet-1/1
+    - n2:ethernet-1/1
+  - endpoints:
+    - n1:ethernet-1/2
+    - n3:ethernet-1/2
+  - endpoints:
+    - n2:ethernet-1/2
+    - n3:ethernet-1/1

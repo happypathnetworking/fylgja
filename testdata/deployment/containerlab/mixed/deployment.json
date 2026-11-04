@@ -1,0 +1,61 @@
+{
+ "allocation": {
+  "lab": "mixed",
+  "mgmt_subnet": "172.20.1.0/24"
+ },
+ "bundle_id": "2868224aa6c31500078013387445b8d2c87401c21adbb15fb01f21aebf55e2d2",
+ "demand": {
+  "cpu": 1.5,
+  "memory_mb": 5120,
+  "nodes": 3
+ },
+ "deployment_version": "1",
+ "driver": "containerlab",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "arista_eos",
+    "text": "Ethernet{slot}/{port} is carried as a port of its own, where a fixed-configuration switch has it as a breakout lane of Ethernet{slot}; intent carries no breakout structure to tell the two apart"
+   },
+   {
+    "package": "arista_eos",
+    "text": "No linecard model; the port set is fixed at container start and read once, so a port added later does not appear"
+   },
+   {
+    "package": "arista_eos",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "arista_eos",
+    "text": "Convergence timing differs from hardware"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 0,
+   "shared_ports": 0
+  },
+  "omitted": [],
+  "synthesized": []
+ },
+ "files": [
+  {
+   "path": "topology.clab.yml",
+   "sha256": "7f14c9d236d47a1a3cec84b7a034fe82a467ff5076d1d986432ca4865c0bd25e"
+  }
+ ],
+ "id": "d7bcf60edeb84ed8a81fe069f34b5b3476bf010ebe1443f036982502bacdd6b9",
+ "twin": "mixed"
+}

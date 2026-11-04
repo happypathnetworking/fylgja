@@ -8,6 +8,7 @@ the twin's `generation`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -79,6 +80,7 @@ class Status:
     blueprint_id: str | None = None
     bundle_id: str | None = None
     deployment_id: str | None = None
+    allocation: Mapping[str, Any] | None = None
     nodes: tuple[Node, ...]
     last_step: LastStep | None = None
 

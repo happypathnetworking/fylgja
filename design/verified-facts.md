@@ -34,11 +34,20 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 
 - `clab deploy` creates `clab-<lab>/` beside the topology file, or under
   `CLAB_LABDIR_BASE` when it is set, mostly root-owned; `clab destroy --cleanup` removes
-  it without root in about 1 s. *(2026-09-15; 26.04, 2026-10-08)*
+  it without root in about 1 s. *(2026-09-15; 26.04, 2026-10-08; 0.81.0, 2026-11-03)* On
+  0.81.0 the destroy of a two-node lab took 1.26–1.4 s, eight times, once after a failed
+  deploy; the directory itself is root's, and `destroy -t <file> --cleanup`
+  removed it with a three-node lab in 1.5 s.
+- **A one-SR Linux, one-cEOS lab joined by one link deploys in 49.1–55.5 s** (five
+  deploys, an otherwise idle host). The same two nodes with no link took 87.6 s, the cEOS
+  node's post-deploy holding the deploy for 84 s. *(0.81.0, 2026-11-03)*
 - containerlab applies an SR Linux `.cli` startup snippet over the default configuration
   and commits it itself, so the snippet carries no `commit` line; LLDP and gNMI are on by
   default. *(0.77, 2026-09-15; 26.04, 2026-10-08)*
-- **No startup-config means the kind's baseline.** *(2026-10-30)*
+- **No startup-config means the kind's baseline.** *(2026-10-30; 0.81.0, 2026-11-03: the local
+  driver's plan renders no startup-config, and every push of phase 4's live runs, the
+  end-to-end test's three SR Linux nodes and the push lab's SR Linux and cEOS nodes,
+  replaced onto the baseline and landed)*
   - SR Linux 24.7.1 holds hostname = node name, linked ports enabled, LLDP with
     neighbours, gNMI and JSON-RPC.
   - cEOS 4.32.0.2F holds the hostname, ports connected, LLDP on every port
@@ -48,28 +57,110 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 - `inspect --all --format json` gives each container's `absLabPath`, always absolute;
   `labPath` is relative to the caller's directory when the topology file is under it, so
   decode `absLabPath`. *(2026-09-16; 26.04, 2026-10-08)*
+- **`inspect -t <file> --format json`** prints on stdout an object mapping the lab's name
+  to one entry per container, its log on stderr, in 0.12–0.24 s. *(0.81.0, 2026-11-03)*
+  - An entry's members are `lab_name`, `labPath`, `absLabPath`, `name`, `container_id`,
+    `image`, `kind`, `state`, `status`, `ipv4_address`, `ipv6_address` and `owner`.
+  - `name` is the container's, `clab-<lab>-<node>`: no member holds the node's own name.
+  - `ipv4_address` carries the prefix length (`172.20.20.3/24`), so the management address
+    is the part before the `/`.
+  - `labPath` was relative (`push-explore.clab.yml`) with the caller in the topology's
+    directory, and `absLabPath` absolute, as the `--all` fact above says.
 - `inspect` reports an exited container's address as `N/A`. *(2026-10-03; 26.04, 2026-10-08)*
 - A lab's node management addresses are reassigned at each deploy: read them after the
-  deploy, never from an earlier one. *(2026-10-29)*
+  deploy, never from an earlier one. *(2026-10-29; 0.81.0, 2026-11-03: a lab destroyed and
+  deployed again gave `n1` `.4`, where its first deploy had given it `.2`)*
 - **Labels.** The topology's `defaults.labels` reach every container, beside
-  containerlab's own (`containerlab=<lab>`, `clab-node-*`, `clab-owner`). *(2026-10-30)*
+  containerlab's own (`containerlab=<lab>`, `clab-node-*`, `clab-owner`). *(2026-10-30;
+  0.81.0, 2026-11-03)* On 0.81.0 an SR Linux node carries exactly `clab-mgmt-net-bridge`,
+  `clab-node-group`, `clab-node-kind`, `clab-node-lab-dir`, `clab-node-longname`,
+  `clab-node-name` (the node's name in the topology), `clab-node-type`, `clab-owner`,
+  `clab-topo-file` and `containerlab` (the lab's name); then the topology's `fylgja.twin`,
+  and the image's own `description` and `org.opencontainers.image.*`.
 - **Two labs at once**, each with its own `mgmt.network` and `ipv4-subnet`, deploy
   concurrently in 48–50 s, with distinct names, labels and hosts entries. Destroying one
   (1.6 s) leaves the other running. **Their management networks route to each other
-  through the host** (3 ms ping between two labs' nodes). *(2026-10-30)*
+  through the host** (3 ms ping between two labs' nodes). *(2026-10-30)* Re-exercised on
+  0.81.0, all but the route *(0.81.0, 2026-11-03)*: `drv-live` and `drv-live-2`, three SR
+  Linux nodes each, deployed at once through the driver in 53.1 s; destroying `drv-live`
+  (1.6 s) left `drv-live-2` running, with its hosts block whole. **The route between two
+  labs, which `isolation: names` rests on, was not re-exercised in phase 4**: it stands from
+  0.79.0.
 - **Residue.** *(2026-10-30)*
   - `docker rm` of a lab's containers, followed by `destroy --cleanup`, leaves the
     management network, the `/etc/hosts` lines and
-    `/etc/ssh/ssh_config.d/clab-<lab>.conf`.
-  - `destroy --name` refuses a lab with no containers.
-  - A deploy followed by a destroy clears all of it.
-  - A deploy refused at its start leaves only the management network.
+    `/etc/ssh/ssh_config.d/clab-<lab>.conf`. *(0.81.0, 2026-11-03)* `docker rm -f` of a
+    three-node lab's containers (0.84 s) leaves the same three: the network, the whole
+    hosts block (both markers and every node's line) and the ssh config.
+  - `destroy --name` refuses a lab with no containers. *(0.81.0, 2026-11-03: `Lab '<lab>'
+    not found - no running containers.`, status 1)*
+  - A deploy followed by a destroy clears all of it. *(0.81.0, 2026-11-03)*: no
+    container, no `/etc/hosts` line, no `/etc/ssh/ssh_config.d/clab-<lab>.conf` and no
+    management network was left after any of eight labs, a failed deploy among them. The
+    deploy over that residue reuses the management network left behind; the driver's
+    residue rule took 25.0 s, the deploy 24 s of it, where a fresh deploy took about 40 s.
+  - A deploy refused at its start leaves only the management network. *(0.81.0,
+    2026-11-03)* A node image that no registry serves (`fylgja.invalid/none:0`) was refused
+    at its pull, status 1 in 0.55 s. containerlab creates the network before it pulls, and
+    no lab directory, host entry or ssh config yet. The driver's `inspect` reads it as
+    `residue` that is not root-owned, and `docker network rm` alone clears it.
+
+**What the local driver reads and runs** *(0.81.0, Docker 29.8.1, 2026-11-03)*
+
+- **A lab's containers** are listed by
+  `docker ps -a --filter label=containerlab=<lab> --format '{{.Names}}'`. The label's value
+  is the lab's name exactly, so `drv-live`'s listing never holds `drv-live-2`'s containers.
+- **`docker inspect --type container <names…>`** answers a JSON array. The driver reads:
+  - `Name`, with a leading `/`;
+  - `State.Running`;
+  - `State.StartedAt`, RFC 3339 with nanoseconds (`2026-11-03T19:55:43.416491086Z`);
+  - `Config.Labels["clab-node-name"]`;
+  - `NetworkSettings.Networks["clab-<lab>"].IPAddress`, the node's address in the lab's
+    management subnet.
+- **An exited container** keeps its last `StartedAt` and its `IPAMConfig.IPv4Address`; its
+  `IPAddress`, `Gateway` and `MacAddress` are empty, and `State.Running` is false.
+- **`/etc/hosts`** holds each lab's entries in a block between
+  `###### CLAB-<lab>-START ######` and `###### CLAB-<lab>-END ######`, one line per node:
+  `<ipv4>\tclab-<lab>-<node> <short id>\t# Kind: <kind>`.
+  - An IPv4-only management network's block held no IPv6 line.
+  - `clab-<lab>-` also begins another lab's names (`clab-drv-live-2-n1`), so the driver
+    finds a lab's residue by its start marker.
+- **`docker network inspect --format '{{json .IPAM.Config}}' <ids…>`** prints one line per
+  network: a list of `{"Subnet", "Gateway"}` objects, or `null` for `host` and `none`.
+  `docker image inspect` of an absent image (`No such image`) and `docker network inspect`
+  of an absent network each exit 1.
+- **`destroy -t <file> --cleanup` needs the topology file.** Without it, it exits 1
+  (`Stat <file>: no such file or directory`) and removes nothing.
+  - `destroy --name <lab> --cleanup` needs no file. It removes the containers, the hosts
+    block, the network and the lab directory, but leaves
+    `/etc/ssh/ssh_config.d/clab-<lab>.conf`: it removes `clab-.conf`, an empty lab name.
+  - So the driver writes the topology and destroys with `-t`.
+- **`destroy -t <file> --cleanup` of a running lab removes its management network too**: the
+  driver's `docker network rm` found nothing to remove in any run.
+- **Timings through the driver** for `three-node`, three SR Linux 24.7.1 nodes, on a host
+  with 27 GiB available:
+
+  | Operation | Time |
+  |---|---|
+  | Deploy | 44.1 s and 39.9 s |
+  | Repeat deploy | 0.73 s |
+  | `--reconfigure` | 40.1 s |
+  | Destroy | 1.5 s |
+  | Two labs at once | 53.1 s |
+  | The residue rule (deploy, then destroy) | 25.0 s |
+  | `inspect` (one `docker ps`, one `docker inspect`) | 0.07–0.17 s |
+  | Two `admit`s | 0.18 s |
+
+  The whole live tier, seven tests, took 212 s twice. A one-node `linux` lab (alpine)
+  deploys in 1.6 s.
 
 **Interface names**
 
 - **`nokia_srlinux` takes production names as aliases**: `ethernet-1/1` → `e1-1`, and
   breakout `ethernet-1/1/1` → `e1-1-1`. `inspect interfaces` lists each port's `alias`.
-  *(2026-10-30)*
+  *(2026-10-30; 0.81.0, 2026-11-03: the end-to-end test's topology, its links between
+  production names such as `n1:ethernet-1/1`, deployed every time; the breakout alias was
+  not re-exercised)*
 - **An out-of-range SR Linux name** (`ethernet-1/99`, `ethernet-2/1`) passes `validate`
   and is refused in post-deploy, about 30 s in, after the containers exist (deploy rc 1).
   *(2026-10-30)*
@@ -77,22 +168,84 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   etX"). Its pattern `eth[1-9][\w.]*$|et[1-9][\w.]*$` is unanchored at the start, so
   `Ethernet1` passes and becomes a Linux port EOS never lists: a silent failure, which in
   that lab also held cEOS's post-deploy for about 6 minutes. 0.80 through 0.82 are
-  unchanged. *(2026-10-30)*
+  unchanged. *(2026-10-30)* *(0.81.0, 2026-11-03: the push lab's cEOS node deployed with its
+  link on the Linux name `eth1`; the refusals were not re-run)*
 - **`validate` checks no interface name.** *(2026-10-30)*
 
 **A killed or partial deploy**
 
 - `/usr/bin/containerlab` is setuid root: it runs with the user's real uid and effective
-  uid 0. *(2026-09-15; 26.04, 2026-10-08, 2026-10-30)*
+  uid 0. *(2026-09-15; 26.04, 2026-10-08, 2026-10-30; 0.81.0, 2026-11-03: a running
+  deploy's `/proc/<pid>/status` reads `Uid: 1000 0 0 0`)*
   - The kernel clears `Pdeathsig` when it starts, so a `clab deploy` outlives a parent
-    killed with `kill -9`: stop a stray `clab` before acting.
-  - `kill -9` from the user kills it.
+    killed with `kill -9`: stop a stray `clab` before acting. *(0.81.0, 2026-11-03)* A
+    deploy whose wrapping shell was killed with `kill -9` ran on and completed.
+  - `kill -9` from the user kills it. *(0.81.0, 2026-11-03)* A deploy of one SR Linux node,
+    killed 4 s in, exited 137 at once. So did the local driver's budget kill, which sends
+    `SIGKILL` to the command's process group (`cli.run`, with the command started in a
+    session of its own): `CommandFailed` with status -1 after 4 s, and no `containerlab`
+    process left.
 - **A deploy killed in post-deploy** leaves running nodes that never answer, the network
-  and the lab directory. *(2026-10-30)*
+  and the lab directory. *(2026-10-30)* *(0.81.0, 2026-11-03)* One SR Linux node killed
+  4 s in, in its post-deploy, left the node running, the network and the lab directory, and
+  no host entries or ssh config. containerlab creates the network, then the lab directory,
+  then the containers; it writes the host entries and the ssh config only after the nodes'
+  post-deploy. Whether that node ever answered was not checked. *(0.81.0, 2026-11-04)* It
+  does not: one SR Linux 24.7.1 node, its post-deploy begun 2.0 s into the deploy, was
+  killed with `SIGKILL` 7.0 s in (status -9, no `containerlab` process left). It left the
+  node running with its management address and no host entries or ssh config, and its push
+  transport never answered the readiness request: `readiness.timeout` after 88 s of a
+  90 s budget.
 - **A plain re-deploy of a partial lab skips containerlab's post-deploy** and leaves the
   bootstrap unapplied: after a killed deploy it returned 0 in 0.6 s and fixed nothing.
   Deploy over a partial lab with `--reconfigure`, which recovered the lab in 51.7 s.
   *(2026-09-15; 26.04, 2026-10-08, 2026-10-30)*
+  *(0.81.0, 2026-11-04)* The same on 0.81.0: over that node, a plain `deploy -t` returned 0
+  in 0.6 s with the container not restarted (`StartedAt` unchanged), and readiness timed
+  out again after 88 s. `deploy -t --reconfigure` then returned 0 in 37.4 s, the node made
+  anew (`StartedAt` moved), and its push transport answered 4.4 s later; `destroy -t
+  --cleanup` took 0.9 s and left no container, network, host entry or ssh config.
+- **`--reconfigure` over a healthy lab recreates every node**: three SR Linux nodes in
+  40.1 s, every container's `State.StartedAt` moved. *(0.81.0, 2026-11-03)*
+
+**fylgja-core, phase 4: one twin end to end through API 1** *(0.81.0, Docker 29.8.1, SR Linux
+24.7.1, 2026-11-03)*
+
+The live end-to-end test (`core/tests/live/test_e2e.py`) runs `three-node` through
+`fylgja-core-server` and the thin CLI, over a store in a temporary directory, on a host with
+27 GiB available. It passed on its first full run and in the whole tier. As it grew a stricter
+kill check and a deletion during the deploy, its next full run failed on a loop defect that
+deletion found, since fixed, and the two after passed. *(2026-11-04)*
+
+- **A create**, `twin create` to Ready, took 57.8–67.1 s end to end over eight runs: apply
+  36.1–43.3 s, the three nodes' readiness 12.3–13.3 s, the three pushes 9.0–10.0 s together
+  (2.9–3.5 s each), and compile, admit and plan under 0.2 s together. A destroy took
+  1.4–2.1 s and left no container, host entry, ssh config or network.
+- **A server killed with SIGKILL at each phase boundary of a create resumed the same run to
+  Ready**, with no gap in its events' `seq` and no second create run. That held at
+  `compiled`, `admitted`, `planned`, `applied`, `ready` and `pushed`, Ready 60.2–70.3 s
+  after the create, five times. No kill caused a `--reconfigure`, and each create deployed
+  once.
+  - The kills at `admitted` and `planned` landed in the apply step's first `docker ps`,
+    before its deploy began, so the run shows two `apply started` events and one deploy.
+  - The kill at `pushed` landed before the run's end was written, and the resume wrote it.
+- **A server killed 10 s into the deploy**: containerlab's deploy, run in a session of its
+  own, ran on without the server. The resumed pass found the three containers, and each
+  node's push transport answered within its readiness budget (46.6 s for the three, while
+  the deploy finished), so it deployed nothing (apply `skipped`) and pushed: Ready
+  72.2–78.9 s after the create.
+- **A server killed during a destroy**: the restarted server took up the destroy run, and
+  the twin was gone 2.6–3.2 s after its deletion was asked, nothing left on the host.
+- **A deletion during the deploy**, asked once the deploy had made its three containers
+  (0.9–1.6 s in): the loop stopped the deploy, killing its process group, and the cancel's
+  `destroy -t --cleanup` of the partial lab took 0.75 s; the create run ended `failed`
+  (`run.cancelled`), the destroy run `ok`, and the twin was gone 1.4–1.7 s after it was asked,
+  no container, host entry, ssh config, network or `containerlab` process left. Asked 0.2 s
+  in, before any container, it found only the management network, and removed it.
+  *(2026-11-04)*
+- The server answered its first request 0.5–1.2 s after each start; its 402–485 lines of log
+  were each one JSON object, none holding the token or a password. The whole live tier, 27
+  tests (the driver's, the push's and the end-to-end), took 904 s. *(2026-11-04)*
 
 **The dry run**
 
@@ -118,7 +271,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
     (3.5–14.6 s for the apply).
   - A node added is created with containerlab's post-deploy (31.3 s).
   - An image or kind change is a recreate (20.3 s, 58.7 s with a far cEOS end's restart).
-  - A node removed is deleted (0.85 s); nothing to do takes 0.39 s.
+  - A node removed is deleted (0.85 s); nothing to do takes 0.39 s. *(0.81.0,
+    2026-11-03)* A repeat deploy of a running three-node lab, with nothing to do, took
+    0.73 s and moved no node's `State.StartedAt`.
   - On Ubuntu 26.04: an SR Linux link added in 0.66 s and removed in 0.59 s, live, with
     neither node's `StartedAt` moved; a link between cEOS and SR Linux 3.2 s; a node added
     37.0 s; a kind change 53.6 s; a node removed 1.04 s; nothing to do 0.53 s.
@@ -337,7 +492,8 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   `nokia_srlinux`. Its front ports are `ethernet-1/1` to `ethernet-1/58`, beside `lo0` and
   `mgmt0`. A push naming `ethernet-1/99` is refused `invalid port 99, max is 58`, and one
   naming `ethernet-2/1` `invalid slot 2`, on that node alone. *(2026-09-19; 26.04, 2026-10-19,
-  2026-10-20)*
+  2026-10-20)* The port-99 refusal was re-exercised on 0.81.0, not the slot's.
+  *(0.81.0, 2026-11-03)*
 - The node's name for a port is `ethernet-1/1`, not containerlab's endpoint name `e1-1`:
   `set / interface e1-1 admin-state enable` is refused. *(2026-09-15)*
 - Every LLDP adjacency forms before `clab deploy` returns, so a read after the twin is
@@ -352,6 +508,11 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   10.2 GiB available at a load of 5–6, one node's `sr_cli` segfaulted in containerlab's
   post-deploy (`python3.11` in the kernel log), containerlab cancelled the other two
   nodes' post-deploy and the deploy failed; the run after a rest passed.
+  *(0.81.0, 2026-11-03)* CPU contention alone does it too: with 22 GiB available and the
+  load at 33, another live tier booting six nodes beside it, `sr_cli` segfaulted in
+  containerlab's post-deploy 31 s in (`Segmentation fault (core dumped)` in its bootstrap),
+  the deploy failed at 65.9 s with rc 1, and `destroy --cleanup` left nothing. The run on a
+  quiet host passed.
 
 **gNMI**
 
@@ -372,31 +533,91 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
 - An absent value is no update and no error: an uncabled port's neighbour, or a port the
   node lacks, gives `updates: []` with exit 0. *(2026-09-19)*
 
+**Readiness (JSON-RPC)** *(0.81.0, 2026-11-03)*
+
+- **`show version` over `cli`**, sent with no output-format, answers HTTP 200 with a
+  `result` of one JSON object, `{"basic system info": {…}}`, not text: `Hostname`, `Chassis
+  Type` (`7220 IXR-D2L`), `Software Version` (`v24.7.1`), `Build Number`
+  (`330-g38f237abfe`), `Last Booted` and memory among its members.
+- **It answered at the first attempt, 3.2–3.5 s after the addresses were read from
+  `inspect`**, 0.12–0.24 s after the deploy returned (four runs, the cEOS node booting
+  beside it): the request itself took those seconds.
+- **Every `cli` request costs seconds.** Twelve `show version` requests in a row on a
+  fresh node took 3.2–4.4 s each, three of them over 4 s. A replace took 2.0–3.4 s and
+  `commit validate` 1.6–2.3 s. A readiness attempt cut at 4 s would miss about one answer
+  in four.
+- **A wrong password is answered HTTP 401 at once**, in 0.31 s, with a 32-byte body,
+  `AuthenticationFailed (status: 1)`, as `text/html; charset=utf-8`. Readiness got it at
+  its first attempt and the push got it too (`Unauthorized`). Three refused logins locked
+  nothing: the real login answered right after.
+
 **The push (JSON-RPC)**
 
 - The push is JSON-RPC `cli` over HTTPS 443 with basic auth: `enter candidate private`,
   the lines, `commit now`. Without the candidate, `set` is refused. It takes 0.62–0.96 s
-  for an 839-byte rendered config, and is idempotent. *(2026-09-18)*
+  for an 839-byte rendered config, and is idempotent. *(2026-09-18; 0.81.0, 2026-11-03)*
+  On 0.81.0 the replace of mixed.json's `s1` (27 commands, `load startup` and `diff flat`
+  among them) took 2.0–3.4 s, and its repeat changed nothing.
+- **A committed replace answers one `{"text": …}` entry** holding every command's output in
+  order: `/system/configuration/checkpoint[id=__startup__]:` and `    Loaded startup
+  configuration` (the reset's), a blank line, `diff flat`'s lines, then `All changes have
+  been committed. Leaving candidate mode.` With `"output-format": "text"` the entry is a
+  bare string. So the device's diff is `diff flat`'s lines alone. *(0.81.0, 2026-11-03)*
+- **`info from running / system name host-name`** as a JSON-RPC `cli` request with
+  `"output-format": "text"` answers `result` as a list of one bare string:
+  `    system {\n        name {\n            host-name n1\n        }\n    }\n` on a node named
+  `n1`, after its replace. *(0.81.0, 2026-11-03)*
+- **`diff flat` writes `insert /` and `delete /` lines.** A changed leaf is an `insert /`
+  line, a removed subtree a `delete /` line, and a changed address a `delete /` and an
+  `insert /`. *(0.81.0, 2026-11-03)*
+- **A repeat push's answer holds only the reset's lines and the commit's line**, no
+  `diff flat` line: its diff is empty. *(0.81.0, 2026-11-03)*
+- The baseline's host name is the node's name, yet the first replace's diff holds `insert /
+  system name host-name s1` on a node named `s1`: the startup configuration does not state
+  it. `#` comment lines are accepted in the request. *(0.81.0, 2026-11-03)*
 - A refused line comes back as HTTP 200 with a JSON-RPC error that echoes every command
-  sent, the rendered config included, so keep only the reason. *(2026-09-18)*
+  sent, the rendered config included, so keep only the reason. *(2026-09-18; 0.81.0,
+  2026-11-03)* The error's `code` is `-1`, and its message is `Error: Cli commands '…'
+  failed with error 1: …`, the echo holding one command per line.
 - A refused line stays in the login's private candidate across requests, and every later
   `commit now` fails on it, until `discard now` or `load startup` clears it. *(2026-09-19,
-  2026-10-01)*
+  2026-10-01; 0.81.0, 2026-11-03)*
 - Under a replace, a refusal's message is `At line N: Error: <reason>`, a blank line, then
   the request's output so far, `diff flat`'s `insert /` lines included; the reason ends at
-  the first blank line. *(2026-10-01)*
+  the first blank line. *(2026-10-01; 0.81.0, 2026-11-03)* On 0.81.0 a commit's reason
+  runs two lines, `Error: Error in path: .interface{.name=="ethernet-1/99"}` and
+  `    [InvalidArgument] invalid port 99, max is 58`; a schema constraint's second line is
+  `[FailedPrecondition] vlan-id only configurable if vlan-tagging enabled on parent
+  interface`.
+- **A parse error writes no blank line before the output.** `set / bogus thing` answers
+  `At line 4: Parsing error: Unknown token 'bogus'. Options are […]`, and the next line is
+  already the reset's `/system/configuration/checkpoint[id=__startup__]:`. So a reason
+  ends at the first blank line or at that line. *(0.81.0, 2026-11-03)*
 - SR Linux cuts that message at about 1 KiB, inside its echo of the commands, so a real
   replace's reason never arrives. `commit validate` after it recovers a schema
   constraint's reason, but answers `All changes are valid.` for the port-range check,
-  which only a commit makes. *(2026-10-02)*
+  which only a commit makes. *(2026-10-02; 0.81.0, 2026-11-03)* On 0.81.0 the cut
+  message was 1,031 characters, ending `...`, for mixed.json's `s1` with one line
+  appended. After a parse error, `commit validate` answered `All changes are valid.` too.
+- **`commit validate`'s answers.** *(0.81.0, 2026-11-03)*
+  - A valid candidate: `result` `[{"text": "All changes are valid.\n"}]`.
+  - A refused one: an error whose message keeps the `At line N:` shape: `Error: Cli
+    commands 'enter candidate private\ncommit validate' failed with error 1: At line 2:
+    Error in /interface[name=ethernet-1/1]/subinterface[index=0]/vlan/encap/single-tagged/vlan-id::`,
+    an indented `vlan-id only configurable if vlan-tagging enabled on parent interface`,
+    then `Error: Validate failed`, with no blank line. `At line 2` is the validate
+    request's own line, never the configuration's.
 - `delete /` as a replace darkens the management plane when the rendered config does not
   restate it; `load startup` resets to the baseline containerlab left and does not.
-  *(2026-09-18, 2026-10-01)*
+  *(2026-09-18, 2026-10-01)* The `load startup` half was re-exercised on 0.81.0: the node
+  answered every request after each replace. *(0.81.0, 2026-11-03)*
 - **A port's address lines are accepted in the replace**: `subinterface 0 ipv4
   admin-state enable` and `subinterface 0 ipv4 address <a/l>` after `subinterface 0
   admin-state enable`. Pushes took 2.8–2.9 s, and `info from running` reads `ipv4 {
   admin-state enable address 10.1.10.1/24 { } }`. A second address is a second plain
-  `address` line. *(2026-10-29)*
+  `address` line. *(2026-10-29)* Re-exercised on 0.81.0 by mixed.json's `s1`, whose two
+  addressed ports landed (the diff's `insert / … ipv4 address` lines); `info from running`
+  was not read again. *(0.81.0, 2026-11-03)*
 
 ---
 
@@ -425,16 +646,63 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   up. *(2026-09-20)*
 - **The push is eAPI `runCmds`** over HTTPS to `/command-api` with basic auth, in a named
   configuration session, since a committed session name cannot be reused; a refused
-  session is aborted before the next attempt. *(2026-09-20)*
-- `#` is refused at token 0, and `!` is read as a comment. *(2026-09-20)*
+  session is aborted before the next attempt. *(2026-09-20; 0.81.0, 2026-11-03)* On 0.81.0
+  the replace of mixed.json's `e1` (25 commands) took 2.6–5.3 s, and its repeat 1.6–2.4 s.
+- **Readiness: `show version` over `runCmds`** with `format: "json"` answers HTTP 200 with
+  a `result` of one object: `mfgName` `Arista`, `modelName` `cEOSLab`, `version`
+  `4.32.0.2F-41889544.43202F (engineering build)`, `uptime` among its members.
+  *(0.81.0, 2026-11-03)*
+  - It first answered 8.1–17.4 s after the addresses were read from `inspect`, 0.12–0.24 s
+    after the deploy returned (four runs).
+  - In the run read with the core's debug log, the port refused connections for about
+    14 s, then `/command-api` answered HTTP 404 once; the next attempt, 2 s later, got the
+    first answer, which took about 1.3 s. Later answers took 0.08–0.13 s.
+- **A wrong password is answered HTTP 401 at once**, in 0.09–0.10 s, with a 62-byte body,
+  `Unable to authenticate user: Bad username/password combination`, as `text/plain`.
+  Readiness got it at its first attempt and the push got it too (`Unauthorized`). Three
+  refused logins locked nothing: the real login answered right after. *(0.81.0,
+  2026-11-03)*
+- **A replace's answer** is one `{"output": …}` entry per command, the diff's the entry
+  before the commit's (`{"output": ""}`). The diff opens `--- system:/running-config` and
+  `+++ session:/<session>-session-config`, then unified lines. **A repeat push's diff
+  entry is `""`.** *(0.81.0, 2026-11-03)*
+- **A port the node lacks is accepted in the session with a warning**: its `interface`
+  entry carries `warnings`, `Interface does not exist. The configuration will not take
+  effect until the module is inserted.`, and its lines appear in the diff.
+  *(0.81.0, 2026-11-03)* This differs from the `arista_eos` package's `hot_add_ports` note,
+  which says a push naming such a port is accepted silently: the node does warn, in an
+  answer the push does not read, and the push lands.
+- **A refused command** answers HTTP 200 with an error. *(0.81.0, 2026-11-03)*
+  - `code` is `1002` and `message` `CLI command 25 of 27 'no such command' failed:
+    invalid command`.
+  - `data` holds one entry per command run, the refused one last: its index is the
+    command's number less one.
+  - That entry carries `errors` (`Invalid input (at token 1: 'such')`) beside `output`.
+- **A refused session stays `pending`** in `show configuration sessions` (`format:
+  "json"`: `sessions` by name, each with a `state`, beside `maxSavedSessions` `1` and
+  `maxOpenSessions` `5`). `configure session <name>` then `abort` removes it, and no
+  session is left. A committed session is not listed: `sessions` was `{}` after two
+  commits. *(0.81.0, 2026-11-03)*
+- `#` is refused at token 0, and `!` is read as a comment. *(2026-09-20)* The `!` half was
+  re-exercised on 0.81.0: mixed.json's `e1` carries three `!` lines, and its push lands.
+  *(0.81.0, 2026-11-03)*
 - `show session-config diffs` has no JSON model: `format: "json"` fails the whole request
   with code 1003 and leaves the session pending, and `format: "text"` answers. The diff
   carries its own bare `!` separators, never the rendered config's `!` comment.
-  *(2026-10-01, 2026-10-02)*
+  *(2026-10-01, 2026-10-02)* The `format: "text"` half was re-exercised on 0.81.0, its bare
+  `!` separators with it; the `json` failure was not tried again. *(0.81.0, 2026-11-03)*
 - **Address lines are accepted in the eAPI replace**: `ip routing` after `hostname`, and
   on each addressed port `no switchport` and `ip address <a/l>` after `no shutdown`.
   Pushes took 2.3–2.5 s, and `show running-config` reads them. A second address needs
-  `secondary`: a plain second `ip address` replaces the first. *(2026-10-29)*
+  `secondary`: a plain second `ip address` replaces the first. *(2026-10-29)* That holds on
+  a node with an Ethernet port; one with none refuses `ip routing` (below). *(0.81.0,
+  2026-11-03)*
+- **A node with no Ethernet port refuses `ip routing`**: `Unavailable command (not
+  supported on this hardware platform) (at token 1: 'routing')`. *(0.81.0, 2026-11-03)*
+  - With no link, containerlab sets `CLAB_INTFS=0`, and the node lists `Management0` alone.
+  - Its forwarding agent, `Etba`, never started: still absent six minutes after boot.
+  - The same image with one link ran `Etba` and accepted `ip routing` at once.
+  - The rest of mixed.json's `e1` configuration was accepted on the link-less node.
 - The paths: `/system/state/hostname`; `/system/state/software-version`
   (`4.32.0.2F-41889544.43202F (engineering build)`);
   `/interfaces/interface[name=X]/state/enabled`; `/lldp/interfaces/interface[name=X]/…`.

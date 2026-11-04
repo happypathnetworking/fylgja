@@ -1,0 +1,31 @@
+name: lossy
+mgmt:
+  network: clab-lossy
+  ipv4-subnet: 172.20.1.0/24
+topology:
+  defaults:
+    labels:
+      fylgja.twin: lossy
+  nodes:
+    c1:
+      kind: chassisos
+      image: example.invalid/chassisos:0
+      link-apply-mode: live
+    c2:
+      kind: chassisos
+      image: example.invalid/chassisos:0
+      link-apply-mode: live
+    s1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+  links:
+  - endpoints:
+    - c1:eth1
+    - s1:ethernet-1/1
+  - endpoints:
+    - c1:eth49
+    - c2:eth49
+  - endpoints:
+    - c2:eth1
+    - s1:ethernet-1/2/1

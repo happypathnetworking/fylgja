@@ -1,6 +1,6 @@
 # fylgja-core (CONTRIBUTING.md).
 
-.PHONY: all venv test lint linkcheck
+.PHONY: all venv test live lint linkcheck
 
 VENV := core/.venv
 
@@ -15,6 +15,10 @@ venv:
 # The pure tier: no infrastructure (Constitution, Development).
 test:
 	cd core && .venv/bin/pytest -q
+
+# The live tier: booted images on the local driver, on demand (CONTRIBUTING.md). Load local/.env first.
+live:
+	cd core && .venv/bin/pytest -q -rA -m live tests/live
 
 lint:
 	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts && .venv/bin/mypy

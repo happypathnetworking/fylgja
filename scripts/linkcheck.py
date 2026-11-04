@@ -31,30 +31,30 @@ HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.M)
 EXPLICIT = re.compile(r"<a\s+(?:id|name)=\"([^\"]+)\"|\{#([^}]+)\}")
 
 
-def git_files():
+def git_files() -> set[str]:
     out = subprocess.run(["git", "ls-files", "-z"], capture_output=True, check=True)
     return {f.decode() for f in out.stdout.split(b"\0") if f}
 
 
-def blank_fences(text):
+def blank_fences(text: str) -> str:
     """Replace fenced code blocks with newlines, so line numbers hold."""
     return FENCE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
 
 
-def blank_code(text):
+def blank_code(text: str) -> str:
     """Blank fenced blocks and inline code spans, keeping every offset."""
     return INLINE.sub(lambda m: " " * len(m.group(0)), blank_fences(text))
 
 
-def slug(heading):
+def slug(heading: str) -> str:
     heading = re.sub(r"<[^>]+>", "", heading).strip().lower()
     return re.sub(r"[^\w\- ]", "", heading).replace(" ", "-")
 
 
-def anchors(text):
+def anchors(text: str) -> set[str]:
     """The anchors a Markdown document offers, as GitHub renders them."""
-    seen = collections.Counter()
-    ids = set()
+    seen: collections.Counter[str] = collections.Counter()
+    ids: set[str] = set()
     for m in HEADING.finditer(blank_fences(text)):
         base = slug(m.group(1))
         n = seen[base]
@@ -65,9 +65,9 @@ def anchors(text):
     return ids
 
 
-def main():
+def main() -> int:
     if len(sys.argv) > 1:
-        print(__doc__.strip().splitlines()[0], file=sys.stderr)
+        print((__doc__ or "").strip().splitlines()[0], file=sys.stderr)
         print("usage: python3 -I scripts/linkcheck.py (no arguments)", file=sys.stderr)
         return 2
     tracked = git_files()
@@ -79,9 +79,9 @@ def main():
             d = os.path.dirname(d)
     docs = sorted(f for f in tracked if f.endswith(".md"))
     texts = {f: Path(f).read_text(encoding="utf-8") for f in docs}
-    anchor_cache = {}
+    anchor_cache: dict[str, set[str]] = {}
     checked = external = 0
-    broken = []
+    broken: list[tuple[str, int, str, str]] = []
     for f in docs:
         text = blank_code(texts[f])
         found = [(m.group(2), m.start()) for m in LINK.finditer(text)]

@@ -173,6 +173,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "501": { $ref: "#/components/responses/NotBuilt" }
 
   /v1/packages:validate:
     post:
@@ -237,8 +238,9 @@ paths:
       responses:
         "200":
           description: >-
-            As JSON, the records sorted by name. As text/event-stream with watch=true, one WatchEvent per
-            change to any twin, in the order the store wrote them, after since_revision when given.
+            As JSON, the records sorted by name. As text/event-stream, a watch: every current record (those
+            beyond since_revision, when given), then one WatchEvent per change to any twin, in the order the
+            store wrote them.
           content:
             application/json:
               schema:
@@ -254,6 +256,7 @@ paths:
               schema:
                 type: string
                 description: SSE messages, each event named ADDED, MODIFIED or DELETED and each data line one WatchEvent as JSON.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -270,9 +273,12 @@ paths:
       responses:
         "200":
           description: >-
-            As JSON, the record. As text/event-stream with watch=true, one WatchEvent per write to the
-            record, the whole object each time, ending with DELETED once the twin is gone. A client that
-            reconnects with the last revision it saw misses nothing.
+            As JSON, the record. As text/event-stream, a watch: the record as it stands (ADDED at revision
+            1, else MODIFIED) unless since_revision is at or beyond it, then one WatchEvent per write to the
+            record, the whole object each time, each revision once, ending with DELETED once the twin is
+            gone. The store keeps no history, so a client that reconnects with the last revision it saw is
+            sent the record as it stands and every later write: it misses no change of state and is sent
+            none it saw. A twin that does not exist when the watch begins is 404.
           headers:
             ETag:
               description: The record's revision, quoted; a PUT or DELETE sends it back as If-Match.
@@ -284,6 +290,7 @@ paths:
               schema:
                 type: string
                 description: SSE messages, each event named ADDED, MODIFIED or DELETED and each data line one WatchEvent as JSON.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -297,7 +304,8 @@ paths:
         live, restarts or recreates nodes as the driver's plan says, refusing a restart without allow_restart.
         Writing the spec the twin already has changes nothing and answers 200. With dry_run=true it writes
         nothing: it compiles the blueprint, runs admission and the driver's pure plan, and answers what would
-        happen. Admission refusal is the run's verdict, status rejected, and also shown by a dry run.
+        happen. A refused admission is the run's verdict, status rejected; a dry run answers it as a 422
+        problem whose rule is the refusal's, since a refusal reserves nothing to plan with.
       parameters:
         - name: If-Match
           in: header
@@ -312,7 +320,9 @@ paths:
         - name: dry_run
           in: query
           required: false
-          description: Plan only; nothing is written and no run starts.
+          description: >-
+            Plan only; nothing is written and no run starts. A blueprint that does not compile, a bundle
+            the driver cannot plan and a refused admission each answer 422 (Unprocessable).
           schema: { type: boolean, default: false }
       requestBody:
         required: true
@@ -346,6 +356,7 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         "422": { $ref: "#/components/responses/Unprocessable" }
+        "501": { $ref: "#/components/responses/NotBuilt" }
     delete:
       tags: [twins]
       operationId: deleteTwin
@@ -362,7 +373,10 @@ paths:
           schema: { type: string }
       responses:
         "202":
-          description: Deletion requested; the record, its Ready condition False.
+          description: >-
+            Deletion requested; the record as written, deletion_requested_at set and generation
+            incremented. The loop sets Ready False (twin.deleting) as it begins the teardown, since the
+            API never writes status. Asked again, the record as it stands, with nothing written.
           content:
             application/json:
               schema: { $ref: "twin-record-1.schema.json" }
@@ -389,6 +403,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "501": { $ref: "#/components/responses/NotBuilt" }
 
   /v1/runs:
     get:
@@ -415,6 +430,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Run" }
                     description: Newest first; the CLI's run list and the orchestrator read it.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -452,7 +468,8 @@ paths:
         "200":
           description: >-
             The events so far. As text/event-stream, each event is one SSE message whose id is its seq and
-            whose data is one Event; the stream ends when the run ends, and Last-Event-ID resumes it.
+            whose data is one Event; the stream ends when the run ends, and Last-Event-ID resumes it (the
+            greater of it and after). An after or a Last-Event-ID that is no integer of 0 or more is 400.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EventPage" }
@@ -460,6 +477,7 @@ paths:
               schema:
                 type: string
                 description: SSE messages, each data line one Event as JSON.
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -471,6 +489,9 @@ paths:
       tags: [runs]
       operationId: cancelRun
       summary: Ask a run to cancel; it cleans up and ends.
+      description: >-
+        A create stops where it is, tears down what it built and ends failed with run.cancelled. A destroy
+        run is never stopped halfway: it is marked cancelling and completes all the same.
       responses:
         "202":
           description: Cancellation requested; the run, state cancelling. Read it to see how it ends.
@@ -504,7 +525,9 @@ components:
       name: watch
       in: query
       required: false
-      description: With Accept text/event-stream, stream changes instead of answering once.
+      description: >-
+        true streams changes as server-sent events instead of answering once; with no watch, an Accept of
+        text/event-stream asks the same, and false answers JSON whatever the Accept.
       schema: { type: boolean, default: false }
     SinceRevision:
       name: since_revision
@@ -566,12 +589,25 @@ components:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     PreconditionFailed:
-      description: The record moved since the client read it, or the twin exists under If-None-Match (twin.conflict, twin.exists).
+      description: >-
+        The record moved since the client read it, or If-Match names a twin that does not exist
+        (twin.conflict); the twin exists under If-None-Match (twin.exists).
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     Unprocessable:
-      description: Well-formed but not compilable (bundle.rejected), every fault in findings.
+      description: >-
+        Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected),
+        every fault in findings; or, for a dry run, refused admission, under the refusal's rule
+        (admission.capacity, say) with its finding.
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
+    NotBuilt:
+      description: >-
+        What this core's phase does not build yet (api.unbuilt): a route (the bundle diff, verify) or a
+        change (a step, a new spec on an existing twin); the detail names the phase that builds it.
+        Clients show it and do not retry.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
@@ -638,8 +674,33 @@ components:
       required: [spec]
       properties:
         spec:
-          $ref: "twin-record-1.schema.json#/properties/spec"
-          description: What the twin should be; written to the record's spec. Unknown fields are refused.
+          type: object
+          additionalProperties: false
+          properties:
+            blueprint_id:
+              $ref: "bundle-1.schema.json#/$defs/id"
+              description: The blueprint to run, when the client names one; the loop compiles it to a bundle.
+            bundle_id:
+              $ref: "bundle-1.schema.json#/$defs/id"
+              description: The bundle to run, when the client names one directly; the loop plans it with no compile.
+            driver:
+              $ref: "deployment-1.schema.json#/$defs/driver"
+              description: >-
+                The driver the twin runs on, fixed at creation; the server's configured driver when absent. A PUT
+                naming another than the twin's is refused (twin.driver.fixed).
+            allow_restart:
+              type: boolean
+              default: false
+              description: Whether the loop may restart or recreate nodes to reach this spec; false when absent.
+          oneOf:
+            - required: [blueprint_id]
+              not: { required: [bundle_id] }
+            - required: [bundle_id]
+              not: { required: [blueprint_id] }
+          description: >-
+            What the twin should be, as a partial spec: exactly one of the two ids, and driver and allow_restart
+            when the client sets them. The server fills what is absent and writes the whole spec to the record,
+            whose spec requires both. Unknown fields are refused.
 
     Plan:
       type: object
@@ -651,7 +712,9 @@ components:
           description: What applying the spec would deploy, with its fidelity; clients show it.
         verdict:
           $ref: "findings-1.schema.json"
-          description: Admission's and the step comparison's findings (operation plan); rejected when admission refuses or a step would need allow_restart.
+          description: >-
+            The step comparison's findings (operation plan); rejected when a step would need allow_restart. A
+            refused admission is a 422 problem instead, since it leaves no deployment to answer.
 
     WatchEvent:
       type: object
@@ -679,7 +742,7 @@ components:
         capabilities:
           type: object
           additionalProperties: false
-          required: [nodes, relink, forwarding, access]
+          required: [nodes, relink, forwarding, access, isolation]
           properties:
             nodes:
               enum: [provisions, claims]
@@ -693,6 +756,9 @@ components:
             access:
               enum: [direct, proxied]
               description: Whether node addresses are reachable directly or through a twin record node's access host; clients branch on it.
+            isolation:
+              enum: [names, network]
+              description: Whether twins are kept apart by name alone (local labs whose management networks route to each other through the host) or by the network (a NetworkPolicy per namespace); clients show it (D-019).
 
     BundleDiff:
       type: object
@@ -828,7 +894,12 @@ components:
           description: Seconds since the matching started event, on an end; metrics and clients read it.
         rule:
           $ref: "findings-1.schema.json#/$defs/rule"
-          description: On failed or timed_out, the finding's rule; clients show it, the verdict holds the finding.
+          description: >-
+            The rule of an ending other than plain success: on failed and timed_out, the failing finding's
+            rule, which is the Ready condition's reason too (a compile or plan refusal carries bundle.rejected
+            or plan.rejected, the verdict holding every finding); on the cancel phase's done, run.cancelled. A
+            transient failure's failed event carries the error's rule when it has one and no finding is
+            filed: the phase's next started is the retry. Clients show it; the verdict holds the findings.
 
     EventPage:
       type: object

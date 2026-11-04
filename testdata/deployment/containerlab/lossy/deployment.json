@@ -1,0 +1,65 @@
+{
+ "allocation": {
+  "lab": "lossy",
+  "mgmt_subnet": "172.20.1.0/24"
+ },
+ "bundle_id": "5411d551438da71fb725a84a58894acdfb835d51673be408aa25499e285d7411",
+ "demand": {
+  "cpu": 2.5,
+  "memory_mb": 6144,
+  "nodes": 3
+ },
+ "deployment_version": "1",
+ "driver": "containerlab",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "chassisos",
+    "text": "Synthetic test platform; its port names are illustrative and nothing about it is measured"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 7,
+   "shared_ports": 3
+  },
+  "omitted": [
+   {
+    "device": "c1",
+    "interface": "Ethernet1/49/2",
+    "omission": "shared"
+   },
+   {
+    "device": "c1",
+    "interface": "Ethernet1/53",
+    "omission": "out_of_range"
+   },
+   {
+    "device": "c1",
+    "interface": "Ethernet2/1",
+    "omission": "shared"
+   }
+  ],
+  "synthesized": []
+ },
+ "files": [
+  {
+   "path": "topology.clab.yml",
+   "sha256": "886db05f0259df18c6c884d892d8f8302edc61aad170c66357a8641840352af3"
+  }
+ ],
+ "id": "9c1b860809baace4e09d0bdc65c5101e17e52af9f4a7c1d3a5e9b4b680e4261f",
+ "twin": "lossy"
+}

@@ -44,7 +44,10 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 - containerlab applies an SR Linux `.cli` startup snippet over the default configuration
   and commits it itself, so the snippet carries no `commit` line; LLDP and gNMI are on by
   default. *(0.77, 2026-09-15; 26.04, 2026-10-08)*
-- **No startup-config means the kind's baseline.** *(2026-10-30)*
+- **No startup-config means the kind's baseline.** *(2026-10-30; 0.81.0, 2026-11-03: the local
+  driver's plan renders no startup-config, and every push of phase 4's live runs, the
+  end-to-end test's three SR Linux nodes and the push lab's SR Linux and cEOS nodes,
+  replaced onto the baseline and landed)*
   - SR Linux 24.7.1 holds hostname = node name, linked ports enabled, LLDP with
     neighbours, gNMI and JSON-RPC.
   - cEOS 4.32.0.2F holds the hostname, ports connected, LLDP on every port
@@ -80,7 +83,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   through the host** (3 ms ping between two labs' nodes). *(2026-10-30)* Re-exercised on
   0.81.0, all but the route *(0.81.0, 2026-11-03)*: `drv-live` and `drv-live-2`, three SR
   Linux nodes each, deployed at once through the driver in 53.1 s; destroying `drv-live`
-  (1.6 s) left `drv-live-2` running, with its hosts block whole.
+  (1.6 s) left `drv-live-2` running, with its hosts block whole. **The route between two
+  labs, which `isolation: names` rests on, was not re-exercised in phase 4**: it stands from
+  0.79.0.
 - **Residue.** *(2026-10-30)*
   - `docker rm` of a lab's containers, followed by `destroy --cleanup`, leaves the
     management network, the `/etc/hosts` lines and
@@ -153,7 +158,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 
 - **`nokia_srlinux` takes production names as aliases**: `ethernet-1/1` → `e1-1`, and
   breakout `ethernet-1/1/1` → `e1-1-1`. `inspect interfaces` lists each port's `alias`.
-  *(2026-10-30)*
+  *(2026-10-30; 0.81.0, 2026-11-03: the end-to-end test's topology, its links between
+  production names such as `n1:ethernet-1/1`, deployed every time; the breakout alias was
+  not re-exercised)*
 - **An out-of-range SR Linux name** (`ethernet-1/99`, `ethernet-2/1`) passes `validate`
   and is refused in post-deploy, about 30 s in, after the containers exist (deploy rc 1).
   *(2026-10-30)*
@@ -161,7 +168,8 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   etX"). Its pattern `eth[1-9][\w.]*$|et[1-9][\w.]*$` is unanchored at the start, so
   `Ethernet1` passes and becomes a Linux port EOS never lists: a silent failure, which in
   that lab also held cEOS's post-deploy for about 6 minutes. 0.80 through 0.82 are
-  unchanged. *(2026-10-30)*
+  unchanged. *(2026-10-30)* *(0.81.0, 2026-11-03: the push lab's cEOS node deployed with its
+  link on the Linux name `eth1`; the refusals were not re-run)*
 - **`validate` checks no interface name.** *(2026-10-30)*
 
 **A killed or partial deploy**
@@ -182,11 +190,21 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
   4 s in, in its post-deploy, left the node running, the network and the lab directory, and
   no host entries or ssh config. containerlab creates the network, then the lab directory,
   then the containers; it writes the host entries and the ssh config only after the nodes'
-  post-deploy. Whether that node ever answered was not checked.
+  post-deploy. Whether that node ever answered was not checked. *(0.81.0, 2026-11-04)* It
+  does not: one SR Linux 24.7.1 node, its post-deploy begun 2.0 s into the deploy, was
+  killed with `SIGKILL` 7.0 s in (status -9, no `containerlab` process left). It left the
+  node running with its management address and no host entries or ssh config, and its push
+  transport never answered the readiness request: `readiness.timeout` after 88 s of a
+  90 s budget.
 - **A plain re-deploy of a partial lab skips containerlab's post-deploy** and leaves the
   bootstrap unapplied: after a killed deploy it returned 0 in 0.6 s and fixed nothing.
   Deploy over a partial lab with `--reconfigure`, which recovered the lab in 51.7 s.
   *(2026-09-15; 26.04, 2026-10-08, 2026-10-30)*
+  *(0.81.0, 2026-11-04)* The same on 0.81.0: over that node, a plain `deploy -t` returned 0
+  in 0.6 s with the container not restarted (`StartedAt` unchanged), and readiness timed
+  out again after 88 s. `deploy -t --reconfigure` then returned 0 in 37.4 s, the node made
+  anew (`StartedAt` moved), and its push transport answered 4.4 s later; `destroy -t
+  --cleanup` took 0.9 s and left no container, network, host entry or ssh config.
 - **`--reconfigure` over a healthy lab recreates every node**: three SR Linux nodes in
   40.1 s, every container's `State.StartedAt` moved. *(0.81.0, 2026-11-03)*
 
@@ -195,16 +213,18 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 
 The live end-to-end test (`core/tests/live/test_e2e.py`) runs `three-node` through
 `fylgja-core-server` and the thin CLI, over a store in a temporary directory, on a host with
-27 GiB available. It passed on its first full run, and again in the whole tier.
+27 GiB available. It passed on its first full run and in the whole tier, and three times more
+as it grew a stricter kill check and a deletion during the deploy. *(2026-11-04)*
 
-- **A create**, `twin create` to Ready, took 57.8–67.1 s end to end over five runs: apply
+- **A create**, `twin create` to Ready, took 57.8–67.1 s end to end over eight runs: apply
   36.1–43.3 s, the three nodes' readiness 12.3–13.3 s, the three pushes 9.0–10.0 s together
   (2.9–3.5 s each), and compile, admit and plan under 0.2 s together. A destroy took
   1.4–2.1 s and left no container, host entry, ssh config or network.
 - **A server killed with SIGKILL at each phase boundary of a create resumed the same run to
   Ready**, with no gap in its events' `seq` and no second create run. That held at
-  `compiled`, `admitted`, `planned`, `applied`, `ready` and `pushed`, Ready 60.2–69.6 s
-  after the create, twice. No kill caused a `--reconfigure`.
+  `compiled`, `admitted`, `planned`, `applied`, `ready` and `pushed`, Ready 60.2–70.3 s
+  after the create, five times. No kill caused a `--reconfigure`, and each create deployed
+  once.
   - The kills at `admitted` and `planned` landed in the apply step's first `docker ps`,
     before its deploy began, so the run shows two `apply started` events and one deploy.
   - The kill at `pushed` landed before the run's end was written, and the resume wrote it.
@@ -212,10 +232,17 @@ The live end-to-end test (`core/tests/live/test_e2e.py`) runs `three-node` throu
   own, ran on without the server. The resumed pass found the three containers, and each
   node's push transport answered within its readiness budget (46.6 s for the three, while
   the deploy finished), so it deployed nothing (apply `skipped`) and pushed: Ready
-  75.7–78.9 s after the create.
+  72.2–78.9 s after the create.
 - **A server killed during a destroy**: the restarted server took up the destroy run, and
-  the twin was gone 2.6–2.7 s after its deletion was asked, nothing left on the host.
-- The server answered its first request 0.5–1.2 s after each start; its 402–455 lines of log
+  the twin was gone 2.6–3.2 s after its deletion was asked, nothing left on the host.
+- **A deletion during the deploy**, asked once the deploy had made its three containers
+  (0.9–1.6 s in): the loop stopped the deploy, killing its process group, and the cancel's
+  `destroy -t --cleanup` of the partial lab took 0.75 s; the create run ended `failed`
+  (`run.cancelled`), the destroy run `ok`, and the twin was gone 1.4–1.7 s after it was asked,
+  no container, host entry, ssh config, network or `containerlab` process left. Asked 0.2 s
+  in, before any container, it found only the management network, and removed it.
+  *(2026-11-04)*
+- The server answered its first request 0.5–1.2 s after each start; its 402–485 lines of log
   were each one JSON object, none holding the token or a password. The whole live tier, 27
   tests (the driver's, the push's and the end-to-end), took 904 s. *(2026-11-04)*
 

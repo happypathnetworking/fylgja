@@ -1,0 +1,31 @@
+name: mixed
+mgmt:
+  network: clab-mixed
+  ipv4-subnet: 172.20.1.0/24
+topology:
+  defaults:
+    labels:
+      fylgja.twin: mixed
+  nodes:
+    e1:
+      kind: ceos
+      image: ceos:4.32.0.2F
+      link-apply-mode: live
+    e2:
+      kind: ceos
+      image: ceos:4.32.0.2F
+      link-apply-mode: live
+    s1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+  links:
+  - endpoints:
+    - e1:eth1
+    - s1:ethernet-1/1
+  - endpoints:
+    - e1:eth2_1
+    - e2:eth1
+  - endpoints:
+    - e2:eth3_1_1
+    - s1:ethernet-1/2

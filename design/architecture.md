@@ -55,11 +55,28 @@ writes them.
 - **The compiler** (section 4.2): pure, held to the facts the frozen Go compiler produced
   for the four fixtures, and refusing an uncompilable blueprint with every fault in one
   pass; its rules are in the catalogue, [`docs/rules.md`](../docs/rules.md).
+- **The state store** (section 4.6) as a local directory, held locked for one core
+  ([D-041](decisions.md#d-041)).
+- **The local driver** (section 4.4): containerlab behind the seam, its pure `plan` and its
+  live `admit`, `apply`, `inspect` and `destroy` with the two recovery rules, every
+  behaviour it relies on recorded for containerlab 0.81.0 in
+  [verified-facts.md](verified-facts.md).
+- **Readiness and the push**: the credential provider, a node's push transport answering an
+  authenticated request, and the two replace mechanisms, JSON-RPC for SR Linux and eAPI for
+  EOS ([D-027](decisions.md#d-027)).
+- **The reconcile loop** (section 4.5) for a create and a destroy: runs and their events,
+  admission one twin at a time, cancellation, and a resume after a kill at the phase after
+  the one recorded ([D-023](decisions.md#d-023)).
+- **API 1 and the thin CLI** (section 4.7): `fylgja-core-server` serves API 1 and runs the
+  loop in one process, with per-client tokens, problem documents and watches by server-sent
+  events; `fylgja-core` is its client. A twin is created, shown, watched and destroyed end
+  to end, with the server killed at every phase boundary and resumed each time.
 
-**Designed, not yet built:** everything else in section 4. It is built in the phases of
-[design/core.md](core.md#sequence): the compiler, then one named twin on the local
-driver, then step, verify and probes, then the clabernetes driver, then many twins, then
-the cut-over that moves the orchestrator onto API 1.
+**Designed, not yet built:** everything else in section 4: steps, verify, the probes' flows
+and a probe host's readiness, the bundle diff, the clabernetes driver, many twins at once,
+and the cut-over that moves the orchestrator onto API 1. They are built in the phases of
+[design/core.md](core.md#sequence); in the API, a route or a change a phase does not build
+answers `501` (`api.unbuilt`).
 
 **The reference implementation** is the **frozen Go core** in the archived repository
 ([D-001](decisions.md#d-001)): one twin at a time under a fixed lab name on one lab host,
@@ -171,12 +188,12 @@ A runtime is added by writing a driver, and nothing else
 
 | Call | What it does |
 |---|---|
-| `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy. |
+| `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network. |
 | `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason. |
-| `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment. |
-| `apply(deployment)` | Makes the runtime match the deployment. |
+| `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)). |
+| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)). |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
-| `destroy(twin)` | Removes everything the twin holds, and releases its allocation. |
+| `destroy(deployment, files, packages)` | Removes everything the twin holds, the residue of a killed destroy included, within its packages' measured destroy timeouts, and releases its allocation. |
 | `endpoints(twin)` | Returns each node's management address. |
 
 `plan` is the only step that binds a bundle to a twin and a runtime. It is pure, so what it
@@ -202,10 +219,12 @@ in software and hardware in silicon, so it is computed per deployment and never 
   production interface names where the kind has aliases and renamed ports where it does
   not. The clabernetes driver wraps it in a `Topology` resource.
 - Account-gated images, such as cEOS, live in a private registry the cluster trusts
-  ([D-021](decisions.md#d-021)). kind is the cluster for developing the clabernetes driver
-  ([D-022](decisions.md#d-022)). The production cluster is three k3s servers with embedded
-  etcd on SSD, MetalLB in layer 2, and the registry on a host outside the cluster
-  ([D-036](decisions.md#d-036)).
+  ([D-021](decisions.md#d-021)). Locally, a gated image is a presence check at admission
+  (`admission.image.absent`) and is never pulled; an ungated one is containerlab's to pull
+  at deploy ([D-015](decisions.md#d-015)). kind is the cluster for developing the
+  clabernetes driver ([D-022](decisions.md#d-022)). The production cluster is three k3s
+  servers with embedded etcd on SSD, MetalLB in layer 2, and the registry on a host outside
+  the cluster ([D-036](decisions.md#d-036)).
 - The hardware driver is not built; its paper shape checks the seam. The local driver
   stays sufficient for development and the live tier, so neither needs Kubernetes.
 
@@ -411,7 +430,7 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 
 | Path | What it holds |
 |---|---|
-| `core/` | The core, the Python package `fylgja_core`. Today the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler |
+| `core/` | The core, the Python package `fylgja_core`: the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler; the state store and its local directory; the driver seam, its registry and the containerlab driver (`containerlab/`); the credential provider, readiness and the push; the reconcile loop; the server (`server/`, the console script `fylgja-core-server`); and the client library with the thin CLI (`fylgja-core`). Its tests are under `core/tests/`, the live tier's under `core/tests/live/` |
 | `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README |
 | `psp/` | The platform packages, SR Linux and EOS |
 | `probes/` | The probe package `ping` |
@@ -419,7 +438,8 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 | `testdata/packages/` | Test-only packages, the interface mapping rows each shipped package must decide, and the rejection fixtures for the package loaders |
 | `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match, and the compiler's rejection fixtures |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
-| `scripts/` | The link checker (`linkcheck.py`) |
+| `testdata/deployment/` | The golden deployments, per driver and fixture: the rendered runtime files and the deployment document each plan must reproduce (`scripts/render-goldens.py` writes them); and under `rejected/`, the blueprints a driver's plan must refuse |
+| `scripts/` | The link checker (`linkcheck.py`), and the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`) |
 | `design/` | How the project is governed and designed: the constitution, the decisions, this architecture, the verified facts, and design documents ([core.md](core.md) is the core's) |
 | `docs/` | Documentation for people using Fylgja; today the glossary and the rule catalogue |
 | `CONTRIBUTING.md` | How to set up, build, test and change Fylgja |
@@ -430,5 +450,4 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 - Whether the 40-character twin name and 63-character device names fit every runtime's own
   limits; clabernetes names a Service per node, and a Service name is a DNS-1035 label,
   which begins with a letter.
-- Image pulls on the local driver, and whether admission needs per-node requests as well as
-  sums.
+- Whether admission needs per-node requests as well as sums.

@@ -9,9 +9,16 @@ description = "Fylgja's core: a blueprint becomes a twin."
 license = "Apache-2.0"
 requires-python = ">=3.14"
 dependencies = [
+    "httpx==0.28.1",
     "jsonschema==4.26.0",
     "PyYAML==6.0.3",
+    "starlette==1.9.0",
+    "uvicorn==0.54.0",
 ]
+
+[project.scripts]
+fylgja-core = "fylgja_core.cli:main"
+fylgja-core-server = "fylgja_core.server.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -30,7 +37,10 @@ fylgja_core = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-p no:cacheprovider"
+markers = ["live: boots images on the local containerlab driver; run with make live"]
+addopts = "-p no:cacheprovider -m 'not live'"
+# Starlette 1.9.0's TestClient prefers httpx2; the project pins httpx (D-039) for the readiness wait and the push.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [tool.ruff]
 line-length = 120
@@ -42,7 +52,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 [tool.mypy]
 strict = true
 python_version = "3.14"
-files = ["src", "tests"]
+files = ["src", "tests", "../scripts"]
 
 [[tool.mypy.overrides]]
 module = ["jsonschema.*", "rfc8785.*", "referencing.*"]

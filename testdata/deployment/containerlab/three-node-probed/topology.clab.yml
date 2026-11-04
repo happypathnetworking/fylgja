@@ -1,0 +1,49 @@
+name: three-node-probed
+mgmt:
+  network: clab-three-node-probed
+  ipv4-subnet: 172.20.1.0/24
+topology:
+  defaults:
+    labels:
+      fylgja.twin: three-node-probed
+  nodes:
+    n1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+    n2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+    n3:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.7.1
+      link-apply-mode: live
+    n1-loop-a:
+      kind: linux
+      image: alpine:3.24.2
+      exec:
+      - ip addr add 10.1.10.2/24 dev eth1
+      - ip route add 10.1.11.2/32 via 10.1.10.1 dev eth1
+    n1-loop-b:
+      kind: linux
+      image: alpine:3.24.2
+      exec:
+      - ip addr add 10.1.11.2/24 dev eth1
+      - ip route add 10.1.10.2/32 via 10.1.11.1 dev eth1
+  links:
+  - endpoints:
+    - n1:ethernet-1/1
+    - n2:ethernet-1/1
+  - endpoints:
+    - n1:ethernet-1/2
+    - n3:ethernet-1/2
+  - endpoints:
+    - n2:ethernet-1/2
+    - n3:ethernet-1/1
+  - endpoints:
+    - n1-loop-a:eth1
+    - n1:ethernet-1/10
+  - endpoints:
+    - n1-loop-b:eth1
+    - n1:ethernet-1/11

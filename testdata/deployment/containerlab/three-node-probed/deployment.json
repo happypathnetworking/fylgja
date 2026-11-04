@@ -1,0 +1,64 @@
+{
+ "allocation": {
+  "lab": "three-node-probed",
+  "mgmt_subnet": "172.20.1.0/24"
+ },
+ "bundle_id": "d45f6b7de1d7d90466cb31aeeb0197a0d2ab5f0beecb2ad69de6e480ebef2c31",
+ "demand": {
+  "cpu": 1.7,
+  "memory_mb": 6208,
+  "nodes": 5
+ },
+ "deployment_version": "1",
+ "driver": "containerlab",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   },
+   {
+    "package": "ping",
+    "text": "The hosts forward in their container's kernel and the twin's devices in theirs: a loss figure is the container's, never a hardware forwarder's."
+   },
+   {
+    "package": "ping",
+    "text": "Timing is the container's: the interval, a reply's time and a gap are measured on the lab host's scheduler, under its load."
+   },
+   {
+    "package": "ping",
+    "text": "A host speaks no discovery protocol, so the device port's neighbour is never asserted on a synthesized link."
+   },
+   {
+    "package": "ping",
+    "text": "IPv4 only: ping and ip are run without -6."
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 0,
+   "shared_ports": 0
+  },
+  "omitted": [],
+  "synthesized": [
+   "n1-loop-a",
+   "n1-loop-b"
+  ]
+ },
+ "files": [
+  {
+   "path": "topology.clab.yml",
+   "sha256": "d155a164d92ca240bf3a2a984e066be6b58542e2f08efe6aaec74886130ec9e5"
+  }
+ ],
+ "id": "870ef96f236c38d04141d115c1d0e6d1ca69ddd2488bd344c545b74d136b414e",
+ "twin": "three-node-probed"
+}

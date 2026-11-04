@@ -24,6 +24,14 @@ documents ([`api-1.openapi.yaml`](../formats/api-1.openapi.yaml),
 [D-025](../design/decisions.md#d-025)). The frozen Go core's API is also version 1; they share
 nothing else.
 
+**Audit log** — The log lines, on the same stream as every other, that carry the principal and
+the action of every write to a twin, so that every change is attributable
+([Constitution X](../design/constitution.md#x-report-honestly)).
+
+**Backoff** — The loop's growing delay before it retries a twin after a transient failure:
+doubling from 1 s to a 60 s ceiling, reset by a pass that completes
+([D-023](../design/decisions.md#d-023)).
+
 **Blueprint** — The core's one input: the network (devices, interfaces, links, each
 device's rendered configuration) and the probes declared beside it, with an opaque *source
 envelope* ([`blueprint-1.schema.json`](../formats/blueprint-1.schema.json),
@@ -47,8 +55,8 @@ the other, held when every reply comes back ([D-008](../design/decisions.md#d-00
 
 **`capabilities`** — The driver call that says what a driver can do: provision nodes or
 claim them, change links on a running twin, forward in software or hardware, reach nodes
-directly or by proxy. Code above the *driver seam* may branch on a capability, never on a
-runtime.
+directly or by proxy, and keep twins apart by names alone or by the network. Code above the
+*driver seam* may branch on a capability, never on a runtime.
 
 **clabernetes** — containerlab on Kubernetes, one pod per node. The production *driver*,
 with a namespace and a NetworkPolicy per twin and a LoadBalancer per node
@@ -98,6 +106,10 @@ old bundle and part on its new one. It can be shown, verified and destroyed
 **Driver** — The code that runs twins on one runtime behind the *driver seam*: local
 `containerlab`, `clabernetes`, and `hardware` later ([D-017](../design/decisions.md#d-017),
 [Constitution XIII](../design/constitution.md#xiii-runtimes-are-drivers)).
+
+**Driver registry** — `fylgja_core.drivers`, the one module above the *driver seam* that
+names a runtime: it lists the drivers the core serves, makes one by name, and answers a
+driver's capabilities ([D-046](../design/decisions.md#d-046)).
 
 **Driver seam** — The seven calls every driver implements: `capabilities`, `admit`, `plan`,
 `apply`, `inspect`, `destroy` and `endpoints`. Each is idempotent.
@@ -156,6 +168,10 @@ no aliases (cEOS), that includes a *rename rule* from production names to the ki
 re-cabled with no restart, or `restart`. Set by the platform package, written on each node
 at create, and never changed on a running twin.
 
+**Lossy** — A rename that drops a placeholder of its rule's match, so that two production
+names can land on one runtime port. The plan counts lossy mappings and shared ports per
+deployment, and omits an uncabled interface whose port a cabled one holds (`shared`).
+
 **Mapping row** — One row of a bundle's mapping per blueprint interface: the device, the
 production interface name, the rule that matched, the *disposition* (`cabled`, `uncabled`,
 `management` or `omitted`), the node's own port name, and an omission's reason.
@@ -175,7 +191,8 @@ recorded before the next begins, so a restarted core resumes
 
 **`plan`** — The pure driver call that binds a bundle to a twin and a runtime, given its
 allocation, and returns a *deployment*. It is the only binding step
-([D-011](../design/decisions.md#d-011)).
+([D-011](../design/decisions.md#d-011)). It refuses a runtime port two cabled interfaces
+share (`interface.port.shared`, [D-045](../design/decisions.md#d-045)).
 
 **Platform package** — The data that makes one network operating system supported:
 interface rules, push, readiness, gNMI paths, conformance, fidelity, and a section per
@@ -230,6 +247,11 @@ pointer or object it must report, and nothing else.
 left at deploy (host name, linked ports, LLDP, gNMI), and applies the whole configuration in
 one atomic commit ([D-027](../design/decisions.md#d-027)).
 
+**Residue** — What a killed or hand-removed lab leaves on the host with no node left: its
+block of `/etc/hosts` entries, its ssh config and its management network. It is an
+`Inspection` state. Recovery rule 2 clears the root-owned part, the host entries and the ssh
+config, by deploying, then destroying ([D-023](../design/decisions.md#d-023)).
+
 **Resync** — The loop's periodic re-queueing of every twin, so a missed runtime event is
 only late, never lost ([D-023](../design/decisions.md#d-023)).
 
@@ -238,8 +260,9 @@ loop's. The API serves it as the ETag; a client sends it back as `If-Match`, and
 fails `412` if the record has moved ([D-025](../design/decisions.md#d-025)).
 
 **Run** — One long operation on a twin (create, step or destroy): a ULID, the principal, a
-state and, once ended, a *verdict*. It answers `202`, and is read and cancelled by id. One
-run acts on a twin at a time.
+state and, once ended, a *verdict*. A write to the twin queues it, and the twin's status
+names it while it runs; it is read by id, its events by cursor, and cancelled by id
+(`202`). One run acts on a twin at a time.
 
 **Run event** — One event of a run: a sequence number, a time, a phase and an outcome,
 read after a cursor (`GET /v1/runs/{id}/events?after=N`). Timings are events.
@@ -266,6 +289,10 @@ and whether the loop may restart nodes. Writing a new spec creates or steps the 
 blueprints, bundles and deployments live: a directory locally, S3-compatible object storage
 in production. No database
 ([Constitution IX](../design/constitution.md#ix-state-lives-behind-one-store-no-database)).
+The local store's files are `lock`, `blueprints/<id>.json`, `bundles/<id>/manifest.json` and
+`configs/<node>.cfg`, `deployments/<id>/deployment.json` with the rendered files beside it,
+`twins/<name>.json`, and `runs/<ulid>.json` with `runs/<ulid>.events.ndjson`
+([D-041](../design/decisions.md#d-041)).
 
 **Status** — The part of a twin record only the reconcile loop writes: conditions, phase,
 the running blueprint, bundle and deployment, the nodes, the last step and the observed
@@ -277,8 +304,14 @@ kind allows, replace each changed node, then wait for the twin to settle. A step
 restart a node needs `allow_restart` in the spec.
 
 **Thin CLI** — `fylgja-core`, a client of API 1 like any other. It renders documents as
-text and exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport failure,
-and 3 for a twin left dirty.
+text and exits 0 for ok, 1 for a negative verdict, 2 for a problem, a transport failure or
+a usage error, and 3 for a twin left dirty.
+
+**Token file** — The server's file of client tokens, named by `FYLGJA_TOKENS`: one
+`<sha256 hex of the token> <principal>` per line, so it never holds a token itself and several
+are valid at once ([D-025](../design/decisions.md#d-025)). A client holds its token in
+`FYLGJA_API_TOKEN` and sends it as a bearer token; the server hashes it, looks up the
+*principal* and discards it.
 
 **Twin** — A running copy of a network's intent: its operating system images, wired as the
 blueprint says and configured as the source rendered, named and in its own isolation unit.
@@ -291,6 +324,10 @@ runtime, and the twin resource the API serves: its *spec* and *status*, its *gen
 and *revision*, changed only by compare-and-set
 ([`twin-record-1.schema.json`](../formats/twin-record-1.schema.json),
 [D-025](../design/decisions.md#d-025)).
+
+**ULID** — A 26-character, time-sortable id (48 bits of milliseconds, 80 random bits,
+Crockford base32), made in the core, which every run carries
+([D-040](../design/decisions.md#d-040)).
 
 **Verdict** — A findings document: what a compile, a package validation, a plan, a run or a
 verification concluded, with a status and every finding behind it

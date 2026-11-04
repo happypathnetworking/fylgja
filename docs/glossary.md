@@ -260,8 +260,9 @@ loop's. The API serves it as the ETag; a client sends it back as `If-Match`, and
 fails `412` if the record has moved ([D-025](../design/decisions.md#d-025)).
 
 **Run** — One long operation on a twin (create, step or destroy): a ULID, the principal, a
-state and, once ended, a *verdict*. It answers `202`, and is read and cancelled by id. One
-run acts on a twin at a time.
+state and, once ended, a *verdict*. A write to the twin queues it, and the twin's status
+names it while it runs; it is read by id, its events by cursor, and cancelled by id
+(`202`). One run acts on a twin at a time.
 
 **Run event** — One event of a run: a sequence number, a time, a phase and an outcome,
 read after a cursor (`GET /v1/runs/{id}/events?after=N`). Timings are events.
@@ -303,8 +304,14 @@ kind allows, replace each changed node, then wait for the twin to settle. A step
 restart a node needs `allow_restart` in the spec.
 
 **Thin CLI** — `fylgja-core`, a client of API 1 like any other. It renders documents as
-text and exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport failure,
-and 3 for a twin left dirty.
+text and exits 0 for ok, 1 for a negative verdict, 2 for a problem, a transport failure or
+a usage error, and 3 for a twin left dirty.
+
+**Token file** — The server's file of client tokens, named by `FYLGJA_TOKENS`: one
+`<sha256 hex of the token> <principal>` per line, so it never holds a token itself and several
+are valid at once ([D-025](../design/decisions.md#d-025)). A client holds its token in
+`FYLGJA_API_TOKEN` and sends it as a bearer token; the server hashes it, looks up the
+*principal* and discards it.
 
 **Twin** — A running copy of a network's intent: its operating system images, wired as the
 blueprint says and configured as the source rendered, named and in its own isolation unit.

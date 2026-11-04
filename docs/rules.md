@@ -39,6 +39,13 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 | `bundle.version.unsupported`, `deployment.version.unsupported`, `twin_record.version.unsupported`, `findings.version.unsupported` | the store's and clients' readers | a stored or received document is of a version this core does not read |
 | `bundle.invalid`, `deployment.invalid`, `twin_record.invalid`, `findings.invalid`, `problem.invalid` | the store's and clients' readers | the document violates its schema at the pointer |
 
+## Problems: the server's start
+
+| Rule | Filed by | Means |
+|---|---|---|
+| `package.id.duplicate` | the packages registry | two packages under `FYLGJA_PACKAGES` share an id (platform) or a format (probe); the message names both files |
+| `settings.missing` | the settings | a `FYLGJA_*` variable the server needs is not set, empty or malformed ([D-042](../design/decisions.md#d-042)); the message names the variable, never a value, and the server exits 2 |
+
 ## Findings: a compile refused
 
 Each is an error, and every fault is reported in one pass. A compile with one is refused:
@@ -106,9 +113,12 @@ the compile, admission or the plan refuses (nothing was built), or `failed` when
 does not become ready, the push is refused or unauthorized, a credential is missing, or the
 run is cancelled; either way the loop cleans up and waits for the spec to be written again.
 Its verdict holds the findings, and the twin's `Ready` condition carries a **reason**, a
-rule id too, which is also the `rule` of the run's ending event (the failing phase's, or
-`cancel done`). A transient failure (the driver's runtime failure, an unreachable node, the
-store) ends no run: the loop tries again after a backoff.
+rule id too, which is also the `rule` of the run's ending event (the failing phase's
+`failed` or `timed_out`, a compile or plan refusal's being `bundle.rejected` or
+`plan.rejected`; or `cancel done`, carrying `run.cancelled`). A transient failure (the
+driver's runtime failure, an unreachable node, the store) ends no run: its phase's `failed`
+event carries the error's rule when it has one, no finding is filed, and the phase's next
+`started` is the loop's try again after a backoff.
 
 A cancelled create stops where it is, stopping a call on the runtime in flight, tears down
 what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels a create in
@@ -132,7 +142,7 @@ The findings the loop files itself, each an error:
 |---|---|---|
 | `blueprint.missing` | `rejected` | the spec's blueprint is not in the store; the object is its id |
 | `bundle.missing` | `rejected` | the spec's bundle is not in the store; the object is its id |
-| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up |
+| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up; the API files it too, for a run it queued and withdrew before it started because its request's write failed (lost to another, or failed outright) |
 | `twin.driver.unknown` | `rejected` | the spec names a driver this core does not serve; the object is the twin. The API refuses such a spec with a problem of the same rule, so the loop meets one only when a core was started without a driver its records name: every run of the twin in flight ends `rejected`, and nothing is torn down |
 
 The `Ready` condition's reasons:
@@ -145,3 +155,33 @@ The `Ready` condition's reasons:
 | `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)) |
 | `plan.rejected` | `False` | the driver's plan refused the bundle; the run's verdict holds every finding ([a plan refused](#findings-a-plan-refused)) |
 | a finding's rule | `False` | the run ended with that one finding: `blueprint.missing`, `bundle.missing`, `run.cancelled`, `twin.driver.unknown`, an `admission.*` rule, `readiness.timeout`, `readiness.unauthorized`, `credential.missing`, `push.refused` or `push.unauthorized` |
+
+## Problems: the API
+
+Answered as problem documents by the server. A blueprint its loader refuses is `400`, under
+the first problem's rule ([a document refused by its loader](#problems-a-document-refused-by-its-loader)),
+with every problem a finding whose object is its pointer.
+
+| Rule | Status | Means |
+|---|---|---|
+| `auth.token.missing` | 401 | the request has no `Authorization: Bearer <token>` header (`GET /v1/version` needs none) |
+| `auth.token.unknown` | 401 | the bearer token is not one a principal holds; the message never carries it |
+| `auth.forbidden` | 403 | reserved until roles exist ([D-025](../design/decisions.md#d-025)): a known principal not allowed the call. No route files it yet: every known principal may make every call |
+| `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a twin name to write or filter by that is no DNS-1123 label, a query parameter of the wrong form (`watch` not `true` or `false`; `since_revision`, `after` or a `Last-Event-ID` not an integer of 0 or more), an `If-None-Match` other than `*` |
+| `request.not_found` | 404 | API 1 has no such path |
+| `request.method` | 405 | the path does not take the method; the `Allow` header names those it takes |
+| `blueprint.not_found` | 404 | no blueprint is filed under the id, or the id is not one (64 lowercase hex digits) |
+| `bundle.not_found` | 404 | no bundle is filed under the id, or the id is not one |
+| `twin.not_found` | 404 | no twin has the name, or the name is not one a twin can have |
+| `run.not_found` | 404 | no run has the id, or the id is no ULID |
+| `twin.conflict` | 412 | `If-Match` names a revision the record has moved past, or a twin that does not exist; or the write lost to another, and the run queued for it was withdrawn (`run.cancelled`) |
+| `twin.exists` | 412 | `If-None-Match: *` asks to create a twin that exists, or a create lost to another, its run withdrawn |
+| `twin.driver.unknown` | 400 | the spec names a driver this core does not serve; the message names those it serves |
+| `twin.driver.fixed` | 409 | the spec names another driver than the one the twin was created on |
+| `twin.deleting` | 409 | the twin's deletion was asked, so its spec is not written again |
+| `run.ended` | 409 | the run asked to cancel has ended; the message names its verdict's status |
+| `bundle.rejected` | 422 | the blueprint compiles to no bundle; the findings give every reason |
+| `plan.rejected` | 422 | the bundle has no plan on the driver; the findings give every reason |
+| an `admission.*` rule | 422 | a dry run's admission refused the twin; the one finding is the refusal's ([admission refused](#findings-admission-refused)), since a refusal reserves nothing to plan with |
+| `api.unbuilt` | 501 | what this core's phase does not build yet: the bundle diff, verify, and a step (a new spec on a twin that exists); the detail names the phase that builds it |
+| `server.error` | 500 | the server failed; the answer names nothing of the fault, which its log holds with the traceback |

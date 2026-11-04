@@ -23,7 +23,6 @@
     "subject": {
       "type": "object",
       "additionalProperties": false,
-      "minProperties": 1,
       "properties": {
         "twin": {
           "$ref": "twin-record-1.schema.json#/$defs/twin_name",
@@ -46,7 +45,7 @@
           "description": "The deployment planned or applied; clients cite it."
         }
       },
-      "description": "What the verdict is about; only the ids that apply are present."
+      "description": "What the verdict is about; only the ids that apply are present, and none for a package validation, which is about the package the request carried."
     },
     "findings": {
       "type": "array",

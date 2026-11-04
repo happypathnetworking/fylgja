@@ -36,8 +36,9 @@ It is being built ([design/core.md](design/core.md)):
   - Real hardware, later.
 - **Done so far:** the formats ([formats/](formats/README.md)), the platform and probe
   packages, a model type and a loader for every format, and the compiler, held to the
-  facts the prototype's compiler produced; its rules are catalogued in
-  [docs/rules.md](docs/rules.md).
+  facts the prototype's compiler produced; and one named twin on the local driver: the
+  state store, the containerlab driver, readiness and the push, the reconcile loop, API 1
+  and the thin CLI. Its rules are catalogued in [docs/rules.md](docs/rules.md).
 
 The **orchestrator** reads [Infrahub](https://github.com/opsmill/infrahub) into blueprints and
 rehearses proposed changes. It lives in the
@@ -64,6 +65,16 @@ make venv     # core/.venv at core/pyproject.toml's pins
 make lint     # ruff and mypy (strict)
 make test     # the pure tier: no infrastructure
 ```
+
+## Running a twin
+
+`fylgja-core-server` serves API 1 and runs the reconcile loop over a store on this host,
+with containerlab as the driver; `fylgja-core` is its thin CLI. With Docker, containerlab
+and the SR Linux image in place, a token made and the environment loaded,
+`fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json` boots three
+SR Linux nodes, pushes each its configuration, and waits until the twin is Ready; `twin
+show` and `twin destroy` follow. CONTRIBUTING's
+[Running the core](CONTRIBUTING.md#running-the-core) says how to set it up.
 
 ## Licence
 

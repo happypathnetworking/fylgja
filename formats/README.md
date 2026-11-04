@@ -53,7 +53,9 @@ relative to them.
    events. `status.phase` and `status.run_id` let a restarted core resume (constitution VIII).
 8. **A compile that fails answers 422 with a problem document**, rule `bundle.rejected`, and
    every fault in `findings`. It is not a verdict document. A plan the driver refuses
-   answers 422 the same way, rule `plan.rejected` ([D-045](../design/decisions.md#d-045)).
+   answers 422 the same way, rule `plan.rejected` ([D-045](../design/decisions.md#d-045)),
+   and so does a dry run's refused admission, under the refusal's rule with its finding, since
+   a refusal leaves no deployment for a `Plan`.
 9. **Verify is synchronous with no wait.** A waiting verify happens only inside a step's
    run, and the step's wait budget is the server's setting.
 10. **A twin's name is a DNS-1123 label of at most 40 characters.** Run ids are ULIDs. A
@@ -68,6 +70,27 @@ relative to them.
     record by compare-and-set ([D-017](../design/decisions.md#d-017)), a resumed plan reads it
     back so that plan stays pure, and destroy releases it. Its shape is the driver's, as in the
     deployment.
+14. **`TwinApply` takes a partial spec** since phase 4. A client names one of the two ids,
+    and `driver` and `allow_restart` only when it sets them. The server fills what is absent
+    (its configured driver, `false`) and writes the whole spec, which the twin record still
+    requires.
+15. **A package validation's verdict has an empty `subject`** since phase 4: no id applies to
+    a package the request carried, so findings-1's `subject` may hold none.
+16. **API 1's driver capabilities carry `isolation`** since phase 4: `names` for a local lab,
+    whose management network routes to other twins' through the host, or `network` for a
+    NetworkPolicy per namespace ([D-019](../design/decisions.md#d-019)), so a client can say
+    how far apart its twins are.
+17. **A malformed query parameter is 400** (`request.invalid`) since phase 4, on the four
+    operations that take one and declared no 400 before: `listTwins` and `getTwin`
+    (`watch`, `since_revision`), `listRuns` (`twin`) and `getRunEvents` (`after`, and the
+    stream's `Last-Event-ID`).
+18. **`Event.rule` says what each ending's rule holds** since phase 4: on `failed` and
+    `timed_out`, the failing finding's rule, which is the Ready condition's reason too; on the
+    cancel phase's `done`, `run.cancelled`; and on a transient failure's `failed`, the error's
+    rule with no finding filed, the phase's next `started` being the retry.
+19. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
+    builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff,
+    verify, and a step (a new spec on a twin that exists).
 
 ## Settled by measurement (2026-10-30)
 

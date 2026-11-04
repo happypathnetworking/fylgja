@@ -996,7 +996,11 @@ def test_a_deletion_during_a_create_cancels_it_then_tears_the_twin_down(store: L
         assert_cancelled(create)
         # The deletion's write mid-pass did not fail the push: the loop's status was written over it.
         assert seen(store, create.id) == [*CREATE[:-4], ("cancel", "started", None), ("cancel", "done", None)]
-        assert store.get_twin("t").status.deployment_id is None
+        record = store.get_twin("t")
+        assert record.status.deployment_id is None
+        # The generation is the deletion's, which the destroy run has yet to act on.
+        assert record.deletion_requested_at is not None
+        assert record.status.observed_generation < record.generation
         await r.reconcile("t")  # the kick the deletion queued
 
     asyncio.run(scenario())

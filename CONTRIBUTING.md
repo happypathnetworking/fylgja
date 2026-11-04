@@ -49,6 +49,7 @@ pull request** ([D-033](design/decisions.md#d-033)).
 | Python | 3.14 | [D-001](design/decisions.md#d-001) |
 | jsonschema, PyYAML | 4.26.0, 6.0.3 | Runtime dependencies: the formats' validation and the packages' YAML |
 | httpx | 0.28.1 | A runtime dependency: the readiness wait and the push ([D-039](design/decisions.md#d-039)) |
+| Starlette, uvicorn | 1.9.0, 0.54.0 | Runtime dependencies: the server's ASGI application and the process that serves it ([D-025](design/decisions.md#d-025)) |
 | pytest, ruff, mypy | 9.2.0, 0.17.3, 2.4.0 | mypy in strict mode (Constitution I) |
 | rfc8785 | 0.1.4 | Tests only: an independent RFC 8785 implementation that the blueprint id is checked against |
 | containerlab, Docker | 0.81.0, 29.8.1 | The local driver and the live tier. containerlab is pinned to the version clabernetes 0.10.1 embeds, so the kinds behave alike on both drivers |
@@ -65,15 +66,15 @@ inside the tree carries a `.gitignore` of `*`.
 | `make venv` | The core's venv |
 | `make lint` | ruff over `core/` and `scripts/`, then mypy in strict mode |
 | `make test` | The pure tier: no infrastructure. Gates every pull request |
-| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them. Load `local/.env` first |
+| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them; and the end-to-end test, `three-node` through `fylgja-core-server` and the thin CLI, with the server killed at every phase boundary of a create, during a deploy and during a destroy, and a deletion during a deploy. About 16 minutes. Load `local/.env` first |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
 
 ## Test tiers
 
 | Tier | Needs | Runs |
 |---|---|---|
-| **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures |
-| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded. `make test` deselects it (the `live` marker) |
+| **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures, and the store, the reconcile loop, API 1 and the CLI over fakes of the runtime |
+| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded: the driver, readiness and the push, and the end-to-end test through the API (`core/tests/live/test_e2e.py`, about 11 minutes alone). `make test` deselects it (the `live` marker) |
 | **Driver conformance** | Each driver's own runtime: a cluster for clabernetes | On demand, per driver |
 
 Development and the live tier never need Kubernetes (Constitution XIII).
@@ -103,6 +104,68 @@ Development and the live tier never need Kubernetes (Constitution XIII).
   pulled.
 
 On Ubuntu, SR Linux's `rsyslogd` needs an AppArmor widening ([verified-facts.md](design/verified-facts.md)).
+
+## Running the core
+
+`fylgja-core-server` is one process: API 1 on uvicorn and the reconcile loop, over one store
+it holds locked for one core ([D-023](design/decisions.md#d-023), [D-039](design/decisions.md#d-039)).
+Everything it runs with is a `FYLGJA_*` variable ([D-042](design/decisions.md#d-042)), listed
+in [`.env.example`](.env.example):
+
+| Variable | Default | Holds |
+|---|---|---|
+| `FYLGJA_STORE` | required | The store's directory, created on first start; the driver's working files live under it |
+| `FYLGJA_PACKAGES` | required | Colon-separated directories of platform and probe packages, loaded once at start: `psp:probes` |
+| `FYLGJA_TOKENS` | required | The token file (below) |
+| `FYLGJA_LISTEN` | `127.0.0.1:7650` | The address it serves on, `host:port` |
+| `FYLGJA_DRIVER` | `containerlab` | The driver twins run on |
+| `FYLGJA_WORKERS` | `4` | How many twins the loop works on at once |
+| `FYLGJA_CREDENTIAL_<NAME>_USERNAME`, `_PASSWORD` | none | Each package's node login, `<NAME>` its `credentials` value upper-cased; a run needing one not set fails with `credential.missing` |
+
+**The token file** holds one `<sha256 hex of the token> <principal>` per line, `#` comments
+and blank lines skipped. It never holds a token itself, and several tokens may be valid at
+once, one per client. Make a client's token and add its line:
+
+```sh
+token=$(head -c 24 /dev/urandom | base64)
+printf '%s %s\n' "$(printf %s "$token" | sha256sum | cut -d' ' -f1)" alice >> local/tokens
+printf 'FYLGJA_API_TOKEN=%s\n' "$token" >> local/.env   # the client's token, never echoed
+unset token
+```
+
+`printf %s "$FYLGJA_API_TOKEN" | sha256sum` gives the hash of a token already set.
+
+**Start it** with the environment loaded:
+
+```sh
+set -a; . local/.env; set +a
+core/.venv/bin/fylgja-core-server
+```
+
+It logs one JSON object per line on stderr, the principal on every write, never a token or a
+password. A start refused is one line naming the variable or the file at fault. SIGTERM or
+Ctrl-C ends open watches and stops the loop; a create cut short resumes at the next start. Its
+exit status:
+
+| Status | Means |
+|---|---|
+| 0 | stopped cleanly |
+| 130 | stopped by Ctrl-C (SIGINT) |
+| 143 | stopped by SIGTERM: uvicorn ends the process by the signal after its graceful shutdown |
+| 1 | the store is held by another core, or the application failed to start |
+| 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, a package refused, a token file it cannot read, or an address it cannot listen on (`FYLGJA_LISTEN`) |
+
+**The thin CLI** reads `FYLGJA_API_ADDRESS` (the server's `host:port` or URL) and
+`FYLGJA_API_TOKEN`. In a shell of its own, load the environment and point the CLI at the
+server's listen address:
+
+```sh
+set -a; . local/.env; set +a
+export FYLGJA_API_ADDRESS=127.0.0.1:7650   # FYLGJA_LISTEN's value
+core/.venv/bin/fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json
+core/.venv/bin/fylgja-core twin show demo
+core/.venv/bin/fylgja-core twin destroy demo
+```
 
 ## Conventions
 

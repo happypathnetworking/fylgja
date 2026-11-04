@@ -1001,3 +1001,19 @@ def test_a_delete_leaves_a_run_that_ended_meanwhile_as_it_ended(
     marks = lose_the_first_mark(monkeypatch, core.store, lambda: real(ended_ok(running), "running"))
     answered(idle.delete("/v1/twins/t"), 202)
     assert marks == [("running", False)] and core.store.get_run(running.id).state == "ended"
+
+
+
+def test_the_thin_cli_destroying_a_twin_mid_create_waits_until_it_is_gone(
+    served: httpx.Client, core: Core, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from fylgja_core import cli
+
+    core.driver.block = "apply"
+    answered(put(served, "t", {"blueprint_id": file_blueprint(served)}), 201)
+    wait_for(lambda: True if answered(served.get("/v1/twins/t"), 200)["status"].get("phase") == "planned" else None)
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", str(served.base_url))
+    monkeypatch.setenv("FYLGJA_API_TOKEN", ALICE)
+    assert cli.main(["twin", "destroy", "t"]) == 0
+    assert "twin t deleted" in capsys.readouterr().out
+    assert core.store.list_twins() == []

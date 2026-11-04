@@ -611,16 +611,22 @@ class Reconciler:
         Ready True for an `ok` verdict; otherwise the cleanup, `destroy` when a deployment was
         filed, and then the nodes, deployment and allocation cleared, with Ready False for
         `reason` (read from the run's ending event when not given). A failed destroy records the
-        failure, keeps the rest, and is raised."""
+        failure, keeps the rest, and is raised.
+
+        A create's end sets `observed_generation` to the generation it acted on, unless the twin's
+        deletion was asked meanwhile: that generation is the deletion's, which the destroy run
+        acts on and settles by deleting the record, so a client that waits for the twin to be
+        observed at it is never told so while the twin is still there."""
         assert run.verdict is not None
         if run.operation == "destroy" and run.verdict.status == "ok":
             self.store.delete_twin(record.name, record.revision)
             logs.audit(run.principal, "delete", record.name, run=run.id, revision=record.revision)
             _log.info("%s: torn down, and its record deleted", record.name, **logs.fields(twin=record.name, run=run.id))
             return
+        observed = record.status.observed_generation if record.deletion_requested_at is not None else record.generation
         if run.verdict.status == "ok":
             self._write(record, run, conditions=ready_condition(record.status.conditions, "True", REASON_READY),
-                        observed_generation=record.generation, run_id=None)
+                        observed_generation=observed, run_id=None)
             return
         reason = reason if reason is not None else self._failing_rule(run)
         conditions = ready_condition(record.status.conditions, "False", reason)
@@ -629,18 +635,17 @@ class Reconciler:
             _log.error("%s: its deployment %s cannot be torn down without the packages its bundle names (%s): it is "
                        "kept, and so is its allocation", record.name, record.status.deployment_id,
                        ", ".join(str(f.object) for f in lacking), **logs.fields(twin=record.name, run=run.id))
-            self._write(record, run, conditions=conditions, observed_generation=record.generation, run_id=None,
-                        phase=None)
+            self._write(record, run, conditions=conditions, observed_generation=observed, run_id=None, phase=None)
             return
         if record.status.deployment_id is not None:
             deployment, files = self.store.get_deployment(record.status.deployment_id)
             try:
                 await driver.destroy(deployment, files, self.platforms, self.probe_packages)
             except DriverFailed:
-                if (conditions, record.generation) != (record.status.conditions, record.status.observed_generation):
-                    self._write(record, run, conditions=conditions, observed_generation=record.generation)
+                if (conditions, observed) != (record.status.conditions, record.status.observed_generation):
+                    self._write(record, run, conditions=conditions, observed_generation=observed)
                 raise
-        self._write(record, run, conditions=conditions, observed_generation=record.generation, run_id=None, phase=None,
+        self._write(record, run, conditions=conditions, observed_generation=observed, run_id=None, phase=None,
                     nodes=(), deployment_id=None, allocation=None)
 
     def _failing_rule(self, run: Run) -> str:

@@ -438,6 +438,7 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 | `testdata/packages/` | Test-only packages, the interface mapping rows each shipped package must decide, and the rejection fixtures for the package loaders |
 | `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match, and the compiler's rejection fixtures |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
+| `testdata/deployment/` | The golden deployments, per driver and fixture: the rendered runtime files and the deployment document each plan must reproduce (`scripts/render-goldens.py` writes them); and under `rejected/`, the blueprints a driver's plan must refuse |
 | `scripts/` | The link checker (`linkcheck.py`), and the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`) |
 | `design/` | How the project is governed and designed: the constitution, the decisions, this architecture, the verified facts, and design documents ([core.md](core.md) is the core's) |
 | `docs/` | Documentation for people using Fylgja; today the glossary and the rule catalogue |

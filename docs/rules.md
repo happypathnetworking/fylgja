@@ -142,7 +142,7 @@ The findings the loop files itself, each an error:
 |---|---|---|
 | `blueprint.missing` | `rejected` | the spec's blueprint is not in the store; the object is its id |
 | `bundle.missing` | `rejected` | the spec's bundle is not in the store; the object is its id |
-| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up; the API files it too, for a run it queued and withdrew before it started, its request's write lost to another |
+| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up; the API files it too, for a run it queued and withdrew before it started because its request's write failed (lost to another, or failed outright) |
 | `twin.driver.unknown` | `rejected` | the spec names a driver this core does not serve; the object is the twin. The API refuses such a spec with a problem of the same rule, so the loop meets one only when a core was started without a driver its records name: every run of the twin in flight ends `rejected`, and nothing is torn down |
 
 The `Ready` condition's reasons:
@@ -166,7 +166,7 @@ with every problem a finding whose object is its pointer.
 |---|---|---|
 | `auth.token.missing` | 401 | the request has no `Authorization: Bearer <token>` header (`GET /v1/version` needs none) |
 | `auth.token.unknown` | 401 | the bearer token is not one a principal holds; the message never carries it |
-| `auth.forbidden` | 403 | the principal is known and is not allowed the call |
+| `auth.forbidden` | 403 | reserved until roles exist ([D-025](../design/decisions.md#d-025)): a known principal not allowed the call. No route files it yet: every known principal may make every call |
 | `request.invalid` | 400 | the request is malformed: a body that is not JSON (RFC 8259, so no `NaN`), a body its schema refuses (a finding per violation, at its pointer), a package of neither kind, a twin name to write or filter by that is no DNS-1123 label, a query parameter of the wrong form (`watch` not `true` or `false`; `since_revision`, `after` or a `Last-Event-ID` not an integer of 0 or more), an `If-None-Match` other than `*` |
 | `request.not_found` | 404 | API 1 has no such path |
 | `request.method` | 405 | the path does not take the method; the `Allow` header names those it takes |

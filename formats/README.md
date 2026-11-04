@@ -80,7 +80,15 @@ relative to them.
     whose management network routes to other twins' through the host, or `network` for a
     NetworkPolicy per namespace ([D-019](../design/decisions.md#d-019)), so a client can say
     how far apart its twins are.
-17. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
+17. **A malformed query parameter is 400** (`request.invalid`) since phase 4, on the four
+    operations that take one and declared no 400 before: `listTwins` and `getTwin`
+    (`watch`, `since_revision`), `listRuns` (`twin`) and `getRunEvents` (`after`, and the
+    stream's `Last-Event-ID`).
+18. **`Event.rule` says what each ending's rule holds** since phase 4: on `failed` and
+    `timed_out`, the failing finding's rule, which is the Ready condition's reason too; on the
+    cancel phase's `done`, `run.cancelled`; and on a transient failure's `failed`, the error's
+    rule with no finding filed, the phase's next `started` being the retry.
+19. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
     builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff,
     verify, and a step (a new spec on a twin that exists).
 

@@ -11,8 +11,8 @@ A twin is written by compare-and-set (D-025): a client writes `spec` and asks fo
 the loop alone writes `status`. Every write names its principal in the audit log and in the run
 it queues, and kicks the loop. A route reads, checks and writes with no `await` between, on the
 event loop's one thread, where the loop makes its own writes too, so no write of the loop's lands
-between a route's check and its write; the compare-and-set still guards each one, and a write it
-loses is answered `412`, the run queued for it withdrawn.
+between a route's check and its write. The compare-and-set still guards each one: a write that
+fails withdraws the run queued for it, and one lost to another is answered `412`.
 
 A twin or the list of twins is watched, and a run's events followed, as server-sent events
 (`sse`), asked by `watch=true` or by an Accept of text/event-stream.

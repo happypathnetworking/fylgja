@@ -273,7 +273,8 @@ Schema: [`api-1.openapi.yaml`](../formats/api-1.openapi.yaml);
   rule id and a JSON pointer; `decode` builds the model type or raises `Rejected`; a
   loader's `load` reads a file. A model type encodes back to its document unchanged, so a
   document has one representation (Constitution XII). The API's own response shapes (a
-  run, an event, a driver, the bundle diff) are built with the server in phase 4.
+  run, an event, a driver) were built with the server in phase 4; the bundle diff's is
+  phase 5's, and its route answers `501` until then.
 
 ### Runtimes behind one driver seam
 
@@ -472,7 +473,14 @@ every containerlab behaviour the driver relies on is recorded for 0.81.0.
    destroy, each resumed to the state asked for. It left to phase 5 a probe host's
    readiness (probe hosts are deployed and their readiness skipped), steps (a new spec on a
    twin that exists answers `501`), verify, the flows, the Docker events trigger (the loop
-   is kicked by writes and resyncs on a period), and the bundle diff route.
+   is kicked by writes and resyncs on a period), and the bundle diff route. It also left:
+   the stray `containerlab deploy` a killed core leaves running in its own session, which the
+   driver does not stop before it acts (the test that kills the server mid-deploy passed
+   because the orphan finished within the nodes' readiness budget); a sweep of the eAPI
+   configuration sessions a push leaves pending, beyond its best-effort abort; the CLI's
+   reconnect of a watch the server ends early; and `schemas.formats_dir()`, which resolves
+   `formats/` through the repository and so must change before the client is installed
+   outside the tree.
 5. **Step, verify, probes** on the local driver: bundle diff, reconcile, verify's rules,
    ping flows and the burst.
 6. **The clabernetes driver**: the object store, the Lease, per-twin namespaces and node

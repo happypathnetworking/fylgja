@@ -73,7 +73,7 @@ inside the tree carries a `.gitignore` of `*`.
 
 | Tier | Needs | Runs |
 |---|---|---|
-| **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures |
+| **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures, and the store, the reconcile loop, API 1 and the CLI over fakes of the runtime |
 | **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded: the driver, readiness and the push, and the end-to-end test through the API (`core/tests/live/test_e2e.py`, about 10 minutes alone). `make test` deselects it (the `live` marker) |
 | **Driver conformance** | Each driver's own runtime: a cluster for clabernetes | On demand, per driver |
 
@@ -127,8 +127,10 @@ and blank lines skipped. It never holds a token itself, and several tokens may b
 once, one per client. Make a client's token and add its line:
 
 ```sh
-token=$(head -c 24 /dev/urandom | base64)   # the client's FYLGJA_API_TOKEN, in local/.env
+token=$(head -c 24 /dev/urandom | base64)
 printf '%s %s\n' "$(printf %s "$token" | sha256sum | cut -d' ' -f1)" alice >> local/tokens
+printf 'FYLGJA_API_TOKEN=%s\n' "$token" >> local/.env   # the client's token, never echoed
+unset token
 ```
 
 `printf %s "$FYLGJA_API_TOKEN" | sha256sum` gives the hash of a token already set.
@@ -154,9 +156,12 @@ exit status:
 | 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, a package refused, a token file it cannot read, or an address it cannot listen on (`FYLGJA_LISTEN`) |
 
 **The thin CLI** reads `FYLGJA_API_ADDRESS` (the server's `host:port` or URL) and
-`FYLGJA_API_TOKEN`:
+`FYLGJA_API_TOKEN`. In a shell of its own, load the environment and point the CLI at the
+server's listen address:
 
 ```sh
+set -a; . local/.env; set +a
+export FYLGJA_API_ADDRESS=127.0.0.1:7650   # FYLGJA_LISTEN's value
 core/.venv/bin/fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json
 core/.venv/bin/fylgja-core twin show demo
 core/.venv/bin/fylgja-core twin destroy demo

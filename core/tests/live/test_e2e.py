@@ -275,17 +275,28 @@ def fylgja(
             print(earlier.out, end="", flush=True)
         began = time.monotonic()
         answer: list[int] = []
-        worker = threading.Thread(target=lambda: answer.append(cli.main(list(args))), daemon=True)
+        raised: list[BaseException] = []
+
+        def call() -> None:
+            try:
+                answer.append(cli.main(list(args)))
+            except BaseException as e:  # SystemExit too: kept for the test's thread to report
+                raised.append(e)
+
+        worker = threading.Thread(target=call, daemon=True)
         worker.start()
         worker.join(DEADLINE_S)
         out, err = capsys.readouterr()
         leaked = core.token in out or core.token in err
         with capsys.disabled():
-            status = f"exit {answer[0]}" if answer else "no exit"
+            status = f"exit {answer[0]}" if answer else f"raised {type(raised[0]).__name__}" if raised else "no exit"
             print(f"\n[e2e] fylgja-core {' '.join(args)}: {status} in {time.monotonic() - began:.1f}s", flush=True)
             if not leaked and answer and answer[0] != 0:
                 print(err, flush=True)
         assert not leaked, "the CLI's output holds the token"
+        if raised:  # its type alone: the message of an exception that escaped the CLI's own guard is not shown
+            code = f" ({raised[0].code!r})" if isinstance(raised[0], SystemExit) else ""
+            pytest.fail(f"fylgja-core {' '.join(args[:2])} raised {type(raised[0]).__name__}{code}")
         assert answer, f"fylgja-core {' '.join(args[:2])} did not end within {DEADLINE_S:g}s"
         return answer[0], out
 
@@ -432,6 +443,16 @@ def reconfigures(core: Core, since: int, twin: str) -> int:
     return sum(1 for line in core.deploys(since, twin) if "--reconfigure" in line)
 
 
+def by(deadline: float, lines: Iterator[str], what: str) -> Iterator[str]:
+    """A stream's lines, failing the test once `deadline` has passed: checked on every line, the
+    server's keepalive comments included, so a twin that stops being written fails the test
+    within the deadline even while the stream stays alive."""
+    for line in lines:
+        if time.monotonic() > deadline:
+            pytest.fail(f"{what} within {DEADLINE_S:g}s")
+        yield line
+
+
 def created_until(core: Core, fylgja: Callable[..., tuple[int, str]], twin: str, phase: str) -> dict[str, Any]:
     """Create `twin` with a watch of every twin already open, so no write is missed, and answer
     its record as the loop writes `phase`; a create that settles first fails the test."""
@@ -442,7 +463,7 @@ def created_until(core: Core, fylgja: Callable[..., tuple[int, str]], twin: str,
         assert stream.status_code == 200
         code, _ = fylgja("twin", "create", twin, "--blueprint", str(BLUEPRINT), "--no-wait")
         assert code == 0
-        for message in messages(stream.iter_lines()):
+        for message in messages(by(deadline, stream.iter_lines(), f"{twin} did not reach {phase}")):
             record: dict[str, Any] = json.loads(message.data)["object"]
             if record["name"] != twin:
                 continue
@@ -450,7 +471,6 @@ def created_until(core: Core, fylgja: Callable[..., tuple[int, str]], twin: str,
                 return record
             if settled(record):
                 pytest.fail(f"{twin} settled before {phase}: Ready {ready(record)}, {verdict_of(core, twin)}")
-            assert time.monotonic() < deadline, f"{twin} did not reach {phase} within {DEADLINE_S:g}s"
     pytest.fail(f"the watch ended before {twin} reached {phase}")
 
 

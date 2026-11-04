@@ -31,7 +31,8 @@ Failures are of two classes. **A failure only a new spec can clear** (a refused 
 uncompilable blueprint, a refused plan, a node that does not become ready, a refused or
 unauthorized push, a missing credential, a driver this core does not serve) ends the run
 `rejected` (nothing was built) or `failed`, cleans up, and sets `observed_generation`, so the
-loop waits for the spec to be written again. **A transient failure** (the driver's
+loop waits for the spec to be written again; unless the twin's deletion was asked meanwhile,
+whose generation the destroy run settles, by deleting the record. **A transient failure** (the driver's
 `DriverFailed`, an unreachable node, a store's `OSError` or lost compare-and-set) leaves the
 record as it is, logs, and queues the twin again after a backoff that doubles from 1 s to 60 s
 and resets on a pass that completes.
@@ -616,7 +617,8 @@ class Reconciler:
         A create's end sets `observed_generation` to the generation it acted on, unless the twin's
         deletion was asked meanwhile: that generation is the deletion's, which the destroy run
         acts on and settles by deleting the record, so a client that waits for the twin to be
-        observed at it is never told so while the twin is still there."""
+        observed at it is never told so by a create's end while the twin is still there (a
+        teardown this core refuses is observed, by `_refuse`, and the record kept)."""
         assert run.verdict is not None
         if run.operation == "destroy" and run.verdict.status == "ok":
             self.store.delete_twin(record.name, record.revision)

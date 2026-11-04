@@ -213,8 +213,9 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 
 The live end-to-end test (`core/tests/live/test_e2e.py`) runs `three-node` through
 `fylgja-core-server` and the thin CLI, over a store in a temporary directory, on a host with
-27 GiB available. It passed on its first full run and in the whole tier, and three times more
-as it grew a stricter kill check and a deletion during the deploy. *(2026-11-04)*
+27 GiB available. It passed on its first full run and in the whole tier. As it grew a stricter
+kill check and a deletion during the deploy, its next full run failed on a loop defect that
+deletion found, since fixed, and the two after passed. *(2026-11-04)*
 
 - **A create**, `twin create` to Ready, took 57.8–67.1 s end to end over eight runs: apply
   36.1–43.3 s, the three nodes' readiness 12.3–13.3 s, the three pushes 9.0–10.0 s together

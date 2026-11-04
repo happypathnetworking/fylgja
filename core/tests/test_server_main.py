@@ -143,11 +143,13 @@ def test_a_token_file_it_cannot_read_exits_2(
 def test_main_serves_the_application_with_uvicorn_and_closes_the_store(
     environ: dict[str, str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    port = free_port()  # main binds the address itself before uvicorn serves on it
+    monkeypatch.setenv("FYLGJA_LISTEN", f"127.0.0.1:{port}")
     served: list[uvicorn.Config] = []
     monkeypatch.setattr(server._Server, "run", lambda self, sockets=None: served.append(self.config))
     assert server.main([]) == 0
     (config_,) = served
-    assert (config_.host, config_.port, config_.log_config, config_.access_log) == ("127.0.0.1", 7651, None, False)
+    assert (config_.host, config_.port, config_.log_config, config_.access_log) == ("127.0.0.1", port, None, False)
     assert config_.timeout_graceful_shutdown == server.GRACE_S
     LocalStore.open(Path(environ["FYLGJA_STORE"])).close()
     assert all(isinstance(line, dict) for line in logged(capsys.readouterr().err))
@@ -211,6 +213,7 @@ def test_ctrl_c_returns_130_with_the_store_closed(environ: dict[str, str], monke
     def interrupted(self: uvicorn.Server, sockets: Any = None) -> None:
         raise KeyboardInterrupt
 
+    monkeypatch.setenv("FYLGJA_LISTEN", f"127.0.0.1:{free_port()}")
     monkeypatch.setattr(server._Server, "run", interrupted)
     assert server.main([]) == 130
     LocalStore.open(Path(environ["FYLGJA_STORE"])).close()

@@ -76,7 +76,11 @@ relative to them.
     requires.
 15. **A package validation's verdict has an empty `subject`** since phase 4: no id applies to
     a package the request carried, so findings-1's `subject` may hold none.
-16. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
+16. **API 1's driver capabilities carry `isolation`** since phase 4: `names` for a local lab,
+    whose management network routes to other twins' through the host, or `network` for a
+    NetworkPolicy per namespace ([D-019](../design/decisions.md#d-019)), so a client can say
+    how far apart its twins are.
+17. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
     builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff,
     verify, and a step (a new spec on a twin that exists).
 

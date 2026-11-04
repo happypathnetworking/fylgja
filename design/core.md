@@ -6,9 +6,10 @@ it.
 
 - **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
   measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
-  (2026-11-02); phase 2: the formats, their model types and the loaders (2026-11-03); and
-  phase 3: the compiler (2026-11-03).
-- **Next:** one named twin on the local driver.
+  (2026-11-02); phase 2: the formats, their model types and the loaders (2026-11-03); phase
+  3: the compiler (2026-11-03); and phase 4: one named twin on the local driver
+  (2026-11-03).
+- **Next:** step, verify and probes on the local driver.
 - **Meanwhile:** the orchestrator stays in the archived repository and drives the frozen Go
   core there, the reference implementation. It moves here at cut-over
   ([D-005](decisions.md#d-005)). Until then the core is built and tested from blueprint
@@ -457,7 +458,21 @@ every containerlab behaviour the driver relies on is recorded for 0.81.0.
    [`docs/rules.md`](../docs/rules.md).
 4. **One named twin on the local driver**: the reconcile loop, the local store, create,
    readiness, push, show and destroy, through the API and the thin CLI. **No Kubernetes
-   anywhere in this phase.**
+   anywhere in this phase.** *Done on 2026-11-03.* It built the local store
+   ([D-041](decisions.md#d-041)); the containerlab driver, its pure `plan` and its live
+   `admit`, `apply`, `inspect` and `destroy` with the two recovery rules, every behaviour it
+   relies on re-verified on containerlab 0.81.0; the credential provider, readiness and the
+   two replace mechanisms ([D-027](decisions.md#d-027)); the reconcile loop, with runs and
+   their events, which resumes after a kill at the phase after the one recorded
+   ([D-023](decisions.md#d-023)); and API 1 on Starlette and uvicorn with per-client tokens,
+   problem documents and watches by server-sent events, beside the thin CLI
+   ([D-025](decisions.md#d-025), [D-026](decisions.md#d-026), [D-039](decisions.md#d-039)).
+   The live end-to-end test runs `three-node` through `fylgja-core-server` and the CLI, with
+   the server killed at every phase boundary of a create, during the deploy and during a
+   destroy, each resumed to the state asked for. It left to phase 5 a probe host's
+   readiness (probe hosts are deployed and their readiness skipped), steps (a new spec on a
+   twin that exists answers `501`), verify, the flows, the Docker events trigger (the loop
+   is kicked by writes and resyncs on a period), and the bundle diff route.
 5. **Step, verify, probes** on the local driver: bundle diff, reconcile, verify's rules,
    ping flows and the burst.
 6. **The clabernetes driver**: the object store, the Lease, per-twin namespaces and node

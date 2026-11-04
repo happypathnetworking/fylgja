@@ -190,6 +190,35 @@ local driver; a fact re-verified there gets a *(0.81.0, date)* mark.
 - **`--reconfigure` over a healthy lab recreates every node**: three SR Linux nodes in
   40.1 s, every container's `State.StartedAt` moved. *(0.81.0, 2026-11-03)*
 
+**fylgja-core, phase 4: one twin end to end through API 1** *(0.81.0, Docker 29.8.1, SR Linux
+24.7.1, 2026-11-03)*
+
+The live end-to-end test (`core/tests/live/test_e2e.py`) runs `three-node` through
+`fylgja-core-server` and the thin CLI, over a store in a temporary directory, on a host with
+27 GiB available. It passed on its first full run, and again in the whole tier.
+
+- **A create**, `twin create` to Ready, took 57.8–67.1 s end to end over five runs: apply
+  36.1–43.3 s, the three nodes' readiness 12.3–13.3 s, the three pushes 9.0–10.0 s together
+  (2.9–3.5 s each), and compile, admit and plan under 0.2 s together. A destroy took
+  1.4–2.1 s and left no container, host entry, ssh config or network.
+- **A server killed with SIGKILL at each phase boundary of a create resumed the same run to
+  Ready**, with no gap in its events' `seq` and no second create run. That held at
+  `compiled`, `admitted`, `planned`, `applied`, `ready` and `pushed`, Ready 60.2–69.6 s
+  after the create, twice. No kill caused a `--reconfigure`.
+  - The kills at `admitted` and `planned` landed in the apply step's first `docker ps`,
+    before its deploy began, so the run shows two `apply started` events and one deploy.
+  - The kill at `pushed` landed before the run's end was written, and the resume wrote it.
+- **A server killed 10 s into the deploy**: containerlab's deploy, run in a session of its
+  own, ran on without the server. The resumed pass found the three containers, and each
+  node's push transport answered within its readiness budget (46.6 s for the three, while
+  the deploy finished), so it deployed nothing (apply `skipped`) and pushed: Ready
+  75.7–78.9 s after the create.
+- **A server killed during a destroy**: the restarted server took up the destroy run, and
+  the twin was gone 2.6–2.7 s after its deletion was asked, nothing left on the host.
+- The server answered its first request 0.5–1.2 s after each start; its 402–455 lines of log
+  were each one JSON object, none holding the token or a password. The whole live tier, 27
+  tests (the driver's, the push's and the end-to-end), took 904 s. *(2026-11-04)*
+
 **The dry run**
 
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,
@@ -506,6 +535,10 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
   configuration` (the reset's), a blank line, `diff flat`'s lines, then `All changes have
   been committed. Leaving candidate mode.` With `"output-format": "text"` the entry is a
   bare string. So the device's diff is `diff flat`'s lines alone. *(0.81.0, 2026-11-03)*
+- **`info from running / system name host-name`** as a JSON-RPC `cli` request with
+  `"output-format": "text"` answers `result` as a list of one bare string:
+  `    system {\n        name {\n            host-name n1\n        }\n    }\n` on a node named
+  `n1`, after its replace. *(0.81.0, 2026-11-03)*
 - **`diff flat` writes `insert /` and `delete /` lines.** A changed leaf is an `insert /`
   line, a removed subtree a `delete /` line, and a changed address a `delete /` and an
   `insert /`. *(0.81.0, 2026-11-03)*

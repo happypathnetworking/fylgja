@@ -66,7 +66,7 @@ inside the tree carries a `.gitignore` of `*`.
 | `make venv` | The core's venv |
 | `make lint` | ruff over `core/` and `scripts/`, then mypy in strict mode |
 | `make test` | The pure tier: no infrastructure. Gates every pull request |
-| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them. Load `local/.env` first |
+| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them; and the end-to-end test, `three-node` through `fylgja-core-server` and the thin CLI, with the server killed at every phase boundary of a create, during a deploy and during a destroy. About 15 minutes. Load `local/.env` first |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
 
 ## Test tiers
@@ -74,7 +74,7 @@ inside the tree carries a `.gitignore` of `*`.
 | Tier | Needs | Runs |
 |---|---|---|
 | **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures |
-| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded. `make test` deselects it (the `live` marker) |
+| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded: the driver, readiness and the push, and the end-to-end test through the API (`core/tests/live/test_e2e.py`, about 10 minutes alone). `make test` deselects it (the `live` marker) |
 | **Driver conformance** | Each driver's own runtime: a cluster for clabernetes | On demand, per driver |
 
 Development and the live tier never need Kubernetes (Constitution XIII).

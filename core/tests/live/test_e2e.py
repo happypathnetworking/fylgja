@@ -295,7 +295,8 @@ def fylgja(
                 print(err, flush=True)
         assert not leaked, "the CLI's output holds the token"
         if raised:  # its type alone: the message of an exception that escaped the CLI's own guard is not shown
-            code = f" ({raised[0].code!r})" if isinstance(raised[0], SystemExit) else ""
+            exited = raised[0].code if isinstance(raised[0], SystemExit) else None
+            code = f" ({exited})" if isinstance(exited, int) else ""  # a status alone, never a text payload
             pytest.fail(f"fylgja-core {' '.join(args[:2])} raised {type(raised[0]).__name__}{code}")
         assert answer, f"fylgja-core {' '.join(args[:2])} did not end within {DEADLINE_S:g}s"
         return answer[0], out

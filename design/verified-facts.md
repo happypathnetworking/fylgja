@@ -236,6 +236,19 @@ the local driver and the step; a fact re-verified there gets a *(0.81.0, date)* 
     that would have reaped it was dead); the table and the hosts block show it completed.
     `destroy -t --cleanup` of each exited 0 and left no container, network, host entry, ssh
     config or `containerlab` process.
+  - **A failed deploy's output holds containerlab's log lines and the error alone.** *(0.81.0,
+    Docker 29.8.1, 2026-11-05)* Read because `deploy.log` now persists in the twin's directory
+    (D-056). Two one-lab deploys were run by hand with their output in a file, the core's
+    environment inherited as `cli.run` leaves it: an image tag that does not exist
+    (`ghcr.io/nokia/srlinux:0.0.0-does-not-exist`) failed at the pull in 1 s with 11 lines, the
+    docker daemon's "failed to resolve reference … not found"; a link to `n1:e1-99` on SR Linux
+    24.7.1 failed at post-deploy after 33 s with 20 lines, "invalid port 99, max is 58" in the
+    error. Each output named the lab, the images, the nodes, the lab directory and the error,
+    and nothing else: none of the five `FYLGJA_*` values in `local/.env` appeared in either
+    (counted with `grep -cF`, each 0). The topology the driver renders carries no
+    startup-config, environment or credential, so a deploy's output has nothing of the kind to
+    echo; what reaches the nodes' credentials is the push and the gNMI reader, after the deploy.
+    `destroy -t --cleanup` of each exited 0 and left the host clean.
   - `kill -9` from the user kills it. *(0.81.0, 2026-11-03)* A deploy of one SR Linux node,
     killed 4 s in, exited 137 at once. So did the local driver's budget kill, which sends
     `SIGKILL` to the command's process group (`cli.run`, with the command started in a

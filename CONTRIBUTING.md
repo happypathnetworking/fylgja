@@ -42,6 +42,40 @@ pull request** ([D-033](design/decisions.md#d-033)).
    - Conventional-commit messages whose body says *why*.
    - A new term goes in [glossary.md](docs/glossary.md) in the same change.
 
+## How a phase is built
+
+A phase is one item of the "Sequence" in [design/core.md](design/core.md). It goes through
+the flow above in four stages. The procedure an agent follows, with the rules every
+implementer and reviewer is handed and the template for a phase's branch plan, is
+[`.claude/skills/build-phase/`](.claude/skills/build-phase/SKILL.md); this section is its
+statement for people, and is the one that is right where the two disagree.
+
+1. **Settle.** On the branch `phase-N-design`, cut from `main`:
+   - the behaviour the phase rests on is read on the running systems and recorded in
+     [verified-facts.md](design/verified-facts.md), in a commit of its own;
+   - the phase's section goes into [design/core.md](design/core.md), with its decision
+     entries: what the phase is for, what is settled before code, the formats touched, its
+     non-goals and anti-goals, its plans, when it is done, and what is left to the builder;
+   - a fresh reader checks the draft against the code before the maintainer approves it.
+2. **Plan.** One working document for each of the design's plans, and a "plan 0" that holds
+   the branches, the order and the names the plans share. They live under `local/plans/`,
+   git-ignored: a plan is how a branch gets built, and the design and the decision log are
+   the record.
+3. **Execute.** The integration branch `phase-N-integration` is cut from `main` with the
+   design merged in. Each plan is a branch `phase-N/<n>-<name>` in a worktree beside the
+   repository (`../fylgja-core-wt/<n>-<name>`).
+   - Each task is built from its own brief, test first, and its diff is read by a fresh
+     reviewer before the next task starts.
+   - Each decision taken along the way is written down as a ruling, with what it costs if
+     wrong.
+   - A plan's whole branch is reviewed once more, then merged into the integration branch.
+   - Live runs are one at a time.
+4. **Land.** On the maintainer's word:
+   - the integration branch is squashed onto `main` as one commit;
+   - its history is kept under the local tag `archive/phase-N-integration`;
+   - the build's records (ledgers, briefs, reviews, rulings) go to `local/sdd/phase-N/`;
+   - the item in "Sequence" is marked done, with what it left to later phases.
+
 ## Tooling
 
 | Tool | Version | Notes |

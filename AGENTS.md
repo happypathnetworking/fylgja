@@ -28,6 +28,8 @@ repository for now, beside the frozen Go core, the reference implementation.
 - **Never echo, log or persist a token or a password.** `local/.env` holds every value.
 - **Commit with a conventional-commit message whose body says why.** Never commit `local/`.
   Never push without being asked.
+- **A phase is built by the procedure in `.claude/skills/build-phase/SKILL.md`**
+  (`CONTRIBUTING.md`, "How a phase is built"): settle, plan, execute, land.
 
 ## Build and test
 

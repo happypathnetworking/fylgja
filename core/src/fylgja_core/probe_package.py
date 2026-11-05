@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from fylgja_core import documents, platform_package
+from fylgja_core import blueprint, documents, platform_package
 from fylgja_core.documents import Problem, Rejected
 from fylgja_core.platform_package import Image, placeholders
 
@@ -171,3 +171,15 @@ def _placeholders(pointer: str, text: str, host: bool = False) -> list[Problem]:
         for name in placeholders(text)
         if name not in allowed
     ]
+
+
+def host_values(package: ProbePackage, probe: blueprint.Probe, side: str) -> dict[str, str]:
+    """The four values the plan renders into a probe host's start-up commands, and the loop
+    into its readiness command; `side` is `a` or `b`."""
+    _, near, far = blueprint.hosts(probe)["ab".index(side)]
+    return {
+        "address": near.address,
+        "interface": package.host.interface,
+        "far_address": far.address.partition("/")[0],
+        "gateway": near.gateway,
+    }

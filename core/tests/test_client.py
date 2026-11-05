@@ -20,6 +20,7 @@ from fake_api import (
     COMPILE_RESULT,
     DRIVERS,
     EVENTS,
+    NOT_HELD,
     PLAN,
     RUN_ID,
     TOKEN,
@@ -31,7 +32,9 @@ from fake_api import (
     record,
     refuse,
     run,
+    step_plan,
     unreachable,
+    verification,
     watch,
 )
 
@@ -39,6 +42,8 @@ from fylgja_core import documents
 from fylgja_core.client import (
     EVENT_STREAM,
     JSON_TYPES,
+    TIMEOUT_S,
+    VERIFY_TIMEOUT,
     Client,
     InvalidAddress,
     InvalidToken,
@@ -193,6 +198,15 @@ def test_reads_of_a_blueprint_a_bundle_and_the_drivers() -> None:
     assert c.list_drivers() == DRIVERS["drivers"]
 
 
+def test_diff_bundles_reads_the_diff_of_two_bundles() -> None:
+    other = "b" * 64
+    diff = {"from": BUNDLE_ID, "to": other, "unchanged": True,
+            "nodes": {"added": [], "removed": [], "changed": []},
+            "links": {"added": [], "removed": []}, "probes": {"added": [], "removed": []}}
+    api = FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}/diff/{other}", ok(diff))
+    assert connect(api).diff_bundles(BUNDLE_ID, other) == diff
+
+
 # Twins.
 
 
@@ -243,6 +257,14 @@ def test_a_dry_run_asks_by_query_and_answers_the_plan() -> None:
     assert api.last("PUT", TWIN_PATH).url.params.multi_items() == [("dry_run", "true")]
 
 
+def test_a_new_spec_on_a_twin_that_exists_answers_the_record_and_its_dry_run_the_changes() -> None:
+    written = record(5, 2, 1, ready=("True", "twin.ready"))
+    api = FakeAPI().on("PUT", TWIN_PATH, ok(written, headers={"ETag": '"5"'}))
+    assert connect(api).apply_twin(TWIN, SPEC, if_match='"4"') == (written, '"5"')
+    api.on("PUT", TWIN_PATH, ok(step_plan("rejected")))
+    assert connect(api).apply_twin(TWIN, SPEC, dry_run=True) == (step_plan("rejected"), None)
+
+
 def test_delete_twin_answers_the_record_deletion_requested() -> None:
     deleting = record(5, 2, 1, deleting=True, run_id=RUN_ID)
     api = FakeAPI().on("DELETE", TWIN_PATH, ok(deleting, 202))
@@ -250,6 +272,30 @@ def test_delete_twin_answers_the_record_deletion_requested() -> None:
     assert api.last("DELETE", TWIN_PATH).headers["if-match"] == '"4"'
     assert connect(api).delete_twin(TWIN) == deleting
     assert "if-match" not in api.last("DELETE", TWIN_PATH).headers
+
+
+def test_verify_twin_posts_and_answers_the_verdict() -> None:
+    verdict = verification("nonconforming", [NOT_HELD], (6, 1, 0))
+    api = FakeAPI().on("POST", f"{TWIN_PATH}/verifications", ok(verdict))
+    assert connect(api).verify_twin(TWIN) == verdict
+    assert api.last("POST", f"{TWIN_PATH}/verifications").content == b""
+    api.on("POST", f"{TWIN_PATH}/verifications", refuse(409, "twin.not_running", "No applied deployment."))
+    with pytest.raises(ProblemError) as raised:
+        connect(api).verify_twin(TWIN)
+    assert (raised.value.status, raised.value.problem.rule) == (409, "twin.not_running")
+
+
+def test_verify_twin_waits_longer_for_its_answer_than_any_other_call() -> None:
+    api = (FakeAPI().on("POST", f"{TWIN_PATH}/verifications", ok(verification()))
+           .on("GET", "/v1/twins", ok({"twins": [record()]})))
+    c = connect(api)
+    c.verify_twin(TWIN)
+    c.list_twins()
+    # The reads and the bursts, one after another, outlast the client's 30 s; the read is still bounded.
+    verifying = api.last("POST", f"{TWIN_PATH}/verifications").extensions["timeout"]
+    assert verifying == VERIFY_TIMEOUT.as_dict() == {"connect": 30.0, "read": 300.0, "write": 30.0, "pool": 30.0}
+    for path in ("/v1/version", "/v1/twins"):
+        assert api.last("GET", path).extensions["timeout"] == httpx.Timeout(TIMEOUT_S).as_dict()
 
 
 def test_list_twins_answers_the_records() -> None:

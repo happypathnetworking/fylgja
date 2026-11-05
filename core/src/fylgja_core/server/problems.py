@@ -31,8 +31,9 @@ TITLES: dict[int, str] = {
     412: "Precondition failed",
     422: "Unprocessable",
     500: "Server error",
-    501: "Not built",
 }
+# No route answers 501 since phase 5 built the step (formats/README.md, note 19); a status with no
+# title of its own takes HTTP's phrase.
 
 # The problem class of each status that has one; any other status is `about:blank`.
 CLASSES: dict[int, str] = {

@@ -173,7 +173,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "501": { $ref: "#/components/responses/NotBuilt" }
 
   /v1/packages:validate:
     post:
@@ -299,13 +298,21 @@ paths:
       operationId: applyTwin
       summary: Create a twin, or step it, by writing its spec.
       description: >-
-        Writes spec by compare-and-set and answers the record. A new spec increments generation, and the
-        reconcile loop starts a run toward it: a create when the twin is new, otherwise a step, which re-cables
-        live, restarts or recreates nodes as the driver's plan says, refusing a restart without allow_restart.
-        Writing the spec the twin already has changes nothing and answers 200. With dry_run=true it writes
-        nothing: it compiles the blueprint, runs admission and the driver's pure plan, and answers what would
-        happen. A refused admission is the run's verdict, status rejected; a dry run answers it as a 422
-        problem whose rule is the refusal's, since a refusal reserves nothing to plan with.
+        Writes spec by compare-and-set and answers the record. A new spec increments generation and queues a
+        run toward it, which the reconcile loop starts: a create when the twin is new, or exists but never
+        applied a lab, otherwise a step (D-050), which re-cables live, restarts or recreates nodes as the
+        driver's changes say, refusing a restart without allow_restart. A diverged twin accepts only deletion,
+        so a new spec of one is refused 409 (twin.diverged); the loop refuses the rest of what a step must not
+        do, ending its run rejected. Writing the spec the twin already has changes nothing, starts no run and
+        answers 200. A new spec whose write loses to the loop's own write of the status, between the server's
+        read and its write, is written once more over the record as it then stands, its refusals checked
+        again; it fails 412 (twin.conflict) when a client moved the record, when it loses a second time, or
+        when If-Match named a revision. With dry_run=true it writes nothing: it compiles the blueprint, runs
+        admission and the driver's pure plan, and answers what would happen; on a twin that runs, admission
+        keeps the allocation it holds and checks only the demand the target adds, and the Plan carries the
+        changes, its verdict rejected where the step would be refused. A refused admission is the run's
+        verdict, status rejected; a dry run answers it as a 422 problem whose rule is the refusal's, since a
+        refusal reserves nothing to plan with.
       parameters:
         - name: If-Match
           in: header
@@ -322,7 +329,8 @@ paths:
           required: false
           description: >-
             Plan only; nothing is written and no run starts. A blueprint that does not compile, a bundle
-            the driver cannot plan and a refused admission each answer 422 (Unprocessable).
+            the driver cannot plan and a refused admission each answer 422 (Unprocessable); a step the loop
+            would refuse answers its Plan, the verdict rejected.
           schema: { type: boolean, default: false }
       requestBody:
         required: true
@@ -356,7 +364,6 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "412": { $ref: "#/components/responses/PreconditionFailed" }
         "422": { $ref: "#/components/responses/Unprocessable" }
-        "501": { $ref: "#/components/responses/NotBuilt" }
     delete:
       tags: [twins]
       operationId: deleteTwin
@@ -392,10 +399,10 @@ paths:
       tags: [twins]
       operationId: verifyTwin
       summary: Read every node once and judge it against the bundle it should hold.
-      description: Synchronous and bounded by the platforms' gNMI reads; changes nothing. A step's wait runs verify inside the step's run.
+      description: Synchronous and bounded by the platforms' gNMI reads and the probes' bursts, run one after another; changes nothing. A step's wait runs verify inside the step's run.
       responses:
         "200":
-          description: The verdict, operation verify, status ok or nonconforming, with counts.
+          description: The verdict, operation verify, status ok, nonconforming, or failed when a node could not be read, with counts.
           content:
             application/json:
               schema: { $ref: "findings-1.schema.json" }
@@ -403,7 +410,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
-        "501": { $ref: "#/components/responses/NotBuilt" }
 
   /v1/runs:
     get:
@@ -584,7 +590,7 @@ components:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     Conflict:
-      description: The request contradicts the twin's state (twin.driver.fixed, twin.deleting) or the run has already ended (run.ended).
+      description: The request contradicts the twin's state (twin.driver.fixed, twin.deleting, twin.diverged), the twin has no applied deployment to read (twin.not_running), or the run has already ended (run.ended).
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
@@ -600,14 +606,6 @@ components:
         Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected),
         every fault in findings; or, for a dry run, refused admission, under the refusal's rule
         (admission.capacity, say) with its finding.
-      content:
-        application/problem+json:
-          schema: { $ref: "problem-1.schema.json" }
-    NotBuilt:
-      description: >-
-        What this core's phase does not build yet (api.unbuilt): a route (the bundle diff, verify) or a
-        change (a step, a new spec on an existing twin); the detail names the phase that builds it.
-        Clients show it and do not retry.
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
@@ -713,8 +711,73 @@ components:
         verdict:
           $ref: "findings-1.schema.json"
           description: >-
-            The step comparison's findings (operation plan); rejected when a step would need allow_restart. A
-            refused admission is a 422 problem instead, since it leaves no deployment to answer.
+            The plan's findings (operation plan): ok, or, for a step, rejected with the findings the loop's
+            refusal would carry (step.twin.diverged, step.relink.unsupported, step.restart.required, or
+            bundle.rejected for a running deployment the driver cannot step from). A refused admission is a 422
+            problem instead, since it leaves no deployment to answer. Clients exit by its status.
+        changes:
+          $ref: "#/components/schemas/Changes"
+          description: >-
+            For a twin that runs, what the step would do to each node and link, from the deployment the twin
+            runs to this one; absent for a create, and for a running deployment the driver cannot step from.
+            The CLI's twin step --dry-run and the orchestrator's report read it.
+
+    Changes:
+      type: object
+      additionalProperties: false
+      required: [nodes, links_added, links_removed]
+      description: >-
+        What the driver's changes call answers (D-049): the runtime's own lifecycle actions for a step from one
+        deployment of a twin to another, every node of either by name and the links added and removed.
+      properties:
+        nodes:
+          type: array
+          description: Every node of either deployment, device or probe host, sorted by name; the step's phases and clients read it.
+          items:
+            type: object
+            additionalProperties: false
+            required: [node, action, reasons]
+            properties:
+              node:
+                type: string
+                minLength: 1
+                description: The node's name in the deployments; clients show it.
+              action:
+                enum: [kept, added, removed, recabled, restarted, recreated, unsupported]
+                description: >-
+                  What the runtime does to the node: recabled changes its links and the node stays, restarted is
+                  a link change under a restart link mode, recreated makes the node anew, and unsupported is a
+                  change the runtime cannot make. restarted and recreated need allow_restart; unsupported refuses
+                  the step. The step's refusals and clients read it.
+              reasons:
+                type: array
+                uniqueItems: true
+                items: { enum: [kind, image, link_mode, exec, links, hot_add] }
+                description: >-
+                  Why a node is not simply kept, sorted: a member of its node differs (kind, image, link_mode),
+                  its start-up lines do (exec), its links do (links), or a port is added after boot to a kind
+                  that cannot add one (hot_add); empty for kept, added and removed. The refusals' messages and
+                  clients show them.
+        links_added:
+          type: array
+          items:
+            type: array
+            prefixItems: [{ type: string, minLength: 1 }, { type: string, minLength: 1 }]
+            items: false
+            minItems: 2
+          description: >-
+            Links only in the target, each its two endpoints as node:port in the topology's runtime names, the
+            pair sorted, the list sorted; the step's apply wires them, and clients show them.
+        links_removed:
+          type: array
+          items:
+            type: array
+            prefixItems: [{ type: string, minLength: 1 }, { type: string, minLength: 1 }]
+            items: false
+            minItems: 2
+          description: >-
+            Links only in the running deployment, each as links_added gives one, the list sorted; the step's
+            apply unwires them, and clients show them.
 
     WatchEvent:
       type: object
@@ -782,11 +845,11 @@ components:
             added:
               type: array
               items: { type: string }
-              description: Nodes only in to; the step's plan creates them.
+              description: Nodes only in to, sorted by name; the step's plan creates them.
             removed:
               type: array
               items: { type: string }
-              description: Nodes only in from; the step's plan removes them.
+              description: Nodes only in from, sorted by name; the step's plan removes them.
             changed:
               type: array
               description: Nodes in both that differ; the step pushes or recreates them.
@@ -802,7 +865,7 @@ components:
                     type: array
                     minItems: 1
                     items: { enum: [platform, mapping, config] }
-                    description: Sorted; platform recreates, mapping may re-cable, config re-pushes. The step's plan and the report read them.
+                    description: In the order platform, mapping, config; platform recreates, mapping may re-cable, config re-pushes. The step's plan and the report read them.
           description: Node changes; the step and the report read them.
         links:
           type: object
@@ -812,11 +875,11 @@ components:
             added:
               type: array
               items: { $ref: "blueprint-1.schema.json#/$defs/link" }
-              description: Links only in to; the step's plan wires them.
+              description: Links only in to, sorted as blueprint 1 sorts links; the step's plan wires them.
             removed:
               type: array
               items: { $ref: "blueprint-1.schema.json#/$defs/link" }
-              description: Links only in from; the step's plan unwires them.
+              description: Links only in from, sorted as blueprint 1 sorts links; the step's plan unwires them.
           description: Link changes; the step and the report read them.
         probes:
           type: object
@@ -826,11 +889,11 @@ components:
             added:
               type: array
               items: { type: string }
-              description: Probes only in to, by name; their flows start after the step.
+              description: Probes only in to, sorted by name; their flows start after the step.
             removed:
               type: array
               items: { type: string }
-              description: Probes only in from, by name; reported as dropped in the step's loss.
+              description: Probes only in from, sorted by name; reported as dropped in the step's loss.
           description: Probe changes; flows and the report read them.
 
     Run:

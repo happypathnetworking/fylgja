@@ -42,6 +42,7 @@ from fylgja_core.reconcile import Reconciler
 from fylgja_core.server.app import create_app
 from fylgja_core.server.auth import Tokens
 from fylgja_core.store import Locked
+from fylgja_core.verify import Verifier
 
 GRACE_S = 5
 """Seconds an open watch is given to end at shutdown before uvicorn cuts it."""
@@ -80,10 +81,12 @@ def build_app(settings: Settings, *, closing: threading.Event | None = None) -> 
             raise _TokenFile(str(e)) from e
         driver = drivers.make(settings.driver, settings.store)
         served = {driver.name: driver}
+        verifier = Verifier(loaded.platforms, loaded.probes, Provider(os.environ))
         reconciler = Reconciler(store, served, loaded.platforms, loaded.probes, Provider(os.environ),
-                                workers=settings.workers)
+                                workers=settings.workers, verifier=verifier, step_wait_s=settings.step_wait_s)
         app = create_app(store=store, loaded=loaded, drivers=served, default_driver=driver.name,
-                         reconciler=reconciler, tokens=tokens, build=version("fylgja-core"), closing=closing)
+                         reconciler=reconciler, verifier=verifier, tokens=tokens, build=version("fylgja-core"),
+                         closing=closing)
     except BaseException:
         store.close()
         raise
@@ -106,8 +109,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     argparse.ArgumentParser(
         prog="fylgja-core-server",
         description="Serve API 1 and run the reconcile loop over one store. Every setting is a FYLGJA_* "
-                    "variable: FYLGJA_STORE, FYLGJA_PACKAGES and FYLGJA_TOKENS, and FYLGJA_LISTEN, FYLGJA_DRIVER "
-                    "and FYLGJA_WORKERS with their defaults (CONTRIBUTING.md, \"Running the core\").",
+                    "variable: FYLGJA_STORE, FYLGJA_PACKAGES and FYLGJA_TOKENS, and FYLGJA_LISTEN, FYLGJA_DRIVER, "
+                    "FYLGJA_WORKERS and FYLGJA_STEP_WAIT_S with their defaults "
+                    "(CONTRIBUTING.md, \"Running the core\").",
     ).parse_args(argv)
     logs.configure()
     try:

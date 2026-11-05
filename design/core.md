@@ -79,7 +79,7 @@ Measured on containerlab 0.79 locally and on clabernetes 0.10.1 in a kind cluste
 | SR Linux interface aliases | Yes: `ethernet-1/1` deploys as `e1-1`, breakouts too; an out-of-range name is refused at post-deploy | [D-015](decisions.md#d-015) |
 | Bootstrap | **Not needed** on either kind or driver. With no startup-config, each kind's baseline holds the hostname, linked ports enabled, LLDP and gNMI, and all of it survives the replace push | [D-015](decisions.md#d-015) |
 | Link changes | `link_apply_mode: live` re-cables both kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port added later. The mode is set at create only: on clabernetes a change replaces every pod | [D-015](decisions.md#d-015) |
-| The seam | **Seven calls**: `admit` joins, to reserve what `plan` binds (a subnet, a namespace, devices) | [D-017](decisions.md#d-017), [D-011](decisions.md#d-011) |
+| The seam | **Seven calls** settled here, with `admit` joining to reserve what `plan` binds (a subnet, a namespace, devices); nine since phase 5 added `changes` and `exec` | [D-017](decisions.md#d-017), [D-011](decisions.md#d-011), [D-049](decisions.md#d-049) |
 | The core's own reconcile loop | Holds. Kills mid-apply, after apply, between pushes and mid-destroy each reach the desired state in one resume, given two recovery rules and each node's recorded incarnation (below). clabernetes finishes a step after its managers are killed mid-step | [D-023](decisions.md#d-023) |
 | Isolation | A lab or a namespace per twin works, with concurrent creates. Management reach between twins is closed on clabernetes by a NetworkPolicy per twin, and accepted locally | [D-019](decisions.md#d-019) |
 | Orphans | Locally, swept only through containerlab, since it leaves root-owned host entries. On clabernetes, the namespace delete sweeps the twin (49 s) | [D-019](decisions.md#d-019) |
@@ -273,8 +273,8 @@ Schema: [`api-1.openapi.yaml`](../formats/api-1.openapi.yaml);
   rule id and a JSON pointer; `decode` builds the model type or raises `Rejected`; a
   loader's `load` reads a file. A model type encodes back to its document unchanged, so a
   document has one representation (Constitution XII). The API's own response shapes (a
-  run, an event, a driver) were built with the server in phase 4; the bundle diff's is
-  phase 5's, and its route answers `501` until then.
+  run, an event, a driver) were built with the server in phase 4; the bundle diff's,
+  `BundleDiff`, was built with its route in phase 5.
 
 ### Runtimes behind one driver seam
 
@@ -284,7 +284,8 @@ Schema: [`api-1.openapi.yaml`](../formats/api-1.openapi.yaml);
 | `clabernetes` | now: production | a namespace per twin, with a NetworkPolicy | the cluster's nodes | a LoadBalancer per node ([D-020](decisions.md#d-020)) |
 | `hardware` | a later release | a reservation of devices from a pool | the pool | the devices' own management addresses |
 
-The seam has seven calls, and every call is idempotent ([D-017](decisions.md#d-017)):
+The seam has nine calls, and every call but `exec` is idempotent
+([D-017](decisions.md#d-017), [D-049](decisions.md#d-049)):
 - `capabilities()`: whether the driver provisions nodes or claims existing ones; whether it
   can re-cable live; per-kind restart behaviour; how nodes are reached.
 - `admit(bundle, twin)`: reserves what the twin is bound to (a lab name and subnet, a
@@ -292,10 +293,14 @@ The seam has seven calls, and every call is idempotent ([D-017](decisions.md#d-0
   the reason. `plan` is pure, so its allocation must exist before it runs.
 - `plan(bundle, twin, allocation)`: pure; a runtime-specific deployment derived from the
   bundle, with its own id.
+- `changes(before, after, packages)`: pure; what the runtime does to each node to go from
+  one deployment to another, each with its reasons, and the links added and removed.
 - `apply(deployment, files, packages, reconfigure)`, `inspect(twin)` and
   `destroy(deployment, files, packages)`: the packages' measured timeouts bound a deploy
   and a destroy, and `reconfigure` is the partial-lab remedy.
 - `endpoints(twin)`: the management addresses that push, readiness, verify and flows use.
+- `exec(twin, node, argv, timeout_s)`: an argument vector run inside a node, bounded in time
+  and bytes; the one way into a node with no management transport, a probe host.
 
 Push, readiness, verify and flows sit above the seam: they reach a node's management
 address whatever runtime it runs on. Nothing above the seam names a runtime; it may branch
@@ -424,6 +429,172 @@ The phase is done when `fylgja-core twin create`, `show` and `destroy` run end t
 fixture through the API, a kill at each phase boundary resumes to the desired state, and
 every containerlab behaviour the driver relies on is recorded for 0.81.0.
 
+## Phase 5: step, verify and the burst on the local driver (settled 2026-11-04)
+
+Phase 5 takes a running twin from one bundle to another at layer 1, judges what the twin
+formed, and sends one burst of traffic across it. It is built against the seam as phase 4
+left it, on the local driver alone.
+
+**What the phase is for.** The orchestrator rehearses a change on a twin: it steps the twin
+to the change's blueprint and reports what happened. The report leads with traffic: which
+declared flows pass after the change. The step is a layer-1 step, on links and nodes added,
+changed and removed. Configuration rides along: the blueprint is a snapshot, so a new node is
+pushed after it boots and a restarted or recreated one is pushed again, but a configuration
+change as a workflow is the orchestrator's, in production, and a device may carry no
+configuration at all ([D-048](decisions.md#d-048)). Verify is a layer-1 judgement: an
+exception on a change, a wrong LLDP neighbour, a linked port down, a node missing or
+replaced. The probes stay a placeholder: one format, `ping`, and one burst per probe after
+the step settles, no flow across the step and no loss counters.
+
+**What is settled before code.**
+
+- **Configuration is optional, and absent means unmanaged** ([D-048](decisions.md#d-048)).
+  Blueprint 1 drops `config` from a device's required members; a device with none compiles
+  to a node with no configuration file; the push passes it over and marks it as holding the
+  bundle; verify makes no claim of it; a step from a configuration to none pushes nothing,
+  and the node keeps what it holds, which after a recreate is the kind's baseline. Both kinds'
+  baselines carry the host name, linked ports enabled, LLDP and gNMI
+  ([D-015](decisions.md#d-015)), so a blueprint with no configuration is a complete layer-1
+  twin.
+- **The seam grows by two calls and one argument** ([D-049](decisions.md#d-049)): `changes`,
+  pure, says what the runtime does to each node between two deployments (kept, added,
+  removed, re-cabled live, restarted, recreated, each with its reason), so the loop knows
+  before `apply` what `allow_restart` must cover; `exec` runs an argument vector inside a
+  node, for a probe host's readiness and the burst, since a host has no management
+  transport; and `admit` takes the deployment a stepping twin has applied, keeps its
+  allocation, and checks the demand the new deployment adds over it. containerlab's own dry
+  run is `changes`'s oracle in the live tier, never its implementation. One case the oracle
+  does not name: a port added after boot to a kind that cannot add one (cEOS under the
+  `live` link mode gets a veth EOS never lists). `changes` answers it `recreated`, and the
+  driver's `apply` makes it so by removing that node before the deploy, which recreates it
+  with its ports. Plan 3 verified that on 0.81.0 (the phase 5 block, "`changes` against the
+  dry run", of [verified-facts.md](verified-facts.md#containerlab-0790)): containerlab
+  obliged, so the fallback, a refusal (`step.relink.unsupported` for that node) and never a
+  dead port, was not needed.
+- **A step's phases are the create's** ([D-050](decisions.md#d-050)): `compiled`,
+  `admitted`, `planned`, `applied`, `ready`, `pushed`, `verified`, `flows`, each recorded
+  before the next. After `planned` and before anything is touched the loop refuses, ending
+  the run `rejected` with the twin running what it ran: a diverged twin
+  (`step.twin.diverged`, [D-029](decisions.md#d-029)), a restart or recreate without
+  `allow_restart` (`step.restart.required`), a link change on a driver that cannot re-cable
+  (`step.relink.unsupported`). A refused step is recorded as a refused create is: the
+  observed generation catches up, `Ready` is False with the refusal's rule as its reason,
+  and `last_step` ends with the outcome `rejected`, naming the run, so a watcher reads the
+  verdict from it. `ready` and `pushed` act on the nodes `changes` named and on every node
+  whose incarnation `inspect` reports changed; a node whose configuration is unchanged
+  between the two bundles is marked as holding the new one without a push, and a node
+  without configuration likewise. `verified` is the wait: verify until it holds or
+  `FYLGJA_STEP_WAIT_S` runs out, an expiry being a warning (`step.wait.expired`), never a
+  failure ([D-032](decisions.md#d-032)). A kill resumes after the last recorded phase under
+  the create's rules, with two differences: the partial-lab probe runs only when the run's
+  events show an `apply` started and not ended, since on a step the lab is always present;
+  and the silent-node remedy, `reconfigure`, recreates every node, so without
+  `allow_restart` the step ends `diverged` (`step.node.silent`) instead. A step whose bundle
+  is the twin's ends `ok` at `compiled`, `last_step` outcome `unchanged`. A spec written
+  while a run is in flight is accepted: the run completes toward its own target, the pass
+  records the generation it took the run under, and the next pass steps to the newer spec.
+- **No rollback** ([D-029](decisions.md#d-029) stands). A step that fails or is cancelled
+  after `apply` began leaves the twin up and `Diverged`, the record naming the phase and each
+  node's held bundle; a diverged twin accepts only deletion. A cancel before `apply` ends the
+  run `failed` with `run.cancelled` and touches nothing.
+- **Verify reads layer 1 from both ends** ([D-031](decisions.md#d-031) stands,
+  [D-051](decisions.md#d-051)): each device node's host name, asserted against the device
+  name only where no configuration could have changed it, and otherwise read and reported,
+  since a source-rendered configuration carries the production hostname and a reader renames
+  the device to a DNS-1123 label; `port.enabled` on every cabled port, a link's end or a
+  probe's endpoint; `port.neighbor` on both ends of every intent link, each end's
+  `system-name` compared with the far node's read host name and its `port-id` with the far
+  port, since a shut port still lists a far end that restarted while the far end sees none
+  ([verified-facts.md](verified-facts.md)); the record's claim, for a node with a
+  configuration; and the `burst`, each direction of each probe, run by `exec`. A port intent
+  disables, its link, a synthesized link's neighbour, a node with no configuration's claim
+  and a configured node's host name are skips, each an info finding. `nonconforming` means every node was read and an
+  assertion failed; a node that could not be read ends the verdict `failed`
+  (`verify.node.unread`) and is never nonconforming. Verify is refused `409` on a twin with
+  no applied deployment, and reads a stepping or diverged twin as it stands, against the
+  bundle it is stepping to. The reads are gNMI, by the package's `conformance` paths
+  ([D-030](decisions.md#d-030)); the client library is [D-052](decisions.md#d-052).
+- **The flow across the step is not built** ([D-051](decisions.md#d-051)). A step's verdict
+  lists each probe of the target bundle, both directions, outcome `not_started`, and
+  findings 1 says so in that value's description. The `flows` phase records that and is
+  otherwise skipped. The burst is the traffic the report leads with.
+- **The bundle diff is a pure function of two manifests**, answered by
+  `GET /v1/bundles/{a}/diff/{b}` in API 1's `BundleDiff` shape: nodes added, removed and
+  changed (reasons `platform`, `mapping`, `config`, where `config` covers a checksum moved
+  and a configuration present on one side alone), links added and removed, probes added and
+  removed. An image change is no bundle fact (formats note 3); `changes` finds it.
+- **A dry run of a step** (`PUT …?dry_run=true` on a twin that exists) compiles, admits the
+  added demand, plans and runs `changes`, writing nothing, and answers `Plan` with a new
+  optional member, `changes`, beside the deployment and the verdict, `rejected` where the
+  step would be refused.
+- **Formats touched**, each in the change that builds it: blueprint 1 and bundle 1
+  (`config` optional), twin record 1 (`holds` for a node with no configuration;
+  `last_step.outcome` gains `rejected`; `status.generation_in_flight`, the generation the
+  run the record names works toward ([D-054](decisions.md#d-054)); the description of
+  `allow_restart` names `step.restart.required`, as [D-029](decisions.md#d-029) does, where it says
+  `step.restart.refused`), findings 1 (`not_started`'s description),
+  API 1 (`Plan.changes`; the `501` answers of the diff, verify and a step go), the server's
+  settings (`FYLGJA_STEP_WAIT_S`, adding to [D-042](decisions.md#d-042)), and the rule
+  catalogue (`step.*`, `verify.*`, `config.missing` narrowed).
+- **Logging** stays as phase 4 set it. A step's events carry each node the phase acts on;
+  the device's diff from a push lives in the run's events alone, bounded, as
+  [D-029](decisions.md#d-029) says.
+
+**Non-goals.** Flows across the step and loss counters; rollback or repair of a diverged
+twin; a configuration-change workflow; a second probe format; clabernetes (phase 6); more
+than one twin at a time (phase 7). **Anti-goals**, each a failure even if the code works: a
+node restarted without `allow_restart`; a verdict that says a flow passed when none ran; a
+read of a node's configuration; a client that learns what a step does from a runtime name.
+
+**Six plans, each a branch and a pull request useful on its own, in this order:**
+
+1. **Optional configuration** ([D-048](decisions.md#d-048)): the two schemas, the compiler,
+   the push, the record, the rule catalogue, and a fixture with a device that carries none.
+2. **The bundle diff**: the pure function, its route, `fylgja-core bundle diff`, and fixture
+   pairs for every kind of change.
+3. **The seam's growth** ([D-049](decisions.md#d-049)): `changes`, `exec` and `admit`'s
+   held allocation on the seam and the local driver; probe hosts' readiness in the ready
+   phase, for a create too; pure tests of `changes` over deployment pairs; a live test that
+   holds `changes` to containerlab's dry run for every kind of change, recorded on 0.81.0.
+4. **Verify** ([D-051](decisions.md#d-051), [D-052](decisions.md#d-052)): the gNMI reader
+   of the fact vocabulary, the assertions derived from the manifest, the burst by `exec`, the
+   route, `fylgja-core twin verify`, and a live test on a probed fixture.
+5. **The step** ([D-050](decisions.md#d-050)): the loop's step path, its refusals, phases,
+   wait, resume and cancel; the API's step and its dry run; `fylgja-core twin step`.
+6. **The live tier for steps**: a link added and removed on SR Linux live; a cEOS node
+   restarted under `allow_restart` and refused without it; a node added and removed; a kind
+   change; a kill at each phase boundary; a cancel mid-apply ending diverged. Each
+   containerlab behaviour the step relies on is recorded for 0.81.0.
+
+Plans 1 and 2 are independent of each other and of the rest; 3 precedes 4 and 5; 6 closes.
+The live tier runs one plan's scenarios at a time on the development host.
+
+**The phase is done** when `fylgja-core twin step` takes a fixture twin through plan 6's
+scenarios end to end through the API, a kill at each phase boundary resumes to the desired
+state or ends `diverged` as designed, `twin verify` answers on demand with the burst held, the
+bundle diff answers for every fixture pair, and every containerlab behaviour the step and
+`changes` rely on is recorded for 0.81.0.
+
+**Left to the builder.** The module layout (`fylgja_core.diff`, `fylgja_core.gnmi`,
+`fylgja_core.verify`, `fylgja_core.burst`, or otherwise); when `status.bundle_id` and
+`status.deployment_id` move to the target (they move at `applied`, with `blueprint_id` and
+`nodes`, `last_step.from` keeping the previous and `last_step.phase` alone recording the phases
+before it, [D-054](decisions.md#d-054)); the exact wording of each new finding; the shape of
+`changes`'s reasons; `exec`'s output bound; and the fixtures.
+
+### The deploy's output goes to a file (2026-11-04)
+
+Plan 6 read on the running system that a `containerlab deploy` whose core has died dies of
+SIGPIPE, at its next write by inference, since the core held its stdout and stderr as pipes. A
+kill in a node's post-deploy wait leaves the nodes made and the hosts block and ssh config never
+written, and a create's resume, finding every node answering, skips the apply: a Ready twin
+no one on the host can reach by name. The driver therefore gives each deploy a file for its
+output, `deploy.log` in the twin's directory, beside the topology it describes, and reads the
+file's tail when the deploy fails. A deploy the core's death orphans then runs to completion,
+which is what the waits of [D-054](decisions.md#d-054) item 14 and
+[D-055](decisions.md#d-055) were premised on; the file is never logged
+([D-056](decisions.md#d-056)).
+
 ## Sequence
 
 0. **The baseline.** *Done.* The decision log ([decisions.md](decisions.md)), the
@@ -476,13 +647,30 @@ every containerlab behaviour the driver relies on is recorded for 0.81.0.
    is kicked by writes and resyncs on a period), and the bundle diff route. It also left:
    the stray `containerlab deploy` a killed core leaves running in its own session, which the
    driver does not stop before it acts (the test that kills the server mid-deploy passed
-   because the orphan finished within the nodes' readiness budget); a sweep of the eAPI
+   because the orphan had made the nodes before it ended; phase 5 read that such a deploy
+   dies of SIGPIPE, at its next write by inference, since the core held its output as pipes,
+   and gave the deploy a log file, [D-056](decisions.md#d-056)); a sweep of the eAPI
    configuration sessions a push leaves pending, beyond its best-effort abort; the CLI's
    reconnect of a watch the server ends early; and `schemas.formats_dir()`, which resolves
    `formats/` through the repository and so must change before the client is installed
    outside the tree.
-5. **Step, verify, probes** on the local driver: bundle diff, reconcile, verify's rules,
-   ping flows and the burst.
+5. **Step, verify and the burst** on the local driver: the bundle diff, a layer-1 step
+   through the loop, verify's rules read from both ends, and one burst per probe. Settled
+   and *done on 2026-11-04*; see "Phase 5". It built: configuration as an optional element
+   of a blueprint, an unmanaged node pushed nothing ([D-048](decisions.md#d-048)); the bundle
+   diff and its route; `changes` and `exec` on the seam, with `admit` holding a stepping
+   twin's allocation ([D-049](decisions.md#d-049)); verify over gNMI with pygnmi and each
+   probe's burst by `exec` ([D-051](decisions.md#d-051), [D-052](decisions.md#d-052),
+   [D-053](decisions.md#d-053)); the step through the loop, the API and the CLI, with its
+   refusals, its record before `applied`, its resume and its cancel, and a probe host's
+   readiness by `exec` ([D-050](decisions.md#d-050), [D-054](decisions.md#d-054)); and a live
+   tier that steps a twin through every fixture, kills the core at each phase boundary,
+   cancels a step mid-apply and deletes a twin after a kill. Two driver rules came out of that
+   tier: a destroy waits for a stray deploy and removes every container of the lab
+   ([D-055](decisions.md#d-055)), and the deploy's output goes to a file so that a stray
+   deploy runs to completion ([D-056](decisions.md#d-056)). It left to later phases: the
+   flows beyond one burst per probe, the Docker events trigger, and item 4's leftovers (the
+   eAPI session sweep, the CLI's watch reconnect, and `schemas.formats_dir()`).
 6. **The clabernetes driver**: the object store, the Lease, per-twin namespaces and node
    access. The driver conformance suite passes on both drivers.
 7. **Many twins**: concurrent create and step, and admission refused when capacity runs out.

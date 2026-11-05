@@ -62,7 +62,7 @@ class Node:
 class LastStep:
     """The latest step's outcome, by its run."""
 
-    outcome: Literal["running", "stepped", "unchanged", "diverged", "cancelled"]
+    outcome: Literal["running", "stepped", "unchanged", "diverged", "cancelled", "rejected"]
     from_: str = field(metadata={"key": "from"})
     to: str
     phase: StepPhase
@@ -77,6 +77,7 @@ class Status:
     conditions: tuple[Condition, ...]
     phase: Phase | None = None
     run_id: str | None = None
+    generation_in_flight: int | None = None
     blueprint_id: str | None = None
     bundle_id: str | None = None
     deployment_id: str | None = None

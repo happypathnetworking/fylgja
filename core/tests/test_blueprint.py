@@ -33,6 +33,12 @@ def test_each_fixture_is_valid(name: str) -> None:
     assert blueprint.validate(load(name)) == []
 
 
+@pytest.mark.parametrize("path", sorted((FIXTURES / "steps").glob("*.json")), ids=lambda p: p.stem)
+def test_each_step_fixture_is_valid_and_loads(path: Path) -> None:
+    assert blueprint.validate(json.loads(path.read_text())) == []
+    blueprint.load(path)
+
+
 @pytest.mark.parametrize("name", NAMES)
 def test_the_id_is_rfc_8785_over_network_and_probes(name: str) -> None:
     doc = load(name)
@@ -83,7 +89,7 @@ def test_another_version_is_refused_first() -> None:
 
 def test_a_schema_violation_is_reported_with_its_pointer() -> None:
     doc = load("three-node")
-    del doc["network"]["devices"][0]["config"]
+    del doc["network"]["devices"][0]["platform"]
     doc["network"]["devices"][1]["interfaces"][0]["enabled"] = "yes"
     found = blueprint.validate(doc)
     assert rules(found) == {blueprint.RULE_INVALID}
@@ -207,3 +213,25 @@ def test_a_dns_1123_label_of_63_characters_is_a_device_name() -> None:
     doc["network"]["devices"][2]["name"] = "sw-core-01-" + "x" * 52
     assert len(doc["network"]["devices"][2]["name"]) == 63
     assert {p.rule for p in blueprint.validate(doc)} <= {blueprint.RULE_ENDPOINT_UNKNOWN}
+
+
+def test_every_blueprint_fixture_validates_as_blueprint_1() -> None:
+    paths = sorted(FIXTURES.glob("*.json"))
+    assert paths
+    for path in paths:
+        assert blueprint.validate(json.loads(path.read_text())) == [], path.name
+
+
+def test_a_device_with_no_config_is_unmanaged() -> None:
+    loaded = blueprint.load(FIXTURES / "three-node-unmanaged.json")
+    configs = {d.name: d.config for d in loaded.network.devices}
+    assert configs["n2"] is None
+    assert isinstance(configs["n1"], str)
+    assert isinstance(configs["n3"], str)
+
+
+def test_a_device_with_an_empty_config_is_still_refused() -> None:
+    doc = load("three-node-unmanaged")
+    doc["network"]["devices"][1]["config"] = ""
+    found = {(p.pointer, p.rule) for p in blueprint.validate(doc)}
+    assert found == {("/network/devices/1/config", blueprint.RULE_INVALID)}

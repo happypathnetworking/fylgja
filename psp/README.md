@@ -43,12 +43,14 @@ config's artifact name and content type.
 | Push | JSON-RPC `cli` on 443 | eAPI `runCmds` in a configuration session on 443 |
 | gNMI | TLS on 57400 | Plaintext on 6030 |
 | `link_apply_mode` | `live` | `live` |
-| `hot_add_ports` | `true` (not yet read back from the node) | `false`: a port added after boot never appears in EOS |
+| `hot_add_ports` | `true`: a port added after boot works in SR Linux (containerlab 0.81.0, 2026-11-04) | `false`: a port added after boot never appears in EOS |
 | Memory per node | 2048 MB (about 1.6–2 GiB measured) | 1536 MB (0.9–1.5 GiB measured) |
 
 `link_apply_mode` and `hot_add_ports` were measured on containerlab 0.79 and clabernetes
-0.10.1 on 2026-10-30. The cases each interface rule must decide, once carried in the
-packages as `mappings`, are test data now:
+0.10.1 on 2026-10-30; SR Linux's `hot_add_ports` was read back from the node on containerlab
+0.81.0 on 2026-11-04 ([verified-facts.md](../design/verified-facts.md), phase 5's steps
+block). The cases each interface rule must decide, once carried in the packages as
+`mappings`, are test data now:
 [`../testdata/packages/mappings.yaml`](../testdata/packages/mappings.yaml).
 
 Probe hosts are not platforms. Their packages are in [`../probes/`](../probes/README.md).

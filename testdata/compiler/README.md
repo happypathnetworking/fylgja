@@ -16,3 +16,7 @@ equality with the old bundles is not the target, since the formats changed.
 
 The facts were exported once, at the repository cut, from the Go compiler's golden bundles,
 which stay in the archived repository.
+
+`testdata/blueprint/three-node-unmanaged.json` is `three-node` with `n2`'s configuration removed
+([D-048](../../design/decisions.md#d-048)). The compile, push and API tests use it. It has no Go
+facts, since the Go compiler had no such case.

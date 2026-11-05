@@ -9,8 +9,11 @@ description = "Fylgja's core: a blueprint becomes a twin."
 license = "Apache-2.0"
 requires-python = ">=3.14"
 dependencies = [
+    "grpcio==1.84.0",
     "httpx==0.28.1",
     "jsonschema==4.26.0",
+    "protobuf==7.36.2",
+    "pygnmi==0.8.15",
     "PyYAML==6.0.3",
     "starlette==1.9.0",
     "uvicorn==0.54.0",
@@ -55,5 +58,5 @@ python_version = "3.14"
 files = ["src", "tests", "../scripts"]
 
 [[tool.mypy.overrides]]
-module = ["jsonschema.*", "rfc8785.*", "referencing.*"]
+module = ["jsonschema.*", "rfc8785.*", "referencing.*", "pygnmi.*", "grpc.*"]
 ignore_missing_imports = true

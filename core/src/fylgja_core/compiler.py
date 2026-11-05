@@ -77,7 +77,7 @@ def compile(
         if device.platform not in platforms:
             found.append(_error(RULE_PLATFORM, device.name, f"No loaded platform package is {device.platform!r}; "
                                                             f"loaded: {_listed(platforms)}."))
-        if not device.config.strip():
+        if device.config is not None and not device.config.strip():
             found.append(_error(RULE_CONFIG, device.name, "The configuration is empty."))
 
     cabled: dict[tuple[str, str], str] = {}
@@ -156,9 +156,11 @@ def compile(
     files: dict[str, bytes] = {}
     nodes = []
     for device in bp.network.devices:
-        path, data = f"configs/{device.name}.cfg", device.config.encode("utf-8")
-        files[path] = data
-        config = bundle.File(file=path, sha256=hashlib.sha256(data).hexdigest())
+        config = None
+        if device.config is not None:  # an absent configuration is an unmanaged device (D-048): no file
+            path, data = f"configs/{device.name}.cfg", device.config.encode("utf-8")
+            files[path] = data
+            config = bundle.File(file=path, sha256=hashlib.sha256(data).hexdigest())
         nodes.append(bundle.Node(name=device.name, platform=device.platform, config=config))
     manifest = bundle.Manifest(blueprint_id=blueprint.blueprint_id(bp), nodes=tuple(nodes), mapping=tuple(rows),
                                links=bp.network.links, probes=bp.probes)

@@ -3,7 +3,8 @@ D-011).
 
 A bundle is a set of files in the state store, addressed by its id: `manifest.json`, this
 document as RFC 8785 (JCS) bytes with no trailing newline, and `configs/<node>.cfg`, each
-device's configuration verbatim. `Manifest` is the document's model, `manifest_bytes`
+device's configuration verbatim, for a device that has one (optional: absent means unmanaged,
+D-048). `Manifest` is the document's model, `manifest_bytes`
 renders it, and `bundle_id` is the content address of a bundle's files, as the schema's
 $comment defines it. Nothing here belongs to one twin: a driver's plan binds a bundle to a
 twin and a runtime (deployment.py).
@@ -44,7 +45,7 @@ class Node:
 
     name: str
     platform: str
-    config: File
+    config: File | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

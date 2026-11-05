@@ -50,6 +50,7 @@ pull request** ([D-033](design/decisions.md#d-033)).
 | jsonschema, PyYAML | 4.26.0, 6.0.3 | Runtime dependencies: the formats' validation and the packages' YAML |
 | httpx | 0.28.1 | A runtime dependency: the readiness wait and the push ([D-039](design/decisions.md#d-039)) |
 | Starlette, uvicorn | 1.9.0, 0.54.0 | Runtime dependencies: the server's ASGI application and the process that serves it ([D-025](design/decisions.md#d-025)) |
+| pygnmi, grpcio, protobuf | 0.8.15, 1.84.0, 7.36.2 | Runtime dependencies: verify's gNMI reader ([D-052](design/decisions.md#d-052)) |
 | pytest, ruff, mypy | 9.2.0, 0.17.3, 2.4.0 | mypy in strict mode (Constitution I) |
 | rfc8785 | 0.1.4 | Tests only: an independent RFC 8785 implementation that the blueprint id is checked against |
 | containerlab, Docker | 0.81.0, 29.8.1 | The local driver and the live tier. containerlab is pinned to the version clabernetes 0.10.1 embeds, so the kinds behave alike on both drivers |
@@ -66,7 +67,7 @@ inside the tree carries a `.gitignore` of `*`.
 | `make venv` | The core's venv |
 | `make lint` | ruff over `core/` and `scripts/`, then mypy in strict mode |
 | `make test` | The pure tier: no infrastructure. Gates every pull request |
-| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them; and the end-to-end test, `three-node` through `fylgja-core-server` and the thin CLI, with the server killed at every phase boundary of a create, during a deploy and during a destroy, and a deletion during a deploy. About 16 minutes. Load `local/.env` first |
+| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them; `changes` held to containerlab's own dry run for every step fixture, with the hot-add recreate of two cEOS nodes and `exec` in a probe host (`core/tests/live/test_changes_live.py`, about 4.5 minutes alone); verify over gNMI on a probed twin, with a node stopped and started by containerlab and by Docker, and a configured cEOS node's host name (`core/tests/live/test_verify_live.py`, about 5 minutes alone); the end-to-end test, `three-node` through `fylgja-core-server` and the thin CLI, with the server killed at every phase boundary of a create, during a deploy and during a destroy, and a deletion during a deploy (`core/tests/live/test_e2e.py`, about 11 minutes alone); and the steps end to end, `fylgja-core twin step` to every step fixture from its base (the SR Linux ones, a cEOS port refused without `allow_restart` and made with it, and a kind change), the server killed at every phase boundary of a step, during its deploy and before a deletion, and a step cancelled during its apply, left diverged and then deleted (`core/tests/live/test_e2e_step.py`, about 16 minutes alone). About 40 minutes. Load `local/.env` first |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
 
 ## Test tiers
@@ -74,7 +75,7 @@ inside the tree carries a `.gitignore` of `*`.
 | Tier | Needs | Runs |
 |---|---|---|
 | **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures, and the store, the reconcile loop, API 1 and the CLI over fakes of the runtime |
-| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded: the driver, readiness and the push, and the end-to-end test through the API (`core/tests/live/test_e2e.py`, about 11 minutes alone). `make test` deselects it (the `live` marker) |
+| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded: the driver, `changes` against containerlab's dry run, readiness and the push, verify over gNMI, the end-to-end test through the API (`core/tests/live/test_e2e.py`, about 11 minutes alone), and the steps end to end (`core/tests/live/test_e2e_step.py`, about 16 minutes alone). `make test` deselects it (the `live` marker) |
 | **Driver conformance** | Each driver's own runtime: a cluster for clabernetes | On demand, per driver |
 
 Development and the live tier never need Kubernetes (Constitution XIII).
@@ -83,7 +84,7 @@ Development and the live tier never need Kubernetes (Constitution XIII).
 
 | Path | Holds |
 |---|---|
-| `testdata/blueprint/` | Four blueprints: `three-node`, `mixed`, `lossy`, `three-node-probed` |
+| `testdata/blueprint/` | Five blueprints: `three-node`, `mixed`, `lossy`, `three-node-probed`, `three-node-unmanaged` (it has no Go facts) |
 | `testdata/compiler/` | The facts the frozen Go compiler produced for each, which the new compiler is held to; and under `rejected/`, valid blueprints the compiler must refuse, one fault each |
 | `testdata/packages/` | `chassisos`, a synthetic lossy platform; the interface mapping rows each package must produce; and under `invalid/`, the rejection fixtures for the platform and probe package loaders |
 | `testdata/probes/` | Probe declaration files, valid and, under `invalid/`, the rejection fixtures for the declaration loader |
@@ -120,6 +121,7 @@ in [`.env.example`](.env.example):
 | `FYLGJA_LISTEN` | `127.0.0.1:7650` | The address it serves on, `host:port` |
 | `FYLGJA_DRIVER` | `containerlab` | The driver twins run on |
 | `FYLGJA_WORKERS` | `4` | How many twins the loop works on at once |
+| `FYLGJA_STEP_WAIT_S` | `180` | Seconds a step waits for verify to hold before it ends anyway (an integer of 1 or more) |
 | `FYLGJA_CREDENTIAL_<NAME>_USERNAME`, `_PASSWORD` | none | Each package's node login, `<NAME>` its `credentials` value upper-cased; a run needing one not set fails with `credential.missing` |
 
 **The token file** holds one `<sha256 hex of the token> <principal>` per line, `#` comments

@@ -15,6 +15,7 @@ FULL = {
     "FYLGJA_LISTEN": "0.0.0.0:9000",
     "FYLGJA_DRIVER": "containerlab",
     "FYLGJA_WORKERS": "2",
+    "FYLGJA_STEP_WAIT_S": "90",
 }
 REQUIRED = ("FYLGJA_STORE", "FYLGJA_TOKENS", "FYLGJA_PACKAGES")
 
@@ -25,6 +26,7 @@ def test_settings_from_a_full_environment() -> None:
         listen=("0.0.0.0", 9000),
         driver="containerlab",
         workers=2,
+        step_wait_s=90,
         packages=(Path("/opt/psp"), Path("/opt/probes")),
         tokens=Path("/etc/fylgja/tokens"),
     )
@@ -33,7 +35,7 @@ def test_settings_from_a_full_environment() -> None:
 def test_defaults() -> None:
     env = {k: FULL[k] for k in REQUIRED}
     s = config.from_environ(env)
-    assert (s.listen, s.driver, s.workers) == (("127.0.0.1", 7650), "containerlab", 4)
+    assert (s.listen, s.driver, s.workers, s.step_wait_s) == (("127.0.0.1", 7650), "containerlab", 4, 180)
 
 
 @pytest.mark.parametrize("variable", REQUIRED)
@@ -79,3 +81,11 @@ def test_a_missing_variable_files_settings_missing() -> None:
     with pytest.raises(config.Misconfigured) as e:
         config.from_environ({})
     assert e.value.rule == "settings.missing"
+
+
+@pytest.mark.parametrize("wait", ["abc", "0", "-1", "1.5"])
+def test_the_step_wait_must_be_an_integer_of_one_or_more(wait: str) -> None:
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ({**FULL, "FYLGJA_STEP_WAIT_S": wait})
+    assert e.value.variable == "FYLGJA_STEP_WAIT_S" and e.value.rule == config.RULE_MISSING
+    assert wait not in str(e.value)

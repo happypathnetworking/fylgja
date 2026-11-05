@@ -138,3 +138,77 @@ def test_every_command_line_is_logged_and_no_stdout(caplog: pytest.LogCaptureFix
     assert [(r.name, r.levelname, r.getMessage()) for r in caplog.records] == [
         ("fylgja.containerlab", "INFO", "sh -c 'echo ${0}put' out")]
     assert "output" not in caplog.text
+
+
+def test_run_status_answers_a_non_zero_status_as_data() -> None:
+    answer = asyncio.run(cli.run_status(["sh", "-c", "echo out; echo err >&2; exit 3"], timeout_s=5))
+    assert answer == (3, "out\n", "err\n")
+
+
+def test_run_status_still_raises_for_a_budget_run_out() -> None:
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(cli.run_status(["sleep", "30"], timeout_s=0.2))
+    assert raised.value.returncode == TIMED_OUT
+
+
+# A deploy's output goes to a file (D-056): the core holds no pipe whose closing ends the command.
+
+
+def test_run_with_a_log_file_writes_both_outputs_to_it_in_order_and_answers_nothing(tmp_path: Path) -> None:
+    log = tmp_path / "deploy.log"
+    out = asyncio.run(cli.run(["sh", "-c", "echo out; echo err >&2; echo more"], timeout_s=5, log=log))
+    assert out == ""
+    assert log.read_text() == "out\nerr\nmore\n"
+
+
+def test_a_failure_with_a_log_file_raises_with_the_files_tail(tmp_path: Path) -> None:
+    log = tmp_path / "deploy.log"
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(cli.run(["sh", "-c", "echo printed; echo complaint >&2; exit 3"], timeout_s=5, log=log))
+    assert raised.value.returncode == 3
+    assert raised.value.stderr == "printed\ncomplaint\n"
+    assert str(raised.value) == "sh -c 'echo printed; echo complaint >&2; exit 3' exited with status 3"
+
+
+def test_a_log_file_holds_the_last_run_alone(tmp_path: Path) -> None:
+    log = tmp_path / "deploy.log"
+    asyncio.run(cli.run(["sh", "-c", "echo first"], timeout_s=5, log=log))
+    asyncio.run(cli.run(["sh", "-c", "echo second"], timeout_s=5, log=log))
+    assert log.read_text() == "second\n"
+
+
+def test_a_budget_run_out_with_a_log_file_is_reported_as_before(tmp_path: Path) -> None:
+    log = tmp_path / "deploy.log"
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(cli.run(["sh", "-c", "echo begun; sleep 5"], timeout_s=0.2, log=log))
+    assert raised.value.returncode == TIMED_OUT
+    assert raised.value.stderr == "timed out after 0.2 s"
+    assert log.read_text() == "begun\n"
+
+
+def test_a_log_file_that_cannot_be_opened_fails_before_the_command_runs(tmp_path: Path) -> None:
+    pidfile = tmp_path / "ran"
+    log = tmp_path / "missing" / "deploy.log"
+    with pytest.raises(DriverFailed) as raised:
+        asyncio.run(cli.run(["sh", "-c", f"touch {pidfile}"], timeout_s=5, log=log))
+    assert not isinstance(raised.value, CommandFailed)
+    assert str(log) in str(raised.value)
+    assert not pidfile.exists()
+
+
+def test_the_core_holds_no_descriptor_of_the_log_file_while_the_command_runs(tmp_path: Path) -> None:
+    log = tmp_path / "deploy.log"
+
+    def held() -> list[str]:
+        fds = Path("/proc/self/fd")
+        return [str(f) for f in fds.iterdir() if os.path.realpath(fds / f) == str(log)]
+
+    async def body() -> None:
+        task = asyncio.create_task(cli.run(["sh", "-c", "echo begun; sleep 0.5; echo done"], timeout_s=5, log=log))
+        await asyncio.sleep(0.2)
+        assert log.read_text() == "begun\n"
+        assert held() == []  # the child writes on; nothing of the core's ends it once the core is gone
+        await task
+
+    asyncio.run(body())
+    assert log.read_text() == "begun\ndone\n"

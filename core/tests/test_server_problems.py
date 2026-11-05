@@ -37,7 +37,7 @@ def test_each_problem_validates_and_carries_the_media_type(status: int) -> None:
 def test_titles_and_types_per_status() -> None:
     assert body(problems.problem(401, "auth.token.missing", "d"))["title"] == "Unauthenticated"
     assert body(problems.problem(412, "twin.precondition", "d"))["title"] == "Precondition failed"
-    assert body(problems.problem(501, "x.y", "d"))["title"] == "Not built"
+    assert body(problems.problem(501, "x.y", "d"))["title"] == "Not Implemented"  # no title of its own since phase 5
     assert body(problems.problem(418, "x.y", "d"))["title"] == "I'm a Teapot"
     assert body(problems.problem(404, "x.y", "d"))["type"].endswith("/core/problems/not-found")  # type: ignore[attr-defined]
     assert body(problems.problem(412, "x.y", "d"))["type"] == "about:blank"

@@ -31,6 +31,11 @@ API = "1"
 JSON_TYPES = "application/json, application/problem+json"
 EVENT_STREAM = "text/event-stream"
 TIMEOUT_S = 30.0
+# A verify answers once every node has been read (at once, up to gNMI's 15 s budget) and each
+# probe's burst has run, one after another (up to 8 s each): longer than `TIMEOUT_S` for a
+# twin of a few probes. Its read is still bounded, so a server that stops answering fails the
+# call rather than holding it; 300 s covers the reads and some thirty bursts.
+VERIFY_TIMEOUT = httpx.Timeout(TIMEOUT_S, read=300.0)
 
 
 class ProblemError(Exception):
@@ -192,6 +197,10 @@ class Client:
         """A filed bundle's id and manifest."""
         return self._call("GET", f"/v1/bundles/{_segment(bundle_id)}")
 
+    def diff_bundles(self, from_id: str, to_id: str) -> dict[str, Any]:
+        """What a step from one filed bundle to another changes."""
+        return self._call("GET", f"/v1/bundles/{_segment(from_id)}/diff/{_segment(to_id)}")
+
     def list_drivers(self) -> list[dict[str, Any]]:
         """The drivers the core serves, sorted by name."""
         drivers: list[dict[str, Any]] = _member("GET", "/v1/drivers", self._call("GET", "/v1/drivers"), "drivers", list)
@@ -278,6 +287,10 @@ class Client:
         """Ask a run to cancel: the run, cancelling."""
         return self._call("POST", f"/v1/runs/{_segment(run_id)}/cancel")
 
+    def verify_twin(self, name: str) -> dict[str, Any]:
+        """Read every node of the twin once and judge it: the verdict, a findings 1 document."""
+        return self._call("POST", f"/v1/twins/{_segment(name)}/verifications", timeout=VERIFY_TIMEOUT)
+
     # the wire
 
     def _call(
@@ -288,8 +301,9 @@ class Client:
         params: Mapping[str, str] | None = None,
         body: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> dict[str, Any]:
-        response = self._respond(method, path, params=params, body=body, headers=headers)
+        response = self._respond(method, path, params=params, body=body, headers=headers, timeout=timeout)
         return _document(method, path, response)
 
     def _respond(
@@ -300,10 +314,11 @@ class Client:
         params: Mapping[str, str] | None = None,
         body: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> httpx.Response:
         if not self._spoken:
             self.version()
-        return self._send(method, path, params=params, body=body, headers=headers)
+        return self._send(method, path, params=params, body=body, headers=headers, timeout=timeout)
 
     def _send(
         self,
@@ -313,9 +328,12 @@ class Client:
         params: Mapping[str, str] | None = None,
         body: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> httpx.Response:
+        """One request, under `timeout` when given, else the client's."""
         try:
-            response = self._http.request(method, path, params=params, json=body, headers=headers)
+            response = self._http.request(method, path, params=params, json=body, headers=headers,
+                                          timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout)
         except httpx.HTTPError as e:
             raise TransportError(self._failed(method, path, e)) from e
         if not response.is_success:

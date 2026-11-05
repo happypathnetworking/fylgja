@@ -19,6 +19,7 @@ RULE_MISSING = "settings.missing"
 DEFAULT_LISTEN = "127.0.0.1:7650"
 DEFAULT_DRIVER = "containerlab"
 DEFAULT_WORKERS = 4
+DEFAULT_STEP_WAIT_S = 180
 
 
 class Misconfigured(Exception):
@@ -38,6 +39,7 @@ class Settings:
     listen: tuple[str, int]
     driver: str
     workers: int
+    step_wait_s: int
     packages: tuple[Path, ...]
     tokens: Path
 
@@ -62,6 +64,12 @@ def _workers(text: str) -> int:
     return int(text)
 
 
+def _step_wait(text: str) -> int:
+    if not text.isascii() or not text.isdigit() or int(text) < 1:
+        raise Misconfigured("FYLGJA_STEP_WAIT_S", "is not an integer of 1 or more")
+    return int(text)
+
+
 def _driver(name: str) -> str:
     if name not in drivers.NAMES:
         raise Misconfigured("FYLGJA_DRIVER", f"is not a driver this build serves: {', '.join(drivers.NAMES)}")
@@ -80,6 +88,7 @@ def from_environ(environ: Mapping[str, str]) -> Settings:
         listen=_listen(environ.get("FYLGJA_LISTEN") or DEFAULT_LISTEN),
         driver=_driver(environ.get("FYLGJA_DRIVER") or DEFAULT_DRIVER),
         workers=_workers(environ.get("FYLGJA_WORKERS") or str(DEFAULT_WORKERS)),
+        step_wait_s=_step_wait(environ.get("FYLGJA_STEP_WAIT_S") or str(DEFAULT_STEP_WAIT_S)),
         packages=packages,
         tokens=Path(tokens),
     )

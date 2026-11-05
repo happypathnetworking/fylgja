@@ -30,7 +30,7 @@ from typing import Any
 
 import yaml
 
-from fylgja_core import blueprint, bundle, deployment, mapping
+from fylgja_core import blueprint, bundle, deployment, mapping, probe_package
 from fylgja_core.containerlab import CAPABILITIES, NAME
 from fylgja_core.driver import Allocation, Planned, Unplannable
 from fylgja_core.findings import Finding
@@ -69,7 +69,7 @@ def plan(
         forwarding=CAPABILITIES.forwarding,
         approximations=_approximations(manifest, platforms, probe_packages),
         omitted=tuple(sorted(omitted, key=lambda o: (o.device, o.interface))),
-        synthesized=tuple(sorted(host for probe in manifest.probes for host, _, _ in _hosts(probe))),
+        synthesized=tuple(sorted(host for probe in manifest.probes for host, _, _ in blueprint.hosts(probe))),
         lossy=counts,
     )
     planned = deployment.Deployment(
@@ -188,13 +188,8 @@ def _topology(
     ]
     for probe in manifest.probes:
         package = probe_packages[probe.format]
-        for host, near, far in _hosts(probe):
-            values = {
-                "address": near.address,
-                "interface": package.host.interface,
-                "far_address": far.address.partition("/")[0],
-                "gateway": near.gateway,
-            }
+        for side, (host, near, _far) in zip("ab", blueprint.hosts(probe), strict=True):
+            values = probe_package.host_values(package, probe, side)
             nodes[host] = {
                 "kind": "linux",
                 "image": package.runtime.containerlab.image.ref,
@@ -226,14 +221,6 @@ def _port_shared(port: str, row: bundle.Row, rows: Sequence[bundle.Row]) -> Find
     message = (f"Port {row.device}:{row.interface} is cabled, and the rename puts it on {port} with {others}; "
                "the twin can cable a port once.")
     return Finding(rule=RULE_PORT_SHARED, severity="error", object=f"{row.device}:{row.interface}", message=message)
-
-
-def _hosts(
-    probe: blueprint.Probe,
-) -> tuple[tuple[str, blueprint.ProbeEndpoint, blueprint.ProbeEndpoint], ...]:
-    """The probe's two hosts, a then b, each with its own endpoint and the far one."""
-    a, b = probe.endpoints
-    return (f"{probe.name}-a", a, b), (f"{probe.name}-b", b, a)
 
 
 def _command(words: Sequence[str], values: Mapping[str, str]) -> str:

@@ -60,7 +60,7 @@
         },
         "allow_restart": {
           "type": "boolean",
-          "description": "Whether the loop may restart or recreate nodes to reach this spec; a change that needs a restart without it is refused before anything is touched (rule step.restart.refused).",
+          "description": "Whether the loop may restart or recreate nodes to reach this spec; a change that needs a restart without it is refused before anything is touched (rule step.restart.required).",
           "default": false
         }
       },
@@ -127,6 +127,11 @@
           "$ref": "#/$defs/run_id",
           "description": "The run the loop is executing for the current generation; absent when idle. The loop appends events to it after a restart."
         },
+        "generation_in_flight": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The generation the run named by run_id works toward; the loop copies it to observed_generation when the run ends, so a spec written meanwhile is observed by the next run"
+        },
         "blueprint_id": {
           "$ref": "bundle-1.schema.json#/$defs/id",
           "description": "The blueprint of the bundle the twin runs; show and the orchestrator read it."
@@ -160,7 +165,7 @@
         },
         "last_step": {
           "$ref": "#/$defs/last_step",
-          "description": "The latest step's outcome; show and the orchestrator's report read it."
+          "description": "The latest step's outcome; on a diverged twin, the step that diverged it, which a later run's refusal or cancel leaves as it is. Show and the orchestrator's report read it."
         }
       },
       "description": "What the reconcile loop last saw: written only by the loop, by compare-and-set; clients read and watch it."
@@ -243,7 +248,7 @@
         },
         "holds": {
           "$ref": "bundle-1.schema.json#/$defs/id",
-          "description": "The bundle whose config the node was last pushed; verify asserts it equals bundle_id, the step's push decides from it. Absent for a probe host and before the first push. Valid only for the recorded incarnation."
+          "description": "The bundle whose config the node was last pushed, or, for a device node whose bundle gives it no configuration, the bundle under which nothing was owed; verify asserts it equals bundle_id for a node with a configuration, the step's push decides from it. Absent for a probe host and before the first push. Valid only for the recorded incarnation."
         },
         "incarnation": {
           "type": "string",
@@ -269,7 +274,8 @@
             "stepped",
             "unchanged",
             "diverged",
-            "cancelled"
+            "cancelled",
+            "rejected"
           ],
           "description": "How the step ended, or running; show and the orchestrator read it."
         },

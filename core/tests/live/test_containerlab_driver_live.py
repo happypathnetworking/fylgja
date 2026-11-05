@@ -159,7 +159,9 @@ def test_2_apply_deploys_the_twin(lab: Lab) -> None:
     print(f"[live] the running lab on the host: {left}")
     assert f"###### CLAB-{TWIN}-START ######" in left["hosts"] and left["ssh_config"] and left["network"]
     directory = lab.driver.root / "containerlab" / TWIN
-    assert sorted(p.name for p in directory.iterdir()) == [f"clab-{TWIN}", "topology.clab.yml"]
+    assert sorted(p.name for p in directory.iterdir()) == [f"clab-{TWIN}", "deploy.log", "topology.clab.yml"]
+    log = (directory / "deploy.log").read_text(errors="replace")  # D-056: the deploy's output, its table last
+    assert "Running postdeploy actions" in log and log.rstrip().endswith("╯"), log[-400:]
 
 
 def test_3_a_repeat_apply_is_a_quick_reconcile_that_restarts_nothing(lab: Lab) -> None:

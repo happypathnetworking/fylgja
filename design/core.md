@@ -668,11 +668,22 @@ which is what the waits of [D-054](decisions.md#d-054) item 14 and
    cancels a step mid-apply and deletes a twin after a kill. Two driver rules came out of that
    tier: a destroy waits for a stray deploy and removes every container of the lab
    ([D-055](decisions.md#d-055)), and the deploy's output goes to a file so that a stray
-   deploy runs to completion ([D-056](decisions.md#d-056)). It left to later phases: the
-   flows beyond one burst per probe, the Docker events trigger, and item 4's leftovers (the
-   eAPI session sweep, the CLI's watch reconnect, and `schemas.formats_dir()`).
+   deploy runs to completion ([D-056](decisions.md#d-056)). It left to phase 6 the trigger
+   that replaces the periodic resync, the CLI's watch reconnect and `schemas.formats_dir()`
+   (item 6), and to later phases the flows beyond one burst per probe and the eAPI session
+   sweep.
 6. **The clabernetes driver**: the object store, the Lease, per-twin namespaces and node
-   access. The driver conformance suite passes on both drivers.
+   access. The driver conformance suite passes on both drivers. It takes up, from phases 4
+   and 5:
+   - `formats/` shipped with the package, so the server and the client run installed outside
+     the tree (`schemas.formats_dir()` resolves it through the repository today);
+   - the CLI's reconnect of a watch the server ends early, the server being remote for the
+     first time;
+   - the trigger that replaces the periodic resync, its shape decided with a pod watch in
+     view beside the Docker events the local driver would use;
+   - a scrubbed environment for every command the local driver runs. Each inherits the
+     server's today, node credentials included; no deploy output read so far held any
+     ([verified-facts.md](verified-facts.md)), and the scrub removes the question.
 7. **Many twins**: concurrent create and step, and admission refused when capacity runs out.
    Several labs on the development host locally, and five twins on a 2–3-node cluster.
 8. **Cut-over**, once phase 5 runs twins locally ([D-005](decisions.md#d-005)):

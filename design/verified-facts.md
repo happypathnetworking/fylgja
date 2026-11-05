@@ -1009,6 +1009,21 @@ k3s's embedded network policy controller (kube-router v2.6.3); MetalLB 0.16.0 in
 the LAN; clabernetes 0.10.1 at its default requests (200m CPU, 512 Mi). Five twins: three
 three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
 
+- **The cluster stands as recorded, with nothing left on it.** *(2026-11-05)* Read before
+  phase 6, through its kubeconfig and one node's shell:
+  - three nodes `Ready` as `control-plane,etcd` on k3s v1.37.1+k3s1 and containerd
+    2.3.4-k3s1, up 2 days 5 h, each with 8 CPU and 23.5 GiB allocatable and no disk pressure;
+  - clabernetes 0.10.1 deployed by its chart in the namespace `c9s`, its manager 3 of 3 and
+    its planner pool 4 of 4; MetalLB's controller at v0.16.0, with one pool and one L2
+    advertisement;
+  - no `Topology`, `Link` or `Node` object (`c9s.run/v1alpha1`), one `Config`, no namespace
+    beyond the system's, `c9s` and `metallb-system`, and no LoadBalancer Service;
+  - use by `kubectl top`: 145–231m CPU and 0.98–1.66 GiB a node;
+  - both images cached on every node: SR Linux by digest from ghcr, cEOS 4.32.0.2F from the
+    private registry, which answers 401 without credentials on its TLS port;
+  - on the node read, k3s's config holds the two relaxed etcd timings and
+    `registries.yaml` the registry's `ca_file`.
+
 - **etcd on spinning disks shared by the hosts** loses its leader when the three hosts
   unpack a 5.2 GB image at once. Applies took 5 s against an expected 100 ms, and k3s
   restarted on two servers, cancelling the pulls. With `etcd-arg` `heartbeat-interval=500`

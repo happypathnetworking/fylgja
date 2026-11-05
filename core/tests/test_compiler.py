@@ -55,6 +55,7 @@ def test_the_nodes_and_configurations_are_the_go_compilers(name: str) -> None:
     c, f = compiled(name), facts(name)
     assert [(n.name, n.platform) for n in c.manifest.nodes] == [(n["name"], n["platform_package"]) for n in f["nodes"]]
     for node, fact in zip(c.manifest.nodes, f["nodes"], strict=True):
+        assert node.config is not None, "every device of the four Go fixtures carries a configuration"
         data = c.files[node.config.file]
         assert node.config.file == f"configs/{node.name}.cfg"
         assert node.config.sha256 == fact["config"]["sha256"] == hashlib.sha256(data).hexdigest()
@@ -227,6 +228,34 @@ def test_a_refusal_names_what_is_loaded_and_what_links() -> None:
         compiler.compile(bp, PLATFORMS, PROBES)
     (finding,) = caught.value.findings
     assert "two ports" in finding.message and "endpoint a" not in finding.message
+
+
+def test_a_device_with_no_configuration_compiles_to_a_node_with_no_file() -> None:
+    c = compiled("three-node-unmanaged")
+    nodes = {n.name: n for n in c.manifest.nodes}
+    assert len(nodes) == 3
+    assert nodes["n2"].config is None
+    assert nodes["n1"].config is not None
+    assert "configs/n2.cfg" not in c.files and "configs/n1.cfg" in c.files
+    assert c.id != compiled("three-node").id
+    assert bundle.validate(documents.encode(c.manifest)) == []
+
+
+def test_a_blueprint_whose_every_device_lacks_a_configuration_compiles_to_a_manifest_alone() -> None:
+    doc = json.loads((FIXTURES / "three-node-unmanaged.json").read_text())
+    for device in doc["network"]["devices"]:
+        device.pop("config", None)
+    c = compiler.compile(blueprint.decode(doc), PLATFORMS, PROBES)
+    assert set(c.files) == {"manifest.json"}
+    assert all(n.config is None for n in c.manifest.nodes)
+
+
+def test_a_blank_configuration_is_still_refused() -> None:
+    doc = json.loads((FIXTURES / "three-node-unmanaged.json").read_text())
+    doc["network"]["devices"][1]["config"] = "  \n"
+    with pytest.raises(compiler.Uncompilable) as caught:
+        compiler.compile(blueprint.decode(doc), PLATFORMS, PROBES)
+    assert [f.rule for f in caught.value.findings] == [compiler.RULE_CONFIG]
 
 
 def with_interface(name: str, device: int, interface: dict[str, Any]) -> blueprint.Blueprint:

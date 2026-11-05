@@ -32,12 +32,12 @@ the action of every write to a twin, so that every change is attributable
 doubling from 1 s to a 60 s ceiling, reset by a pass that completes
 ([D-023](../design/decisions.md#d-023)).
 
-**Blueprint** — The core's one input: the network (devices, interfaces, links, each
-device's rendered configuration) and the probes declared beside it, with an opaque *source
-envelope* ([`blueprint-1.schema.json`](../formats/blueprint-1.schema.json),
-[D-006](../design/decisions.md#d-006), [D-006](../design/decisions.md#d-006)). A *producer* (the orchestrator, or
-a hand-written file) writes it; the core files it by id, compiles it and returns it
-unchanged. It was earlier called a *snapshot*.
+**Blueprint** — The core's one input: the network (devices, interfaces, links, each device's
+rendered configuration, where it has one) and the probes declared beside it, with an opaque
+*source envelope* ([`blueprint-1.schema.json`](../formats/blueprint-1.schema.json),
+[D-006](../design/decisions.md#d-006), [D-006](../design/decisions.md#d-006)). A *producer*
+(the orchestrator, or a hand-written file) writes it; the core files it by id, compiles it
+and returns it unchanged. It was earlier called a *snapshot*.
 
 **Blueprint id** — The lowercase-hex SHA-256 of the RFC 8785 (JCS) canonical JSON of
 `{network, probes}` alone, so the same topology read from two branches has one id. Every
@@ -46,12 +46,15 @@ list must arrive sorted and unique; the core rejects one that is not
 
 **Bundle** — What the compiler makes of one blueprint and the loaded packages: a
 `manifest.json` (nodes, *mapping rows*, links, placed probes, the blueprint id) and one
-`configs/<node>.cfg` per node ([`bundle-1.schema.json`](../formats/bundle-1.schema.json)).
+`configs/<node>.cfg` per node that carries a configuration
+([`bundle-1.schema.json`](../formats/bundle-1.schema.json)).
 It is runtime-neutral and holds nothing that belongs to one twin, so one bundle can back
 many twins on any driver ([D-011](../design/decisions.md#d-011)). Its id hashes its files.
 
-**Burst** — A probe's verdict in *verify*: a fixed count of echoes from one probe host to
-the other, held when every reply comes back ([D-008](../design/decisions.md#d-008)).
+**Burst** — A probe's verdict in *verify*: a fixed count of echoes from each probe host
+toward the other's address, both ends in turn, run inside the host by the driver's `exec`;
+each direction is held when every reply comes back ([D-008](../design/decisions.md#d-008),
+[D-051](../design/decisions.md#d-051)).
 
 **`capabilities`** — The driver call that says what a driver can do: provision nodes or
 claim them, change links on a running twin, forward in software or hardware, reach nodes
@@ -97,11 +100,18 @@ gets the same id.
 
 **Dry run** — A `PUT` of a twin's spec with `dry_run=true`: admission and the driver's
 `plan` run and answer what would happen, and nothing is written
-([D-025](../design/decisions.md#d-025)).
+([D-025](../design/decisions.md#d-025)). On a twin that runs it is a step's: admission keeps the
+allocation the twin holds, the driver's `changes` say what the step would do to each node and
+link, and the verdict is rejected where the step would be refused
+([D-050](../design/decisions.md#d-050)).
 
-**Diverged** — A twin whose step failed or was cancelled after touching it, left part on its
-old bundle and part on its new one. It can be shown, verified and destroyed
-([D-029](../design/decisions.md#d-029)).
+**Diverged** — A twin whose step failed or was cancelled after its apply began, left as it
+stands: part on its old bundle and part on its new one, so no bundle describes it. Its
+`Diverged` condition is True, `last_step` says `diverged`, and the run's verdict is `diverged`,
+its finding (`step.diverged`, or `step.node.silent` for a node silent on a resume) naming the
+phase and what each node holds. Nothing is torn down or rolled back; it can be shown, verified
+and destroyed, and accepts only deletion ([D-029](../design/decisions.md#d-029),
+[D-050](../design/decisions.md#d-050)).
 
 **Driver** — The code that runs twins on one runtime behind the *driver seam*: local
 `containerlab`, `clabernetes`, and `hardware` later ([D-017](../design/decisions.md#d-017),
@@ -111,8 +121,9 @@ old bundle and part on its new one. It can be shown, verified and destroyed
 names a runtime: it lists the drivers the core serves, makes one by name, and answers a
 driver's capabilities ([D-046](../design/decisions.md#d-046)).
 
-**Driver seam** — The seven calls every driver implements: `capabilities`, `admit`, `plan`,
-`apply`, `inspect`, `destroy` and `endpoints`. Each is idempotent.
+**Driver seam** — The nine calls every driver implements: `capabilities`, `admit`, `plan`,
+`changes`, `apply`, `inspect`, `destroy`, `endpoints` and `exec`. Each but `exec` is
+idempotent.
 
 **`endpoints`** — The driver call that returns each node's management address. The push,
 readiness, verify and flows dial it, whatever the runtime.
@@ -299,9 +310,18 @@ the running blueprint, bundle and deployment, the nodes, the last step and the o
 generation ([D-025](../design/decisions.md#d-025)).
 
 **Step** — Taking a running twin to another blueprint or bundle without a rebuild, asked for
-by writing a new *spec*: diff the two bundles (nodes, links, probes), re-cable where the
-kind allows, replace each changed node, then wait for the twin to settle. A step that would
-restart a node needs `allow_restart` in the spec.
+by writing a new *spec* (`fylgja-core twin step`, which waits for its run; with `--dry-run`, it
+prints what the step would change). It is a run of the create's phases and two more
+([D-050](../design/decisions.md#d-050)): the new bundle compiled, admitted over the allocation
+the twin holds, planned, and the driver asked what changes; then, before anything is touched,
+refused where it must be (a *diverged* twin, a change the driver cannot make, a node it would
+restart or recreate without `allow_restart` in the spec); then applied over the running lab,
+re-cabling where the kind allows and replacing each node that must be, each node that changed
+readied and pushed, and verify waited for until it holds or `FYLGJA_STEP_WAIT_S` runs out
+(`verified`), and each probe's flow recorded not started (`flows`). It ends stepped, or
+unchanged when the bundle is the twin's; refused, or cancelled before its apply began, with the
+twin running what it ran; or *diverged*, when it fails or is cancelled from its apply on: a
+step is never rolled back ([D-029](../design/decisions.md#d-029)).
 
 **Thin CLI** — `fylgja-core`, a client of API 1 like any other. It renders documents as
 text and exits 0 for ok, 1 for a negative verdict, 2 for a problem, a transport failure or
@@ -329,6 +349,10 @@ and *revision*, changed only by compare-and-set
 Crockford base32), made in the core, which every run carries
 ([D-040](../design/decisions.md#d-040)).
 
+**Unmanaged** — A device node whose bundle gives it no configuration (the CLI prints the word).
+The core pushes nothing to it and compares nothing of its configuration, and it runs its
+kind's baseline ([D-048](../design/decisions.md#d-048)).
+
 **Verdict** — A findings document: what a compile, a package validation, a plan, a run or a
 verification concluded, with a status and every finding behind it
 ([`findings-1.schema.json`](../formats/findings-1.schema.json)).
@@ -336,9 +360,12 @@ verification concluded, with a status and every finding behind it
 **Verified fact** — External behaviour checked on the running system, with its version
 and date ([verified-facts.md](../design/verified-facts.md)).
 
-**Verify** — Reading a running twin against its bundle: each node's host name, each linked
-port's state, each link's LLDP neighbours, and each probe's *burst*. It changes nothing; a
-waiting verify runs only inside a step.
+**Verify** — Reading a running twin against its bundle: each node's host name, asserted
+against its device name for a node with no configuration and otherwise read and reported;
+each linked port's state; each link's LLDP neighbour at both ends, judged against the far
+node's read host name; the record's claim; and each probe's *burst*
+([D-051](../design/decisions.md#d-051)). A node it cannot read ends the verdict `failed`,
+never `nonconforming`. It changes nothing; a waiting verify runs only inside a step.
 
 **Watch** — A `GET` of one twin or every twin with `watch=true`, answered as server-sent
 events: one per change, each carrying the whole record. A client that reconnects with the

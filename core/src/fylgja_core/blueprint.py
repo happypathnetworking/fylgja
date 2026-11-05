@@ -1,7 +1,7 @@
 """Blueprint 1: the core's one input (formats/blueprint-1.schema.json, D-006).
 
-A blueprint is the network (devices, interfaces, links, each device's rendered config) and
-its probes. Its id is the SHA-256 of the RFC 8785 (JCS) canonical form of
+A blueprint is the network (devices, interfaces, links, each device's rendered config, which is
+optional: absent means unmanaged, D-048) and its probes. Its id is the SHA-256 of the RFC 8785 (JCS) canonical form of
 {"network": ..., "probes": ...}; `blueprint_version` and the opaque `source` are not hashed.
 Every list in the hashed body arrives sorted and unique, and the core never sorts on a
 client's behalf.
@@ -49,12 +49,12 @@ class Interface:
 
 @dataclass(frozen=True, kw_only=True)
 class Device:
-    """One device in scope, with the configuration its source rendered."""
+    """One device in scope, with the configuration its source rendered, if any (absent: unmanaged, D-048)."""
 
     name: str
     platform: str
     interfaces: tuple[Interface, ...]
-    config: str
+    config: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -254,3 +254,9 @@ def probe_problems(probes: list[dict[str, Any]], pointer: str, gateway_rule: str
                 found.append(Problem(f"{where}/address", address_rule, f"{address.ip} is another host's"))
             hosts.add(address.ip)
     return found
+
+
+def hosts(probe: Probe) -> tuple[tuple[str, ProbeEndpoint, ProbeEndpoint], ...]:
+    """The probe's two hosts, a then b, each with its own endpoint and the far one."""
+    a, b = probe.endpoints
+    return (f"{probe.name}-a", a, b), (f"{probe.name}-b", b, a)

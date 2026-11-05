@@ -4,6 +4,7 @@ encodes to a document the schema accepts and reads back."""
 from __future__ import annotations
 
 import copy
+import dataclasses
 from typing import Any
 
 import pytest
@@ -100,3 +101,20 @@ def test_an_empty_allocation_is_a_schema_fault() -> None:
     bad = doc()
     bad["status"]["allocation"] = {}
     assert {p.pointer for p in twin_record.validate(bad)} == {"/status/allocation"}
+
+
+def test_a_rejected_step_and_the_generation_in_flight_validate_and_round_trip() -> None:
+    record = dataclasses.replace(RECORD, status=dataclasses.replace(
+        RECORD.status, generation_in_flight=2, run_id=RUN,
+        last_step=LastStep(outcome="rejected", from_=ID_B, to=ID_C, phase="planned", run_id=RUN)))
+    encoded = documents.encode(record)
+    assert twin_record.validate(encoded) == []
+    assert encoded["status"]["generation_in_flight"] == 2
+    assert encoded["status"]["last_step"]["outcome"] == "rejected"
+    assert twin_record.decode(copy.deepcopy(encoded)) == record
+
+
+def test_the_generation_in_flight_is_one_or_more() -> None:
+    d = doc()
+    d["status"]["generation_in_flight"] = 0
+    assert twin_record.validate(d) != []

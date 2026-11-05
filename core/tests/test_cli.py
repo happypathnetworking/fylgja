@@ -25,19 +25,26 @@ from fake_api import (
     DESTROY_RUN_ID,
     ENDED_AT,
     EVENTS,
+    MANIFEST,
+    NOT_HELD,
     PUSH_REFUSED,
+    RESTART_REQUIRED,
     RUN_ID,
+    STEP_TO,
     TOKEN,
     TWIN,
     VERSION,
     FakeAPI,
     check_component,
     event_stream,
+    last_step,
     ok,
     record,
     refuse,
     run,
+    step_plan,
     unreachable,
+    verification,
     watch,
 )
 
@@ -52,6 +59,7 @@ READY = record(4, 1, 1, phase="pushed", ready=("True", None), nodes=True)
 TWIN_TEXT = [
     "twin three-node: generation 1, observed 1",
     "Ready: True",
+    "Stepping: False",
     "phase: pushed",
     f"bundle: {BUNDLE_ID}",
     "nodes:",
@@ -179,10 +187,14 @@ def test_an_address_and_a_token_are_both_refused_in_one_pass(
         ["bogus", "list"],
         ["twin", "create", TWIN],
         ["twin", "create", TWIN, "--blueprint", "bp.json", "--bundle", BUNDLE_ID],
+        ["twin", "step", TWIN],
+        ["twin", "step", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab"],
+        ["twin", "step", TWIN, "--bundle", BUNDLE_ID, "--dry-run", "--no-wait"],
         ["run", "watch"],
         ["twin", "show", TWIN, "--frobnicate"],
     ],
-    ids=["nothing", "no-verb", "no-such-noun", "no-source", "two-sources", "no-id", "unknown-option"],
+    ids=["nothing", "no-verb", "no-such-noun", "no-source", "two-sources", "step-no-source", "step-driver",
+         "step-dry-run-no-wait", "no-id", "unknown-option"],
 )
 def test_a_usage_error_exits_2_with_the_usage(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
     api = FakeAPI()
@@ -274,6 +286,7 @@ def test_twin_show_names_the_ready_reason_the_run_and_a_deletion(capsys: pytest.
         "twin three-node: generation 2, observed 1",
         f"deletion requested at {ENDED_AT}",
         "Ready: False (readiness.timeout)",
+        "Stepping: False",
         "phase: none",
         "bundle: none",
         f"run: {DESTROY_RUN_ID}",
@@ -453,6 +466,166 @@ def test_a_blueprint_file_that_cannot_be_read_exits_2(capsys: pytest.CaptureFixt
     assert r.code == 2 and r.err.startswith(f"{garbage} is not a document: ")
 
 
+# twin step.
+
+STEPPED = record(9, 2, 2, phase="flows", ready=("True", "twin.ready"), nodes=True, last_step=last_step())
+STEP_LINE = f"last step: stepped {BUNDLE_ID[:12]} -> {STEP_TO[:12]} at flows"
+
+
+def stepping(api: FakeAPI, *records: dict[str, Any], status: str = "ok") -> FakeAPI:
+    """A step of the three-node twin: the record its new spec answered, its watch, and its step run."""
+    found = [PUSH_REFUSED] if status != "ok" else []
+    return (
+        api.on("PUT", TWIN_PATH, ok(record(5, 2, 1, phase="pushed", ready=("True", "twin.ready"), nodes=True),
+                                    headers={"ETag": '"5"'}))
+        .on("GET", TWIN_PATH, watch(*records))
+        .on("GET", RUN_PATH, ok(run("step", status=status, findings=found)))
+    )
+
+
+def test_twin_step_files_the_blueprint_writes_the_spec_of_a_twin_that_exists_and_waits(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    api = FakeAPI()
+    api.on("POST", "/v1/blueprints", ok({"id": BLUEPRINT_ID}))
+    running = record(6, 2, 1, phase="pushed", ready=("False", "twin.stepping"), nodes=True, run_id=RUN_ID,
+                     last_step=last_step("running", "planned"))
+    stepping(api, running, record(7, 2, 1, phase="applied", ready=("False", "twin.stepping"), nodes=True,
+                                  run_id=RUN_ID, last_step=last_step("running", "applied")),
+             record(8, 2, 1, phase="flows", ready=("False", "twin.stepping"), nodes=True, run_id=RUN_ID,
+                    last_step=last_step("running", "flows")), STEPPED)
+    r = fylgja(capsys, api, "twin", "step", TWIN, "--blueprint", str(BLUEPRINT_FILE))
+    assert r.code == 0
+    assert api.calls() == ["POST /v1/blueprints", f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {RUN_PATH}"]
+    put = api.last("PUT", TWIN_PATH)
+    # A partial spec with no driver, of a twin that exists: If-Match * refuses to create one.
+    assert put.headers["if-match"] == "*" and "if-none-match" not in put.headers
+    assert json.loads(put.content) == {"spec": {"blueprint_id": BLUEPRINT_ID}}
+    assert put.url.params.multi_items() == []
+    assert api.last("GET", TWIN_PATH).url.params.multi_items() == [("watch", "true"), ("since_revision", "5")]
+    assert r.lines() == [
+        "twin three-node: generation 2, observed 2",
+        "Ready: True (twin.ready)",
+        "Stepping: False",
+        "phase: flows",
+        f"bundle: {BUNDLE_ID}",
+        STEP_LINE,
+        "nodes:",
+        "  n1 172.20.1.11",
+        "  n2 172.20.1.12 via bastion.example",
+        "  n3 no address yet",
+        f"run {RUN_ID}: step of twin three-node, ended",
+        f"asked by alice at {AT}, ended at {ENDED_AT}",
+        "verdict: ok",
+    ]
+    # Until applied a step records its phases in last_step alone, the record's phase still the running twin's; the
+    # record that settles the run prints no phase.
+    assert r.err.splitlines() == ["three-node: planned", "three-node: applied", "three-node: flows"]
+
+
+@pytest.mark.parametrize(("status", "code"), [("ok", 0), ("rejected", 1), ("failed", 1), ("diverged", 3)])
+def test_twin_steps_exit_code_is_its_runs_verdict(capsys: pytest.CaptureFixture[str], status: str, code: int) -> None:
+    if status == "rejected":  # refused after planned: the record never moved past the running twin's phase
+        running = record(6, 2, 1, phase="flows", ready=("False", "twin.stepping"), nodes=True, run_id=RUN_ID,
+                         last_step=last_step("running", "planned"))
+        ended = record(9, 2, 2, phase="flows", ready=("False", "step.restart.required"), nodes=True,
+                       last_step=last_step("rejected", "planned"))
+    else:
+        running = record(6, 2, 1, phase="applied", ready=("False", "twin.stepping"), nodes=True, run_id=RUN_ID,
+                         last_step=last_step("running", "applied"))
+        ended = record(9, 2, 2, phase="pushed", ready=("False", "step.diverged"), nodes=True,
+                       diverged="step.diverged", last_step=last_step("diverged", "applied"))
+    api = stepping(FakeAPI(), running, ended, status=status)
+    r = fylgja(capsys, api, "twin", "step", TWIN, "--bundle", STEP_TO, "--allow-restart")
+    assert r.code == code
+    assert json.loads(api.last("PUT", TWIN_PATH).content) == {"spec": {"bundle_id": STEP_TO, "allow_restart": True}}
+    assert r.lines()[-1 if status == "ok" else -2] == f"verdict: {status}"
+    if status == "rejected":
+        assert r.lines()[1:3] == ["Ready: False (step.restart.required)", "Stepping: False"]
+        assert f"last step: rejected {BUNDLE_ID[:12]} -> {STEP_TO[:12]} at planned" in r.lines()
+        # The settling record's phase is the running twin's, `flows`, which this run never reached: no line says it.
+        assert r.err.splitlines() == ["three-node: planned"]
+        return
+    assert r.lines()[1:4] == ["Ready: False (step.diverged)", "Stepping: False", "Diverged: True (step.diverged)"]
+    assert f"last step: diverged {BUNDLE_ID[:12]} -> {STEP_TO[:12]} at applied" in r.lines()
+    assert r.err.splitlines() == ["three-node: applied"]
+
+
+def test_twin_step_waits_for_the_create_a_twin_whose_create_never_applied_runs_again(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    api = stepping(FakeAPI(), record(8, 2, 2, phase="pushed", ready=("True", "twin.ready"), nodes=True))
+    api.on("GET", "/v1/runs", ok({"runs": [run(), run("destroy", run_id=DESTROY_RUN_ID)]}))
+    r = fylgja(capsys, api, "twin", "step", TWIN, "--bundle", BUNDLE_ID)
+    assert r.code == 0 and f"run {RUN_ID}: create of twin three-node, ended" in r.lines()
+    assert api.calls() == [f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}", "GET /v1/runs"]
+
+
+def test_twin_step_of_the_spec_the_twin_has_starts_no_run_and_waits_for_none(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    api = FakeAPI().on("PUT", TWIN_PATH, ok(STEPPED, headers={"ETag": '"9"'}))
+    r = fylgja(capsys, api, "twin", "step", TWIN, "--bundle", STEP_TO)
+    assert (r.code, r.lines()[-1]) == (0, "the twin's spec is this already: no run started")
+    assert STEP_LINE in r.lines() and api.calls() == [f"PUT {TWIN_PATH}"]
+
+
+def test_twin_step_no_wait_writes_the_spec_and_prints_the_record(capsys: pytest.CaptureFixture[str]) -> None:
+    api = stepping(FakeAPI(), STEPPED)
+    r = fylgja(capsys, api, "--json", "twin", "step", TWIN, "--bundle", STEP_TO, "--no-wait")
+    assert (r.code, r.json()["generation"]) == (0, 2)
+    assert api.calls() == [f"PUT {TWIN_PATH}"]
+
+
+@pytest.mark.parametrize(("status", "code"), [("ok", 0), ("rejected", 1)])
+def test_twin_step_dry_run_prints_the_plan_and_each_change_and_exits_by_its_verdict(
+    capsys: pytest.CaptureFixture[str], status: str, code: int
+) -> None:
+    api = FakeAPI().on("PUT", TWIN_PATH, ok(step_plan(status)))
+    r = fylgja(capsys, api, "twin", "step", TWIN, "--bundle", STEP_TO, "--dry-run")
+    assert r.code == code
+    assert api.calls() == [f"PUT {TWIN_PATH}"]
+    put = api.last("PUT", TWIN_PATH)
+    assert put.url.params.multi_items() == [("dry_run", "true")] and put.headers["if-match"] == "*"
+    found = [f"  error step.restart.required n3: {RESTART_REQUIRED['message']}"] if status != "ok" else []
+    assert r.lines() == [
+        f"deployment: {step_plan()['deployment']['id']}",
+        f"verdict: {status}",
+        *found,
+        "changes:",
+        "  n1: kept",
+        "  n2: recabled (links)",
+        "  n3: recreated (image, links)",
+        "  link added: n2:e1-2 -- n3:eth1",
+        "  link removed: n2:e1-2 -- n3:e1-1",
+    ]
+    r = fylgja(capsys, api, "--json", "twin", "step", TWIN, "--bundle", STEP_TO, "--dry-run")
+    assert (r.code, r.json()) == (code, step_plan(status))
+
+
+def test_twin_step_of_a_diverged_twin_is_the_servers_refusal(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("PUT", TWIN_PATH, refuse(409, "twin.diverged",
+                                                "Twin three-node is diverged; it accepts only deletion."))
+    r = fylgja(capsys, api, "twin", "step", TWIN, "--bundle", STEP_TO)
+    assert (r.code, r.err) == (2, "409 twin.diverged: Twin three-node is diverged; it accepts only deletion.\n")
+
+
+def test_twin_show_names_a_diverged_twins_conditions_and_its_last_step(capsys: pytest.CaptureFixture[str]) -> None:
+    doc = record(9, 2, 2, ready=("False", "step.diverged"), diverged="step.diverged",
+                 last_step=last_step("diverged", "pushed"))
+    api = FakeAPI().on("GET", TWIN_PATH, ok(doc, headers={"ETag": '"9"'}))
+    assert fylgja(capsys, api, "twin", "show", TWIN).lines() == [
+        "twin three-node: generation 2, observed 2",
+        "Ready: False (step.diverged)",
+        "Stepping: False",
+        "Diverged: True (step.diverged)",
+        "phase: none",
+        "bundle: none",
+        f"last step: diverged {BUNDLE_ID[:12]} -> {STEP_TO[:12]} at pushed",
+        "nodes: none",
+    ]
+
+
 # twin destroy.
 
 
@@ -509,6 +682,7 @@ def test_twin_destroy_whose_teardown_kept_the_record_shows_it_and_does_not_say_d
         "twin three-node: generation 2, observed 2",
         f"deletion requested at {ENDED_AT}",
         "Ready: False (destroy.failed)",
+        "Stepping: False",
         "phase: none",
         "bundle: none",
         f"run: {DESTROY_RUN_ID}",
@@ -661,3 +835,95 @@ def test_bundle_get_renders_the_manifest(capsys: pytest.CaptureFixture[str]) -> 
     r = fylgja(capsys, api, "bundle", "get", BUNDLE_ID, "--json")
     assert (r.code, r.json()) == (0, BUNDLE)
     assert list(schemas.validator("bundle-1").iter_errors(r.json()["manifest"])) == []
+
+
+def _diff(**changes: Any) -> dict[str, Any]:
+    doc: dict[str, Any] = {"from": BUNDLE_ID, "to": "b" * 64, "unchanged": False,
+                           "nodes": {"added": [], "removed": [], "changed": []},
+                           "links": {"added": [], "removed": []}, "probes": {"added": [], "removed": []}}
+    for key, value in changes.items():
+        doc[key] = {**doc[key], **value} if isinstance(value, dict) else value
+    return doc
+
+
+def test_bundle_diff_of_an_unchanged_pair_says_so(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}/diff/{'b' * 64}", ok(_diff(unchanged=True)))
+    r = fylgja(capsys, api, "bundle", "diff", BUNDLE_ID, "b" * 64)
+    assert (r.code, r.lines()) == (0, [f"diff {BUNDLE_ID} -> {'b' * 64}: unchanged"])
+
+
+def test_bundle_diff_of_a_changed_pair_lists_each_change(capsys: pytest.CaptureFixture[str]) -> None:
+    link = {"a": {"device": "n1", "interface": "ethernet-1/1"}, "b": {"device": "n2", "interface": "ethernet-1/1"}}
+    other = {"a": {"device": "n2", "interface": "ethernet-1/2"}, "b": {"device": "n3", "interface": "ethernet-1/1"}}
+    doc = _diff(nodes={"added": ["n4"], "removed": ["n3", "n5"],
+                       "changed": [{"node": "n1", "reasons": ["mapping", "config"]}]},
+                links={"added": [link], "removed": [link, other]},
+                probes={"added": ["p1"], "removed": ["p2"]})
+    api = FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}/diff/{'b' * 64}", ok(doc))
+    r = fylgja(capsys, api, "bundle", "diff", BUNDLE_ID, "b" * 64)
+    assert (r.code, r.lines()) == (0, [
+        f"diff {BUNDLE_ID} -> {'b' * 64}",
+        "nodes added: n4",
+        "nodes removed: n3, n5",
+        "node n1 changed: mapping, config",
+        "links added: n1:ethernet-1/1 -- n2:ethernet-1/1",
+        "links removed: n1:ethernet-1/1 -- n2:ethernet-1/1",
+        "links removed: n2:ethernet-1/2 -- n3:ethernet-1/1",
+        "probes added: p1",
+        "probes removed: p2",
+    ])
+    r = fylgja(capsys, api, "--json", "bundle", "diff", BUNDLE_ID, "b" * 64)
+    assert (r.code, r.json()) == (0, doc)
+
+
+def test_bundle_get_names_the_nodes_that_carry_no_configuration(capsys: pytest.CaptureFixture[str]) -> None:
+    nodes = [{k: v for k, v in n.items() if k != "config"} if n["name"] == "n2" else n
+             for n in MANIFEST["nodes"]]
+    doc = {"id": BUNDLE_ID, "manifest": {**MANIFEST, "nodes": nodes}}
+    api = FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}", ok(doc))
+    r = fylgja(capsys, api, "bundle", "get", BUNDLE_ID)
+    assert (r.code, r.lines()) == (0, [
+        f"bundle {BUNDLE_ID}",
+        f"blueprint: {BLUEPRINT_ID}",
+        "nodes: n1 (nokia_srlinux), n2 (nokia_srlinux), n3 (nokia_srlinux)",
+        "unmanaged: n2",
+        "links: 3, probes: 0",
+    ])
+    api = FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}", ok(BUNDLE))
+    r = fylgja(capsys, api, "bundle", "get", BUNDLE_ID)
+    assert not any(line.startswith("unmanaged") for line in r.lines())
+
+
+# twin verify.
+
+
+def test_twin_verify_ok_prints_the_counts_and_exits_0(capsys: pytest.CaptureFixture[str]) -> None:
+    doc = verification("ok", counts=(7, 0, 0))
+    api = FakeAPI().on("POST", f"{TWIN_PATH}/verifications", ok(doc))
+    r = fylgja(capsys, api, "twin", "verify", TWIN)
+    assert (r.code, r.err, r.lines()) == (0, "", ["verdict: ok", "  held 7, failed 0, skipped 0"])
+    assert api.calls() == [f"POST {TWIN_PATH}/verifications"]
+    assert fylgja(capsys, api, "twin", "verify", TWIN, "--json").json() == doc
+
+
+def test_twin_verify_nonconforming_prints_the_findings_and_exits_1(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("POST", f"{TWIN_PATH}/verifications",
+                       ok(verification("nonconforming", [NOT_HELD], (6, 1, 0))))
+    r = fylgja(capsys, api, "twin", "verify", TWIN)
+    assert (r.code, r.err) == (1, "")
+    assert r.lines()[:2] == ["verdict: nonconforming", "  held 6, failed 1, skipped 0"]
+    assert "verify.host_name" in r.lines()[2] and "n1" in r.lines()[2] and len(r.lines()) == 3
+
+
+def test_twin_verify_failed_exits_1(capsys: pytest.CaptureFixture[str]) -> None:
+    unread = {"rule": "verify.node.unread", "severity": "error", "object": "n1", "message": "No answer from n1."}
+    api = FakeAPI().on("POST", f"{TWIN_PATH}/verifications", ok(verification("failed", [unread], (5, 1, 1))))
+    r = fylgja(capsys, api, "twin", "verify", TWIN)
+    assert (r.code, r.lines()[0]) == (1, "verdict: failed")
+
+
+def test_twin_verify_of_a_twin_not_running_is_a_problem_exit_2(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("POST", f"{TWIN_PATH}/verifications",
+                       refuse(409, "twin.not_running", f"Twin {TWIN} has no applied deployment to read."))
+    assert fylgja(capsys, api, "twin", "verify", TWIN) == Result(
+        2, "", f"409 twin.not_running: Twin {TWIN} has no applied deployment to read.\n")

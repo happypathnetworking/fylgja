@@ -71,6 +71,15 @@ already have been weighed.
 | [D-045](#d-045) | The driver's plan refuses a runtime port two cabled interfaces share | The compiler and the bundle |
 | [D-046](#d-046) | The driver registry is the one module above the seam that names a runtime | Runtimes and drivers |
 | [D-047](#d-047) | A refusal `commit validate` passes names both its possible causes in one sentence | Pushing, stepping and verifying |
+| [D-048](#d-048) | Configuration is optional in a blueprint, and an absent configuration is unmanaged | Intent and the blueprint |
+| [D-049](#d-049) | The seam grows for the step: `changes`, `exec`, and the allocation `admit` keeps | Runtimes and drivers |
+| [D-050](#d-050) | A step runs the create's phases, refuses before it touches, and resumes under the create's rules | The reconcile loop and state |
+| [D-051](#d-051) | Verify reads both ends of a link, a node it cannot read fails the verdict, and phase 5 runs the burst and not the flow | Pushing, stepping and verifying |
+| [D-052](#d-052) | Phase 5's library: pygnmi for the gNMI reader | Pushing, stepping and verifying |
+| [D-053](#d-053) | Verify judges a neighbour's port by the far port's node name, and three refinements of D-051 | Pushing, stepping and verifying |
+| [D-054](#d-054) | The step as built: its dispatch, its record before `applied`, the spec it answers to, and its endings | Pushing, stepping and verifying |
+| [D-055](#d-055) | The local driver's destroy waits for a stray deploy and removes every container of the lab | Runtimes and drivers |
+| [D-056](#d-056) | A deploy's output goes to a file in the twin's directory, so a stray deploy runs to completion | Runtimes and drivers |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -501,6 +510,62 @@ measurements is the wrong ground for probes.
 
 - The core holds no timer of its own over intent.
 - A producer that follows a branch does so outside the core: read, compare, step.
+<a id="d-048"></a>
+### D-048 — Configuration is optional in a blueprint, and an absent configuration is unmanaged
+
+**Status:** Accepted 2026-11-04. Supersedes [D-038](#d-038) in part: `config.missing` narrows
+to a configuration that is present and blank. Details [D-007](#d-007).
+
+#### Context
+
+Blueprint 1 requires a non-empty `config` on every device, the compiler refuses a blank one
+(`config.missing`), and bundle 1 gives every node a configuration file and its checksum, which
+the push sends and verify's claim relies on. Phase 5's step is a layer-1 step, on links and
+nodes; configuration management in production is the orchestrator's, and a source may hold no
+rendered configuration for a device, or no templates at all. Both kinds' baselines already
+hold the host name, linked ports enabled, LLDP and gNMI ([D-015](#d-015)), so a node with no
+configuration is a working layer-1 node.
+
+#### Options considered
+
+- **Keep `config` required.** Rejected: a source with no templates gets no twin, and a
+  layer-1 rehearsal must carry configuration it does not care about.
+- **An empty string means none.** Rejected: absent is the way to say none, and a blank
+  configuration stays a mistake worth refusing.
+- **Absent means the baseline**: a step from a configuration to none pushes an empty replace,
+  which by [D-027](#d-027) resets the node to the kind's baseline. Rejected: a disruptive
+  push to remove what the core is told not to manage.
+- **Absent means unmanaged**: the core neither pushes nor compares that node's configuration.
+  Chosen.
+
+#### Decision
+
+- Blueprint 1 drops `config` from a device's required members; a present `config` is still a
+  non-empty string. Bundle 1 makes a node's `config` optional, and a node without one has no
+  file under `configs/`. The compiler files `config.missing` only for a configuration that is
+  present and blank.
+- **The push passes over a node with no configuration**, emitting a `skipped` event for it,
+  and marks it as holding the bundle, so the step's re-push decision and verify's bookkeeping
+  stay as they are. Readiness still waits for every device node: verify needs a booted node,
+  and the push transport answering is the measured signal that it has booted.
+- **Verify makes no claim of such a node**: the claim assertion is a skip, an info finding.
+- **A step from a configuration to none pushes nothing.** The node keeps what it holds,
+  which after a restart or recreate is the kind's baseline. The bundle diff reports the
+  change under the reason `config`, which covers a checksum moved and a configuration present
+  on one side alone.
+- Twin record 1's `holds` says what it means for such a node: nothing owed under the bundle,
+  not pushed.
+
+#### Consequences
+
+- A blueprint with no configuration is a complete layer-1 twin, and a producer can build one
+  from topology alone, with no rendered artifact.
+- A twin may mix nodes with and without configuration.
+- The open question of a cEOS node with no data link refusing `ip routing` arises only when a
+  configuration carries that line.
+- `testdata/` gains a blueprint fixture with a device that carries no configuration, and
+  the compile, plan and push tests read it.
+
 
 ## The compiler and the bundle
 
@@ -639,7 +704,8 @@ A twin may mix vendors.
 <a id="d-038"></a>
 ### D-038 — What the compiler refuses and what it omits
 
-**Status:** Accepted 2026-11-03.
+**Status:** Accepted 2026-11-03; superseded in part by [D-048](#d-048) on 2026-11-04:
+`config.missing` narrows to a configuration that is present and blank; the rest stands.
 
 #### Context
 
@@ -960,7 +1026,8 @@ SR Linux first, then EOS. The order after that is [parked](#parked).
 <a id="d-017"></a>
 ### D-017 — Runtimes are drivers behind a seam of seven calls
 
-**Status:** Accepted at the baseline (2026-10-31).
+**Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-049](#d-049) on
+2026-11-04: the seam has nine calls, `changes` and `exec` joining; the rest stands.
 
 #### Context
 
@@ -1373,6 +1440,227 @@ declared capability.
   outside `fylgja_core.containerlab` imports it or any of its modules, the registry alone
   excepted.
 
+<a id="d-049"></a>
+### D-049 — The seam grows for the step: `changes`, `exec`, and the allocation `admit` keeps
+
+**Status:** Accepted 2026-11-04. Supersedes [D-017](#d-017) in its count of calls: nine, not
+seven. The rest of D-017 stands.
+
+#### Context
+
+A step whose plan restarts or recreates a node needs `allow_restart`, refused before anything
+is touched ([D-029](#d-029)). Which nodes a change of topology restarts is the runtime's
+knowledge: containerlab's dry run names them, and `link_apply_mode` and `hot_add_ports`,
+which decide it, live under a package's `runtime.containerlab` section, which nothing above
+the seam may read. A probe host has no management transport, and probe package 1 says its
+readiness runs "through the driver's exec", a call the seam does not have. A stepping twin
+keeps its lab and subnet, while `admit` reserves a new allocation every time.
+
+#### Options considered
+
+What a step will do to each node:
+
+- **Ask containerlab's dry run** (`deploy --dry-run --format json`) when a step is planned.
+  Rejected: impure, needs the running lab's directory, and it is one runtime's answer where
+  the seam needs every driver's.
+- **Compute above the seam from the bundle diff and the packages.** Rejected: the deciding
+  fields are a runtime's section, so code above the seam would read one, and the image lives
+  in the deployment, not the bundle.
+- **A pure driver call over two deployments**, held to containerlab's dry run in the live
+  tier. Chosen.
+
+Reaching a probe host:
+
+- **A small HTTP server in the host image.** Rejected: a mechanism inside the image, and a
+  second image to maintain.
+- **SSH into the host.** Rejected: a login and a daemon in the image.
+- **The driver runs a command inside the node**: `docker exec` locally, the pod exec API on
+  clabernetes. Chosen.
+
+Admitting a step:
+
+- **Admit as a new twin.** Rejected: it would reserve a second subnet and count the twin's
+  own nodes against it.
+- **Skip admission on a step.** Rejected: a node added needs capacity, and its image present.
+- **Admit with the allocation the twin holds, checking the added demand alone.** Chosen.
+
+#### Decision
+
+- **`changes(before, after, platforms, probe_packages)`**, pure: given two deployments with
+  their rendered files, answers what the runtime does to each node to go from the first to
+  the second: `kept`, `added`, `removed`, `recabled` (its links change and the node stays),
+  `restarted` (a link change under a restart link mode), or `recreated` (its image, kind or
+  another property of the node changes, or a port is added to a kind that cannot add one
+  after boot, which containerlab's dry run does not name: under `live` it adds a veth the
+  operating system never lists), each with its reasons; and the links added and removed. It
+  is the only source of what `allow_restart` must cover, and of a dry run's `changes`
+  member. The local driver's `apply` makes the hot-add recreate so by removing that node's
+  container before the deploy, which creates it anew with its ports; plan 3 verifies that
+  on containerlab 0.81.0, and the fallback, should it not hold, is a refusal for that node
+  (`step.relink.unsupported`), never a port the node cannot see.
+- **`exec(twin, node, argv, timeout_s)`** runs an argument vector inside a node and answers
+  its exit code and output, bounded in time and in bytes. It is the one way code above the
+  seam reaches a node that has no management transport, and probe hosts are the only such
+  nodes.
+- **`admit` takes `held`**, the deployment a stepping twin has applied, or none for a
+  create. With it, `admit` keeps that deployment's allocation and checks the demand the new
+  manifest adds over the applied deployment's, and the images its added nodes need.
+- `capabilities` is unchanged; `relink` is what `changes` and the loop consult for a link
+  change.
+
+#### Consequences
+
+- The live tier compares `changes` with containerlab's dry run for every kind of change, on
+  the version clabernetes embeds, and a disagreement is a driver bug, recorded in
+  [verified-facts.md](verified-facts.md).
+- The hardware driver's `changes`, when built, answers a link change as something it cannot
+  satisfy, and the step refuses it, as D-017 foresaw.
+- The driver conformance suite (phase 6) gains scenarios for `changes` and `exec`.
+- [architecture.md](architecture.md) §4.4's table and `fylgja_core.driver` gain the two
+  calls and the argument in the change that builds them.
+
+
+<a id="d-055"></a>
+### D-055 — The local driver's destroy waits for a stray deploy and removes every container of the lab
+
+**Status:** Accepted 2026-11-04. Adds to [D-054](#d-054) (item 14, the stray deploy's wait,
+which named `apply` alone, and the premise that a stray runs on) and details [D-029](#d-029) (a
+diverged twin's deletion removes everything). Superseded in part by [D-056](#d-056) on 2026-11-04: a stray
+deploy no longer ends at its next write, since its output goes to a file.
+
+#### Context
+
+Phase 5's live tier (plan 6) asked for a twin's deletion right after a server was killed 5 s
+into a step's deploy that added a node. The deploy ran on in its own session and made the node.
+The step's resume was cancelled, which left the step diverged with its apply begun. The step had
+not recorded `applied`, so the record still named the deployment the twin ran, and the destroy
+wrote that deployment's topology and ran `containerlab destroy -t` with it.
+
+containerlab 0.81.0's destroy removes only the nodes its file names
+([verified-facts.md](verified-facts.md)). The added node stayed up, holding the management
+network, so every `docker network rm` after it failed. The loop retried the destroy run on its
+backoff, from 1 s doubling to 60 s, and it had not ended within the test's 600 s.
+`destroy --name` did no better: it read the same file, through the container's own label. The
+destroy had also run while the stray deploy might still be making nodes, which D-054 item 14
+guards against for `apply` alone.
+
+#### Options considered
+
+- **Destroy the target deployment once a step's apply has begun.** Rejected: a step that removes
+  a node and is cut short leaves that node, which the target does not name, so either deployment
+  can miss a container.
+- **`containerlab destroy --name`.** Rejected: it finds the lab's file through the containers'
+  label and removes only what that file names, as `-t` does. It also leaves the ssh config, as
+  read on 0.81.0 on 2026-11-03 and not read again here ([verified-facts.md](verified-facts.md)).
+- **Remove every container of the lab the deployment does not name with `docker rm -f`, before
+  containerlab's destroy, which then clears the rest and the network.** Chosen. The containers
+  are the twin's by containerlab's label, which `inspect` already reads them by.
+- **The destroy runs beside a stray deploy.** Rejected: the deploy may add a container after
+  the destroy has read the lab.
+- **The destroy waits for a stray deploy, as `apply` does.** Chosen: the same scan of `/proc`,
+  within the deploy's budget, logged once. One still running past the budget is `DriverFailed`,
+  which the loop retries.
+
+#### Decision
+
+1. **`destroy` waits for a stray deploy** of the twin's topology before it reads the lab, as
+   `apply` does (D-054 item 14).
+2. **`destroy` removes each container of the lab that the deployment's topology does not
+   name** (`docker rm -f`, a container already gone being no failure) before containerlab's
+   destroy, which removes the nodes the file names, the host entries, the ssh config and the
+   network.
+
+#### Consequences
+
+- A twin whose step diverged after its deploy added a node, before `applied`, is deleted whole,
+  as D-029 requires. Phase 5's plan 6 holds this live with a deletion asked right after a kill
+  mid-deploy; the deletion after a step cancelled during its apply takes the same path.
+- In the rare case where a step cut short before `applied` left none of the nodes the running
+  deployment names, containerlab's destroy finds none of its file's nodes. Whether it then still
+  clears the hosts block and the ssh config was not read.
+- The pure tier holds both rules (`core/tests/test_containerlab_driver.py`), and `apply`'s wait
+  (D-054 item 14). The live tier holds `destroy`'s: after a kill 5 s into a step's deploy, the
+  destroy waited 16.6–18.9 s for it. `apply`'s never fired live, since every stray a resume met
+  had ended before the resume's probe was done.
+- `destroy` waits within the budget of the deployment it destroys, while the stray deploys the
+  step's target, whose slowest package may have a longer one. A stray still running past it is
+  `DriverFailed`, which the loop retries.
+- **A stray deploy ends at its next write once the core is gone**, which qualifies this entry's
+  premise and D-054 item 14's: its stdout and stderr are pipes the core held, and containerlab
+  0.81.0 dies of SIGPIPE once their reader is gone, at its first write by inference
+  ([verified-facts.md](verified-facts.md)). So a stray runs on only through one of
+  containerlab's quiet stretches, the longest a node's post-deploy wait, tens of seconds on
+  the development host. The waits remain for that stretch: a node the stray makes in it is
+  real.
+
+<a id="d-056"></a>
+### D-056 — A deploy's output goes to a file in the twin's directory, so a stray deploy runs to completion
+
+**Status:** Accepted 2026-11-04. Supersedes in part [D-055](#d-055) (its last bullet: a stray
+ends at its next write) and restores the premise of [D-054](#d-054) item 14 and of D-055: a
+stray deploy runs on, and the waits are for it.
+
+#### Context
+
+Every command the local driver runs had its stdout and stderr piped to the core
+([D-043](#d-043): `cli.run`). Phase 5's plan 6 read on containerlab 0.81.0 that a deploy whose
+core has died dies of SIGPIPE, at its next write by inference
+([verified-facts.md](verified-facts.md)): at once when the kill lands in a stretch of logging,
+and after the nodes' post-deploy wait, tens of seconds, when it lands there. In the second case the nodes are made and running, and
+the hosts block and the ssh config, which containerlab writes last, never are. A create's
+resume probes the lab and skips the apply when every node answers ([D-023](#d-023)), so such
+a twin ends Ready with no `/etc/hosts` entries and no ssh config: correct to the core, which
+reaches nodes by the address `inspect` reads, and wrong to a person on the host. A step's
+resume applies again and so repairs it, after the stray wait, by chance.
+
+#### Decision
+
+- **`apply` gives the deploy a file for its output**: `deploy.log` in the twin's directory,
+  truncated when the deploy starts, holding stdout and stderr in the order written. The core
+  opens it, hands the descriptor to the child and closes its own copy, so nothing the core
+  holds ends the deploy once the core is gone.
+- **`cli.run` takes the file as `log`**, answers an empty stdout for such a run, and raises
+  `CommandFailed` for a failure with the file's last `STDERR_KEPT` characters as its stderr.
+  A budget run out kills the deploy as before. A file that cannot be opened is `DriverFailed`
+  before the command runs.
+- **The file is never logged**, as no command's stdout is ([D-043](#d-043)): a deploy's output
+  names nodes, images and files, and sits in the twin's directory beside the topology the
+  core wrote and containerlab's root-owned lab directory. `destroy` removes it with the
+  directory.
+- **Every other command keeps its pipes.** A destroy or a `docker` command is short and
+  idempotent, and a destroy cut short is found by the next one; the stray that matters is the
+  deploy, which makes nodes for up to a budget.
+
+#### Alternatives rejected
+
+- **Start the deploy with SIGPIPE ignored.** Go's runtime decides for itself what a write to a
+  broken pipe on descriptors 1 and 2 does, so whether an inherited disposition holds would
+  need reading on each containerlab release, and the output would still go to pipes no one
+  reads once the core is gone.
+- **Keep the pipes and accept the stray's death**, as D-055's last bullet did. A Ready twin
+  without its hosts block, and waits premised on a window, is the thing this entry removes.
+- **Have the create's resume always apply again.** It would repair the hosts block at the
+  cost of a deploy on every resume, and leave the stray's death in place for the step.
+
+#### Consequences
+
+- A stray deploy runs to completion once the core is gone, and `apply`'s and `destroy`'s waits
+  (D-054 item 14, D-055) are for a deploy that runs for as long as it takes. In the live
+  tier's kill scenarios `destroy`'s wait fires; `apply`'s has not fired live, since each stray
+  had ended before a step's resume reached its apply ([verified-facts.md](verified-facts.md),
+  the steps block), and the pure tier holds it.
+- An orphaned deploy runs with no budget: the budget kill died with the core, and D-054
+  rejected killing a stray. One still running past the budget makes each `apply` or `destroy`
+  wait a budget out and raise `DriverFailed`, which the loop retries until the stray ends.
+  Before this entry a stray's next write ended it after a quiet stretch, so the bound was
+  shorter in practice; it is as long as a deploy now.
+- A kill in a create's deploy ends in a Ready twin whose hosts block and ssh config are
+  present once the orphan has ended. The create's resume does not wait for it when every node
+  answers, so the live test waits for the orphan's end before it looks, and asserts the resume
+  ran no deploy of its own.
+- The twin's directory holds one file the deployment does not name; `_check_files` checks the
+  deployment's files alone, and the directory is removed whole at destroy.
+
 
 ## The reconcile loop and state
 
@@ -1561,6 +1849,100 @@ time ([D-023](#d-023)). A killed core must leave every file whole.
 - Nothing in the layout assumes one twin; a record is reached by its name alone.
 - The object store implements the same interface with keys of the same shape.
 
+<a id="d-050"></a>
+### D-050 — A step runs the create's phases, refuses before it touches, and resumes under the create's rules
+
+**Status:** Accepted 2026-11-04; superseded in part by [D-054](#d-054) on 2026-11-04: the
+dispatch, the record before `applied`, the generation a run works toward, the cancel's and the
+ending's readings, and a refused step's verdict; the rest stands. Details [D-023](#d-023) and
+[D-029](#d-029); adds `FYLGJA_STEP_WAIT_S` to [D-042](#d-042).
+
+#### Context
+
+D-029 fixed what a failed step leaves and that a restart needs `allow_restart`; D-023 fixed
+the phases and the recovery rules of a create; D-032 put the step's wait inside its run and
+its bound in the server's settings. What remained before code: how a step is admitted, when
+it refuses, which nodes each phase acts on, how a kill mid-step resumes given that the
+silent-node remedy (`reconfigure`) recreates every node, what a cancel before `apply` does,
+and the wait's bound. The record's `phase` and `last_step.phase` already name one sequence
+for both operations.
+
+#### Options considered
+
+- **A state machine of its own for the step.** Rejected: two sequences to keep aligned, and
+  the record already names one.
+- **Refuse at the API door alone**, from a dry run. Rejected: the plan can change between the
+  door and the run, so the loop must refuse anyway; the door refuses only what it can read
+  from the record, a diverged twin.
+- **On a resume with a silent node, `reconfigure` as a create does.** Rejected: it recreates
+  every node, which `allow_restart` may forbid.
+- **End the step `diverged` when a node stays silent and restarts are not allowed; otherwise
+  `reconfigure`.** Chosen.
+- **A wait budget per package.** Rejected by D-032. **The server's setting**, with a default
+  from the measured cEOS restart (a node answers gNMI about 49 s after, and a step across a
+  restart took 62–81 s). Chosen.
+
+#### Decision
+
+- **A step is the create's phases**, `compiled`, `admitted`, `planned`, `applied`, `ready`,
+  `pushed`, `verified`, `flows`, each recorded before the next. The loop runs a step when the
+  record has an applied deployment and the spec's generation is ahead of the observed one; a
+  twin whose create never applied is created again.
+- **`compiled`**: the spec's bundle. A bundle equal to the twin's ends the run `ok` here,
+  `last_step` outcome `unchanged`, the observed generation caught up. Otherwise `last_step`
+  is written with `from`, `to`, outcome `running`, the `Stepping` condition set and `Ready`
+  False with the reason `twin.stepping`.
+- **`admitted`**: the driver's `admit` with the held allocation ([D-049](#d-049)).
+- **`planned`**: the driver's `plan`, then `changes` over the applied and the planned
+  deployment. Then the refusals, each ending the run `rejected` with the twin running what
+  it ran: `step.twin.diverged` ([D-029](#d-029)); `step.restart.required` when `changes`
+  restarts or recreates a node and the spec lacks `allow_restart`; `step.relink.unsupported`
+  when links change and the driver's `relink` is false. A refusal is recorded as a refused
+  create is: the observed generation catches up, `Ready` is False with the refusal's rule as
+  its reason, and `last_step` ends with the outcome `rejected`, naming the run, so the
+  record still says the spec was not reached and where its verdict is. A blueprint that does
+  not compile is recorded the same way under `bundle.rejected`.
+- **`applied`**: `apply` of the new deployment over the running lab, then `inspect`.
+  `status.bundle_id`, `blueprint_id`, `deployment_id` and `nodes` move to the target here:
+  removed nodes leave the record, added ones join it, and a node whose incarnation moved
+  has its `holds` voided.
+- **`ready`**: every device node whose `holds` is void or absent, and every probe host of
+  the new deployment, by `exec` of the probe package's readiness command. **`pushed`**: every
+  device node with a configuration whose `holds` is void or absent, or whose configuration
+  checksum differs between the two bundles; a node whose configuration is unchanged is
+  marked as holding the target bundle without a push, as is a node without one
+  ([D-048](#d-048)).
+- **`verified`** is the wait: verify ([D-051](#d-051)) until it holds or `FYLGJA_STEP_WAIT_S`
+  (default 180) runs out; an expiry is the warning `step.wait.expired`, and the step still
+  ends `stepped`. **`flows`** records each probe's loss as `not_started` and is otherwise
+  skipped ([D-051](#d-051)). The run ends `ok`, `last_step` outcome `stepped`, `Stepping`
+  cleared, `Ready` True with the reason `twin.ready`.
+- **Resume**: after the last recorded phase, under the create's rules, with one change to
+  the partial-lab probe: on a step the lab is always present, so the probe runs only when the
+  run's events show an `apply` started and not ended. Then the lab is applied again plainly
+  when every device node answers; when one stays silent, `reconfigure` with `allow_restart`,
+  and without it the step ends `diverged` with the finding `step.node.silent`, which is
+  honest: the apply had begun.
+- **A spec written during a run** is accepted at the door, as Kubernetes accepts one. The
+  run completes toward its own target, the pass records the generation it took the run under
+  (not the record's latest), and the next pass finds the newer generation and steps again.
+  Phase 4's loop wrote the latest generation on settling, which would swallow the newer
+  spec; plan 5 corrects it.
+- **Cancel**: before `apply` begins, the run ends `failed` with `run.cancelled` and the twin
+  is as it was; from `apply` on, `diverged` ([D-029](#d-029)), the finding `step.diverged`
+  naming the phase and each node's held bundle.
+
+#### Consequences
+
+- `FYLGJA_STEP_WAIT_S` joins the settings of [D-042](#d-042) and `.env.example`.
+- The API's `501` for a new spec on a twin that exists goes; `fylgja-core twin step` writes
+  the spec and waiting is a watch ([D-026](#d-026)).
+- Twin record 1's description of `allow_restart` names `step.restart.required`, the rule
+  D-029 chose, where it says `step.restart.refused`; `last_step.outcome` gains `rejected`.
+- The rule catalogue gains `step.twin.diverged`, `step.restart.required`,
+  `step.relink.unsupported`, `step.wait.expired`, `step.node.silent` and `step.diverged`,
+  and the `Ready` reason `twin.stepping`; a stepped twin's reason is `twin.ready` again.
+
 
 ## The API and its clients
 
@@ -1708,7 +2090,8 @@ compiles to"), and is a client of the API ([D-025](#d-025)).
 <a id="d-039"></a>
 ### D-039 — Phase 4's libraries: Starlette on uvicorn, httpx, and nothing else
 
-**Status:** Accepted 2026-11-03.
+**Status:** Accepted 2026-11-03; added to by [D-052](#d-052) on 2026-11-04: pygnmi for the
+gNMI reader; the rest stands.
 
 #### Context
 
@@ -1749,8 +2132,9 @@ at least two weeks old.
 <a id="d-042"></a>
 ### D-042 — Configuration and credentials come from `FYLGJA_*` variables, with no configuration file
 
-**Status:** Accepted 2026-11-03. Answers the credential provider's local naming, open since
-the baseline.
+**Status:** Accepted 2026-11-03; added to by [D-050](#d-050) on 2026-11-04:
+`FYLGJA_STEP_WAIT_S`; the rest stands. Answers the credential provider's local naming, open
+since the baseline.
 
 #### Context
 
@@ -2035,7 +2419,10 @@ step's wait and the suite.
 <a id="d-031"></a>
 ### D-031 — Verify's assertions are data derived from the bundle
 
-**Status:** Accepted at the baseline (2026-10-31).
+**Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-051](#d-051) on
+2026-11-04: the host name is asserted against the device name only where no configuration
+could have set it, and a neighbour is judged against the far node's read host name; the rest
+stands.
 
 #### Context
 
@@ -2159,6 +2546,360 @@ points at a commit-time check that never happened.
 - An operator reading it looks for a typo in the configuration as well as a value outside
   the package's ranges.
 - **Revisit** with D-028.
+<a id="d-051"></a>
+### D-051 — Verify reads both ends of a link, a node it cannot read fails the verdict, and phase 5 runs the burst and not the flow
+
+**Status:** Accepted 2026-11-04; superseded in part by [D-053](#d-053) on 2026-11-04, which
+judges a neighbour's `port-id` against the far port's node name, not its production name; the
+rest stands. Supersedes [D-031](#d-031) in part: the host name is asserted against the device
+name only where no configuration could have set it, and a neighbour is judged against the far
+node's read host name. Details [D-008](#d-008) and [D-032](#d-032).
+
+#### Context
+
+Verify's assertions are derived from the manifest ([D-031](#d-031)) and its verdict is
+advisory ([D-032](#d-032)). Open before code: the verdict's status when a node could not be
+read, since D-032 forbids `nonconforming` for it and `ok` would mislead a script; whether a
+link is read from one end or both, since a shut port still lists a far end that restarted in
+place while the far end sees none ([verified-facts.md](verified-facts.md)); the claim
+assertion for a node with no configuration ([D-048](#d-048)); and how much of the probes
+phase 5 builds. The maintainer's call: the probes stay a placeholder, built small, with
+traffic still the line the orchestrator's report leads with.
+
+One more came from the builder's reading. D-031 asserts each node's host name is its device
+name and each neighbour's `system-name` is the far device's name. The kind's baseline sets
+the host name from the node name, but a source-rendered configuration sets the production
+hostname, and a device whose production name is no DNS-1123 label is renamed by its reader
+([D-038](#d-038)). On a real network both assertions would fail on every configured node,
+and every step's wait would run out.
+
+#### Options considered
+
+The host name:
+
+- **Keep D-031's assertions.** Rejected: device names would have to equal configured
+  hostnames, case included, and real networks would fail verify until renamed at the source.
+- **Carry the hostname in the blueprint.** Rejected for now: a format change and a producer
+  change, for a fact verify can read from the node.
+- **Read it from the node**: assert the host name against the device name only for a node
+  with no configuration, where the baseline guarantees it; for a configured node read it,
+  report it, and judge each neighbour's `system-name` against the far node's read host name.
+  Chosen: layer 1 stays the judgement, and a hostname is reported, not asserted.
+
+The status when a node cannot be read:
+
+- **`ok` with a warning.** Rejected: a script reading the status would take it for a pass.
+- **`nonconforming`.** Rejected by D-032: intent not met and a node not read are different
+  facts.
+- **`failed`**, with findings 1 saying what it means for verify. Chosen.
+
+The probes in phase 5:
+
+- **Build the flow across the step** (a background ping started before `apply`, read after
+  the wait) and the burst. Rejected for this phase: the facts exist, but the probes are a
+  placeholder by the maintainer's call, and the flow is the larger half.
+- **Omit `loss` from a step's verdict.** Rejected: findings 1 requires it, and silence would
+  read as "no probes".
+- **The burst alone**, each direction of each probe, and a `loss` entry of `not_started`
+  per probe and direction. Chosen.
+
+#### Decision
+
+- **Verify reads, per device node**: the host name, asserted against the device name for a
+  node with no configuration and otherwise read and reported as an info finding;
+  `port.enabled` on every cabled port, a link's end or a probe's endpoint; `port.neighbor` on
+  both ends of every intent link, each end's `system-name` judged against the far node's
+  read host name and its `port-id` against the far port's production name; and the record's
+  claim for a node with a configuration. The reads are gNMI by the package's `conformance`
+  paths ([D-030](#d-030)), with the library of [D-052](#d-052). A neighbour assertion whose
+  far node could not be read is a skip, not a failure, and the verdict is `failed` for the
+  unread node.
+- **Skips, each an info finding**: a port intent disables and its link, at both ends; a
+  synthesized link's neighbour; the claim of a node with no configuration; a configured
+  node's host name.
+- **The burst** runs by `exec` ([D-049](#d-049)) from host `a` to `b` and from `b` to `a`,
+  the package's count and wait, held when every echo is answered.
+- **Status**: `ok`; `nonconforming` when every node was read and an assertion failed;
+  `failed` when a node could not be read (`verify.node.unread`, naming the node and what
+  failed), whatever else was found. Findings 1's comment says that for verify, `failed` means
+  the read did not complete.
+- **Verify is refused `409`** (`twin.not_running`) on a twin with no applied deployment. A
+  stepping or diverged twin is read as it stands, against the bundle it is stepping to
+  ([D-031](#d-031)).
+- **A step's verdict** lists each probe of the target bundle in both directions with the
+  loss outcome `not_started`, and findings 1 says in that value's description that flows
+  across a step are not built in this phase.
+
+#### Consequences
+
+- The rule catalogue gains `verify.host_name`, `verify.port.enabled`, `verify.port.neighbor`,
+  `verify.claim`, `verify.burst`, `verify.skipped` and `verify.node.unread`.
+- `fylgja-core twin verify` exits 1 on `nonconforming` and `failed` ([D-026](#d-026)).
+- The flow across the step returns as its own entry when a probe is wanted for real; the
+  facts of 2026-10-29 stand for it.
+
+<a id="d-052"></a>
+### D-052 — Phase 5's library: pygnmi for the gNMI reader
+
+**Status:** Accepted 2026-11-04; added to by [D-054](#d-054) on 2026-11-04: the reads of a
+step's wait run on daemon threads, sixteen at most and one per node; the rest stands. Adds to
+[D-039](#d-039).
+
+#### Context
+
+Verify reads a node's facts over gNMI ([D-030](#d-030)), which is gRPC. The core's
+dependencies carry HTTP alone (httpx), and every measurement so far used the `gnmic` tool
+by hand. SR Linux answers gNMI over TLS on 57400 with a boot-time certificate, cEOS in
+plaintext on 6030, both in `json_ietf`, as the packages state.
+
+#### Options considered
+
+- **`gnmic` as a subprocess**, as containerlab is ([D-018](#d-018)). Rejected: a second Go
+  binary to install and pin on every host the core runs on, where containerlab is the runtime
+  itself; and its JSON output would be parsed as a second contract.
+- **Read over the push transport instead** (SR Linux JSON-RPC `get`, EOS eAPI `show`
+  commands), superseding D-030's paths. Rejected: eAPI answers are commands, not paths, so
+  the fact vocabulary would need a mapping per command, and D-030 chose paths for a reason.
+- **A gRPC client in Python.** `pygnmi` on `grpcio`: a maintained client of gNMI's `Get`
+  with the encodings and TLS modes the packages name. Chosen.
+
+#### Decision
+
+- `pygnmi`, pinned with `grpcio` and `protobuf` to releases at least two weeks old, chosen
+  when the plan is written. The reader is one mechanism, `fylgja_core.gnmi`, keyed by the
+  package's `gnmi` section (TLS or plaintext, the port, `json_ietf`), dialling by the address
+  `endpoints` answers, with the boot-time certificate accepted unverified as the packages
+  state.
+- No other library enters phase 5.
+
+#### Consequences
+
+- The pins move only by the rule for dependencies.
+- A platform whose transport is not gNMI still needs a new reader ([D-030](#d-030)).
+
+<a id="d-053"></a>
+### D-053 — Verify judges a neighbour's port by the far port's node name, and three refinements of D-051
+
+**Status:** Accepted 2026-11-04. Supersedes [D-051](#d-051) in part: the far port is judged by
+its node name; details D-051's skips and the unread node.
+
+#### Context
+
+D-051 judges each end's neighbour `port-id` "against the far port's production name". LLDP
+carries the far port as the far node names it (`port-id-type` `INTERFACE_NAME`): SR Linux its
+own interface name, cEOS its own, which is one to one with production there
+([verified-facts.md](verified-facts.md)). A production name and a node name differ wherever a
+package's interface rule states a `node_name`, what the node's OS calls the port
+([formats/platform-package-1.schema.json](../formats/platform-package-1.schema.json)).
+Verify's code, the rule catalogue and both packages' `port_id` comments already judge against
+the far row's `node_name`; D-051's text does not.
+
+Building verify settled three cases D-051 leaves open: a node that reports no host name,
+though the kind's baseline and any configuration both set one; a probe whose endpoint intent
+disables, which cannot pass by intent; and a probe host the driver's `exec` cannot reach,
+where D-051's unread node names device nodes alone.
+
+#### Options considered
+
+- **Judge the `port-id` against the far port's production name**, as D-051 says. Rejected:
+  wherever a package's rule gives a port a `node_name` other than its production name, every
+  neighbour facing that port would fail on a twin wired as intended.
+- **Judge it against the far row's `node_name`**, the name the far node's LLDP sends. Chosen:
+  it is the name the far node itself reports, as the `system-name` is judged against the far
+  node's read host name; on the shipped packages, whose rules state no `node_name` for a data
+  port, the two names are one.
+
+#### Decision
+
+- **A neighbour's `port-id` is judged against the far row's `node_name`**, and the failure's
+  message names the far port by it.
+- **A device node whose host-name leaf is unreported fails `verify.host_name`**, whatever its
+  configuration: the kind's baseline and any configuration both set one, so none is a fault
+  and not a value to report. The neighbour assertions facing it are skips, since there is no
+  host name to judge them against.
+- **A probe whose endpoint port is intent-disabled has both bursts skipped**, each an info
+  finding naming the port, and runs no echo: the probe cannot pass by intent.
+- **A probe host the driver's `exec` cannot reach is an unread node**: one
+  `verify.node.unread` naming the host, its burst a skip, and the verdict `failed`, as for a
+  device node the reader cannot read.
+
+#### Consequences
+
+- [`docs/rules.md`](../docs/rules.md)'s verify table says so: `verify.port.neighbor` by the
+  far port's node name, `verify.host_name` for a node that reports none, the skips of the
+  bursts and of the neighbours facing a node with no host name, and `verify.node.unread` for a
+  probe host.
+- The pure tier exercises all four on the fake reader and driver
+  (`core/tests/test_verify.py`). The live tier holds the first on both kinds, where the
+  shipped packages' node names are their production names; it does not reach the other three.
+
+<a id="d-054"></a>
+### D-054 — The step as built: its dispatch, its record before `applied`, the spec it answers to, and its endings
+
+**Status:** Accepted 2026-11-04; added to by [D-055](#d-055) on 2026-11-04: the stray deploy's
+wait, item 14, is `destroy`'s too, and a stray ends at its next write once the core is gone;
+superseded in part by [D-056](#d-056) on 2026-11-04: a stray runs to completion.
+Supersedes [D-050](#d-050) in part: the dispatch, the record before `applied`, the generation a
+run works toward, the cancel's and the ending's readings, and a refused step's verdict. Details
+[D-029](#d-029) (the record a diverged twin keeps) and [D-051](#d-051) (the bundle verify judges
+a stepping twin against); adds to [D-052](#d-052) (the threads the wait's reads run on).
+
+#### Context
+
+D-050 fixed the step's phases, refusals, resume and cancel before code. Building it (phase 5,
+plan 5) found what D-050 leaves open or can be read two ways: when a twin has "an applied
+deployment", since a create's cleanup clears what it applied and a create killed after
+`planned` names a deployment no lab runs; where a step's phases are recorded while the twin
+still runs its old bundle, which [design/core.md](core.md) left to the builder; where "the
+generation it took the run under" lives across a kill; whether a transient failure ends "an
+`apply` started"; what a cancel or a refusal read after the last phase does; what a refused
+step's verdict and an unchanged step's conditions say; what becomes of a queued run no pass
+takes; and on what threads the wait's gNMI reads run.
+
+The branch's final review found four more. A step refused on a diverged twin wrote its own
+`last_step` over the diverged step's, which D-029 keeps. A spec a client writes mid-run replaces
+the record's, since the loop writes its status over the client's record, so an older run could
+restart a node under a newer spec's `allow_restart`, the phase's anti-goal. A node missing from
+the lab counted as silent in a step's resume probe, so a step cut short before its deploy made
+a node it adds ended diverged, though an added node needs no `allow_restart`. And a core killed
+mid-deploy leaves `containerlab deploy` running in its own session, which a step's resume,
+deploying again plainly, would run beside.
+
+#### Options considered
+
+- **Dispatch by the deployment id alone.** Rejected: a create killed or refused after
+  `planned` names a deployment with no lab, and a step would diff from a lab that is not there.
+  **By Ready True.** Rejected: a refused or cancelled step leaves Ready False while the twin
+  runs, and a new spec must step it, not create over it. **By a deployment id and the nodes an
+  apply left.** Chosen.
+- **Move `status.phase` with the step from `compiled`.** Rejected: until `applied` nothing is
+  touched, and a kill would leave a record naming a target no lab runs. **Record the phases
+  before `applied` in `last_step.phase` alone.** Chosen; the cost is that `status.phase` shows
+  the running twin's phase until `applied`, and a client reads the step's from `last_step`.
+- **Keep the generation a run works toward in the pass alone.** Rejected: a kill loses it, and
+  the resume would observe the latest generation, swallowing a spec written meanwhile, as phase
+  4's loop did. **In the record.** Chosen: a format change D-050 did not list.
+- **An `apply started` followed by a transient `apply failed` is an apply that ended.**
+  Rejected: the failed apply may have partly landed, and the next pass would apply without
+  probing. **Any `apply started` of the run begins the apply.** Chosen.
+- **An uncompilable target writes no `last_step`.** Rejected: the record would not say the spec
+  was not reached, nor where its verdict is (D-050). **`from` and `to` both the running
+  bundle.** Chosen, since the schema requires both; the cost is that `to` names no target.
+- **An unchanged step leaves Ready as it was.** Rejected: a refused twin given back the spec it
+  runs would stay Ready False while it runs what is asked. **Ready True.** Chosen.
+- **A queued run no pass takes stays queued.** Rejected: its watch never ends, and the API
+  queues by the dispatch rule as it reads the record, which a later pass may read otherwise.
+  **It ends, superseded.** Chosen.
+- **The wait's reads on a thread pool.** Rejected: an executor's workers are joined at exit, so
+  a read that never answers holds the server's exit. **Daemon threads.** Chosen.
+- **A refusal of a diverged twin writes its own `last_step`, as every refusal does.** Rejected:
+  it erases the record D-029 keeps of where the diverged step stopped. **The diverged step's
+  `last_step` stays.** Chosen.
+- **The record's `allow_restart`, whatever its generation.** Rejected: an older run would
+  restart a node under a newer spec's permission. **The run's `allow_restart` kept in the record
+  too.** Rejected: a second format change for one boolean. **`allow_restart` trusted only while
+  the record's generation is the run's.** Chosen. Its cost falls on a run whose own spec allowed
+  a restart when a client writes a newer spec during it: before its apply began it is refused at
+  `planned`, and the next run steps the newer spec; on a resume into its begun apply, whose pure
+  re-plan skips the restart check the pass that began the apply passed, it ends
+  `step.node.silent`, diverged, only when the probe finds a node silent, where the run's own spec
+  would have allowed the reconfigure. With every node answering it applies plainly and ends
+  stepped.
+- **A node missing from the lab is silent in a step's probe, as in a create's.** Rejected: a
+  plain deploy makes a node whose container is gone anew ([verified-facts.md](verified-facts.md),
+  0.81.0). **Not silent.** Chosen.
+- **A stray deploy killed.** Rejected: a deploy killed part-way leaves a partial lab, the fault
+  the probe exists to remedy. **The deploy skipped while the lab is present, as a create's probe
+  skips it.** Rejected: a step's lab is always present. **Waited for, within the deploy's
+  budget.** Chosen.
+
+#### Decision
+
+1. **Dispatch.** A step runs when the spec's generation is ahead, `status.deployment_id` is
+   set, `status.nodes` is non-empty (a lab was applied) and no create run is in flight;
+   otherwise a create, so a twin whose create never applied is created again. The API queues a
+   run of the kind the same rule reads from the record.
+2. **The record before `applied`.** A step's phases `compiled`, `admitted` and `planned` are
+   recorded in `last_step.phase` alone; `status.phase`, `bundle_id`, `blueprint_id`,
+   `deployment_id` and `nodes` keep describing the running twin until `applied` moves them to
+   the target. A resume after `planned` plans again, purely, to the same deployment id, and
+   refuses again before it touches anything; into an apply already begun, all but the restart
+   check, which the pass that began the apply passed under the run's own spec.
+3. **The generation a run works toward** is written into the record when the run is taken
+   (`status.generation_in_flight`, twin record 1), kept on a resume whatever the generation has
+   become since, and copied to `observed_generation` when the run ends, so a spec written
+   meanwhile is the next run's. The run's own spec decides what it may restart:
+   `allow_restart` counts only while the record's generation is the one the run was taken
+   under, and is read as false otherwise, by the restart check at `planned` and by the
+   reconfigure of a resume's probe; a resume into a begun apply does not make the restart check
+   again (2).
+4. **Refusals** come at `compiled` for a diverged twin, before the unchanged short-cut, and at
+   `planned` for the rest, in the order diverged, relink or unsupported, restart: what no spec
+   setting can fix first. A `changes` that cannot read the running deployment, which names a
+   node no loaded package runs, is `bundle.rejected`, and so is a running deployment whose
+   bundle names a package this core has not loaded, found before the run starts. A refused
+   step's verdict names what the run compiled and planned: the target's blueprint from its
+   manifest (the stored target's when the pass that ends the run read none), never a newer
+   spec's, the target bundle, and the target deployment once planned. An uncompilable target
+   records `last_step` with `from` and `to` both the running bundle, at `compiled`.
+5. **An unchanged step** ends `ok` with Ready True for `twin.ready` and Stepping False.
+6. **The apply has begun** whenever the run's events hold an `apply started`, of any pass; a
+   transient `apply failed` is no end. From then every failure and every cancel ends the step
+   `diverged`, with `step.diverged` beside the failure's finding; a cancel before it ends the run
+   `failed` with `run.cancelled`, `last_step` `cancelled`. A cancel or a refusal read once
+   `last_step.phase` is `flows` ends the step
+   stepped, since it had completed. A resume into a begun apply probes the lab: a node missing
+   from it is not silent, since the plain apply that follows makes it; one present but stopped,
+   without an address or not answering is, and without the run's `allow_restart` the step ends
+   `diverged` with `step.node.silent`.
+7. **Each ending's record.** Stepped or unchanged: Ready True and Stepping False for
+   `twin.ready`. Rejected, or cancelled before its apply began: Ready and Stepping False for the
+   rule, `run.cancelled` for a cancel, the twin running what it ran. Diverged: Ready and
+   Stepping False and Diverged True for `step.diverged` or `step.node.silent`; Diverged is never
+   set back. `last_step` takes the ending's outcome, and a run that ends before `compiled` wrote
+   one records `from` and `to` both the running bundle, at `compiled`. On a twin diverged
+   already, the diverged step's `last_step` stays, its bundles, run and phase (D-029): a later
+   run refused or cancelled writes only the conditions, the observed generation and no run.
+8. **An ended step is settled from its verdict first.** A pass that finds the record naming an
+   ended step run completes the record's last write from the verdict before anything else, on
+   any core, since a step tears nothing down. A core that does not serve the twin's driver ends
+   a step in flight `rejected` before its apply began, `diverged` with `step.diverged` after it,
+   and `ok` once every phase has run.
+9. **The verdict's members.** The last verify's findings and counts and the wait come from the
+   pass that ran `verified`: a step resumed after it carries neither counts nor a wait. A step
+   that ends stepped always lists its flows, each probe of the target from each host
+   `not_started` (D-051), whichever pass ends it.
+10. **A run superseded.** When a pass takes a create or step run afresh (one it makes, the
+    loop's own, or the newest queued of the operation), every other create or step run of the
+    twin still queued, or queued and marked cancelling by a client, ends `failed` with
+    `run.cancelled`, superseded before it started, its message naming the run taken. A resumed
+    run supersedes nothing, and a destroy run is never superseded.
+11. **A twin whose step has not recorded `applied`**, stepping or diverged during its apply, is
+    verified against the bundle its record names, the running one; from `applied` on that is the
+    target, the bundle it is stepping to (D-051). Its deletion destroys the running deployment,
+    with that deployment's files.
+12. **Ready and push select by the node's hold.** A node is readied and pushed when it holds
+    nothing: added, its incarnation moved, or restarted or recreated by `changes`, since a
+    runtime may restart a node in place and keep its incarnation. It is pushed when its
+    configuration's checksum differs from the one it ran; any other is marked holding the target
+    without a push.
+13. **The reads of the wait** run on daemon threads, sixteen at most and one per node, so an
+    abandoned read holds neither the other nodes' reads nor the server's exit (adds to D-052).
+14. **The local driver waits for a stray deploy.** Before it removes a hot-add container or
+    deploys, `apply` waits, polling every second within the deploy's budget, for every
+    `containerlab deploy` whose command line names the twin's topology file to end, and logs
+    once that it waits; one still running past the budget is `DriverFailed`, which the loop
+    retries. A scan of `/proc` finds them, injectable for the pure tier.
+
+#### Consequences
+
+- Twin record 1 gains `status.generation_in_flight` and the `last_step` outcome `rejected`;
+  its `last_step` description says a diverged twin keeps the diverging step's.
+- The rule catalogue's Steps section ([docs/rules.md](../docs/rules.md)) states the refusals,
+  the endings and the conditions above.
+- The live tier of plan 6 exercises 1, 4, 6 and 14 on containerlab 0.81.0, the last with a
+  server killed mid-deploy, and records what it finds in [verified-facts.md](verified-facts.md).
+
 
 ## Process and repository
 

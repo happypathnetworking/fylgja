@@ -93,3 +93,13 @@ def test_the_bundle_id_is_what_the_schema_computes_by_hand(tmp_path: Path) -> No
     by_hand = subprocess.run(["sh", "-c", recipe], cwd=tmp_path, capture_output=True, text=True, check=True)
     assert bundle.bundle_id(files) == by_hand.stdout.strip()
     assert bundle.bundle_id(dict(reversed(files.items()))) == bundle.bundle_id(files)
+
+
+def test_a_node_without_config_is_valid_decodes_to_none_and_encodes_without_it() -> None:
+    document = doc()
+    del document["nodes"][1]["config"]
+    assert bundle.validate(document) == []
+    manifest = bundle.decode(document)
+    assert manifest.nodes[1] == Node(name="n2", platform="arista_eos", config=None)
+    assert manifest.nodes[0].config == File(file="configs/n1.cfg", sha256=ID_B)
+    assert "config" not in documents.encode(manifest)["nodes"][1]

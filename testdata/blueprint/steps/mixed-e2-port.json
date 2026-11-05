@@ -1,0 +1,149 @@
+{
+ "blueprint_version": "1",
+ "network": {
+  "devices": [
+   {
+    "name": "e1",
+    "platform": "arista_eos",
+    "interfaces": [
+     {
+      "name": "Ethernet1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet10",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet11",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet2/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Management1",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "! e1: production configuration rendered by Infrahub (fylgja-artifacts)\n! platform Arista EOS; FYLGJA-MARKER-mixed-fixture\nhostname e1\nip routing\ninterface Ethernet1\ndescription to s1 ethernet-1/1\nno shutdown\ninterface Ethernet10\nno shutdown\nno switchport\nip address 10.2.10.1/24\ninterface Ethernet11\nno shutdown\nno switchport\nip address 10.2.11.1/24\ninterface Ethernet2/1\ndescription to e2 Ethernet1\nno shutdown\n! Management1: out-of-band management, left to the platform\n"
+   },
+   {
+    "name": "e2",
+    "platform": "arista_eos",
+    "interfaces": [
+     {
+      "name": "Ethernet1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet10",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet11",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Ethernet3/1/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "Management1",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "! e2: production configuration rendered by Infrahub (fylgja-artifacts)\n! platform Arista EOS; FYLGJA-MARKER-mixed-fixture\nhostname e2\nip routing\ninterface Ethernet1\ndescription to e1 Ethernet2/1\nno shutdown\ninterface Ethernet10\nno shutdown\nno switchport\nip address 10.3.10.1/24\ninterface Ethernet11\nno shutdown\nno switchport\nip address 10.3.11.1/24\ninterface Ethernet3/1/1\ndescription to s1 ethernet-1/2\nno shutdown\n! Management1: out-of-band management, left to the platform\n"
+   },
+   {
+    "name": "s1",
+    "platform": "nokia_srlinux",
+    "interfaces": [
+     {
+      "name": "ethernet-1/1",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/10",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/11",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "ethernet-1/2",
+      "mgmt_only": false,
+      "enabled": true
+     },
+     {
+      "name": "mgmt0",
+      "mgmt_only": true,
+      "enabled": true
+     }
+    ],
+    "config": "# s1: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform Nokia SR Linux; FYLGJA-MARKER-mixed-fixture\nset / system name host-name s1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to e1 Ethernet1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/10 admin-state enable\nset / interface ethernet-1/10 subinterface 0 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 address 10.1.10.1/24\nset / network-instance default interface ethernet-1/10.0\nset / interface ethernet-1/11 admin-state enable\nset / interface ethernet-1/11 subinterface 0 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 address 10.1.11.1/24\nset / network-instance default interface ethernet-1/11.0\nset / interface ethernet-1/2 description \"to e2 Ethernet3/1/1\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\n# mgmt0: out-of-band management, left to the platform\n"
+   }
+  ],
+  "links": [
+   {
+    "a": {
+     "device": "e1",
+     "interface": "Ethernet1"
+    },
+    "b": {
+     "device": "s1",
+     "interface": "ethernet-1/1"
+    }
+   },
+   {
+    "a": {
+     "device": "e1",
+     "interface": "Ethernet10"
+    },
+    "b": {
+     "device": "e2",
+     "interface": "Ethernet10"
+    }
+   },
+   {
+    "a": {
+     "device": "e1",
+     "interface": "Ethernet2/1"
+    },
+    "b": {
+     "device": "e2",
+     "interface": "Ethernet1"
+    }
+   },
+   {
+    "a": {
+     "device": "e2",
+     "interface": "Ethernet3/1/1"
+    },
+    "b": {
+     "device": "s1",
+     "interface": "ethernet-1/2"
+    }
+   }
+  ]
+ },
+ "probes": [],
+ "source": {
+  "step_fixture": "mixed with a link added between e1 Ethernet10 and e2 Ethernet10, two ports that were configured and uncabled. A step fixture: one change from its base, see steps/README.md."
+ }
+}

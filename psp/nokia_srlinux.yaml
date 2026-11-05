@@ -70,4 +70,4 @@ runtime:
     destroy_timeout_s: 60             # 0.8-2.0s measured, one to three nodes, ready or half-deployed; x30
     link_apply_mode: live             # a link added or removed on a port present at boot is re-cabled with no restart, and the push is kept
     alias: true                       # the kind accepts production names as endpoints (ethernet-1/1 -> e1-1) and refuses out-of-range ones at deploy
-    hot_add_ports: true               # unverified: a new port of an existing node was not read back from that node
+    hot_add_ports: true               # a port added to a running node works with no restart: read back on containerlab 0.81.0, 2026-11-04

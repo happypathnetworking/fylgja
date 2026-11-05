@@ -57,26 +57,30 @@ writes them.
   pass; its rules are in the catalogue, [`docs/rules.md`](../docs/rules.md).
 - **The state store** (section 4.6) as a local directory, held locked for one core
   ([D-041](decisions.md#d-041)).
-- **The local driver** (section 4.4): containerlab behind the seam, its pure `plan` and its
-  live `admit`, `apply`, `inspect` and `destroy` with the two recovery rules, every
-  behaviour it relies on recorded for containerlab 0.81.0 in
+- **The local driver** (section 4.4): containerlab behind the seam, its pure `plan` and
+  `changes` and its live `admit`, `apply`, `inspect`, `destroy` and `exec`, with the two
+  recovery rules, every behaviour it relies on recorded for containerlab 0.81.0 in
   [verified-facts.md](verified-facts.md).
 - **Readiness and the push**: the credential provider, a node's push transport answering an
   authenticated request, and the two replace mechanisms, JSON-RPC for SR Linux and eAPI for
   EOS ([D-027](decisions.md#d-027)).
-- **The reconcile loop** (section 4.5) for a create and a destroy: runs and their events,
-  admission one twin at a time, cancellation, and a resume after a kill at the phase after
-  the one recorded ([D-023](decisions.md#d-023)).
+- **The reconcile loop** (section 4.5) for a create, a step and a destroy: runs and their
+  events, admission one twin at a time, cancellation, and a resume after a kill at the phase
+  after the one recorded ([D-023](decisions.md#d-023), [D-054](decisions.md#d-054)).
+- **Steps and verify**: the bundle diff; a step's refusals before it touches the twin, its
+  wait for verify, and a twin left diverged when a step fails or is cancelled after touching
+  it ([D-050](decisions.md#d-050), [D-054](decisions.md#d-054)); verify over gNMI, each
+  probe's burst and a probe host's readiness, both through the driver's `exec`
+  ([D-050](decisions.md#d-050), [D-051](decisions.md#d-051), [D-053](decisions.md#d-053)).
 - **API 1 and the thin CLI** (section 4.7): `fylgja-core-server` serves API 1 and runs the
   loop in one process, with per-client tokens, problem documents and watches by server-sent
-  events; `fylgja-core` is its client. A twin is created, shown, watched and destroyed end
-  to end, with the server killed at every phase boundary and resumed each time.
+  events; `fylgja-core` is its client. A twin is created, shown, watched, stepped, verified
+  and destroyed end to end, with the server killed at every phase boundary of a create and
+  of a step and resumed each time.
 
-**Designed, not yet built:** everything else in section 4: steps, verify, the probes' flows
-and a probe host's readiness, the bundle diff, the clabernetes driver, many twins at once,
-and the cut-over that moves the orchestrator onto API 1. They are built in the phases of
-[design/core.md](core.md#sequence); in the API, a route or a change a phase does not build
-answers `501` (`api.unbuilt`).
+**Designed, not yet built:** everything else in section 4: the probes' flows, the
+clabernetes driver, many twins at once, and the cut-over that moves the orchestrator onto
+API 1. They are built in the phases of [design/core.md](core.md#sequence).
 
 **The reference implementation** is the **frozen Go core** in the archived repository
 ([D-001](decisions.md#d-001)): one twin at a time under a fixed lab name on one lab host,
@@ -131,7 +135,7 @@ A blueprint is the network and its probes, with a source envelope
 - **Network.** Devices, each named by a DNS-1123 label (it becomes the node's host name,
   its container or pod name and its file name; [D-038](decisions.md#d-038)), with a
   platform package id, its interfaces (name, `mgmt_only`, `enabled`) and its configuration
-  as one plain string; links, each with ends `a` and `b`.
+  as one plain string, optional, absent meaning unmanaged ([D-048](decisions.md#d-048)); links, each with ends `a` and `b`.
 - **Probes.** Each a name, a probe format and two endpoints, each a device, an uncabled
   port, an IPv4 address and a gateway ([D-008](decisions.md#d-008)).
 - **Id.** The SHA-256 of the RFC 8785 (JCS) canonical JSON of `{network, probes}` alone.
@@ -170,9 +174,9 @@ A bundle is **runtime-neutral** and holds nothing that belongs to one twin
 ([`bundle-1.schema.json`](../formats/bundle-1.schema.json), [D-011](decisions.md#d-011)).
 
 - **Layout.** `manifest.json`, as JCS bytes, and `configs/<node>.cfg`, each device's
-  configuration verbatim. Nothing else: no topology file, no lab name, no image and no
+  configuration verbatim, for a device that has one. Nothing else: no topology file, no lab name, no image and no
   fidelity.
-- **Manifest.** The nodes (name, platform, configuration file and hash), one mapping row
+- **Manifest.** The nodes (name, platform, configuration file and hash, where the device has one), one mapping row
   per interface, the links in production names, the probes as placed, and the blueprint id.
 - **Id.** The SHA-256 of a listing of every file's hash and path, as `sha256sum` writes it.
   A reworded package moves no bundle id.
@@ -184,17 +188,20 @@ overwritten. The difference between two bundles is what a step changes.
 
 A runtime is added by writing a driver, and nothing else
 ([Constitution XIII](constitution.md#xiii-runtimes-are-drivers),
-[D-017](decisions.md#d-017)). Every call is idempotent.
+[D-017](decisions.md#d-017)). Every call but `exec` is idempotent: `exec` runs what it is
+given.
 
 | Call | What it does |
 |---|---|
 | `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network. |
-| `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason. |
+| `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason; or, for a step, keeps the allocation the twin holds and checks the added demand ([D-049](decisions.md#d-049)). |
 | `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)). |
+| `changes(before, after, packages)` | Pure. Answers what the runtime does to each node to go from one deployment to another: `kept`, `added`, `removed`, `recabled`, `restarted`, `recreated` or `unsupported`, each with its reasons, and the links added and removed ([D-049](decisions.md#d-049)). |
 | `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)). |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
 | `destroy(deployment, files, packages)` | Removes everything the twin holds, the residue of a killed destroy included, within its packages' measured destroy timeouts, and releases its allocation. |
 | `endpoints(twin)` | Returns each node's management address. |
+| `exec(twin, node, argv, timeout_s)` | Runs an argument vector inside a node and answers its exit code and output, bounded in time and bytes: the one way to reach a node with no management transport, which only probe hosts are ([D-049](decisions.md#d-049)). |
 
 `plan` is the only step that binds a bundle to a twin and a runtime. It is pure, so what it
 binds to must exist first: that is why `admit` reserves the allocation.

@@ -58,7 +58,7 @@
     "device": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "platform", "interfaces", "config"],
+      "required": ["name", "platform", "interfaces"],
       "properties": {
         "name": {
           "$ref": "#/$defs/device_name",
@@ -77,7 +77,7 @@
         "config": {
           "type": "string",
           "minLength": 1,
-          "description": "The configuration the source rendered for this device, verbatim UTF-8 text; the compiler writes it into the bundle and the push sends it (rule config.missing when empty)."
+          "description": "The configuration the source rendered for this device, verbatim UTF-8 text; the compiler writes it into the bundle and the push sends it; absent, the device is unmanaged: nothing is pushed or compared (D-048); rule config.missing when present and empty."
         }
       }
     },

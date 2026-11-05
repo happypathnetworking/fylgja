@@ -33,7 +33,8 @@ relative to them.
 1. **Links have `a` and `b`, not `endpoints[2]`.** `a` sorts first, so a link has one
    spelling.
 2. **The blueprint's config is a plain `config` string.** The core does not know the
-   source's word "artifact".
+   source's word "artifact". It is optional in blueprint 1 and bundle 1
+   ([D-048](../design/decisions.md#d-048)): a device without one is unmanaged.
 3. **The bundle stores no `image`.** An image is runtime-specific, and the bundle stays
    runtime-neutral. The deployment's rendered topology carries the image, and a step finds an
    image change by comparing the old and new deployments. Bundle diff covers only
@@ -88,9 +89,15 @@ relative to them.
     `timed_out`, the failing finding's rule, which is the Ready condition's reason too; on the
     cancel phase's `done`, `run.cancelled`; and on a transient failure's `failed`, the error's
     rule with no finding filed, the phase's next `started` being the retry.
-19. **What a phase does not build answers 501**, rule `api.unbuilt`, with the phase that
-    builds it in the detail (API 1's `NotBuilt` response): in phase 4, the bundle diff,
-    verify, and a step (a new spec on a twin that exists).
+19. **No route answers 501 since phase 5.** In phase 4, what a phase did not build answered
+    501, rule `api.unbuilt`, with the phase that builds it in the detail (API 1's `NotBuilt`
+    response): the bundle diff, verify, and a step (a new spec on a twin that exists). Phase 5
+    builds all three, and the response and the rule went with the last.
+20. **A dry run of a step answers what changes** since phase 5: on a twin that runs, `Plan`
+    carries `changes`, API 1's `Changes`, which mirrors the driver's `changes` key for key
+    ([D-049](../design/decisions.md#d-049)), and its verdict is `rejected` with the findings
+    of the refusal the loop would make ([D-050](../design/decisions.md#d-050)). A new spec of
+    a diverged twin is `409 twin.diverged`, a dry run's too.
 
 ## Settled by measurement (2026-10-30)
 

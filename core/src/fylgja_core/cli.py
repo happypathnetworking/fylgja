@@ -145,7 +145,7 @@ def _parser() -> argparse.ArgumentParser:
 
         return verb
 
-    twin = verbs("twin", "create, show, list and destroy twins")
+    twin = verbs("twin", "create, step, show, list, verify and destroy twins")
     create = twin("create", "File the blueprint (or name a bundle), create the twin, and wait for its create run.",
                   _twin_create)
     create.add_argument("name")
@@ -155,11 +155,25 @@ def _parser() -> argparse.ArgumentParser:
     create.add_argument("--driver", metavar="D", help="the driver to run it on; the server's default otherwise")
     create.add_argument("--allow-restart", action="store_true", help="let the loop restart or recreate nodes")
     create.add_argument("--no-wait", action="store_true", help="write the spec and print the record, not waiting")
+    step = twin("step", "File the blueprint (or name a bundle), write it as the spec of a twin that exists, and "
+                        "wait for the run toward it; exit by its verdict.", _twin_step)
+    step.add_argument("name")
+    source = step.add_mutually_exclusive_group(required=True)
+    source.add_argument("--blueprint", type=Path, metavar="FILE", help="a blueprint file, JSON or YAML, to file")
+    source.add_argument("--bundle", metavar="ID", help="a filed bundle's id")
+    step.add_argument("--allow-restart", action="store_true", help="let the step restart or recreate nodes")
+    how = step.add_mutually_exclusive_group()  # a dry run writes nothing, so there is nothing to wait for
+    how.add_argument("--no-wait", action="store_true", help="write the spec and print the record, not waiting")
+    how.add_argument("--dry-run", action="store_true",
+                     help="print what the step would change and its verdict, writing no spec; exit by the verdict")
     twin("show", "Show one twin's record.", _twin_show).add_argument("name")
     twin("list", "List every twin.", _twin_list)
     destroy = twin("destroy", "Ask for the twin's deletion and wait for its destroy run.", _twin_destroy)
     destroy.add_argument("name")
     destroy.add_argument("--no-wait", action="store_true", help="ask and print the record, not waiting")
+
+    twin("verify", "Read every node once and judge it against its bundle; exit by the verdict.",
+         _twin_verify).add_argument("name")
 
     run = verbs("run", "read, follow and cancel runs")
     run("get", "Show a run and, once it has ended, its verdict.", _run_get).add_argument("id")
@@ -172,18 +186,24 @@ def _parser() -> argparse.ArgumentParser:
     bundle = verbs("bundle", "compile and read bundles")
     bundle("build", "Compile a filed blueprint into a bundle.", _bundle_build).add_argument("blueprint_id")
     bundle("get", "Show a filed bundle's manifest.", _bundle_get).add_argument("id")
+    diff = bundle("diff", "Show what a step from one filed bundle to another changes.", _bundle_diff)
+    diff.add_argument("from_id", metavar="FROM")
+    diff.add_argument("to_id", metavar="TO")
     return parser
 
 
 # Commands.
 
 
-def _twin_create(ctx: Context, args: argparse.Namespace) -> int:
-    spec: dict[str, Any] = {}
+def _source(ctx: Context, args: argparse.Namespace) -> dict[str, Any]:
+    """A partial spec naming what `--blueprint` (filed first) or `--bundle` gives."""
     if args.blueprint is not None:
-        spec["blueprint_id"] = ctx.client.put_blueprint(_blueprint_file(args.blueprint))
-    else:
-        spec["bundle_id"] = args.bundle
+        return {"blueprint_id": ctx.client.put_blueprint(_blueprint_file(args.blueprint))}
+    return {"bundle_id": args.bundle}
+
+
+def _twin_create(ctx: Context, args: argparse.Namespace) -> int:
+    spec = _source(ctx, args)
     # A partial spec: what is not named here, the server fills (its driver, no restart).
     if args.driver is not None:
         spec["driver"] = args.driver
@@ -194,7 +214,36 @@ def _twin_create(ctx: Context, args: argparse.Namespace) -> int:
         ctx.show(record, _twin_lines(record))
         return 0
     settled = _settle(ctx, record)
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, "create", settled.run_id))
+    run = _ended(ctx.client, _run_of(ctx.client, args.name, ("create",), settled.run_id))
+    ctx.show(run, _twin_lines(settled.record) + _run_lines(run))
+    return EXIT[_verdict(run).status]
+
+
+def _twin_step(ctx: Context, args: argparse.Namespace) -> int:
+    # A partial spec with no driver: the twin keeps its own. If-Match * asks the server to refuse a
+    # twin that does not exist, rather than create one.
+    spec = _source(ctx, args)
+    if args.allow_restart:
+        spec["allow_restart"] = True
+    if args.dry_run:
+        plan, _ = ctx.client.apply_twin(args.name, spec, if_match="*", dry_run=True)
+        try:
+            verdict = findings.decode(plan["verdict"])
+        except Rejected as e:
+            raise Failure("the plan's verdict is no findings 1 document:", *_problem_lines(e)) from None
+        ctx.show(plan, _plan_lines(plan, verdict))
+        return EXIT[verdict.status]
+    record, _ = ctx.client.apply_twin(args.name, spec, if_match="*")
+    if args.no_wait:
+        ctx.show(record, _twin_lines(record))
+        return 0
+    if record["status"]["observed_generation"] == record["generation"]:
+        # A written spec moves the generation past the observed one: this one was the twin's already.
+        ctx.show(record, [*_twin_lines(record), "the twin's spec is this already: no run started"])
+        return 0
+    settled = _settle(ctx, record)
+    # The run toward the spec is a step, or a create for a twin whose create never applied (D-050).
+    run = _ended(ctx.client, _run_of(ctx.client, args.name, ("step", "create"), settled.run_id))
     ctx.show(run, _twin_lines(settled.record) + _run_lines(run))
     return EXIT[_verdict(run).status]
 
@@ -228,11 +277,21 @@ def _twin_destroy(ctx: Context, args: argparse.Namespace) -> int:
         if e.status != 404:
             raise
         settled = Settled(record, record["status"].get("run_id"), gone=True)
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, "destroy", settled.run_id))
+    run = _ended(ctx.client, _run_of(ctx.client, args.name, ("destroy",), settled.run_id))
     # Deleted only when the twin is gone; a teardown that kept the record shows where it stands.
     head = [f"twin {args.name} deleted"] if settled.gone else _twin_lines(settled.record)
     ctx.show(run, head + _run_lines(run))
     return EXIT[_verdict(run).status]
+
+
+def _twin_verify(ctx: Context, args: argparse.Namespace) -> int:
+    document = ctx.client.verify_twin(args.name)
+    try:
+        verdict = findings.decode(document)
+    except Rejected as e:
+        raise Failure("the verdict is no findings 1 document:", *_problem_lines(e)) from None
+    ctx.show(document, _verdict_lines(verdict))
+    return EXIT[verdict.status]
 
 
 def _run_get(ctx: Context, args: argparse.Namespace) -> int:
@@ -252,7 +311,7 @@ def _run_watch(ctx: Context, args: argparse.Namespace) -> int:
         print(json.dumps(events, indent=2))
     else:
         # The exit code is the verdict's, so the text says which and why.
-        for line in _verdict_lines(run):
+        for line in _verdict_lines(_verdict(run)):
             print(line)
     return EXIT[_verdict(run).status]
 
@@ -285,6 +344,12 @@ def _bundle_get(ctx: Context, args: argparse.Namespace) -> int:
     return 0
 
 
+def _bundle_diff(ctx: Context, args: argparse.Namespace) -> int:
+    doc = ctx.client.diff_bundles(args.from_id, args.to_id)
+    ctx.show(doc, _diff_lines(doc))
+    return 0
+
+
 # Waiting.
 
 
@@ -299,34 +364,51 @@ class Settled:
 
 
 def _settle(ctx: Context, record: dict[str, Any]) -> Settled:
-    """Watch a twin until the loop has acted on its generation or the twin is gone."""
+    """Watch a twin until the loop has acted on its generation or the twin is gone, with a
+    progress line each time the phase a record shows its run in flight at moves (`_phase`). The
+    record that settles the run, or the twin's deletion, prints none: a step that ended short of
+    `applied` leaves `phase` the running twin's, which is no phase the run reached."""
     seen: str | None = record["status"].get("run_id")
     if record["status"]["observed_generation"] == record["generation"]:
         return Settled(record, seen)
-    name, phase = record["name"], record["status"].get("phase")
+    name, phase = record["name"], _phase(record["status"])
     for event in ctx.client.watch_twin(name, since_revision=record["revision"]):
         record = event["object"]
         seen = record["status"].get("run_id", seen)
-        if record["status"].get("phase", phase) != phase:
-            phase = record["status"]["phase"]
+        settled = record["status"]["observed_generation"] == record["generation"]
+        now = _phase(record["status"])
+        if not settled and event["type"] != "DELETED" and now is not None and now != phase:
+            phase = now
             ctx.progress(f"{name}: {phase}")
         if event["type"] == "DELETED":
             return Settled(record, seen, gone=True)
-        if record["status"]["observed_generation"] == record["generation"]:
+        if settled:
             return Settled(record, seen)
     raise Failure(f"the watch of twin {name} ended before the loop acted on generation {record['generation']}")
 
 
-def _run_of(client: Client, twin: str, operation: str, seen: str | None) -> dict[str, Any]:
-    """The run a record last named, if it is the operation's, else the twin's newest of it."""
+def _phase(status: Mapping[str, Any]) -> str | None:
+    """The phase a record shows its run last completed: a running step's `last_step.phase`, which
+    moves before `phase` does (until `applied` a step records its phases there alone), else
+    `phase`; None when the record shows neither."""
+    last = status.get("last_step")
+    if last is not None and last["outcome"] == "running":
+        step_phase: str = last["phase"]
+        return step_phase
+    phase: str | None = status.get("phase")
+    return phase
+
+
+def _run_of(client: Client, twin: str, operations: Sequence[str], seen: str | None) -> dict[str, Any]:
+    """The run a record last named, if it is of one of the operations, else the twin's newest of them."""
     if seen is not None:
         run = client.get_run(seen)
-        if run["operation"] == operation:
+        if run["operation"] in operations:
             return run
     for run in client.list_runs(twin=twin):
-        if run["operation"] == operation:
+        if run["operation"] in operations:
             return run
-    raise Failure(f"twin {twin} has no {operation} run")
+    raise Failure(f"twin {twin} has no {' or '.join(operations)} run")
 
 
 def _ended(client: Client, run: dict[str, Any]) -> dict[str, Any]:
@@ -374,8 +456,13 @@ def _twin_lines(record: Mapping[str, Any]) -> list[str]:
     lines = [f"twin {record['name']}: generation {record['generation']}, observed {status['observed_generation']}"]
     if "deletion_requested_at" in record:
         lines.append(f"deletion requested at {record['deletion_requested_at']}")
-    lines += [f"Ready: {_ready(status)}", f"phase: {status.get('phase', 'none')}",
-              f"bundle: {status.get('bundle_id', 'none')}"]
+    lines.append(f"Ready: {_ready(status)}")
+    lines += [f"{c['type']}: {_condition(c)}" for kind in ("Stepping", "Diverged") for c in status["conditions"]
+              if c["type"] == kind]
+    lines += [f"phase: {status.get('phase', 'none')}", f"bundle: {status.get('bundle_id', 'none')}"]
+    if "last_step" in status:
+        last = status["last_step"]
+        lines.append(f"last step: {last['outcome']} {last['from'][:12]} -> {last['to'][:12]} at {last['phase']}")
     if "run_id" in status:
         lines.append(f"run: {status['run_id']}")
     lines.append("nodes:" if status["nodes"] else "nodes: none")
@@ -387,27 +474,42 @@ def _twin_lines(record: Mapping[str, Any]) -> list[str]:
 
 def _ready(status: Mapping[str, Any]) -> str:
     ready = next((c for c in status["conditions"] if c["type"] == "Ready"), None)
-    if ready is None:
-        return "not reported"
-    return f"{ready['status']} ({ready['reason']})" if "reason" in ready else str(ready["status"])
+    return "not reported" if ready is None else _condition(ready)
+
+
+def _condition(condition: Mapping[str, Any]) -> str:
+    """A condition's status, and its reason when it has one."""
+    return f"{condition['status']} ({condition['reason']})" if "reason" in condition else str(condition["status"])
 
 
 def _run_lines(run: Mapping[str, Any]) -> list[str]:
     ended = f", ended at {run['ended_at']}" if "ended_at" in run else ""
     return [f"run {run['id']}: {run['operation']} of twin {run['twin']}, {run['state']}",
-            f"asked by {run['principal']} at {run['created_at']}{ended}", *_verdict_lines(run)]
+            f"asked by {run['principal']} at {run['created_at']}{ended}",
+            *(_verdict_lines(_verdict(run)) if "verdict" in run else [])]
 
 
-def _verdict_lines(run: Mapping[str, Any]) -> list[str]:
-    """A run's verdict and each of its findings; none before the run has ended."""
-    if "verdict" not in run:
-        return []
-    verdict = _verdict(run)
+def _verdict_lines(verdict: Verdict) -> list[str]:
+    """A verdict's status, counts and each of its findings."""
     lines = [f"verdict: {verdict.status}"]
     if verdict.counts is not None:
         c = verdict.counts
         lines.append(f"  held {c.held}, failed {c.failed}, skipped {c.skipped}")
     return lines + [f"  {_finding(documents.encode(f))}" for f in verdict.findings]
+
+
+def _plan_lines(plan: Mapping[str, Any], verdict: Verdict) -> list[str]:
+    """A dry run's plan: the deployment it would apply, its verdict and, for a step, each node's
+    change (with its reasons when it has any) and each link added and removed."""
+    lines = [f"deployment: {plan['deployment']['id']}", *_verdict_lines(verdict)]
+    changes = plan.get("changes")
+    if changes is not None:
+        lines.append("changes:")
+        lines += [f"  {c['node']}: {c['action']}" + (f" ({', '.join(c['reasons'])})" if c["reasons"] else "")
+                  for c in changes["nodes"]]
+        for what in ("added", "removed"):
+            lines += [f"  link {what}: {a} -- {b}" for a, b in changes[f"links_{what}"]]
+    return lines
 
 
 def _event_line(event: Mapping[str, Any]) -> str:
@@ -423,8 +525,32 @@ def _event_line(event: Mapping[str, Any]) -> str:
 
 def _bundle_lines(bundle_id: str, manifest: Mapping[str, Any]) -> list[str]:
     nodes = ", ".join(f"{n['name']} ({n['platform']})" for n in manifest["nodes"])
+    unmanaged = ", ".join(n["name"] for n in manifest["nodes"] if "config" not in n)
     return [f"bundle {bundle_id}", f"blueprint: {manifest['blueprint_id']}", f"nodes: {nodes or 'none'}",
+            *([f"unmanaged: {unmanaged}"] if unmanaged else []),
             f"links: {len(manifest['links'])}, probes: {len(manifest['probes'])}"]
+
+
+def _diff_lines(doc: Mapping[str, Any]) -> list[str]:
+    head = f"diff {doc['from']} -> {doc['to']}"
+    if doc["unchanged"]:
+        return [f"{head}: unchanged"]
+
+    def end(e: Mapping[str, Any]) -> str:
+        return f"{e['device']}:{e['interface']}"
+
+    nodes, links, probes = doc["nodes"], doc["links"], doc["probes"]
+    lines = [head]
+    for what, names in (("nodes added", nodes["added"]), ("nodes removed", nodes["removed"])):
+        if names:
+            lines.append(f"{what}: {', '.join(names)}")
+    lines += [f"node {c['node']} changed: {', '.join(c['reasons'])}" for c in nodes["changed"]]
+    for what, found in (("links added", links["added"]), ("links removed", links["removed"])):
+        lines += [f"{what}: {end(link['a'])} -- {end(link['b'])}" for link in found]
+    for what, names in (("probes added", probes["added"]), ("probes removed", probes["removed"])):
+        if names:
+            lines.append(f"{what}: {', '.join(names)}")
+    return lines
 
 
 def _finding(f: Mapping[str, Any]) -> str:

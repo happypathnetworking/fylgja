@@ -5,6 +5,7 @@ path API 1 does not have, to problem-1."""
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
@@ -23,7 +24,7 @@ import httpx
 import pytest
 import uvicorn
 import yaml
-from fakes import FakeDriver, fake_push, fake_ready
+from fakes import FakeDriver, FakeReader, fake_push, fake_ready
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
@@ -33,13 +34,15 @@ from fylgja_core.credentials import Provider
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding, Subject, Verdict
 from fylgja_core.local_store import LocalStore
-from fylgja_core.reconcile import Reconciler
+from fylgja_core.packages import Loaded
+from fylgja_core.reconcile import Reconciler, set_condition
 from fylgja_core.run import Run
 from fylgja_core.run import State as RunState
 from fylgja_core.server import auth
 from fylgja_core.server.app import create_app
 from fylgja_core.store import Conflict
 from fylgja_core.twin_record import Spec, Status, TwinRecord
+from fylgja_core.verify import Verifier
 
 ROOT = Path(__file__).resolve().parents[2]
 ALICE = "alice-test-token"
@@ -51,6 +54,7 @@ ENVIRON = {
     "FYLGJA_CREDENTIAL_EOS_PASSWORD": "admin",
 }
 THREE_NODE = ROOT / "testdata" / "blueprint" / "three-node.json"
+STEPS = ROOT / "testdata" / "blueprint" / "steps"
 SSE = "text/event-stream"
 
 
@@ -61,6 +65,8 @@ class Core:
     app: Starlette
     store: LocalStore
     driver: FakeDriver
+    reader: FakeReader
+    loaded: Loaded
     reconciler: Reconciler
     closing: threading.Event
 
@@ -72,14 +78,17 @@ def core(tmp_path: Path) -> Iterator[Core]:
     tokens.write_text(f"# the test's clients\n{auth.hash_token(ALICE)} alice\n{auth.hash_token(BOB)} bob\n")
     loaded = packages.load([ROOT / "psp", ROOT / "probes"])
     driver = FakeDriver()
+    reader = FakeReader(driver)
+    verifier = Verifier(loaded.platforms, loaded.probes, Provider(ENVIRON), reader=reader)
     reconciler = Reconciler(store, {driver.name: driver}, loaded.platforms, loaded.probes, Provider(ENVIRON),
                             workers=1, pusher=fake_push(driver=driver), readiness=fake_ready(driver=driver),
-                            cancel_poll_s=0.01)
+                            cancel_poll_s=0.01, verifier=verifier, step_wait_s=1.0, verify_poll_s=0.01)
     closing = threading.Event()
     app = create_app(store=store, loaded=loaded, drivers={driver.name: driver}, default_driver=driver.name,
                      reconciler=reconciler, tokens=auth.Tokens.load(tokens), build=version("fylgja-core"),
-                     closing=closing)
-    yield Core(app=app, store=store, driver=driver, reconciler=reconciler, closing=closing)
+                     closing=closing, verifier=verifier)
+    yield Core(app=app, store=store, driver=driver, reader=reader, loaded=loaded, reconciler=reconciler,
+               closing=closing)
     store.close()
 
 
@@ -169,7 +178,7 @@ def test_every_other_call_needs_a_token(core: Core) -> None:
 def test_the_drivers_are_listed_with_the_default_and_capabilities(api: TestClient) -> None:
     doc = answered(api.get("/v1/drivers"), 200)
     assert doc == {"drivers": [{"name": "fake", "default": True, "capabilities": {
-        "nodes": "provisions", "relink": False, "forwarding": "software", "access": "direct", "isolation": "names"}}]}
+        "nodes": "provisions", "relink": True, "forwarding": "software", "access": "direct", "isolation": "names"}}]}
 
 
 # Blueprints.
@@ -211,6 +220,15 @@ def test_a_blueprint_never_filed_is_not_found(api: TestClient) -> None:
 # Bundles.
 
 
+def test_a_blueprint_with_an_unmanaged_device_builds_a_bundle_whose_node_has_no_config(api: TestClient) -> None:
+    unmanaged = ROOT / "testdata/blueprint/three-node-unmanaged.json"
+    blueprint_id = file_blueprint(api, a_blueprint(unmanaged))
+    result = answered(api.post("/v1/bundles", json={"blueprint_id": blueprint_id}), 201)
+    nodes = {n["name"]: n for n in result["manifest"]["nodes"]}
+    assert "config" not in nodes["n2"] and "config" in nodes["n1"] and "config" in nodes["n3"]
+    assert bundle.validate(result["manifest"]) == []
+
+
 def test_a_bundle_is_built_once_and_read_back(api: TestClient) -> None:
     blueprint_id = file_blueprint(api)
     r = api.post("/v1/bundles", json={"blueprint_id": blueprint_id})
@@ -241,9 +259,36 @@ def test_a_bundle_request_is_held_to_its_schema(api: TestClient) -> None:
     refused(api.post("/v1/bundles", json={"blueprint_id": "short"}), 400, "request.invalid")
 
 
-def test_the_bundle_diff_is_not_built_in_this_phase(api: TestClient) -> None:
-    problem = refused(api.get(f"/v1/bundles/{'a' * 64}/diff/{'b' * 64}"), 501, "api.unbuilt")
-    assert "phase 5" in problem["detail"]
+def file_bundle(api: TestClient, path: Path) -> str:
+    blueprint_id = file_blueprint(api, json.loads(path.read_text()))
+    bundle_id: str = answered(api.post("/v1/bundles", json={"blueprint_id": blueprint_id}), 201)["id"]
+    return bundle_id
+
+
+def test_the_bundle_diff_of_two_filed_bundles_names_what_a_step_changes(api: TestClient) -> None:
+    before = file_bundle(api, THREE_NODE)
+    after = file_bundle(api, STEPS / "two-node.json")
+    result = answered(api.get(f"/v1/bundles/{before}/diff/{after}"), 200)
+    assert (result["from"], result["to"], result["unchanged"]) == (before, after, False)
+    assert result["nodes"]["removed"] == ["n3"] and result["nodes"]["added"] == []
+    assert [c["node"] for c in result["nodes"]["changed"]] == ["n1", "n2"]
+    assert len(result["links"]["removed"]) == 2 and result["links"]["added"] == []
+
+
+def test_the_bundle_diff_of_a_bundle_with_itself_is_unchanged(api: TestClient) -> None:
+    only = file_bundle(api, THREE_NODE)
+    result = answered(api.get(f"/v1/bundles/{only}/diff/{only}"), 200)
+    assert result["unchanged"] is True and result["nodes"]["changed"] == []
+
+
+def test_the_bundle_diff_of_a_bundle_never_filed_is_not_found(api: TestClient) -> None:
+    only = file_bundle(api, THREE_NODE)
+    assert "e" * 64 in refused(api.get(f"/v1/bundles/{only}/diff/{'e' * 64}"), 404, "bundle.not_found")["detail"]
+    assert "e" * 64 in refused(api.get(f"/v1/bundles/{'e' * 64}/diff/{only}"), 404, "bundle.not_found")["detail"]
+    both = refused(api.get(f"/v1/bundles/{'d' * 64}/diff/{'e' * 64}"), 404, "bundle.not_found")["detail"]
+    assert "d" * 64 in both and "e" * 64 not in both
+    refused(api.get(f"/v1/bundles/{only}/diff/not-an-id"), 404, "bundle.not_found")
+    refused(api.get(f"/v1/bundles/not-an-id/diff/{only}"), 404, "bundle.not_found")
 
 
 # Packages.
@@ -442,13 +487,207 @@ def test_another_driver_than_the_twins_is_refused(api: TestClient, core: Core) -
     refused(put(api, "t", {"blueprint_id": blueprint_id, "driver": "fake"}), 409, "twin.driver.fixed")
 
 
-def test_a_change_of_spec_is_a_step_which_is_not_built_yet(api: TestClient) -> None:
+# Twins: a new spec on a twin that runs is a step (D-050).
+
+
+def target_of(api: httpx.Client, core: Core, path: Path, name: str = "t") -> str:
+    """The blueprint at `path` filed and built, and the reader seeded with the facts of `name`
+    built to it, so verify holds on the twin a step to it leaves; the blueprint's id."""
+    blueprint_id = file_blueprint(api, a_blueprint(path))
+    built = api.post("/v1/bundles", json={"blueprint_id": blueprint_id})
+    assert built.status_code in (200, 201), built.text
+    core.reader.seed(name, bundle.decode(built.json()["manifest"]), core.loaded.platforms)
+    return blueprint_id
+
+
+def test_a_new_spec_on_a_ready_twin_queues_a_step_the_loop_runs_to_ready(
+    api: TestClient, core: Core, caplog: pytest.LogCaptureFixture
+) -> None:
     record = create(api)
-    other = file_blueprint(api, a_blueprint(ROOT / "testdata/blueprint/mixed.json"))
-    problem = refused(put(api, "t", {"blueprint_id": other}), 501, "api.unbuilt")
-    assert "phase 5" in problem["detail"]
-    refused(put(api, "t", {"blueprint_id": record["spec"]["blueprint_id"], "allow_restart": True}), 501, "api.unbuilt")
+    target = target_of(api, core, STEPS / "three-node-unlinked.json")
+    with caplog.at_level(logging.INFO, logger="fylgja.audit"):
+        r = put(api, "t", {"blueprint_id": target})
+        written = answered(r, 200)
+    assert (written["revision"], written["generation"]) == (record["revision"] + 1, 2)
+    assert written["spec"] == {"blueprint_id": target, "driver": "fake", "allow_restart": False}
+    assert written["status"] == record["status"]  # the API never writes status
+    assert r.headers["etag"] == f'"{written["revision"]}"'
+    (line,) = [line for line in audited(caplog, "put") if line.get("generation") == 2]
+    assert (line["principal"], line["revision"]) == ("alice", written["revision"])
+
+    done = settled(api, "t")
+    assert done["status"]["observed_generation"] == 2 and ready(done) == ("True", "twin.ready")
+    step, _ = runs_of(api, "t")
+    assert (step["id"], step["operation"], step["principal"]) == (line["run"], "step", "alice")
+    assert (step["state"], step["verdict"]["status"], step["verdict"]["wait"]["outcome"]) == ("ended", "ok", "settled")
+    last = done["status"]["last_step"]
+    assert (last["outcome"], last["from"], last["to"], last["phase"], last["run_id"]) == (
+        "stepped", record["status"]["bundle_id"], done["status"]["bundle_id"], "flows", step["id"])
+
+
+def test_a_new_spec_on_a_twin_whose_create_never_applied_queues_a_create(api: TestClient, core: Core) -> None:
+    core.driver.refuse = Refusal("admission.capacity", "The host has no room.")
+    record = create(api)
+    assert "deployment_id" not in record["status"]  # its cleanup cleared it
+    core.driver.refuse = None
+    answered(put(api, "t", {"blueprint_id": record["spec"]["blueprint_id"], "allow_restart": True}), 200)
+    done = settled(api, "t")
+    assert ready(done) == ("True", "twin.ready")
+    again, _ = runs_of(api, "t")
+    assert (again["operation"], again["principal"], again["verdict"]["status"]) == ("create", "alice", "ok")
+
+
+def test_a_new_spec_under_an_if_match_the_record_moved_past_is_refused(api: TestClient) -> None:
+    record = create(api)
+    other = file_blueprint(api, a_blueprint(STEPS / "two-node.json"))
+    refused(put(api, "t", {"blueprint_id": other}, **{"If-Match": '"1"'}), 412, "twin.conflict")
+    assert answered(api.get("/v1/twins/t"), 200) == record and len(runs_of(api, "t")) == 1
+    written = answered(put(api, "t", {"blueprint_id": other}, **{"If-Match": f'"{record["revision"]}"'}), 200)
+    assert written["generation"] == 2
+
+
+def test_a_new_spec_whose_write_is_lost_withdraws_its_step_run(
+    api: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = create(api)
+    other = file_blueprint(api, a_blueprint(STEPS / "two-node.json"))
+
+    def lost(record: TwinRecord, expected_revision: int) -> TwinRecord:
+        raise Conflict("twin t moved")
+
+    monkeypatch.setattr(core.store, "update_twin", lost)
+    refused(put(api, "t", {"blueprint_id": other}), 412, "twin.conflict")
+    withdrawn, _ = runs_of(api, "t")
+    assert (withdrawn["operation"], withdrawn["state"], withdrawn["verdict"]["status"]) == ("step", "ended", "failed")
+    assert [f["rule"] for f in withdrawn["verdict"]["findings"]] == ["run.cancelled"]
     assert answered(api.get("/v1/twins/t"), 200) == record
+
+
+def condition_set(kind: Any, status: Any, reason: str) -> Callable[[Status], Status]:
+    """A write of the loop's to a status: the condition `kind` set to `status` for `reason`."""
+    return lambda s: dataclasses_replace(s, conditions=set_condition(s.conditions, kind, status, reason))
+
+
+def beaten_by_the_loop(
+    monkeypatch: pytest.MonkeyPatch, store: LocalStore, *writes: Callable[[Status], Status]
+) -> list[int]:
+    """Make the next twin record writes lose their compare-and-set, each to the loop's write of the
+    status by `writes` in turn, landing between the handler's read and its write; the revision each
+    of the loop's writes left."""
+    real = store.update_twin
+    left = list(writes)
+    beaten: list[int] = []
+
+    def update_twin(record: TwinRecord, expected_revision: int) -> TwinRecord:
+        if left:
+            current = store.get_twin(record.name)
+            beaten.append(real(dataclasses_replace(current, status=left.pop(0)(current.status)),
+                               current.revision).revision)
+        return real(record, expected_revision)
+
+    monkeypatch.setattr(store, "update_twin", update_twin)
+    return beaten
+
+
+def ready_and_idle(idle: TestClient, core: Core) -> tuple[dict[str, Any], str]:
+    """A Ready twin `t`, made by one pass of the loop, which is not started, and another blueprint filed."""
+    answered(put(idle, "t", {"blueprint_id": file_blueprint(idle)}), 201)
+    asyncio.run(core.reconciler.reconcile("t"))
+    return answered(idle.get("/v1/twins/t"), 200), file_blueprint(idle, a_blueprint(STEPS / "two-node.json"))
+
+
+@pytest.mark.parametrize("if_match", [None, "*"])
+def test_a_new_spec_whose_write_the_loop_beat_is_written_again_over_the_loops_status(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch, if_match: str | None
+) -> None:
+    record, other = ready_and_idle(idle, core)
+    beaten = beaten_by_the_loop(monkeypatch, core.store, condition_set("Stepping", "False", "twin.ready"))
+    headers = {} if if_match is None else {"If-Match": if_match}
+    written = answered(put(idle, "t", {"blueprint_id": other}, **headers), 200)
+    assert len(beaten) == 1 and written["revision"] == beaten[0] + 1  # written over the loop's write
+    assert (written["generation"], written["spec"]["blueprint_id"]) == (record["generation"] + 1, other)
+    assert [c["type"] for c in written["status"]["conditions"]] == ["Ready", "Stepping"]  # the loop's status kept
+    (step, _) = runs_of(idle, "t")  # the run queued for the first try, never withdrawn
+    assert (step["operation"], step["state"], step["principal"]) == ("step", "queued", "alice")
+    assert core.store.events(step["id"]) == []
+
+
+@pytest.mark.parametrize("why", ["lost twice", "If-Match named a revision"])
+def test_a_new_spec_whose_write_the_loop_beat_is_refused_when_it_cannot_be_made_again(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch, why: str
+) -> None:
+    record, other = ready_and_idle(idle, core)
+    writes = [condition_set("Stepping", "False", "twin.ready")]
+    if why == "lost twice":
+        writes.append(condition_set("Stepping", "False", "twin.stepping"))
+    beaten = beaten_by_the_loop(monkeypatch, core.store, *writes)
+    headers = {} if why == "lost twice" else {"If-Match": f'"{record["revision"]}"'}
+    refused(put(idle, "t", {"blueprint_id": other}, **headers), 412, "twin.conflict")
+    assert len(beaten) == len(writes)
+    stored = answered(idle.get("/v1/twins/t"), 200)
+    assert (stored["generation"], stored["spec"]) == (record["generation"], record["spec"])  # no spec written
+    (withdrawn, _) = runs_of(idle, "t")  # one run, withdrawn once
+    assert (withdrawn["operation"], withdrawn["state"], withdrawn["verdict"]["status"]) == ("step", "ended", "failed")
+    assert [f["rule"] for f in withdrawn["verdict"]["findings"]] == ["run.cancelled"]
+
+
+def test_a_new_spec_whose_write_the_loop_beat_meets_the_refusals_again(
+    idle: TestClient, core: Core, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record, other = ready_and_idle(idle, core)
+    beaten_by_the_loop(monkeypatch, core.store, condition_set("Diverged", "True", "step.diverged"))
+    refused(put(idle, "t", {"blueprint_id": other}), 409, "twin.diverged")  # the loop's write diverged the twin
+    assert answered(idle.get("/v1/twins/t"), 200)["spec"] == record["spec"]
+    (withdrawn, _) = runs_of(idle, "t")
+    assert (withdrawn["operation"], withdrawn["state"], withdrawn["verdict"]["status"]) == ("step", "ended", "failed")
+
+
+def stepping_into_apply(api: httpx.Client, core: Core, path: Path) -> dict[str, Any]:
+    """A step of the Ready twin `t` to the blueprint at `path`, held in its apply, which never
+    answers until cancelled: the step run once its `apply started` is recorded."""
+    core.driver.block = "apply"
+    answered(put(api, "t", {"blueprint_id": file_blueprint(api, a_blueprint(path))}), 200)
+
+    def applying() -> dict[str, Any] | None:
+        listed = [r for r in runs_of(api, "t") if r["operation"] == "step"]
+        if not listed:
+            return None
+        events = answered(api.get(f"/v1/runs/{listed[0]['id']}/events"), 200)["events"]
+        return listed[0] if events and (events[-1]["phase"], events[-1]["outcome"]) == ("apply", "started") else None
+
+    return wait_for(applying)
+
+
+def test_a_diverged_twin_accepts_only_deletion(api: TestClient, core: Core) -> None:
+    create(api)
+    step = stepping_into_apply(api, core, STEPS / "two-node.json")
+    answered(api.post(f"/v1/runs/{step['id']}/cancel"), 202)
+    diverged = settled(api, "t")
+    core.driver.block = None
+    assert [(c["type"], c["status"]) for c in diverged["status"]["conditions"]] == [
+        ("Ready", "False"), ("Stepping", "False"), ("Diverged", "True")]
+    assert answered(api.get(f"/v1/runs/{step['id']}"), 200)["verdict"]["status"] == "diverged"
+
+    other = file_blueprint(api, a_blueprint(STEPS / "three-node-unlinked.json"))
+    problem = refused(put(api, "t", {"blueprint_id": other}), 409, "twin.diverged")
+    assert problem["detail"] == "Twin t is diverged; it accepts only deletion."
+    dry = api.put("/v1/twins/t", params={"dry_run": "true"}, json={"spec": {"blueprint_id": other}})
+    refused(dry, 409, "twin.diverged")
+    assert answered(put(api, "t", {"blueprint_id": diverged["spec"]["blueprint_id"]}), 200) == diverged
+    assert answered(api.get("/v1/twins/t"), 200) == diverged and len(runs_of(api, "t")) == 2
+    answered(api.delete("/v1/twins/t"), 202)
+    gone(api, "t")
+
+
+def test_a_delete_during_a_step_cancels_it_and_the_twin_is_gone(api: TestClient, core: Core) -> None:
+    create(api)
+    step = stepping_into_apply(api, core, STEPS / "two-node.json")
+    answered(api.delete("/v1/twins/t"), 202)  # marks the step cancelling: its apply, which never answers, stops
+    gone(api, "t")
+    destroy, ended, _ = runs_of(api, "t")
+    assert (ended["id"], ended["verdict"]["status"]) == (step["id"], "diverged")  # its apply had begun (D-029)
+    assert (destroy["operation"], destroy["verdict"]["status"]) == ("destroy", "ok")
+    assert "t" not in core.driver.labs
 
 
 def test_a_driver_this_core_does_not_serve_is_refused(api: TestClient) -> None:
@@ -479,8 +718,65 @@ def test_a_malformed_name_or_body_is_refused(api: TestClient) -> None:
     refused(api.get("/v1/runs/not-a-ulid"), 404, "run.not_found")
 
 
-def test_verify_is_not_built_yet(api: TestClient) -> None:
-    refused(api.post("/v1/twins/t/verifications"), 501, "api.unbuilt")
+def seed_reader(core: Core, name: str = "t") -> None:
+    """Facts consistent with the bundle the twin was built to, as the nodes would report them."""
+    bundle_id = core.store.get_twin(name).status.bundle_id
+    assert bundle_id is not None
+    manifest = bundle.decode(json.loads(core.store.get_bundle(bundle_id)["manifest.json"]))
+    core.reader.seed(name, manifest, core.loaded.platforms)
+
+
+def test_a_ready_twin_verifies_ok_through_the_route(api: TestClient, core: Core) -> None:
+    record = create(api)
+    seed_reader(core)
+    verdict = answered(api.post("/v1/twins/t/verifications"), 200)
+    assert verdict["operation"] == "verify" and verdict["status"] == "ok"
+    assert {f["severity"] for f in verdict["findings"]} <= {"info"}
+    assert verdict["subject"] == {"twin": "t", "bundle_id": record["status"]["bundle_id"],
+                                  "deployment_id": record["status"]["deployment_id"]}
+    assert verdict["counts"]["held"] > 0 and verdict["counts"]["failed"] == 0
+    assert answered(api.get("/v1/twins/t"), 200) == record
+
+
+def test_a_node_that_reports_nothing_is_a_nonconforming_verdict(api: TestClient, core: Core) -> None:
+    create(api)
+    seed_reader(core)
+    core.reader.facts[("t", "n1")] = {}
+    verdict = answered(api.post("/v1/twins/t/verifications"), 200)
+    assert verdict["status"] == "nonconforming" and verdict["counts"]["failed"] > 0
+
+
+def test_an_unreadable_node_fails_the_verdict(api: TestClient, core: Core) -> None:
+    create(api)
+    seed_reader(core)
+    core.reader.unreadable.add(("t", "n1"))
+    verdict = answered(api.post("/v1/twins/t/verifications"), 200)
+    assert verdict["status"] == "failed"
+
+
+def test_a_twin_with_no_applied_deployment_is_not_running(api: TestClient, core: Core) -> None:
+    core.driver.refuse = Refusal("admission.capacity", "The host has no room.")
+    answered(put(api, "t", {"blueprint_id": file_blueprint(api)}), 201)
+    settled(api, "t")
+    assert core.store.get_twin("t").status.deployment_id is None
+    problem = refused(api.post("/v1/twins/t/verifications"), 409, "twin.not_running")
+    assert problem["detail"] == "Twin t has no applied deployment to read."
+    assert core.reader.calls == []
+
+
+def test_a_create_between_planned_and_applied_is_not_running(idle: TestClient, core: Core) -> None:
+    # The deployment id is written at `planned`, the nodes only at `applied`: the hosts are still being deployed.
+    spec = Spec(blueprint_id=file_blueprint(idle), driver="fake", allow_restart=False)
+    status = Status(observed_generation=0, conditions=(), nodes=(), phase="planned", blueprint_id=spec.blueprint_id,
+                    bundle_id="b" * 64, deployment_id="d" * 64)
+    core.store.create_twin(TwinRecord(name="t", revision=1, generation=1, spec=spec, status=status))
+    problem = refused(idle.post("/v1/twins/t/verifications"), 409, "twin.not_running")
+    assert problem["detail"] == "Twin t has no applied deployment to read."
+    assert core.reader.calls == [] and [c for c in core.driver.calls if c[0] == "exec"] == []
+
+
+def test_an_unknown_twin_cannot_be_verified(api: TestClient) -> None:
+    refused(api.post("/v1/twins/t/verifications"), 404, "twin.not_found")
 
 
 # Twins: the dry run.
@@ -533,6 +829,47 @@ def test_a_dry_run_of_an_uncompilable_blueprint_is_a_problem(api: TestClient) ->
     rejected = file_blueprint(api, a_blueprint(ROOT / "testdata/compiler/rejected/network-empty.json"))
     r = api.put("/v1/twins/t", params={"dry_run": "true"}, json={"spec": {"blueprint_id": rejected}})
     refused(r, 422, "bundle.rejected")
+
+
+def dry_run(api: httpx.Client, spec: dict[str, Any], name: str = "t") -> httpx.Response:
+    response: httpx.Response = api.put(f"/v1/twins/{name}", params={"dry_run": "true"}, json={"spec": spec})
+    return response
+
+
+def test_a_dry_run_on_a_twin_that_runs_answers_its_steps_changes_and_writes_nothing(
+    api: TestClient, core: Core
+) -> None:
+    record = create(api)
+    other = file_blueprint(api, a_blueprint(STEPS / "three-node-unlinked.json"))
+    before = stored(core.store)
+    plan = answered(dry_run(api, {"blueprint_id": other}), 200)
+    assert stored(core.store) == before  # no run, bundle or deployment, and the record as it was
+    assert set(plan) == {"deployment", "verdict", "changes"}
+    fake_api.check_component("Changes", plan["changes"])
+    assert plan["changes"] == {
+        "nodes": [{"node": "n1", "action": "kept", "reasons": []},
+                  {"node": "n2", "action": "recabled", "reasons": ["links"]},
+                  {"node": "n3", "action": "recabled", "reasons": ["links"]}],
+        "links_added": [], "links_removed": [["n2:ethernet-1/2", "n3:ethernet-1/1"]]}
+    assert (plan["verdict"]["operation"], plan["verdict"]["status"], plan["verdict"]["findings"]) == ("plan", "ok", [])
+    assert plan["deployment"]["allocation"] == record["status"]["allocation"]
+    assert plan["verdict"]["subject"]["deployment_id"] == plan["deployment"]["id"] != record["status"]["deployment_id"]
+    assert answered(api.get("/v1/twins/t"), 200) == record and len(runs_of(api, "t")) == 1
+    rejected = file_blueprint(api, a_blueprint(ROOT / "testdata/compiler/rejected/network-empty.json"))
+    refused(dry_run(api, {"blueprint_id": rejected}), 422, "bundle.rejected")
+
+
+def test_a_dry_run_of_a_step_needing_a_restart_the_spec_does_not_allow_is_rejected(api: TestClient, core: Core) -> None:
+    create(api)
+    core.driver.recreates = {"n3"}
+    other = file_blueprint(api, a_blueprint(STEPS / "three-node-n3-eos.json"))
+    plan = answered(dry_run(api, {"blueprint_id": other}), 200)
+    assert plan["verdict"]["status"] == "rejected"
+    assert [(f["rule"], f["object"]) for f in plan["verdict"]["findings"]] == [("step.restart.required", "n3")]
+    assert {c["node"]: c["action"] for c in plan["changes"]["nodes"]}["n3"] == "recreated"
+    allowed = answered(dry_run(api, {"blueprint_id": other, "allow_restart": True}), 200)
+    assert (allowed["verdict"]["status"], allowed["changes"]) == ("ok", plan["changes"])
+    assert len(runs_of(api, "t")) == 1
 
 
 # Twins: deletion.
@@ -881,6 +1218,33 @@ def test_the_thin_cli_creates_shows_and_destroys_a_twin_through_the_served_api(
     assert core.store.list_twins() == [] and "t" not in core.driver.labs
 
 
+def test_the_thin_cli_steps_a_twin_through_the_served_api(
+    served: httpx.Client, core: Core, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from fylgja_core import cli
+
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", str(served.base_url))
+    monkeypatch.setenv("FYLGJA_API_TOKEN", ALICE)
+    assert cli.main(["twin", "create", "t", "--blueprint", str(THREE_NODE)]) == 0
+    capsys.readouterr()
+    before = core.store.get_twin("t").status.bundle_id
+    assert before is not None
+    target = STEPS / "three-node-unlinked.json"
+    target_of(served, core, target)
+    assert cli.main(["twin", "step", "t", "--blueprint", str(target), "--dry-run"]) == 0
+    planned = capsys.readouterr().out.splitlines()
+    assert [line for line in planned if "n2:" in line] == [
+        "  n2: recabled (links)", "  link removed: n2:ethernet-1/2 -- n3:ethernet-1/1"]
+    assert cli.main(["twin", "step", "t", "--blueprint", str(target)]) == 0
+    out = capsys.readouterr().out
+    after = core.store.get_twin("t").status.bundle_id
+    assert after is not None and after != before
+    assert f"last step: stepped {before[:12]} -> {after[:12]} at flows" in out.splitlines()
+    assert "verdict: ok" in out.splitlines() and ALICE not in out
+    (step, _) = runs_of(served, "t")
+    assert (step["operation"], step["principal"]) == ("step", "alice")
+
+
 # A write that fails between the run it queues and the record: the run is withdrawn.
 
 
@@ -981,6 +1345,32 @@ def in_flight(core: Core, blueprint_id: str) -> Run:
                                       status=Status(observed_generation=0, conditions=(), nodes=(),
                                                     run_id=running.id, phase="compiled")))
     return running
+
+
+def test_two_specs_written_before_the_loop_takes_either_supersede_the_older_run(idle: TestClient, core: Core) -> None:
+    # The loop is not started: each pass is run here, so both specs are written before one takes a run.
+    answered(put(idle, "t", {"blueprint_id": file_blueprint(idle)}), 201)
+    asyncio.run(core.reconciler.reconcile("t"))
+    answered(put(idle, "t", {"blueprint_id": file_blueprint(idle, a_blueprint(STEPS / "two-node.json"))}), 200)
+    target = target_of(idle, core, STEPS / "three-node-unlinked.json")
+    answered(put(idle, "t", {"blueprint_id": target}), 200)
+    newer, older, _ = runs_of(idle, "t")
+    assert [(r["operation"], r["state"]) for r in (newer, older)] == [("step", "queued")] * 2
+    asyncio.run(core.reconciler.reconcile("t"))
+
+    superseded = answered(idle.get(f"/v1/runs/{older['id']}"), 200)
+    assert (superseded["state"], superseded["verdict"]["status"]) == ("ended", "failed")
+    assert [(f["rule"], f["message"]) for f in superseded["verdict"]["findings"]] == [
+        ("run.cancelled", f"The run was superseded before it started by run {newer['id']}.")]
+    page = answered(idle.get(f"/v1/runs/{older['id']}/events"), 200)
+    assert [(e["phase"], e["outcome"], e.get("rule")) for e in page["events"]] == [
+        ("cancel", "started", None), ("cancel", "done", "run.cancelled")]
+    assert page["ended"] is True  # so a watch of it ends
+    taken = answered(idle.get(f"/v1/runs/{newer['id']}"), 200)
+    assert (taken["state"], taken["verdict"]["status"], taken["principal"]) == ("ended", "ok", "alice")
+    record = answered(idle.get("/v1/twins/t"), 200)
+    assert record["status"]["observed_generation"] == record["generation"] == 3
+    assert record["spec"]["blueprint_id"] == target and record["status"]["last_step"]["run_id"] == newer["id"]
 
 
 def test_a_delete_whose_cancelling_mark_loses_reads_the_run_again_and_marks_it(

@@ -3,7 +3,7 @@
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/findings-1.schema.json",
   "title": "Fylgja verdict 1",
   "description": "A domain verdict: what a compile, a package validation, a plan, a run (create, step, destroy) or a verification concluded, with every finding that led there. Anything malformed or refused at the door is a problem document (problem-1), never a verdict.",
-  "$comment": "EXIT CODES, on the thin CLI only: ok -> 0; rejected, failed, nonconforming -> 1 (a negative verdict); unclean, diverged -> 3 (the twin is left dirty); a problem document or a transport failure -> 2. STATUS. ok: done as asked. rejected: refused on its merits before the runtime was touched (a compile, a package, admission). failed: failed after the runtime was touched, and cleanup completed. unclean: failed, and something remains (the run's findings name it). diverged: a step failed or was cancelled after touching the twin, and nothing was torn down. nonconforming: verify read every node and intent is not met. RULES. One stable dotted id per rule; the rule catalogue, written with the code that files the rules, is user documentation under docs/.",
+  "$comment": "EXIT CODES, on the thin CLI only: ok -> 0; rejected, failed, nonconforming -> 1 (a negative verdict); unclean, diverged -> 3 (the twin is left dirty); a problem document or a transport failure -> 2. STATUS. ok: done as asked. rejected: refused on its merits before the runtime was touched (a compile, a package, admission). failed: failed after the runtime was touched, and cleanup completed; for verify, the read did not complete: a node could not be read (verify.node.unread). unclean: failed, and something remains (the run's findings name it). diverged: a step failed or was cancelled after touching the twin, and nothing was torn down. nonconforming: verify read every node and intent is not met. RULES. One stable dotted id per rule; the rule catalogue, written with the code that files the rules, is user documentation under docs/.",
   "type": "object",
   "additionalProperties": false,
   "required": ["findings_version", "operation", "status", "subject", "findings"],
@@ -150,7 +150,7 @@
         },
         "outcome": {
           "enum": ["measured", "not_started", "not_read", "interrupted", "dropped"],
-          "description": "Whether counters were read; dropped when the step's target removed the probe. The report reads it."
+          "description": "Whether counters were read; dropped when the step's target removed the probe. not_started: the flow was not started; in phase 5 flows across a step are not built, and every probe of a step is reported so (D-051). The report reads it."
         },
         "sent": {
           "type": "integer",

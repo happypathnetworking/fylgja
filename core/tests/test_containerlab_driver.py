@@ -15,18 +15,23 @@ from typing import Any
 import pytest
 
 from fylgja_core import blueprint, bundle, compiler, containerlab, platform_package, probe_package
+from fylgja_core.containerlab import driver as driver_module
 from fylgja_core.containerlab import plan as clab_plan
-from fylgja_core.containerlab.cli import TIMED_OUT, CommandFailed
+from fylgja_core.containerlab.cli import STDERR_KEPT, TIMED_OUT, CommandFailed
 from fylgja_core.containerlab.driver import (
+    DOCKER_TIMEOUT_S,
+    EXEC_OUTPUT_KEPT,
     RULE_CAPACITY,
     RULE_IMAGE,
     ContainerlabDriver,
     deploy_budget,
     destroy_budget,
+    stray_deploys,
 )
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
-from fylgja_core.driver import Allocation, DriverFailed, Inspection, NodeState, Planned, Refusal
+from fylgja_core.deployment import Deployment
+from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -56,14 +61,17 @@ class FakeRunner:
         self.calls: list[tuple[str, ...]] = []
         self.budgets: list[float] = []
         self.cwds: list[Path | None] = []
+        self.logs: list[Path | None] = []
 
     async def __call__(
-        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None,
+        log: Path | None = None,
     ) -> str:
         args = tuple(argv)
         self.calls.append(args)
         self.budgets.append(timeout_s)
         self.cwds.append(cwd)
+        self.logs.append(log)
         if any(args[: len(prefix)] == prefix for prefix in self.fail):
             raise CommandFailed(args, self.status, "Error response from daemon: no such object\n")
         matches = [prefix for prefix in self.answers if args[: len(prefix)] == prefix]
@@ -191,6 +199,64 @@ def test_a_present_gated_image_is_admitted(tmp_path: Path) -> None:
     assert admit(tmp_path, runner, "mixed") == {"lab": "t", "mgmt_subnet": "172.20.1.0/24"}
 
 
+def stepping(
+    tmp_path: Path,
+    runner: FakeRunner,
+    step: bundle.Manifest,
+    held: Deployment,
+    *,
+    available_kb: int = ROOMY_KB,
+    cpus: int = 64,
+) -> Allocation | Refusal:
+    driver = ContainerlabDriver(tmp_path, runner=runner, meminfo=meminfo(tmp_path, available_kb), cpus=cpus)
+    return asyncio.run(driver.admit(step, PLATFORMS, PROBES, "t", [], held))
+
+
+def with_a_fourth_node() -> bundle.Manifest:
+    base = manifest("three-node")
+    extra = dataclasses.replace(base.nodes[0], name="n4", config=None)
+    return dataclasses.replace(base, nodes=(*base.nodes, extra))
+
+
+ONE_NODE_KB = 2048 * 1024  # a SR Linux node's memory, in kB
+
+
+def held() -> Deployment:
+    return planned("three-node", subnet="172.20.7.0/24").deployment
+
+
+def test_a_step_keeps_the_held_allocation_when_the_host_has_room_for_the_added_node(tmp_path: Path) -> None:
+    runner = FakeRunner({})
+    answer = stepping(tmp_path, runner, with_a_fourth_node(), held(), available_kb=ONE_NODE_KB)
+    assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24"}
+    assert runner.calls == []  # no `docker network` command: the twin's own network is not read
+
+
+def test_a_step_the_host_has_no_room_for_is_refused_naming_the_added_demand(tmp_path: Path) -> None:
+    refused = stepping(tmp_path, FakeRunner({}), with_a_fourth_node(), held(), available_kb=ONE_NODE_KB // 2)
+    assert refused == Refusal(RULE_CAPACITY, "The step adds 2048 MiB of memory, and the host has 1024 MiB available.")
+
+
+def test_a_step_that_adds_cpu_the_host_lacks_is_refused(tmp_path: Path) -> None:
+    refused = stepping(tmp_path, FakeRunner({}), with_a_fourth_node(), held(), cpus=0)
+    assert refused == Refusal(RULE_CAPACITY, "The step adds 0.5 CPUs, and the host has 0.")
+
+
+def test_a_step_that_shrinks_the_demand_is_admitted_on_a_host_with_no_free_memory(tmp_path: Path) -> None:
+    runner = FakeRunner({})
+    answer = stepping(tmp_path, runner, manifest("steps/two-node"), held(), available_kb=0, cpus=0)
+    assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24"}
+    assert runner.calls == []
+
+
+def test_a_step_whose_gated_image_is_absent_is_refused(tmp_path: Path) -> None:
+    runner = FakeRunner({}, fail=[IMAGE_INSPECT])
+    refused = stepping(tmp_path, runner, manifest("mixed"), held())
+    assert isinstance(refused, Refusal) and refused.rule == RULE_IMAGE
+    assert "ceos:4.32.0.2F" in refused.message
+    assert not any(c[:2] == ("docker", "network") for c in runner.calls)
+
+
 def test_a_hung_image_inspect_is_a_driver_error_not_an_absence(tmp_path: Path) -> None:
     with pytest.raises(CommandFailed) as raised:
         admit(tmp_path, FakeRunner(HOLDING_172_20_0, fail=[IMAGE_INSPECT], status=TIMED_OUT), "mixed")
@@ -241,6 +307,249 @@ def test_a_repeat_apply_replaces_the_files_and_deploys_again(tmp_path: Path) -> 
     assert (tmp_path / "containerlab/t" / TOPOLOGY).read_bytes() == stepped.files[TOPOLOGY]
     assert [path.name for path in (tmp_path / "containerlab/t").iterdir()] == [TOPOLOGY]
     assert runner.calls == [("containerlab", "deploy", "-t", str(tmp_path / "containerlab/t" / TOPOLOGY))] * 2
+
+
+# A stray deploy: one a killed core left running in its own session, which a resume's deploy waits out.
+
+
+class Strays:
+    """A `strays` scan that answers a stray deploy's pid for its first `running` calls, then none,
+    recording each topology it is asked about and, beside it, what the runner had run by then."""
+
+    def __init__(self, runner: FakeRunner, running: int | None) -> None:
+        self.runner = runner
+        self.running = running  # None: the stray never ends
+        self.asked: list[tuple[str, int]] = []
+
+    def __call__(self, topology: str) -> list[int]:
+        self.asked.append((topology, len(self.runner.calls)))
+        if self.running is None or len(self.asked) <= self.running:
+            return [4242]
+        return []
+
+
+def test_apply_waits_for_a_stray_deploy_of_the_twin_to_end_before_it_deploys(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    runner = FakeRunner({DEPLOY: ""})
+    strays = Strays(runner, running=2)
+    driver = ContainerlabDriver(tmp_path, runner=runner, strays=strays, stray_poll_s=0.01)
+    p = planned("three-node")
+    with caplog.at_level("INFO", logger="fylgja.containerlab"):
+        asyncio.run(driver.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    topology = str(tmp_path / "containerlab/t" / TOPOLOGY)
+    assert strays.asked == [(topology, 0)] * 3  # running, running, ended: and only then the deploy
+    assert runner.calls == [("containerlab", "deploy", "-t", topology)]
+    waits = [r.getMessage() for r in caplog.records if "stray deploy" in r.getMessage()]
+    assert waits == ["apply t: a stray deploy of t is still running (pid 4242): waiting for it to end before "
+                     "deploying"]  # logged once, however long it waits
+
+
+def test_a_stray_deploy_that_outlives_the_deploys_budget_is_a_driver_failure_and_nothing_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(driver_module, "deploy_budget", lambda *args: 0.05)
+    runner = FakeRunner({DEPLOY: ""})
+    driver = ContainerlabDriver(tmp_path, runner=runner, strays=Strays(runner, running=None), stray_poll_s=0.01)
+    p = planned("three-node")
+    with pytest.raises(DriverFailed, match=r"^a stray deploy of t did not end within 0\.05s \(pid 4242\)$"):
+        asyncio.run(driver.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    assert runner.calls == [] and not (tmp_path / "containerlab").exists()
+
+
+def test_with_no_stray_deploy_apply_deploys_at_once(tmp_path: Path) -> None:
+    runner = FakeRunner({DEPLOY: ""})
+    strays = Strays(runner, running=0)
+    driver = ContainerlabDriver(tmp_path, runner=runner, strays=strays, stray_poll_s=60.0)
+    p = planned("three-node")
+    asyncio.run(driver.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    assert len(strays.asked) == 1 and [c[:2] for c in runner.calls] == [DEPLOY]
+
+
+def test_the_stray_scan_finds_a_running_deploy_of_the_topology_alone(tmp_path: Path) -> None:
+    topology = "/srv/fylgja/store/containerlab/t/topology.clab.yml"
+    processes = {
+        "101": ["containerlab", "deploy", "-t", topology],
+        "102": ["/usr/bin/containerlab", "deploy", "-t", topology, "--reconfigure"],
+        "103": ["containerlab", "destroy", "-t", topology, "--cleanup"],  # not a deploy
+        "104": ["containerlab", "deploy", "-t", "/srv/fylgja/store/containerlab/t-2/topology.clab.yml"],
+        "105": ["sh", "-c", f"containerlab deploy -t {topology}"],  # not containerlab itself
+        "106": [],  # a zombie's command line reads empty
+        "self": ["containerlab", "deploy", "-t", topology],  # no pid
+    }
+    for name, argv in processes.items():
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "cmdline").write_bytes(b"".join(word.encode() + b"\0" for word in argv))
+    (tmp_path / "107").mkdir()  # a process that ended while it was read: no cmdline
+    assert stray_deploys(topology, tmp_path) == [101, 102]
+
+
+RM_E1 = ("docker", "rm", "-f", "clab-t-e1")
+RM_E2 = ("docker", "rm", "-f", "clab-t-e2")
+NO_SUCH = "Error response from daemon: No such container: clab-t-e1"
+
+
+class RmRunner:
+    """A status runner for `docker rm`: it appends to `calls`, the runner's list, so the order
+    against the deploy shows; `answers` is the (status, stderr) of each rm, by container."""
+
+    def __init__(self, calls: list[tuple[str, ...]], answers: Mapping[str, tuple[int, str]] | None = None) -> None:
+        self.calls = calls
+        self.answers = dict(answers or {})
+        self.budgets: list[float] = []
+
+    async def __call__(
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None
+    ) -> tuple[int, str, str]:
+        self.calls.append(tuple(argv))
+        self.budgets.append(timeout_s)
+        status, stderr = self.answers.get(argv[-1], (0, ""))
+        return status, "", stderr
+
+
+def apply_hot_add(
+    tmp_path: Path, answers: Mapping[str, tuple[int, str]] | None = None, first: str = "mixed",
+    fails: type[Exception] | None = None,
+) -> tuple[FakeRunner, RmRunner, Planned]:
+    """Apply `first`, then `mixed-e2-port` over it, with the recorded calls cleared between."""
+    runner = FakeRunner({DEPLOY: ""})
+    rm = RmRunner(runner.calls, answers)
+    stepped = planned("steps/mixed-e2-port")
+
+    def run(p: Planned, **kw: Any) -> None:
+        driver = ContainerlabDriver(tmp_path, runner=runner, status_runner=rm)
+        asyncio.run(driver.apply(p.deployment, p.files, PLATFORMS, PROBES, **kw))
+
+    run(planned(first))
+    runner.calls.clear()
+    rm.budgets.clear()
+    if fails is None:
+        run(stepped)
+    else:
+        with pytest.raises(fails):
+            run(stepped)
+    return runner, rm, stepped
+
+
+def test_apply_removes_the_container_of_a_node_gaining_a_port_its_kind_cannot_add_before_the_deploy(
+    tmp_path: Path,
+) -> None:
+    runner, rm, stepped = apply_hot_add(tmp_path)
+    topology = tmp_path / "containerlab/t" / TOPOLOGY
+    assert runner.calls == [RM_E1, RM_E2, ("containerlab", "deploy", "-t", str(topology))]  # never s1
+    assert rm.budgets == [DOCKER_TIMEOUT_S] * 2
+    assert topology.read_bytes() == stepped.files[TOPOLOGY]
+
+
+def test_apply_gives_the_deploy_a_log_file_in_the_twins_directory(tmp_path: Path) -> None:
+    """D-056: the deploy's stdout and stderr go to `deploy.log` beside its topology, so a deploy
+    the core's death orphans runs to completion; `docker` commands keep their pipes."""
+    runner, _, _ = apply_hot_add(tmp_path)
+    log = tmp_path / "containerlab/t/deploy.log"
+    assert runner.calls[-1][:2] == ("containerlab", "deploy")
+    assert runner.logs == [log, log]  # both deploys (the removals run through the status runner)
+
+
+def test_rule_2s_deploy_inside_destroy_gets_the_log_file_and_no_other_command_does(tmp_path: Path) -> None:
+    (tmp_path / "ssh_config.d").mkdir()
+    (tmp_path / "ssh_config.d" / "clab-t.conf").write_text("Host clab-t-n1\n")
+    runner = FakeRunner({**NOTHING, DEPLOY: "", DESTROY: ""}, fail=[NETWORK])
+    destroy(tmp_path, runner)
+    log = tmp_path / "root/containerlab/t/deploy.log"
+    assert [(c[:2], path) for c, path in zip(runner.calls, runner.logs, strict=True)] == [
+        (PS[:2], None), (DEPLOY, log), (("containerlab", "destroy"), None), (NETWORK[:2], None)]
+
+
+def test_inspect_gives_no_command_a_log_file(tmp_path: Path) -> None:
+    runner = FakeRunner({("docker", "ps"): ""}, fail=[("docker", "network", "inspect")])
+    asyncio.run(ContainerlabDriver(tmp_path, runner=runner).inspect("t"))
+    assert [c[:2] for c in runner.calls] == [("docker", "ps"), ("docker", "network")] and runner.logs == [None, None]
+
+
+def test_the_topology_on_disk_moves_only_after_the_removals(tmp_path: Path) -> None:
+    topology = tmp_path / "containerlab/t" / TOPOLOGY
+    old, new = planned("mixed").files[TOPOLOGY], planned("steps/mixed-e2-port").files[TOPOLOGY]
+    seen: list[tuple[str, bytes]] = []
+
+    class Watching(RmRunner):
+        async def __call__(self, argv: Sequence[str], **kw: Any) -> tuple[int, str, str]:
+            seen.append((argv[1], topology.read_bytes()))
+            return await super().__call__(argv, **kw)
+
+    class WatchingRunner(FakeRunner):
+        async def __call__(self, argv: Sequence[str], **kw: Any) -> str:
+            seen.append((argv[1], topology.read_bytes()))
+            return await super().__call__(argv, **kw)
+
+    first = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, first, planned("mixed"))
+    runner = WatchingRunner({DEPLOY: ""})
+    rm = Watching(runner.calls)
+    p = planned("steps/mixed-e2-port")
+    driver = ContainerlabDriver(tmp_path, runner=runner, status_runner=rm)
+    asyncio.run(driver.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    assert runner.calls == [RM_E1, RM_E2, ("containerlab", "deploy", "-t", str(topology))]
+    assert seen == [("rm", old), ("rm", old), ("deploy", new)]
+
+
+def test_a_container_already_gone_lets_the_deploy_run(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("INFO"):
+        runner, _, _ = apply_hot_add(tmp_path, {"clab-t-e1": (1, NO_SUCH)})
+    assert [c[:2] for c in runner.calls] == [("docker", "rm")] * 2 + [DEPLOY]
+    assert "e1 is already gone" in caplog.text
+
+
+def test_any_other_failed_removal_is_a_driver_failure_and_no_deploy_runs(tmp_path: Path) -> None:
+    runner, _, _ = apply_hot_add(tmp_path, {"clab-t-e1": (1, "Error response from daemon: conflict")},
+                                 fails=DriverFailed)
+    assert runner.calls == [RM_E1]
+
+
+def test_a_failed_removal_keeps_the_tail_of_its_stderr_as_a_failed_command_does(tmp_path: Path) -> None:
+    stderr = "x" * 100 + "Error response from daemon: conflict" + "y" * STDERR_KEPT
+    runner = FakeRunner({DEPLOY: ""})
+    rm = RmRunner(runner.calls, {"clab-t-e1": (1, stderr)})
+    driver = ContainerlabDriver(tmp_path, runner=runner, status_runner=rm)
+    first, stepped = planned("mixed"), planned("steps/mixed-e2-port")
+    asyncio.run(driver.apply(first.deployment, first.files, PLATFORMS, PROBES))
+    with pytest.raises(CommandFailed) as raised:
+        asyncio.run(driver.apply(stepped.deployment, stepped.files, PLATFORMS, PROBES))
+    assert raised.value.argv == RM_E1 and raised.value.returncode == 1
+    assert raised.value.stderr == stderr[-STDERR_KEPT:]
+
+
+def test_apply_over_the_same_topology_removes_nothing(tmp_path: Path) -> None:
+    runner = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, runner, planned("mixed"))
+    apply(tmp_path, runner, planned("mixed"))
+    assert [c[:2] for c in runner.calls] == [DEPLOY] * 2
+
+
+def test_apply_into_an_empty_directory_removes_nothing(tmp_path: Path) -> None:
+    runner = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, runner, planned("steps/mixed-e2-port"))
+    assert [c[:2] for c in runner.calls] == [DEPLOY]
+
+
+def test_apply_with_reconfigure_removes_nothing(tmp_path: Path) -> None:
+    runner = FakeRunner({DEPLOY: ""})
+    apply(tmp_path, runner, planned("mixed"))
+    runner.calls.clear()
+    apply(tmp_path, runner, planned("steps/mixed-e2-port"), reconfigure=True)
+    assert [c[:2] for c in runner.calls] == [DEPLOY]
+
+
+def test_a_previous_topology_that_cannot_be_read_is_a_driver_failure_before_any_write_or_command(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "containerlab/t"
+    directory.mkdir(parents=True)
+    (directory / TOPOLOGY).write_bytes(b": : not yaml [\n")
+    runner = FakeRunner({DEPLOY: ""})
+    with pytest.raises(DriverFailed, match=r"previous topology .*topology\.clab\.yml cannot be compared"):
+        apply(tmp_path, runner, planned("mixed"))
+    assert runner.calls == []
+    assert (directory / TOPOLOGY).read_bytes() == b": : not yaml [\n"
 
 
 def test_files_that_are_not_the_deployments_are_refused_before_any_command_or_write(tmp_path: Path) -> None:
@@ -335,14 +644,16 @@ RUNNING = lab(container("n2", address="172.20.2.3", started="2026-11-03T12:00:01
 NOTHING: dict[tuple[str, ...], str] = {PS: ""}
 
 
-def driver(tmp_path: Path, runner: FakeRunner) -> ContainerlabDriver:
-    """The driver with the host's residue staged under `tmp_path`: an empty hosts file and ssh config directory."""
+def driver(tmp_path: Path, runner: FakeRunner, **given: Any) -> ContainerlabDriver:
+    """The driver with the host's residue staged under `tmp_path`: an empty hosts file and ssh
+    config directory; `given` are its other arguments."""
     hosts = tmp_path / "etc-hosts"
     if not hosts.exists():
         hosts.write_text("127.0.0.1 localhost\n")
     ssh_config_dir = tmp_path / "ssh_config.d"
     ssh_config_dir.mkdir(exist_ok=True)
-    return ContainerlabDriver(tmp_path / "root", runner=runner, hosts_path=hosts, ssh_config_dir=ssh_config_dir)
+    return ContainerlabDriver(tmp_path / "root", runner=runner, hosts_path=hosts, ssh_config_dir=ssh_config_dir,
+                              **given)
 
 
 def inspect(tmp_path: Path, runner: FakeRunner) -> Inspection:
@@ -440,6 +751,59 @@ def test_a_network_a_destroy_leaves_is_removed(tmp_path: Path) -> None:
     destroy(tmp_path, runner)
     assert runner.calls[-3:] == [("containerlab", "destroy", "-t", str(tmp_path / "root/containerlab/t" / TOPOLOGY),
                                   "--cleanup"), NETWORK, NETWORK_RM]
+
+
+def test_destroy_waits_for_a_stray_deploy_of_the_twin_to_end_before_it_reads_the_lab(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A core killed during a deploy leaves it running in its own session, still making nodes: a
+    # destroy beside it would read, and tear down, a lab the deploy goes on changing.
+    runner = FakeRunner({**RUNNING, DESTROY: ""}, fail=[NETWORK])
+    strays = Strays(runner, running=2)
+    p = planned("three-node")
+    with caplog.at_level("INFO", logger="fylgja.containerlab"):
+        asyncio.run(driver(tmp_path, runner, strays=strays, stray_poll_s=0.01).destroy(p.deployment, p.files,
+                                                                                      PLATFORMS, PROBES))
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    assert strays.asked == [(topology, 0)] * 3  # running, running, ended: and only then the lab is read
+    assert runner.calls == [PS, (*INSPECT, "clab-t-n2", "clab-t-n1", "clab-t-n3"),
+                            ("containerlab", "destroy", "-t", topology, "--cleanup"), NETWORK]
+    waits = [r.getMessage() for r in caplog.records if "stray deploy" in r.getMessage()]
+    assert waits == ["destroy t: a stray deploy of t is still running (pid 4242): waiting for it to end before "
+                     "destroying"]
+
+
+def test_a_stray_deploy_that_outlives_the_deploys_budget_fails_the_destroy_and_nothing_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(driver_module, "deploy_budget", lambda *args: 0.05)
+    runner = FakeRunner(RUNNING)
+    p = planned("three-node")
+    with pytest.raises(DriverFailed, match=r"^a stray deploy of t did not end within 0\.05s \(pid 4242\)$"):
+        asyncio.run(driver(tmp_path, runner, strays=Strays(runner, running=None), stray_poll_s=0.01).destroy(
+            p.deployment, p.files, PLATFORMS, PROBES))
+    assert runner.calls == []
+
+
+def test_destroy_removes_each_container_of_the_lab_its_topology_does_not_name(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A step that added n3 and diverged before `applied` leaves the record naming the two-node
+    # deployment, and containerlab 0.81.0's `destroy -t` removes only the nodes its file names
+    # (verified-facts.md): n3 would hold the management network, and every destroy would fail.
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    # Removed by the handle the label filter found, whatever its name.
+    unnamed = {**container("n3", address="172.20.2.4"), "Name": "/stray-n3"}
+    runner = FakeRunner({**lab(container("n2", address="172.20.2.3"), container("n1", address="172.20.2.2"), unnamed),
+                         DESTROY: ""}, fail=[NETWORK])
+    rm = RmRunner(runner.calls)
+    p = planned("steps/two-node")
+    asyncio.run(driver(tmp_path, runner, status_runner=rm).destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    assert runner.calls == [PS, (*INSPECT, "clab-t-n2", "clab-t-n1", "stray-n3"), ("docker", "rm", "-f", "stray-n3"),
+                            ("containerlab", "destroy", "-t", topology, "--cleanup"), NETWORK]
+    assert ("destroy t: removed n3, or it was already gone (docker answers 0 for both), since the deployment "
+            "destroyed does not name it") in caplog.messages
 
 
 def test_root_owned_residue_is_deployed_then_destroyed(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -575,3 +939,56 @@ def test_a_failed_network_removal_is_logged_and_raised_and_leaves_the_directory(
     assert runner.calls[-1] == NETWORK_RM
     assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
     assert any(r.levelname == "WARNING" and "destroy t failed" in r.getMessage() for r in caplog.records)
+
+
+class FakeStatusRunner:
+    """An async callable with `cli.run_status`'s signature: it records each command line and
+    answers `(status, stdout, stderr)`."""
+
+    def __init__(self, status: int, stdout: str = "", stderr: str = "") -> None:
+        self.answer = (status, stdout, stderr)
+        self.calls: list[tuple[str, ...]] = []
+
+    async def __call__(
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None
+    ) -> tuple[int, str, str]:
+        self.calls.append(tuple(argv))
+        return self.answer
+
+
+def _exec(tmp_path: Path, status_runner: FakeStatusRunner) -> Exec:
+    driver = ContainerlabDriver(tmp_path, runner=FakeRunner({}), status_runner=status_runner)
+    return asyncio.run(driver.exec("t", "n1", ["ping", "-c", "1", "10.0.0.1"], 5.0))
+
+
+def test_exec_runs_docker_exec_in_the_node_and_answers_the_status_and_output(tmp_path: Path) -> None:
+    runner = FakeStatusRunner(1, "out", "bad")
+    assert _exec(tmp_path, runner) == Exec(1, "out", "bad")
+    assert runner.calls == [("docker", "exec", "clab-t-n1", "ping", "-c", "1", "10.0.0.1")]
+
+
+@pytest.mark.parametrize("status", [125, 126, 127])
+def test_exec_fails_when_docker_cannot_reach_the_node(tmp_path: Path, status: int) -> None:
+    with pytest.raises(DriverFailed, match=f"docker exec into clab-t-n1 failed with status {status}"):
+        _exec(tmp_path, FakeStatusRunner(status))
+
+
+@pytest.mark.parametrize("stderr", ["Error response from daemon: No such container: clab-t-n9",
+                                    "Error: No such container: clab-t-n9"])
+def test_exec_fails_when_docker_says_the_container_is_missing(tmp_path: Path, stderr: str) -> None:
+    with pytest.raises(DriverFailed, match="docker exec into clab-t-n1 failed with status 1") as raised:
+        _exec(tmp_path, FakeStatusRunner(1, "secret", stderr))
+    assert "secret" not in str(raised.value)
+
+
+def test_exec_answers_a_command_that_only_prints_a_daemon_error(tmp_path: Path) -> None:
+    text = "Error response from daemon: x"
+    assert _exec(tmp_path, FakeStatusRunner(1, text, "")) == Exec(1, text, "")
+    assert _exec(tmp_path, FakeStatusRunner(1, "", f"warn\n{text}")) == Exec(1, "", f"warn\n{text}")
+
+
+def test_exec_keeps_the_last_bytes_of_each_output(tmp_path: Path) -> None:
+    big = "a" * 40_000 + "b" * 60_000
+    answer = _exec(tmp_path, FakeStatusRunner(0, big, big))
+    assert answer.stdout == big[-EXEC_OUTPUT_KEPT:] and len(answer.stdout) == 65536
+    assert answer.stderr == big[-EXEC_OUTPUT_KEPT:]

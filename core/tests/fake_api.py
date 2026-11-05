@@ -327,14 +327,21 @@ def record(
     nodes: bool = False,
     deleting: bool = False,
     spec: Mapping[str, Any] | None = None,
+    diverged: str | None = None,
+    last_step: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """A twin record of the three-node twin."""
+    """A twin record of the three-node twin; `diverged` adds the Diverged condition True for that
+    reason, after Ready and Stepping."""
     status: dict[str, Any] = {"observed_generation": observed, "conditions": [], "nodes": []}
     if ready is not None:
         condition = {"type": "Ready", "status": ready[0], "since": AT}
         if ready[1] is not None:
             condition["reason"] = ready[1]
         status["conditions"] = [condition, {"type": "Stepping", "status": "False"}]
+    if diverged is not None:
+        status["conditions"].append({"type": "Diverged", "status": "True", "reason": diverged, "since": AT})
+    if last_step is not None:
+        status["last_step"] = dict(last_step)
     if phase is not None:
         status["phase"] = phase
     if run_id is not None:
@@ -361,6 +368,17 @@ def verdict(operation: str, status: str = "ok", findings: Iterable[Mapping[str, 
             "subject": {"twin": TWIN, "run_id": run_id}, "findings": list(findings)}
 
 
+def verification(status: str = "ok", findings: Iterable[Mapping[str, Any]] = (),
+                 counts: tuple[int, int, int] = (7, 0, 0)) -> dict[str, Any]:
+    """The verdict of a verify of the three-node twin: its subject the bundle and deployment, with counts."""
+    doc: dict[str, Any] = {"findings_version": "1", "operation": "verify", "status": status,
+                           "subject": {"twin": TWIN, "bundle_id": BUNDLE_ID, "deployment_id": DEPLOYMENT["id"]},
+                           "counts": {"held": counts[0], "failed": counts[1], "skipped": counts[2]},
+                           "findings": list(findings)}
+    assert list(schemas.validator("findings-1").iter_errors(doc)) == []
+    return doc
+
+
 def run(operation: str = "create", state: str = "ended", status: str = "ok",
         findings: Iterable[Mapping[str, Any]] = (), run_id: str = RUN_ID) -> dict[str, Any]:
     """A run of the three-node twin; ended ones carry a verdict."""
@@ -374,6 +392,7 @@ def run(operation: str = "create", state: str = "ended", status: str = "ok",
 
 PUSH_REFUSED = {"rule": "push.refused", "severity": "error", "object": "n1",
                 "message": "The node refused the configuration: commit failed."}
+NOT_HELD = {"rule": "verify.host_name", "severity": "error", "object": "n1", "message": "n1 reports no host name."}
 EVENTS: list[dict[str, Any]] = [
     {"seq": 1, "at": AT, "phase": "compile", "outcome": "started"},
     {"seq": 2, "at": AT, "phase": "compile", "outcome": "done", "duration_s": 0.25},
@@ -385,3 +404,38 @@ PLAN: dict[str, Any] = {
     "verdict": {"findings_version": "1", "operation": "plan", "status": "ok",
                 "subject": {"twin": TWIN, "bundle_id": BUNDLE_ID}, "findings": []},
 }
+
+# A step of the three-node twin to another bundle.
+
+STEP_TO = "5e" * 32
+
+
+def last_step(outcome: str = "stepped", phase: str = "flows", run_id: str = RUN_ID) -> dict[str, Any]:
+    """The record's last step, from the three-node bundle to `STEP_TO`."""
+    return {"outcome": outcome, "from": BUNDLE_ID, "to": STEP_TO, "phase": phase, "run_id": run_id}
+
+
+STEP_CHANGES: dict[str, Any] = {
+    "nodes": [{"node": "n1", "action": "kept", "reasons": []},
+              {"node": "n2", "action": "recabled", "reasons": ["links"]},
+              {"node": "n3", "action": "recreated", "reasons": ["image", "links"]}],
+    "links_added": [["n2:e1-2", "n3:eth1"]],
+    "links_removed": [["n2:e1-2", "n3:e1-1"]],
+}
+RESTART_REQUIRED = {"rule": "step.restart.required", "severity": "error", "object": "n3",
+                    "message": "n3 would be recreated (image, links), and the spec does not allow a restart: set "
+                               "allow_restart to step it."}
+
+
+def step_plan(status: str = "ok") -> dict[str, Any]:
+    """A dry run's plan of a step to `STEP_TO`: the deployment, the verdict (`rejected` with the
+    restart the spec does not allow) and the changes."""
+    doc: dict[str, Any] = {
+        "deployment": DEPLOYMENT,
+        "verdict": {"findings_version": "1", "operation": "plan", "status": status,
+                    "subject": {"twin": TWIN, "bundle_id": STEP_TO, "deployment_id": DEPLOYMENT["id"]},
+                    "findings": [RESTART_REQUIRED] if status != "ok" else []},
+        "changes": STEP_CHANGES,
+    }
+    check_component("Plan", doc)
+    return doc

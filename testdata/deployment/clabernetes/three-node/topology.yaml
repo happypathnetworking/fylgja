@@ -1,0 +1,71 @@
+apiVersion: c9s.run/v1alpha1
+kind: Topology
+metadata:
+  name: three-node
+  namespace: fylgja-twin-three-node
+  labels:
+    fylgja.owner: core
+    fylgja.twin: three-node
+spec:
+  expose:
+    disableAutoExpose: true
+  imagePull:
+    pullSecrets:
+    - fylgja-pull-arista-ceos
+  deployment:
+    resources:
+      n1:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+      n2:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+      n3:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+  definition:
+    containerlab: |
+      name: three-node
+      topology:
+        defaults:
+          labels:
+            fylgja.owner: core
+            fylgja.twin: three-node
+        nodes:
+          n1:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          n2:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          n3:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+        links:
+        - endpoints:
+          - n1:ethernet-1/1
+          - n2:ethernet-1/1
+        - endpoints:
+          - n1:ethernet-1/2
+          - n3:ethernet-1/2
+        - endpoints:
+          - n2:ethernet-1/2
+          - n3:ethernet-1/1

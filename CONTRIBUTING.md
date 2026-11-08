@@ -51,10 +51,15 @@ pull request** ([D-033](design/decisions.md#d-033)).
 | httpx | 0.28.1 | A runtime dependency: the readiness wait and the push ([D-039](design/decisions.md#d-039)) |
 | Starlette, uvicorn | 1.9.0, 0.54.0 | Runtime dependencies: the server's ASGI application and the process that serves it ([D-025](design/decisions.md#d-025)) |
 | pygnmi, grpcio, protobuf | 0.8.15, 1.84.0, 7.36.2 | Runtime dependencies: verify's gNMI reader ([D-052](design/decisions.md#d-052)) |
+| lightkube, lightkube-models, httpx2, msgspec | 1.0.1, 1.37.0.8, 2.16.0, 0.22.0 | Runtime dependencies: the clabernetes driver's Kubernetes calls ([D-064](design/decisions.md#d-064)) |
 | pytest, ruff, mypy | 9.2.0, 0.17.3, 2.4.0 | mypy in strict mode (Constitution I) |
 | rfc8785 | 0.1.4 | Tests only: an independent RFC 8785 implementation that the blueprint id is checked against |
+| openssl | the host's (3.5.5) | Tests only: the pure tier's TLS tests make a self-signed certificate and key with it (`core/tests/tls.py`); without it they are skipped, and fail when `CI` is set |
 | containerlab, Docker | 0.81.0, 29.8.1 | The local driver and the live tier. containerlab is pinned to the version clabernetes 0.10.1 embeds, so the kinds behave alike on both drivers |
-| clabernetes, kind | 0.10.1, v0.33.0 | The clabernetes driver's development ([D-022](design/decisions.md#d-022)) |
+| Versity S3 Gateway | v1.10.0 | The object store's live test, and development's endpoint ([D-061](design/decisions.md#d-061)) |
+| clabernetes, k3s | 0.10.1, v1.37.1+k3s1 | The clabernetes driver's development ([D-060](design/decisions.md#d-060)) |
+| crane | 0.22.1 | Pushes the core's image to the cluster's private registry from a tarball Docker saved ([Running the core on a cluster](#running-the-core-on-a-cluster)) |
+| kubectl | 1.37.2, its kustomize v5.8.1 | Builds the core's kustomize base under `deploy/` and applies a site's overlay ([Running the core on a cluster](#running-the-core-on-a-cluster)) |
 
 Each dependency is pinned to a release at least two weeks old when it was chosen.
 `make venv` builds `core/.venv` at the pins, with the package installed editable. A venv
@@ -67,16 +72,22 @@ inside the tree carries a `.gitignore` of `*`.
 | `make venv` | The core's venv |
 | `make lint` | ruff over `core/` and `scripts/`, then mypy in strict mode |
 | `make test` | The pure tier: no infrastructure. Gates every pull request |
-| `make live` | The live tier: boots labs under containerlab, one SR Linux and one cEOS node for readiness and the push, and labs through the local driver (admit, apply, inspect, destroy, the residue rule, two labs at once), then destroys them; `changes` held to containerlab's own dry run for every step fixture, with the hot-add recreate of two cEOS nodes and `exec` in a probe host (`core/tests/live/test_changes_live.py`, about 4.5 minutes alone); verify over gNMI on a probed twin, with a node stopped and started by containerlab and by Docker, and a configured cEOS node's host name (`core/tests/live/test_verify_live.py`, about 5 minutes alone); the end-to-end test, `three-node` through `fylgja-core-server` and the thin CLI, with the server killed at every phase boundary of a create, during a deploy and during a destroy, and a deletion during a deploy (`core/tests/live/test_e2e.py`, about 11 minutes alone); and the steps end to end, `fylgja-core twin step` to every step fixture from its base (the SR Linux ones, a cEOS port refused without `allow_restart` and made with it, and a kind change), the server killed at every phase boundary of a step, during its deploy and before a deletion, and a step cancelled during its apply, left diverged and then deleted (`core/tests/live/test_e2e_step.py`, about 16 minutes alone). About 40 minutes. Load `local/.env` first |
+| `make live` | The live tier on the local driver: the driver's own modules under `core/tests/live/`, then the conformance suite on the local harness. The driver's own: readiness and the push on one SR Linux and one cEOS node booted under containerlab (`core/tests/live/test_push.py`); labs through the local driver, `admit`, `apply`, `inspect` and `destroy`, the residue rule and two labs at once (`core/tests/live/test_containerlab_driver_live.py`); `changes` held to containerlab's own dry run for every step fixture, with the hot-add recreate of two cEOS nodes and `exec` in a probe host (`core/tests/live/test_changes_live.py`, about 4.5 minutes alone); verify over gNMI on a probed twin, with a node stopped and started by containerlab and by Docker, and a configured cEOS node's host name (`core/tests/live/test_verify_live.py`, about 5 minutes alone); the trigger and the restore through Docker's own restart paths, the loop run in-process with its resync an hour away: a node restarted by `docker restart` and one started again by Docker's restart policy, each pushed again by a restore the driver's events started within seconds (its links are not restored), and one removed, reported missing once its boot window passed (`core/tests/live/test_restore_live.py`, about 4 minutes alone); and the object store against Versity S3 Gateway under Docker, the store contract whole and every compare-and-set raced by 32 stores (`core/tests/live/test_object_store_live.py`, about 1 minute alone). Then the suite, as `make conformance DRIVER=containerlab` runs it (below), about 31 minutes of the whole. 159 tests in about 51 minutes, read with the cluster quiet. Load `local/.env` first |
+| `make cluster` | The cluster tier: the clabernetes driver's calls on the k3s cluster, from the development host. The driver's reach into Kubernetes, every call of `LightKube` read on a two-node SR Linux twin (`core/tests/cluster/test_kube_cluster.py`, 1 to 2 minutes alone); the driver as the server makes it on a three-node twin: `admit` against a namespace that is not the twin's, `apply` with the root logger at DEBUG and its repeat, `exec`, a node's container ended in its pod, a pod deleted, `reconfigure`, `destroy` and the residue (`core/tests/cluster/test_clabernetes_driver_cluster.py`, about 4 minutes alone); and `changes` held to the pods' uids for every step fixture, with the hot-add recreate of two cEOS nodes killed before its deletions and resumed (`core/tests/cluster/test_clabernetes_changes_cluster.py`, about 10 minutes alone); and the trigger and the restore through the loop, run in-process with the resync an hour away, on a two-node twin stepped twice: a pod deleted, a container ended in its pod and that pod replaced by the driver, a probe host's and a cEOS node's pods deleted, each restored without the resync, the settled twin's pods watched for three minutes, and a watch asked at a compacted version (`core/tests/cluster/test_restore_cluster.py`, about 14 minutes alone); and the Lease, on a Lease of its own in the kubeconfig's default namespace held by two holders in one process: taken, waited for, taken over 15 s after its holder went silent and released (`core/tests/cluster/test_lease_cluster.py`, about 30 s alone). About 30 minutes. Load `local/.env` first, with `KUBECONFIG`, `FYLGJA_CLABERNETES_NAMESPACE`, `FYLGJA_POD_CIDR` and the cEOS pull credential set. With the core deployed on the cluster, its Deployment is scaled to no replica first and back to one after ([Running the core on a cluster](#running-the-core-on-a-cluster)) |
+| `make conformance DRIVER=containerlab\|clabernetes` | The driver conformance suite alone (`core/tests/conformance/`): one set of scenarios, written once, on the harness of the driver `DRIVER` names, `containerlab` by default; any other name is refused in one line. A twin created and shown; stepped through every step fixture with verify after each and the burst held, and the step's refusals; the core killed at each phase boundary of a create and of a step, during an apply and during a destroy, a waiting CLI riding through, a deletion after a kill, and a step cancelled; a node replaced behind the core and one stopped; leftovers read by label; node access through each node's own transport; and isolation over TCP between two twins and from a third namespace, where the driver declares it. `containerlab` runs `fylgja-core-server` on this host under the live tier's marker: 49 tests, about 31 minutes. `clabernetes` drives the core deployed on the cluster over TLS, killing it by its pod, under the cluster tier's marker: 49 tests, about 58 minutes. Load `local/.env` first, and for the cluster the suite's own variables ([Running the core on a cluster](#running-the-core-on-a-cluster)) |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
+| `make wheelcheck` | Builds the wheel from `core/` and `formats/`, installs it into an empty venv outside the tree and validates a fixture there ([D-066](design/decisions.md#d-066)). Needs the network, so it is no part of `make test`; CI runs it on every push and pull request |
+| `make image` | Builds the core's image from the `Dockerfile` at the root ([D-062](design/decisions.md#d-062)) as `fylgja-core:<tag>`, the tag the commit's first 12 characters, with `-dirty` where `git status --porcelain` prints anything. Its build context is `.dockerignore`'s allow-list, so nothing under `local/` reaches a layer. Needs Docker and the network |
+| `make imagecheck` | Builds the image, then runs it: its user is 10001; given only `FYLGJA_STORE` and a `FYLGJA_TOKENS` that names no file, it exits 2 naming `FYLGJA_TOKENS`, its packages loaded against the wheel's formats; and the formats it carries are `formats/`'s, by name and by bytes; and its copies of `psp/` and `probes/` hold the files git tracks there and no other, by path, so a file git ignores there (an editor's `*.swp`, a nested `local/`), which reaches the image with no `-dirty` tag, fails it. Prints the tag it checked last. CI runs it on every push and pull request, and pushes nothing |
 
 ## Test tiers
 
 | Tier | Needs | Runs |
 |---|---|---|
-| **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures, and the store, the reconcile loop, API 1 and the CLI over fakes of the runtime |
-| **Live** | Booted images on the local containerlab driver | On demand: `make live`, with `local/.env` loaded: the driver, `changes` against containerlab's dry run, readiness and the push, verify over gNMI, the end-to-end test through the API (`core/tests/live/test_e2e.py`, about 11 minutes alone), and the steps end to end (`core/tests/live/test_e2e_step.py`, about 16 minutes alone). `make test` deselects it (the `live` marker) |
-| **Driver conformance** | Each driver's own runtime: a cluster for clabernetes | On demand, per driver |
+| **Pure** | Nothing | `make test`, in CI on every push and pull request: the model, the compiler, every driver's `plan`, the packages and the fixtures, and the store, the object store over a fake S3 endpoint, the reconcile loop, API 1 and the CLI over fakes of the runtime |
+| **Live** | Booted images on the local containerlab driver, and Versity S3 Gateway under Docker | On demand: `make live`, with `local/.env` loaded: the driver's own modules under `core/tests/live/` (the driver, `changes` against containerlab's dry run, readiness and the push, verify over gNMI, the trigger and the restore through Docker's restart paths, and the object store against the gateway), then the conformance suite on the local harness. 159 tests in about 51 minutes, read with the cluster quiet. Never while the cluster runs the suite or the cluster tier: here the two share a hypervisor, and SR Linux segfaults under the contention. `make test` deselects it (the `live` marker) |
+| **Cluster** | The k3s cluster, reached from the development host | On demand: `make cluster`, with `local/.env` loaded and `KUBECONFIG`, `FYLGJA_CLABERNETES_NAMESPACE` and `FYLGJA_POD_CIDR` set: the clabernetes driver's calls on the cluster, its reach into Kubernetes first (`core/tests/cluster/test_kube_cluster.py`), then the driver's calls and `changes` held to the pods' uids (`core/tests/cluster/test_clabernetes_driver_cluster.py`, `core/tests/cluster/test_clabernetes_changes_cluster.py`), the trigger and the restore through the loop (`core/tests/cluster/test_restore_cluster.py`), and the Lease (`core/tests/cluster/test_lease_cluster.py`). Each test twin has its own namespace, deleted at its module's end; never while `make live` runs. `make test` deselects it (the `cluster` marker) |
+| **Driver conformance** | Each driver's own runtime: for the local driver, containerlab and Docker on the development host; for clabernetes, the core deployed on the cluster with `FYLGJA_RESYNC_S` of 3600 or more, a token of the suite's own principal, both node logins and the cEOS pull credential, reached from the development host ([Running the core on a cluster](#running-the-core-on-a-cluster)) | On demand, per driver: `make conformance DRIVER=containerlab`, 49 tests in about 31 minutes, which `make live` runs too; and `make conformance DRIVER=clabernetes`, 49 tests in about 58 minutes. Each was measured with the other runtime quiet, and the two are never run together here: they share a hypervisor. `make test` deselects the suite (its harness's marker, `live` or `cluster`) |
 
 Development and the live tier never need Kubernetes (Constitution XIII).
 
@@ -88,7 +99,8 @@ Development and the live tier never need Kubernetes (Constitution XIII).
 | `testdata/compiler/` | The facts the frozen Go compiler produced for each, which the new compiler is held to; and under `rejected/`, valid blueprints the compiler must refuse, one fault each |
 | `testdata/packages/` | `chassisos`, a synthetic lossy platform; the interface mapping rows each package must produce; and under `invalid/`, the rejection fixtures for the platform and probe package loaders |
 | `testdata/probes/` | Probe declaration files, valid and, under `invalid/`, the rejection fixtures for the declaration loader |
-| `testdata/deployment/` | The golden deployments: for each driver and fixture, the rendered runtime files and the deployment document the plan must reproduce, which change in a commit of their own; and under `rejected/`, valid blueprints a driver's plan must refuse, one fault each |
+| `testdata/deployment/` | The golden deployments: for each driver (`containerlab/`, `clabernetes/`) and fixture, the rendered runtime files and the deployment document the plan must reproduce, which change in a commit of their own; and under `rejected/`, valid blueprints a driver's plan must refuse, one fault each |
+| `testdata/s3/` | The SigV4 signer's known answers, written once by `generate.py` from botocore's signer in a venv outside the tree; botocore is never a dependency (D-061) |
 
 ## Local environment
 
@@ -102,27 +114,42 @@ Development and the live tier never need Kubernetes (Constitution XIII).
 - Docker and containerlab, with the user in the `docker` and `clab_admins` groups;
 - the SR Linux image (`ghcr.io/nokia/srlinux:24.7.1`, public);
 - the cEOS image (`ceos:4.32.0.2F`), imported from Arista's account-gated download and never
-  pulled.
+  pulled;
+- the Versity S3 Gateway image (`ghcr.io/versity/versitygw:v1.10.0`, public), pulled on first
+  use.
 
 On Ubuntu, SR Linux's `rsyslogd` needs an AppArmor widening ([verified-facts.md](design/verified-facts.md)).
 
 ## Running the core
 
 `fylgja-core-server` is one process: API 1 on uvicorn and the reconcile loop, over one store
-it holds locked for one core ([D-023](design/decisions.md#d-023), [D-039](design/decisions.md#d-039)).
+held for one core, a directory by its lock and an object store by a Lease
+([D-023](design/decisions.md#d-023), [D-039](design/decisions.md#d-039), [D-062](design/decisions.md#d-062)).
 Everything it runs with is a `FYLGJA_*` variable ([D-042](design/decisions.md#d-042)), listed
 in [`.env.example`](.env.example):
 
 | Variable | Default | Holds |
 |---|---|---|
-| `FYLGJA_STORE` | required | The store's directory, created on first start; the driver's working files live under it |
+| `FYLGJA_STORE` | required | The store's directory, created on first start (the driver's working files live under it), or `s3://<bucket>[/<prefix>]`, an object store ([D-061](design/decisions.md#d-061)), which needs `FYLGJA_LEASE` and a driver that keeps no files in the store's directory (`clabernetes`) |
+| `FYLGJA_S3_ENDPOINT` | required for `s3://` | The object store's endpoint, an `http://` or `https://` URL of a host and an optional port |
+| `FYLGJA_S3_ACCESS_KEY` | required for `s3://` | The endpoint's access key |
+| `FYLGJA_S3_SECRET_KEY` | required for `s3://` | The endpoint's secret key |
+| `FYLGJA_S3_REGION` | `us-east-1` | The region its requests are signed for |
+| `FYLGJA_S3_CA` | the system's | A CA bundle for an `https://` endpoint a private CA signed |
+| `FYLGJA_LEASE` | none; required by `s3://` | The Lease that holds the store for one core ([D-062](design/decisions.md#d-062)), in the core's namespace (the service account's in a pod, the kubeconfig context's off the cluster), taken before the store is opened: a core that finds it held waits, saying once whom for, and one that loses it stops at once (`lease.lost`): its loop's stop begun, given 2 s, every connection dropped, one still in its TLS handshake among them, and each request in flight cancelled, none answered and none given grace, nothing released, exit status 1 |
 | `FYLGJA_PACKAGES` | required | Colon-separated directories of platform and probe packages, loaded once at start: `psp:probes` |
 | `FYLGJA_TOKENS` | required | The token file (below) |
 | `FYLGJA_LISTEN` | `127.0.0.1:7650` | The address it serves on, `host:port` |
-| `FYLGJA_DRIVER` | `containerlab` | The driver twins run on |
+| `FYLGJA_TLS_CERT` | none | The certificate the server ends TLS with, set with `FYLGJA_TLS_KEY` ([D-063](design/decisions.md#d-063)); without the two it serves HTTP, which is for loopback, and a listen address off loopback is one warning at start |
+| `FYLGJA_TLS_KEY` | none | The certificate's key, unencrypted, set with `FYLGJA_TLS_CERT`: an encrypted key is refused at start, never prompted for |
+| `FYLGJA_DRIVER` | `containerlab` | The driver twins run on: `containerlab`, the local driver, or `clabernetes`, which reaches the cluster from its service account in a pod and from the kubeconfig `KUBECONFIG` names off the cluster |
+| `FYLGJA_CLABERNETES_NAMESPACE` | none; required by `clabernetes` | clabernetes' namespace, a DNS-1123 label (`c9s`), which each twin's policy admits |
+| `FYLGJA_POD_CIDR` | none; required by `clabernetes` | The cluster's pod network, an IPv4 network in CIDR form (`10.244.0.0/16`); each twin's policy admits any source outside it |
 | `FYLGJA_WORKERS` | `4` | How many twins the loop works on at once |
 | `FYLGJA_STEP_WAIT_S` | `180` | Seconds a step waits for verify to hold before it ends anyway (an integer of 1 or more) |
+| `FYLGJA_RESYNC_S` | `300` | Seconds between the loop's resyncs, each of which queues every twin again, so a runtime event missed is only late (an integer of 1 or more) |
 | `FYLGJA_CREDENTIAL_<NAME>_USERNAME`, `_PASSWORD` | none | Each package's node login, `<NAME>` its `credentials` value upper-cased; a run needing one not set fails with `credential.missing` |
+| `FYLGJA_CREDENTIAL_<NAME>_REGISTRY`, `_USERNAME`, `_PASSWORD` | none | A package's pull secret on the clabernetes driver: the image prefix a gated image is pulled under, and the registry's login; a twin's allocation holds the prefixes set when it was admitted |
 
 **The token file** holds one `<sha256 hex of the token> <principal>` per line, `#` comments
 and blank lines skipped. It never holds a token itself, and several tokens may be valid at
@@ -137,6 +164,10 @@ unset token
 
 `printf %s "$FYLGJA_API_TOKEN" | sha256sum` gives the hash of a token already set.
 
+The commands the local driver runs, `containerlab` and `docker`, get `DOCKER_HOST` and `PATH`
+from the server's environment and nothing else ([D-065](design/decisions.md#d-065)); a
+variable containerlab should see is added to `ALLOWED_ENV` by a change, with its reason.
+
 **Start it** with the environment loaded:
 
 ```sh
@@ -146,20 +177,32 @@ core/.venv/bin/fylgja-core-server
 
 It logs one JSON object per line on stderr, the principal on every write, never a token or a
 password. A start refused is one line naming the variable or the file at fault. SIGTERM or
-Ctrl-C ends open watches and stops the loop; a create cut short resumes at the next start. Its
-exit status:
+Ctrl-C ends open watches, stops the loop and then releases the Lease. A second Ctrl-C, landing
+before uvicorn has begun the loop's stop, gives the loop 2 s to stop; landing after, it leaves
+uvicorn's own stop running, unbounded; either way the Lease is released only once the loop has
+stopped. SIGTERM anywhere in the start, while it waits for the Lease or opens the store among
+it, ends the start as Ctrl-C does, and while the console script imports the server, before
+anything is opened, it exits 143: the server handles SIGTERM itself, since in a container it is
+PID 1, which ignores a signal it has no handler for. Three windows are left, each leaving the
+Lease to its duration (the server's module docstring): the interpreter's first 0.14-0.16 s in the
+image, and two in the start, each read at under a millisecond on the development host, where the
+Lease's client had no connection to close; against the API the one that closes it takes longer,
+by how much not read. A create cut short resumes at the next start. Waiting for a Lease another
+holds is not an exit: one INFO line a holder, and no socket bound. Its exit status:
 
 | Status | Means |
 |---|---|
-| 0 | stopped cleanly |
-| 130 | stopped by Ctrl-C (SIGINT) |
-| 143 | stopped by SIGTERM: uvicorn ends the process by the signal after its graceful shutdown |
-| 1 | the store is held by another core, or the application failed to start |
-| 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, a package refused, a token file it cannot read, or an address it cannot listen on (`FYLGJA_LISTEN`) |
+| 0 | stopped cleanly, the Lease released first when one is held |
+| 130 | stopped by Ctrl-C (SIGINT), the Lease released first when one is held; or Ctrl-C anywhere in the start, while it waits for the Lease, while the store is opened or before uvicorn runs, what was opened closed again and the Lease released first, but in the two windows in the start above, where the status is the same and the Lease is left to its duration |
+| 143 | stopped by SIGTERM, as by Ctrl-C, in a container as PID 1 too: after uvicorn's graceful shutdown, which releases the Lease; or anywhere in the start, as Ctrl-C, what was opened closed again and the Lease released first, the two windows in the start above as for 130; or while `fylgja-core-server` imports the server, nothing yet opened |
+| 1 | the store is held by another core, an object store cannot be opened (its endpoint unreachable, or refusing), the Lease is lost (`lease.lost`), or the application failed to start |
+| 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, or set to what another rules out (an `s3://` store without `FYLGJA_LEASE` or with the `containerlab` driver, one of the TLS pair without the other); a certificate or key that does not load (`FYLGJA_TLS_CERT`); a key that is encrypted (`FYLGJA_TLS_KEY`); `FYLGJA_LEASE` set with no cluster to reach, or a Lease the service account may not read or write; a CA bundle that does not load (`FYLGJA_S3_CA`); an endpoint that fails the store's proof (`FYLGJA_S3_ENDPOINT`, `store.unconditional`); Python run optimised (`-O` or `PYTHONOPTIMIZE`, `server.optimised`); a package refused, a token file it cannot read, a cluster the clabernetes driver cannot reach (`KUBECONFIG` not set, or not a kubeconfig, off the cluster), or an address it cannot listen on (`FYLGJA_LISTEN`) |
 
 **The thin CLI** reads `FYLGJA_API_ADDRESS` (the server's `host:port` or URL) and
-`FYLGJA_API_TOKEN`. In a shell of its own, load the environment and point the CLI at the
-server's listen address:
+`FYLGJA_API_TOKEN`, and `FYLGJA_API_CA` where it is set: the CA file an `https://` address is
+verified against, the system's trust when it is not ([D-063](design/decisions.md#d-063)). A
+certificate not trusted is one line saying so and one naming `FYLGJA_API_CA`, and exits 2. In a
+shell of its own, load the environment and point the CLI at the server's listen address:
 
 ```sh
 set -a; . local/.env; set +a
@@ -168,6 +211,142 @@ core/.venv/bin/fylgja-core twin create demo --blueprint testdata/blueprint/three
 core/.venv/bin/fylgja-core twin show demo
 core/.venv/bin/fylgja-core twin destroy demo
 ```
+
+A command that waits rides through a restart of the server: its watch reconnects for up to about
+three minutes, each try given 5 s to connect, saying so once on stderr, and then exits 2. A
+`twin create` already waiting rides through; a `run watch` begun while the server is away exits 2
+at once, since its version read is made once, before any stream.
+
+## Running the core on a cluster
+
+On a cluster the core is one pod under a Lease, run from an image built in the tree
+([D-062](design/decisions.md#d-062)). The image holds no containerlab, so a core in a pod
+serves the `clabernetes` driver alone.
+
+**Build** the image with `make imagecheck`, which builds it, runs it and prints its tag last.
+The tag is the commit the image was built at, so a run on the cluster says which commit's code
+it read. Push from a clean head: a `-dirty` tag is for the development host alone and is never
+pushed. CI builds the image and pushes nothing: publishing one is a release's decision.
+
+**Push** it to the cluster's private registry as the gated image is
+([D-021](design/decisions.md#d-021)): by `crane`, from a tarball Docker saves. Nothing of the
+registry is in the tree: `<registry>` is its host and port, `<path>` the repository's path in
+it and `<user>` its login, each the site's. In one shell, with `DOCKER_CONFIG` a directory under
+`local/` for `crane`'s login, `SSL_CERT_FILE` the registry's CA, and the password read on
+standard input from a file under `local/` of mode `0600`, never put on a command line:
+
+```sh
+export DOCKER_CONFIG=$PWD/local/<config directory> SSL_CERT_FILE=$PWD/local/<the registry's CA>
+crane auth login <registry> -u <user> --password-stdin < local/<password file>
+docker save -o local/fylgja-core-<tag>.tar fylgja-core:<tag>
+crane push local/fylgja-core-<tag>.tar <registry>/<path>/fylgja-core:<tag>
+```
+
+**Deploy** it from a site's overlay, `local/deploy/kustomization.yaml`, over the base under
+[`deploy/`](deploy/README.md), which holds no address and no value. The overlay names the image
+just pushed by its registry, path and tag; makes the Secrets the base's pods name from files
+under `local/deploy/secret/`, each of mode `0600`, and their ConfigMap from two literals; and
+may give the Service its address. [deploy/README.md](deploy/README.md) holds a whole example and
+says which Secret each file becomes. With `KUBECONFIG` naming the cluster's kubeconfig:
+
+```sh
+kubectl apply -k local/deploy
+kubectl -n fylgja rollout status statefulset/versity
+kubectl -n fylgja rollout status deployment/fylgja-core
+```
+
+The core's pod turns Ready when it listens, which it does only after it holds the Lease and has
+opened its store; one that waits for the Lease is never Ready, and is not restarted for waiting.
+At the first apply it may start before its store: it exits 1 at the store's proof, and the
+kubelet starts it again after its backoff (10 s, then doubling).
+
+**Reach** it from a workstation over TLS, at the Service's address, with a token whose hash the
+overlay's `secret/tokens` holds, trusting the CA that signed the server's certificate.
+`local/.env`'s `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` are the development host's core's, so
+the three are set in the shell's own environment, the token read from its file under `local/`
+(mode `0600`), never echoed. The token's line needs bash: under dash, Ubuntu's `sh`, `$(< file)`
+is empty.
+
+```bash
+export FYLGJA_API_ADDRESS=https://<the Service's address> FYLGJA_API_CA=$PWD/local/<the site's CA>
+export FYLGJA_API_TOKEN="$(< local/<the token's file>)"
+core/.venv/bin/fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json
+```
+
+The client verifies strictly: Python's `ssl.create_default_context()` sets `VERIFY_X509_STRICT`.
+The server's certificate names the address as an IP SAN, and the CA's certificate must carry a
+key usage that allows signing certificates. One made by `openssl req -x509` with OpenSSL's
+default configuration carries none and is refused (`CA cert does not include key usage
+extension`); issued again over the same key and subject with `-addext
+keyUsage=critical,keyCertSign,cRLSign`, it is accepted, and every certificate it signed verifies
+against it ([verified-facts.md](design/verified-facts.md)).
+
+**Never two cores on the cluster at once.** Once the core is deployed, `make cluster`, a driver
+run in process on the development host under the same owner label, runs only with the core's
+Deployment scaled to no replica (`kubectl scale deployment fylgja-core --replicas=0 -n fylgja`),
+and it is scaled back to one after (`--replicas=1`). The labels name no core, the driver's watch
+is cluster-wide, and since [D-070](design/decisions.md#d-070) a core deletes a pod of any twin's
+whose container ended or restarted in it, so two would each act on the other's twins.
+
+**The conformance suite on the cluster**, `make conformance DRIVER=clabernetes`, drives the
+deployed core from the development host, as the CLI does from a workstation. It reads, beside the
+node logins of `local/.env` and the `FYLGJA_CONFORMANCE_DRIVER` that `make` sets:
+
+| Variable | Holds |
+|---|---|
+| `KUBECONFIG` | The cluster's kubeconfig: the harness reads the core's pod, its Lease and the twins' namespaces |
+| `FYLGJA_API_ADDRESS`, `FYLGJA_API_TOKEN`, `FYLGJA_API_CA` | The core's `https://` address, a token and the CA, set as "Reach" says; the token is the suite's own principal's, its hash in the overlay's `secret/tokens` |
+| `FYLGJA_CONFORMANCE_SELECTOR` | The label selector of the core's pod, `app.kubernetes.io/name=fylgja-core` in the base |
+| `FYLGJA_CONFORMANCE_NAMESPACE` | The core's namespace, `fylgja` where it is unset |
+
+A variable missing ends the session in one line naming it, and a value is never printed. The
+deployed core runs with `FYLGJA_RESYNC_S` of 3600 or more as a literal of its pod, the overlay's
+optional patch ([deploy/README.md](deploy/README.md)), so a restore the suite reads was started by
+the driver's events and not by the resync; the suite refuses to start otherwise. It prints the tag
+of the image the core runs, the only record of the commit a run read. To kill the core it labels
+the pod that holds the Lease, cuts its egress by a NetworkPolicy of its own, writes an annotation on
+the Lease between two renewals, or once one is 6 s overdue, so the release the dying pod sends is
+refused, and deletes the pod with no grace; the next pod takes the Lease 15 s after
+([D-072](design/decisions.md#d-072)). It undoes the policy, the label and the annotation after
+each kill, and deletes the namespace `fylgja-conformance-probe` it makes for its isolation
+scenario at its end. A run stopped hard leaves its twins in the store; the next run removes them
+first, and says so.
+
+**The maintainer's walk**, the phase's own gate ([Sequence](design/core.md#sequence), item 6): a
+twin created over TLS by the CLI from `three-node`, stepped through each step fixture with `twin
+verify` after each, and destroyed; and a twin from `mixed` given its cEOS port. In a shell with the
+three variables set as "Reach" says; the cEOS steps need the EOS login among the overlay's
+credentials:
+
+```bash
+(
+  set -e
+  f=core/.venv/bin/fylgja-core b=testdata/blueprint s=testdata/blueprint/steps
+  $f twin create walk --blueprint $b/three-node.json; $f twin verify walk
+  for to in $s/three-node-unlinked $b/three-node $s/two-node $b/three-node \
+            $s/three-node-n1-disabled $b/three-node $b/three-node-unmanaged $b/three-node \
+            $b/three-node-probed; do
+    $f twin step walk --blueprint $to.json
+    $f twin verify walk || { rc=$?; [ $rc -eq 1 ] || exit $rc; sleep 5; $f twin verify walk; }
+  done
+  $f twin step walk --blueprint $s/three-node-probed-moved.json --allow-restart; $f twin verify walk
+  $f twin step walk --blueprint $b/three-node.json; $f twin verify walk
+  $f twin step walk --blueprint $s/three-node-n3-eos.json --allow-restart; $f twin verify walk
+  $f twin destroy walk
+  $f twin create walk-eos --blueprint $b/mixed.json; $f twin verify walk-eos
+  $f twin step walk-eos --blueprint $s/mixed-e2-port.json --allow-restart; $f twin verify walk-eos
+  $f twin destroy walk-eos
+)
+```
+
+Each command exits by its verdict: 0 for `ok`, 1 for `rejected`, `failed` or `nonconforming`, 3
+for `unclean` or `diverged`, and 2 for a fault of the CLI's own. The walk runs in a subshell under
+`set -e`, so the first command that does not exit 0 ends it and nothing after it runs; the shell
+stays open, with the twin left as that command found it, to read with `twin show` and `run get`
+and then destroy. A `twin verify` that exits 1 within seconds of a step, with `verify.node.unread`
+as its only error, is no finding but the blink [verified-facts.md](design/verified-facts.md)
+records, a node's Service the step kept without its endpoint for a second or two, so the loop asks
+a verify that exits 1 once more, 5 s on, before the walk stops.
 
 ## Conventions
 

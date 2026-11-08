@@ -15,7 +15,7 @@ from typing import Literal
 from fylgja_core import clock, ulid
 from fylgja_core.findings import Verdict
 
-Operation = Literal["create", "step", "destroy"]
+Operation = Literal["create", "step", "restore", "destroy"]
 State = Literal["queued", "running", "cancelling", "ended"]
 Phase = Literal["compile", "admit", "plan", "apply", "ready", "push", "verify", "flows", "destroy", "cancel"]
 Outcome = Literal["started", "done", "failed", "timed_out", "cancelled", "skipped"]
@@ -23,7 +23,9 @@ Outcome = Literal["started", "done", "failed", "timed_out", "cancelled", "skippe
 
 @dataclass(frozen=True, kw_only=True)
 class Run:
-    """One operation on a twin: queued, running, cancelling, then ended with its verdict."""
+    """One operation on a twin: queued, running, cancelling, then ended with its verdict. A client's
+    write queues a create, a step or a destroy; a `restore` is the loop's own, by the principal
+    `core`, taken when a kick finds a node of a settled twin at another incarnation (D-067)."""
 
     id: str
     twin: str

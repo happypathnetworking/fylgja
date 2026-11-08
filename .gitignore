@@ -3,6 +3,7 @@ local/
 
 # Python
 __pycache__/
+build/
 *.egg-info/
 .mypy_cache/
 .pytest_cache/

@@ -1,0 +1,97 @@
+apiVersion: c9s.run/v1alpha1
+kind: Topology
+metadata:
+  name: three-node-probed
+  namespace: fylgja-twin-three-node-probed
+  labels:
+    fylgja.owner: core
+    fylgja.twin: three-node-probed
+spec:
+  expose:
+    disableAutoExpose: true
+  imagePull:
+    pullSecrets:
+    - fylgja-pull-arista-ceos
+  deployment:
+    resources:
+      n1:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+      n2:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+      n3:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+      n1-loop-a:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+      n1-loop-b:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+  definition:
+    containerlab: |
+      name: three-node-probed
+      topology:
+        defaults:
+          labels:
+            fylgja.owner: core
+            fylgja.twin: three-node-probed
+        nodes:
+          n1:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          n2:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          n3:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          n1-loop-a:
+            kind: linux
+            image: alpine:3.24.2
+            exec:
+            - ip addr add 10.1.10.2/24 dev eth1
+            - ip route add 10.1.11.2/32 via 10.1.10.1 dev eth1
+          n1-loop-b:
+            kind: linux
+            image: alpine:3.24.2
+            exec:
+            - ip addr add 10.1.11.2/24 dev eth1
+            - ip route add 10.1.10.2/32 via 10.1.11.1 dev eth1
+        links:
+        - endpoints:
+          - n1:ethernet-1/1
+          - n2:ethernet-1/1
+        - endpoints:
+          - n1:ethernet-1/2
+          - n3:ethernet-1/2
+        - endpoints:
+          - n2:ethernet-1/2
+          - n3:ethernet-1/1
+        - endpoints:
+          - n1-loop-a:eth1
+          - n1:ethernet-1/10
+        - endpoints:
+          - n1-loop-b:eth1
+          - n1:ethernet-1/11

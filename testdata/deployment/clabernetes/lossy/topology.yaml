@@ -1,0 +1,71 @@
+apiVersion: c9s.run/v1alpha1
+kind: Topology
+metadata:
+  name: lossy
+  namespace: fylgja-twin-lossy
+  labels:
+    fylgja.owner: core
+    fylgja.twin: lossy
+spec:
+  expose:
+    disableAutoExpose: true
+  imagePull:
+    pullSecrets:
+    - fylgja-pull-arista-ceos
+  deployment:
+    resources:
+      c1:
+        requests:
+          cpu: 1000m
+          memory: 2048Mi
+      c2:
+        requests:
+          cpu: 1000m
+          memory: 2048Mi
+      s1:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+  definition:
+    containerlab: |
+      name: lossy
+      topology:
+        defaults:
+          labels:
+            fylgja.owner: core
+            fylgja.twin: lossy
+        nodes:
+          c1:
+            kind: chassisos
+            image: example.invalid/chassisos:0
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          c2:
+            kind: chassisos
+            image: example.invalid/chassisos:0
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+          s1:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+        links:
+        - endpoints:
+          - c1:eth1
+          - s1:ethernet-1/1
+        - endpoints:
+          - c1:eth49
+          - c2:eth49
+        - endpoints:
+          - c2:eth1
+          - s1:ethernet-1/2/1

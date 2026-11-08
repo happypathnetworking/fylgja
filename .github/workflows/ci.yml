@@ -8,8 +8,9 @@ on:
 permissions:
   contents: read
 
-# The pure tier and lint gate every change. The live tier and the driver conformance suite
-# boot twins, so they run on a host that can (CONTRIBUTING.md).
+# The pure tier and lint gate every change, and the core's image is built and checked. The live
+# tier and the driver conformance suite boot twins, so they run on a host that can
+# (CONTRIBUTING.md).
 jobs:
   lint-and-test:
     runs-on: ubuntu-26.04
@@ -22,3 +23,13 @@ jobs:
       - run: make lint
       - run: make test
       - run: make linkcheck
+      - run: make wheelcheck
+
+  # Built and run, and pushed nowhere: publishing an image is a release's decision (D-062).
+  image:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - run: make imagecheck

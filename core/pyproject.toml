@@ -11,7 +11,11 @@ requires-python = ">=3.14"
 dependencies = [
     "grpcio==1.84.0",
     "httpx==0.28.1",
+    "httpx2==2.16.0",
     "jsonschema==4.26.0",
+    "lightkube==1.0.1",
+    "lightkube-models==1.37.0.8",
+    "msgspec==0.22.0",
     "protobuf==7.36.2",
     "pygnmi==0.8.15",
     "PyYAML==6.0.3",
@@ -21,7 +25,7 @@ dependencies = [
 
 [project.scripts]
 fylgja-core = "fylgja_core.cli:main"
-fylgja-core-server = "fylgja_core.server.__main__:main"
+fylgja-core-server = "fylgja_core.server.entry:main"
 
 [project.optional-dependencies]
 dev = [
@@ -40,10 +44,14 @@ fylgja_core = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["live: boots images on the local containerlab driver; run with make live"]
-addopts = "-p no:cacheprovider -m 'not live'"
-# Starlette 1.9.0's TestClient prefers httpx2; the project pins httpx (D-039) for the readiness wait and the push.
-filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+# tests/ on the path, so tests/live, tests/cluster and tests/conformance, each collected alone by its make target,
+# import the store contract, the fakes and the host's readings.
+pythonpath = ["tests"]
+markers = [
+    "live: boots images on the local containerlab driver: tests/live, and the conformance suite on the local harness; run with make live, or the suite alone with make conformance",
+    "cluster: runs against the k3s cluster from the development host: tests/cluster, and the conformance suite on the cluster harness; run with make cluster, or the suite with make conformance DRIVER=clabernetes",
+]
+addopts = "-p no:cacheprovider -m 'not live and not cluster'"
 
 [tool.ruff]
 line-length = 120

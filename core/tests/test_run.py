@@ -1,5 +1,5 @@
 from fylgja_core import documents, run, schemas, ulid
-from fylgja_core.findings import Subject, Verdict
+from fylgja_core.findings import Counts, Subject, Verdict, Wait
 from fylgja_core.run import Event, Run
 
 RUN = Run(
@@ -44,3 +44,15 @@ def test_ended_sets_the_state_the_time_and_the_verdict() -> None:
     assert done.state == "ended" and done.verdict == verdict and done.ended_at is not None
     doc = documents.encode(done)
     assert schemas.api_validator("Run").is_valid(doc), list(schemas.api_validator("Run").iter_errors(doc))
+
+
+def test_a_restore_run_ended_ok_encodes_to_the_apis_run_and_decodes_back() -> None:
+    queued = run.queued("three-node", "restore", "core")
+    verdict = Verdict(operation="restore", status="ok", subject=Subject(twin="three-node", run_id=queued.id),
+                      findings=(), counts=Counts(held=7, failed=0, skipped=0),
+                      wait=Wait(outcome="settled", budget_s=180, after_s=2.5))
+    restored = run.ended(queued, verdict)
+    doc = documents.encode(restored)
+    assert schemas.api_validator("Run").is_valid(doc), list(schemas.api_validator("Run").iter_errors(doc))
+    assert (doc["operation"], doc["verdict"]["operation"]) == ("restore", "restore")
+    assert documents.decode(Run, doc) == restored

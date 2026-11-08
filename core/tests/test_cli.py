@@ -1,7 +1,8 @@
 """The thin CLI, fylgja-core (D-026), against the fake API 1 server: each command's requests
 (the fake holds each to the OpenAPI document), its text and its --json output (each document
 held to its schema), and its exit code: 0 ok, 1 a negative verdict, 2 a problem, a transport
-failure or a usage failure, 3 a twin left dirty. No output ever holds the token."""
+failure or a usage failure, 3 a twin left dirty. No output ever holds the token. An https://
+address is verified against the CA file FYLGJA_API_CA names, over a real server."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from typing import Any
 
 import httpx
 import pytest
+import tls
 import yaml
 from fake_api import (
     ADDRESS,
@@ -33,9 +35,12 @@ from fake_api import (
     STEP_TO,
     TOKEN,
     TWIN,
+    UNTRUSTED,
     VERSION,
     FakeAPI,
+    application,
     check_component,
+    cut,
     event_stream,
     last_step,
     ok,
@@ -44,6 +49,7 @@ from fake_api import (
     run,
     step_plan,
     unreachable,
+    untrusted,
     verification,
     watch,
 )
@@ -86,12 +92,13 @@ class Result:
 def environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FYLGJA_API_ADDRESS", ADDRESS)
     monkeypatch.setenv("FYLGJA_API_TOKEN", TOKEN)
+    monkeypatch.delenv("FYLGJA_API_CA", raising=False)
 
 
 def fylgja(capsys: pytest.CaptureFixture[str], api: FakeAPI | None, *argv: str) -> Result:
     """Run the CLI against `api` and capture what it wrote; the token is in neither stream, and
-    every request and answer held to the OpenAPI document."""
-    code = cli.main(list(argv), transport=api.transport if api is not None else None)
+    every request and answer held to the OpenAPI document. A watch reconnects without waiting."""
+    code = cli.main(list(argv), transport=api.transport if api is not None else None, sleep=lambda s: None)
     captured = capsys.readouterr()
     assert api is None or api.failures == [], api.failures
     assert TOKEN not in captured.out and TOKEN not in captured.err
@@ -170,13 +177,56 @@ def test_a_token_that_is_no_bearer_token_exits_2_and_no_part_of_it_is_shown(
     assert "sekrit" not in r.out + r.err and api.requests == []
 
 
-def test_an_address_and_a_token_are_both_refused_in_one_pass(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+BAD_CA = "FYLGJA_API_CA names no file of CA certificates that can be read"
+NO_CA = "FYLGJA_API_CA names the CA file an https:// address is verified against"
+
+
+def test_an_address_a_token_and_a_ca_file_are_refused_in_one_pass(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("FYLGJA_API_ADDRESS", "a b:80")
     monkeypatch.setenv("FYLGJA_API_TOKEN", "sekrit\n")
+    monkeypatch.setenv("FYLGJA_API_CA", str(tmp_path / "missing.pem"))
     r = fylgja(capsys, FakeAPI(), "twin", "list")
-    assert (r.code, r.err.splitlines()) == (2, ["FYLGJA_API_ADDRESS is not an http(s):// URL or host:port", BAD_TOKEN])
+    assert (r.code, r.err.splitlines()) == (
+        2, ["FYLGJA_API_ADDRESS is not an http(s):// URL or host:port", BAD_TOKEN, BAD_CA])
+
+
+@pytest.mark.parametrize("fault", ["missing", "prose"])
+def test_a_ca_file_that_cannot_be_read_exits_2_naming_the_variable_before_any_request(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str
+) -> None:
+    ca = tmp_path / "ca.pem"
+    if fault == "prose":
+        ca.write_text("sekrit prose, and no certificate\n")
+    monkeypatch.setenv("FYLGJA_API_CA", str(ca))
+    api = FakeAPI()
+    r = fylgja(capsys, api, "twin", "list")
+    assert r == Result(2, "", f"{BAD_CA}\n")
+    assert api.requests == []
+
+
+def test_an_empty_ca_file_is_not_set(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    # `set -a; . local/.env` sets the variable empty where .env.example's line is left so.
+    monkeypatch.setenv("FYLGJA_API_CA", "")
+    api = FakeAPI().on("GET", "/v1/twins", ok({"twins": []}))
+    assert fylgja(capsys, api, "twin", "list") == Result(0, "no twins\n", "")
+
+
+def test_an_https_address_is_verified_against_the_ca_file_fylgja_api_ca_names(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cert, key = tls.pair(tmp_path / "tls")
+    with tls.served(application({"/v1/twins": {"twins": [READY]}}), (cert, key)) as port:
+        address = f"https://127.0.0.1:{port}"
+        monkeypatch.setenv("FYLGJA_API_ADDRESS", address)
+        # Without it, a call and a watch alike: one line saying the certificate is not trusted, one naming the variable.
+        said = f"GET {address}/v1/version failed: the server's certificate is not trusted: {UNTRUSTED}\n{NO_CA}\n"
+        assert fylgja(capsys, None, "twin", "list") == Result(2, "", said)
+        assert fylgja(capsys, None, "run", "watch", RUN_ID) == Result(2, "", said)
+        monkeypatch.setenv("FYLGJA_API_CA", str(cert))
+        r = fylgja(capsys, None, "twin", "list")
+    assert r == Result(0, "three-node: generation 1, observed 1, Ready True, phase pushed\n", "")
 
 
 @pytest.mark.parametrize(
@@ -409,7 +459,7 @@ def test_twin_create_follows_a_run_not_yet_ended_to_its_verdict(capsys: pytest.C
     r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
     assert r.code == 3
     assert api.calls() == [f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {RUN_PATH}", f"GET {RUN_PATH}/events",
-                           f"GET {RUN_PATH}"]
+                           f"GET {RUN_PATH}/events", f"GET {RUN_PATH}"]
 
 
 def test_a_twin_deleted_while_it_is_created_exits_by_the_create_runs_verdict(
@@ -421,12 +471,56 @@ def test_a_twin_deleted_while_it_is_created_exits_by_the_create_runs_verdict(
     assert r.lines()[1] == f"deletion requested at {ENDED_AT}"
 
 
-def test_a_watch_that_ends_before_the_twin_settles_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
-    api = creating(FakeAPI(), record(2, 1, 0, phase="compiled", run_id=RUN_ID))
+COMPILED = record(2, 1, 0, phase="compiled", run_id=RUN_ID)
+
+
+def test_a_waiting_create_rides_through_a_server_gone_between_two_streams(capsys: pytest.CaptureFixture[str]) -> None:
+    api = creating(FakeAPI()).on("GET", TWIN_PATH, watch(COMPILED), unreachable, watch(READY))
+    r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
+    assert r.code == 0 and r.lines()[-1] == "verdict: ok"
+    # Said once, at the first early end: the stream's, then a server refusing the connection.
+    assert r.err.splitlines() == ["three-node: compiled",
+                                  f"GET http://127.0.0.1:7650{TWIN_PATH} ended before its end; reconnecting"]
+    assert api.calls() == [f"PUT {TWIN_PATH}"] + [f"GET {TWIN_PATH}"] * 3 + [f"GET {RUN_PATH}"]
+    api = creating(FakeAPI()).on("GET", TWIN_PATH, watch(COMPILED), unreachable, watch(READY))
+    r = fylgja(capsys, api, "--json", "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
+    assert (r.code, r.json(), r.err) == (0, run(), "")
+
+
+def test_a_watch_never_resumed_exits_2_naming_the_call(capsys: pytest.CaptureFixture[str]) -> None:
+    api = creating(FakeAPI()).on("GET", TWIN_PATH, watch(COMPILED), watch())
     r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
     assert (r.code, r.out) == (2, "")
-    assert r.err.splitlines()[-1] == "the watch of twin three-node ended before the loop acted on generation 1"
-    assert api.calls() == [f"PUT {TWIN_PATH}", f"GET {TWIN_PATH}"]
+    assert r.err.splitlines()[-1] == (f"GET http://127.0.0.1:7650{TWIN_PATH} ended before its end; "
+                                      "not resumed after 15 reconnects")
+    assert api.calls() == [f"PUT {TWIN_PATH}"] + [f"GET {TWIN_PATH}"] * 16
+
+
+def test_a_waiting_create_whose_watch_reconnects_to_a_certificate_not_trusted_exits_2_naming_fylgja_api_ca(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FYLGJA_API_ADDRESS", "https://core.example")
+    api = creating(FakeAPI()).on("GET", TWIN_PATH, watch(COMPILED), untrusted)
+    r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
+    assert (r.code, r.out) == (2, "")
+    assert r.err.splitlines() == [
+        "three-node: compiled",
+        f"GET https://core.example{TWIN_PATH} ended before its end; reconnecting",
+        f"GET https://core.example{TWIN_PATH} failed: the server's certificate is not trusted: {UNTRUSTED}",
+        NO_CA,
+    ]
+    assert api.calls() == [f"PUT {TWIN_PATH}"] + [f"GET {TWIN_PATH}"] * 2  # not opened again after it
+
+
+def test_a_twin_gone_between_two_streams_of_a_waiting_create_is_the_servers_refusal(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    api = creating(FakeAPI()).on("GET", TWIN_PATH, cut("WatchEvent", [("MODIFIED", None, {"type": "MODIFIED",
+                                                                                            "object": COMPILED})]),
+                                 refuse(404, "twin.not_found", "No twin is named three-node."))
+    r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
+    assert (r.code, r.out) == (2, "")
+    assert r.err.splitlines()[-1] == "404 twin.not_found: No twin is named three-node."
 
 
 def test_a_twin_that_exists_is_the_servers_refusal(capsys: pytest.CaptureFixture[str]) -> None:
@@ -671,6 +765,20 @@ def test_twin_destroy_of_a_twin_already_gone_reads_the_destroy_run(capsys: pytes
     assert api.calls() == [f"DELETE {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
 
 
+def test_twin_destroy_whose_watch_is_cut_and_then_answered_404_reads_the_destroy_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destroyed = record(6, 2, 1, deleting=True, phase="destroyed", run_id=DESTROY_RUN_ID)
+    api = destroying(FakeAPI(), status="unclean")
+    api.on("GET", TWIN_PATH, cut("WatchEvent", [("MODIFIED", None, {"type": "MODIFIED", "object": destroyed})]),
+           refuse(404, "twin.not_found", "No twin is named three-node."))
+    r = fylgja(capsys, api, "twin", "destroy", TWIN)
+    assert (r.code, r.lines()[0], r.lines()[-2]) == (3, "twin three-node deleted", "verdict: unclean")
+    assert r.err.splitlines() == ["three-node: destroyed",
+                                  f"GET http://127.0.0.1:7650{TWIN_PATH} failed: connection reset; reconnecting"]
+    assert api.calls() == [f"DELETE {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
+
+
 def test_twin_destroy_whose_teardown_kept_the_record_shows_it_and_does_not_say_deleted(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -743,6 +851,13 @@ def test_run_get_of_a_run_in_flight_has_no_verdict(capsys: pytest.CaptureFixture
         f"run {RUN_ID}: create of twin three-node, running", f"asked by alice at {AT}"]
 
 
+def test_run_get_names_a_restore_by_its_operation(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("GET", RUN_PATH, ok(run(operation="restore")))
+    r = fylgja(capsys, api, "run", "get", RUN_ID)
+    assert (r.code, r.lines()[:3]) == (0, [f"run {RUN_ID}: restore of twin three-node, ended",
+                                           f"asked by alice at {AT}, ended at {ENDED_AT}", "verdict: ok"])
+
+
 def test_a_verdict_of_another_findings_version_is_refused(capsys: pytest.CaptureFixture[str]) -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/version":
@@ -779,12 +894,32 @@ def test_run_watch_prints_each_event_and_exits_by_the_verdict(capsys: pytest.Cap
         "verdict: failed",
         "  error push.refused n1: The node refused the configuration: commit failed.",
     ])
-    assert api.calls() == [f"GET {RUN_PATH}/events", f"GET {RUN_PATH}"]
-    assert api.last("GET", f"{RUN_PATH}/events").headers["accept"] == "text/event-stream"
+    # The stream, then the page that says the run has ended.
+    assert api.calls() == [f"GET {RUN_PATH}/events", f"GET {RUN_PATH}/events", f"GET {RUN_PATH}"]
+    stream, page = (r.headers["accept"] for r in api.requests if r.url.path == f"{RUN_PATH}/events")
+    assert (stream, page) == ("text/event-stream", "application/json, application/problem+json")
     r = fylgja(capsys, api, "--json", "run", "watch", RUN_ID)
     assert (r.code, r.json()) == (1, EVENTS)
     for doc in r.json():
         check_component("Event", doc)
+
+
+def test_run_watch_rides_through_a_cut_printing_each_event_once(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI()
+    api.on("GET", f"{RUN_PATH}/events", cut("Event", [(None, str(e["seq"]), e) for e in EVENTS[:2]]),
+           event_stream(*EVENTS[2:]))
+    api.on("GET", RUN_PATH, ok(run(status="failed", findings=[PUSH_REFUSED])))
+    r = fylgja(capsys, api, "run", "watch", RUN_ID)
+    assert (r.code, r.lines()) == (1, [
+        f"1 {AT} compile started",
+        f"2 {AT} compile done 0.25s",
+        f"3 {ENDED_AT} push failed n1 1.5s push.refused",
+        "verdict: failed",
+        "  error push.refused n1: The node refused the configuration: commit failed.",
+    ])
+    assert r.err == f"GET http://127.0.0.1:7650{RUN_PATH}/events failed: connection reset; reconnecting\n"
+    assert api.calls() == [f"GET {RUN_PATH}/events"] * 3 + [f"GET {RUN_PATH}"]
+    assert api.last("GET", f"{RUN_PATH}/events").url.params.multi_items() == [("after", "3")]
 
 
 # Blueprints and bundles.

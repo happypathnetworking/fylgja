@@ -33,20 +33,34 @@ not fired live: each stray had ended before a step's resume reached its apply (D
 each one's node name from the label `clab-node-name`, its incarnation from `State.StartedAt`
 and its address on the lab's management network, `clab-<twin>`. Those keys are the ones
 containerlab 0.79.0 was seen to set (verified-facts.md); the live tier verifies them on the
-running version. With no container, what a killed destroy leaves is residue: the lab's block
-of `/etc/hosts` entries, its ssh config `clab-<twin>.conf`, or its management network.
+running version. A container removed between the listing and its inspect fails the inspect,
+so the listing is taken once more. With no container, what a killed destroy leaves is
+residue: the lab's block of `/etc/hosts` entries, its ssh config `clab-<twin>.conf`, or its
+management network.
 `destroy` removes everything; the root-owned residue only containerlab can clear, so finding
 it and no container it deploys, then destroys (recovery rule 2, D-019, D-023), while a
 network left alone, as a deploy refused at its start leaves it, is removed with `docker`.
 containerlab's `destroy -t` removes only the nodes its file names, so a container of the lab
 the deployment destroyed does not name (one a step's deploy, cut short, added) is removed with
 `docker` first (D-055).
+
+`events` follows `docker events` for the containers that carry the lab label, a start, a die
+or a destroy (`EVENTS_ARGV`), as one long-lived command under the allow-listed environment
+(`cli.follow`, D-065), and names the lab of each, which is the twin's name (D-058). It reads
+that label alone and logs no line of the stream, nor a failure's text, which can name the
+daemon's address. When the stream ends it waits the seam's backoff, names every twin it holds,
+each lab on the host (`LABS_ARGV`) and each twin with a directory under the root, since the
+daemon replays only its last 256 events and every `docker exec` the core runs adds three
+(verified-facts.md), and follows the stream again. The core's own deploys,
+restarts and removals raise events too, each costing the loop a pass. A core stopped ends its
+`docker events`; one killed with SIGKILL leaves it running until the next event it would print,
+when it dies of SIGPIPE (verified-facts.md).
 """
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
+import contextlib
 import ipaddress
 import json
 import logging
@@ -54,14 +68,14 @@ import os
 import secrets
 import shutil
 import time
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from fylgja_core import containerlab, platform_package, probe_package
+from fylgja_core import containerlab, logs, platform_package, probe_package
 from fylgja_core.bundle import Manifest
 from fylgja_core.containerlab import changes as clab_changes
 from fylgja_core.containerlab import cli, pool
@@ -78,6 +92,8 @@ from fylgja_core.driver import (
     NodeState,
     Planned,
     Refusal,
+    check_files,
+    events_backoff,
 )
 from fylgja_core.platform_package import Image, PlatformPackage
 from fylgja_core.probe_package import ProbePackage
@@ -112,12 +128,53 @@ NEVER_STARTED = "0001-01-01T00:00:00Z"
 STRAY_POLL_S = 1.0
 """How often `apply` and `destroy` look again for a stray deploy of the twin to have ended."""
 
+EVENTS_ARGV = ("docker", "events", "--filter", "type=container", "--filter", "label=containerlab", "--filter",
+               "event=start", "--filter", "event=die", "--filter", "event=destroy", "--format", "{{json .}}")
+"""What `events` follows: a container carrying containerlab's lab label that starts, dies or is
+removed, one JSON object a line. A `docker exec` prints nothing through it, and nor does a
+container without the label (Docker 29.8.1, verified-facts.md)."""
+
+LABS_ARGV = ("docker", "ps", "-a", "--filter", "label=containerlab", "--format", '{{.Label "containerlab"}}')
+"""Every lab on the host: one line per container carrying the label, its lab's name, a lab of two
+containers twice and a container whose label is empty an empty line (Docker 29.8.1,
+verified-facts.md)."""
+
 DEPLOY_LOG = "deploy.log"
 """The file in the twin's directory that holds the last deploy's stdout and stderr (D-056): the
 deploy writes there and not into pipes the core holds, so a deploy orphaned by a killed core runs
 to completion. It is beside the topology it describes, never logged, and removed with the directory."""
 
 _log = logging.getLogger("fylgja.containerlab")
+
+
+def lab_of(line: str) -> str | None:
+    """The lab a line of `docker events` names, its `Actor.Attributes["containerlab"]`, which is
+    the twin's name (`pool.allocation`), when the line is a JSON object holding it and it is a
+    twin name (`check_twin_name`); else None. Nothing else of the line is read."""
+    try:
+        event = json.loads(line)
+    except (ValueError, RecursionError):
+        return None
+    actor = event.get("Actor") if isinstance(event, dict) else None
+    attributes = actor.get("Attributes") if isinstance(actor, dict) else None
+    lab = attributes.get("containerlab") if isinstance(attributes, dict) else None
+    return lab if isinstance(lab, str) and _is_twin_name(lab) else None
+
+
+def _is_twin_name(name: str) -> bool:
+    try:
+        check_twin_name(name)
+    except ValueError:
+        return False
+    return True
+
+
+def _failure(e: Exception) -> tuple[str, dict[str, Any]]:
+    """How a failure of a `docker` command is logged: its type and, for a command's, its status;
+    never its text, which can name `DOCKER_HOST` (verified-facts.md), nor its stderr."""
+    if isinstance(e, cli.CommandFailed):
+        return f"{type(e).__name__}, status {e.returncode}", {"error": type(e).__name__, "status": e.returncode}
+    return type(e).__name__, {"error": type(e).__name__}
 
 
 def stray_deploys(topology: str, proc: Path = Path("/proc")) -> list[int]:
@@ -144,7 +201,9 @@ class ContainerlabDriver:
     `os.cpu_count()` when None); `hosts_path` and `ssh_config_dir` are where containerlab
     writes a lab's host entries and ssh config; `strays` answers the pids of the `containerlab
     deploy` processes running over a topology file (`stray_deploys`), and `stray_poll_s` is how
-    often `apply` and `destroy` ask it again. All are injectable, for the pure tier."""
+    often `apply` and `destroy` ask it again; `follower` yields a long-lived command's lines, as
+    `cli.follow` does, and `backoff` is how long `events` waits before it follows `docker events`
+    again (`events_backoff`). All are injectable, for the pure tier."""
 
     name = containerlab.NAME
 
@@ -161,6 +220,8 @@ class ContainerlabDriver:
         ssh_config_dir: Path = Path("/etc/ssh/ssh_config.d"),
         strays: Callable[[str], list[int]] = stray_deploys,
         stray_poll_s: float = STRAY_POLL_S,
+        follower: Callable[..., AsyncGenerator[str]] = cli.follow,
+        backoff: Callable[[float | None], float] = events_backoff,
     ) -> None:
         self.root = Path(root).absolute()
         self.pool = pool
@@ -172,6 +233,8 @@ class ContainerlabDriver:
         self._ssh_config_dir = ssh_config_dir
         self._strays = strays
         self._stray_poll_s = stray_poll_s
+        self._follow = follower
+        self._backoff = backoff
 
     def capabilities(self) -> Capabilities:
         return containerlab.CAPABILITIES
@@ -317,13 +380,26 @@ class ContainerlabDriver:
 
     async def inspect(self, twin: str) -> Inspection:
         """The twin's containers, by node name, `present` when there is one; else `residue` when
-        the twin's host entries, ssh config or management network remain, and `absent`."""
-        names = (await self._run(
-            ["docker", "ps", "-a", "--filter", f"label=containerlab={twin}", "--format", "{{.Names}}"],
-            timeout_s=DOCKER_TIMEOUT_S)).split()
-        if names:
-            found = json.loads(await self._run(["docker", "inspect", "--type", "container", *names],
-                                               timeout_s=DOCKER_TIMEOUT_S))
+        the twin's host entries, ssh config or management network remain, and `absent`.
+
+        A container removed between the listing (`docker ps`) and its `docker inspect` makes the
+        inspect exit 1 (Docker 29.8.1, verified-facts.md), and a `docker rm -f` kicks a pass at
+        its `die`, so the race is routine: when the inspect fails, but for a budget run out, the
+        listing is taken once more and inspected again, and a second failure is raised. A daemon
+        that fails, fails twice; a lab removed whole meanwhile reads as the next pass would."""
+        for last in (False, True):
+            names = (await self._run(
+                ["docker", "ps", "-a", "--filter", f"label=containerlab={twin}", "--format", "{{.Names}}"],
+                timeout_s=DOCKER_TIMEOUT_S)).split()
+            if not names:
+                break
+            try:
+                found = json.loads(await self._run(["docker", "inspect", "--type", "container", *names],
+                                                   timeout_s=DOCKER_TIMEOUT_S))
+            except cli.CommandFailed as e:
+                if last or e.returncode == cli.TIMED_OUT:
+                    raise
+                continue
             nodes = sorted((_node(twin, doc) for doc in found), key=lambda n: n.name)
             return Inspection(state="present", nodes=tuple(nodes))
         residue = self._root_owned_residue(twin) or await self._network_exists(twin)
@@ -405,6 +481,79 @@ class ContainerlabDriver:
         if returncode in DOCKER_EXEC_UNREACHED or (returncode and stderr.startswith(DOCKER_DAEMON_ERRORS)):
             raise DriverFailed(f"docker exec into {handle} failed with status {returncode}")
         return Exec(returncode, _tail(stdout), _tail(stderr))
+
+    async def events(self) -> AsyncIterator[str]:
+        """The twins whose runtime changed (D-058): the lab of each container of a lab that starts,
+        dies or is removed, as `docker events` reports it (`EVENTS_ARGV`, read by `lab_of`),
+        followed as one long-lived command under the allow-listed environment (`follower`,
+        `cli.follow`, D-065). A line that names no twin is passed over at DEBUG, its text never
+        logged.
+
+        When the stream ends, or anything is raised from it, that is one WARNING naming `docker
+        events` and how it ended, by status and type, never a failure's text. Then, after
+        `backoff(previous)` (the seam's `events_backoff`, which the first name a stream yields
+        resets), every twin the driver holds is named, each once and sorted (`_labs`: each lab on
+        the host, `LABS_ARGV`, and each twin with a directory under the root), and the stream is
+        followed again: the daemon replays only its last 256 events, which the core's own `docker
+        exec` calls fill (verified-facts.md), so what happened meanwhile is not known. A listing
+        that fails is logged so too and passed over. It ends only when cancelled, and a cancel or
+        a close ends the follow, and its command, with it."""
+        previous: float | None = None
+        while True:
+            try:
+                async with contextlib.aclosing(self._follow(EVENTS_ARGV)) as lines:
+                    async for line in lines:
+                        lab = lab_of(line)
+                        if lab is None:
+                            _log.debug("docker events: a line that names no twin is passed over")
+                            continue
+                        previous = None  # the stream works: a later end waits the first backoff again
+                        yield lab
+            except Exception as e:  # whatever the source raised; it is never raised past the seam
+                how, fields = _failure(e)
+            else:
+                how, fields = "status 0", {"status": 0}
+            delay = self._backoff(previous)
+            previous = delay
+            _log.warning("docker events ended (%s): every lab on the host is named, and it is followed again, in %gs",
+                         how, delay, **logs.fields(**fields, retry_s=delay))
+            await asyncio.sleep(delay)
+            for lab in await self._labs():
+                yield lab
+
+    async def _labs(self) -> list[str]:
+        """Every twin the driver holds whose name is a twin name, once and sorted: each lab on the
+        host (`LABS_ARGV`, a line each), and each twin with a directory under
+        `root/containerlab/`, which `apply` makes and `destroy` removes, since the listing is of
+        containers and a twin whose every container went is still the driver's. A listing that
+        fails, or a root that cannot be read, is logged at WARNING by its type and status alone,
+        and names nothing of its own."""
+        try:
+            listed = set((await self._run(LABS_ARGV, timeout_s=DOCKER_TIMEOUT_S)).splitlines())
+        except Exception as e:
+            how, fields = _failure(e)
+            _log.warning("the labs on the host could not be listed (%s): a twin is named once docker events reports "
+                         "it, or by the loop's resync", how, **logs.fields(**fields))
+            listed = set()
+        held = listed | self._directories()
+        labs = sorted(lab for lab in held if _is_twin_name(lab))
+        if len(labs) < len(held):
+            _log.debug("docker ps, or the driver's root: a lab whose name is no twin name is passed over")
+        return labs
+
+    def _directories(self) -> set[str]:
+        """The name of each directory under `root/containerlab/`: a twin's from its `apply` to its
+        `destroy` (`_directory`). None when there is none yet; a root that cannot be read is
+        logged at WARNING by its type alone."""
+        try:
+            return {entry.name for entry in (self.root / "containerlab").iterdir() if entry.is_dir()}
+        except FileNotFoundError:
+            return set()
+        except OSError as e:
+            _log.warning("the driver's twin directories could not be listed (%s): a twin is named once docker events "
+                         "reports it, or by the loop's resync", type(e).__name__,
+                         **logs.fields(error=type(e).__name__))
+            return set()
 
     def _directory(self, twin: str) -> Path:
         """The twin's working directory; containerlab makes the lab's own, `clab-<twin>/`, inside it."""
@@ -571,14 +720,12 @@ def _sections(
 
 
 def _check_files(deployment: Deployment, files: Mapping[str, bytes]) -> None:
-    """`ValueError` unless `files` are exactly the deployment's, each with the SHA-256 it lists."""
-    listed = {f.path: f.sha256 for f in deployment.files}
-    if set(files) != set(listed):
-        raise ValueError(f"the files {sorted(files)} are not the deployment's {sorted(listed)}")
-    for path, data in files.items():
+    """`ValueError` unless `files` are exactly the deployment's, each with the SHA-256 it lists
+    (`check_files`), each a relative file path to write under the twin's directory, and the
+    topology among them."""
+    check_files(deployment, files)
+    for path in files:
         check_file_key(path)
-        if hashlib.sha256(data).hexdigest() != listed[path]:
-            raise ValueError(f"{path} is not the deployment's: its SHA-256 differs from the one {deployment.id} lists")
     if TOPOLOGY not in files:
         raise ValueError(f"the deployment {deployment.id} lists no {TOPOLOGY}")
 

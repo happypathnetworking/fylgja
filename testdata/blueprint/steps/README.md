@@ -2,12 +2,19 @@
 
 Each blueprint here is one change from a base fixture in the directory above, so every kind
 of change a step must handle has a pair. The bundle diff's tests (`core/tests/test_diff.py`)
-and the seam's `changes` (`core/tests/test_containerlab_changes.py`), both pure, read every
-pair, and the loop's pure tests some. The live tier steps a twin from each base to each of
-these in two modules: through the local driver, `changes` held to containerlab's dry run
+and both drivers' `changes` (`core/tests/test_containerlab_changes.py` and
+`core/tests/test_clabernetes_changes.py`, which answer alike), all pure, read every pair, and
+the loop's pure tests some. The live tier steps a twin from each base to each of
+these through the local driver, `changes` held to containerlab's dry run
 (`core/tests/live/test_changes_live.py`, where `three-node-n1-disabled` stands for
-`three-node-unmanaged`, the same topology), and end to end through the API
-(`core/tests/live/test_e2e_step.py`, every pair). Each is a valid, sorted blueprint 1 that compiles with
+`three-node-unmanaged`, the same topology). The conformance suite steps a twin end to end
+through the API on any driver: every pair (`core/tests/conformance/test_steps.py`), and
+`two-node` to `three-node` with the core killed at each phase of the step, in its apply and
+before a deletion, and the step cancelled (`core/tests/conformance/test_step_kills.py`).
+The cluster tier steps a twin through every
+pair too, `three-node-n1-disabled` again standing for `three-node-unmanaged`, the clabernetes
+driver's `changes` held to the pods' uids
+(`core/tests/cluster/test_clabernetes_changes_cluster.py`). Each is a valid, sorted blueprint 1 that compiles with
 the shipped packages, and says in its `source` what it changes.
 
 | Fixture | Base | The change | What the diff says |

@@ -443,7 +443,7 @@
             "live",
             "restart"
           ],
-          "description": "The containerlab link-apply-mode both containerlab drivers write on every node of this kind at create (containerlab 0.79 and clabernetes 0.10.1 both take it; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30). Never changed on a running twin: on clabernetes a changed mode alters the pod spec and replaces every pod, losing every push. live: a link added or removed on a port the node had at boot re-cables with no restart and the push kept, for SR Linux and for cEOS 4.32 alike. restart: the node's pod or container is restarted and re-pushed."
+          "description": "The containerlab link-apply-mode both containerlab drivers write on every node of this kind at create (containerlab 0.79 and clabernetes 0.10.1 both take it; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30). Never changed on a running twin: on clabernetes a changed mode alters the pod spec of each node of this kind and replaces those pods, losing their pushes, and keeps the other device nodes' pods (verified on k3s v1.37.1+k3s1 with clabernetes 0.10.1, 2026-11-05), and a probe host's too [unverified: a probe host's pod under a device's mode change was not read]. live: a link added or removed on a port the node had at boot re-cables with no restart and the push kept, for SR Linux and for cEOS 4.32 alike. restart: the node's pod or container is restarted and re-pushed."
         },
         "hot_add_ports": {
           "type": "boolean",

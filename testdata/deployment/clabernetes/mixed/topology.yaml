@@ -1,0 +1,71 @@
+apiVersion: c9s.run/v1alpha1
+kind: Topology
+metadata:
+  name: mixed
+  namespace: fylgja-twin-mixed
+  labels:
+    fylgja.owner: core
+    fylgja.twin: mixed
+spec:
+  expose:
+    disableAutoExpose: true
+  imagePull:
+    pullSecrets:
+    - fylgja-pull-arista-ceos
+  deployment:
+    resources:
+      e1:
+        requests:
+          cpu: 500m
+          memory: 1536Mi
+      e2:
+        requests:
+          cpu: 500m
+          memory: 1536Mi
+      s1:
+        requests:
+          cpu: 500m
+          memory: 2048Mi
+  definition:
+    containerlab: |
+      name: mixed
+      topology:
+        defaults:
+          labels:
+            fylgja.owner: core
+            fylgja.twin: mixed
+        nodes:
+          e1:
+            kind: ceos
+            image: registry.example:5443/arista/ceos:4.32.0.2F
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 6030:6030
+          e2:
+            kind: ceos
+            image: registry.example:5443/arista/ceos:4.32.0.2F
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 6030:6030
+          s1:
+            kind: nokia_srlinux
+            image: ghcr.io/nokia/srlinux:24.7.1
+            link-apply-mode: live
+            ports:
+            - '22:22'
+            - 443:443
+            - 57400:57400
+        links:
+        - endpoints:
+          - e1:eth1
+          - s1:ethernet-1/1
+        - endpoints:
+          - e1:eth2_1
+          - e2:eth1
+        - endpoints:
+          - e2:eth3_1_1
+          - s1:ethernet-1/2

@@ -6,6 +6,11 @@ them. The driver's module boots and destroys its own labs. The push module's ses
 destroyed at the session's end. They share mixed.json's own link (`e1:Ethernet1` to
 `s1:ethernet-1/1`): a cEOS node with no Ethernet port refuses `ip routing`, which mixed.json's
 `e1` configuration carries (design/verified-facts.md).
+
+Phases 4 and 5's end-to-end scenarios, a twin created through API 1 and the thin CLI, stepped to
+every step fixture, its core killed and its step cancelled, are the conformance suite's
+(`tests/conformance`), written once for any driver: `make live` runs that suite too, on the local
+driver's harness. What stays here is the local driver's own.
 """
 
 from __future__ import annotations

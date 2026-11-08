@@ -4,7 +4,10 @@ The queue holds twin names, not tasks. A name already waiting is not added twice
 deadline wins), and one that arrives while a worker holds its twin is marked dirty and queued
 again when the worker is done, at the earliest deadline asked meanwhile, so each twin has at
 most one worker and one run at a time, and a backoff the loop asks from inside its own pass
-holds. A bounded pool of workers keeps one slow twin from holding up the others.
+holds. A backoff (`back_off`) is also a floor for a driver's event (`nudge`), received during
+the pass that failed or while the twin waits: a runtime's own events follow every apply, and
+would otherwise retry a failing pass at once. A client's write (`put`) goes under it, as
+before. A bounded pool of workers keeps one slow twin from holding up the others.
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ class WorkQueue:
         self._due: dict[str, float] = {}
         self._active: set[str] = set()
         self._dirty: dict[str, float] = {}  # an active name asked for again, by the earliest deadline asked
+        self._nudged: set[str] = set()  # an active name a nudge asked for again
+        self._held: dict[str, float] = {}  # a name backing off, by when its backoff ends: until a worker takes it
         self._closed = False
         self._changed = asyncio.Condition()
         self._wakes: set[asyncio.Task[None]] = set()
@@ -48,6 +53,21 @@ class WorkQueue:
         self._due[name] = min(deadline, self._due.get(name, deadline))
         self._notify()
 
+    def nudge(self, name: str) -> None:
+        """Queue `name` at once, or, while it backs off (`back_off`), when its backoff ends; a
+        name already waiting keeps the earlier deadline. One whose worker is active is queued
+        again by `done`: at once, or when the backoff the worker asked meanwhile ends."""
+        if name in self._active:
+            self._nudged.add(name)
+            return
+        self.put(name, delay_s=max(0.0, self._held.get(name, 0.0) - asyncio.get_running_loop().time()))
+
+    def back_off(self, name: str, delay_s: float) -> None:
+        """Queue `name` after `delay_s`, as `put` does, and hold it there against `nudge` until a
+        worker takes it; a `put` still brings it forward."""
+        self._held[name] = asyncio.get_running_loop().time() + delay_s
+        self.put(name, delay_s)
+
     async def get(self) -> str:
         """The earliest due name, once its deadline has come; it is active until `done`."""
         loop = asyncio.get_running_loop()
@@ -61,6 +81,7 @@ class WorkQueue:
                     timeout = self._due[name] - loop.time()
                     if timeout <= 0:
                         del self._due[name]
+                        self._held.pop(name, None)
                         self._active.add(name)
                         return name
                 with contextlib.suppress(TimeoutError):
@@ -68,11 +89,15 @@ class WorkQueue:
 
     def done(self, name: str) -> None:
         """Release `name`; a name marked dirty meanwhile is queued again, due at the earliest
-        deadline asked for it (at once, if that has passed)."""
+        deadline asked for it (at once, if that has passed), and one nudged meanwhile as a nudge
+        queues it now."""
         self._active.discard(name)
         deadline = self._dirty.pop(name, None)
         if deadline is not None:
             self.put(name, delay_s=max(0.0, deadline - asyncio.get_running_loop().time()))
+        if name in self._nudged:
+            self._nudged.discard(name)
+            self.nudge(name)
 
     def waiting(self) -> list[str]:
         """The names queued and not yet served, earliest deadline first."""
@@ -112,9 +137,12 @@ class Workers:
         self.tasks = [asyncio.create_task(self._work()) for _ in range(self._size)]
 
     async def stop(self) -> None:
-        """Cancel every task and wait for it to end."""
+        """Cancel every task not cancelled already, and wait for it to end: one a caller cancelled
+        first (`Reconciler.stop` cancels them before it awaits anything) is not cancelled again,
+        which would cut its cleanup after the first."""
         for task in self.tasks:
-            task.cancel()
+            if not task.cancelling():
+                task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
     async def _work(self) -> None:

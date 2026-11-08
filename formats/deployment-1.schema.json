@@ -3,7 +3,7 @@
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/deployment-1.schema.json",
   "title": "Fylgja deployment 1",
   "description": "A driver's plan: the pure, runtime-specific binding of one bundle to one twin. The reconcile loop stores it, hands it to the driver's apply, compares two of them to decide a step's lifecycle actions, and reports its fidelity.",
-  "$comment": "PURITY. plan(bundle, packages, twin, allocation) -> deployment has no I/O, clock or environment, exactly as the compiler; it is tested by fixtures, one bundle rendered by each driver. Admission (does the demand fit) is a separate, impure check that reads the plan. FILES. The rendered artifacts (for both containerlab drivers: topology.clab.yml naming the lab after the twin, with production names where the kind has aliases and renamed ports where not; for hardware later: a device assignment) are stored beside this document under deployments/<id>/ in the state store; this document lists them by path and SHA-256. ID. The deployment id is the lowercase-hex SHA-256 of the RFC 8785 (JCS) bytes of {\"driver\", \"twin\", \"bundle_id\", \"files\"} taken from this document: fidelity and demand are derived from the same inputs and are not hashed, so rewording a package moves neither a bundle nor a deployment id, while a changed image does (it changes a rendered file). A changed resource request moves the id only where the driver renders it into a file (clabernetes' pod requests in the Topology), not locally, where it is an admission budget (D-015). Planning the same bundle for the same twin on the same driver with the same allocation gives the same id, which makes apply idempotent.",
+  "$comment": "PURITY. plan(bundle, packages, twin, allocation) -> deployment has no I/O, clock or environment, exactly as the compiler; it is tested by fixtures, one bundle rendered by each driver. Admission (does the demand fit) is a separate, impure check that reads the plan. FILES. The rendered artifacts (for the local driver: topology.clab.yml naming the lab after the twin, with production names where the kind has aliases and renamed ports where not; for clabernetes: namespace.yaml, networkpolicy.yaml and topology.yaml, a Topology wrapping the same containerlab definition less its mgmt block; for hardware later: a device assignment) are stored beside this document under deployments/<id>/ in the state store; this document lists them by path and SHA-256. ID. The deployment id is the lowercase-hex SHA-256 of the RFC 8785 (JCS) bytes of {\"driver\", \"twin\", \"bundle_id\", \"files\"} taken from this document: fidelity and demand are derived from the same inputs and are not hashed, so rewording a package moves neither a bundle nor a deployment id, while a changed image does (it changes a rendered file). A changed resource request moves the id only where the driver renders it into a file (clabernetes' pod requests in the Topology), not locally, where it is an admission budget (D-015). Planning the same bundle for the same twin on the same driver with the same allocation gives the same id, which makes apply idempotent.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -37,7 +37,7 @@
     "allocation": {
       "type": "object",
       "minProperties": 1,
-      "description": "What admit() reserved for this twin and recorded in its twin record by compare-and-set, passed to the pure plan as an input (D-017): containerlab {lab, mgmt_subnet}, two labs on one host needing disjoint subnets; clabernetes {namespace}; hardware {reservation, devices}. Its shape is the driver's; it is not hashed itself, and reaches the id through the files it shapes (D-044).",
+      "description": "What admit() reserved for this twin and recorded in its twin record by compare-and-set, passed to the pure plan as an input (D-017): containerlab {lab, mgmt_subnet}, two labs on one host needing disjoint subnets; clabernetes {namespace, core_namespace, controller_namespace, pod_cidr, registries}: the twin's namespace and what the site decides that the plan writes, the core's namespace absent off the cluster, registries mapping each pull credential's key to its image prefix (D-057); hardware {reservation, devices}. Its shape is the driver's; it is not hashed itself, and reaches the id through the files it shapes (D-044).",
       "additionalProperties": {
         "type": [
           "string",
@@ -72,7 +72,7 @@
           }
         }
       },
-      "description": "The runtime artifacts the plan rendered, sorted by path; apply consumes them. On clabernetes: the Namespace (PSA privileged, labelled), the pull-secret Secret, a NetworkPolicy that admits only the twin's own pods, the c9s namespace and non-pod sources (without it a node reaches another twin's pods on the cluster's flat pod network; D-019), and the Topology."
+      "description": "The runtime artifacts the plan rendered, sorted by path; apply consumes them. On clabernetes: the Namespace (PSA privileged, labelled), a NetworkPolicy that admits only the twin's own pods, clabernetes' namespace, non-pod sources and the core's namespace (D-019, D-059), and the Topology. No Secret is a file: apply makes each pull secret from the credential provider (D-057)."
     },
     "demand": {
       "type": "object",

@@ -1,0 +1,148 @@
+{
+ "access_key": "AKIDEXAMPLE",
+ "cases": [
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;if-none-match;x-amz-content-sha256;x-amz-date, Signature=d9939af04a4d7bc4f22fa11a2a429cbf1696573966715a6a3c684baa3a93d458",
+   "body": "{\"rev\":1}",
+   "bucket": "fylgja",
+   "endpoint": "http://127.0.0.1:7070",
+   "headers": {
+    "if-none-match": "*"
+   },
+   "key": "twins/a.json",
+   "method": "PUT",
+   "name": "put-create",
+   "query": null,
+   "url": "http://127.0.0.1:7070/fylgja/twins/a.json"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;if-match;x-amz-content-sha256;x-amz-date, Signature=a6b69480c9efbffd3f96a30080c7805255a57aa7c5ad545565020415b12f0b08",
+   "body": "{\"rev\":2}",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {
+    "if-match": "\"0123456789abcdef0123456789abcdef\""
+   },
+   "key": "p/twins/a.json",
+   "method": "PUT",
+   "name": "put-replace",
+   "query": null,
+   "url": "https://s3.example.internal:9000/fylgja/p/twins/a.json"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=baf79987f7699f0c22c1f6fb0dd4a1b657bb2aa485de91589ebe1e9d46aef116",
+   "body": "",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {},
+   "key": "p/empty",
+   "method": "PUT",
+   "name": "put-empty",
+   "query": null,
+   "url": "https://s3.example.internal:9000/fylgja/p/empty"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=6eb04463e382295158f55d47be35764d1a78586753032e6b1b1df9d866980fab",
+   "body": "",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {},
+   "key": "p/runs/01ARZ3NDEKTSV4RRFFQ69G5FAV.json",
+   "method": "GET",
+   "name": "get",
+   "query": null,
+   "url": "https://s3.example.internal:9000/fylgja/p/runs/01ARZ3NDEKTSV4RRFFQ69G5FAV.json"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;if-match;x-amz-content-sha256;x-amz-date, Signature=2d23bf9d38c05f9effd07a5ff5b52ee8f8d6764dfeb8bbb3606b109c63d52902",
+   "body": "",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {
+    "if-match": "\"0123456789abcdef0123456789abcdef\""
+   },
+   "key": "p/twins/a.json",
+   "method": "DELETE",
+   "name": "delete",
+   "query": null,
+   "url": "https://s3.example.internal:9000/fylgja/p/twins/a.json"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=d107e718b7587f507b1b197bc1f2901a5fe892bee84081fb2486be707946d3d2",
+   "body": "x",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {},
+   "key": "p/bundles/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/configs/a b+c=\u00e9~x.cfg",
+   "method": "PUT",
+   "name": "key-encoded",
+   "query": null,
+   "url": "https://s3.example.internal:9000/fylgja/p/bundles/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/configs/a%20b%2Bc%3D%C3%A9~x.cfg"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=354bdc7011159f2fb1fcac042e7512232c914b7793a93c2d1aff6635a8b3922e",
+   "body": "",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {},
+   "key": "",
+   "method": "GET",
+   "name": "list-first",
+   "query": {
+    "list-type": "2",
+    "max-keys": "1000",
+    "prefix": "p/events/01ARZ3NDEKTSV4RRFFQ69G5FAV/",
+    "start-after": "p/events/01ARZ3NDEKTSV4RRFFQ69G5FAV/0000000005.json"
+   },
+   "url": "https://s3.example.internal:9000/fylgja?list-type=2&max-keys=1000&prefix=p%2Fevents%2F01ARZ3NDEKTSV4RRFFQ69G5FAV%2F&start-after=p%2Fevents%2F01ARZ3NDEKTSV4RRFFQ69G5FAV%2F0000000005.json"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=c40c7ee43e7330a195fe0ad2d616d0ab28ecf1de7fd8963bdbb35aab9a18d524",
+   "body": "",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:9000",
+   "headers": {},
+   "key": "",
+   "method": "GET",
+   "name": "list-next",
+   "query": {
+    "continuation-token": "+/=abc+/=",
+    "list-type": "2",
+    "max-keys": "1000",
+    "prefix": "p/events/01ARZ3NDEKTSV4RRFFQ69G5FAV/"
+   },
+   "url": "https://s3.example.internal:9000/fylgja?continuation-token=%2B%2F%3Dabc%2B%2F%3D&list-type=2&max-keys=1000&prefix=p%2Fevents%2F01ARZ3NDEKTSV4RRFFQ69G5FAV%2F"
+  },
+  {
+   "at": "20261105T140806Z",
+   "authorization": "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261105/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=d67877c42621c571e89deef3124e375ad7066f64278c8abc523f8a7738ec1466",
+   "body": "",
+   "bucket": "fylgja",
+   "endpoint": "https://s3.example.internal:443",
+   "headers": {},
+   "key": "p/twins/a.json",
+   "method": "GET",
+   "name": "default-port",
+   "query": null,
+   "url": "https://s3.example.internal:443/fylgja/p/twins/a.json"
+  }
+ ],
+ "region": "us-east-1",
+ "secret_key": "fixture-secret-not-a-credential",
+ "source": {
+  "botocore": "1.43.124",
+  "by": "testdata/s3/generate.py",
+  "encoder": "botocore.utils.percent_encode",
+  "generated": "2026-11-05",
+  "python": "3.14.4",
+  "signer": "botocore.auth.S3SigV4Auth"
+ }
+}

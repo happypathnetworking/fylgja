@@ -9,13 +9,15 @@ import contextlib
 import dataclasses
 import hashlib
 import io
+import itertools
 import json
 import logging
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
 import pytest
+from aio import Skipping, bounded
 from fakes import FakeDriver, FakePush, FakeReader, FakeReady, fake_push, fake_ready
 
 from fylgja_core import (
@@ -32,7 +34,7 @@ from fylgja_core import (
     reconcile,
 )
 from fylgja_core.credentials import Credential, Provider
-from fylgja_core.driver import Changes, Exec, NodeChange, Planned, Refusal, Unplannable
+from fylgja_core.driver import Changes, Exec, Inspection, NodeChange, Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding, Loss, Subject, Verdict
 from fylgja_core.local_store import LocalStore
 from fylgja_core.reconcile import Reconciler
@@ -95,10 +97,12 @@ def make(
     resync_s: float = 300.0,
     verifier: Verifier | None = None,
     step_wait_s: float = 1.0,
+    platforms: Mapping[str, platform_package.PlatformPackage] = PLATFORMS,
+    events_retry_s: float = 5.0,
 ) -> Reconciler:
-    return Reconciler(store, {driver.name: driver}, PLATFORMS, PROBES, Provider(environ), workers=workers,
-                      resync_s=resync_s, verifier=verifier if verifier is not None else verifier_of(driver),
-                      step_wait_s=step_wait_s, verify_poll_s=0.01,
+    return Reconciler(store, {driver.name: driver}, platforms, PROBES, Provider(environ), workers=workers,
+                      resync_s=resync_s, verifier=verifier if verifier is not None else verifier_of(driver, platforms),
+                      step_wait_s=step_wait_s, verify_poll_s=0.01, events_retry_s=events_retry_s,
                       pusher=pusher if pusher is not None else fake_push(driver=driver),
                       readiness=ready if ready is not None else fake_ready(driver=driver), cancel_poll_s=0.01)
 
@@ -224,14 +228,14 @@ def test_a_queued_create_run_is_the_run_the_pass_takes(store: LocalStore) -> Non
     assert seen(store, run.id) == CREATE
 
 
-def test_a_settled_twin_is_left_alone(store: LocalStore) -> None:
-    new_twin(store, file_blueprint(store))
+def test_a_kick_on_a_ready_twin_with_nothing_moved_inspects_once_and_writes_nothing(store: LocalStore) -> None:
     driver = FakeDriver()
-    r = make(store, driver)
+    revision = ready_twin(store, driver).revision
+    before = len(driver.calls)
+    r = restorer(store, driver)
     asyncio.run(r.reconcile("t"))
-    revision, calls = store.get_twin("t").revision, list(driver.calls)
-    asyncio.run(r.reconcile("t"))
-    assert store.get_twin("t").revision == revision and driver.calls == calls and len(store.list_runs("t")) == 1
+    assert store.get_twin("t").revision == revision and len(store.list_runs("t")) == 1
+    assert driver.calls[before:] == [("inspect", "t")] and r.queue.waiting() == []
 
 
 def test_an_absent_twin_is_nothing_to_do(store: LocalStore) -> None:
@@ -595,11 +599,19 @@ def phase_of(record: TwinRecord) -> str | None:
 class KillingStore(LocalStore):
     """A local store that kills the core once, right after the write of a twin record that moves
     its phase (`phase_of`) to `kill_at`, or, for `kill_at == "ended"`, right after ending a run;
-    or right after appending a run event whose `(phase, outcome)` is `kill_event`. The move is
-    what counts: a step's run is taken over a twin whose `phase` is already `pushed`."""
+    or right after appending a run event whose `(phase, outcome)` is `kill_event`; or right after
+    making a run of the operation `kill_created`. The move is what counts: a step's run is taken
+    over a twin whose `phase` is already `pushed`."""
 
     kill_at: str | None = None
     kill_event: tuple[str, str] | None = None
+    kill_created: str | None = None
+
+    def create_run(self, run: Run) -> None:
+        super().create_run(run)
+        if self.kill_created == run.operation:
+            self.kill_created = None
+            raise RuntimeError("killed")
 
     def append_event(self, run_id: str, event: Event) -> Event:
         appended = super().append_event(run_id, event)
@@ -759,6 +771,38 @@ def test_killed_after_planned_with_no_lab_a_resume_deploys_plainly(killing: Kill
     assert "t" not in driver.residue
     assert_ready_once_each(killing, pusher)
     assert [node for node, _ in ready.calls] == DEVICES
+
+
+def test_with_reapply_a_create_applies_with_no_inspect_before_it(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver(reapply=True)
+    asyncio.run(make(store, driver).reconcile("t"))
+    assert driver.calls == [("admit", "t"), ("plan", "t"), ("apply", "t"), ("inspect", "t")]
+    assert seen(store, only_run(store).id) == CREATE
+    assert ready_of(store.get_twin("t")).status == "True"
+
+
+def test_with_reapply_a_create_killed_during_its_deploy_applies_again_with_no_probe(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver(reapply=True)
+    driver.fail_after = "apply"
+    killed(make(store, driver))
+    assert store.get_twin("t").status.phase == "planned" and "t" in driver.labs
+    del driver.labs["t"]["n3"]  # a node the killed apply had not made yet
+
+    before = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(store, driver, ready=ready, pusher=pusher).reconcile("t"))
+    # Applying again finishes the apply cut short (D-068): no inspect before it, and no reconfigure.
+    assert driver.calls[before:] == [("apply", "t"), ("inspect", "t")]
+    assert [node for node, _ in ready.calls] == DEVICES  # the ready phase alone: no probe
+    record = assert_ready_once_each(store, pusher)
+    assert [(n.name, n.incarnation) for n in record.status.nodes] == [("n1", "boot-1"), ("n2", "boot-1"),
+                                                                      ("n3", "boot-2")]
+    events = resumed(store, only_run(store).id)
+    assert events == [*UP_TO_APPLY[:-1], ("apply", "started", None), ("apply", "done", None),
+                      *pairs("ready", DEVICES), *pairs("push", DEVICES)]
+    assert all(outcome != "skipped" for _, outcome, _ in events)
 
 
 def test_killed_after_two_pushes_a_resume_pushes_only_the_third(store: LocalStore) -> None:
@@ -1312,6 +1356,62 @@ def test_the_resync_serves_a_twin_nothing_kicked(store: LocalStore) -> None:
     asyncio.run(scenario())
 
 
+class SlowToStop(FakeDriver):
+    """A runtime whose `events`, once cancelled, takes until `released` is set to close, as a watch's
+    stream may; and whose `apply` answers once `answer` is set, setting `cancelled` when it is
+    cancelled waiting."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.closing = asyncio.Event()
+        self.released = asyncio.Event()
+        self.applying = asyncio.Event()
+        self.answer = asyncio.Event()
+        self.cancelled = asyncio.Event()
+
+    async def events(self) -> AsyncIterator[str]:
+        try:
+            await asyncio.Event().wait()  # nothing happens on this runtime: only a cancel ends the wait
+            yield ""
+        finally:
+            self.closing.set()
+            await self.released.wait()  # its source's close, held by the test
+
+    async def apply(self, *args: Any, **kw: Any) -> None:
+        self.applying.set()
+        try:
+            await self.answer.wait()
+        except asyncio.CancelledError:
+            self.cancelled.set()
+            raise
+        await super().apply(*args, **kw)
+
+
+def test_stop_cancels_a_pass_in_flight_before_it_awaits_a_watcher_slow_to_close(store: LocalStore) -> None:
+    # A watcher's cancellation can take as long as its source's close: a pass must not go on meanwhile, calling the
+    # runtime and writing the store, a stop for a lost Lease's included.
+    new_twin(store, file_blueprint(store))
+    driver = SlowToStop()
+
+    async def scenario() -> None:
+        r = make(store, driver, workers=1)
+        await r.start()
+        await asyncio.wait_for(driver.applying.wait(), 5)  # a create's pass, in its deploy
+        (run,) = store.list_runs("t")
+        at_stop = (list(driver.calls), store.get_twin("t"), store.list_runs("t"), store.events(run.id))
+        stopping = asyncio.create_task(r.stop())
+        await asyncio.wait_for(driver.closing.wait(), 5)  # the watcher cancelled, its close held
+        driver.answer.set()  # the runtime answers now: a pass still running goes on
+        for _ in range(50):
+            await asyncio.sleep(0)
+        assert driver.cancelled.is_set()  # the pass was cancelled before the watcher's close ended
+        driver.released.set()
+        await asyncio.wait_for(stopping, 5)
+        assert (driver.calls, store.get_twin("t"), store.list_runs("t"), store.events(run.id)) == at_stop
+
+    asyncio.run(scenario())
+
+
 # No credential in any line (Task 7, Constitution X).
 
 PASSWORD = "s3cret-never-logged"
@@ -1417,8 +1517,10 @@ def test_start_twice_is_refused_and_a_stopped_reconciler_starts_on_another_loop(
         r.kick("a")
     new_twin(store, blueprint_id, "b")
     asyncio.run(second())
-    # No worker failed to take a name: the queue it waits on is its own loop's.
+    # No worker failed to take a name: the queue it waits on is its own loop's; nor did the task that listens to the
+    # driver's events, whose wake-up is made on the loop that listens.
     assert [r.getMessage() for r in caplog.records if r.name == "fylgja.queue"] == []
+    assert [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR] == []
 
 
 class FlakyStore(LocalStore):
@@ -2643,6 +2745,32 @@ def test_a_transient_failure_in_the_resumes_probe_leaves_the_apply_begun_so_the_
     assert record.status.last_step is not None and record.status.last_step.outcome == "diverged"
 
 
+@pytest.mark.parametrize("allowed", [False, True], ids=["no restart", "allow_restart"])
+def test_with_reapply_a_step_resumed_into_its_apply_applies_again_and_never_reconfigures(
+    killing: KillingStore, allowed: bool
+) -> None:
+    driver = FakeDriver(reapply=True)
+    before, run, verifier = killed_stepping(killing, driver, fail_after="apply", allow_restart=allowed)
+    driver.silent.add(("t", "n3"))  # without reapply the probe finds it silent: a reconfigure, or diverged
+
+    calls = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(make(killing, driver, ready=ready, pusher=pusher, verifier=verifier).reconcile("t"))
+    run = killing.get_run(run.id)
+    record = assert_stepped(killing, before, run)
+    # Applied again plainly, with no inspect before it (D-068). On clabernetes a reconfigure writes no hot-add
+    # annotation, so one cut short before its pod deletions and resumed plainly would leave a port added after boot
+    # unarrived: a resume there never reconfigures.
+    assert runtime_calls(driver, calls) == [("plan", "t"), ("changes", "t"), ("apply", "t"), ("inspect", "t")]
+    assert ready.calls == [] and pusher.calls == []  # no probe, and no device node's incarnation moved
+    assert [(n.name, n.incarnation) for n in record.status.nodes] == [
+        ("n1", "boot-1"), ("n1-loop-a", "boot-2"), ("n1-loop-b", "boot-2"), ("n2", "boot-1"), ("n3", "boot-1")]
+    assert run.verdict is not None and all(f.rule != "step.node.silent" for f in run.verdict.findings)
+    events = resumed(killing, run.id, "step")
+    assert events == [*APPLY_BEGUN, ("apply", "done", None), *AFTER_APPLY]
+    assert (events.count(("apply", "started", None)), events.count(("apply", "done", None))) == (2, 1)
+
+
 def test_a_step_killed_after_applied_resumes_with_no_second_apply_readies_the_hosts_and_skips_the_pushes(
     killing: KillingStore,
 ) -> None:
@@ -3797,3 +3925,1506 @@ def test_a_node_a_step_restarts_in_place_is_readied_and_pushed_though_its_incarn
     assert seen(store, run.id) == UP_TO_APPLY + pairs("ready", ["n2"]) + push_events(["n2"], DEVICES) + WAITED
     assert [node for node, _ in ready.calls] == ["n2"] and [node for node, _ in pusher.calls] == ["n2"]
     assert holds(record) == dict.fromkeys(DEVICES, record.status.bundle_id)
+
+
+# The pass on a settled twin, and the restore (D-067): a kick inspects a settled twin, and a node the runtime replaced
+# behind the loop's back is readied, pushed and verified again under a run of operation `restore`.
+
+VERIFIED: list[Seen] = [("verify", "started", None), ("verify", "done", None)]
+
+
+def restorer(store: LocalStore, driver: FakeDriver, path: str = "testdata/blueprint/three-node.json",
+             **kw: Any) -> Reconciler:
+    """A reconciler whose verify holds on the twin built to the blueprint at `path` (`seeded`), so a restore's wait
+    settles at once: the default reader holds no facts, and the wait would expire after `step_wait_s`."""
+    return make(store, driver, verifier=seeded(driver, path)[0], **kw)
+
+
+def newest(store: LocalStore) -> Run:
+    """The twin's newest run."""
+    return store.list_runs("t")[0]
+
+
+class RecordingPush(FakePush):
+    """A push that keeps the twin's record as it stands at each call."""
+
+    def __init__(self, store: LocalStore, driver: FakeDriver) -> None:
+        super().__init__(None, None, None, driver)
+        self.store = store
+        self.records: list[TwinRecord] = []
+
+    async def __call__(
+        self, address: str, package: platform_package.PlatformPackage, config: str, credential: Credential
+    ) -> push.Pushed | push.Refused:
+        self.records.append(self.store.get_twin("t"))
+        return await super().__call__(address, package, config, credential)
+
+
+def test_a_node_at_another_incarnation_is_readied_pushed_and_verified_under_a_restore_run(store: LocalStore) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    replaced = driver.replace("t", "n2")
+    assert replaced.incarnation != "boot-1" and replaced.running
+    calls = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), RecordingPush(store, driver)
+    r = restorer(store, driver, ready=ready, pusher=pusher)
+    asyncio.run(r.reconcile("t"))
+
+    run = newest(store)
+    (at_push,) = pusher.records
+    assert (ready_of(at_push).status, ready_of(at_push).reason) == ("False", "twin.restoring")
+    assert at_push.status.run_id == run.id
+    (n2,) = [n for n in at_push.status.nodes if n.name == "n2"]
+    assert n2.incarnation == replaced.incarnation and n2.holds is None
+    assert (run.operation, run.principal, run.state) == ("restore", "core", "ended")
+    assert run.verdict is not None and (run.verdict.operation, run.verdict.status) == ("restore", "ok")
+    was = before.status
+    assert run.verdict.subject == Subject(twin="t", run_id=run.id, blueprint_id=was.blueprint_id,
+                                          bundle_id=was.bundle_id, deployment_id=was.deployment_id)
+    assert run.verdict.counts is not None and run.verdict.wait is not None and run.verdict.wait.outcome == "settled"
+    assert run.verdict.loss is None
+    assert seen(store, run.id) == [*pairs("ready", ["n2"]), *pairs("push", ["n2"]), *VERIFIED]
+    assert [n for n, _ in ready.calls] == [n for n, _ in pusher.calls] == ["n2"]
+    assert driver.calls[calls:] == [("inspect", "t")]  # no compile, admit, plan or apply: nothing is applied
+
+    record = store.get_twin("t")
+    status = record.status
+    nodes = {n.name: n for n in status.nodes}
+    assert (nodes["n2"].incarnation, nodes["n2"].holds) == (driver.labs["t"]["n2"].incarnation, was.bundle_id)
+    assert [nodes["n1"], nodes["n3"]] == [n for n in was.nodes if n.name in ("n1", "n3")]
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert status.run_id is None and status.generation_in_flight is None
+    assert (record.generation, status.observed_generation, status.phase, status.last_step, status.bundle_id,
+            status.deployment_id, status.allocation) == (before.generation, was.observed_generation, was.phase,
+                                                         was.last_step, was.bundle_id, was.deployment_id,
+                                                         was.allocation)
+
+    calls = len(driver.calls)
+    asyncio.run(r.reconcile("t"))  # nothing moved since: one inspect, and no run
+    assert driver.calls[calls:] == [("inspect", "t")]
+    assert [each.operation for each in store.list_runs("t")] == ["restore", "create"]
+
+
+def test_a_replaced_probe_host_is_readied_again_and_nothing_is_pushed(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver, PROBED)
+    driver.replace("t", "n1-loop-a")
+    pusher = fake_push(driver=driver)
+    asyncio.run(restorer(store, driver, PROBED, pusher=pusher).reconcile("t"))
+
+    run = newest(store)
+    assert run.operation == "restore" and run.verdict is not None and run.verdict.status == "ok"
+    assert seen(store, run.id) == [*pairs("ready", HOSTS), *VERIFIED]  # every host readied, as a step readies them
+    assert pusher.calls == []
+    record = store.get_twin("t")
+    (host,) = [n for n in record.status.nodes if n.name == "n1-loop-a"]
+    assert host.incarnation == driver.labs["t"]["n1-loop-a"].incarnation
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+
+
+def test_a_restore_on_a_twin_whose_step_was_refused_pushes_and_leaves_its_conditions(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.recreates = {"n3"}
+    respec(store, "testdata/blueprint/steps/three-node-n3-eos.json")
+    asyncio.run(make(store, driver).reconcile("t"))
+    refused = store.get_twin("t")
+    assert (ready_of(refused).status, ready_of(refused).reason) == ("False", "step.restart.required")
+    driver.replace("t", "n1")
+    pusher = fake_push(driver=driver)
+    asyncio.run(restorer(store, driver, pusher=pusher).reconcile("t"))
+
+    run = newest(store)
+    assert run.operation == "restore" and run.verdict is not None and run.verdict.status == "ok"
+    assert [n for n, _ in pusher.calls] == ["n1"]
+    record = store.get_twin("t")
+    # The twin does not run what the spec asks, so the restore leaves the refusal's conditions and step as they were.
+    assert ready_of(record) == ready_of(refused)
+    assert condition_of(record, "Stepping") == condition_of(refused, "Stepping")
+    assert record.status.last_step == refused.status.last_step
+    assert record.status.observed_generation == refused.status.observed_generation and record.status.run_id is None
+
+
+def test_a_diverged_twin_is_passed_over(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    blueprint_id, _ = store.put_blueprint(edited_n1())
+    respec(store, blueprint_id=blueprint_id)
+    asyncio.run(make(store, driver, pusher=fake_push(refuse={"n1"}, driver=driver)).reconcile("t"))
+    assert reconcile.diverged(store.get_twin("t"))
+    driver.replace("t", "n1")
+
+    revision, calls = store.get_twin("t").revision, len(driver.calls)
+    asyncio.run(restorer(store, driver).reconcile("t"))
+    assert driver.calls[calls:] == []
+    assert [r.operation for r in store.list_runs("t") if r.operation == "restore"] == []
+    assert store.get_twin("t").revision == revision
+
+
+def test_a_restore_never_starts_beside_a_run_in_flight(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "applied"
+    killed(make(killing, driver))
+    replaced = driver.replace("t", "n2")  # behind the back of a create left in flight
+    pusher = fake_push(driver=driver)
+    r = restorer(killing, driver, pusher=pusher)
+
+    asyncio.run(r.reconcile("t"))  # the create resumes and ends: no restore beside it
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert [run.operation for run in killing.list_runs("t")] == ["create"]
+
+    asyncio.run(r.reconcile("t"))  # the next pass finds n2 at an incarnation the record does not hold
+    run = newest(killing)
+    assert run.operation == "restore" and run.verdict is not None and run.verdict.status == "ok"
+    assert [n for n, _ in pusher.calls] == ["n1", "n2", "n3", "n2"]
+    (n2,) = [n for n in killing.get_twin("t").status.nodes if n.name == "n2"]
+    assert n2.incarnation == driver.labs["t"]["n2"].incarnation == replaced.incarnation
+
+
+def test_a_step_that_recreates_a_node_then_a_kick_starts_no_restore(killing: KillingStore) -> None:
+    driver = FakeDriver()
+    ready_twin(killing, driver)
+    driver.recreates = {"n3"}
+    target = "testdata/blueprint/steps/three-node-n3-eos.json"
+    respec(killing, target, allow_restart=True)
+    killing.kill_at = "applied"  # the step's own apply made n3 anew, and the event it raised finds the step in flight
+    killed(make(killing, driver))
+    recorded = {n.name: n.incarnation for n in killing.get_twin("t").status.nodes}
+    assert recorded == {name: state.incarnation for name, state in driver.labs["t"].items()}
+    assert recorded["n3"] != "boot-1"
+    pusher = fake_push(driver=driver)
+    r = restorer(killing, driver, target, pusher=pusher)
+
+    calls = len(driver.calls)
+    asyncio.run(r.reconcile("t"))  # the kick resumes the step to its end, and asks nothing more of the runtime
+    assert driver.calls[calls:] == []
+    assert [run.operation for run in killing.list_runs("t")] == ["step", "create"]
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert [n for n, _ in pusher.calls] == ["n3"]
+
+    revision, calls = record.revision, len(driver.calls)
+    asyncio.run(r.reconcile("t"))  # the pass after the step's end: n3 is at the incarnation the step recorded
+    assert driver.calls[calls:] == [("inspect", "t")]
+    assert killing.get_twin("t").revision == revision
+    assert [run.operation for run in killing.list_runs("t")] == ["step", "create"]
+
+
+@pytest.mark.parametrize("served", [True, False])
+def test_killed_after_a_restore_ended_the_next_pass_records_its_ending(killing: KillingStore, served: bool) -> None:
+    driver = FakeDriver()
+    ready_twin(killing, driver)
+    driver.replace("t", "n2")
+    killing.kill_at = "ended"
+    killed(restorer(killing, driver))
+    run = newest(killing)
+    record = killing.get_twin("t")
+    assert run.operation == "restore" and run.state == "ended" and record.status.run_id == run.id
+    assert ready_of(record).reason == "twin.restoring"
+
+    calls = len(driver.calls)
+    asyncio.run((restorer(killing, driver) if served else make(killing, FakeDriver("elsewhere"))).reconcile("t"))
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert record.status.run_id is None and record.status.generation_in_flight is None
+    assert [r.operation for r in killing.list_runs("t")] == ["restore", "create"]  # no second restore
+    assert driver.calls[calls:] == []  # a pass that ends a run inspects nothing after it
+
+
+def test_killed_after_a_missing_end_the_next_pass_settles_for_twin_node_missing(killing: KillingStore) -> None:
+    driver = FakeDriver()
+    ready_twin(killing, driver)
+    driver.replace("t", "n2")
+    asyncio.run(restorer(killing, driver, pusher=fake_push(unreachable={"n2"}, driver=driver)).reconcile("t"))
+    run = newest(killing)
+    assert run.state == "running" and killing.events(run.id)[-1].rule == "push.unreachable"
+    del driver.labs["t"]["n3"]
+    r = restorer(killing, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")
+        await asyncio.sleep(1.1)
+        killing.kill_at = "ended"  # killed once the run ended, before the record's write
+        with pytest.raises(RuntimeError, match="killed"):
+            await r.reconcile("t")
+
+    asyncio.run(scenario())
+    asyncio.run(restorer(killing, driver).reconcile("t"))
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")
+
+
+def test_a_settled_pass_reads_a_deployment_and_its_bundle_once_per_deployment(
+    store: LocalStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    reads: list[str] = []
+    for name in ("get_deployment", "get_bundle"):
+        monkeypatch.setattr(store, name, counted(reads, getattr(store, name)))
+    r = restorer(store, driver)
+
+    asyncio.run(r.reconcile("t"))  # what this core lacks to serve the deployment is read once
+    assert reads == ["get_deployment", "get_bundle"]
+    reads.clear()
+    asyncio.run(r.reconcile("t"))  # the same deployment: content-addressed, and the packages are fixed
+    assert reads == []
+    assert driver.calls[-2:] == [("inspect", "t"), ("inspect", "t")]
+
+
+def counted(reads: list[str], call: Callable[..., Any]) -> Callable[..., Any]:
+    """`call`, its name appended to `reads` at each call."""
+
+    def counting(*args: Any) -> Any:
+        reads.append(call.__name__)
+        return call(*args)
+
+    return counting
+
+
+# A node missing or not running (D-067): waited for through its boot window, then reported, never made.
+
+SRLINUX = PLATFORMS["nokia_srlinux"]
+SHORT = {**PLATFORMS, SRLINUX.id: dataclasses.replace(SRLINUX, readiness=dataclasses.replace(SRLINUX.readiness,
+                                                                                               timeout_s=1))}
+"""The packages with SR Linux's readiness window shrunk to 1 s: a `three-node` node's boot window."""
+
+
+def stopped(driver: FakeDriver, node: str, *, stop: bool = True) -> None:
+    """`node` of `t` stopped, or running again (`stop=False`), at the incarnation it had."""
+    driver.labs["t"][node] = dataclasses.replace(driver.labs["t"][node], running=not stop)
+
+
+def warnings_of(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """The loop's WARNING lines so far."""
+    return [r.getMessage() for r in caplog.records if r.name == "fylgja.reconcile" and r.levelno == logging.WARNING]
+
+
+async def served(r: Reconciler) -> str:
+    """A worker's turn: the twin the queue has due, passed over, and released; within 0.5 s."""
+    name = await asyncio.wait_for(r.queue.get(), timeout=0.5)
+    try:
+        await r.reconcile(name)
+    finally:
+        r.queue.done(name)
+    return name
+
+
+async def reported_missing(store: LocalStore, driver: FakeDriver, r: Reconciler) -> None:
+    """`n3` of a Ready `t` stopped, and two passes of `r` its boot window apart: `twin.node.missing` recorded."""
+    stopped(driver, "n3")
+    await r.reconcile("t")
+    await asyncio.sleep(1.1)
+    await r.reconcile("t")
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")
+
+
+@pytest.mark.parametrize("how", ["deleted", "stopped"])
+def test_a_missing_node_is_waited_for_then_recorded_and_never_made(
+    store: LocalStore, caplog: pytest.LogCaptureFixture, how: str
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    if how == "deleted":
+        del driver.labs["t"]["n3"]
+    else:
+        stopped(driver, "n3")
+    calls = len(driver.calls)
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")  # within n3's boot window: nothing written, the twin queued again
+        assert store.get_twin("t").revision == before.revision and len(store.list_runs("t")) == 1
+        assert driver.calls[calls:] == [("inspect", "t")]
+        assert r.queue.waiting() == ["t"]
+        assert warnings_of(caplog) == []
+
+        await asyncio.sleep(1.1)
+        assert await served(r) == "t"  # the window has passed: the twin says so, and is not queued again
+        record = store.get_twin("t")
+        assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")
+        was, now = before.status, record.status
+        assert (now.nodes, now.phase, now.last_step, now.observed_generation) == (
+            was.nodes, was.phase, was.last_step, was.observed_generation)
+        (n3,) = [n for n in now.nodes if n.name == "n3"]
+        assert (n3.incarnation, n3.holds) == ("boot-1", was.bundle_id)  # still recorded, never made
+        assert len(store.list_runs("t")) == 1
+        assert driver.calls[calls:] == [("inspect", "t")] * 2  # nothing applied
+        assert r.queue.waiting() == []
+        (warning,) = warnings_of(caplog)
+        assert "n3" in warning
+
+        await r.reconcile("t")  # the next kick looks again, and the same holds: nothing written
+        assert store.get_twin("t").revision == record.revision
+        assert r.queue.waiting() == []
+
+    asyncio.run(scenario())
+    lab = driver.labs["t"]
+    assert "n3" not in lab if how == "deleted" else not lab["n3"].running  # never made, never started
+
+
+def test_a_node_back_within_its_window_at_its_incarnation_writes_nothing(store: LocalStore) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        stopped(driver, "n3")
+        await r.reconcile("t")
+        assert "t" in r._absent
+        stopped(driver, "n3", stop=False)
+        await r.reconcile("t")
+
+    asyncio.run(scenario())
+    record = store.get_twin("t")
+    assert record.revision == before.revision and len(store.list_runs("t")) == 1
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert "t" not in r._absent
+
+
+def test_a_missing_node_that_returns_at_another_incarnation_is_restored(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    r = restorer(store, driver, ready=ready, pusher=pusher, platforms=SHORT)
+    asyncio.run(reported_missing(store, driver, r))
+    returned = driver.replace("t", "n3")
+    asyncio.run(r.reconcile("t"))
+
+    run = newest(store)
+    assert (run.operation, run.state) == ("restore", "ended")
+    assert run.verdict is not None and run.verdict.status == "ok"
+    assert seen(store, run.id) == [*pairs("ready", ["n3"]), *pairs("push", ["n3"]), *VERIFIED]
+    assert [n for n, _ in ready.calls] == [n for n, _ in pusher.calls] == ["n3"]
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    (n3,) = [n for n in record.status.nodes if n.name == "n3"]
+    assert (n3.incarnation, n3.holds) == (returned.incarnation, record.status.bundle_id)
+    assert "t" not in r._absent
+
+
+def test_a_twin_reported_missing_whose_nodes_all_run_again_is_verified_before_it_is_ready(store: LocalStore) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    r = restorer(store, driver, ready=ready, pusher=pusher, platforms=SHORT)
+    asyncio.run(reported_missing(store, driver, r))
+    stopped(driver, "n3", stop=False)  # at the incarnation the record holds
+    calls = len(driver.calls)
+    asyncio.run(r.reconcile("t"))
+
+    run = newest(store)
+    assert (run.operation, run.principal, run.state) == ("restore", "core", "ended")
+    assert run.verdict is not None and run.verdict.status == "ok" and run.verdict.wait is not None
+    assert seen(store, run.id) == VERIFIED  # nothing holds nothing: no node is readied or pushed
+    assert pusher.calls == [] and ready.calls == []
+    assert driver.calls[calls:] == [("inspect", "t")]
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert record.status.nodes == before.status.nodes and record.status.run_id is None
+
+
+def test_a_node_missing_on_a_twin_whose_spec_is_not_met_writes_nothing(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.recreates = {"n3"}
+    respec(store, "testdata/blueprint/steps/three-node-n3-eos.json")
+    asyncio.run(make(store, driver).reconcile("t"))
+    refused = store.get_twin("t")
+    assert (ready_of(refused).status, ready_of(refused).reason) == ("False", "step.restart.required")
+    stopped(driver, "n3")
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")
+        await asyncio.sleep(1.1)
+        await r.reconcile("t")
+
+    asyncio.run(scenario())
+    record = store.get_twin("t")
+    assert record.revision == refused.revision  # the refusal's conditions stand: the twin does not run its spec
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "step.restart.required")
+    assert [run.operation for run in store.list_runs("t")] == ["step", "create"]
+
+
+def test_a_node_gone_during_a_restore_ends_it_failed_naming_the_node(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.replace("t", "n2")
+    killed(restorer(store, driver, pusher=fake_push(kill_after=0, driver=driver)))  # left in flight at n2's push
+    run = newest(store)
+    assert (run.operation, run.state) == ("restore", "running")
+    del driver.labs["t"]["n3"]
+    calls = len(driver.calls)
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")  # the resume waits for n3 through its boot window
+        assert store.get_run(run.id).state == "running" and store.get_twin("t").status.run_id == run.id
+        await asyncio.sleep(1.1)
+        await r.reconcile("t")
+
+    asyncio.run(scenario())
+    ended = store.get_run(run.id)
+    assert ended.state == "ended" and ended.verdict is not None
+    assert (ended.verdict.operation, ended.verdict.status) == ("restore", "failed")
+    assert [(f.rule, f.severity, f.object) for f in ended.verdict.findings] == [("twin.node.missing", "error", "n3")]
+    last = store.events(run.id)[-1]  # the ending event, naming the node
+    assert (last.phase, last.outcome, last.node, last.rule) == ("ready", "failed", "n3", "twin.node.missing")
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")
+    assert record.status.run_id is None and record.status.generation_in_flight is None
+    assert driver.calls[calls:] == [("inspect", "t")] * 2  # no apply, and no destroy: a restore tears nothing down
+    assert record.status.deployment_id is not None and record.status.allocation is not None
+
+
+def test_each_absent_nodes_boot_window_is_its_own_packages_readiness_window(store: LocalStore) -> None:
+    driver = FakeDriver()
+    probed = ready_twin(store, driver, PROBED)
+    new_twin(store, file_blueprint(store, N3_EOS), "e")
+    asyncio.run(make(store, driver).reconcile("e"))
+    mixed = store.get_twin("e")
+    r = make(store, driver)
+    assert r._boot_windows(probed, ["n1-loop-a", "n2"]) == {"n1-loop-a": 30, "n2": 60}  # a ping host's, SR Linux's
+    assert r._boot_windows(mixed, ["n2", "n3"]) == {"n2": 60, "n3": 90}  # SR Linux's, cEOS's
+    assert make(store, driver, platforms={})._boot_windows(mixed, ["n3"]) == {"n3": 0}  # no package loaded
+
+
+N3_EOS = "testdata/blueprint/steps/three-node-n3-eos.json"
+EOS = PLATFORMS["arista_eos"]
+SHORT_EOS = {**SHORT, EOS.id: dataclasses.replace(EOS, readiness=dataclasses.replace(EOS.readiness, timeout_s=2))}
+"""`SHORT` with cEOS's readiness window shrunk to 2 s."""
+
+
+def test_a_node_gone_after_another_is_not_reported_on_the_first_ones_clock(
+    store: LocalStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        stopped(driver, "n3")
+        await r.reconcile("t")
+        await asyncio.sleep(0.6)
+        stopped(driver, "n2")  # as a drain evicts a twin's pods one after another
+        await r.reconcile("t")
+        await asyncio.sleep(0.6)
+        await r.reconcile("t")  # n3's window has passed, and n2's has not: nothing is written
+        record = store.get_twin("t")
+        assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+        assert warnings_of(caplog) == [] and r.queue.waiting() == ["t"]
+        await asyncio.sleep(0.6)
+        await r.reconcile("t")  # both have passed: every absent node is reported, at once
+
+    asyncio.run(scenario())
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")
+    (warning,) = warnings_of(caplog)
+    assert "n2" in warning and "n3" in warning
+
+
+def test_each_absent_node_is_waited_for_through_its_own_packages_window(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver, N3_EOS)  # n3 runs cEOS, 2 s here; n2 SR Linux, 1 s
+    r = restorer(store, driver, N3_EOS, platforms=SHORT_EOS)
+
+    def ready() -> tuple[str, str | None]:
+        record = store.get_twin("t")
+        return ready_of(record).status, ready_of(record).reason
+
+    async def scenario() -> None:
+        stopped(driver, "n3")
+        await r.reconcile("t")  # n3's window ends at 2 s
+        await asyncio.sleep(1.5)
+        stopped(driver, "n2")
+        await r.reconcile("t")  # n2's ends at 2.5 s, its own 1 s from its own sighting
+        await asyncio.sleep(0.7)
+        await r.reconcile("t")  # 2.2 s: n3's has passed, and n2's has not
+        assert ready() == ("True", "twin.ready")
+        await asyncio.sleep(0.5)
+        await r.reconcile("t")  # 2.7 s: n2's has passed too, though cEOS's 2 s from its sighting would not have
+        assert ready() == ("False", "twin.node.missing")
+
+    asyncio.run(scenario())
+
+
+def test_a_node_that_runs_again_drops_its_own_sighting_alone(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        stopped(driver, "n3")
+        await r.reconcile("t")
+        stopped(driver, "n2")
+        await r.reconcile("t")
+        first = dict(r._absent["t"])
+        assert set(first) == {"n2", "n3"}
+        stopped(driver, "n3", stop=False)
+        await r.reconcile("t")
+        assert r._absent["t"] == {"n2": first["n2"]}  # n2 keeps its own first sighting
+
+    asyncio.run(scenario())
+
+
+def test_a_node_first_seen_absent_after_a_step_is_waited_for(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    edited = edited_n1()
+    blueprint_id, _ = store.put_blueprint(edited)
+    r = make(store, driver, verifier=seeded(driver, edited)[0], platforms=SHORT)
+
+    async def scenario() -> None:
+        stopped(driver, "n3")
+        await r.reconcile("t")  # n3 seen absent
+        respec(store, blueprint_id=blueprint_id)
+        await r.reconcile("t")  # the step's run is taken: the twin's sightings are dropped
+        (run,) = steps(store)
+        assert run.verdict is not None and run.verdict.status == "ok"
+        await asyncio.sleep(1.1)
+        await r.reconcile("t")  # n3 seen absent after the step: its window begins now
+
+    asyncio.run(scenario())
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert "t" in r._absent
+
+
+def test_a_node_replaced_and_not_yet_running_is_waited_for_then_restored_and_never_reported(
+    store: LocalStore,
+) -> None:
+    """The clabernetes shape: a pod replaced, or a container restarted in place, reads not running at its new
+    incarnation until it starts."""
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    new = driver.replace("t", "n3")
+    driver.labs["t"]["n3"] = dataclasses.replace(new, running=False)
+    pusher = fake_push(driver=driver)
+    r = restorer(store, driver, pusher=pusher, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")
+        record = store.get_twin("t")
+        assert "t" in r._absent and len(store.list_runs("t")) == 1
+        assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+        driver.labs["t"]["n3"] = new  # it starts, inside its window
+        await r.reconcile("t")
+
+    asyncio.run(scenario())
+    run = newest(store)
+    assert run.operation == "restore" and run.verdict is not None and run.verdict.status == "ok"
+    assert [n for n, _ in pusher.calls] == ["n3"]
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert "t" not in r._absent
+
+
+def test_a_twin_deleted_while_a_node_was_missing_leaves_no_window_behind(store: LocalStore) -> None:
+    """A twin made again under the name begins its own window: the old one's sighting is not carried to it."""
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    stopped(driver, "n3")
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")
+        assert "t" in r._absent
+        request_deletion(store)
+        await r.reconcile("t")
+
+    asyncio.run(scenario())
+    assert store.list_twins() == [] and "t" not in r._absent
+
+
+# A restore's failures, its cancel, a deletion, its resume, and a spec written meanwhile (D-067): a restore that fails
+# or is cancelled leaves the twin up and not diverged, and is not repeated; one that fails transiently is.
+
+NO_SRLINUX_LOGIN = {k: v for k, v in ENVIRON.items() if not k.startswith("FYLGJA_CREDENTIAL_SRLINUX_")}
+
+
+def assert_kept(record: TwinRecord, before: TwinRecord, driver: FakeDriver) -> None:
+    """Nothing torn down and the twin not diverged: no `destroy`, and the record keeps the deployment, the allocation
+    and the nodes `before` named."""
+    was, now = before.status, record.status
+    assert ("destroy", "t") not in driver.calls and "t" in driver.labs
+    assert (now.deployment_id, now.allocation, [n.name for n in now.nodes]) == (
+        was.deployment_id, was.allocation, [n.name for n in was.nodes])
+    assert not any(c.type == "Diverged" and c.status == "True" for c in now.conditions)
+    assert now.run_id is None and now.generation_in_flight is None
+
+
+@pytest.mark.parametrize(("fault", "rule"), [("a refused push", "push.refused"),
+                                             ("a node that never answers", "readiness.timeout"),
+                                             ("a missing credential", "credential.missing")])
+def test_a_refused_restore_ends_failed_and_the_next_kick_repeats_nothing(
+    store: LocalStore, fault: str, rule: str
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    replaced = driver.replace("t", "n2")
+    kw: dict[str, Any] = {}
+    if fault == "a refused push":
+        kw["pusher"] = fake_push(refuse={"n2"}, driver=driver)
+    elif fault == "a node that never answers":
+        kw["ready"] = fake_ready(answers={"n1", "n3"}, driver=driver)
+    else:
+        kw["environ"] = NO_SRLINUX_LOGIN
+    asyncio.run(restorer(store, driver, **kw).reconcile("t"))
+
+    run = newest(store)
+    assert (run.operation, run.state) == ("restore", "ended")
+    assert run.verdict is not None and (run.verdict.operation, run.verdict.status) == ("restore", "failed")
+    assert [(f.rule, f.object) for f in run.verdict.findings] == [(rule, "n2")]
+    assert store.events(run.id)[-1].rule == rule
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", rule)
+    nodes = {n.name: n for n in record.status.nodes}
+    assert (nodes["n2"].incarnation, nodes["n2"].holds) == (replaced.incarnation, None)
+    assert nodes["n1"].holds == nodes["n3"].holds == before.status.bundle_id
+    assert_kept(record, before, driver)
+
+    revision, runs, calls = record.revision, len(store.list_runs("t")), len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(restorer(store, driver, ready=ready, pusher=pusher).reconcile("t"))  # one that would succeed
+    assert pusher.calls == [] and ready.calls == []  # nothing moved since: the refused push is not pushed again
+    assert driver.calls[calls:] == [("inspect", "t")]
+    assert store.get_twin("t").revision == revision and len(store.list_runs("t")) == runs
+
+
+def test_a_transient_failure_in_a_restore_backs_off_and_the_next_pass_pushes(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.replace("t", "n2")
+    pusher = fake_push(unreachable={"n2"}, driver=driver)
+    r = restorer(store, driver, pusher=pusher)
+
+    async def scenario() -> Run:
+        await r.reconcile("t")
+        run = newest(store)
+        assert (run.operation, run.state) == ("restore", "running")
+        record = store.get_twin("t")
+        assert record.status.run_id == run.id
+        assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.restoring")
+        assert r.backoff["t"] == 1.0
+        await r.reconcile("t")  # the next pass resumes the same run
+        return run
+
+    run = asyncio.run(scenario())
+    ended = store.get_run(run.id)
+    assert ended.state == "ended" and ended.verdict is not None and ended.verdict.status == "ok"
+    assert [each.operation for each in store.list_runs("t")] == ["restore", "create"]
+    assert [n for n, _ in pusher.calls] == ["n2", "n2"]
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert r.backoff == {}
+
+
+def test_a_restore_killed_at_its_push_resumes_inspects_again_and_pushes_the_node_once_at_its_newest_incarnation(
+    store: LocalStore,
+) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.replace("t", "n2")
+    killed(restorer(store, driver, pusher=fake_push(kill_after=0, driver=driver)))
+    run = newest(store)
+    assert (run.operation, run.state) == ("restore", "running")
+    third = driver.replace("t", "n2")  # replaced once more while its restore waits to be resumed
+    calls = len(driver.calls)
+    pusher = fake_push(driver=driver)
+    asyncio.run(restorer(store, driver, pusher=pusher).reconcile("t"))
+
+    assert [each.id for each in store.list_runs("t") if each.operation == "restore"] == [run.id]
+    ended = store.get_run(run.id)
+    assert ended.state == "ended" and ended.verdict is not None and ended.verdict.status == "ok"
+    assert [n for n, _ in pusher.calls] == ["n2"]
+    assert driver.calls[calls:] == [("inspect", "t")]  # inspected again; nothing applied
+    record = store.get_twin("t")
+    (n2,) = [n for n in record.status.nodes if n.name == "n2"]
+    assert (n2.incarnation, n2.holds) == (third.incarnation, record.status.bundle_id)
+    assert third.incarnation == "boot-3"
+
+
+def test_a_cancelled_restore_ends_failed_tears_nothing_down_and_is_not_repeated(store: LocalStore) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.replace("t", "n2")
+    pusher = CancellingPush(store, driver, operation="restore")  # n2 pushed, then a client's cancel
+    asyncio.run(restorer(store, driver, pusher=pusher).reconcile("t"))
+
+    run = newest(store)
+    assert run.operation == "restore"
+    assert_cancelled(run)
+    assert run.verdict is not None and run.verdict.operation == "restore"
+    assert seen(store, run.id) == [*pairs("ready", ["n2"]), *pairs("push", ["n2"]), *CANCELLED]
+    assert store.events(run.id)[-1].rule == "run.cancelled"
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "run.cancelled")
+    assert_kept(record, before, driver)
+
+    revision, calls = record.revision, len(driver.calls)
+    asyncio.run(restorer(store, driver).reconcile("t"))  # the next kick: nothing moved since, nothing written
+    assert store.get_twin("t").revision == revision
+    assert [each.operation for each in store.list_runs("t")] == ["restore", "create"]
+    assert driver.calls[calls:] == [("inspect", "t")]
+
+
+def test_a_deletion_finding_a_restore_in_flight_cancels_it_then_tears_the_twin_down(store: LocalStore) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.replace("t", "n2")
+    killed(restorer(store, driver, pusher=fake_push(kill_after=0, driver=driver)))  # left in flight at n2's push
+    restore = newest(store)
+    assert (restore.operation, restore.state) == ("restore", "running")
+    destroy = request_deletion(store)
+    calls = len(driver.calls)
+    asyncio.run(restorer(store, driver).reconcile("t"))
+
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+    ended = store.get_run(restore.id)
+    assert_cancelled(ended)
+    assert seen(store, restore.id)[-2:] == CANCELLED
+    assert ended.verdict is not None and "where it stood" in ended.verdict.findings[0].message  # its cancel path's
+    verdict = store.get_run(destroy.id).verdict
+    assert verdict is not None and verdict.status == "ok"
+    assert verdict.subject.deployment_id == before.status.deployment_id  # the destroy run found the deployment kept
+    assert driver.calls[calls:] == [("destroy", "t")]  # the restore's cancel tore nothing down: the destroy run did
+    assert "t" not in driver.labs
+
+
+def test_a_restore_in_flight_is_not_resumed_once_the_twins_deletion_is_asked_though_its_run_is_not_marked(
+    store: LocalStore,
+) -> None:
+    """A deletion asked between a pass's `inspect` and its take of the restore leaves the run unmarked: the next pass
+    cancels it where it stands, readying and pushing nothing, and then tears the twin down."""
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.replace("t", "n2")
+    killed(restorer(store, driver, pusher=fake_push(kill_after=0, driver=driver)))  # left in flight at n2's push
+    restore = newest(store)
+    request_deletion(store, mark=False)
+    assert store.get_run(restore.id).state == "running"
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    calls = len(driver.calls)
+    asyncio.run(restorer(store, driver, ready=ready, pusher=pusher).reconcile("t"))
+
+    assert ready.calls == [] and pusher.calls == []  # never resumed
+    assert driver.calls[calls:] == [("destroy", "t")]
+    ended = store.get_run(restore.id)
+    assert_cancelled(ended)
+    assert seen(store, restore.id)[-2:] == CANCELLED
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+
+
+def test_a_spec_written_during_a_restore_is_stepped_to_in_the_same_pass(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    replaced = driver.replace("t", "n2")
+    inner = fake_push(driver=driver)
+    written: list[TwinRecord] = []
+
+    async def writes_a_spec(address: str, package: Any, config: str, credential: Any) -> Any:
+        if not written:  # a client's PUT while the restore pushes n2
+            written.append(respec(store, TWO_NODE))
+        return await inner(address, package, config, credential)
+
+    asyncio.run(restorer(store, driver, pusher=writes_a_spec).reconcile("t"))
+
+    assert [each.operation for each in store.list_runs("t")] == ["step", "restore", "create"]
+    restore = the_run(store, "restore")
+    assert restore.verdict is not None and restore.verdict.status == "ok"
+    assert [e for e in seen(store, restore.id) if e[0] == "push"] == pairs("push", ["n2"])
+    (step,) = steps(store)
+    assert step.verdict is not None and step.verdict.status == "ok"
+    record = store.get_twin("t")
+    assert record.status.observed_generation == record.generation == 2
+    assert record.status.last_step is not None and record.status.last_step.outcome == "stepped"
+    # The step read the nodes the restore recorded: n2, at its new incarnation and holding what it was pushed, is not
+    # waited for again.
+    assert [e for e in seen(store, step.id) if e[0] == "ready"] == []
+    (n2,) = [n for n in record.status.nodes if n.name == "n2"]
+    assert n2.incarnation == replaced.incarnation
+
+
+@pytest.mark.parametrize("left", ["backing off", "by a stopped core"])
+def test_a_spec_written_while_a_restore_waits_to_be_resumed_is_stepped_to_by_the_pass_that_ends_it(
+    store: LocalStore, left: str
+) -> None:
+    """A kick while a restore backs off merges into its waiting entry, and a restarted core queues each twin once: the
+    pass that resumes and ends the restore is the only one the spec gets, so it goes on to the step."""
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.replace("t", "n2")
+    if left == "by a stopped core":
+        killed(restorer(store, driver, pusher=fake_push(kill_after=0, driver=driver)))
+        r = restorer(store, driver)
+    else:
+        r = restorer(store, driver, pusher=fake_push(unreachable={"n2"}, driver=driver))
+
+    async def go() -> list[str]:
+        if left == "backing off":
+            await r.reconcile("t")  # n2's push is unreachable: the restore is in flight, backing off
+            assert r.queue.waiting() == ["t"]
+        assert newest(store).state == "running"
+        respec(store, TWO_NODE)  # a client's spec, then its kick
+        r.queue.put("t")
+        name = await r.queue.get()  # at once: the kick moved the backoff's deadline up
+        await r.reconcile(name)
+        r.queue.done(name)
+        return r.queue.waiting()
+
+    waiting = asyncio.run(go())
+    record = store.get_twin("t")
+    assert [run.operation for run in store.list_runs("t")] == ["step", "restore", "create"]
+    assert record.generation == record.status.observed_generation == 2 and record.status.run_id is None
+    assert waiting == []  # nothing left for the resync
+
+
+def test_a_cancelled_restore_whose_node_is_absent_is_cancelled_without_waiting_out_its_window(
+    store: LocalStore,
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.replace("t", "n2")
+    killed(restorer(store, driver, pusher=fake_push(kill_after=0, driver=driver)))  # left in flight at n2's push
+    run = newest(store)
+    stopped(driver, "n3")
+    r = restorer(store, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")  # the resume waits for n3 through its boot window
+        assert store.get_run(run.id).state == "running" and r.queue.waiting() == ["t"]
+        mark_cancelling(store, run.id)
+        await asyncio.sleep(1.1)  # past n3's window: an inspect now would end the restore for n3
+        calls = len(driver.calls)
+        await r.reconcile("t")  # the cancel is read first
+        assert driver.calls[calls:] == []
+
+    asyncio.run(scenario())
+    ended = store.get_run(run.id)
+    assert_cancelled(ended)
+    assert seen(store, run.id)[-2:] == CANCELLED
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "run.cancelled")
+    assert_kept(record, before, driver)
+
+
+@pytest.mark.parametrize("how", ["keeps failing", "never answers"])
+def test_a_cancelled_restore_waits_on_no_inspect(store: LocalStore, how: str) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.replace("t", "n2")
+    r = restorer(store, driver, pusher=fake_push(unreachable={"n2"}, driver=driver))
+
+    async def scenario() -> Run:
+        await r.reconcile("t")  # the restore backs off
+        run = newest(store)
+        if how == "keeps failing":
+            driver.fail_inspect_once = True
+            await r.reconcile("t")  # its resume's inspect fails: it backs off again
+            assert r.backoff["t"] == 2.0 and store.get_run(run.id).state == "running"
+            mark_cancelling(store, run.id)
+            driver.fail_inspect_once = True  # and would fail again
+            calls = len(driver.calls)
+            await r.reconcile("t")  # the cancel is read before the inspect
+            assert driver.calls[calls:] == [] and driver.fail_inspect_once
+        else:
+            driver.block = "inspect"
+            calls = len(driver.calls)
+            resume = asyncio.create_task(r.reconcile("t"))
+            await until(lambda: ("inspect", "t") in driver.calls[calls:])
+            mark_cancelling(store, run.id)  # the cancel stops the inspect it waits on
+            await asyncio.wait_for(resume, timeout=5)
+            driver.block = None
+        return run
+
+    run = asyncio.run(scenario())
+    assert_cancelled(store.get_run(run.id))
+    assert seen(store, run.id)[-2:] == CANCELLED
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "run.cancelled")
+    assert_kept(record, before, driver)
+    assert r.backoff == {}
+
+
+@pytest.mark.parametrize("taken", ["destroy", "step"])
+def test_a_restore_run_left_queued_is_ended_by_the_next_run_taken(store: LocalStore, taken: str) -> None:
+    """A restore whose take was cut short before the record named it: the deletion's sweep ends it, and so does a step
+    taken afresh, as either ends a create or step run that never started."""
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    stray = queued("t", "restore", "core")
+    store.create_run(stray)
+    if taken == "destroy":
+        request_deletion(store)
+    else:
+        respec(store, TWO_NODE)
+    asyncio.run(restorer(store, driver).reconcile("t"))
+
+    ended = store.get_run(stray.id)
+    assert_cancelled(ended)
+    assert ended.verdict is not None and ended.verdict.operation == "restore"
+    message = ended.verdict.findings[0].message
+    assert ("deletion" in message) if taken == "destroy" else (the_run(store, "step").id in message)
+    assert seen(store, stray.id) == CANCELLED
+
+
+def test_a_restore_run_left_queued_by_a_take_cut_short_is_ended_by_the_pass_that_reports_its_node_missing(
+    killing: KillingStore,
+) -> None:
+    """A core killed after it made a restore's run and before the record named it, and then the node gone for good:
+    no pass takes a restore while a node is missing, so the pass that reports it ends the run left queued, as the
+    sweep ends a create's or a step's that never started, its message saying why."""
+    driver = FakeDriver()
+    ready_twin(killing, driver)
+    driver.replace("t", "n2")
+    killing.kill_created = "restore"
+    killed(restorer(killing, driver))
+    (stray,) = [run for run in killing.list_runs("t") if run.operation == "restore"]
+    assert stray.state == "queued" and killing.get_twin("t").status.run_id is None
+    stopped(driver, "n2")  # and it stays down
+    r = restorer(killing, driver, platforms=SHORT)
+
+    async def scenario() -> None:
+        await r.reconcile("t")  # inside n2's boot window: nothing written
+        assert killing.get_run(stray.id).state == "queued"
+        await asyncio.sleep(1.1)
+        await r.reconcile("t")  # past it: n2 reported missing
+
+    asyncio.run(scenario())
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")
+    ended = killing.get_run(stray.id)
+    assert_cancelled(ended)
+    assert ended.verdict is not None and "missing past its boot window" in ended.verdict.findings[0].message
+    assert seen(killing, stray.id) == CANCELLED
+    assert [run.operation for run in killing.list_runs("t")] == ["restore", "create"]
+
+
+# A step to the bundle the twin runs (D-050's unchanged step) where a restore that failed or was cancelled left a node
+# holding nothing: it readies, pushes and verifies what holds nothing, so a new spec is a client's remedy, and it never
+# reports Ready over a node that holds nothing.
+
+SAME_BUNDLE = "testdata/blueprint/three-node.json"
+"""A `three-node` twin's own blueprint: a spec of it (with `allow_restart` toggled) compiles to the bundle it runs."""
+COMPILED: list[Seen] = [("compile", "started", None), ("compile", "done", None)]
+
+
+def left_holding_nothing(store: LocalStore, driver: FakeDriver, how: str) -> None:
+    """`n2` of a Ready `t` replaced, and its restore refused at the push, or cancelled before it: `n2` recorded at its
+    new incarnation holding nothing, and Ready False for the restore's rule."""
+    driver.replace("t", "n2")
+    if how == "refused":
+        asyncio.run(restorer(store, driver, pusher=fake_push(refuse={"n2"}, driver=driver)).reconcile("t"))
+    else:
+        r = restorer(store, driver, pusher=fake_push(unreachable={"n2"}, driver=driver))
+
+        async def cancelled() -> None:
+            await r.reconcile("t")  # the restore backs off before n2 holds anything
+            mark_cancelling(store, newest(store).id)
+            await r.reconcile("t")
+
+        asyncio.run(cancelled())
+    (n2,) = [n for n in store.get_twin("t").status.nodes if n.name == "n2"]
+    assert n2.holds is None
+
+
+@pytest.mark.parametrize(("how", "rule"), [("refused", "push.refused"), ("cancelled", "run.cancelled")])
+def test_a_step_to_the_running_bundle_pushes_the_node_a_restore_left_holding_nothing_and_only_then_is_ready(
+    store: LocalStore, how: str, rule: str
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    left_holding_nothing(store, driver, how)
+    assert ready_of(store.get_twin("t")).reason == rule
+    respec(store, SAME_BUNDLE, allow_restart=True)
+    calls = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), RecordingPush(store, driver)
+    asyncio.run(restorer(store, driver, ready=ready, pusher=pusher).reconcile("t"))
+
+    (step,) = steps(store)
+    assert step.verdict is not None and (step.verdict.operation, step.verdict.status) == ("step", "ok")
+    assert seen(store, step.id) == [*COMPILED, *pairs("ready", ["n2"]), *pairs("push", ["n2"]), *VERIFIED]
+    assert [n for n, _ in ready.calls] == [n for n, _ in pusher.calls] == ["n2"]
+    (at_push,) = pusher.records
+    assert (ready_of(at_push).status, ready_of(at_push).reason) == ("False", rule)  # not Ready before it is pushed
+    assert step.verdict.wait is not None and step.verdict.wait.outcome == "settled"
+    assert driver.calls[calls:] == []  # no plan, changes, apply or destroy: nothing of the lab changes
+    record = store.get_twin("t")
+    bundle_id = before.status.bundle_id
+    assert bundle_id is not None
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert all(n.holds == bundle_id for n in record.status.nodes)
+    assert record.status.observed_generation == record.generation == 2 and record.status.run_id is None
+    assert record.status.last_step == LastStep(outcome="unchanged", from_=bundle_id, to=bundle_id, phase="compiled",
+                                               run_id=step.id)
+    assert (record.status.deployment_id, record.status.allocation) == (before.status.deployment_id,
+                                                                       before.status.allocation)
+
+
+def test_a_spec_to_the_running_bundle_written_during_a_refused_restore_pushes_the_node_in_the_same_pass(
+    store: LocalStore,
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.replace("t", "n2")
+    inner = fake_push(driver=driver)
+    written: list[TwinRecord] = []
+
+    async def refuses_once_and_writes_a_spec(address: str, package: Any, config: str, credential: Any) -> Any:
+        if not written:  # the restore's push of n2: refused, while a client writes a spec of the bundle the twin runs
+            written.append(respec(store, SAME_BUNDLE, allow_restart=True))
+            return push.Refused("At line 1: n2 refused the configuration")
+        return await inner(address, package, config, credential)
+
+    asyncio.run(restorer(store, driver, pusher=refuses_once_and_writes_a_spec).reconcile("t"))
+
+    restore = the_run(store, "restore")
+    assert restore.verdict is not None and restore.verdict.status == "failed"
+    (step,) = steps(store)
+    assert step.verdict is not None and step.verdict.status == "ok"
+    assert [n for n, _ in inner.calls] == ["n2"]  # pushed under the step
+    assert [e for e in seen(store, step.id) if e[0] == "push"] == pairs("push", ["n2"])
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert all(n.holds == before.status.bundle_id for n in record.status.nodes)
+    assert record.status.observed_generation == record.generation == 2
+
+
+def test_a_step_to_the_running_bundle_whose_push_is_refused_leaves_the_twin_up_and_not_diverged(
+    store: LocalStore,
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    replaced = driver.replace("t", "n2")
+    refusing = fake_push(refuse={"n2"}, driver=driver)
+    written: list[TwinRecord] = []
+
+    async def writes_a_spec(address: str, package: Any, config: str, credential: Any) -> Any:
+        if not written:  # during the restore's push of n2, which is refused, and so is the step's
+            written.append(respec(store, SAME_BUNDLE, allow_restart=True))
+        return await refusing(address, package, config, credential)
+
+    asyncio.run(restorer(store, driver, pusher=writes_a_spec).reconcile("t"))
+
+    (step,) = steps(store)
+    assert step.state == "ended" and step.verdict is not None
+    assert (step.verdict.operation, step.verdict.status) == ("step", "failed")
+    assert [(f.rule, f.object) for f in step.verdict.findings] == [("push.refused", "n2")]
+    assert [n for n, _ in refusing.calls] == ["n2", "n2"]  # the restore's push, then the step's
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "push.refused")
+    assert (condition_of(record, "Stepping").status, condition_of(record, "Stepping").reason) == (
+        "False", "push.refused")
+    assert_kept(record, before, driver)  # up, nothing destroyed, the record kept, not diverged
+    (n2,) = [n for n in record.status.nodes if n.name == "n2"]
+    assert (n2.incarnation, n2.holds) == (replaced.incarnation, None)
+    assert record.status.observed_generation == record.generation == 2
+    bundle_id = before.status.bundle_id
+    assert bundle_id is not None
+    assert record.status.last_step == LastStep(outcome="rejected", from_=bundle_id, to=bundle_id, phase="compiled",
+                                               run_id=step.id)
+
+
+def test_a_step_to_the_running_bundle_leaves_a_twin_reported_missing_so(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    r = restorer(store, driver, platforms=SHORT)
+    asyncio.run(reported_missing(store, driver, r))  # n3 stopped past its window, at the incarnation it held
+    respec(store, SAME_BUNDLE, allow_restart=True)
+    calls = len(driver.calls)
+    asyncio.run(r.reconcile("t"))
+
+    (step,) = steps(store)
+    assert step.verdict is not None and step.verdict.status == "ok"
+    assert seen(store, step.id) == COMPILED  # every device node holds the bundle: nothing to push
+    assert driver.calls[calls:] == []
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "twin.node.missing")  # the settled pass's
+    assert record.status.observed_generation == record.generation == 2 and record.status.run_id is None
+    assert record.status.last_step is not None and record.status.last_step.outcome == "unchanged"
+
+
+def test_a_step_to_the_running_bundle_of_a_twin_whose_every_device_node_holds_it_ends_at_compiled(
+    store: LocalStore,
+) -> None:
+    """A probe host holds no bundle: the shortcut counts the device nodes alone."""
+    driver = FakeDriver()
+    ready_twin(store, driver, PROBED)
+    respec(store, PROBED, allow_restart=True)
+    calls = len(driver.calls)
+    asyncio.run(make(store, driver).reconcile("t"))
+
+    (step,) = steps(store)
+    assert step.verdict is not None and step.verdict.status == "ok"
+    assert seen(store, step.id) == COMPILED
+    assert driver.calls[calls:] == []  # no host readied through exec
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+
+
+@pytest.mark.parametrize("kill_event", [("ready", "done"), ("push", "done"), ("verify", "started")],
+                         ids=["ready done", "push done", "verify started"])
+def test_a_step_to_the_running_bundle_killed_once_it_began_to_ready_finishes_and_ends_with_counts(
+    killing: KillingStore, kill_event: tuple[str, str]
+) -> None:
+    """A step to the bundle the twin runs records no phase, so its resume reads its events: once it began to ready, it
+    finishes what it began, readying and pushing what still holds nothing and verifying, and neither compiles again nor
+    takes the shortcut a step that pushed nothing takes. Killed after n2's ready, n2 still holds nothing: a resume that
+    compiled again would read the spec a client wrote meanwhile under this run."""
+    driver = FakeDriver()
+    ready_twin(killing, driver)
+    left_holding_nothing(killing, driver, "refused")
+    respec(killing, SAME_BUNDLE, allow_restart=True)
+    killing.kill_event = kill_event
+    killed(restorer(killing, driver))
+    (step,) = steps(killing)
+    assert step.state == "running"
+    calls = len(driver.calls)
+    ready, pusher = fake_ready(driver=driver), fake_push(driver=driver)
+    asyncio.run(restorer(killing, driver, ready=ready, pusher=pusher).reconcile("t"))
+
+    ended = killing.get_run(step.id)
+    assert ended.verdict is not None and (ended.verdict.operation, ended.verdict.status) == ("step", "ok")
+    assert ended.verdict.counts is not None
+    assert ended.verdict.wait is not None and ended.verdict.wait.outcome == "settled"
+    if kill_event == ("ready", "done"):  # n2 readied and not pushed: readied again, then pushed
+        killed_run, readied = pairs("ready", ["n2"]), ["n2"]
+    else:  # n2 holds the bundle already
+        cut = [("verify", "started", None)] if kill_event == ("verify", "started") else []
+        killed_run, readied = [*pairs("ready", ["n2"]), *pairs("push", ["n2"]), *cut], []
+    resume = [*pairs("ready", readied), *pairs("push", readied)]
+    assert resumed(killing, step.id, "step") == [*COMPILED, *killed_run, *resume, *VERIFIED]  # no second compile
+    assert [node for node, _ in ready.calls] == readied and [node for node, _ in pusher.calls] == readied
+    assert driver.calls[calls:] == []
+    record = killing.get_twin("t")
+    bundle_id = record.status.bundle_id
+    assert bundle_id is not None
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+    assert record.status.last_step == LastStep(outcome="unchanged", from_=bundle_id, to=bundle_id, phase="compiled",
+                                               run_id=step.id)
+    assert record.status.observed_generation == record.generation == 2 and record.status.run_id is None
+
+
+def test_a_spec_written_while_a_step_to_the_running_bundle_backs_off_is_stepped_to_by_the_next_run(
+    store: LocalStore,
+) -> None:
+    """The resume of a step to the bundle the twin runs, past `compiled`, compiles no spec again: one a client wrote
+    during its backoff is not admitted, planned or applied under the older generation's run, and is the next run's."""
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    left_holding_nothing(store, driver, "refused")
+    respec(store, SAME_BUNDLE, allow_restart=True)
+    r = restorer(store, driver, pusher=fake_push(unreachable={"n2"}, driver=driver))
+
+    async def backed_off() -> TwinRecord:
+        await r.reconcile("t")  # n2's push is unreachable: the step backs off, n2 still holding nothing
+        assert steps(store)[0].state == "running"
+        newer = respec(store, TWO_NODE)  # a client's spec, during the backoff
+        calls = len(driver.calls)
+        await r.reconcile("t")  # the resume pushes n2 and verifies, to the bundle the twin runs
+        assert driver.calls[calls:] == []  # no admit, plan, changes or apply of the newer spec
+        return newer
+
+    newer = asyncio.run(backed_off())
+    (step,) = steps(store)
+    assert step.verdict is not None and (step.verdict.status, step.verdict.subject.bundle_id) == (
+        "ok", before.status.bundle_id)
+    assert step.verdict.counts is not None
+    assert [e for e in seen(store, step.id) if e[0] == "compile"] == COMPILED
+    record = store.get_twin("t")
+    bundle_id = before.status.bundle_id
+    assert bundle_id is not None
+    assert (record.status.bundle_id, record.status.deployment_id) == (bundle_id, before.status.deployment_id)
+    assert record.status.last_step == LastStep(outcome="unchanged", from_=bundle_id, to=bundle_id, phase="compiled",
+                                               run_id=step.id)
+    assert (record.generation, record.status.observed_generation, record.status.run_id) == (3, 2, None)
+
+    asyncio.run(restorer(store, driver, TWO_NODE).reconcile("t"))  # the next pass steps to the newer spec
+    first, second = steps(store)
+    assert first.id == step.id
+    assert_stepped(store, newer, second)
+
+
+# The trigger (D-058): the driver names a twin whose runtime changed, and the loop's task queues it, so a node the
+# runtime replaced is restored without waiting for the resync.
+
+
+def errors_of(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    """The ERROR records so far, of any logger."""
+    return [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_a_drivers_event_restores_a_replaced_node_without_the_resync(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    r = restorer(store, driver, resync_s=3600)
+
+    def restored() -> bool:
+        return any(run.operation == "restore" and run.verdict is not None and run.verdict.status == "ok"
+                   for run in store.list_runs("t"))
+
+    async def scenario() -> None:
+        await r.start()
+        await until(lambda: is_ready(store, "t"))
+        driver.replace("t", "n2")
+        driver.emit("t")
+        await until(restored)
+        await r.stop()
+
+    asyncio.run(scenario())
+    record = store.get_twin("t")
+    (n2,) = [n for n in record.status.nodes if n.name == "n2"]
+    assert (n2.incarnation, n2.holds) == (driver.labs["t"]["n2"].incarnation, record.status.bundle_id)
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")
+
+
+def test_an_event_naming_no_twin_is_dropped(store: LocalStore, caplog: pytest.LogCaptureFixture) -> None:
+    blueprint_id = file_blueprint(store)
+    driver = FakeDriver()
+    r = restorer(store, driver, resync_s=3600)
+
+    async def scenario() -> None:
+        await r.start()
+        driver.emit("nobody")
+        new_twin(store, blueprint_id, "c")
+        driver.emit("c")
+        await until(lambda: is_ready(store, "c"))
+        await r.stop()
+
+    asyncio.run(scenario())
+    assert store.list_runs("nobody") == []
+    assert [run.twin for run in store.list_runs()] == ["c"]
+    assert errors_of(caplog) == []
+
+
+class EndsOnce(FakeDriver):
+    """A fake whose first `events` ends at once, naming nothing, as a driver that breaks the seam's contract."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.ended = False
+
+    async def events(self) -> AsyncIterator[str]:
+        if not self.ended:
+            self.ended = True
+            return
+        async for name in super().events():
+            yield name
+
+
+@pytest.mark.parametrize("fault", ["raises", "ends"])
+def test_a_driver_whose_events_fail_is_asked_again(
+    store: LocalStore, caplog: pytest.LogCaptureFixture, fault: str
+) -> None:
+    blueprint_id = file_blueprint(store)
+    driver = FakeDriver() if fault == "raises" else EndsOnce()
+    driver.fail_events_once = fault == "raises"  # its first `events` raises, or ends
+    r = restorer(store, driver, resync_s=3600, events_retry_s=0.01)
+
+    async def scenario() -> None:
+        await r.start()
+        await until(lambda: errors_of(caplog) != [])
+        new_twin(store, blueprint_id, "c")
+        driver.emit("c")  # served by the `events` the loop asks for again
+        await until(lambda: is_ready(store, "c"))
+        await r.stop()
+
+    asyncio.run(scenario())
+    (error,) = errors_of(caplog)
+    assert error.name == "fylgja.reconcile" and "fake" in error.getMessage()
+    assert (error.exc_info is not None) == (fault == "raises")  # a traceback for what was raised
+    assert not driver.fail_events_once
+
+
+# An event never brings a twin's pass forward of its backoff (D-070 item 18): a runtime's own events follow every apply
+# and destroy, so a pass that failed after changing the runtime is kicked by its own events. A client's write still
+# brings it forward, as it did before. These run on a fake clock (`Skipping`), so a backoff's seconds pass at once.
+
+
+class Clocked(FakeDriver):
+    """A fake that keeps the loop's time at each `apply` and each `inspect` it is asked for."""
+
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(**kw)
+        self.applied: list[float] = []
+        self.inspected: list[float] = []
+
+    async def apply(
+        self,
+        deployment: deployment.Deployment,
+        files: Mapping[str, bytes],
+        platforms: Mapping[str, platform_package.PlatformPackage],
+        probe_packages: Mapping[str, probe_package.ProbePackage],
+        reconfigure: bool = False,
+    ) -> None:
+        self.applied.append(asyncio.get_running_loop().time())
+        await super().apply(deployment, files, platforms, probe_packages, reconfigure)
+
+    async def inspect(self, twin: str) -> Inspection:
+        self.inspected.append(asyncio.get_running_loop().time())
+        return await super().inspect(twin)
+
+
+def gaps(times: list[float]) -> list[float]:
+    return [b - a for a, b in itertools.pairwise(times)]
+
+
+def test_a_failing_apply_whose_driver_names_the_twin_is_retried_at_the_backoffs_pace(store: LocalStore) -> None:
+    """A deploy that fails after its containers changed: the fake's `apply` names the twin each time, as a real
+    runtime's events do, and fails. Each pass's own event is folded into its retry, which comes as the backoff ends:
+    five applies in 20 s, 1, 2, 4 and 8 s apart, never hundreds back to back."""
+    new_twin(store, file_blueprint(store))
+    driver = Clocked(fail_apply=True, own_events=True)
+    r = make(store, driver, resync_s=3600)
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        await r.start()
+        began = loop.time()
+        try:
+            while len(driver.applied) < 10 and loop.time() < began + 20:
+                await asyncio.sleep(0.01)
+        finally:
+            await r.stop()
+
+    bounded(scenario, loop=Skipping())
+    assert gaps(driver.applied) == pytest.approx([1.0, 2.0, 4.0, 8.0], abs=0.1)
+    assert r.backoff == {"t": 16.0}
+
+
+class Faulty(Clocked):
+    """A fake whose `apply` names its twin, as a runtime's events do, then fails outside the seam's contract."""
+
+    async def apply(self, *args: Any, **kw: Any) -> None:
+        self.applied.append(asyncio.get_running_loop().time())
+        self.emit(args[0].twin)
+        raise RuntimeError("a fault the seam does not declare")
+
+
+def test_a_pass_that_fails_outside_the_seams_contract_is_retried_at_the_backoffs_pace_too(
+    store: LocalStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A fault the loop does not class is the worker's to log, with its traceback. The twin still waits out a backoff
+    before its next pass, which its own events do not shorten: such a pass was served again at once, for ever."""
+    new_twin(store, file_blueprint(store))
+    driver = Faulty()
+    r = make(store, driver, resync_s=3600)
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        await r.start()
+        began = loop.time()
+        try:
+            while len(driver.applied) < 10 and loop.time() < began + 20:
+                await asyncio.sleep(0.01)
+        finally:
+            await r.stop()
+
+    with caplog.at_level(logging.ERROR, logger="fylgja"):
+        bounded(scenario, loop=Skipping())
+    assert gaps(driver.applied) == pytest.approx([1.0, 2.0, 4.0, 8.0], abs=0.1)
+    assert r.backoff == {"t": 16.0}
+    logged = [record for record in caplog.records if record.name == "fylgja.queue" and record.exc_info is not None]
+    assert len(logged) == len(driver.applied)  # each failure logged once, by the worker, as before
+
+
+def test_an_event_received_while_a_twin_backs_off_does_not_bring_its_retry_forward(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = Clocked(fail_apply=True)  # it names nothing of its own
+    r = make(store, driver, resync_s=3600)
+
+    async def scenario() -> None:
+        await r.start()
+        try:
+            await until(lambda: r.backoff.get("t") == 1.0)
+            await asyncio.sleep(0.5)
+            driver.emit("t")  # half way through the backoff
+            await until(lambda: len(driver.applied) == 2)
+        finally:
+            await r.stop()
+
+    bounded(scenario, loop=Skipping())
+    assert gaps(driver.applied) == pytest.approx([1.0], abs=0.1)
+
+
+def test_a_clients_write_while_a_twin_backs_off_brings_its_pass_forward_as_it_always_did(store: LocalStore) -> None:
+    """A client's write kicks its twin (`kick`), which the queue serves at once, the backoff's later deadline lost."""
+    new_twin(store, file_blueprint(store))
+    driver = Clocked(fail_apply=True)
+    r = make(store, driver, resync_s=3600)
+
+    async def scenario() -> None:
+        await r.start()
+        try:
+            await until(lambda: r.backoff.get("t") == 1.0)
+            await asyncio.sleep(0.5)
+            r.kick("t")  # half way through the backoff
+            # The pass it brought forward has failed and grown the backoff: a stop as its apply begins would cut it.
+            await until(lambda: len(driver.applied) == 2 and r.backoff.get("t") == 2.0)
+        finally:
+            await r.stop()
+
+    bounded(scenario, loop=Skipping())
+    assert gaps(driver.applied) == pytest.approx([0.5], abs=0.1)
+    assert r.backoff == {"t": 2.0}  # the pass it brought forward failed too: the backoff grows as before
+
+
+def test_a_create_that_completes_is_followed_by_one_settled_pass_for_its_own_events(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver(own_events=True)
+    r = make(store, driver, resync_s=3600)
+
+    async def scenario() -> None:
+        await r.start()
+        try:
+            await until(lambda: is_ready(store, "t"))
+            await asyncio.sleep(30)  # every pass the create's events cause has run by now
+        finally:
+            await r.stop()
+
+    bounded(scenario, loop=Skipping())
+    create = [("admit", "t"), ("plan", "t"), ("inspect", "t"), ("apply", "t"), ("inspect", "t")]
+    assert driver.calls == [*create, ("inspect", "t")]  # then one settled pass, which writes nothing
+    assert [run.operation for run in store.list_runs("t")] == ["create"]
+
+
+def test_a_node_replaced_while_its_twin_backs_off_is_restored_by_the_pass_the_backoffs_end_brings(
+    store: LocalStore,
+) -> None:
+    """`n2`'s restore backs off at its push; `n3` is replaced half way through the backoff, and its event folded into
+    the retry, which comes as the backoff ends: one pass inspects again and pushes both."""
+    driver = Clocked()
+    ready_twin(store, driver)
+    driver.replace("t", "n2")
+    pusher = fake_push(unreachable={"n2"}, driver=driver)
+    r = restorer(store, driver, pusher=pusher, resync_s=3600)
+    since = len(driver.inspected)
+
+    async def scenario() -> None:
+        await r.start()  # the twin queued: the restore, which backs off
+        try:
+            await until(lambda: r.backoff.get("t") == 1.0)
+            await asyncio.sleep(0.5)
+            driver.replace("t", "n3")
+            driver.emit("t")
+            await until(lambda: newest(store).state == "ended")
+        finally:
+            await r.stop()
+
+    bounded(scenario, loop=Skipping())
+    restore = newest(store)
+    assert restore.operation == "restore" and restore.verdict is not None and restore.verdict.status == "ok"
+    assert [n for n, _ in pusher.calls] == ["n2", "n2", "n3"]
+    assert gaps(driver.inspected[since:]) == pytest.approx([1.0], abs=0.1)
+    record = store.get_twin("t")
+    nodes = {n.name: n for n in record.status.nodes}
+    for node in ("n2", "n3"):
+        assert (nodes[node].incarnation, nodes[node].holds) == (driver.labs["t"][node].incarnation,
+                                                                record.status.bundle_id)
+    assert (ready_of(record).status, ready_of(record).reason) == ("True", "twin.ready")

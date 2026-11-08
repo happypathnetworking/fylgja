@@ -19,8 +19,11 @@ API_ID = f"{ID_PREFIX}api-1.openapi.yaml"
 
 
 def formats_dir() -> Path:
-    """The repository's `formats/`, which holds every current schema."""
-    return Path(__file__).resolve().parents[3] / "formats"
+    """The directory holding every current schema: `formats/` beside this module in an installed
+    package, where the wheel copies it (D-066), else the repository's `formats/` in a checkout."""
+    here = Path(__file__).resolve()
+    packaged = here.parent / "formats"
+    return packaged if packaged.is_dir() else here.parents[3] / "formats"
 
 
 @cache

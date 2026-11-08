@@ -1,0 +1,96 @@
+# The core's service account and its rights (D-062, D-071).
+#
+# One ClusterRole holds what the clabernetes driver does in every namespace, each verb one its calls were read to need
+# from inside a pod under this account (verified-facts.md): a twin's namespace made, read, changed and deleted; its
+# Secrets, NetworkPolicy and Topology made and changed by server-side apply, which asks `create` of an object not there
+# yet beside `patch`, and deleted with the namespace; its Topology read; its Services listed and patched; its pods
+# listed, watched and deleted; and an exec, whose WebSocket handshake asks `get` on `pods/exec` and `create` beside it.
+# `watch` on pods is cluster-wide because the driver's `events` is one watch on pods across every namespace, by the
+# owner's label; it deletes a twin's pod at a renewal and at a hot-add (D-070). The Lease's rule is a Role in this
+# namespace alone, since a ClusterRoleBinding grants its rules in every namespace: `get` and `update` on the core's one
+# Lease by name, and `create`, which a name cannot confine.
+#
+# core/tests/test_deploy.py holds the rules as tables.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fylgja-core
+  namespace: fylgja
+  labels:
+    app.kubernetes.io/part-of: fylgja
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fylgja-core
+  labels:
+    app.kubernetes.io/part-of: fylgja
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, patch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create, patch]
+  - apiGroups: [c9s.run]
+    resources: [topologies]
+    verbs: [get, create, patch]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [list, patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, watch, delete]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fylgja-core
+  labels:
+    app.kubernetes.io/part-of: fylgja
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fylgja-core
+subjects:
+  - kind: ServiceAccount
+    name: fylgja-core
+    namespace: fylgja
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fylgja-core-lease
+  namespace: fylgja
+  labels:
+    app.kubernetes.io/part-of: fylgja
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [fylgja-core]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fylgja-core-lease
+  namespace: fylgja
+  labels:
+    app.kubernetes.io/part-of: fylgja
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fylgja-core-lease
+subjects:
+  - kind: ServiceAccount
+    name: fylgja-core
+    namespace: fylgja

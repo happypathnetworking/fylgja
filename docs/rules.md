@@ -43,8 +43,11 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 
 | Rule | Filed by | Means |
 |---|---|---|
+| `server.optimised` | the server's start | Python runs with `-O` or `PYTHONOPTIMIZE`, which strip the `assert` inside asyncio that drops a connection accepted in the turn before a lost Lease's cut; the server exits 2 without reading a setting ([D-062](../design/decisions.md#d-062)) |
+| `lease.lost` | the Lease | no renewal succeeded within the Lease's 15 s, or another holder took it; the server stops at once and exits 1 ([D-062](../design/decisions.md#d-062)) |
 | `package.id.duplicate` | the packages registry | two packages under `FYLGJA_PACKAGES` share an id (platform) or a format (probe); the message names both files |
-| `settings.missing` | the settings | a `FYLGJA_*` variable the server needs is not set, empty or malformed ([D-042](../design/decisions.md#d-042)); the message names the variable, never a value, and the server exits 2 |
+| `settings.missing` | the settings | a `FYLGJA_*` variable the server needs is not set, empty or malformed, or set to what another setting rules out ([D-042](../design/decisions.md#d-042)); the message names the variable, never a value, and the server exits 2 |
+| `store.unconditional` | the object store's proof at start | the S3 endpoint accepted a create over an object, a replace at an earlier ETag or a delete at an earlier ETag ([D-061](../design/decisions.md#d-061)); the message names the condition it ignores, and the store is not opened |
 
 ## Findings: a compile refused
 
@@ -76,16 +79,20 @@ refused (`Unplannable`): the API answers a dry run with a 422 problem document, 
 shape requires a deployment, so a refusal cannot be a plan), and the loop ends such a run
 `rejected`, the twin's Ready condition False with the reason `plan.rejected`; the API's
 problem rule arrives with the API, like `bundle.rejected`. The object is an interface as
-`device:interface`.
+`device:interface`, or for `plan.registry.absent` a node by name.
 
 | Rule | Means |
 |---|---|
 | `interface.port.shared` | on a kind with no aliases, the rename puts this cabled interface (a link's end or a probe's endpoint) on a runtime port with another cabled interface of its node, and the twin can cable a port once. An uncabled interface the rename puts on a cabled one's port is an omission fidelity reports (`shared`), not a finding |
+| `plan.registry.absent` | on clabernetes, a node's package names a pull secret whose registry the twin's allocation does not hold: the credential's `_REGISTRY` variable was not set when the twin was admitted, and a stepping twin keeps its allocation ([D-057](../design/decisions.md#d-057)) |
 
 ## Findings: admission refused
 
-`admit` refuses a twin with one of these rules and a message naming every shortfall or
-every absent image ([D-019](../design/decisions.md#d-019)); nothing is reserved. The loop
+`admit` refuses a twin with one of these rules and a message naming every shortfall, every
+absent image or the namespace at fault ([D-019](../design/decisions.md#d-019)); nothing is
+reserved. The clabernetes driver's `admit` also refuses a twin under a credential's own rule
+when a pull credential's registry variable is set badly
+([below](#problems-and-findings-the-credential-provider-readiness-and-the-push)). The loop
 files the refusal as the run's one finding, an error whose object is the twin by name, and
 ends the run `rejected` ([Conditions and runs](#conditions-and-runs)).
 
@@ -93,12 +100,14 @@ ends the run `rejected` ([Conditions and runs](#conditions-and-runs)).
 |---|---|---|
 | `admission.capacity` | the local driver | the host cannot fit the twin: the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)), or the deployment's demand exceeds the host's available memory (`/proc/meminfo`'s `MemAvailable`) or its CPU count |
 | `admission.image.absent` | the local driver | a package the twin's nodes use has an account-gated image (one with a `pull_secret`) that is not on the host, which the local driver never pulls ([D-015](../design/decisions.md#d-015)); an ungated image is containerlab's to pull at deploy |
+| `admission.namespace.taken` | the clabernetes driver | the namespace `fylgja-twin-<twin>` exists and does not carry the twin's labels ([D-057](../design/decisions.md#d-057)); nothing is reserved |
 
 ## Problems and findings: the credential provider, readiness and the push
 
 | Rule | Raised by | Means |
 |---|---|---|
-| `credential.missing` | the credential provider | a `FYLGJA_CREDENTIAL_<NAME>_USERNAME` or `_PASSWORD` variable a package's credential names is not set, or is empty; the message names the variable, never a value ([D-042](../design/decisions.md#d-042)). An operator-environment fault: neither a retry nor a new spec clears it, only setting the variable |
+| `credential.missing` | the credential provider; the clabernetes driver's `admit`, refusing the twin | a `FYLGJA_CREDENTIAL_<NAME>_USERNAME`, `_PASSWORD` or `_REGISTRY` variable a package's credential names is not set, or is empty, or, at the clabernetes driver's admission, one of a pull credential whose registry is set, or of one a stepping twin's allocation holds ([D-069](../design/decisions.md#d-069)); the message names the variable, never a value ([D-042](../design/decisions.md#d-042)). An operator-environment fault: neither a retry nor a new spec clears it, only setting the variable |
+| `credential.malformed` | the credential provider; the clabernetes driver's `admit`, refusing the twin | a `FYLGJA_CREDENTIAL_<NAME>_REGISTRY` variable is not an image prefix, or, at the clabernetes driver's admission, its `<NAME>` gives a pull secret whose name Kubernetes refuses (not a DNS-1123 subdomain of at most 253 characters), or, at a stepping twin's, it names another prefix than the one the twin was admitted with; the message names the variable, never its value. An operator-environment fault, as `credential.missing` is |
 | `readiness.timeout` | readiness | a node's push transport did not answer an authenticated request within the budget (the package's `readiness.timeout_s` unless a caller gives one); the message names the address, the port and the budget |
 | `readiness.unauthorized` | readiness | the node's push transport answered HTTP 401 or 403: the credential is refused, and waiting longer would not help |
 | `push.refused` | the push | the node refused the replace, and nothing landed ([D-027](../design/decisions.md#d-027)). By `json_rpc`, the message is the node's reason, read after its echo of the commands sent in its recorded shape `At line N: …`, with no diff line; when the node cut its message before the reason, it is the reason one `commit validate` request gives, or else one of the two sentences of [D-028](../design/decisions.md#d-028) and [D-047](../design/decisions.md#d-047). By `eapi`, it names the refused command, its number among the commands sent and the node's errors for it (or that the node named no reason), and the refused session is aborted, best effort |
@@ -152,7 +161,9 @@ what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels
 flight that way, then a destroy run tears the twin down and deletes its record; it ends `ok`,
 and a destroy run is never stopped halfway. In the partial-lab probe a node that refuses the
 login is not silent: the run fails at once with `readiness.unauthorized`, since a reconfigure
-would not help.
+would not help. The probe does not run on a driver that declares `reapply`
+([D-068](../design/decisions.md#d-068)): a resumed apply there applies again, and a node
+refusing the login fails the run in `ready`.
 
 A bundle naming a package this core has not loaded (one compiled elsewhere, or a run resumed
 by a core started without a package it began with) is refused with `bundle.rejected`: one
@@ -163,21 +174,87 @@ deployment, its allocation and its nodes, until a deletion or a new spec is hand
 that has the packages. Here, both are refused the same way, once, and a new spec starts no
 create: nothing is compiled, admitted or destroyed over the kept deployment.
 
+A restore is a run too ([D-067](../design/decisions.md#d-067)), the loop's own, by the
+principal `core`. A pass on a settled twin (no deletion asked, its generation observed, a
+deployment applied, no run in flight, not diverged) inspects it, unless this core lacks a
+package its deployment names. A node at another incarnation than the record holds was replaced
+behind the core's back and lost its push: it is readied and pushed again, and verify is run,
+under a `restore` run, as a step does for a node whose incarnation moved. `ready` waits for each device
+node holding nothing and every probe host, `push` pushes each node not holding the twin's
+bundle, and verify is waited for within `FYLGJA_STEP_WAIT_S`. With every node running at its
+recorded incarnation the pass writes nothing. A restore compiles, admits, plans and applies
+nothing, tears nothing down, and leaves the phase, `last_step` and the observed generation as
+they were. It sets `Ready` False for `twin.restoring` while it runs and True for `twin.ready`
+when it ends `ok`; a twin that does not run what its spec asks, after a refused or cancelled
+step, keeps the conditions that step left. A failure only a new spec can clear (a refused or
+unauthorized push, a node that does not become ready, a missing credential) ends it `failed`,
+or `rejected` for a bundle naming a package this core lacks, with `Ready` False for its rule
+where it had set `twin.restoring`. The node keeps its new incarnation either way, holding
+nothing when it was not pushed again, so a refusal is not repeated: no later pass finds it
+moved. A new spec is the remedy: a step, even one that compiles to the bundle the twin runs,
+readies, pushes and verifies whatever holds nothing before the twin is `Ready` again
+([Steps](#steps)). A transient failure (the driver's runtime failure, an unreachable node, the
+store) is repeated: the run stays in flight, and the next pass after the backoff resumes it,
+inspects again, and readies and pushes whatever holds nothing, a node replaced once more at its
+newest incarnation. A cancel, by a client or by the twin's deletion, stops the restore where it
+is: it ends `failed` with `run.cancelled`, tears nothing down, and `Ready` is False for
+`run.cancelled` where it had set `twin.restoring`; a deletion then tears the twin down. It is
+not repeated for what the restore recorded: the nodes it found, at their new incarnations. A
+cancel that lands before that write (a core stopped between the restore's take and its record
+of the nodes, then the cancel) leaves the old incarnations in the record, so the next kick finds
+the node moved and restores again. The twin's deployment is the record's, so a restore never
+diverges the twin, however it ends. A spec written while a restore runs waits for it, as for a
+step: the restore completes toward the bundle the twin runs, and the same pass then steps the
+twin to the new spec.
+
+On clabernetes a node whose container ended or restarted in its pod is reached again only through
+a new pod: read on an SR Linux node, its management address does not answer again once the
+container runs there again ([verified-facts.md](../design/verified-facts.md)). The driver deletes
+such a pod as its pod watch delivers the container's end, a state no starting pod passes through,
+the cluster makes it anew within the node's boot window, and the pass restores the new pod as any
+replaced one ([D-070](../design/decisions.md#d-070)). The rule is every node's alike; only SR Linux
+was read. The driver does so at most three times in ten minutes a node. Past that the pod is left,
+and the node's restore fails `readiness.timeout`, `Ready` False; no timer revisits it, so it is
+left until its pod is delivered again with room in the window (its next end or restart), until the
+core restarts, or until someone deletes the pod. A left pod that runs on unchanged, as one does
+whose pushed configuration had ended it and which boots again without the push, keeps its twin
+`Ready` False until then. A node can still read `twin.node.missing` when its end was missed by the
+watch, and it is renewed at its restart about 25 s later, and when it is left, its container
+restarting in place under the kubelet's backoff.
+
+A node missing or not running is waited for, then reported, and never made: a runtime that
+replaces a node brings it back by itself, and a twin is not repaired. Each node's boot window is
+its package's readiness window (60 s for SR Linux, 90 s for cEOS, 30 s for a ping host), counted
+from the first pass that saw that node absent, so a node gone after another, as when a drain
+evicts a twin's pods one after another, is not judged on the other's clock. A node that runs
+again drops its count, a create or step run drops the twin's, and a restarted core counts again.
+While any absent node is inside its window the pass writes nothing and looks again within 5 s.
+Once none is, a warning in the log names each node, since a condition carries no message, and
+`Ready` is False for `twin.node.missing`, unless the twin does not run what its spec asks,
+whose conditions stand; a restore under way ends `failed` instead, with one `twin.node.missing`
+finding per node. The twin stays so until the node returns, or the twin is stepped or deleted:
+each later kick looks again, and once every node runs a restore readies and pushes whatever
+holds nothing and verifies the twin before it is `Ready` again. A container removed on the local
+driver does not return by itself.
+
 The findings the loop files itself, each an error:
 
 | Rule | Ends the run | Means |
 |---|---|---|
 | `blueprint.missing` | `rejected` | the spec's blueprint is not in the store; the object is its id |
 | `bundle.missing` | `rejected` | the spec's bundle is not in the store; the object is its id |
-| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up; a step cancelled before its apply began cleans nothing up, since it touched nothing ([Steps](#steps)); the API files it too, for a run it queued and withdrew before it started because its request's write failed (lost to another, or failed outright); and the loop, for a create or step run still queued, or queued and marked cancelling by a client, when it takes another create or step run of the twin afresh (made, or the newest queued): superseded before it started by that run, its message says, naming it (a client's, or the loop's own), as when two specs are written before the loop takes the first, or the API queued a create or a step by the record as it stood and the loop's later reading differs. A destroy run is never superseded |
+| `run.cancelled` | `failed` | the run was cancelled, by a client or by the twin's deletion during it, and cleaned up; a step cancelled before its apply began cleans nothing up, since it touched nothing ([Steps](#steps)); a restore cancelled stops where it is and tears nothing down, a node it had not pushed again holding nothing at its new incarnation, so it is not repeated once it recorded the nodes it found ([D-067](../design/decisions.md#d-067)); the API files it too, for a run it queued and withdrew before it started because its request's write failed (lost to another, or failed outright); and the loop, for a create, step or restore run still queued, or queued and marked cancelling by a client, when it takes another create or step run of the twin afresh (made, or the newest queued): superseded before it started by that run, its message says, naming it (a client's, or the loop's own), as when two specs are written before the loop takes the first, or the API queued a create or a step by the record as it stood and the loop's later reading differs. A destroy run is never superseded |
 | `twin.driver.unknown` | `rejected` | the spec names a driver this core does not serve; the object is the twin. The API refuses such a spec with a problem of the same rule, so the loop meets one only when a core was started without a driver its records name: every run of the twin in flight ends `rejected`, and nothing is torn down |
+| `twin.node.missing` | `failed` | a restore's node, the object, is missing or not running, and did not return within its boot window ([D-067](../design/decisions.md#d-067)); one finding per node, and a `ready failed` event per node, naming it and carrying the rule, ends the run. The loop never makes a node: the restore ends without it, tears nothing down, and sets `Ready` False for this rule where it had set `twin.restoring`. The twin stays so until the node returns, or the twin is stepped or deleted |
 
 The `Ready` condition's reasons:
 
 | Reason | Status | Means |
 |---|---|---|
-| `twin.ready` | `True` | the create reached `pushed`: every device node holds the bundle and answered; a step's reasons are under [Steps](#steps) |
+| `twin.ready` | `True` | the create reached `pushed`: every device node holds the bundle and answered; or a restore ended `ok`: every node it found replaced readied and pushed again, and verify run, which is advisory, so a restore whose wait expired (`step.wait.expired`) ends `ok` too ([D-032](../design/decisions.md#d-032)); a step's reasons are under [Steps](#steps) |
 | `twin.creating` | `False` | a create runs |
+| `twin.restoring` | `False` | a restore runs ([D-067](../design/decisions.md#d-067)): a node of a settled twin was found at another incarnation, and is readied and pushed again, then verify is run, which is advisory; or every node of a twin reported `twin.node.missing` runs again, and verify is run before it is Ready. Not set on a twin that does not run what its spec asks: a restore leaves the conditions a refused or cancelled step left |
+| `twin.node.missing` | `False` | a node of a settled twin is missing or not running past its boot window, or a restore ended for it ([D-067](../design/decisions.md#d-067)); the log names each node. It is never made: the twin stays so until the node returns, when a restore readies and pushes what holds nothing and runs verify, which is advisory, before it is Ready, or until the twin is stepped or deleted. Not set on a twin that does not run what its spec asks |
 | `twin.deleting` | `False` | the twin's deletion was asked, and the loop tears it down |
 | `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)) |
 | `plan.rejected` | `False` | the driver's plan refused the bundle; the run's verdict holds every finding ([a plan refused](#findings-a-plan-refused)) |
@@ -192,17 +269,33 @@ anything, the twin running what it ran: for one of the rules below, or for one a
 refusal carries (an uncompilable blueprint, a running deployment naming a node no loaded
 package runs, or one whose bundle names a package this core has not loaded, is
 `bundle.rejected`); `failed` with `run.cancelled` when it is cancelled before
-its apply began, the twin running what it ran; or `diverged` when it fails or is cancelled from
+its apply began, the twin running what it ran, or with a readiness or push rule when an
+unchanged step fails (below); or `diverged` when it fails or is cancelled from
 its apply on, an `apply started` of any pass of its run. There is no rollback
 ([D-029](../design/decisions.md#d-029)): a step never tears anything down, and a diverged twin
 is left as it stands. It accepts only deletion, which destroys the deployment its record names
 (the step's target once `applied` was recorded, else the one the twin ran) and deletes the
 record, as any twin's; the loop, deleting a twin, first cancels a step run it finds in flight. A transient failure
 ends no step, as it ends no create: the next pass resumes it, and probes the lab first when the
-apply had begun. A step whose phases have all run has completed: a cancel then, a deletion's
-too, ends it as it would have ended, `ok`. A dry run of a step (`PUT …?dry_run=true` on a twin
-that runs) answers the refusal the loop would make, by the same rules, in its `Plan`'s verdict,
-`rejected`, beside what the step would change.
+apply had begun, on a driver that does not declare `reapply`. A step whose phases have all run
+has completed: a cancel then, a deletion's too, ends it as it would have ended, `ok`. A dry run
+of a step (`PUT …?dry_run=true` on a twin that runs) answers the refusal the loop would make, by
+the same rules, in its `Plan`'s verdict, `rejected`, beside what the step would change.
+
+A step whose spec compiles to the bundle the twin runs (the same blueprint with `allow_restart`
+changed, or that bundle named) changes nothing of the lab: it plans and applies nothing. Where
+every device node holds that bundle it ends at `compiled`. Where one does not, as a restore that
+failed or was cancelled leaves a node ([D-067](../design/decisions.md#d-067)), it first readies,
+pushes and verifies it, as a restore does, so such a step is the remedy a client is given after
+that restore; it then ends `ok`, `last_step` `unchanged`. Such a step records no phase past
+`compiled`, whatever it pushed: its `last_step.phase` reads `compiled`, and its events say what
+it readied, pushed and verified. A resume after it began to ready or push finishes those phases
+and compiles no spec again, so a spec written meanwhile is the next run's. A failure in that
+readiness or push ends it `failed`, `last_step` `rejected`, `Ready` and `Stepping` False for the
+failing rule, and leaves the twin as a failed restore does: up, not diverged, nothing torn down,
+since no apply began. Ending `ok`, it sets `Ready` True, unless `Ready` is False for
+`twin.node.missing`: that reason is the pass on a settled twin's, which verifies the twin once
+its nodes run again, so a step that changes nothing leaves it.
 
 The findings the loop files on a step:
 
@@ -211,8 +304,8 @@ The findings the loop files on a step:
 | `step.twin.diverged` | error | `rejected` | the twin is diverged: no bundle describes it, so it accepts only deletion. Refused at `compiled`, whatever the spec, and again after `planned` on a resume. The object is the twin. The refusal leaves `last_step` as the step that diverged the twin wrote it, its bundles, run and phase ([D-029](../design/decisions.md#d-029)), and writes the observed generation, no run, and `Ready` and `Stepping` False for this rule; `Diverged` stays True |
 | `step.restart.required` | error | `rejected` | the driver's `changes` restarts or recreates the node, the object, and the spec's `allow_restart` is false; the message names the node's action and reasons. Refused after `planned`, before anything is touched, one finding per node. The spec is the one the run was taken under: a newer spec a client writes during the run is the next run's, and so is its `allow_restart`. A resume into an apply already begun does not check again: the pass that began the apply passed this check under the run's own spec, and the pure re-plan is that plan, so a newer spec refuses nothing there (the other refusals are made again, and one that holds then ends the step `diverged`) |
 | `step.relink.unsupported` | error | `rejected` | the driver cannot make the change: one it cannot satisfy for a node, the object, or links that change on a driver that cannot change a running twin's links, the object being the twin. Refused after `planned`, before anything is touched |
-| `step.wait.expired` | warning | `ok` | verify did not hold within the step's wait, `FYLGJA_STEP_WAIT_S` ([D-032](../design/decisions.md#d-032)); the message names the budget and the last verdict's status, and the `verify done` event carries the rule. Verify is advisory: the step goes on, and ends stepped. The object is the twin |
-| `step.node.silent` | error | `diverged` | on a resume into an apply already begun, a device node, the object, is silent (present but stopped, without an address, or not answering), and the reconfigure that would remedy it makes every node anew, which the `allow_restart` of the spec the run was taken under does not allow; the message names the last phase recorded and what each node holds. A node missing from the lab is not silent: the plain apply that follows makes it anew, as it makes a node the step adds |
+| `step.wait.expired` | warning | `ok` | verify did not hold within the step's wait, or a restore's, `FYLGJA_STEP_WAIT_S` ([D-032](../design/decisions.md#d-032)); the message names the run's operation, the budget and the last verdict's status, and the `verify done` event carries the rule. Verify is advisory: the step goes on, and ends stepped, and a restore ends `ok`. The object is the twin |
+| `step.node.silent` | error | `diverged` | on a resume into an apply already begun, a device node, the object, is silent (present but stopped, without an address, or not answering), and the reconfigure that would remedy it makes every node anew, which the `allow_restart` of the spec the run was taken under does not allow; the message names the last phase recorded and what each node holds. A node missing from the lab is not silent: the plain apply that follows makes it anew, as it makes a node the step adds. It does not arise on a driver that declares `reapply` ([D-068](../design/decisions.md#d-068)): a resume there applies again, with no probe |
 | `step.diverged` | error | `diverged` | the step failed or was cancelled after its apply began, and the twin is left as it stands. The object is the twin; the message names the phase it stopped in, where it stopped in one (a deletion's cancel, or a core without the twin's driver, stops none), the last phase it recorded and what each node holds as the record knows it (before `applied` the record still names the running twin's nodes, which the lab may no longer match). After a failure, the failing finding is in the verdict beside it, and the failing phase's event carries that finding's rule; after a cancel, `cancel done` carries `step.diverged` |
 
 A step sets three conditions of the twin record
@@ -224,12 +317,13 @@ cancelled, writes the conditions alone.
 | Condition | Reason | Status | Means |
 |---|---|---|---|
 | `Ready` | `twin.stepping` | `False` | a step is under way: from `compiled`, once it knows the bundle changes, until it ends |
-| `Ready` | `twin.ready` | `True` | the step ended stepped, at `flows`, or unchanged at `compiled`: the twin runs what the spec asks |
+| `Ready` | `twin.ready` | `True` | the step ended stepped, at `flows`, or unchanged, at `compiled` or once it pushed each device node that did not hold the twin's bundle: the twin runs what the spec asks. An unchanged step leaves a `Ready` False for `twin.node.missing` as it is |
 | `Ready` | a refusal's rule, or `run.cancelled` | `False` | the step was refused, or cancelled before its apply began; the twin runs what it ran, or, diverged already, stays as it stands, its `last_step` the diverging step's |
+| `Ready` | a readiness or push rule | `False` | an unchanged step failed to ready or push a device node that did not hold the twin's bundle; the twin is up and not diverged, and `last_step` is `rejected` |
 | `Ready` | `step.diverged`, `step.node.silent` | `False` | the step left the twin diverged |
 | `Stepping` | `twin.stepping` | `True` | a step is under way, as for `Ready` |
 | `Stepping` | `twin.ready` | `False` | the step ended `ok`, stepped or unchanged |
-| `Stepping` | the rule it ended for | `False` | the step ended short of its target, the rule being `Ready`'s: a refusal's, `run.cancelled`, `step.diverged` or `step.node.silent` |
+| `Stepping` | the rule it ended for | `False` | the step ended short of its target, the rule being `Ready`'s: a refusal's, `run.cancelled`, an unchanged step's readiness or push rule, `step.diverged` or `step.node.silent` |
 | `Diverged` | `step.diverged`, `step.node.silent` | `True` | the step failed or was cancelled after its apply began. It is never set back: the twin accepts only deletion |
 
 A core that does not serve the twin's driver ends a step in flight as it ends a create

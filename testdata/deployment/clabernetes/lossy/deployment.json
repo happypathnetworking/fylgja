@@ -1,0 +1,78 @@
+{
+ "allocation": {
+  "controller_namespace": "c9s",
+  "core_namespace": "fylgja",
+  "namespace": "fylgja-twin-lossy",
+  "pod_cidr": "198.51.100.0/24",
+  "registries": {
+   "ARISTA_CEOS": "registry.example:5443/arista"
+  }
+ },
+ "bundle_id": "5411d551438da71fb725a84a58894acdfb835d51673be408aa25499e285d7411",
+ "demand": {
+  "cpu": 2.5,
+  "memory_mb": 6144,
+  "nodes": 3
+ },
+ "deployment_version": "1",
+ "driver": "clabernetes",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "chassisos",
+    "text": "Synthetic test platform; its port names are illustrative and nothing about it is measured"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 7,
+   "shared_ports": 3
+  },
+  "omitted": [
+   {
+    "device": "c1",
+    "interface": "Ethernet1/49/2",
+    "omission": "shared"
+   },
+   {
+    "device": "c1",
+    "interface": "Ethernet1/53",
+    "omission": "out_of_range"
+   },
+   {
+    "device": "c1",
+    "interface": "Ethernet2/1",
+    "omission": "shared"
+   }
+  ],
+  "synthesized": []
+ },
+ "files": [
+  {
+   "path": "namespace.yaml",
+   "sha256": "c1be2387bbe29811ff400930db5eac26ce9e51474d44967c9b0432d4d68e1052"
+  },
+  {
+   "path": "networkpolicy.yaml",
+   "sha256": "362fcf150a1d4abc1fbe2a3b4668d344f70bf6ef6be99a3b5eefd2a5602f05d1"
+  },
+  {
+   "path": "topology.yaml",
+   "sha256": "471e2baeceed41f2dbeb85a738a47ea0c8ec0389c115fc5d8bb3043c6b2152ef"
+  }
+ ],
+ "id": "f0b513fd31a2f527bec27b087f52540c9c268aeaecd2192f7de023e40c0ba95b",
+ "twin": "lossy"
+}

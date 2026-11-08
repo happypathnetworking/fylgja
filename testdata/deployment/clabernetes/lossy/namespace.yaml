@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fylgja-twin-lossy
+  labels:
+    fylgja.owner: core
+    fylgja.twin: lossy
+    pod-security.kubernetes.io/enforce: privileged

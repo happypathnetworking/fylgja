@@ -1,0 +1,11 @@
+# The image's build context is an allow-list (D-062): nothing is sent but what is named here, so
+# nothing under local/, no venv and no build directory can reach a layer.
+*
+!core/pyproject.toml
+!core/setup.py
+!core/src
+!formats
+!psp
+!probes
+**/__pycache__
+**/*.egg-info

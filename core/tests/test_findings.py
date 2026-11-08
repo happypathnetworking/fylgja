@@ -41,6 +41,16 @@ def test_a_loss_names_the_host_it_ran_from() -> None:
     assert doc()["loss"][1] == {"probe": "n1-loop", "from": "b", "outcome": "not_read"}
 
 
+def test_a_restore_verdict_carries_verifys_counts_and_its_wait_and_no_loss() -> None:
+    restored = Verdict(operation="restore", status="ok", subject=Subject(twin="three-node", run_id=RUN, bundle_id=ID_B),
+                       findings=(), counts=Counts(held=12, failed=0, skipped=1),
+                       wait=Wait(outcome="settled", budget_s=180, after_s=2.5))
+    encoded = documents.encode(restored)
+    assert findings.validate(encoded) == []
+    assert "loss" not in encoded
+    assert findings.decode(encoded) == restored
+
+
 def test_a_compile_verdict_carries_no_counts_wait_or_loss() -> None:
     rejected = Verdict(operation="compile", status="rejected", subject=Subject(blueprint_id=ID_B),
                        findings=(Finding(rule="platform.unsupported", severity="error", object="n2",

@@ -1,0 +1,77 @@
+{
+ "allocation": {
+  "controller_namespace": "c9s",
+  "core_namespace": "fylgja",
+  "namespace": "fylgja-twin-three-node-probed",
+  "pod_cidr": "198.51.100.0/24",
+  "registries": {
+   "ARISTA_CEOS": "registry.example:5443/arista"
+  }
+ },
+ "bundle_id": "d45f6b7de1d7d90466cb31aeeb0197a0d2ab5f0beecb2ad69de6e480ebef2c31",
+ "demand": {
+  "cpu": 1.7,
+  "memory_mb": 6208,
+  "nodes": 5
+ },
+ "deployment_version": "1",
+ "driver": "clabernetes",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   },
+   {
+    "package": "ping",
+    "text": "The hosts forward in their container's kernel and the twin's devices in theirs: a loss figure is the container's, never a hardware forwarder's."
+   },
+   {
+    "package": "ping",
+    "text": "Timing is the container's: the interval, a reply's time and a gap are measured on the lab host's scheduler, under its load."
+   },
+   {
+    "package": "ping",
+    "text": "A host speaks no discovery protocol, so the device port's neighbour is never asserted on a synthesized link."
+   },
+   {
+    "package": "ping",
+    "text": "IPv4 only: ping and ip are run without -6."
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 0,
+   "shared_ports": 0
+  },
+  "omitted": [],
+  "synthesized": [
+   "n1-loop-a",
+   "n1-loop-b"
+  ]
+ },
+ "files": [
+  {
+   "path": "namespace.yaml",
+   "sha256": "3ba15089129d446001807dd89128b1dcf3411d3bc2602367d34a6aacc5ca8200"
+  },
+  {
+   "path": "networkpolicy.yaml",
+   "sha256": "87559e636871b52eea8215c9635f6428d04dc5a30b34a988c9b5e584c7915b71"
+  },
+  {
+   "path": "topology.yaml",
+   "sha256": "a629fe2c527012a4c529da015133431eb98417330b19b354ae68b4e59b470e7b"
+  }
+ ],
+ "id": "d4839b1f6f0a70570375b546b4e4df8aa401a0106f0ef7fc2b109ed80ea3c96c",
+ "twin": "three-node-probed"
+}

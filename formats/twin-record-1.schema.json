@@ -130,7 +130,7 @@
         "generation_in_flight": {
           "type": "integer",
           "minimum": 1,
-          "description": "The generation the run named by run_id works toward; the loop copies it to observed_generation when the run ends, so a spec written meanwhile is observed by the next run"
+          "description": "The generation the run named by run_id works toward. When a create or a step ends the loop copies it to observed_generation (unless the twin's deletion was asked meanwhile), so a spec written meanwhile is observed by the next run. A restore is taken only at the observed generation, so for one the two are equal, and its end leaves observed_generation as it is; a destroy's end deletes the record."
         },
         "blueprint_id": {
           "$ref": "bundle-1.schema.json#/$defs/id",
@@ -147,7 +147,7 @@
         "allocation": {
           "type": "object",
           "minProperties": 1,
-          "description": "What admit() reserved for this twin, recorded here by compare-and-set (D-017): a resumed plan reads it back as its input so the pure plan stays pure, and destroy releases it. Its shape is the driver's, as in the deployment's allocation: containerlab {lab, mgmt_subnet}, clabernetes {namespace}, hardware {reservation, devices}. Absent before admit.",
+          "description": "What admit() reserved for this twin, recorded here by compare-and-set (D-017): a resumed plan reads it back as its input so the pure plan stays pure, and destroy releases it. Its shape is the driver's, as in the deployment's allocation: containerlab {lab, mgmt_subnet}, clabernetes {namespace, core_namespace, controller_namespace, pod_cidr, registries}, hardware {reservation, devices}. Absent before admit.",
           "additionalProperties": {
             "type": [
               "string",
@@ -234,7 +234,7 @@
         "handle": {
           "type": "string",
           "minLength": 1,
-          "description": "The driver's own handle for the node (container name, namespace/pod, device id); the driver's inspect, exec and destroy use it."
+          "description": "The driver's own handle for the node (the container's name locally, the pod's name on clabernetes, a device id); the driver's inspect, exec and destroy use it."
         },
         "address": {
           "type": "string",
@@ -248,12 +248,12 @@
         },
         "holds": {
           "$ref": "bundle-1.schema.json#/$defs/id",
-          "description": "The bundle whose config the node was last pushed, or, for a device node whose bundle gives it no configuration, the bundle under which nothing was owed; verify asserts it equals bundle_id for a node with a configuration, the step's push decides from it. Absent for a probe host and before the first push. Valid only for the recorded incarnation."
+          "description": "The bundle whose config the node was last pushed, or, for a device node whose bundle gives it no configuration, the bundle under which nothing was owed; verify asserts it equals bundle_id for a node with a configuration, the step's push decides from it. Absent for a probe host, before the first push, and for a node a restore found replaced and has not pushed (D-067). Valid only for the recorded incarnation."
         },
         "incarnation": {
           "type": "string",
           "minLength": 1,
-          "description": "The driver's identity of the node's current instance: the container's StartedAt locally, the pod uid on clabernetes. A step or a runtime event can replace a node and lose its push (locally, cEOS restarted on a link change; on clabernetes, pods replaced on restart, recreate and any change to the node's spec; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30), so the loop treats holds as void whenever inspect reports a different incarnation, and re-pushes."
+          "description": "The driver's identity of the node's current instance: the container's StartedAt locally; on clabernetes the pod's uid and its container's restart count, <uid>/<restarts>, since a container the kubelet restarts in place keeps its pod's uid (D-069). A step or a runtime event can replace a node and lose its push (locally, cEOS restarted on a link change; on clabernetes, pods replaced on restart, recreate and any change to the node's spec; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30), so the loop treats holds as void whenever inspect reports a different incarnation, and re-pushes."
         }
       }
     },
@@ -298,7 +298,7 @@
             "verified",
             "flows"
           ],
-          "description": "The last phase the step completed; a diverged step's report names where it stopped."
+          "description": "The last phase the step completed; a diverged step's report names where it stopped. A step to the bundle the twin runs records no phase past compiled, whatever it readied, pushed and verified: its events say what it did."
         },
         "run_id": {
           "$ref": "#/$defs/run_id",

@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/findings-1.schema.json",
   "title": "Fylgja verdict 1",
-  "description": "A domain verdict: what a compile, a package validation, a plan, a run (create, step, destroy) or a verification concluded, with every finding that led there. Anything malformed or refused at the door is a problem document (problem-1), never a verdict.",
-  "$comment": "EXIT CODES, on the thin CLI only: ok -> 0; rejected, failed, nonconforming -> 1 (a negative verdict); unclean, diverged -> 3 (the twin is left dirty); a problem document or a transport failure -> 2. STATUS. ok: done as asked. rejected: refused on its merits before the runtime was touched (a compile, a package, admission). failed: failed after the runtime was touched, and cleanup completed; for verify, the read did not complete: a node could not be read (verify.node.unread). unclean: failed, and something remains (the run's findings name it). diverged: a step failed or was cancelled after touching the twin, and nothing was torn down. nonconforming: verify read every node and intent is not met. RULES. One stable dotted id per rule; the rule catalogue, written with the code that files the rules, is user documentation under docs/.",
+  "description": "A domain verdict: what a compile, a package validation, a plan, a run (create, step, restore, destroy) or a verification concluded, with every finding that led there. Anything malformed or refused at the door is a problem document (problem-1), never a verdict.",
+  "$comment": "EXIT CODES, on the thin CLI only: ok -> 0; rejected, failed, nonconforming -> 1 (a negative verdict); unclean, diverged -> 3 (the twin is left dirty); a problem document or a transport failure -> 2. STATUS. ok: done as asked. rejected: refused on its merits before the runtime was touched (a compile, a package, admission). failed: failed after the runtime was touched, and cleanup completed (a restore has none: it applied nothing); for verify, the read did not complete: a node could not be read (verify.node.unread). unclean: failed, and something remains (the run's findings name it). diverged: a step failed or was cancelled after touching the twin, and nothing was torn down. nonconforming: verify read every node and intent is not met. RULES. One stable dotted id per rule; the rule catalogue, written with the code that files the rules, is user documentation under docs/.",
   "type": "object",
   "additionalProperties": false,
   "required": ["findings_version", "operation", "status", "subject", "findings"],
@@ -13,7 +13,7 @@
       "description": "The format's version; clients refuse any other."
     },
     "operation": {
-      "enum": ["compile", "packages.validate", "plan", "create", "step", "destroy", "verify"],
+      "enum": ["compile", "packages.validate", "plan", "create", "step", "restore", "destroy", "verify"],
       "description": "What reached the verdict; the CLI chooses its rendering by it."
     },
     "status": {
@@ -73,7 +73,7 @@
           "description": "Assertions not made (a disabled port, a synthesized link's neighbour), each an info finding; the CLI and the report show it."
         }
       },
-      "description": "Verify's assertion counts, bursts included; present on verify and on a step whose wait verified."
+      "description": "Verify's assertion counts, bursts included; present on verify and on a step or a restore whose wait verified."
     },
     "wait": {
       "type": "object",
@@ -82,7 +82,7 @@
       "properties": {
         "outcome": {
           "enum": ["settled", "expired", "cancelled"],
-          "description": "Whether verify held within the budget; the step's status and the report read it."
+          "description": "Whether verify held within the budget; the status and the report of the step or the restore read it."
         },
         "budget_s": {
           "type": "integer",
@@ -95,7 +95,7 @@
           "description": "Seconds from the push to the wait's end; the report states it."
         }
       },
-      "description": "A step's wait for verify to hold; present on step only."
+      "description": "A step's or a restore's wait for verify to hold; present on a step or a restore only."
     },
     "loss": {
       "type": "array",

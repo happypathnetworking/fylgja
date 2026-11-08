@@ -574,11 +574,12 @@ class _Api:
         return _json(documents.encode(written), 202)
 
     def _cancel_in_flight(self, record: TwinRecord) -> None:
-        """Mark the create or step run the record names `cancelling`, if it has not ended, so the
-        loop stops it where it is (a call on the runtime in flight included); a `Conflict` is read
-        again once. A step cancelled so tears nothing down: it ends cancelled before its apply
-        began and diverged after (D-029), and the destroy run follows. A run the record does not
-        name never started: the loop ends it."""
+        """Mark the create, step or restore run the record names `cancelling`, if it has not ended,
+        so the loop stops it where it is (a call on the runtime in flight included); a `Conflict` is
+        read again once. A step cancelled so tears nothing down: it ends cancelled before its apply
+        began and diverged after (D-029); nor does a restore, which ends `failed` with
+        `run.cancelled` (D-067); and the destroy run follows. A run the record does not name never
+        started: the loop ends it."""
         if record.status.run_id is None:
             return
         try:
@@ -586,7 +587,7 @@ class _Api:
         except store.NotFound:
             return
         for _ in range(2):
-            if run.operation not in ("create", "step") or run.state not in ("queued", "running"):
+            if run.operation not in ("create", "step", "restore") or run.state not in ("queued", "running"):
                 return
             try:
                 self._mark_cancelling(run)
@@ -667,8 +668,11 @@ class _Api:
                       "ended": run.state == "ended"})
 
     async def cancel_run(self, request: Request) -> Response:
-        """Mark the run `cancelling`; the loop stops it where it is, cleans up and ends it (a
-        destroy run completes all the same). A lost write is read again once."""
+        """Mark the run `cancelling`; the loop stops it where it is and ends it. A create tears down
+        what it built and ends `failed` with `run.cancelled`; a step tears nothing down, and ends so
+        before its apply began and `diverged` from it on (D-029); a restore tears nothing down and
+        ends `failed` with `run.cancelled` (D-067); a destroy run completes all the same. A lost
+        write is read again once."""
         run = self._run(request)
         if run.state not in ("ended", "cancelling"):
             try:

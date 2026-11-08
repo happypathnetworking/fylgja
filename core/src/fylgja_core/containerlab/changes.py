@@ -2,19 +2,21 @@
 topology to another's (D-049).
 
 It is pure (Constitution V and XIII): no I/O, clock or environment, which a test enforces
-through its imports. It compares the two rendered `topology.clab.yml` files. For a node in
-both, every reason that applies is named: `kind`, `image` and `link_mode` when that member
-differs; `exec` when a `linux` node's start-up lines differ; `links` when the links the node
-is on differ; and `hot_add` when the node gains a port, on a kind whose package has
-`hot_add_ports: false`, only on a node whose kind and image are unchanged (containerlab's dry
-run does not name it: under `live` it adds a veth the operating system never lists). A port
-gained is one not in the deployment applied before, which stands for "not present at boot": a
-port removed and re-added counts as new, a recreate the runtime would not need (cEOS under
-`live` re-cables a port present at boot with no restart). The action is the strongest the
-reasons call for: `recreated` for any but `links`; else `restarted` for `links` under the
-`restart` link mode; else `recabled` for `links`; else `kept`. A node in one topology only is
-`added` or `removed`. `link_apply_mode` and `hot_add_ports` are read here and nowhere above
-the seam.
+through its imports. It compares the two rendered `topology.clab.yml` files through
+`compare`, which takes two definitions' `topology` members and a way to find a node's
+packages, so that clabernetes compares the definitions its `Topology` objects wrap the same
+way (D-057). For a node in both, every reason that applies is named: `kind`, `image` and
+`link_mode` when that member differs; `exec` when a `linux` node's start-up lines differ;
+`links` when the links the node is on differ; and `hot_add` when the node gains a port, on a
+kind whose package has `hot_add_ports: false`, only on a node whose kind and image are
+unchanged (containerlab's dry run does not name it: under `live` it adds a veth the operating
+system never lists). A port gained is one not in the deployment applied before, which stands
+for "not present at boot": a port removed and re-added counts as new, a recreate the runtime
+would not need (cEOS under `live` re-cables a port present at boot with no restart). The
+action is the strongest the reasons call for: `recreated` for any but `links`; else
+`restarted` for `links` under the `restart` link mode; else `recabled` for `links`; else
+`kept`. A node in one topology only is `added` or `removed`. `link_apply_mode` and
+`hot_add_ports` are read here and nowhere above the seam.
 
 Two answers are not exercised on 0.81.0: `link_mode` answered `recreated`, and a hot-add under
 the `restart` link mode, answered `recreated` where the dry run would say `restarted`.
@@ -22,7 +24,7 @@ the `restart` link mode, answered `recreated` where the dry run would say `resta
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import Any
 
 import yaml
@@ -35,6 +37,18 @@ from fylgja_core.probe_package import ProbePackage
 
 Section = platform_package.Containerlab | probe_package.Containerlab
 
+Sections = Callable[[str, Mapping[str, Any]], list[Section]]
+"""A node's name and its definition entry to its packages' sections; `ValueError` when no
+package runs it."""
+
+Written = Callable[[platform_package.Image], Collection[str]]
+"""A package's image to each reference a definition may write it as, for a node the package runs."""
+
+
+def own_ref(image: platform_package.Image) -> tuple[str]:
+    """The reference the local driver's definition writes an image as: its own `ref`."""
+    return (image.ref,)
+
 
 def changes(
     before: Planned,
@@ -46,18 +60,29 @@ def changes(
     deployments of two twins, or for a node no given package runs."""
     if before.deployment.twin != after.deployment.twin:
         raise ValueError(f"the deployments are of two twins, {before.deployment.twin} and {after.deployment.twin}")
-    old, new = _topology(before), _topology(after)
+
+    def sections(name: str, node: Mapping[str, Any]) -> list[Section]:
+        return sections_of(name, node, platforms, probe_packages)
+
+    return compare(_topology(before), _topology(after), sections)
+
+
+def compare(old: Mapping[str, Any], new: Mapping[str, Any], sections: Sections) -> Changes:
+    """What the runtime does to each node to go from the containerlab definition whose
+    `topology` member is `old` to the one whose `topology` member is `new`, each node's
+    packages found by `sections`. Both containerlab drivers compare their definitions so.
+    `ValueError` from `sections` for a node no package runs, whichever side holds it."""
     nodes: dict[str, NodeChange] = {}
     for name in sorted(set(old["nodes"]) | set(new["nodes"])):
         for side in (old, new):  # a node no given package runs is refused, whichever side holds it
             if name in side["nodes"]:
-                sections_of(name, side["nodes"][name], platforms, probe_packages)
+                sections(name, side["nodes"][name])
         if name not in old["nodes"]:
             nodes[name] = NodeChange(node=name, action="added", reasons=())
         elif name not in new["nodes"]:
             nodes[name] = NodeChange(node=name, action="removed", reasons=())
         else:
-            nodes[name] = _kept(name, old, new, platforms, probe_packages)
+            nodes[name] = _kept(name, old, new, sections)
     was, now = _links(old), _links(new)
     return Changes(
         nodes=tuple(nodes.values()),
@@ -78,26 +103,29 @@ def endpoints(topology: Mapping[str, Any]) -> dict[str, set[str]]:
 
 
 def package_of(
-    kind: str, image: str, platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+    kind: str, image: str, platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage],
+    written: Written = own_ref,
 ) -> list[Section]:
     """The containerlab section of each package a node of this `kind` and `image` uses: a
     platform's by kind and image, a probe package's by a linux node's image; none when no given
-    package runs it."""
+    package runs it. A package's image is matched as `written` says a definition writes it, by
+    its own `ref` unless told otherwise, as the local driver writes it."""
     sections: list[Section] = [
         p.runtime.containerlab for p in platforms.values()
-        if (p.runtime.containerlab.kind, p.runtime.containerlab.image.ref) == (kind, image)]
+        if p.runtime.containerlab.kind == kind and image in written(p.runtime.containerlab.image)]
     if kind == "linux":
         sections += [q.runtime.containerlab for q in probe_packages.values()
-                     if q.runtime.containerlab.image.ref == image]
+                     if image in written(q.runtime.containerlab.image)]
     return sections
 
 
 def sections_of(
     name: str, node: Mapping[str, Any], platforms: Mapping[str, PlatformPackage],
-    probe_packages: Mapping[str, ProbePackage],
+    probe_packages: Mapping[str, ProbePackage], written: Written = own_ref,
 ) -> list[Section]:
-    """`package_of` for the topology's node `name`; `ValueError` for a node no given package runs."""
-    sections = package_of(node["kind"], node["image"], platforms, probe_packages)
+    """`package_of` for the definition's node `name`, its image matched as `written` says;
+    `ValueError` for a node no given package runs."""
+    sections = package_of(node["kind"], node["image"], platforms, probe_packages, written)
     if not sections:
         raise ValueError(f"no package given runs the node {name} ({node['kind']}, {node['image']})")
     return sections
@@ -114,15 +142,8 @@ def _links(topology: Mapping[str, Any]) -> list[tuple[str, str]]:
     return sorted((a, b) for a, b in pairs)
 
 
-def _kept(
-    name: str,
-    old: Mapping[str, Any],
-    new: Mapping[str, Any],
-    platforms: Mapping[str, PlatformPackage],
-    probe_packages: Mapping[str, ProbePackage],
-) -> NodeChange:
+def _kept(name: str, old: Mapping[str, Any], new: Mapping[str, Any], sections: Sections) -> NodeChange:
     was, now = old["nodes"][name], new["nodes"][name]
-    sections = sections_of(name, now, platforms, probe_packages)
     reasons: set[ChangeReason] = set()
     members: tuple[tuple[str, ChangeReason], ...] = (
         ("kind", "kind"), ("image", "image"), ("link-apply-mode", "link_mode"))
@@ -137,7 +158,7 @@ def _kept(
     # boot": a port removed and re-added counts as new, a recreate the runtime would not need.
     gained = endpoints(new).get(name, set()) - endpoints(old).get(name, set())
     same_container = was["kind"] == now["kind"] and was["image"] == now["image"]  # hot_add: kind and image unchanged
-    platform_sections = [s for s in sections if isinstance(s, platform_package.Containerlab)]
+    platform_sections = [s for s in sections(name, now) if isinstance(s, platform_package.Containerlab)]
     if gained and same_container and any(not s.hot_add_ports for s in platform_sections):
         reasons.add("hot_add")
     action: Action

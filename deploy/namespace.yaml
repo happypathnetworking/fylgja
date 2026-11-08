@@ -1,0 +1,8 @@
+# The core's namespace: the core, its Service and its store, and nothing else (D-062). Every twin's NetworkPolicy
+# admits its pods (D-059), and the core's service account acts on Secrets and pods in every namespace (SECURITY.md).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fylgja
+  labels:
+    app.kubernetes.io/part-of: fylgja

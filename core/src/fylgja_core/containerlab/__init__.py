@@ -4,4 +4,5 @@ from fylgja_core.driver import Capabilities
 
 NAME = "containerlab"
 
-CAPABILITIES = Capabilities(nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names")
+CAPABILITIES = Capabilities(
+    nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names", reapply=False)

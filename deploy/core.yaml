@@ -1,0 +1,113 @@
+# The core (D-062): one pod under the Lease FYLGJA_LEASE names, its store the gateway in this namespace (D-061), API 1
+# served over TLS (D-063) behind a LoadBalancer Service on 443.
+#
+# One replica under Recreate: a second core must never start beside the first, and the Lease keeps one that does from
+# reconciling. The environment below is what is the same at every site; the rest comes from the site's Secrets and
+# ConfigMap (deploy/README.md), and the image's registry and tag from its overlay. Nothing listens until the Lease is
+# held, so the one probe is readiness on the API's port: a pod that waits is never Ready, and never restarted for
+# waiting. No liveness probe, since a core that cannot renew its Lease exits by itself, and no route is added to API 1.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fylgja-core
+  namespace: fylgja
+  labels:
+    app.kubernetes.io/name: fylgja-core
+    app.kubernetes.io/part-of: fylgja
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fylgja-core
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fylgja-core
+        app.kubernetes.io/part-of: fylgja
+    spec:
+      serviceAccountName: fylgja-core
+      imagePullSecrets:
+        - name: fylgja-registry
+      containers:
+        - name: core
+          image: fylgja-core
+          ports:
+            - name: api
+              containerPort: 7650
+          env:
+            - name: FYLGJA_STORE
+              value: s3://fylgja
+            - name: FYLGJA_S3_ENDPOINT
+              value: http://versity:7070
+            - name: FYLGJA_LEASE
+              value: fylgja-core
+            - name: FYLGJA_DRIVER
+              value: clabernetes
+            - name: FYLGJA_LISTEN
+              value: "0.0.0.0:7650"
+            - name: FYLGJA_TOKENS
+              value: /etc/fylgja/tokens/tokens
+            - name: FYLGJA_TLS_CERT
+              value: /etc/fylgja/tls/tls.crt
+            - name: FYLGJA_TLS_KEY
+              value: /etc/fylgja/tls/tls.key
+          envFrom:
+            - secretRef:
+                name: fylgja-credentials
+            - secretRef:
+                name: fylgja-s3
+            - configMapRef:
+                name: fylgja-site
+          volumeMounts:
+            - name: tokens
+              mountPath: /etc/fylgja/tokens
+              readOnly: true
+            - name: tls
+              mountPath: /etc/fylgja/tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            tcpSocket:
+              port: api
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: tokens
+          secret:
+            secretName: fylgja-tokens
+        - name: tls
+          secret:
+            secretName: fylgja-tls
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fylgja-core
+  namespace: fylgja
+  labels:
+    app.kubernetes.io/name: fylgja-core
+    app.kubernetes.io/part-of: fylgja
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: fylgja-core
+  ports:
+    - name: api
+      port: 443
+      targetPort: api

@@ -1,0 +1,58 @@
+{
+ "allocation": {
+  "controller_namespace": "c9s",
+  "core_namespace": "fylgja",
+  "namespace": "fylgja-twin-three-node",
+  "pod_cidr": "198.51.100.0/24",
+  "registries": {
+   "ARISTA_CEOS": "registry.example:5443/arista"
+  }
+ },
+ "bundle_id": "6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31",
+ "demand": {
+  "cpu": 1.5,
+  "memory_mb": 6144,
+  "nodes": 3
+ },
+ "deployment_version": "1",
+ "driver": "clabernetes",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 0,
+   "shared_ports": 0
+  },
+  "omitted": [],
+  "synthesized": []
+ },
+ "files": [
+  {
+   "path": "namespace.yaml",
+   "sha256": "e795fd38311110b234f748a3679c3ae2be235c245dd1163f67398a6b13f62db9"
+  },
+  {
+   "path": "networkpolicy.yaml",
+   "sha256": "9091b3053a4c87ab31f61c2a59f6899a29a85f9493f2163fc591c1e1bc233e0e"
+  },
+  {
+   "path": "topology.yaml",
+   "sha256": "bb26f8e60d66453828af5a4c1bd060fd49d255a188fd4f2c48c66bd08fa6e0a4"
+  }
+ ],
+ "id": "0ea24119e42bd553c6db56306bc11a5b8ca89c6ca389dc49255756f20618ebb8",
+ "twin": "three-node"
+}

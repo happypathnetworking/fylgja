@@ -171,6 +171,16 @@ def test_a_node_no_package_runs_is_refused() -> None:
         clab_changes.changes(planned("three-node"), planned("three-node"), {}, PROBES)
 
 
+def test_compare_over_the_two_topologies_is_changes_of_the_two_deployments() -> None:
+    # What both containerlab drivers compare (D-057): `changes` binds the packages to it.
+    before, after = planned("three-node"), planned("steps/two-node")
+    old, new = (yaml.safe_load(p.files[clab_plan.TOPOLOGY])["topology"] for p in (before, after))
+    compared = clab_changes.compare(
+        old, new, lambda name, node: clab_changes.sections_of(name, node, PLATFORMS, PROBES))
+    assert compared == clab_changes.changes(before, after, PLATFORMS, PROBES)
+    assert actions(compared)["n3"] == ("removed", ())
+
+
 def test_endpoints_are_each_nodes_ports() -> None:
     topology = yaml.safe_load(planned("mixed").files[clab_plan.TOPOLOGY])
     assert clab_changes.endpoints(topology["topology"]) == {

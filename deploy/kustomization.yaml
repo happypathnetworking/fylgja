@@ -1,0 +1,11 @@
+# The core's kustomize base (D-062): what is the same at every site, and nothing a site decides. A site's overlay
+# under local/deploy/ sets the image's registry and tag, makes the Secrets and the ConfigMap the pods name, and may give
+# the Service its address (deploy/README.md). `kubectl kustomize deploy/` builds the base; `kubectl apply -k
+# local/deploy` applies a site's.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - core.yaml
+  - versity.yaml

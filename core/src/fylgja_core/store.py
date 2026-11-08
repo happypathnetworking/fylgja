@@ -10,7 +10,9 @@ behind this same interface. The interface is synchronous.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -52,6 +54,13 @@ class Locked(StoreError):
 
 _ID = re.compile(r"^[0-9a-f]{64}$")
 _TWIN_NAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
+_UNLISTABLE = re.compile(r"[\x00-\x1f\x7f\ufffe\uffff]")
+
+
+def dumps(doc: Any) -> bytes:
+    """A JSON document's bytes as every store files them: keys sorted, one space of indent a
+    level, and a final newline."""
+    return (json.dumps(doc, sort_keys=True, indent=1) + "\n").encode()
 
 
 def check_id(key: str) -> str:
@@ -76,8 +85,11 @@ def check_twin_name(key: str) -> str:
 
 
 def check_file_key(key: str) -> str:
-    """`key` if it is a relative, `/`-separated path with no empty, `.` or `..` segment, else `ValueError`."""
-    if not key or any(part in ("", ".", "..") for part in key.split("/")) or "\\" in key or "\0" in key:
+    """`key` if it is a relative, `/`-separated path with no empty, `.` or `..` segment, no
+    character below U+0020 and none of U+007F, U+FFFE and U+FFFF, else `ValueError`. A listing's
+    XML cannot carry most of these or would not return them the same (a carriage return comes
+    back a line feed), and what one store holds the other must."""
+    if not key or any(part in ("", ".", "..") for part in key.split("/")) or "\\" in key or _UNLISTABLE.search(key):
         raise ValueError(f"{key!r} is not a relative file path")
     return key
 
@@ -107,6 +119,44 @@ class Subscription:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+class Subscribers:
+    """A store's open subscriptions, each fed every twin change through its watcher's loop."""
+
+    def __init__(self) -> None:
+        self._subscriptions: list[Subscription] = []
+        self._lock = threading.Lock()
+
+    def subscribe(self) -> Subscription:
+        """A subscription on the running loop, fed until it is closed."""
+        subscription = Subscription(asyncio.get_running_loop(), self._remove)
+        with self._lock:
+            self._subscriptions.append(subscription)
+        return subscription
+
+    def notify(self, change: Change) -> None:
+        """Put `change` on every subscription; called with the store's twin-write lock held, so
+        each watcher sees the changes in write order."""
+        with self._lock:
+            subscriptions = list(self._subscriptions)
+        # Always through the watcher's loop, never a direct put: a write from any thread wakes
+        # the loop, and a write on the loop thread cannot overtake one already scheduled.
+        for subscription in subscriptions:
+            try:
+                if subscription.loop.is_closed():
+                    raise RuntimeError("closed")
+                subscription.loop.call_soon_threadsafe(subscription.queue.put_nowait, change)
+            except RuntimeError:  # the watcher's loop is gone: drop it, the write is committed
+                self._remove(subscription)
+
+    def _remove(self, subscription: Subscription) -> None:
+        with self._lock:
+            if subscription in self._subscriptions:
+                self._subscriptions.remove(subscription)
+
+    def __len__(self) -> int:
+        return len(self._subscriptions)
 
 
 class Store(ABC):

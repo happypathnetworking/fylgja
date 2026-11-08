@@ -19,7 +19,8 @@ from fylgja_core.credentials import Credential
 TIME = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$")
 
 
-QUIETED = ("httpx", "httpcore")
+QUIETED = ("httpx", "httpcore", "httpx2", "httpcore2")
+"""The HTTP clients' loggers `configure` quiets: httpx's, and lightkube's httpx2's (D-064)."""
 
 
 @pytest.fixture(autouse=True)
@@ -102,14 +103,24 @@ def test_configure_replaces_the_handlers_and_quiets_the_http_clients() -> None:
     root = logging.getLogger()
     foreign = logging.StreamHandler(io.StringIO())
     root.handlers[:] = [foreign, logging.NullHandler()]
-    logging.getLogger("httpx").setLevel(logging.DEBUG)
+    for name in QUIETED:
+        logging.getLogger(name).setLevel(logging.DEBUG)
     out = io.StringIO()
     logs.configure(stream=out)
     (handler,) = root.handlers
     assert handler is not foreign and isinstance(handler, logging.StreamHandler) and handler.stream is out
     assert isinstance(handler.formatter, logs.JsonFormatter)
-    assert logging.getLogger("httpx").level == logging.WARNING
-    assert logging.getLogger("httpcore").level == logging.WARNING
+    assert {name: logging.getLogger(name).level for name in QUIETED} == dict.fromkeys(QUIETED, logging.WARNING)
+
+
+def test_an_httpx2_request_line_is_not_written_at_info() -> None:
+    # httpx2, lightkube's client, logs each request's method and URL, the API server's address in
+    # it, at INFO.
+    out = io.StringIO()
+    logs.configure(stream=out)
+    logging.getLogger("httpx2").info('HTTP Request: %s %s "%s %d %s"', "GET", "https://kube.example:6443/api",
+                                     "HTTP/1.1", 200, "OK")
+    assert out.getvalue() == ""
 
 
 def test_configure_writes_to_stderr_as_it_is_when_called(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -42,8 +42,9 @@ def configure(level: int = logging.INFO, stream: TextIO | None = None) -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
-    # Their request lines would log URLs at INFO and DEBUG.
-    for name in ("httpx", "httpcore"):
+    # Their request lines would log URLs at INFO and DEBUG: httpx's, and httpx2's, lightkube's
+    # client, which names the API server in each (D-064).
+    for name in ("httpx", "httpcore", "httpx2", "httpcore2"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 

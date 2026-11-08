@@ -14,7 +14,7 @@ import asyncio
 import dataclasses
 import hashlib
 import itertools
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
 from fylgja_core import blueprint, deployment, gnmi, mapping, push
@@ -41,7 +41,8 @@ from fylgja_core.probe_package import ProbePackage
 from fylgja_core.readiness import RULE_TIMEOUT, RULE_UNAUTHORIZED, NotReady
 
 PLAN = "plan.txt"
-CAPABILITIES = Capabilities(nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names")
+CAPABILITIES = Capabilities(
+    nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names", reapply=False)
 
 
 def hosts(manifest: Manifest) -> list[str]:
@@ -76,19 +77,37 @@ class FakeDriver:
     answers `exec_answers` for a node set there, a `ping` with BusyBox's summary (every echo of
     five answered, or three when `(twin, node)` is in `lossy`, status 1), and a probe host's
     readiness command with its address line. `relink=False` makes a driver that declares it
-    cannot change a link."""
+    cannot change a link, and `reapply=True` one that declares applying a deployment again
+    finishes an apply cut short (D-068). `emit` reports a twin whose runtime changed: `events`
+    yields each name emitted, in order, once, for good (D-058); `fail_events_once` makes the next
+    `events` raise at once, as a driver that breaks the seam's contract. The names are kept in a
+    list and each `events` call makes its own wake-up, on the loop that iterates it, so one fake
+    serves a reconciler stopped on one event loop and started on another. `own_events=True`
+    makes `apply` and `destroy` emit their twin as each is called, failing or not, as a real
+    runtime's events follow what its deploy or destroy touched; otherwise only a test's `emit`
+    names a twin."""
 
     def __init__(
-        self, name: str = "fake", *, refuse: Refusal | None = None, fail_apply: bool = False, relink: bool = True
+        self,
+        name: str = "fake",
+        *,
+        refuse: Refusal | None = None,
+        fail_apply: bool = False,
+        relink: bool = True,
+        reapply: bool = False,
+        own_events: bool = False,
     ) -> None:
         self.name = name
         self.relink = relink
+        self.reapply = reapply
+        self.own_events = own_events
         self.restarts: set[str] = set()
         self.recreates: set[str] = set()
         self.refuse = refuse
         self.fail_apply = fail_apply
         self.fail_destroy = False
         self.fail_inspect_once = False
+        self.fail_events_once = False
         self.fail_after: str | None = None
         self.block: str | None = None
         self.labs: dict[str, dict[str, NodeState]] = {}
@@ -101,9 +120,11 @@ class FakeDriver:
         self._plans: dict[str, bytes] = {}  # each twin's `plan.txt` as last applied
         self.calls: list[tuple[str, ...]] = []
         self._boots: dict[str, int] = {}
+        self._emitted: list[str] = []  # names emitted that no `events` has yielded yet
+        self._listening: set[asyncio.Event] = set()  # each running `events` call's wake-up
 
     def capabilities(self) -> Capabilities:
-        return CAPABILITIES if self.relink else dataclasses.replace(CAPABILITIES, relink=False)
+        return dataclasses.replace(CAPABILITIES, relink=self.relink, reapply=self.reapply)
 
     async def admit(
         self,
@@ -208,6 +229,8 @@ class FakeDriver:
     ) -> None:
         twin = deployment.twin
         self.calls.append(("apply", twin, "reconfigure") if reconfigure else ("apply", twin))
+        if self.own_events:
+            self.emit(twin)
         await self._held("apply")
         if self.fail_apply:
             raise DriverFailed(f"the deploy of {twin} failed")
@@ -262,6 +285,8 @@ class FakeDriver:
     ) -> None:
         twin = deployment.twin
         self.calls.append(("destroy", twin))
+        if self.own_events:
+            self.emit(twin)
         await self._held("destroy")
         if self.fail_destroy:
             raise DriverFailed(f"the destroy of {twin} failed")
@@ -291,6 +316,37 @@ class FakeDriver:
             return Exec(0, "5 packets transmitted, 5 packets received, 0% packet loss\n", "")
         address = self._addresses.get(twin, {}).get(node)
         return Exec(0, "" if address is None else f"2: eth1    inet {address} scope global eth1\n", "")
+
+    async def events(self) -> AsyncIterator[str]:
+        if self.fail_events_once:
+            self.fail_events_once = False
+            raise RuntimeError("the fake's events failed")
+        woken = asyncio.Event()  # made here, so it waits on the loop that iterates this call
+        self._listening.add(woken)
+        try:
+            while True:
+                while self._emitted:
+                    yield self._emitted.pop(0)
+                woken.clear()
+                await woken.wait()
+        finally:
+            self._listening.discard(woken)
+
+    def emit(self, name: str) -> None:
+        """Report `name` as a twin whose runtime changed: the next name an `events` call yields,
+        after any emitted before it. Called on the loop's thread."""
+        self._emitted.append(name)
+        for woken in self._listening:
+            woken.set()
+
+    def replace(self, twin: str, node: str) -> NodeState:
+        """The node `node` of `twin` made anew behind the loop's back, as a runtime replaces a container or a
+        pod: running, at its address and handle, its incarnation the twin's next boot's (`boot-<k>`)."""
+        was = self.labs[twin][node]
+        made = NodeState(name=node, handle=was.handle, incarnation=f"boot-{self._boot(twin)}", address=was.address,
+                         running=True)
+        self.labs[twin][node] = made
+        return made
 
     def node_at(self, address: str) -> tuple[str, str] | None:
         """The `(twin, node)` whose node holds `address`, or None."""

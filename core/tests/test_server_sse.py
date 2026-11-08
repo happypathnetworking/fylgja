@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from aio import bounded, closed
 
 from fylgja_core import run
 from fylgja_core.client import messages
@@ -48,13 +49,13 @@ def test_an_idle_watch_sends_a_comment_then_the_next_change(store: LocalStore) -
         first, keepalive = await anext(stream), await anext(stream)
         store.update_twin(record, 1)
         change = await anext(stream)
-        await stream.aclose()
+        await closed(stream)
         return [first, keepalive, change]
 
-    first, keepalive, change = asyncio.run(watch())
+    first, keepalive, change = bounded(watch)
     assert first.startswith(b"event: ADDED\n") and keepalive == b": keepalive\n\n"
     assert change.startswith(b"event: MODIFIED\n") and b'"revision":2' in change
-    assert store._subscriptions == []
+    assert len(store._subscribers) == 0
 
 
 def test_another_twins_changes_do_not_hold_back_a_watchs_keepalive(store: LocalStore) -> None:
@@ -73,12 +74,15 @@ def test_another_twins_changes_do_not_hold_back_a_watchs_keepalive(store: LocalS
 
         writes = asyncio.create_task(busy())
         try:
-            return await asyncio.wait_for(anext(stream), 0.5)
+            keepalive = asyncio.ensure_future(anext(stream))
+            done, _ = await asyncio.wait({keepalive}, timeout=0.5)
+            assert keepalive in done, "no keepalive within 0.5 s"
+            return keepalive.result()
         finally:
             writes.cancel()
-            await stream.aclose()
+            await closed(stream)
 
-    assert asyncio.run(watch()) == b": keepalive\n\n"
+    assert bounded(watch) == b": keepalive\n\n"
 
 
 def test_a_watch_never_read_releases_its_subscription(store: LocalStore) -> None:
@@ -86,11 +90,11 @@ def test_a_watch_never_read_releases_its_subscription(store: LocalStore) -> None
 
     async def unread() -> int:
         stream = sse.twin_stream(store, None, None)
-        held = len(store._subscriptions)
-        await stream.aclose()
+        held = len(store._subscribers)
+        await closed(stream)
         return held
 
-    assert asyncio.run(unread()) == 1 and store._subscriptions == []
+    assert bounded(unread) == 1 and len(store._subscribers) == 0
 
 
 def test_a_watch_of_a_twin_that_does_not_exist_holds_nothing(store: LocalStore) -> None:
@@ -99,7 +103,7 @@ def test_a_watch_of_a_twin_that_does_not_exist_holds_nothing(store: LocalStore) 
 
     with pytest.raises(NotFound):
         asyncio.run(absent())
-    assert store._subscriptions == []
+    assert len(store._subscribers) == 0
 
 
 def test_a_runs_stream_ends_once_the_run_has_ended_and_sent_every_event(store: LocalStore) -> None:
@@ -110,13 +114,14 @@ def test_a_runs_stream_ends_once_the_run_has_ended_and_sent_every_event(store: L
 
     async def follow() -> list[bytes]:
         sent = []
-        async for chunk in sse.run_events_stream(store, queued.id, 0, poll_s=0.01, keepalive_s=0.02):
-            sent.append(chunk)
-            if len(sent) == 4:  # two events and the idle stream's comments: now it ends
-                store.update_run(run.ended(queued, verdict_of(queued)), "queued")
+        async with asyncio.timeout(5):
+            async for chunk in sse.run_events_stream(store, queued.id, 0, poll_s=0.01, keepalive_s=0.02):
+                sent.append(chunk)
+                if len(sent) == 4:  # two events and the idle stream's comments: now it ends
+                    store.update_run(run.ended(queued, verdict_of(queued)), "queued")
         return sent
 
-    sent = asyncio.run(follow())
+    sent = bounded(follow)
     assert [m.id for m in messages(b"".join(sent).decode().split("\n"))] == ["1", "2"]
     assert b": keepalive\n\n" in sent
 

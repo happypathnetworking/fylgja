@@ -76,6 +76,10 @@ SR Linux nodes, pushes each its configuration, and waits until the twin is Ready
 show` and `twin destroy` follow. CONTRIBUTING's
 [Running the core](CONTRIBUTING.md#running-the-core) says how to set it up.
 
+On a Kubernetes cluster the core runs as one pod, deployed from the kustomize base under
+[`deploy/`](deploy/README.md) and a site's overlay, as
+[Running the core on a cluster](CONTRIBUTING.md#running-the-core-on-a-cluster) says.
+
 ## Licence
 
 [Apache License 2.0](LICENSE).

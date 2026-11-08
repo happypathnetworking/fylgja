@@ -40,9 +40,11 @@ FORBIDDEN = (
     "compiler",
     "store",
     "local_store",
+    "object_store",
     "driver",
     "drivers",
     "containerlab",
+    "clabernetes",
     "reconcile",
     "queue",
     "push",
@@ -51,6 +53,9 @@ FORBIDDEN = (
     "config",
     "packages",
     "server",
+    "s3",
+    "kubeapi",
+    "lease",
 )
 
 PROBE = """
@@ -113,3 +118,4 @@ def test_no_allowed_module_is_a_forbidden_one() -> None:
     assert not any(forbidden(m) for m in ALLOWED)
     assert forbidden("fylgja_core.push_eapi") and forbidden("fylgja_core.server.app")
     assert forbidden("fylgja_core.containerlab.driver") and not forbidden("fylgja_core.problem")
+    assert forbidden("fylgja_core.clabernetes.plan")

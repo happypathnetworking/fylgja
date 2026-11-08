@@ -494,10 +494,13 @@ paths:
     post:
       tags: [runs]
       operationId: cancelRun
-      summary: Ask a run to cancel; it cleans up and ends.
+      summary: Ask a run to cancel; it stops where it is and ends.
       description: >-
-        A create stops where it is, tears down what it built and ends failed with run.cancelled. A destroy
-        run is never stopped halfway: it is marked cancelling and completes all the same.
+        A create stops where it is, tears down what it built and ends failed with run.cancelled. A step stops
+        where it is and tears nothing down: before its apply began it ends failed with run.cancelled, the twin
+        running what it ran; from its apply on it ends diverged; one whose phases have all run ends as it
+        would have. A restore stops where it is and tears nothing down, and ends failed with run.cancelled. A
+        destroy run is never stopped halfway: it is marked cancelling and completes all the same.
       responses:
         "202":
           description: Cancellation requested; the run, state cancelling. Read it to see how it ends.
@@ -805,7 +808,7 @@ components:
         capabilities:
           type: object
           additionalProperties: false
-          required: [nodes, relink, forwarding, access, isolation]
+          required: [nodes, relink, forwarding, access, isolation, reapply]
           properties:
             nodes:
               enum: [provisions, claims]
@@ -822,6 +825,9 @@ components:
             isolation:
               enum: [names, network]
               description: Whether twins are kept apart by name alone (local labs whose management networks route to each other through the host) or by the network (a NetworkPolicy per namespace); clients show it (D-019).
+            reapply:
+              type: boolean
+              description: Whether applying a deployment again finishes an apply that was cut short; where it is false, a resumed apply probes the lab first and may reconfigure it (D-068). Clients show it.
 
     BundleDiff:
       type: object
@@ -908,8 +914,10 @@ components:
           $ref: "twin-record-1.schema.json#/$defs/twin_name"
           description: The twin the run acts on; clients link to it.
         operation:
-          enum: [create, step, destroy]
-          description: What the run does; clients render by it.
+          enum: [create, step, restore, destroy]
+          description: >-
+            What the run does; clients render by it. A restore is the loop's own (principal core): a node of a
+            settled twin found at another incarnation is readied, pushed and verified again.
         state:
           enum: [queued, running, cancelling, ended]
           description: Where the run is; ended means verdict is present. Clients poll until ended.
@@ -927,7 +935,9 @@ components:
           description: When the run ended; present once ended. Clients show it.
         verdict:
           $ref: "findings-1.schema.json"
-          description: The run's verdict (status, findings, a step's counts, wait and loss); present once ended.
+          description: >-
+            The run's verdict (status, findings, a step's or a restore's counts and wait, a step's loss); present once
+            ended.
 
     Event:
       type: object

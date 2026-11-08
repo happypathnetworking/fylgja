@@ -12,6 +12,10 @@ production name where the kind has aliases and the package's rename of it where 
 none (D-015). The deployment lists the file, and its id hashes the driver, the twin, the
 bundle id and the file list (D-044).
 
+Both containerlab drivers share the render and the assembly (D-057): `definition` is the lab
+less its management network, which the local plan sets and clabernetes wraps in a `Topology`;
+`dump` writes a document; and `bind` assembles the deployment of a driver's files.
+
 Only the plan renders the rename, so the facts of a rename that maps many production names
 onto one port are its own (`lossy`): the renames that drop a placeholder, the ports two
 interfaces of one node land on, and the uncabled interfaces such a port omits because a
@@ -26,7 +30,7 @@ import hashlib
 import math
 import shlex
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
@@ -58,7 +62,31 @@ def plan(
     if allocation.get("lab") != twin:
         raise ValueError(f"the allocation is for the lab {allocation.get('lab')!r}, not the twin {twin!r}")
     counts, shared = lossy(manifest, platforms)
-    files = {TOPOLOGY: _topology(manifest, platforms, probe_packages, twin, allocation)}
+    doc = definition(manifest, platforms, probe_packages, twin)
+    mgmt = {"network": f"clab-{twin}", "ipv4-subnet": allocation["mgmt_subnet"]}
+    files = {TOPOLOGY: dump({"name": doc["name"], "mgmt": mgmt, "topology": doc["topology"]})}
+    return bind(NAME, CAPABILITIES.forwarding, manifest, bundle_id, platforms, probe_packages, twin, allocation, files,
+                counts, shared)
+
+
+def bind(
+    driver: str,
+    forwarding: Literal["software", "hardware"],
+    manifest: bundle.Manifest,
+    bundle_id: str,
+    platforms: Mapping[str, PlatformPackage],
+    probe_packages: Mapping[str, ProbePackage],
+    twin: str,
+    allocation: Allocation,
+    files: Mapping[str, bytes],
+    counts: deployment.Lossy,
+    shared: Sequence[deployment.Omitted],
+) -> Planned:
+    """The deployment the driver `driver` plans of the bundle `bundle_id` for the twin `twin`,
+    and its rendered `files`: the files listed by path with their SHA-256, the fidelity (the
+    runtime's `forwarding`, the compile's approximations and omissions with the rename's
+    `shared` ones, the probe hosts synthesized and the rename's `counts`), the demand and the id
+    (D-044). Both containerlab drivers assemble their plans so."""
     listed = tuple(deployment.File(path=path, sha256=hashlib.sha256(files[path]).hexdigest()) for path in sorted(files))
     omitted = [
         deployment.Omitted(device=row.device, interface=row.interface, omission=row.omission)
@@ -66,15 +94,15 @@ def plan(
         if row.omission is not None
     ] + list(shared)
     fidelity = deployment.Fidelity(
-        forwarding=CAPABILITIES.forwarding,
+        forwarding=forwarding,
         approximations=_approximations(manifest, platforms, probe_packages),
         omitted=tuple(sorted(omitted, key=lambda o: (o.device, o.interface))),
         synthesized=tuple(sorted(host for probe in manifest.probes for host, _, _ in blueprint.hosts(probe))),
         lossy=counts,
     )
     planned = deployment.Deployment(
-        id=deployment_id(NAME, twin, bundle_id, listed),
-        driver=NAME,
+        id=deployment_id(driver, twin, bundle_id, listed),
+        driver=driver,
         twin=twin,
         allocation=dict(allocation),
         bundle_id=bundle_id,
@@ -82,7 +110,7 @@ def plan(
         demand=demand(manifest, platforms, probe_packages),
         fidelity=fidelity,
     )
-    return Planned(deployment=planned, files=files)
+    return Planned(deployment=planned, files=dict(files))
 
 
 def endpoint_port(package: PlatformPackage, row: bundle.Row) -> str:
@@ -161,13 +189,16 @@ def deployment_id(driver_name: str, twin: str, bundle_id: str, files: Sequence[d
     return hashlib.sha256(blueprint.canonical(body)).hexdigest()
 
 
-def _topology(
+def definition(
     manifest: bundle.Manifest,
     platforms: Mapping[str, PlatformPackage],
     probe_packages: Mapping[str, ProbePackage],
     twin: str,
-    allocation: Allocation,
-) -> bytes:
+) -> dict[str, Any]:
+    """The containerlab definition both containerlab drivers render, with no `mgmt` block,
+    which is the local driver's alone: the lab named `twin`, every container labelled as the
+    twin's, a node per device and per probe host, and the links, the intent's and then the
+    probes'."""
     package_of = {node.name: platforms[node.platform] for node in manifest.nodes}
     rows = {(row.device, row.interface): row for row in manifest.mapping}
 
@@ -196,11 +227,11 @@ def _topology(
                 "exec": [_command(package.host.address, values), _command(package.host.route, values)],
             }
             links.append({"endpoints": [f"{host}:{package.host.interface}", endpoint(near.device, near.interface)]})
-    doc = {
-        "name": twin,
-        "mgmt": {"network": f"clab-{twin}", "ipv4-subnet": allocation["mgmt_subnet"]},
-        "topology": {"defaults": {"labels": {"fylgja.twin": twin}}, "nodes": nodes, "links": links},
-    }
+    return {"name": twin, "topology": {"defaults": {"labels": {"fylgja.twin": twin}}, "nodes": nodes, "links": links}}
+
+
+def dump(doc: Mapping[str, Any]) -> bytes:
+    """A document as the drivers write it: block YAML, the keys in their order."""
     # A wide line, so that no long scalar (an exec line) is folded onto the next.
     return yaml.safe_dump(doc, sort_keys=False, width=1000).encode("utf-8")
 

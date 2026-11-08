@@ -78,8 +78,8 @@ Measured on containerlab 0.79 locally and on clabernetes 0.10.1 in a kind cluste
 | cEOS interface aliases | **None** in containerlab 0.79–0.82, so one rename rule stays. The kind's name pattern is unanchored at the start: a wrong name ending in `et<digit>` (`Ethernet1`) is accepted silently and wires a port EOS never sees | [D-015](decisions.md#d-015) |
 | SR Linux interface aliases | Yes: `ethernet-1/1` deploys as `e1-1`, breakouts too; an out-of-range name is refused at post-deploy | [D-015](decisions.md#d-015) |
 | Bootstrap | **Not needed** on either kind or driver. With no startup-config, each kind's baseline holds the hostname, linked ports enabled, LLDP and gNMI, and all of it survives the replace push | [D-015](decisions.md#d-015) |
-| Link changes | `link_apply_mode: live` re-cables both kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port added later. The mode is set at create only: on clabernetes a change replaces every pod | [D-015](decisions.md#d-015) |
-| The seam | **Seven calls** settled here, with `admit` joining to reserve what `plan` binds (a subnet, a namespace, devices); nine since phase 5 added `changes` and `exec` | [D-017](decisions.md#d-017), [D-011](decisions.md#d-011), [D-049](decisions.md#d-049) |
+| Link changes | `link_apply_mode: live` re-cables both kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port added later. The mode is set at create only: on clabernetes a change replaces the pod of each node whose mode changed | [D-015](decisions.md#d-015) |
+| The seam | **Seven calls** settled here, with `admit` joining to reserve what `plan` binds (a subnet, a namespace, devices); nine since phase 5 added `changes` and `exec`, ten since phase 6 added `events` | [D-017](decisions.md#d-017), [D-011](decisions.md#d-011), [D-049](decisions.md#d-049), [D-058](decisions.md#d-058) |
 | The core's own reconcile loop | Holds. Kills mid-apply, after apply, between pushes and mid-destroy each reach the desired state in one resume, given two recovery rules and each node's recorded incarnation (below). clabernetes finishes a step after its managers are killed mid-step | [D-023](decisions.md#d-023) |
 | Isolation | A lab or a namespace per twin works, with concurrent creates. Management reach between twins is closed on clabernetes by a NetworkPolicy per twin, and accepted locally | [D-019](decisions.md#d-019) |
 | Orphans | Locally, swept only through containerlab, since it leaves root-owned host entries. On clabernetes, the namespace delete sweeps the twin (49 s) | [D-019](decisions.md#d-019) |
@@ -252,7 +252,7 @@ Schema: [`api-1.openapi.yaml`](../formats/api-1.openapi.yaml);
   - 401 and 403 kept distinct;
   - several keys valid at once, for rotation;
   - an audit log naming the principal;
-  - TLS at the ingress.
+  - TLS at the server ([D-063](decisions.md#d-063)).
 
   OIDC and RBAC roles follow when the first outside user is known.
 - **Thin CLI**: `fylgja-core twin create|step|show|verify|destroy|list`,
@@ -284,10 +284,11 @@ Schema: [`api-1.openapi.yaml`](../formats/api-1.openapi.yaml);
 | `clabernetes` | now: production | a namespace per twin, with a NetworkPolicy | the cluster's nodes | a LoadBalancer per node ([D-020](decisions.md#d-020)) |
 | `hardware` | a later release | a reservation of devices from a pool | the pool | the devices' own management addresses |
 
-The seam has nine calls, and every call but `exec` is idempotent
-([D-017](decisions.md#d-017), [D-049](decisions.md#d-049)):
+The seam has ten calls, and every call but `exec` is idempotent
+([D-017](decisions.md#d-017), [D-049](decisions.md#d-049), [D-058](decisions.md#d-058)):
 - `capabilities()`: whether the driver provisions nodes or claims existing ones; whether it
-  can re-cable live; per-kind restart behaviour; how nodes are reached.
+  can re-cable live; per-kind restart behaviour; how nodes are reached; whether applying
+  again finishes an apply cut short ([D-068](decisions.md#d-068)).
 - `admit(bundle, twin)`: reserves what the twin is bound to (a lab name and subnet, a
   namespace, a device reservation) into the twin record by compare-and-set, or refuses with
   the reason. `plan` is pure, so its allocation must exist before it runs.
@@ -301,6 +302,8 @@ The seam has nine calls, and every call but `exec` is idempotent
 - `endpoints(twin)`: the management addresses that push, readiness, verify and flows use.
 - `exec(twin, node, argv, timeout_s)`: an argument vector run inside a node, bounded in time
   and bytes; the one way into a node with no management transport, a probe host.
+- `events()`: an asynchronous iterator of the names of twins whose runtime changed, which
+  the loop kicks; a driver's own trigger, beside the write, the resync and the start.
 
 Push, readiness, verify and flows sit above the seam: they reach a node's management
 address whatever runtime it runs on. Nothing above the seam names a runtime; it may branch
@@ -321,9 +324,11 @@ on a declared capability (constitution XIII).
 ### Consequences of the seam
 
 - **The bundle is runtime-neutral** ([D-011](decisions.md#d-011)). It holds nodes, links,
-  the interface mapping, configurations and probes, and no containerlab topology. Each driver's `plan` renders its own deployment: `topology.clab.yml` for both containerlab
-  drivers (with production names where the kind has aliases, renamed ports where it does
-  not, and the twin's lab name), and a device assignment for hardware.
+  the interface mapping, configurations and probes, and no containerlab topology. Each
+  driver's `plan` renders its own deployment: the same containerlab definition for both
+  containerlab drivers (with production names where the kind has aliases, renamed ports
+  where it does not, and the twin's lab name), a file of its own locally and wrapped in a
+  `Topology` on clabernetes, and a device assignment for hardware.
   - Design choice: this keeps the compiler and the bundle id independent of where a twin
     runs. `plan` is pure too, and is tested with fixtures.
 - **Platform packages get a per-runtime section** ([D-015](decisions.md#d-015)).
@@ -342,22 +347,23 @@ cluster on 2026-10-30 unless marked "from its docs".
 
 | Fact | Consequence |
 |---|---|
-| A `Topology` CR (`c9s.run/v1alpha1`) holds the containerlab YAML as-is in `spec.definition.containerlab` | The clabernetes `plan` renders the same `topology.clab.yml` as the local driver and wraps it. The two `plan`s share most of their code |
+| A `Topology` CR (`c9s.run/v1alpha1`) holds the containerlab YAML as-is in `spec.definition.containerlab` | The clabernetes `plan` wraps the containerlab definition the local driver's plan renders, less its `mgmt` block, with each device's ports declared, a gated image prefixed and the core's label (`fylgja.owner: core`) beside the twin's in its default labels. The two `plan`s share most of their code |
 | One Deployment and pod per node, with no Docker or containerlab inside | Kind behaviour that containerlab runs at deploy time may differ from local; aliases and running without bootstrap were checked on both drivers |
 | `restart` and `recreate` replace the pod, losing the pushed configuration | A step that restarts or recreates a node re-pushes it: the loop re-enters `pushed` for those nodes, and the driver's capabilities say so |
 | Each node gets its own LoadBalancer Service, and by default 14 TCP ports are exposed per node | `plan` sets `expose.disableAutoExpose: true` and declares only the package's push, gNMI and SSH ports ([D-020](decisions.md#d-020)) |
-| The pod network is flat: a node reaches another twin's pods | `plan` emits a NetworkPolicy per twin that admits its own pods, the clabernetes namespace and non-pod sources ([D-019](decisions.md#d-019)) |
+| The pod network is flat: a node reaches another twin's pods | `plan` emits a NetworkPolicy per twin that admits its own pods, the clabernetes namespace, non-pod sources ([D-019](decisions.md#d-019)) and the core's namespace ([D-059](decisions.md#d-059)) |
 | The `mgmt` block is ignored and binds are rejected (from its docs) | `plan` relies on neither. Per-twin management networks are the local driver's alone |
 | The controller fetches the image manifest from a registry before creating a pod | The account-gated cEOS image lives in a private registry, pulled through `Topology.spec.imagePull.pullSecrets` with the CA trusted by the controller's config ([D-021](decisions.md#d-021)) |
 | The default request is 200m CPU and 512 Mi per node | Requests come from the package's `cpu` and `memory_mb` |
-| Each node's Service is `externalTrafficPolicy: Cluster`, with no setting to change it; a patched value is kept across steps, pod replacements and a drain | `apply` patches each Service to `Local`, and `inspect` reports one that is not as drift ([D-037](decisions.md#d-037)) |
+| Each node's Service is `externalTrafficPolicy: Cluster`, with no setting to change it; a patched value is kept across steps, pod replacements and a drain | `apply` patches each Service to `Local`, and `inspect` patches one it finds that is not ([D-037](decisions.md#d-037), [D-057](decisions.md#d-057)) |
 | A drain moves a host's nodes to the other hosts as new pods, at the same LoadBalancer addresses | The loop sees each moved node's new incarnation and re-pushes it ([D-036](decisions.md#d-036)) |
 | No in-place upgrade from before 0.9; Kubernetes 1.31 or later, VXLAN and nftables required (from its docs) | Pin the clabernetes version in the driver's capabilities, and document the cluster prerequisites |
 | containerlab 0.81.0 inside clabernetes (its `go.mod`); the development host moved from 0.79.0 to 0.81.0 on 2026-11-03 | No version skew between the two drivers: the local driver's containerlab is pinned to the version the clabernetes release embeds, so the kinds behave alike. The facts measured on 0.79 stand until phase 4 re-exercises them |
 
-The clabernetes driver is one driver behind the seam ([D-017](decisions.md#d-017)). Its
-development cluster is kind on one host ([D-022](decisions.md#d-022)); the production
-cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-036)).
+The clabernetes driver is one driver behind the seam ([D-017](decisions.md#d-017)). It is
+developed on a three-server k3s cluster, kind having been retired
+([D-060](decisions.md#d-060)); the production cluster is three k3s servers with embedded
+etcd on SSD ([D-036](decisions.md#d-036)).
 
 ### Durability and state
 
@@ -367,8 +373,9 @@ cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-0
   pushed, verified, flows.
   It records each phase before the next begins, so a restarted core resumes from the record.
   - Neither kopf nor CRDs are used, because the local driver has no cluster.
-  - Design choice: the Temporal Python SDK remains the fallback, should resuming mid-phase
-    prove fragile in production.
+  - Design choice: the Temporal Python SDK was kept as the fallback, should resuming mid-phase
+    prove fragile. The conformance suite's kills resumed on both drivers, and it is retired
+    ([D-072](decisions.md#d-072)).
 - **Scheduling** ([D-023](decisions.md#d-023)): a work queue keyed by twin name and a
   bounded pool of workers, so each twin has at most one run while different twins proceed
   at once. A client's write, a driver's event, a periodic resync and the core's start each
@@ -381,14 +388,16 @@ cluster is three k3s servers with embedded etcd on SSD ([D-036](decisions.md#d-0
     means `deploy --reconfigure`.
   - **Residue after a killed destroy:** a resumed destroy cannot remove containerlab's
     root-owned host entries, so the fallback is deploy, then destroy.
-- **Each node's incarnation** (the container's start time locally, the pod's uid on
-  clabernetes) is recorded. When `inspect` reports a different one, the node was replaced
-  and lost its push: the loop voids its `holds` and pushes again.
+- **Each node's incarnation** (the container's start time locally, the pod's uid and its
+  container's restart count on clabernetes, [D-069](decisions.md#d-069)) is recorded. When
+  `inspect` reports a different one, the node was replaced and lost its push: the loop voids
+  its `holds` and pushes again.
 - **A state-store interface** holds twin records, run records and their events, blueprints
   and bundles, and offers a compare-and-set write on a twin record.
   - `local`: a directory, for development, with each twin's record in its own file. No
     single state root assumes one twin.
-  - `object`: S3-compatible storage (MinIO in development), for production.
+  - `object`: S3-compatible storage that honours conditional writes, for production
+    (Versity S3 Gateway in development, [D-061](decisions.md#d-061)).
   - Still no database (constitution IX). The compare-and-set write is what keeps concurrent
     runs on two twins from colliding.
 - **On Kubernetes** the core runs as one replica, holding a Lease so that a second never
@@ -490,7 +499,11 @@ the step settles, no flow across the step and no loss counters.
   events show an `apply` started and not ended, since on a step the lab is always present;
   and the silent-node remedy, `reconfigure`, recreates every node, so without
   `allow_restart` the step ends `diverged` (`step.node.silent`) instead. A step whose bundle
-  is the twin's ends `ok` at `compiled`, `last_step` outcome `unchanged`. A spec written
+  is the twin's changes nothing of the lab: where every device node holds that bundle it ends `ok`
+  at `compiled`, `last_step` outcome `unchanged`; where one holds none, as a restore that failed
+  leaves one, it readies and pushes that node and runs verify, and ends `ok`, `unchanged`, or
+  `failed` when that readiness or push fails, `last_step` then `rejected`
+  ([D-070](decisions.md#d-070)). A spec written
   while a run is in flight is accepted: the run completes toward its own target, the pass
   records the generation it took the run under, and the next pass steps to the newer spec.
 - **No rollback** ([D-029](decisions.md#d-029) stands). A step that fails or is cancelled
@@ -595,6 +608,194 @@ which is what the waits of [D-054](decisions.md#d-054) item 14 and
 [D-055](decisions.md#d-055) were premised on; the file is never logged
 ([D-056](decisions.md#d-056)).
 
+## Phase 6: the clabernetes driver, and the core as a pod (settled 2026-11-05)
+
+Phase 6 takes the walk phase 5 ends on to Kubernetes. The core runs as a pod on the
+three-server k3s cluster; a twin is created there through the API, stepped through the step
+fixtures and verified after each step, driven by the thin CLI from a workstation. It is
+built against the seam as phase 5 left it, with one call added.
+
+**What the phase is for.** Production runs twins on a cluster, and the core beside them.
+Everything so far ran on one host: the core a process there, its store a directory, its
+twins containerlab labs. This phase builds the second driver behind the seam, the second
+store behind the store interface, and the core's own deployment, and proves the three
+together by the same scenarios the local driver passes. It also answers whether the core's
+own loop resumes on clabernetes after a kill, which the Temporal fallback has waited on
+([D-023](decisions.md#d-023)).
+
+**What is settled before code.**
+
+- **The clabernetes driver** ([D-057](decisions.md#d-057)). A twin is the namespace
+  `fylgja-twin-<twin>`, labelled as its own. The allocation holds that namespace and what
+  the site decides that `plan` writes: the core's namespace when the core is a pod,
+  clabernetes' namespace and the pod CIDR (two settings of the driver), and the image prefix
+  of every pull credential the provider holds at admission. So a resumed `plan` renders the
+  same files from the record alone, and a step may bring a gated kind. `plan`
+  renders the namespace, a NetworkPolicy and a `Topology` wrapping the containerlab YAML the
+  local driver's plan renders, less its `mgmt` block and binds; no Secret is a file, and
+  `apply` makes each pull secret from the credential provider. `apply` waits within the
+  packages' budget until two reads in a row, 2 s apart, find every node's pod and the
+  Topology ready (the Topology's first write of a new generation keeps the readiness of the
+  one before for a moment), and patches each Service to `Local`
+  ([D-037](decisions.md#d-037)); `reconfigure` deletes the twin's pods. `inspect` reads
+  pods: a pod's uid and its container's restart count are the node's incarnation
+  ([D-069](decisions.md#d-069)), its Service's LoadBalancer address the node's address
+  ([D-020](decisions.md#d-020)), and a node runs while its pod is `Running` and its
+  container is. `destroy` deletes the namespace and waits for it to go. `exec` runs in the
+  node's pod, naming no container. `changes` is pure, written from the recorded facts, and
+  **held in the cluster tier to the pods' uids before and after each step fixture**,
+  clabernetes having no dry run. A probe host runs as it does locally: its start-up lines
+  set its address at every boot, and a change to them replaces its pod. A cEOS port added
+  after boot arrives with a new pod, so `apply` deletes that pod once the Topology has taken
+  the change, under an annotation a resumed `apply` finishes
+  ([verified-facts.md](verified-facts.md)).
+- **A twin's policy admits the core's namespace** ([D-059](decisions.md#d-059)). Read on the
+  cluster: the policy as [D-019](decisions.md#d-019) wrote it refuses a pod in another
+  namespace on every path to a node, and one `namespaceSelector` opens them while a third
+  namespace stays refused ([verified-facts.md](verified-facts.md)). The core's namespace
+  therefore holds the core and its store, and nothing else.
+- **The seam's tenth call, `events`** ([D-058](decisions.md#d-058)): an asynchronous
+  iterator of the names of twins whose runtime changed. The local driver follows Docker's
+  events for its labs' containers; the clabernetes driver holds one watch on its twins'
+  pods. The loop kicks each name. The periodic resync stays, so a missed event is only late
+  ([D-023](decisions.md#d-023)).
+- **A kick on a settled twin inspects it** ([D-067](decisions.md#d-067)). As built, a pass
+  acts only on a deletion or a new generation, so a node the runtime replaced keeps its
+  kind's baseline until the twin is stepped. Now a pass on a settled twin inspects it, and a
+  node at another incarnation is readied and pushed again, and verify run, which is advisory,
+  under a run of a new operation, `restore`, its principal the core's own. A node missing or
+  not running is waited for and then reported (`twin.node.missing`), never made: nothing is
+  applied, and a twin is not repaired. A refused restore leaves `Ready` False and is not
+  repeated.
+- **A driver declares whether applying again finishes an apply cut short**
+  ([D-068](decisions.md#d-068)). The partial-lab probe and its reconfigure are containerlab's
+  remedy. On clabernetes the controller goes on after the core dies, and a resumed core
+  would find pods still coming up and delete them, or end a step `diverged`. The capability
+  `reapply` is true for clabernetes and false locally; where it is true a resume applies
+  again, with no probe.
+- **The object store** ([D-061](decisions.md#d-061)). MinIO's open-source edition ended in
+  2026, so [D-024](decisions.md#d-024)'s development store is replaced. The `object` store
+  speaks S3 to any endpoint that honours conditional writes, with four calls signed by the
+  core over httpx: `If-None-Match: *` creates, `If-Match` at the ETag read replaces and
+  deletes, a run's event is one object created under its sequence number, and a document is
+  written after its files and read before them. **The store proves its endpoint at start**
+  and refuses one that accepts a write it should not. In development the endpoint is
+  Versity S3 Gateway, one pod over a volume in the core's namespace, its conditions read
+  under 32-way races ([verified-facts.md](verified-facts.md)). `FYLGJA_STORE` is a directory
+  or `s3://<bucket>[/<prefix>]`.
+- **The core on the cluster** ([D-062](decisions.md#d-062)): one pod in the namespace
+  `fylgja`, under a Lease it takes before the loop starts and exits on losing; credentials
+  as `FYLGJA_*` variables from Secrets ([D-042](decisions.md#d-042)); one ClusterRole; a
+  kustomize base under `deploy/` that holds no address and no value, with the site's overlay
+  under `local/`; and an image built from a `Dockerfile` in the tree, pushed to the private
+  registry as the gated image was. The server refuses an `s3://` store without a Lease.
+- **TLS ends at the server** ([D-063](decisions.md#d-063)): a LoadBalancer Service, the
+  certificate and key named by two variables, and a CA the client names by a third. No
+  ingress.
+- **Libraries** ([D-064](decisions.md#d-064)): lightkube 1.0.1 for every Kubernetes call,
+  imported by the clabernetes driver and the Lease alone; no S3 library. What the driver
+  relies on in it was read against the cluster ([verified-facts.md](verified-facts.md)).
+- **The cluster** ([D-060](decisions.md#d-060)): the driver is developed and its conformance
+  suite run on the three-server k3s cluster; kind is retired. The pure tier covers the
+  driver's `plan` and `changes` by fixtures and its acting calls over a fake of the
+  Kubernetes API, so no change to the core needs a cluster.
+- **The three leftovers that need no cluster.** The formats ship inside the package, built
+  from `formats/`, so the server and the client validate wherever they are installed
+  ([D-066](decisions.md#d-066)). Every command the local driver runs gets an environment
+  from an allow-list ([D-065](decisions.md#d-065)). The CLI's watches reconnect when the
+  server ends a stream before its end, resuming from the last revision or event seen, which
+  the server already honours.
+- **The conformance suite is one set of scenarios and two harnesses.** Phase 4's and
+  phase 5's end-to-end scenarios (create, show, step through every step fixture with verify
+  after each, destroy; the core killed at every phase boundary of a create and of a step,
+  during an apply and during a destroy; a step cancelled mid-apply) are written once. A
+  harness per driver says how to start the core, kill it (a signal locally, the pod's
+  deletion on the cluster), replace a node behind its back, and look for leftovers. A
+  scenario reads what a step should do from the driver's `changes` and never from a
+  driver's name. The cluster's run adds isolation over TCP between two twins
+  ([D-059](decisions.md#d-059)) and the two open questions it was left: the SR Linux marker
+  after a pod replacement, and the resume after a kill
+  ([open questions](decisions.md#open-questions)). Five twins at once are phase 7's.
+- **Formats touched**, each in the change that builds it: deployment 1 and twin record 1
+  (the clabernetes allocation's members; the files, which name no Secret; `holds` absent for a
+  node a restore found replaced and has not pushed), API 1 (a run's operation gains `restore`,
+  and a driver's capabilities `reapply`), findings 1 (a verdict's `operation` gains `restore`,
+  since a run's verdict names its run's operation, [D-070](decisions.md#d-070)), the server's
+  and the client's settings (`.env.example`, `FYLGJA_RESYNC_S` among them), and the rule
+  catalogue (`admission.namespace.taken`, `twin.restoring`, `twin.node.missing`, and the rule
+  an endpoint that fails the store's proof is refused with).
+- **Logging** stays as phase 4 set it; on the cluster the stream is the pod's log. No
+  credential reaches a line, a manifest in the tree, an image layer or a Topology.
+
+**Non-goals.** Several twins at once, admission by capacity and scheduling at the packages'
+requests (phase 7); a store or a core that survives its host's drain; an ingress, OIDC or
+roles; a Helm chart; a published image; the flows beyond one burst a probe; the eAPI session
+sweep; the repair of a twin whose node is gone; the `hardware` driver. A core run off the cluster against it serves the driver's own
+live tests, and is not a deployment this phase delivers. **Anti-goals**, each a failure even
+if the code works: a node of one twin reachable from another twin's pod; a credential in a
+file of the tree, a stored deployment, an image or a log line; two cores reconciling one
+store; a store that starts against an endpoint that ignores a condition; a host name or an
+address in the tree; anything above the seam naming a runtime; a scenario that passes on one
+driver by branching on its name.
+
+**Seven plans, each a branch and a pull request useful on its own, in this order:**
+
+1. **The leftovers that need no cluster** ([D-065](decisions.md#d-065),
+   [D-066](decisions.md#d-066)): the formats in the package, with the test that installs the
+   wheel outside the tree; the local driver's allow-listed environment, read on containerlab
+   0.81.0; the CLI's watch reconnect.
+2. **The object store** ([D-061](decisions.md#d-061)): the signer and its known answers, the
+   store, its proof at start, its settings; pure tests over a fake endpoint, and a live test
+   against Versity under Docker.
+3. **The clabernetes driver's pure half** ([D-057](decisions.md#d-057),
+   [D-059](decisions.md#d-059)): the allocation, `capabilities`, `plan` sharing the local
+   driver's render, `changes`; the golden deployments for every fixture; the two formats'
+   descriptions.
+4. **The driver's live half** ([D-057](decisions.md#d-057), [D-064](decisions.md#d-064)):
+   `admit`, `apply`, `inspect`, `destroy`, `endpoints` and `exec` over lightkube, a pull
+   secret from the credential provider, run against the cluster from the development host;
+   the registry's second name; `changes` held to the pods' uids for every step fixture; each
+   behaviour recorded for clabernetes 0.10.1 on k3s v1.37.1.
+5. **The trigger and the restore** ([D-058](decisions.md#d-058),
+   [D-067](decisions.md#d-067), [D-068](decisions.md#d-068)): `events` on the seam and its
+   fake, the loop's task, Docker's events locally and the pod watch on the cluster; the pass
+   on a settled twin and the `restore` run; the `reapply` capability and the resume it
+   changes; a live test on each driver that replaces a node behind the core's back. **Built**
+   as [D-070](decisions.md#d-070) records: `events` and both drivers' sources, the loop's task
+   and `FYLGJA_RESYNC_S`; the settled pass, the `restore` run and each absent node's boot
+   window; a step to the twin's own bundle that pushes what holds nothing; `reapply` and the
+   resume it changes; on clabernetes, a pod whose container ended in it deleted by the driver,
+   at most three times in ten minutes a node, so that the cluster makes the node anew; and a
+   module in the live tier and one in the cluster tier that replace nodes behind the core's
+   back, with the resync an hour away.
+6. **The core as a pod** ([D-062](decisions.md#d-062), [D-063](decisions.md#d-063)): the
+   Lease, the TLS settings and the client's CA, the `Dockerfile` and `make image`, the
+   kustomize base with Versity, the role's rules read from inside a pod, and the core
+   deployed: `twin create`, `show` and `destroy` through its LoadBalancer address.
+7. **The conformance suite**: the scenarios written once over the two harnesses, run on the
+   local driver and on the cluster. It closes the phase.
+
+Plans 1, 2 and 3 are independent of each other; 4 follows 3; 5 follows 4; 6 follows 2 and 4;
+7 closes. The cluster's scenarios run one plan at a time, and never while the local live
+tier boots labs, since here the two share a hypervisor.
+
+**The phase is done** when the conformance suite passes on both drivers; on the cluster a
+fixture twin is created through the API over TLS by the CLI from a workstation, stepped
+through every step fixture with `twin verify` after each and the burst held, and destroyed
+leaving nothing by its label; the core's pod killed at each phase boundary of a create and
+of a step, during an apply and during a destroy, resumes to the desired state or ends
+`diverged` as designed; a node replaced behind the core's back is restored without waiting
+for the resync; and every behaviour the driver, the Lease and the store rely on is
+recorded for the versions they run on.
+
+**Left to the builder.** The module layout (`fylgja_core.clabernetes`,
+`fylgja_core.object_store`, `fylgja_core.lease`, or otherwise) and `deploy/`'s; how the
+build copies `formats/`; the environment's allow-list; the object keys beyond the rules
+above; which pod changes `events` drops; the watch reconnect's backoff and when it gives up;
+the pod's probes, which add no route to API 1; the role's exact rules; what a missing binary
+answers through `exec`; the wording of each new refusal; and how the conformance harness is
+parametrised.
+
 ## Sequence
 
 0. **The baseline.** *Done.* The decision log ([decisions.md](decisions.md)), the
@@ -673,17 +874,31 @@ which is what the waits of [D-054](decisions.md#d-054) item 14 and
    (item 6), and to later phases the flows beyond one burst per probe and the eAPI session
    sweep.
 6. **The clabernetes driver**: the object store, the Lease, per-twin namespaces and node
-   access. The driver conformance suite passes on both drivers. It takes up, from phases 4
-   and 5:
+   access. The driver conformance suite passes on both drivers. *Settled on 2026-11-05*; see
+   "Phase 6". It takes up, from phases 4 and 5:
    - `formats/` shipped with the package, so the server and the client run installed outside
-     the tree (`schemas.formats_dir()` resolves it through the repository today);
+     the tree: the wheel carries the schemas and the OpenAPI document, and `schemas.formats_dir()`
+     reads them from the installed package ([D-066](decisions.md#d-066));
    - the CLI's reconnect of a watch the server ends early, the server being remote for the
      first time;
    - the trigger that replaces the periodic resync, its shape decided with a pod watch in
      view beside the Docker events the local driver would use;
-   - a scrubbed environment for every command the local driver runs. Each inherits the
-     server's today, node credentials included; no deploy output read so far held any
-     ([verified-facts.md](verified-facts.md)), and the scrub removes the question.
+   - an allow-listed environment for every command the local driver runs
+     ([D-065](decisions.md#d-065)). Each inherited the server's until phase 6, node
+     credentials included; no deploy output read then held any
+     ([verified-facts.md](verified-facts.md)), and the allow-list removes the question.
+
+   Built, in the seven plans of "Phase 6": the formats in the package, the local driver's
+   allow-listed environment and the CLI's reconnect; the object store; the clabernetes driver, its
+   pure half and its live calls ([D-069](decisions.md#d-069)); the trigger and the restore
+   ([D-070](decisions.md#d-070)); the core as a pod under its Lease, behind TLS
+   ([D-071](decisions.md#d-071)); and the driver conformance suite, which passed on both drivers:
+   on 2026-11-07 but for the cluster's cEOS scenarios, failed by a site whose deployed core held no
+   EOS login, and those four on 2026-11-08 once the login was applied ("Verification"). *Done on
+   2026-11-08*: the maintainer's own walk on the development cluster passed end to end, a twin
+   created over TLS by the CLI from a workstation, stepped through every step fixture with
+   `twin verify` after each, and destroyed, then a twin from `mixed` given its cEOS port, by the
+   commands in [CONTRIBUTING.md](../CONTRIBUTING.md#running-the-core-on-a-cluster).
 7. **Many twins**: concurrent create and step, and admission refused when capacity runs out.
    Several labs on the development host locally, and five twins on a 2–3-node cluster.
 8. **Cut-over**, once phase 5 runs twins locally ([D-005](decisions.md#d-005)):
@@ -706,11 +921,26 @@ which is what the waits of [D-054](decisions.md#d-054) item 14 and
 - **Driver `plan`**: pure fixture tests, one bundle rendered by each driver.
 - **Live tier, local driver** (no Kubernetes): pytest end-to-end tests of the nine
   end-to-end behaviours, and several twins at once.
-- **Driver conformance suite**: one set of scenarios (create, push, step, verify, destroy,
-  orphan sweep, node access) run on each driver's own runtime. The clabernetes run needs a
-  2–3-node cluster and covers five concurrent twins.
+- **Driver conformance suite** (`core/tests/conformance/`): one set of scenarios, written once
+  over a harness per driver, run on each driver's own runtime. It holds a twin created and shown;
+  stepped through every step fixture with verify after each and the burst held, and the step's
+  refusals; the core killed at each phase boundary of a create and of a step, during an apply and
+  during a destroy, a waiting CLI riding through, a deletion after a kill, and a step cancelled; a
+  node replaced behind the core and restored without the resync, and one stopped, reported missing
+  and never made; leftovers read at each destroy and at the session's end, on the cluster by the
+  twin's label; node access, each node read through its own transport at its recorded address;
+  and isolation over TCP between two twins and from a third namespace, where the driver declares
+  it. Locally twins are kept apart by names, so the isolation scenario skips; on clabernetes a
+  stopped node is not expressible, clabernetes 0.10.1 scaling a node's Deployment back to one
+  within 1.3 s, so that scenario skips. It passed on both drivers: on 2026-11-07, 48 tests and a
+  skip locally and 44 and a skip on the cluster, where the four cEOS scenarios failed on the site,
+  the deployed core holding no EOS login; and those four on 2026-11-08, 22 of the steps module
+  passing once the login was applied ([verified-facts.md](verified-facts.md)). The clabernetes
+  run needs a 2–3-node cluster; five concurrent twins join it in phase 7.
 - **Resumption**: kill the core mid-phase on each driver; the twin reaches its desired state
-  or is cleaned up.
+  or is cleaned up. The suite's kill scenarios do so on both drivers, where the kill found the
+  run unfinished ([D-072](decisions.md#d-072) names the two boundaries it did not on the
+  cluster).
 - **Orchestrator**: its pure and contract suites stay green, and a rehearsal passes on the
   new core.
 
@@ -728,7 +958,7 @@ multi-host stage repeated them on three Proxmox VMs running k3s v1.37.1+k3s1, ea
 | The cluster | Three k3s servers with embedded etcd, MetalLB 0.16.0 in layer 2, clabernetes 0.10.1, and the private registry under Podman on one host | [D-036](decisions.md#d-036) |
 | etcd | **Lost its leader on spinning disks** when three hosts unpacked an image at once, and k3s restarted on two servers. Relaxed timings and pulls one host at a time cut it to blips of 2–3 s. Production puts etcd on SSD | [D-036](decisions.md#d-036) |
 | Spread | The default scheduler put each three-node twin one node per host, so every link crossed hosts over VXLAN | — |
-| Steps across hosts | As on kind: default modes replace the cEOS pods (136–138 s); switching to `live` replaces every pod; `live` replaces none (25 s) | [D-015](decisions.md#d-015) |
+| Steps across hosts | As on kind: default modes replace the cEOS pods (136–138 s); switching every node to `live` replaces every pod; `live` replaces none (25 s) | [D-015](decisions.md#d-015) |
 | Node access over the LAN | **Refused for some nodes** by the twin's NetworkPolicy, until each Service was set to `externalTrafficPolicy: Local` | [D-037](decisions.md#d-037) |
 | Isolation | Holds over TCP. Ping is no test: k3s's policy controller accepts ICMP echo into every pod | [D-019](decisions.md#d-019), [D-037](decisions.md#d-037) |
 | Five twins | Three created at once were Ready in 89–119 s with the images present. 15 nodes, 15 addresses; every node's push transport, SSH and gNMI answered | — |
@@ -763,12 +993,15 @@ On each host:
 
 Between them:
 - one L2 segment for MetalLB, with a pool outside DHCP of one address per node of every twin
-  at once;
+  at once, and one more for the core's Service;
 - open: TCP 6443 and 10250, TCP 2379–2380 (etcd between servers), UDP 8472 (flannel),
   UDP 14789–14790 and TCP 14791 (clabernetes).
 
 And beside them, the private registry on a host outside the cluster, which is never drained
 with it.
+
+On the cluster, the storage class `local-path`, for the store's volume
+([D-061](decisions.md#d-061)).
 
 ## Risks to watch
 
@@ -784,19 +1017,30 @@ with it.
 - **LoadBalancer addresses.** One per node means five twins of tens of nodes take hundreds
   of addresses. A bastion or ingress per twin returns if the pool runs short
   ([D-020](decisions.md#d-020)).
-- **The core's own reconcile loop.** Resuming held on the local driver with the two recovery
-  rules; it is not yet exercised on clabernetes under the core's own loop. Temporal Python is
-  the fallback.
+- **The core's own reconcile loop.** Under the conformance suite's kills, resuming held on both
+  drivers during an apply and a destroy, and at every phase boundary of a create and of a step
+  where the kill found the run unfinished: every one but a step's `verified` locally, and on the
+  cluster every one but that and a create's `pushed`, where the kill found the run ended. Temporal
+  is no longer the fallback ([D-072](decisions.md#d-072)). The suite's kill scenarios are the
+  guard, and a kill the loop does not survive is a design document first.
 - **Two drivers drifting apart.** The conformance suite is the guard, and so is the rule
   that nothing above the seam names a runtime. Pin containerlab to the version clabernetes
   embeds.
 - **A seam shaped by containers alone.** Hardware claims rather than creates. The paper
   `hardware` driver above checks the seam before it sets.
-- **An unexplained reading.** An SR Linux marker read as present after its pod was replaced
-  by a link-mode switch. The multi-host stage pushed no marker, so it is still open; the
-  driver conformance suite's step scenarios re-check it.
+- **An unexplained reading, not seen again.** An SR Linux marker was once read as present after
+  its pod was replaced by a link-mode switch. The conformance suite read it absent after each of
+  three pod replacements on the cluster, each the pod's deletion; the link-mode switch itself was
+  not repeated. A replaced pod boots the kind's baseline, as [D-048](decisions.md#d-048) and
+  [D-023](decisions.md#d-023) assume ([verified-facts.md](verified-facts.md)). Nothing relies on a
+  replaced node keeping its push.
 - **etcd's disks.** On spinning disks, etcd lost its leader under parallel image pulls.
   Production needs SSD; relaxed timings are only a fallback ([D-036](decisions.md#d-036)).
+- **A store on one host.** Development's object store is one pod over a volume bound to a
+  host, so a drain of that host stops the core's writes until it returns
+  ([D-061](decisions.md#d-061)). Production points the core at replicated S3 storage.
+- **lightkube** has one maintainer and a 1.0 three months old. REST over httpx is the
+  fallback ([D-064](decisions.md#d-064)).
 - **The Services' traffic policy is a patch.** clabernetes has no setting for
   `externalTrafficPolicy`, so the driver patches it and watches for drift
   ([D-037](decisions.md#d-037)). Worth asking upstream for a field.

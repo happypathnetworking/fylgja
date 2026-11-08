@@ -103,6 +103,85 @@ def test_the_earlier_deadline_asked_while_active_wins() -> None:
     assert asyncio.run(scenario()) < 1.0
 
 
+async def taken(q: WorkQueue) -> str:
+    """The name `q` serves next, within 10 s: a name never queued again fails the test, not the suite."""
+    return await asyncio.wait_for(q.get(), timeout=10)
+
+
+def test_a_nudge_waits_out_a_backoff_and_a_put_does_not() -> None:
+    # A driver's event nudges its twin; a client's write puts it.
+    async def scenario() -> tuple[float, float]:
+        q = WorkQueue()
+        q.back_off("a", 0.3)
+        q.nudge("a")
+        start = time.monotonic()
+        name = await taken(q)
+        nudged = time.monotonic() - start
+        q.done(name)
+        q.back_off("a", 5.0)
+        q.put("a")
+        start = time.monotonic()
+        await taken(q)
+        return nudged, time.monotonic() - start
+
+    nudged, put = asyncio.run(scenario())
+    assert nudged >= 0.25 and put < 1.0
+
+
+def test_a_nudge_while_active_is_served_after_done_at_once_or_once_a_backoff_asked_meanwhile_ends() -> None:
+    # The loop's own pass raises events: they cost one pass after it, or wait out the backoff it failed into.
+    async def scenario() -> tuple[float, float]:
+        q = WorkQueue()
+        q.put("a")
+        name = await taken(q)
+        q.nudge("a")
+        q.done(name)
+        start = time.monotonic()
+        name = await taken(q)
+        at_once = time.monotonic() - start
+        q.nudge("a")
+        q.back_off("a", 0.3)
+        q.done(name)
+        assert q.waiting() == ["a"]
+        start = time.monotonic()
+        await taken(q)
+        return at_once, time.monotonic() - start
+
+    at_once, held = asyncio.run(scenario())
+    assert at_once < 0.2 and held >= 0.25
+
+
+def test_a_put_while_active_is_served_after_done_at_once_whatever_backoff_was_asked_meanwhile() -> None:
+    async def scenario() -> float:
+        q = WorkQueue()
+        q.put("a")
+        name = await taken(q)
+        q.put("a")
+        q.back_off("a", 5.0)
+        q.done(name)
+        start = time.monotonic()
+        await taken(q)
+        return time.monotonic() - start
+
+    assert asyncio.run(scenario()) < 1.0
+
+
+def test_a_backoff_ends_when_its_name_is_taken() -> None:
+    # A pass a put brought forward ends the backoff: an event after it is served at once.
+    async def scenario() -> float:
+        q = WorkQueue()
+        q.back_off("a", 5.0)
+        q.put("a")
+        name = await taken(q)
+        q.done(name)
+        q.nudge("a")
+        start = time.monotonic()
+        await taken(q)
+        return time.monotonic() - start
+
+    assert asyncio.run(scenario()) < 1.0
+
+
 def test_an_active_name_is_not_served_to_a_second_worker() -> None:
     async def scenario() -> bool:
         q = WorkQueue()

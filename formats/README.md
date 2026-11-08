@@ -5,6 +5,8 @@ specified by its file here ([D-002](../design/decisions.md#d-002), Constitution 
 design they follow is [design/core.md](../design/core.md). A change found while
 building the core is made here, in the same change as the code.
 
+The wheel carries these files as the package's data, copied when it is built ([D-066](../design/decisions.md#d-066)); this directory stays the one place a format is changed.
+
 Version 1 of every format starts at the repository's baseline. The earlier formats are in
 the project's archived repository, where the input was called a snapshot
 ([D-006](../design/decisions.md#d-006)).
@@ -98,6 +100,17 @@ relative to them.
     ([D-049](../design/decisions.md#d-049)), and its verdict is `rejected` with the findings
     of the refusal the loop would make ([D-050](../design/decisions.md#d-050)). A new spec of
     a diverged twin is `409 twin.diverged`, a dry run's too.
+21. **API 1's driver capabilities carry `reapply`** since phase 6: `true` where applying a
+    deployment again finishes an apply that was cut short (clabernetes, whose controller goes
+    on after the core stops), `false` where a resumed apply probes the lab first and may
+    reconfigure it (a local lab, whose plain redeploy of a partial lab fixes nothing)
+    ([D-068](../design/decisions.md#d-068)), so a client can say how a twin resumes from a core
+    stopped during its apply.
+22. **A run's operation may be `restore`** since phase 6, and so may its verdict's: the loop's
+    own run, by the principal `core`, that readies, pushes and verifies again a node a kick
+    found replaced on a settled twin ([D-067](../design/decisions.md#d-067)). Its verdict
+    carries verify's counts and the wait, as a step's does, and no loss. A run's verdict
+    names its run's operation, so findings 1 gains `restore` beside API 1.
 
 ## Settled by measurement (2026-10-30)
 
@@ -111,9 +124,12 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
 - **`link_apply_mode` and `hot_add_ports`.** `live` re-cables both
   kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port
   added after boot. The mode is set at create and never changed: on clabernetes a change
-  replaces every pod.
+  replaces the pod of each node whose mode changed.
 - **The twin record holds each node's `incarnation`** (the container's start time, the
-  pod's uid), since a replaced node loses its push and `holds` must be voided.
+  pod's uid and its container's restart count), since a replaced node loses its push and
+  `holds` must be voided. On clabernetes a container ended in its pod is restarted there,
+  with the pod's uid unchanged, and an SR Linux node's, read so, booted again and lost its
+  push too: the restart count is what moves.
 - **The deployment holds an `allocation`**, from the seam call `admit`
   ([D-017](../design/decisions.md#d-017)), and on clabernetes a NetworkPolicy per twin
   ([D-019](../design/decisions.md#d-019)).

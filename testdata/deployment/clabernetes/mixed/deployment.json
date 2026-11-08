@@ -1,0 +1,74 @@
+{
+ "allocation": {
+  "controller_namespace": "c9s",
+  "core_namespace": "fylgja",
+  "namespace": "fylgja-twin-mixed",
+  "pod_cidr": "198.51.100.0/24",
+  "registries": {
+   "ARISTA_CEOS": "registry.example:5443/arista"
+  }
+ },
+ "bundle_id": "2868224aa6c31500078013387445b8d2c87401c21adbb15fb01f21aebf55e2d2",
+ "demand": {
+  "cpu": 1.5,
+  "memory_mb": 5120,
+  "nodes": 3
+ },
+ "deployment_version": "1",
+ "driver": "clabernetes",
+ "fidelity": {
+  "approximations": [
+   {
+    "package": "arista_eos",
+    "text": "Ethernet{slot}/{port} is carried as a port of its own, where a fixed-configuration switch has it as a breakout lane of Ethernet{slot}; intent carries no breakout structure to tell the two apart"
+   },
+   {
+    "package": "arista_eos",
+    "text": "No linecard model; the port set is fixed at container start and read once, so a port added later does not appear"
+   },
+   {
+    "package": "arista_eos",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "arista_eos",
+    "text": "Convergence timing differs from hardware"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No linecard model"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "No hardware QoS, TCAM or buffer behaviour"
+   },
+   {
+    "package": "nokia_srlinux",
+    "text": "Convergence timing differs from hardware"
+   }
+  ],
+  "forwarding": "software",
+  "lossy": {
+   "mappings": 0,
+   "shared_ports": 0
+  },
+  "omitted": [],
+  "synthesized": []
+ },
+ "files": [
+  {
+   "path": "namespace.yaml",
+   "sha256": "a9533056905d8aa774a881b7efa596de69dacdb34c0dfca6bdb672e17b3da381"
+  },
+  {
+   "path": "networkpolicy.yaml",
+   "sha256": "f977b219f768fedab74baca8cfe416b3ffeaa2c1556a27fddeecf95e6deeb01c"
+  },
+  {
+   "path": "topology.yaml",
+   "sha256": "6ad938b3bff9b3255c88d5f4ca632cc9e935fe01daff6d39aadab31cd3ac4450"
+  }
+ ],
+ "id": "ae66adaea740140f03c76aeeef5b382b60f10c67a34b6a9ea7ca1009b6fda009",
+ "twin": "mixed"
+}

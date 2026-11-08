@@ -56,7 +56,7 @@ class Counts:
 
 @dataclass(frozen=True, kw_only=True)
 class Wait:
-    """A step's wait for verify to hold."""
+    """A step's or a restore's wait for verify to hold."""
 
     outcome: Literal["settled", "expired", "cancelled"]
     budget_s: int
@@ -80,7 +80,7 @@ class Verdict:
     """A findings 1 document as a model."""
 
     findings_version: str = VERSION
-    operation: Literal["compile", "packages.validate", "plan", "create", "step", "destroy", "verify"]
+    operation: Literal["compile", "packages.validate", "plan", "create", "step", "restore", "destroy", "verify"]
     status: Literal["ok", "rejected", "failed", "unclean", "diverged", "nonconforming"]
     subject: Subject
     findings: tuple[Finding, ...]

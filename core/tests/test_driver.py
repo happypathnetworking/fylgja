@@ -1,4 +1,4 @@
-"""The driver seam's types (D-017, D-049) and the local driver's declared capabilities."""
+"""The driver seam's types (D-017, D-049) and each driver's declared capabilities."""
 
 from __future__ import annotations
 
@@ -11,22 +11,37 @@ from pathlib import Path
 import fakes
 import pytest
 
-from fylgja_core import blueprint, compiler, containerlab, documents, platform_package, probe_package, schemas
+from fylgja_core import (
+    blueprint,
+    clabernetes,
+    compiler,
+    containerlab,
+    documents,
+    platform_package,
+    probe_package,
+    schemas,
+)
 from fylgja_core.bundle import Manifest
+from fylgja_core.clabernetes import plan as clabernetes_plan
+from fylgja_core.clabernetes.driver import ClabernetesDriver
 from fylgja_core.containerlab import changes as clab_changes
 from fylgja_core.containerlab import plan as clab_plan
+from fylgja_core.containerlab.driver import ContainerlabDriver
 from fylgja_core.deployment import Deployment
 from fylgja_core.driver import (
     Action,
     Capabilities,
     ChangeReason,
     Changes,
+    Driver,
     DriverFailed,
     Exec,
     Inspection,
     NodeChange,
     NodeState,
     Planned,
+    check_files,
+    events_backoff,
     relinks,
     restarts,
     unsupported,
@@ -38,13 +53,91 @@ PROBES = {p.format: p for p in [probe_package.load(ROOT / "probes/ping.yaml")]}
 NO_MANIFEST = typing.cast(Manifest, None)  # the fake's admit never reads it
 
 
+CALLS = {"capabilities", "admit", "plan", "changes", "apply", "inspect", "destroy", "endpoints", "exec", "events"}
+
+
+def test_the_seam_has_ten_calls() -> None:
+    declared = {name for name, value in vars(Driver).items() if callable(value) and not name.startswith("_")}
+    assert declared == CALLS
+    for driver in (fakes.FakeDriver, ContainerlabDriver, ClabernetesDriver):
+        assert all(callable(getattr(driver, call, None)) for call in CALLS), driver.__name__
+
+
+def test_the_events_backoff_doubles_from_one_second_to_a_minute() -> None:
+    assert events_backoff(None) == 1.0
+    assert events_backoff(1.0) == 2.0
+    assert events_backoff(60.0) == 60.0
+
+
+def test_the_fake_yields_each_name_it_was_given_until_cancelled() -> None:
+    driver = fakes.FakeDriver()
+
+    async def first() -> None:
+        driver.emit("a")
+        driver.emit("b")
+        names = driver.events()
+        assert [await anext(names), await anext(names)] == ["a", "b"]
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(anext(names), timeout=0.05)
+
+    async def second() -> None:  # one fake serves a second event loop: a stopped reconciler starts on another
+        names = driver.events()
+        waiting = asyncio.ensure_future(anext(names))
+        await asyncio.sleep(0.01)
+        driver.emit("c")
+        assert await asyncio.wait_for(waiting, timeout=1.0) == "c"
+
+    asyncio.run(first())
+    asyncio.run(second())
+
+
 def test_the_local_drivers_capabilities_are_what_the_api_lists() -> None:
     doc = {"name": containerlab.NAME, "default": True, "capabilities": documents.encode(containerlab.CAPABILITIES)}
     assert list(schemas.api_validator("Driver").iter_errors(doc)) == []
-    without = {**doc, "capabilities": {k: v for k, v in doc["capabilities"].items() if k != "isolation"}}
-    assert not schemas.api_validator("Driver").is_valid(without)
-    expected = Capabilities(nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names")
+    for member in ("isolation", "reapply"):
+        without = {**doc, "capabilities": {k: v for k, v in doc["capabilities"].items() if k != member}}
+        assert not schemas.api_validator("Driver").is_valid(without), member
+    expected = Capabilities(nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names",
+                            reapply=False)
     assert expected == containerlab.CAPABILITIES
+
+
+def test_the_clabernetes_drivers_capabilities_are_what_the_api_lists() -> None:
+    doc = {"name": clabernetes.NAME, "default": False, "capabilities": documents.encode(clabernetes.CAPABILITIES)}
+    assert list(schemas.api_validator("Driver").iter_errors(doc)) == []
+    for member in ("isolation", "reapply"):
+        without = {**doc, "capabilities": {k: v for k, v in doc["capabilities"].items() if k != member}}
+        assert not schemas.api_validator("Driver").is_valid(without), member
+    expected = Capabilities(
+        nodes="provisions", relink=True, forwarding="software", access="direct", isolation="network", reapply=True)
+    assert expected == clabernetes.CAPABILITIES
+
+
+def test_a_driver_declares_whether_applying_again_finishes_an_apply_cut_short() -> None:
+    with pytest.raises(TypeError, match="reapply"):  # no default: every driver declares it (D-068)
+        Capabilities(  # type: ignore[call-arg]
+            nodes="provisions", relink=True, forwarding="software", access="direct", isolation="names")
+    assert containerlab.CAPABILITIES.reapply is False  # a plain redeploy of a partial lab fixes nothing (D-023)
+    assert clabernetes.CAPABILITIES.reapply is True
+
+
+def test_check_files_passes_the_deployments_own_and_refuses_a_missing_an_extra_or_a_changed_file() -> None:
+    c = compiler.compile(blueprint.load(ROOT / "testdata/blueprint/three-node.json"), PLATFORMS, PROBES)
+    allocation = {"namespace": "fylgja-twin-t", "controller_namespace": "c9s", "pod_cidr": "10.244.0.0/16",
+                  "registries": {}}
+    planned = clabernetes_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "t", allocation)
+    deployment, files = planned.deployment, dict(planned.files)
+    check_files(deployment, files)
+    missing = {path: data for path, data in files.items() if path != "topology.yaml"}
+    refused = (r"the files \['namespace\.yaml', 'networkpolicy\.yaml'\] are not the deployment's "
+               r"\['namespace\.yaml', 'networkpolicy\.yaml', 'topology\.yaml'\]")
+    with pytest.raises(ValueError, match=refused):
+        check_files(deployment, missing)
+    with pytest.raises(ValueError, match=r"the files \[.*'extra\.yaml'.*\] are not the deployment's"):
+        check_files(deployment, {**files, "extra.yaml": b""})
+    with pytest.raises(ValueError, match=rf"topology\.yaml is not the deployment's: its SHA-256 differs from the "
+                                         rf"one {deployment.id} lists"):
+        check_files(deployment, {**files, "topology.yaml": files["topology.yaml"] + b"\n"})
 
 
 def test_an_inspection_is_one_of_three_states_beside_the_nodes() -> None:
@@ -111,6 +204,11 @@ def test_the_fakes_changes_compare_two_renders() -> None:
 def test_the_fake_declares_relink_unless_made_without_it() -> None:
     assert fakes.FakeDriver().capabilities().relink is True
     assert fakes.FakeDriver(relink=False).capabilities().relink is False
+
+
+def test_the_fake_declares_no_reapply_unless_made_with_it() -> None:
+    assert fakes.FakeDriver().capabilities().reapply is False
+    assert fakes.FakeDriver(reapply=True).capabilities().reapply is True
 
 
 def test_the_fakes_changes_recreate_a_host_whose_address_moves_and_refuse_two_twins() -> None:

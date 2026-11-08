@@ -264,3 +264,13 @@ def test_the_plan_is_the_golden_deployment(name: str) -> None:
     encoded = documents.encode(p.deployment)
     assert encoded == json.loads((GOLDEN / name / "deployment.json").read_text())
     assert deployment.validate(encoded) == []
+
+
+@pytest.mark.parametrize("name", ["three-node", "mixed", "lossy", "three-node-probed"])
+def test_the_definition_is_the_golden_topology_less_its_management_network(name: str) -> None:
+    # What both containerlab drivers render (D-057): the local plan sets `mgmt` in it.
+    c = compiler.compile(blueprint.load(ROOT / f"testdata/blueprint/{name}.json"), PLATFORMS, PROBES)
+    definition = clab_plan.definition(c.manifest, PLATFORMS, PROBES, name)
+    golden = yaml.safe_load((GOLDEN / name / "topology.clab.yml").read_bytes())
+    assert list(definition) == ["name", "topology"]
+    assert definition == {key: value for key, value in golden.items() if key != "mgmt"}

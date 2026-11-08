@@ -15,7 +15,6 @@ multi-file document is built in a temporary directory and renamed into place.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import errno
 import fcntl
@@ -37,11 +36,13 @@ from fylgja_core.store import (
     NotFound,
     Store,
     StoreError,
+    Subscribers,
     Subscription,
     check_file_key,
     check_id,
     check_run_id,
     check_twin_name,
+    dumps,
 )
 from fylgja_core.twin_record import TwinRecord
 
@@ -156,10 +157,6 @@ def _read_tree(directory: Path, key: str) -> dict[str, bytes]:
     return {p.relative_to(directory).as_posix(): p.read_bytes() for p in sorted(directory.rglob("*")) if p.is_file()}
 
 
-def _json(doc: Any) -> bytes:
-    return (json.dumps(doc, sort_keys=True, indent=1) + "\n").encode()
-
-
 class LocalStore(Store):
     """The state store as a directory."""
 
@@ -167,7 +164,7 @@ class LocalStore(Store):
         self.root = Path(root)
         self._lock_fd = lock_fd
         self._mutex = threading.Lock()  # compare-and-set, and the order of notifications
-        self._subscriptions: list[Subscription] = []
+        self._subscribers = Subscribers()
         self._closed = False
 
     @classmethod
@@ -203,7 +200,7 @@ class LocalStore(Store):
     def put_blueprint(self, doc: Mapping[str, Any]) -> tuple[str, bool]:
         self._live()
         bid = blueprint.blueprint_id(dict(doc))
-        return bid, _write_new(self.root / "blueprints" / f"{bid}.json", _json(doc))
+        return bid, _write_new(self.root / "blueprints" / f"{bid}.json", dumps(doc))
 
     def get_blueprint(self, blueprint_id: str) -> dict[str, Any]:
         self._live()
@@ -243,7 +240,7 @@ class LocalStore(Store):
             raise ValueError("deployment.json is the deployment's own document, not a rendered file")
         return _write_tree(
             self.root / "deployments" / deployment.id,
-            {"deployment.json": _json(documents.encode(deployment)), **files},
+            {"deployment.json": dumps(documents.encode(deployment)), **files},
         )
 
     def get_deployment(self, deployment_id: str) -> tuple[Deployment, dict[str, bytes]]:
@@ -263,17 +260,6 @@ class LocalStore(Store):
             return twin_record.decode(json.loads(self._twin_path(name).read_bytes()))
         except FileNotFoundError:
             raise NotFound(name) from None
-
-    def _notify(self, change: Change) -> None:
-        # Always through the watcher's loop, never a direct put: a write from any thread wakes
-        # the loop, and a write on the loop thread cannot overtake one already scheduled.
-        for subscription in list(self._subscriptions):
-            try:
-                if subscription.loop.is_closed():
-                    raise RuntimeError("closed")
-                subscription.loop.call_soon_threadsafe(subscription.queue.put_nowait, change)
-            except RuntimeError:  # the watcher's loop is gone: drop it, the write is committed
-                self._subscriptions.remove(subscription)
 
     def list_twins(self) -> list[TwinRecord]:
         self._live()
@@ -295,9 +281,9 @@ class LocalStore(Store):
         if record.revision != 1:
             raise ValueError(f"a new twin record is at revision 1, not {record.revision}")
         with self._mutex:
-            if not _write_new(self._twin_path(record.name), _json(documents.encode(record))):
+            if not _write_new(self._twin_path(record.name), dumps(documents.encode(record))):
                 raise Conflict(f"twin {record.name} exists")
-            self._notify(Change("ADDED", record))
+            self._subscribers.notify(Change("ADDED", record))
         return record
 
     def _check(self, name: str, expected_revision: int) -> TwinRecord:
@@ -310,8 +296,8 @@ class LocalStore(Store):
         with self._mutex:
             self._check(record.name, expected_revision)
             written = dataclasses.replace(record, revision=expected_revision + 1)
-            _write_atomic(self._twin_path(record.name), _json(documents.encode(written)))
-            self._notify(Change("MODIFIED", written))
+            _write_atomic(self._twin_path(record.name), dumps(documents.encode(written)))
+            self._subscribers.notify(Change("MODIFIED", written))
         return written
 
     def delete_twin(self, name: str, expected_revision: int) -> None:
@@ -319,19 +305,11 @@ class LocalStore(Store):
             current = self._check(name, expected_revision)
             self._twin_path(name).unlink()
             _fsync_directory(self.root / "twins")
-            self._notify(Change("DELETED", current))
+            self._subscribers.notify(Change("DELETED", current))
 
     def subscribe(self) -> Subscription:
         self._live()
-        subscription = Subscription(asyncio.get_running_loop(), self._unsubscribe)
-        with self._mutex:
-            self._subscriptions.append(subscription)
-        return subscription
-
-    def _unsubscribe(self, subscription: Subscription) -> None:
-        with self._mutex:
-            if subscription in self._subscriptions:
-                self._subscriptions.remove(subscription)
+        return self._subscribers.subscribe()
 
     def _run_path(self, run_id: str) -> Path:
         self._live()
@@ -344,7 +322,7 @@ class LocalStore(Store):
         return self.root / "runs" / f"{run_id}.events.ndjson"
 
     def create_run(self, run: Run) -> None:
-        if not _write_new(self._run_path(run.id), _json(documents.encode(run))):
+        if not _write_new(self._run_path(run.id), dumps(documents.encode(run))):
             raise Conflict(f"run {run.id} exists")
 
     def get_run(self, run_id: str) -> Run:
@@ -358,7 +336,7 @@ class LocalStore(Store):
             current = self.get_run(run.id)
             if current.state != expected_state:
                 raise Conflict(f"run {run.id} is {current.state}, not {expected_state}")
-            _write_atomic(self._run_path(run.id), _json(documents.encode(run)))
+            _write_atomic(self._run_path(run.id), dumps(documents.encode(run)))
 
     def list_runs(self, twin: str | None = None) -> list[Run]:
         self._live()

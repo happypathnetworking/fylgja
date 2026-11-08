@@ -3,23 +3,31 @@ answering canned documents. It holds every request, and every answer it gives, t
 document (formats/api-1.openapi.yaml), the authority for each shape: the operation, its path,
 query and header parameters, its request body, and the status, media type and body of the
 answer. Problems are shaped by the server's own `problems.problem`, so the client reads what
-the server writes."""
+the server writes. `operation` and `check_response` take a request and an answer of either HTTP
+library: the client library's httpx, or httpx2, which Starlette's TestClient runs on in API 1's
+own tests. Where a test needs a real server, over TLS, `application` is what it serves."""
 
 from __future__ import annotations
 
 import json
 import re
+import ssl
 import urllib.parse
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 import httpx
+import httpx2
 import jsonschema
 import yaml
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
 
 from fylgja_core import blueprint, compiler, documents, platform_package, probe_package, schemas, twin_record
 from fylgja_core.findings import Finding
@@ -82,14 +90,14 @@ def _templates() -> list[tuple[re.Pattern[str], str]]:
     return found
 
 
-def operation(request: httpx.Request) -> tuple[str, str]:
+def operation(request: httpx.Request | httpx2.Request) -> tuple[str, str]:
     """The path template and the method, lowercase, of the API 1 operation a request names; its
     parameters and body unchecked, so a test of a malformed request can hold the answer to it."""
     template, _ = _operation(request)
     return template, request.method.lower()
 
 
-def _operation(request: httpx.Request) -> tuple[str, dict[str, str]]:
+def _operation(request: httpx.Request | httpx2.Request) -> tuple[str, dict[str, str]]:
     raw = request.url.raw_path.decode().partition("?")[0]
     for pattern, template in _templates():
         match = pattern.match(raw)
@@ -154,7 +162,7 @@ def check_request(request: httpx.Request) -> tuple[str, str]:
     return template, method
 
 
-def check_response(template: str, method: str, response: httpx.Response) -> None:
+def check_response(template: str, method: str, response: httpx.Response | httpx2.Response) -> None:
     """Assert that an answer is one the operation declares: its status, its media type and,
     for JSON, its body. A stream's events are checked where they are made (`sse`)."""
     status = str(response.status_code)
@@ -237,14 +245,67 @@ def unreachable(request: httpx.Request) -> httpx.Response:
     raise httpx.ConnectError("[Errno 111] Connection refused", request=request)
 
 
-def sse(component: str, messages: Iterable[tuple[str | None, str | None, Mapping[str, Any]]]) -> Answer:
-    """A stream answer of messages (event, id, data); each data is checked as `component`."""
+UNTRUSTED = "self-signed certificate"
+"""What `ssl` says of `tls.pair`'s certificate verified against a trust that does not hold it."""
+
+
+def untrusted(request: httpx.Request) -> httpx.Response:
+    """A connection whose TLS handshake failed to verify the server's certificate, raised as httpx
+    raises it: the `ssl` error, its `verify_message` set as `ssl` sets it, in the chain as a
+    context and not a cause, since httpcore's pool raises its own error again `from None`
+    (verified-facts.md)."""
+    failure = ssl.SSLCertVerificationError(1, f"[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+                                              f"{UNTRUSTED} (_ssl.c:1081)")
+    failure.verify_code, failure.verify_message = 18, UNTRUSTED
+    try:
+        raise failure
+    except ssl.SSLCertVerificationError:
+        raise httpx.ConnectError(str(failure), request=request) from None
+
+
+def application(answers: Mapping[str, Any]) -> Starlette:
+    """API 1 as an ASGI application, for a test that serves it through a real server
+    (`tls.served`): `/v1/version` answered `VERSION`, and each GET of a path in `answers` its
+    document. Nothing is held to the OpenAPI document, as `FakeAPI` holds what it answers."""
+    served = {"/v1/version": VERSION, **answers}
+
+    async def answer(request: Request) -> Response:
+        return JSONResponse(served[request.url.path])
+
+    return Starlette(routes=[Route(path, answer) for path in served])
+
+
+type Messages = Iterable[tuple[str | None, str | None, Mapping[str, Any]]]
+
+
+def _stream_body(component: str, messages: Messages) -> bytes:
+    """Messages (event, id, data) as a stream's body; each data is checked as `component`."""
     body = b""
     for event, id_, data in messages:
         check_component(component, data)
         lines = ([f"event: {event}"] if event else []) + ([f"id: {id_}"] if id_ else []) + [f"data: {json.dumps(data)}"]
         body += ("\n".join(lines) + "\n\n").encode()
+    return body
+
+
+def sse(component: str, messages: Messages) -> Answer:
+    """A stream answer of messages (event, id, data); each data is checked as `component`."""
+    body = _stream_body(component, messages)
     return lambda request: httpx.Response(200, headers={"content-type": EVENT_STREAM}, content=body)
+
+
+def cut(component: str, messages: Messages, error: str = "connection reset") -> Answer:
+    """`sse`'s stream, whose body then raises `httpx.ReadError(error)`: a connection cut off."""
+    body = _stream_body(component, messages)
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        def chunks() -> Iterator[bytes]:
+            yield body
+            raise httpx.ReadError(error)
+
+        return httpx.Response(200, headers={"content-type": EVENT_STREAM}, content=chunks())
+
+    return answer
 
 
 def watch(*records: Mapping[str, Any], deleted: bool = False) -> Answer:
@@ -257,9 +318,18 @@ def watch(*records: Mapping[str, Any], deleted: bool = False) -> Answer:
     return sse("WatchEvent", [(e["type"], None, e) for e in events])
 
 
-def event_stream(*events: Mapping[str, Any]) -> Answer:
-    """A run's event stream: each event with its seq as id."""
-    return sse("Event", [(None, str(e["seq"]), e) for e in events])
+def event_stream(*events: Mapping[str, Any], ended: bool = True) -> Answer:
+    """A run's event stream, each event with its seq as id, to a request that accepts one; to any
+    other, the page a client reads once the stream has ended: no event, `next` the request's
+    `after` (0 when absent), and `ended`."""
+    stream = sse("Event", [(None, str(e["seq"]), e) for e in events])
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if EVENT_STREAM in request.headers.get("accept", ""):
+            return stream(request)
+        return ok({"events": [], "next": int(request.url.params.get("after", "0")), "ended": ended})(request)
+
+    return answer
 
 
 # Canned documents.
@@ -300,11 +370,11 @@ DEPLOYMENT: dict[str, Any] = json.loads(
 DRIVERS: dict[str, Any] = {
     "drivers": [
         {"name": "clabernetes", "default": False,
-         "capabilities": {"nodes": "provisions", "relink": False, "forwarding": "software", "access": "direct",
-                          "isolation": "network"}},
+         "capabilities": {"nodes": "provisions", "relink": True, "forwarding": "software", "access": "direct",
+                          "isolation": "network", "reapply": True}},
         {"name": "containerlab", "default": True,
          "capabilities": {"nodes": "provisions", "relink": True, "forwarding": "software", "access": "direct",
-                          "isolation": "names"}},
+                          "isolation": "names", "reapply": False}},
     ]
 }
 

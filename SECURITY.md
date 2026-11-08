@@ -12,10 +12,15 @@ Each point holds from the release that implements it.
 - A missing or unknown token is `401`, and a refused action is `403`.
 - Several tokens can be valid at once, for rotation.
 - An audit log names the principal behind every change to a twin.
-- The core terminates no TLS: put it behind an ingress or a proxy that does.
+- The server ends TLS itself when given a certificate and its key (`FYLGJA_TLS_CERT`,
+  `FYLGJA_TLS_KEY`), and serves HTTP without them, which is for loopback
+  ([D-063](design/decisions.md#d-063)).
 
 **One credential provider.**
 - Node logins and tokens come from the environment locally, and from Secrets on a cluster.
+- On a cluster the core's service account acts on Secrets and pods in every namespace
+  ([D-062](design/decisions.md#d-062)), so the namespace `fylgja` holds the core and its store
+  alone.
 - `local/.env`, at mode `0600`, is the only file that holds a value locally.
 - **No credential reaches any output:** not a blueprint, bundle, deployment, twin record,
   finding, API answer or log line (Constitution X).

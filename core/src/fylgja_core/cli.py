@@ -3,12 +3,14 @@
 Commands are noun-verb. Each reaches the core through the client library alone and holds no
 rule of its own: every refusal is the server's, printed as its status, rule and detail. The
 CLI renders the API's documents as a few lines of text, or with `--json` prints them as they
-came, one JSON value per command. It reads `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`
-(D-042) and never prints the token.
+came, one JSON value per command. It reads `FYLGJA_API_ADDRESS`, `FYLGJA_API_TOKEN` (D-042)
+and, where it is set, `FYLGJA_API_CA`, the CA file an https:// address is verified against,
+else the system's trust (D-063); it never prints the token.
 
 Exit codes: 0 ok; 1 a negative verdict (rejected, failed, nonconforming); 2 a problem
-document, a transport failure, or a failure of the CLI's own (a variable not set, a file it
-cannot read, a blueprint the model package refuses); 3 a twin left dirty (unclean, diverged).
+document, a transport failure (a server certificate not trusted among them), or a failure of
+the CLI's own (a variable not set or one it cannot use, a file it cannot read, a blueprint the
+model package refuses); 3 a twin left dirty (unclean, diverged).
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,12 +28,22 @@ from typing import Any
 import httpx
 
 from fylgja_core import blueprint, documents, findings
-from fylgja_core.client import Client, ProblemError, TransportError, UnsupportedVersion, base_url, bearer
+from fylgja_core.client import (
+    Client,
+    ProblemError,
+    TransportError,
+    UnsupportedVersion,
+    Untrusted,
+    base_url,
+    bearer,
+    trust,
+)
 from fylgja_core.documents import Malformed, Rejected
 from fylgja_core.findings import Verdict
 
 ADDRESS = "FYLGJA_API_ADDRESS"
 TOKEN = "FYLGJA_API_TOKEN"
+CA = "FYLGJA_API_CA"
 
 # The exit code of each verdict status (findings-1's $comment, D-026).
 EXIT: dict[str, int] = {"ok": 0, "rejected": 1, "failed": 1, "nonconforming": 1, "unclean": 3, "diverged": 3}
@@ -69,14 +82,20 @@ class Context:
 Command = Callable[[Context, argparse.Namespace], int]
 
 
-def main(argv: Sequence[str] | None = None, *, transport: httpx.BaseTransport | None = None) -> int:
-    """Run one command; its exit code. `transport` replaces the network, for tests."""
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    transport: httpx.BaseTransport | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Run one command; its exit code. `transport` replaces the network and `sleep` the waits
+    before a watch reconnects, for tests."""
     try:
         args = _parser().parse_args(argv)
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else EXIT_FAILURE
     try:
-        return _run(args, transport)
+        return _run(args, transport, sleep)
     except KeyboardInterrupt:
         return EXIT_FAILURE
     except Exception as e:
@@ -87,14 +106,18 @@ def main(argv: Sequence[str] | None = None, *, transport: httpx.BaseTransport | 
         return EXIT_FAILURE
 
 
-def _run(args: argparse.Namespace, transport: httpx.BaseTransport | None) -> int:
-    # Both variables are checked in one pass; a refusal names the variable, never its value.
+def _run(args: argparse.Namespace, transport: httpx.BaseTransport | None, sleep: Callable[[float], None]) -> int:
+    # The variables are checked in one pass; a refusal names the variable, never its value. The CA
+    # alone may be left unset, or empty.
     refused = False
-    for name, check in ((ADDRESS, base_url), (TOKEN, bearer)):
+    checks: tuple[tuple[str, Callable[[str], object], bool], ...] = (
+        (ADDRESS, base_url, True), (TOKEN, bearer, True), (CA, lambda value: trust(Path(value)), False))
+    for name, check, required in checks:
         value = os.environ.get(name)
         if not value:
-            _error(f"{name} is not set")
-            refused = True
+            if required:
+                _error(f"{name} is not set")
+                refused = True
             continue
         try:
             check(value)
@@ -103,7 +126,10 @@ def _run(args: argparse.Namespace, transport: httpx.BaseTransport | None) -> int
             refused = True
     if refused:
         return EXIT_FAILURE
-    client = Client(os.environ[ADDRESS], os.environ[TOKEN], transport=transport)
+    ca = os.environ.get(CA)
+    # A watch that reconnects says so once on stderr, like a progress line, and not at all with --json.
+    client = Client(os.environ[ADDRESS], os.environ[TOKEN], ca=Path(ca) if ca else None, transport=transport,
+                    sleep=sleep, notice=None if args.json else _error)
     command: Command = args.command
     try:
         with client:
@@ -114,6 +140,9 @@ def _run(args: argparse.Namespace, transport: httpx.BaseTransport | None) -> int
         _error(str(e))
         for finding in e.problem.findings or ():
             _error(f"  {_finding(documents.encode(finding))}")
+    except Untrusted as e:
+        _error(str(e))
+        _error(f"{CA} names the CA file an https:// address is verified against")
     except (TransportError, UnsupportedVersion) as e:
         _error(str(e))
     except Failure as e:
@@ -273,7 +302,7 @@ def _twin_destroy(ctx: Context, args: argparse.Namespace) -> int:
     try:
         settled = _settle(ctx, record)
     except ProblemError as e:
-        # Gone before the watch began: the destroy run says how it went.
+        # Gone before the watch began, or between two of its streams: the destroy run says how it went.
         if e.status != 404:
             raise
         settled = Settled(record, record["status"].get("run_id"), gone=True)
@@ -412,7 +441,7 @@ def _run_of(client: Client, twin: str, operations: Sequence[str], seen: str | No
 
 
 def _ended(client: Client, run: dict[str, Any]) -> dict[str, Any]:
-    """The run once it has ended: its events followed until their stream ends, then read again."""
+    """The run once it has ended: its events followed until the run has ended, then read again."""
     if run["state"] != "ended":
         for _ in client.watch_run(run["id"]):
             pass

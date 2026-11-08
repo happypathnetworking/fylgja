@@ -6,32 +6,37 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import logging
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
 from typing import Any
 
 import pytest
+from aio import bounded, cancelled, closed
 
-from fylgja_core import blueprint, bundle, compiler, containerlab, platform_package, probe_package
+from fylgja_core import blueprint, bundle, compiler, containerlab, logs, platform_package, probe_package
+from fylgja_core.containerlab import cli
 from fylgja_core.containerlab import driver as driver_module
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.containerlab.cli import STDERR_KEPT, TIMED_OUT, CommandFailed
 from fylgja_core.containerlab.driver import (
     DOCKER_TIMEOUT_S,
+    EVENTS_ARGV,
     EXEC_OUTPUT_KEPT,
     RULE_CAPACITY,
     RULE_IMAGE,
     ContainerlabDriver,
     deploy_budget,
     destroy_budget,
+    lab_of,
     stray_deploys,
 )
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
 from fylgja_core.deployment import Deployment
-from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal
+from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, events_backoff
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -62,6 +67,7 @@ class FakeRunner:
         self.budgets: list[float] = []
         self.cwds: list[Path | None] = []
         self.logs: list[Path | None] = []
+        self.envs: list[Mapping[str, str] | None] = []
 
     async def __call__(
         self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None,
@@ -72,6 +78,7 @@ class FakeRunner:
         self.budgets.append(timeout_s)
         self.cwds.append(cwd)
         self.logs.append(log)
+        self.envs.append(env)
         if any(args[: len(prefix)] == prefix for prefix in self.fail):
             raise CommandFailed(args, self.status, "Error response from daemon: no such object\n")
         matches = [prefix for prefix in self.answers if args[: len(prefix)] == prefix]
@@ -673,6 +680,51 @@ def test_inspect_reads_each_nodes_name_handle_incarnation_and_address(tmp_path: 
     assert runner.calls == [PS, (*INSPECT, "clab-t-n2", "clab-t-n1", "clab-t-n3")]
 
 
+class Listings(FakeRunner):
+    """`FakeRunner` whose `docker ps` of the lab answers each of `listings` in turn."""
+
+    def __init__(self, answers: Mapping[tuple[str, ...], str], listings: Sequence[str], **kw: Any) -> None:
+        super().__init__(answers, **kw)
+        self.listings = list(listings)
+
+    async def __call__(self, argv: Sequence[str], **kw: Any) -> str:
+        if tuple(argv) == PS:
+            self.answers[PS] = self.listings.pop(0)
+        return await super().__call__(argv, **kw)
+
+
+def test_a_container_removed_between_the_listing_and_its_inspect_is_listed_again_once(tmp_path: Path) -> None:
+    """A `docker rm -f` kicks a pass at its `die`, whose `docker ps` can list the container its
+    `docker inspect` then finds gone: Docker 29.8.1 exits 1 (verified-facts.md). The listing is
+    taken once more, and the nodes that remain are answered."""
+    every = "clab-t-n1\nclab-t-n2\nclab-t-n3\n"
+    runner = Listings(lab(container("n1", address="172.20.2.2"), container("n3", address="172.20.2.4")),
+                      [every, "clab-t-n1\nclab-t-n3\n"], fail=[(*INSPECT, "clab-t-n1", "clab-t-n2", "clab-t-n3")])
+    inspection = inspect(tmp_path, runner)
+    assert inspection.state == "present" and [n.name for n in inspection.nodes] == ["n1", "n3"]
+    assert runner.calls == [PS, (*INSPECT, "clab-t-n1", "clab-t-n2", "clab-t-n3"), PS, (*INSPECT, "clab-t-n1",
+                                                                                         "clab-t-n3")]
+
+
+def test_an_inspect_failing_again_or_outrunning_its_budget_is_raised(tmp_path: Path) -> None:
+    """Listed again, a failure that is no removal (a daemon failing) fails again, and is raised as
+    before; a budget run out is raised at once, the listing not taken again."""
+    runner = FakeRunner(RUNNING, fail=[INSPECT])
+    with pytest.raises(CommandFailed):
+        inspect(tmp_path, runner)
+    assert [call[:2] for call in runner.calls] == [("docker", "ps"), ("docker", "inspect")] * 2
+    hung = FakeRunner(RUNNING, fail=[INSPECT], status=TIMED_OUT)
+    with pytest.raises(CommandFailed):
+        inspect(tmp_path, hung)
+    assert [call[:2] for call in hung.calls] == [("docker", "ps"), ("docker", "inspect")]
+
+
+def test_a_lab_removed_whole_between_the_listing_and_its_inspect_reads_as_the_next_pass_would(tmp_path: Path) -> None:
+    runner = Listings(RUNNING, ["clab-t-n1\n", ""], fail=[INSPECT, NETWORK])
+    assert inspect(tmp_path, runner) == Inspection(state="absent", nodes=())
+    assert runner.calls == [PS, (*INSPECT, "clab-t-n1"), PS, NETWORK]
+
+
 def test_an_exited_container_is_present_not_running_and_without_an_address(tmp_path: Path) -> None:
     exited = lab(container("n1", running=False, address="172.20.2.2"), container("n2", address="172.20.2.3"))
     inspection = inspect(tmp_path, FakeRunner(exited))
@@ -948,11 +1000,13 @@ class FakeStatusRunner:
     def __init__(self, status: int, stdout: str = "", stderr: str = "") -> None:
         self.answer = (status, stdout, stderr)
         self.calls: list[tuple[str, ...]] = []
+        self.envs: list[Mapping[str, str] | None] = []
 
     async def __call__(
         self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None
     ) -> tuple[int, str, str]:
         self.calls.append(tuple(argv))
+        self.envs.append(env)
         return self.answer
 
 
@@ -992,3 +1046,304 @@ def test_exec_keeps_the_last_bytes_of_each_output(tmp_path: Path) -> None:
     answer = _exec(tmp_path, FakeStatusRunner(0, big, big))
     assert answer.stdout == big[-EXEC_OUTPUT_KEPT:] and len(answer.stdout) == 65536
     assert answer.stderr == big[-EXEC_OUTPUT_KEPT:]
+
+
+def test_the_driver_states_no_environment_of_its_own(tmp_path: Path) -> None:
+    """Every command leaves `env` unstated, so that `cli` gives it the allow-list's (D-065)."""
+    runner = FakeRunner({**HOLDING_172_20_0, **RUNNING, DEPLOY: "", DESTROY: ""}, fail=[NETWORK])
+    status_runner = FakeStatusRunner(0, "out")
+    p = planned("three-node")
+    asyncio.run(ContainerlabDriver(tmp_path / "a", runner=runner, meminfo=meminfo(tmp_path, ROOMY_KB), cpus=64)
+                .admit(manifest("three-node"), PLATFORMS, PROBES, "t", ()))
+    asyncio.run(ContainerlabDriver(tmp_path / "b", runner=runner).apply(p.deployment, p.files, PLATFORMS, PROBES))
+    inspect(tmp_path, runner)
+    destroy(tmp_path, runner, p)
+    asyncio.run(ContainerlabDriver(tmp_path, runner=runner, status_runner=status_runner)
+                .exec("t", "n1", ["true"], 5.0))
+    assert runner.envs and status_runner.envs
+    assert len(runner.envs) == len(runner.calls)
+    assert all(env is None for env in runner.envs + status_runner.envs)
+
+
+# `events` (D-058): `docker events` followed for the containers of every lab, and the lab of each event named.
+
+FOLLOWED = ["docker", "events", "--filter", "type=container", "--filter", "label=containerlab", "--filter",
+            "event=start", "--filter", "event=die", "--filter", "event=destroy", "--format", "{{json .}}"]
+LISTED = ("docker", "ps", "-a", "--filter", "label=containerlab", "--format", '{{.Label "containerlab"}}')
+MARKERS = ("192.0.2.1", "secret-marker")
+
+
+class Waits:
+    """A follow with nothing more to say: it waits until it is cancelled or closed, as `docker events` does."""
+
+
+WAITS = Waits()
+
+
+class FakeFollower:
+    """An asynchronous generator function with `cli.follow`'s signature. Each call follows the next of `streams`: it
+    yields the stream's lines, then raises its exception, waits for good at `WAITS`, or ends (status 0) where the
+    stream ends; a call past the last stream waits. It records each call's argv and env, how many follows reached
+    `WAITS`, and how many ended, whatever ended them (its `finally`)."""
+
+    def __init__(self, *streams: Sequence[str | Exception | Waits]) -> None:
+        self.streams = list(streams)
+        self.argvs: list[list[str]] = []
+        self.envs: list[Mapping[str, str] | None] = []
+        self.waiting = 0
+        self.ended = 0
+
+    async def __call__(self, argv: Sequence[str], *, env: Mapping[str, str] | None = None) -> AsyncGenerator[str]:
+        self.argvs.append(list(argv))
+        self.envs.append(env)
+        stream = self.streams.pop(0) if self.streams else [WAITS]
+        try:
+            for item in stream:
+                if isinstance(item, Waits):
+                    self.waiting += 1
+                    await asyncio.Event().wait()
+                elif isinstance(item, Exception):
+                    raise item
+                else:
+                    yield item
+        finally:
+            self.ended += 1
+
+
+def docker_event(action: str, lab: str) -> str:
+    """A line of `docker events --format '{{json .}}'` for a node of the lab `lab`, as Docker 29.8.1 prints one
+    (verified-facts.md)."""
+    attributes = {"containerlab": lab, "image": "ghcr.io/nokia/srlinux:24.7.1", "name": f"clab-{lab}-n1"}
+    if action == "die":
+        attributes |= {"execDuration": "11", "exitCode": "137"}
+    return json.dumps({"Type": "container", "Action": action, "Actor": {"ID": "82ae1ae58c53", "Attributes": attributes},
+                       "scope": "local", "time": 1793935322, "timeNano": 1793935322707899332})
+
+
+def events_driver(
+    tmp_path: Path, follower: FakeFollower, runner: Callable[..., Awaitable[str]] | None = None, **kw: Any
+) -> ContainerlabDriver:
+    return ContainerlabDriver(tmp_path, runner=runner or FakeRunner({}), follower=follower,
+                              **{"backoff": lambda _: 0.0, **kw})
+
+
+async def _until_waiting(task: asyncio.Task[Any], follower: FakeFollower, follows: int) -> None:
+    """Return once `follows` follows have reached `WAITS`; what ended `task` before is the test's failure."""
+    async with asyncio.timeout(5):
+        while follower.waiting < follows:
+            if task.done():
+                await task
+                pytest.fail("events ended")
+            await asyncio.sleep(0.001)
+
+
+def named(driver: ContainerlabDriver, follower: FakeFollower, follows: int = 1) -> list[str]:
+    """The names `driver.events()` yields until its `follows`-th follow waits; the task is then cancelled, and the
+    cancel must reach it."""
+    names: list[str] = []
+
+    async def consume() -> None:
+        async for name in driver.events():
+            names.append(name)
+
+    async def body() -> None:
+        task = asyncio.create_task(consume())
+        await _until_waiting(task, follower, follows)
+        await cancelled(task)
+
+    bounded(body)
+    return names
+
+
+def test_the_lab_of_an_event_is_its_containerlab_label_alone() -> None:
+    assert lab_of(docker_event("die", "t-2")) == "t-2"
+    assert lab_of('{"Actor": {"Attributes": {"containerlab": "t", "name": "clab-u-n1"}}}') == "t"
+
+
+@pytest.mark.parametrize("line", [
+    "", "not json", "[]", '"t"', "null", "{}", '{"Actor": []}', '{"Actor": {"Attributes": ["t"]}}',
+    '{"Actor": {"Attributes": {"name": "clab-t-n1"}}}', '{"Actor": {"Attributes": {"containerlab": 7}}}',
+    '{"Actor": {"Attributes": {"containerlab": ""}}}', '{"Actor": {"Attributes": {"containerlab": "Bad_Name"}}}',
+])
+def test_a_line_that_names_no_twin_has_no_lab(line: str) -> None:
+    assert lab_of(line) is None
+
+
+def test_events_names_the_lab_of_each_container_event(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level("DEBUG", logger="fylgja.containerlab")
+    follower = FakeFollower([docker_event("start", "t"), docker_event("die", "t-2"), docker_event("destroy", "u"),
+                             "not json", '{"Action": "start", "Actor": {"Attributes": {}}}',
+                             docker_event("start", "Bad_Name"), WAITS])
+    runner = FakeRunner({})
+    assert named(events_driver(tmp_path, follower, runner), follower) == ["t", "t-2", "u"]
+    assert follower.argvs == [FOLLOWED]
+    assert follower.envs == [None]  # the allow-list's environment, as every command the driver runs (D-065)
+    assert runner.calls == []  # the first follow lists nothing: the loop's start queues every twin
+    assert [r.levelname for r in caplog.records if r.levelname != "DEBUG"] == []
+    assert "Bad_Name" not in caplog.text and "not json" not in caplog.text
+
+
+@pytest.mark.parametrize("listing", ["answered", "failed"])
+def test_events_starts_docker_events_again_and_names_every_lab_it_holds(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, listing: str
+) -> None:
+    failed = CommandFailed(EVENTS_ARGV, 1, "error during connect\n")
+    follower = FakeFollower([docker_event("start", "t"), failed], [WAITS])
+    runner = FakeRunner({LISTED: "u\nt\nu\n"}) if listing == "answered" else FakeRunner({}, fail=[LISTED])
+    names = named(events_driver(tmp_path, follower, runner), follower)
+    assert follower.argvs == [FOLLOWED, FOLLOWED]  # the second follow started
+    assert runner.calls == [LISTED] and runner.budgets == [DOCKER_TIMEOUT_S]
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert "docker events" in warnings[0] and "status 1" in warnings[0]
+    if listing == "answered":
+        assert names == ["t", "t", "u"]  # each lab once, sorted, after the stream's own
+        assert len(warnings) == 1
+    else:
+        assert names == ["t"]
+        assert len(warnings) == 2 and "status 1" in warnings[1]
+
+
+def test_after_a_follow_that_ends_a_listed_lab_that_is_no_twin_name_is_dropped(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    follower = FakeFollower([], [WAITS])  # the first follow ends at once, with status 0
+    # A container whose label is empty lists an empty line; a label holding a space is one lab's name, never two.
+    runner = FakeRunner({LISTED: "\nBad_Name\na b\nt\n"})
+    assert named(events_driver(tmp_path, follower, runner), follower) == ["t"]
+    (warning,) = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert "docker events" in warning and "status 0" in warning
+    assert "Bad_Name" not in caplog.text and "a b" not in caplog.text
+
+
+@pytest.mark.parametrize("listing", ["answered", "failed"])
+def test_after_a_follow_that_ends_a_twin_with_a_directory_and_no_container_is_named(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, listing: str
+) -> None:
+    """Rule D: the driver holds a twin from its `apply` to its `destroy` by its directory, `root/containerlab/<twin>`,
+    and a twin whose every container went during the gap lists none (the listing is of containers)."""
+    for directory in ("gone", "t", "Bad_Name"):  # the last no twin name, so dropped
+        (tmp_path / "containerlab" / directory).mkdir(parents=True)
+    (tmp_path / "containerlab" / "stray-file").write_text("")  # no twin's directory
+    follower = FakeFollower([], [WAITS])
+    runner = FakeRunner({LISTED: "t\nu\n"}) if listing == "answered" else FakeRunner({}, fail=[LISTED])
+    names = named(events_driver(tmp_path, follower, runner), follower)
+    assert names == (["gone", "t", "u"] if listing == "answered" else ["gone", "t"])  # each once, sorted
+    assert "Bad_Name" not in caplog.text
+
+
+def test_cancelling_events_closes_its_follow(tmp_path: Path) -> None:
+    follower = FakeFollower([docker_event("start", "t"), WAITS])
+    driver = events_driver(tmp_path, follower)
+
+    async def body() -> None:
+        async def consume() -> None:
+            async for _ in driver.events():
+                pass
+
+        task = asyncio.create_task(consume())
+        await _until_waiting(task, follower, 1)
+        assert follower.ended == 0
+        await cancelled(task)  # the cancel goes on: events never swallows it
+        assert follower.ended == 1
+
+    bounded(body)
+
+
+def test_closing_events_between_two_names_closes_its_follow(tmp_path: Path) -> None:
+    follower = FakeFollower([docker_event("start", "t"), docker_event("start", "u"), WAITS])
+    driver = events_driver(tmp_path, follower)
+
+    async def body() -> None:
+        names = driver.events()
+        assert isinstance(names, AsyncGenerator)
+        async with asyncio.timeout(5):
+            assert await anext(names) == "t"
+        await closed(names)
+        assert follower.ended == 1  # at once, not when the follow is collected
+
+    bounded(body)
+
+
+def test_the_backoff_grows_while_docker_events_names_nothing_and_a_name_resets_it(tmp_path: Path) -> None:
+    asked: list[float | None] = []
+
+    def backoff(previous: float | None) -> float:
+        asked.append(previous)
+        return 0.001 if previous is None else previous * 2
+
+    failed = CommandFailed(EVENTS_ARGV, 1, "")
+    follower = FakeFollower([failed], [failed], [docker_event("start", "t"), failed], [WAITS])
+    driver = events_driver(tmp_path, follower, FakeRunner({LISTED: ""}), backoff=backoff)
+    assert named(driver, follower) == ["t"]
+    assert asked == [None, 0.001, None]
+
+
+def test_events_follows_through_cli_and_waits_the_seams_one_backoff() -> None:
+    """The restart waits `driver.events_backoff`, not a copy of it (pre-flight ruling 9)."""
+    defaults = ContainerlabDriver.__init__.__kwdefaults__
+    assert defaults is not None
+    assert defaults["follower"] is cli.follow and defaults["backoff"] is events_backoff
+
+
+class RaisingRunner:
+    """A runner whose every command raises an error holding `MARKERS`: a `CommandFailed`, then a `RuntimeError`."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, ...]] = []
+
+    async def __call__(self, argv: Sequence[str], *, timeout_s: float, **kw: Any) -> str:
+        self.calls.append(tuple(argv))
+        if len(self.calls) % 2:
+            raise CommandFailed(argv, 1, f"failed to connect to the docker API at tcp://{' '.join(MARKERS)}\n")
+        raise RuntimeError(f"dial tcp {' '.join(MARKERS)}: connection refused")
+
+
+def test_nothing_of_docker_events_or_its_failures_reaches_a_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Constitution X: a failure's text and a line of the stream can name the daemon's address (verified-facts.md),
+    so neither is logged, and the stream is followed again."""
+    caplog.set_level("DEBUG", logger="fylgja.containerlab")
+    marked = " ".join(MARKERS)
+    follower = FakeFollower(
+        [f"not json {marked}", f'{{"Actor": {{"Attributes": {{"containerlab": "{marked}"}}}}}}',
+         RuntimeError(f"dial tcp {marked}")],
+        [CommandFailed(EVENTS_ARGV, 1, f"failed to connect to the docker API at tcp://{marked}\n")],
+        [docker_event("start", "t"), WAITS])
+    runner = RaisingRunner()
+    assert named(events_driver(tmp_path, follower, runner), follower) == ["t"]  # it went on
+    assert len(follower.argvs) == 3 and runner.calls == [LISTED, LISTED]
+    formatted = [logs.JsonFormatter().format(record) for record in caplog.records]
+    assert sum('"level": "WARNING"' in line for line in formatted) == 4  # two follows and two listings failed
+    assert not [line for line in formatted if any(marker in line for marker in MARKERS)]
+
+
+def test_on_a_host_without_docker_events_follows_again_and_logs_no_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """With the driver's own follower and runner and no `docker` on `PATH`: the follow's spawn fails as a command
+    does (status 127), the listing's as `cli.run` raises it, and each is a WARNING and a retry, never a traceback for
+    the loop to log (pre-flight ruling 5)."""
+    monkeypatch.setenv("PATH", str(tmp_path))  # an empty directory: `docker` is nowhere
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    driver = ContainerlabDriver(tmp_path, backoff=lambda _: 0.0)
+
+    def warnings() -> list[logging.LogRecord]:
+        return [r for r in caplog.records if r.levelname == "WARNING"]
+
+    async def body() -> None:
+        async def consume() -> None:
+            async for name in driver.events():
+                pytest.fail(f"events named {name}")
+
+        task = asyncio.create_task(consume())
+        async with asyncio.timeout(5):
+            while len(warnings()) < 4 and not task.done():
+                await asyncio.sleep(0.001)
+        await cancelled(task)
+
+    bounded(body)
+    follow, listing, again = (r.getMessage() for r in warnings()[:3])
+    assert "docker events ended (CommandFailed, status 127)" in follow and follow == again
+    assert "(FileNotFoundError)" in listing
+    assert all(r.exc_info is None and r.levelno <= logging.WARNING for r in caplog.records)

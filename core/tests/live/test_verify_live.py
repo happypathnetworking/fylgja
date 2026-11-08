@@ -38,6 +38,7 @@ from typing import Any
 import pytest
 
 from fylgja_core import blueprint, burst, compiler, gnmi, mapping, platform_package, probe_package, push
+from fylgja_core.containerlab import cli
 from fylgja_core.containerlab.driver import ContainerlabDriver
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.credentials import Credential, Provider
@@ -107,10 +108,10 @@ def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
 
 
 def clab(lab: Lab, *args: str) -> None:
-    """containerlab on the twin's topology, as the driver deploys it; its environment carries no
-    variable of the core's."""
+    """containerlab on the twin's topology, as the driver deploys it; its environment is the
+    allow-list's, as the driver's is."""
     directory = lab.driver._directory(lab.twin)
-    env = {k: v for k, v in os.environ.items() if not k.startswith("FYLGJA_")}
+    env = cli.environment(os.environ)
     start = time.monotonic()
     done = subprocess.run(["containerlab", *args, "-t", str(directory / TOPOLOGY)], capture_output=True, text=True,
                           timeout=300, env=env, cwd=directory, check=False)

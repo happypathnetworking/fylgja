@@ -33,6 +33,7 @@ from typing import Any
 import pytest
 
 from fylgja_core import blueprint, compiler, mapping, platform_package, probe_package
+from fylgja_core.containerlab import cli
 from fylgja_core.containerlab.driver import DOCKER_DAEMON_ERRORS, ContainerlabDriver
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.driver import Allocation, Changes, DriverFailed, Exec, Inspection, Planned, Refusal
@@ -196,10 +197,11 @@ def exec_in(lab: Lab, node: str, argv: Sequence[str], timeout_s: float = EXEC_TI
 
 def dry_run(lab: Lab, after: Planned) -> dict[str, Any]:
     """containerlab's plan for deploying `after`'s topology over the running lab. Its own
-    stdout; the child's environment carries no credential of the core's."""
+    stdout; the child's environment is the
+    allow-list's, as the driver's is."""
     topology = lab.dry / TOPOLOGY
     topology.write_bytes(after.files[TOPOLOGY])
-    env = {k: v for k, v in os.environ.items() if not k.startswith("FYLGJA_")}
+    env = cli.environment(os.environ)
     env["CLAB_LABDIR_BASE"] = str(lab.driver._directory(TWIN))  # where the driver deploys the lab from
     start = time.monotonic()
     done = subprocess.run(["containerlab", "deploy", "--dry-run", "--format", "json", "-t", str(topology)],

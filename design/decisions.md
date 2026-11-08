@@ -80,6 +80,22 @@ already have been weighed.
 | [D-054](#d-054) | The step as built: its dispatch, its record before `applied`, the spec it answers to, and its endings | Pushing, stepping and verifying |
 | [D-055](#d-055) | The local driver's destroy waits for a stray deploy and removes every container of the lab | Runtimes and drivers |
 | [D-056](#d-056) | A deploy's output goes to a file in the twin's directory, so a stray deploy runs to completion | Runtimes and drivers |
+| [D-057](#d-057) | The clabernetes driver: a namespace per twin, files that hold no credential, and pods as incarnations | Runtimes and drivers |
+| [D-058](#d-058) | The seam's tenth call, `events`: a driver names the twins whose runtime changed | Runtimes and drivers |
+| [D-059](#d-059) | A twin's NetworkPolicy also admits the core's namespace | Runtimes and drivers |
+| [D-060](#d-060) | The clabernetes driver is developed on the three-server k3s cluster; kind is retired | Runtimes and drivers |
+| [D-061](#d-061) | The object store is S3 by conditional writes, signed in the core, with Versity in development | The reconcile loop and state |
+| [D-062](#d-062) | On a cluster the core is one pod under a Lease, deployed by kustomize from an image built in the tree | The reconcile loop and state |
+| [D-063](#d-063) | TLS ends at the server | The API and its clients |
+| [D-064](#d-064) | Phase 6's libraries: lightkube for Kubernetes, and none for S3 | The API and its clients |
+| [D-065](#d-065) | Every command the local driver runs gets a stated environment | Runtimes and drivers |
+| [D-066](#d-066) | The formats ship inside the package, built from `formats/` | Process and repository |
+| [D-067](#d-067) | A kick on a settled twin inspects it, and a replaced node is pushed again under a `restore` run | The reconcile loop and state |
+| [D-068](#d-068) | A driver declares whether applying again finishes an apply cut short | Runtimes and drivers |
+| [D-069](#d-069) | A clabernetes node's incarnation is its pod's uid and its container's restart count | Runtimes and drivers |
+| [D-070](#d-070) | The trigger and the restore as built | The reconcile loop and state |
+| [D-071](#d-071) | The core as a pod as built: the Lease's Role, one Kubernetes client above the seam, and the stop at a lost Lease | The reconcile loop and state |
+| [D-072](#d-072) | The core's own loop resumes on both drivers; the Temporal fallback is retired | The reconcile loop and state |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -934,6 +950,8 @@ make D-013 a slogan.
 ### D-015 — A platform package states only what the runtime does not know
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-069](#d-069) on 2026-11-05: on clabernetes a link-mode change
+replaces the pods of the nodes whose mode changed, not every pod; the rest stands.
 
 #### Context
 
@@ -1028,6 +1046,7 @@ SR Linux first, then EOS. The order after that is [parked](#parked).
 
 **Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-049](#d-049) on
 2026-11-04: the seam has nine calls, `changes` and `exec` joining; the rest stands.
+Superseded in part by [D-058](#d-058) on 2026-11-05: the seam has ten calls, `events` joining.
 
 #### Context
 
@@ -1104,6 +1123,8 @@ other driver reaches its runtime by its own means: clabernetes through the Kuber
 ### D-019 — Many named twins, each in its own isolation unit
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-059](#d-059) on 2026-11-05: the policy also admits the core's
+namespace; the rest stands.
 
 #### Context
 
@@ -1206,6 +1227,8 @@ image present on a host is not enough.
 **Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-036](#d-036) on
 2026-11-02, which decides the production cluster's shape that this entry left to the
 multi-host trial. kind for development stands.
+Superseded by [D-060](#d-060) on 2026-11-05 in its cluster: the three-server k3s cluster
+replaces kind. The local driver's sufficiency stands.
 
 #### Context
 
@@ -1319,6 +1342,8 @@ hosts, a drain of one host, and teardown ([verified-facts.md](verified-facts.md)
 
 **Status:** Accepted 2026-11-02. Supersedes [D-020](#d-020) in the Services' traffic
 policy; its LoadBalancer per node, auto-expose off and `endpoints()` stand.
+Superseded in part by [D-057](#d-057) on 2026-11-05: `inspect` patches a Service it finds not
+`Local` itself; the rest stands.
 
 #### Context
 
@@ -1373,6 +1398,7 @@ and not others.
 ### D-043 — The local driver's allocation and its reach into Docker
 
 **Status:** Accepted 2026-11-03. Details [D-018](#d-018) and [D-019](#d-019).
+Added to by [D-065](#d-065) on 2026-11-05: a command's environment is an allow-list.
 
 #### Context
 
@@ -1407,6 +1433,8 @@ CLI as a subprocess ([D-018](#d-018)).
 ### D-046 — The driver registry is the one module above the seam that names a runtime
 
 **Status:** Accepted 2026-11-03. Details [D-017](#d-017).
+Detailed by [D-069](#d-069) on 2026-11-05: behind the seam, the clabernetes package imports
+the local driver's `plan` and `changes` alone.
 
 #### Context
 
@@ -1445,6 +1473,7 @@ declared capability.
 
 **Status:** Accepted 2026-11-04. Supersedes [D-017](#d-017) in its count of calls: nine, not
 seven. The rest of D-017 stands.
+Superseded in part by [D-058](#d-058) on 2026-11-05: the seam has ten calls.
 
 #### Context
 
@@ -1661,6 +1690,428 @@ resume applies again and so repairs it, after the stray wait, by chance.
 - The twin's directory holds one file the deployment does not name; `_check_files` checks the
   deployment's files alone, and the directory is removed whole at destroy.
 
+<a id="d-057"></a>
+### D-057 — The clabernetes driver: a namespace per twin, files that hold no credential, and pods as incarnations
+
+**Status:** Accepted 2026-11-05. Details [D-017](#d-017), [D-019](#d-019), [D-020](#d-020)
+and [D-021](#d-021); supersedes [D-037](#d-037) in who patches a Service that drifted.
+Detailed by [D-069](#d-069) on 2026-11-05: a node's incarnation is its pod's uid and its
+container's restart count, the pull secrets name every registry of the allocation, and a
+namespace of the twin's name that is not the twin's is `absent` to `inspect`, left by
+`destroy` and refused by `apply` and `exec`; superseded in part by it the same day: a
+link-mode change replaces the pods of the nodes whose mode changed, not every pod. The rest
+stands.
+
+#### Context
+
+The seam ([D-017](#d-017), [D-049](#d-049)) and the facts measured on the cluster
+([verified-facts.md](verified-facts.md)) fix most of the driver. What they left open: the
+names, what `plan` renders, where a gated image's registry comes from, how each acting call
+maps to Kubernetes, and what `changes` is held to on a runtime with no dry run. Deployment 1
+already lists the driver's files, the pull secret's Secret among them, and the store keeps
+every deployment's files.
+
+#### Options considered
+
+- **The namespace named for the twin alone.** Rejected: a twin named `default` or `c9s`
+  would claim a namespace that is not its own.
+- **The pull secret rendered as a file of the deployment.** Rejected: the store would hold a
+  registry password ([Constitution X](constitution.md#x-report-honestly)).
+- **The registry's address in the platform package.** Rejected: a package is data any site
+  shares, and it names its pull secret already. Where that secret's registry is belongs
+  with the credential.
+- **What the site decides (the core's namespace, the controller's, the pod CIDR, the
+  registries) as the driver's configuration, not the allocation.** Rejected: a resumed `plan`
+  must render the same files from the record alone, whatever the core's settings have become
+  ([D-017](#d-017)).
+- **`registries` holding only the pull secrets the bundle names.** Rejected: a stepping twin
+  keeps its allocation ([D-049](#d-049)), and a step from an SR Linux twin to one with a
+  cEOS node would have no prefix to write.
+- **The pod CIDR or the controller's namespace as a constant.** Rejected: each is a site's,
+  and [D-037](#d-037) kept one CNI's addressing out of `plan`.
+- **`changes` trusted from the recorded facts alone.** Rejected: the local driver's is held to
+  containerlab's dry run ([D-049](#d-049)), and this one deserves an oracle as real.
+
+#### Decision
+
+- **The allocation** is `{namespace, core_namespace, controller_namespace, pod_cidr,
+  registries}`: the twin's own namespace, and what the site decides that `plan` writes.
+  - `namespace` is `fylgja-twin-<twin>`.
+  - `core_namespace` is the namespace the core runs in, absent when it runs off the cluster.
+  - `controller_namespace` and `pod_cidr` are clabernetes' namespace and the cluster's pod
+    CIDR, which the policy names. The driver reads them from `FYLGJA_CLABERNETES_NAMESPACE`
+    and `FYLGJA_POD_CIDR`, both required when it is the driver ([D-042](#d-042)).
+  - `registries` maps every pull credential the provider holds at admission to its image
+    prefix ([D-062](#d-062)), whichever the bundle names, so a step may bring a gated kind.
+    A bundle naming a pull secret the allocation lacks is unplannable.
+
+  `admit` reserves the allocation by compare-and-set and refuses, with
+  `admission.namespace.taken`, a namespace that exists without the twin's labels. A stepping
+  twin keeps its allocation ([D-049](#d-049)). Capacity is phase 7's.
+- **Labels.** Every object the driver makes carries `fylgja.owner: core` and
+  `fylgja.twin: <twin>`, and the containerlab topology's default labels put both on every
+  pod. An orphan is a namespace with the first label and no twin record.
+- **`plan` renders three files**: `namespace.yaml` (the labels, and pod security
+  `privileged`), `networkpolicy.yaml` ([D-059](#d-059)) and `topology.yaml`, a `Topology`
+  wrapping the containerlab YAML the local driver's plan renders, less its `mgmt` block and
+  its binds. The Topology sets `expose.disableAutoExpose`, declares each package's push and
+  gNMI ports and SSH on 22, requests each package's `cpu` and `memory_mb`, names each pull secret
+  in `imagePull.pullSecrets`, and writes a gated image as `<prefix>/<ref>`. **No Secret is a
+  file**: `apply` makes each pull secret in the twin's namespace from the credential
+  provider.
+- **`capabilities`**: provisions nodes, re-cables live, forwards in software, direct access,
+  isolation by network, and an apply cut short is finished by applying again
+  ([D-068](#d-068)).
+- **`changes`** is pure, from the two rendered topologies and the packages, by the recorded
+  facts: a link change under the `live` mode re-cables and keeps the pod; a `restart` or
+  `recreate` mode replaces the link's pods; a change to any node's link mode, kind or image
+  replaces that pod, and a link-mode change replaces every pod; a change to a host's `exec`
+  lines replaces the host's pod; a port added after boot to a kind that cannot add one is
+  `recreated`, and `apply` makes it so. **Its oracle is the cluster**: the live tier holds
+  each step fixture's answer to the pods' uids before and after the step.
+- **`apply`** applies the namespace and the policy, makes the pull secrets, applies the
+  Topology, waits within the packages' deploy budget until every node's pod is `Ready` and
+  the Topology says so, and patches each Service to `externalTrafficPolicy: Local`
+  ([D-037](#d-037)). `reconfigure` deletes every pod of the twin, so each returns as a new
+  incarnation.
+- **A recreate `apply` must make** (a port added after boot) it finds by comparing the
+  Topology the cluster holds with the one it applies: the cluster's is its "before", as the
+  topology on disk is the local driver's. It applies the new Topology carrying an annotation
+  that names each such node and its pod's uid, waits until the Topology has observed its
+  generation, deletes each named pod still at that uid, and removes the annotation. An
+  `apply` that finds the annotation finishes it, so a kill between the two is resumed. Read
+  on the cluster: the replacement pod lists the added port
+  ([verified-facts.md](verified-facts.md)).
+- **`inspect`** answers `absent` when the namespace does not exist, `residue` when it exists
+  and holds none of the twin's pods, and `present` otherwise. A node's handle is its pod's
+  name, its incarnation the pod's uid, its address its Service's LoadBalancer address; a
+  probe host declares no port, has no such Service, and so no address. A
+  Service it finds not `Local` it patches and logs: the seam's `Inspection` carries no
+  drift, and every pass inspects.
+- **`destroy`** deletes the namespace and waits, within the packages' destroy budget, until
+  it is gone. **`endpoints`** is each node's LoadBalancer address ([D-020](#d-020)).
+- **`exec`** runs the argument vector in the node's pod, naming no container, within its
+  budget, keeping the tail of each stream. A budget run out is `DriverFailed`, and the
+  command may run on in the node ([verified-facts.md](verified-facts.md)), so a caller passes
+  a command that ends by itself, as the burst's does.
+
+#### Consequences
+
+- Deployment 1 and twin record 1 describe the allocation's members, and deployment 1's
+  description of the files drops the Secret; the rule catalogue gains
+  `admission.namespace.taken`. The driver registry serves a second name
+  ([D-046](#d-046)).
+- A changed setting or registry prefix reaches a twin only when it is admitted anew, since a
+  stepping twin keeps its allocation; so does a pull credential added after its admission.
+- The driver's service account acts in every twin namespace ([D-062](#d-062)).
+- What a missing binary answers through `exec` (the API server's 500 here, an exit status
+  locally) is made the same on both drivers where the conformance suite reads it.
+
+<a id="d-058"></a>
+### D-058 — The seam's tenth call, `events`: a driver names the twins whose runtime changed
+
+**Status:** Accepted 2026-11-05. Supersedes [D-017](#d-017) and [D-049](#d-049) in the
+seam's count; details [D-023](#d-023)'s third trigger. Detailed by [D-070](#d-070) on
+2026-11-06: what names a twin on clabernetes, what each source drops, their gaps and how a
+failure is logged; and the resync is a setting, `FYLGJA_RESYNC_S`.
+
+#### Context
+
+[D-023](#d-023) names four triggers. Three are built: a client's write, the core's start and
+a resync every 300 s. The fourth, a change the driver reports, was left by phase 4. Without
+it a node the runtime replaces (a drained host's pods, a restarted container) holds no
+configuration until the next resync. The two runtimes report differently: Docker's event
+stream, and a watch on pods.
+
+#### Options considered
+
+- **A shorter resync.** Rejected: every twin inspected every few seconds, and still late.
+- **Each driver calls the loop's `kick` itself.** Rejected: the driver would hold the loop,
+  and the seam would run both ways.
+- **Events that carry the node and what happened to it.** Rejected: the loop is
+  level-triggered and `inspect` tells it what is true; an event's detail would be a second,
+  staler account.
+- **An asynchronous iterator of twin names.** Chosen.
+
+#### Decision
+
+- **`events()` answers an asynchronous iterator of twin names**, each a twin whose runtime
+  state may have changed. It ends only when cancelled. The driver reconnects for itself, and
+  after a reconnect may name every twin it holds: a name with nothing behind it costs one
+  pass that finds nothing to do.
+- **The loop runs one task that kicks each name.** The queue already folds repeats
+  ([D-023](#d-023)); a name with no record is dropped.
+- **The local driver** follows `docker events` for containers carrying containerlab's lab
+  label, and names the lab on a start, a die or a destroy.
+- **The clabernetes driver** holds one watch on pods labelled `fylgja.owner: core` in every
+  namespace, and names `fylgja.twin` when a pod is added, deleted, or changes its uid or its
+  readiness.
+- **The resync stays** at its period, so that a missed event is only late.
+
+#### Consequences
+
+- The seam has ten calls. What a kick does on a settled twin is [D-067](#d-067). The core's
+  own applies raise events, each costing one further pass that finds nothing to do.
+- The conformance suite replaces a node behind the core's back, with the resync set long,
+  and reads the push return within seconds.
+
+<a id="d-059"></a>
+### D-059 — A twin's NetworkPolicy also admits the core's namespace
+
+**Status:** Accepted 2026-11-05. Supersedes [D-019](#d-019) in the policy's sources; the
+rest stands.
+
+#### Context
+
+[D-019](#d-019)'s policy admits a twin's own pods, the clabernetes namespace and non-pod
+sources. It was written when the core ran off the cluster. The core is now a pod
+([D-062](#d-062)), and read on the cluster on 2026-11-05 such a pod is refused at a node's
+pod address, its Service's cluster address and its LoadBalancer address alike
+([verified-facts.md](verified-facts.md)).
+
+#### Options considered
+
+- **The core on the host's network.** Rejected: its traffic to another host's pods carries
+  the host's flannel address, inside the pod CIDR the policy refuses ([D-037](#d-037)).
+- **A `namespaceSelector` naming the core's namespace.** Chosen, as verified: every path
+  opened within a second, and a pod in a third namespace stayed refused.
+- **That selector narrowed by a pod label.** Not taken now: it was not read on the cluster,
+  and the core's namespace holds only the core and its store.
+
+#### Decision
+
+The plan's NetworkPolicy admits, beside D-019's three sources, the namespace the allocation
+names as `core_namespace`, selected by `kubernetes.io/metadata.name`. An allocation without
+one, a core off the cluster, adds nothing: such a core is a non-pod source already.
+
+#### Consequences
+
+- Whatever runs in the core's namespace reaches every twin's nodes, so that namespace holds
+  the core and its store and nothing else.
+- The conformance suite tests isolation over TCP from another twin's pod and from a pod in a
+  third namespace, each at least 15 s old ([D-037](#d-037)).
+
+<a id="d-060"></a>
+### D-060 — The clabernetes driver is developed on the three-server k3s cluster; kind is retired
+
+**Status:** Accepted 2026-11-05. Supersedes [D-022](#d-022) in its cluster; that the local
+driver stays sufficient for development and the live tier stands.
+
+#### Context
+
+[D-022](#d-022) chose kind before the multi-host stage. That stage found two behaviours
+kind's single host had hidden: the Services' traffic policy ([D-037](#d-037)) and etcd under
+parallel pulls ([D-036](#d-036)). The three-server cluster now stands, phase 6 ends on it,
+and every fact the driver relies on would otherwise be re-verified on two clusters whose
+network policy controllers differ.
+
+#### Options considered
+
+- **kind for development, k3s for the exit.** Rejected: two sets of facts, and the one
+  developed against is the one that hid what mattered.
+- **kind in CI.** Rejected: CI cannot hold the gated image, and boots no node.
+- **The k3s cluster for both.** Chosen.
+
+#### Decision
+
+- The three-server k3s cluster of [D-036](#d-036)'s shape is where the clabernetes driver is
+  developed and where its conformance suite runs.
+- kind's facts stay in [verified-facts.md](verified-facts.md) under their dates and are not
+  re-verified; kind leaves the tooling.
+- The pure tier covers the driver's `plan` and `changes` by fixtures, and its acting calls
+  over a fake of the Kubernetes API, so no contributor needs a cluster to change the core
+  ([Constitution XIII](constitution.md#xiii-runtimes-are-drivers)).
+
+#### Consequences
+
+- A contributor without such a cluster cannot run the clabernetes conformance suite, as one
+  without the images cannot run the live tier ([D-034](#d-034)).
+- The cluster's prerequisites in [core.md](core.md) are its setup.
+
+<a id="d-065"></a>
+### D-065 — Every command the local driver runs gets a stated environment
+
+**Status:** Accepted 2026-11-05. Adds to [D-043](#d-043): `cli.run`'s default environment.
+
+#### Context
+
+`cli.run` hands a command the core's whole environment unless told otherwise
+([D-043](#d-043)), and the core's environment holds every node login and its settings
+([D-042](#d-042)). No output read so far held one ([verified-facts.md](verified-facts.md)),
+but containerlab expands variables in a topology, and a deploy's output goes to a file
+([D-056](#d-056)).
+
+#### Options considered
+
+- **Remove the `FYLGJA_*` variables.** Rejected: whatever else the operator's shell holds
+  still passes.
+- **An allow-list.** Chosen.
+
+#### Decision
+
+- Every command the local driver runs, `docker events` included ([D-058](#d-058)), gets an
+  environment built from an allow-list: the variables `containerlab` and `docker` need to
+  find their binaries, their home and the Docker daemon, and nothing named `FYLGJA_*`.
+- The list is the smallest with which a deploy, a destroy, an inspect and each `docker`
+  command the driver runs succeed on the running system, recorded in
+  [verified-facts.md](verified-facts.md) for containerlab 0.81.0.
+
+#### Consequences
+
+- A variable an operator relied on reaching containerlab through the core no longer does;
+  it is added to the list by a change, with its reason.
+- A pure test holds that no `FYLGJA_*` variable reaches a child.
+
+<a id="d-068"></a>
+### D-068 — A driver declares whether applying again finishes an apply cut short
+
+**Status:** Accepted 2026-11-05. Supersedes [D-023](#d-023)'s partial-lab rule and
+[D-050](#d-050)'s resume of a step in their reach: both hold for a driver that declares it
+cannot. Adds a member to API 1's driver capabilities ([D-025](#d-025)). Detailed by
+[D-070](#d-070) on 2026-11-06: no path of the loop reconfigures on a driver that declares
+`reapply`.
+
+#### Context
+
+The partial-lab rule is containerlab's fact: a deploy over a partial lab returns 0 and fixes
+nothing, so a resumed core probes the lab and, finding a node silent, reconfigures it, or
+ends a step `diverged` where the spec allows no restart ([D-023](#d-023),
+[D-050](#d-050)). The probe counts a node that is not running, or has no address, silent at
+once, and any other after its readiness window, which was measured from a deploy's return.
+
+On clabernetes the controller goes on after the core dies. A resumed core finds pods still
+coming up, 55 to 119 s from their apply to `Ready`
+([verified-facts.md](verified-facts.md)), against readiness windows of 60 and 90 s. The
+probe would delete pods that were about to answer, or end a step `diverged` for them. And
+the Topology is declarative: applying it again waits for the same pods.
+
+#### Options considered
+
+- **`inspect` reports a pod still coming up as running.** Rejected: the probe's window then
+  decides, and it was measured for a node whose deploy had returned.
+- **The probe moved behind the seam.** Rejected: readiness and the logins sit above it
+  ([D-017](#d-017)).
+- **A declared capability.** Chosen: the loop may branch on one
+  ([Constitution XIII](constitution.md#xiii-runtimes-are-drivers)).
+
+#### Decision
+
+- **`Capabilities` gains `reapply`**, true when applying a deployment again finishes an
+  apply that was cut short. The local driver declares false, the clabernetes driver true.
+- **Where it is true**, a resumed create or step whose apply had begun applies again, with no
+  probe and no reconfigure, and `step.node.silent` cannot arise. **Where it is false**,
+  D-023's and D-050's rules stand as written.
+
+#### Consequences
+
+- API 1's `Driver` lists the member. The `hardware` driver would declare true: its apply
+  resets each device to a baseline.
+- A scenario that kills the core during an apply expects the same ending on both drivers.
+
+<a id="d-069"></a>
+### D-069 — A clabernetes node's incarnation is its pod's uid and its container's restart count
+
+**Status:** Accepted 2026-11-05. Details [D-057](#d-057) (a node's incarnation, the pull
+secrets `apply` makes, and what the driver does with a namespace of the twin's name that is
+not the twin's) and [D-046](#d-046) (the boundary between the two containerlab drivers);
+supersedes [D-057](#d-057) and [D-015](#d-015) in what a link-mode change replaces. Detailed
+by [D-070](#d-070) on 2026-11-06: a pod whose container ended or restarted in it is deleted by
+the driver, at most three times in ten minutes a node, since such a node's address does not
+answer again, and the cluster makes it anew.
+
+#### Context
+
+[D-057](#d-057) makes a node's incarnation its pod's uid, so that a pod the cluster replaces
+voids what the node holds and the loop pushes it again ([D-023](#d-023),
+[D-067](#d-067)). But a pod outlives its container. Kubernetes' contract for a Deployment's
+pod, as a node's is (`restartPolicy: Always`), is that a container that ends is restarted in
+place: the uid stays and the container's restart count grows. What a node does when its
+container is restarted so was not yet read on clabernetes. If it boots again, its push is
+lost, and by the uid alone the restore pass would never see it. Read since, on 2026-11-05:
+an SR Linux node's container ended in its pod came back at the same uid, its restart count
+one more, booted again, its push lost ([verified-facts.md](verified-facts.md)).
+
+Building the driver (phase 6, plan 4) settled three more points, which D-057 left implicit
+or the cluster contradicted:
+
+- the clabernetes driver renders and compares the containerlab definition the local driver
+  renders, through the local driver's own modules, where [D-046](#d-046)'s boundary test let
+  no module outside `fylgja_core.containerlab` import them;
+- `plan` names in `imagePull.pullSecrets` the pull secret of every registry the allocation
+  holds, whichever the bundle uses;
+- read on the cluster on 2026-11-05, a link-mode change replaced the pods of the nodes whose
+  mode changed and no other ([verified-facts.md](verified-facts.md)), where D-057 and
+  [D-015](#d-015) say it replaces every pod. The k3s reading that switching to `live`
+  replaced every pod ("Steps across hosts", 2026-11-02) had changed every node's mode at
+  once; the kind reading that changing any node's mode replaces every pod (2026-10-30) was
+  not read again, kind being retired ([D-060](#d-060)).
+
+#### Options considered
+
+- **The pod's uid alone, as D-057 has it.** Rejected: a container restarted in place keeps
+  it, and the record would say the node holds a push it may have lost.
+- **The container's start time, as the local driver's.** Rejected: a container waiting to
+  restart has none, so a node between two runs of a crash loop would read no incarnation,
+  and a replaced pod is the uid's to say already.
+- **The restart count beside the incarnation, a member of its own.** Rejected: `NodeState`
+  has one incarnation, which the loop compares alone ([D-067](#d-067)); a second member is a
+  change to the seam for one driver's fact.
+- **The pod's uid and its container's restart count, in one string.** Chosen.
+
+#### Decision
+
+- **A clabernetes node's incarnation is `<uid>/<restarts>`**: the uid of the pod that stands
+  for the node (its newest not being deleted, or the newest of all when every one is) and
+  the restart count of its one container, 0 before it has a status. A pod replaced and a
+  container restarted in place each change it, and the loop voids the node's `holds` and
+  pushes it again, as for any changed incarnation. `changes`' oracle in the cluster tier
+  (the clabernetes driver's on-demand tier, beside [D-034](#d-034)'s) still compares uids: a
+  step's pods are replaced, not restarted in place.
+- **The clabernetes package imports, of the local driver, `fylgja_core.containerlab.plan`
+  and `fylgja_core.containerlab.changes` alone, and the two drivers find a node's packages
+  by one lookup,** told how a package's image is written: by its `ref` locally, as
+  `<prefix>/<ref>` for a gated image in a Topology. Both drivers run one containerlab
+  definition, so its render, its comparison and the lookup are written once; the CLI
+  runner, the pool and the local driver's names stay its own, and the local driver imports
+  nothing of clabernetes. Above the seam nothing imports either package, as D-046 has it;
+  `core/tests/test_boundary_seam.py` holds both.
+- **`imagePull.pullSecrets` names every registry of the allocation, so an ungated twin's
+  `apply` needs every held registry's login.** The allocation is the twin's for life
+  ([D-049](#d-049)), so a step that brings a gated kind changes no pod's pull secrets; and a
+  Topology naming a Secret its namespace lacks gets no pod
+  ([verified-facts.md](verified-facts.md)), so `apply` makes every one, each login read
+  before the first Secret is applied. A Secret's `auths` host is the host of the
+  allocation's prefix, under which the Topology writes the images, and a provider whose
+  registry is no longer that prefix fails the `apply`, naming the variable: the twin is bound
+  to the prefix it was admitted with.
+- **A namespace is the twin's by its two labels at every call, not at admission alone.** One
+  of the twin's name that exists without `fylgja.owner: core` and `fylgja.twin: <twin>` is
+  `absent` to `inspect`, where [D-057](#d-057) says `absent` only of a namespace that does
+  not exist; `destroy` leaves it, logging a warning; `apply` fails, `DriverFailed`, with
+  nothing applied and the namespace not labelled; and `exec` fails with nothing run. The
+  driver never labels, applies into or deletes a namespace that is not the twin's.
+- **D-057's and D-015's clauses that a link-mode change on clabernetes replaces every pod
+  are superseded.** A change to a node's link mode replaces that node's pod and no other, as
+  read on the cluster, and `changes` answers so: `recreated` for `link_mode`, as the local
+  driver answers it.
+
+#### Consequences
+
+- Twin record 1 describes a node's `handle` on clabernetes as its pod's name and its
+  `incarnation` as `<uid>/<restarts>`.
+- The cluster tier restarts a node's container in place and reads the same uid, one restart
+  more, another incarnation and whether the node boots again, recorded in
+  [verified-facts.md](verified-facts.md): read there on 2026-11-05, on an SR Linux node,
+  which booted again and lost its push. Until then the pure tier alone held the rule.
+- A step that changes one node's link mode needs `allow_restart` for that node alone. A
+  neighbour the cluster did replace would still be pushed again, since the loop acts on
+  every changed incarnation.
+- A pull credential removed from the provider, left without its login, or set to another
+  registry refuses the next admission of a stepping twin that was admitted while it was held,
+  and fails an `apply` already under way, each naming its variable, until it is set again.
+  One left without its login refuses any admission, a new twin's included. One added reaches
+  a twin only when it is admitted anew ([D-057](#d-057)).
+
 
 ## The reconcile loop and state
 
@@ -1668,6 +2119,14 @@ resume applies again and so repairs it, after the stray wait, by chance.
 ### D-023 — The core runs its own reconcile loop, scheduled by a queue keyed by twin
 
 **Status:** Accepted at the baseline (2026-10-31).
+Detailed by [D-058](#d-058) (the driver's trigger), [D-062](#d-062) (the Lease) and
+[D-067](#d-067) (the pass on a settled twin) on 2026-11-05; superseded in part by
+[D-068](#d-068) the same day: the partial-lab rule holds for a driver that cannot apply again.
+Detailed by [D-070](#d-070) on 2026-11-06: a driver's event never brings a twin's pass forward
+of its backoff (item 18). Superseded in part by [D-072](#d-072) on 2026-11-07: Temporal is no
+longer the fallback, the core's own loop having resumed every run a kill of the conformance suite
+found unfinished, on both drivers; on the cluster the kills at a create's `pushed` and a step's
+`verified` found the run ended, and locally the one at a step's `verified` did.
 
 #### Context
 
@@ -1750,6 +2209,8 @@ Scheduling:
 ### D-024 — State lives behind one store; no database
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-061](#d-061) on 2026-11-05: development's object storage is Versity
+S3 Gateway, MinIO's open-source edition having ended; the rest stands.
 
 #### Context
 
@@ -1856,6 +2317,10 @@ time ([D-023](#d-023)). A killed core must leave every file whole.
 dispatch, the record before `applied`, the generation a run works toward, the cancel's and the
 ending's readings, and a refused step's verdict; the rest stands. Details [D-023](#d-023) and
 [D-029](#d-029); adds `FYLGJA_STEP_WAIT_S` to [D-042](#d-042).
+Superseded in part by [D-068](#d-068) on 2026-11-05: a step's resume applies again, with no
+probe, on a driver that declares it can. Superseded in part by [D-070](#d-070) on 2026-11-06:
+a step to the bundle the twin runs ends at `compiled` only when every device node holds it, and
+otherwise readies, pushes and verifies those that hold nothing.
 
 #### Context
 
@@ -1943,6 +2408,793 @@ for both operations.
   `step.relink.unsupported`, `step.wait.expired`, `step.node.silent` and `step.diverged`,
   and the `Ready` reason `twin.stepping`; a stepped twin's reason is `twin.ready` again.
 
+<a id="d-061"></a>
+### D-061 — The object store is S3 by conditional writes, signed in the core, with Versity in development
+
+**Status:** Accepted 2026-11-05. Supersedes [D-024](#d-024) in development's object storage
+(MinIO); details its `object` store. One store interface and no database stand.
+
+#### Context
+
+[D-024](#d-024) names MinIO for development. MinIO's open-source repository was archived in
+April 2026, and its vendor no longer serves that edition's binaries or images; what replaced
+it is proprietary. The `object` store needs four calls and one property: a write that
+succeeds only if the object is absent, or only if it is unchanged. The store interface is
+synchronous ([D-041](#d-041)). The cluster's one storage class binds a volume to a node, so
+any store of one replica there is as pinned as a directory on a volume.
+
+#### Options considered
+
+The store, for development:
+
+- **Garage.** Rejected: it accepts `If-None-Match: *` and overwrites; its maintainers say its
+  replication cannot support the condition.
+- **SeaweedFS, RustFS.** Not taken: fuller systems than megabytes of JSON need, with
+  conditional-write races repaired in releases weeks old.
+- **Ceph through Rook.** Rejected for development: about 10 GiB of daemons and a raw disk per
+  host. It is what a site that needs the store to survive a drain would point the core at.
+- **The store beside the registry, off the cluster.** Not taken now: host setup the manifests
+  cannot carry.
+- **Versity S3 Gateway, one pod over a volume.** Chosen: one Apache-2.0 process that makes a
+  directory an S3 endpoint, its conditional writes read on 2026-11-05
+  ([verified-facts.md](verified-facts.md)).
+
+The client:
+
+- **boto3 in threads; aiobotocore.** Rejected: 7 to 17 packages, a second HTTP stack or
+  none typed, for four calls.
+- **obstore.** Rejected: one package, but a compiled extension still before 1.0.
+- **SigV4 written in the core, over httpx.** Chosen: about a hundred lines, whose signatures
+  matched botocore's byte for byte.
+
+#### Decision
+
+- **The `object` store speaks S3 to any endpoint that honours conditional writes**:
+  `GetObject`, `PutObject`, `DeleteObject` and `ListObjectsV2`, path-style, signed with
+  SigV4 by the core over httpx. No S3 library is a dependency.
+- **Compare-and-set is the condition.**
+  - A document kept by id, a new twin record and a new run are put with `If-None-Match: *`;
+    a refusal means it exists.
+  - A twin record or a run is replaced with `If-Match` at the ETag it was read with, once
+    the revision or the state read is the one expected; a delete carries the same
+    condition.
+  - A run's event is one object, keyed by the run and its sequence number padded to sort,
+    created with `If-None-Match: *`; a refusal means the number is taken. Events are read by
+    `prefix` and `start-after`.
+  - A bundle's or a deployment's document is written after its files and read before them,
+    so a reader sees every file or `NotFound`.
+- **The store proves its endpoint at start.** On a key of its own it must be refused a
+  create over an object, a replace at an earlier ETag and a delete at an earlier ETag; an
+  endpoint that accepts any of them is refused, naming which.
+- **Settings** ([D-042](#d-042)): `FYLGJA_STORE` is a directory or `s3://<bucket>[/<prefix>]`;
+  with the latter, `FYLGJA_S3_ENDPOINT`, `FYLGJA_S3_ACCESS_KEY` and `FYLGJA_S3_SECRET_KEY`
+  are required, and `FYLGJA_S3_REGION` (default `us-east-1`) and `FYLGJA_S3_CA` are
+  optional.
+- **One core per store** is the Lease's ([D-062](#d-062)): the server refuses an `s3://`
+  store when no Lease is named.
+- **In development** the endpoint is Versity S3 Gateway v1.10.0, one pod in the core's
+  namespace over a `local-path` volume, reached over the cluster network without TLS: a
+  request carries a signature, never the secret, and no record holds a credential.
+- **The signer is tested** against answers taken from botocore's signer and kept in
+  `testdata/`, and the store against Versity under Docker in the live tier.
+
+#### Consequences
+
+- The store and the core stop together when the store's host is drained; the twins run on,
+  unmanaged, until it returns. A site that cannot accept that points the core at replicated
+  S3 storage.
+- An ETag is used only as the token a condition names, never as a checksum.
+- Reading a run's events is one listing and one read an event, which the volume allows.
+- A watcher's subscription stays in the process, as the local store's is.
+
+<a id="d-062"></a>
+### D-062 — On a cluster the core is one pod under a Lease, deployed by kustomize from an image built in the tree
+
+**Status:** Accepted 2026-11-05. Details [D-023](#d-023)'s Lease; adds to [D-042](#d-042):
+`FYLGJA_LEASE`, and a pull credential's `_REGISTRY`.
+Detailed by [D-071](#d-071) on 2026-11-07: the Lease's rule is a Role in the core's namespace,
+beside the one ClusterRole; what the Lease promises and what it does not; what the server does
+when it loses it; and what a store's fault on a read route answers.
+
+#### Context
+
+Phase 6 runs the core off the development host for the first time: as a pod on the
+three-server cluster ([D-060](#d-060)), holding a Lease so that a second never reconciles
+beside it ([D-023](#d-023)), its credentials from Secrets ([D-042](#d-042)). The tree holds
+no host name, address or value, and the cluster's private registry is how an image reaches a
+node ([D-021](#d-021)).
+
+#### Options considered
+
+The manifests:
+
+- **A Helm chart.** Not taken now: a second tool and templates to keep, before any outside
+  user asks for one.
+- **Plain YAML and a script.** Rejected: the site's values would be substituted ad hoc.
+- **kustomize.** Chosen: `kubectl` carries it, the base is plain YAML, and an overlay holds
+  what is a site's.
+
+The image:
+
+- **A distroless base.** Not taken: no shell when a pod needs a look, for megabytes saved.
+- **Built in CI and published.** Not taken: publishing an image is a release's decision.
+- **A Dockerfile in the tree on `python:3.14-slim`.** Chosen.
+
+The role:
+
+- **A Role per twin namespace, bound by the core as it makes each.** Rejected: the core would
+  need the right to grant rights.
+- **One ClusterRole.** Chosen, and stated: the core's service account acts on Secrets and
+  pods in every namespace.
+
+#### Decision
+
+- **The Lease.** `FYLGJA_LEASE` names a `coordination.k8s.io/v1` Lease in the core's
+  namespace; its holder is the pod's name, its duration 15 s, renewed every 5 s. The server
+  takes it before it starts the loop or listens, and exits when no renewal has succeeded
+  within the duration; the pod's restart resumes from the record. The Deployment has one
+  replica and the `Recreate` strategy.
+- **The namespace** `fylgja` holds the core, its Service and its store, and nothing else
+  ([D-059](#d-059)).
+- **The role** is one ClusterRole: namespaces; in any namespace Secrets, NetworkPolicies and
+  Topologies, Services to read and patch, pods to read, watch and delete, and `create` on
+  `pods/exec`; and Leases in its own namespace. The rules are read from inside a pod before
+  they are relied on.
+- **Credentials** are `FYLGJA_*` variables set from Secrets ([D-042](#d-042)). A pull
+  secret's entry is `FYLGJA_CREDENTIAL_<NAME>_REGISTRY` (the image prefix, a host and port
+  with an optional path), `_USERNAME` and `_PASSWORD`.
+- **The manifests** are a kustomize base under `deploy/`, with no address and no value in
+  it, and an overlay under `local/` that sets the image, the Secrets and the addresses.
+- **The image** is built by `make image` from a `Dockerfile` at the root: two stages on
+  `python:3.14-slim` pinned by digest, a user that is not root, the platform and probe
+  packages inside, `fylgja-core-server` its entry point, tagged by commit. It is pushed to
+  the private registry as the gated image was. CI builds it and pushes nothing.
+
+#### Consequences
+
+- A core that loses its Lease stops mid-phase, which the record already survives.
+- A rollout stops the core before it starts the next, so the API is away for a start's
+  length.
+- The image holds no containerlab: a core in a pod serves the clabernetes driver alone.
+
+<a id="d-067"></a>
+### D-067 — A kick on a settled twin inspects it, and a replaced node is pushed again under a `restore` run
+
+**Status:** Accepted 2026-11-05. Details [D-023](#d-023)'s incarnation rule and
+[D-036](#d-036)'s drain. Adds `restore` to API 1's run operations ([D-025](#d-025)).
+Detailed by [D-070](#d-070) on 2026-11-06: findings 1's `restore`, the conditions a restore
+touches, that it records no phase, its endings, the boot window and how a missing node is
+named; D-070 also corrects the reason the options below give for rejecting a step run to the
+twin's own bundle, which now pushes what holds nothing. The Consequences' "Repairing a twin is
+not built" is detailed by D-070 item 13: on clabernetes the driver deletes a pod whose container
+ended or restarted in it, and the cluster makes the node anew; the loop still makes no node.
+
+#### Context
+
+[D-023](#d-023) says a changed incarnation voids what a node holds and the loop pushes it
+again, and [D-036](#d-036) relies on that after a drain. As built, a pass acts only on a
+deletion or a new generation, and incarnations are compared only inside a step's apply. A
+kick on a Ready twin, from the resync, the start or an event ([D-058](#d-058)), does
+nothing, so a node the runtime replaced holds its kind's baseline until someone steps the
+twin.
+
+#### Options considered
+
+- **Leave it, and let the trigger name twins nothing acts on.** Rejected: the behaviour is
+  decided, and the cluster needs it at its first drain.
+- **Push again inside the pass, with no run.** Rejected: a push changes a twin, and every
+  change is recorded and attributable
+  ([Constitution X](constitution.md#x-report-honestly)).
+- **A `step` run to the twin's own bundle.** Rejected: such a step ends unchanged at
+  `compiled` ([D-050](#d-050)), and `last_step` would show a step no client asked for.
+- **A run of an operation of its own.** Chosen.
+
+#### Decision
+
+- **A pass on a settled twin inspects it.** Settled means no deletion asked, the generation
+  observed, a deployment applied, no run in flight and not diverged. With every node running
+  at its recorded incarnation, nothing is written.
+- **A node at another incarnation is restored.** The pass takes a run of operation
+  `restore`, its principal the core's own. It records the nodes as inspected, those nodes
+  holding nothing, then runs `ready`, `pushed` and `verified` for them as a step does for a
+  node whose incarnation moved ([D-050](#d-050)). `Ready` is False with the reason
+  `twin.restoring` until the run ends. `last_step` is not touched.
+- **A node missing or not running is waited for, never made.** The twin goes back on the
+  queue; once the node's boot window has passed, the record says so (`Ready` False,
+  `twin.node.missing`, naming the node) and the pass ends, to begin again at the next kick.
+  Nothing is applied.
+- **A failure.** A transient one backs off and is tried again ([D-023](#d-023)). A refusal,
+  of the push or of a login, ends the run `failed` with `Ready` False for its rule; the
+  record keeps the node's new incarnation, holding nothing, so no later pass repeats the
+  push, and the twin is not diverged: its deployment is the record's.
+- **A diverged twin and a twin with a run in flight are passed over.** A step compares
+  incarnations itself.
+
+#### Consequences
+
+- API 1's run operations gain `restore`, and the rule catalogue `twin.restoring` and
+  `twin.node.missing`.
+- A resync costs one `inspect` a settled twin. On clabernetes that pass also returns a
+  drifted Service to `Local` ([D-057](#d-057)).
+- A container removed on the local driver does not return by itself: its twin stays
+  `twin.node.missing` until it is stepped or deleted. Repairing a twin is not built.
+
+<a id="d-070"></a>
+### D-070 — The trigger and the restore as built
+
+**Status:** Accepted 2026-11-06. Details [D-067](#d-067) (findings 1's `restore`, the principal,
+the conditions a restore touches, that it records no phase, its endings and its cancel, the boot
+window, how a missing node is named) and [D-058](#d-058) (what names a twin, what each driver's
+`events` drops, their gaps and their failures); details [D-068](#d-068) (no path of the loop
+reconfigures on a driver that declares `reapply`) and [D-069](#d-069) (a container restarted in
+its pod). Supersedes [D-050](#d-050) in part, and [D-054](#d-054)'s item 5: a step to the
+bundle the twin runs ends at `compiled` only when every device node holds it, and leaves `Ready`
+False for `twin.node.missing` as it is; and corrects the reason [D-067](#d-067) gives for
+rejecting a step run to the twin's own bundle. Adds `FYLGJA_RESYNC_S` to [D-042](#d-042).
+
+#### Context
+
+D-067 and D-058 fixed the restore and the trigger before code. Building them (phase 6, plan 5)
+and running them on both drivers found what they leave open, and two places where a runtime does
+not do what D-067's Context assumes.
+
+- D-067 says the record names a missing node, and the twin record's condition has no member to
+  name it in.
+- It does not say what a restore does to a twin that already does not run what its spec asks,
+  where its progress is kept across a kill, or what a failed or cancelled restore leaves a client
+  to do.
+- Its rejected option, a step run to the twin's own bundle, "ends unchanged at `compiled`": no
+  longer so once a restore can fail and leave a node holding nothing.
+- D-058 has the clabernetes driver name a twin for a pod's uid or readiness, which is less than
+  what the loop reads of a pod; neither entry says how a source's failure is logged or what its
+  gaps cost.
+- D-067's Context assumes a replaced node lacks only its configuration. On the local driver every
+  Docker restart path read loses the node's links. On clabernetes a replaced pod comes back whole,
+  but a container restarted in its pod comes back without its management address
+  ([verified-facts.md](verified-facts.md)).
+- The resync, 300 s since [D-023](#d-023), had no setting, and a harness must set it long to show
+  that an event, not the resync, restored a node.
+
+#### Options considered
+
+Naming a missing node:
+
+- **A message on the `Ready` condition, or a member per node.** Rejected: twin record 1's
+  conditions carry a type, a status, a reason and a time, and either is a format change for a
+  fact the next `inspect` may undo.
+- **The log, and under a restore its events and its finding.** Chosen.
+
+What a failed or cancelled restore leaves:
+
+- **Repeated at the next pass.** Rejected: a refused push or login would be tried again at
+  every kick and every resync, and a cancel would not hold.
+- **Not repeated: the nodes' new incarnations are recorded before any is pushed.** Chosen.
+
+Where a restore's progress is kept:
+
+- **`status.phase` or `last_step`.** Rejected: the phase says how far a create or a step got,
+  and `last_step` would show a step no client asked for (D-067).
+- **The nodes' `holds`.** Chosen: what is pushed is held, and a resume passes over it.
+
+The remedy after a restore that failed or was cancelled:
+
+- **A route or an operation a client asks for.** Rejected: a spec already says what the twin
+  runs, and a second way to say it is a second contract.
+- **A step to the twin's own bundle ending at `compiled`, as D-050 has it.** Rejected: it would
+  set `Ready` True over a node holding nothing.
+- **That step pushes what holds nothing.** Chosen.
+- **`last_step.outcome` `failed` for such a step whose push failed.** Rejected: a format value
+  no client asked for; the run's verdict says `failed` and `Ready`'s reason carries the rule.
+
+`Ready` after a restore whose verify did not hold:
+
+- **A reason, or a condition, for restores alone.** Rejected: `Ready` has never meant
+  conforming ([D-032](#d-032)), and a reason or condition for restores alone would split its
+  meaning by operation.
+- **`Ready` as any run sets it.** Chosen; a condition carrying the last verify's status, for
+  every run that verifies, is an [open question](#open-questions).
+
+The boot window:
+
+- **One window for the twin, from its first node gone.** Rejected: a drain evicts a twin's pods
+  one after another, and a node gone later would be judged on the first's clock.
+- **Kept in the record.** Rejected: a member for a count that moves every few seconds.
+- **Each absent node's own window, from the first pass that saw it absent, in the core's
+  memory.** Chosen: a restarted core counts again.
+
+The trigger's gaps:
+
+- **The clabernetes driver restarting its own watch.** Rejected: `LightKube.watch_pods`
+  reconnects for itself and then delivers every pod again; a second loop would duplicate it.
+- **The local source following before it lists, or following with `--since`.** Rejected:
+  following first only narrows the gap, and `--since` needs a clock shared with a daemon that
+  may be remote, and Docker's replay buffer of 256 events.
+- **`PR_SET_PDEATHSIG` for the local source, or a wrapper binary.** Rejected: the first needs
+  `preexec_fn`, unsafe beside the server's threads; the second is a binary to ship.
+
+A container restarted in its pod on clabernetes:
+
+- **Left reported**, `Ready` False for `readiness.timeout` until someone deletes the pod by hand.
+  Rejected: a container restarting in its pod is ordinary on Kubernetes (an out-of-memory kill,
+  a failed probe), and no Fylgja operation would mend it.
+- **The loop applies again.** Rejected: a restore never applies (D-067).
+- **The restart count out of the incarnation.** Rejected: the loop would read the node as it was
+  and never act ([D-069](#d-069)).
+- **The driver deletes the pod, and the cluster makes it anew.** Chosen: [D-057](#d-057) already
+  has this driver delete a pod where the runtime cannot bring a node to its definition, a port
+  added after boot; this is the same remedy for the same kind of fact.
+
+When the driver deletes such a pod, and how often:
+
+- **At the restart count's move.** Rejected: the kubelet restarts the container about 25 s after
+  it ends, and that wait and the replacement's boot together run past an SR Linux node's 60 s
+  boot window, so every such renewal read `twin.node.missing` for some seconds.
+- **At the container's end**, a state no starting pod passes through. Chosen.
+- **As often as the container ends.** Rejected: a node whose container keeps ending would be made
+  anew at its crash rate for ever, where the kubelet alone slows it to one restart in five
+  minutes, each round a pod, a restore run kept in the store and its log lines; and a pushed
+  configuration that ends the container would be pushed again into each new pod.
+- **At most three times in ten minutes a node.** Chosen.
+- **A deletion that fails ends the watch under the watch's own backoff.** Rejected: each name the
+  listing gives before the pod resets that backoff, so a deletion that always fails would list
+  every pod and fail again each second.
+- **Under a backoff of its own.** Chosen.
+
+The resync:
+
+- **Fixed at 300 s.** Rejected: a harness could not show the event's work apart from the
+  resync's.
+- **A setting.** Chosen.
+
+#### Decision
+
+**The restore** (details D-067):
+
+1. **Findings 1's `operation` gains `restore`.** A run's verdict carries its run's operation, so
+   a restore's names it; D-067 listed API 1's run operations alone.
+2. **Its principal is `core`**, the one the loop already writes for a run no client asked for.
+3. **What it touches.** It is taken only on a settled twin: no deletion asked, the generation
+   observed, a deployment applied, no run in flight, not diverged; `Ready` is not part of it, so
+   a twin a refused step or a failed restore left not Ready is still inspected. Where the twin
+   runs what its spec asks, `Ready` is False for `twin.restoring` while the restore runs and True
+   for `twin.ready` when it ends `ok`. Where it does not, after a refused or cancelled step, the
+   conditions stay as that step left them. It never touches `status.phase`, `last_step`,
+   `observed_generation`, `bundle_id`, `deployment_id` or `allocation`: it records no phase. Its
+   progress is the nodes' `holds`, written as each node is pushed, and a resume is the same code,
+   passing over what is held.
+4. **It is not repeated.** The nodes are recorded as inspected, each moved one holding nothing,
+   before any is readied, so a restore that fails (`readiness.timeout`, `credential.missing`, a
+   refused or unauthorized push or login) or is cancelled leaves nothing the next pass finds
+   moved, and a core restart retries nothing. Since it records no phase, a restore killed after
+   its last push and then cancelled ends `failed` for `run.cancelled`, `Ready` False, though
+   nothing was left to do; so does a cancel read during verify, after every push. A cancel read
+   once verify is done ends it `ok`. A cancel that lands before the nodes are written (a core
+   stopped between the take and that write) leaves the old incarnations, and the next kick
+   restores again.
+5. **Its wait** for verify is a step's, within `FYLGJA_STEP_WAIT_S`; an expiry is the warning
+   `step.wait.expired`, its message naming the restore's wait, and the restore ends `ok`.
+6. **The boot window.** A recorded node the inspection lacks or reads not running is waited for
+   through its own window, its package's `readiness.timeout_s` (60 s SR Linux, 90 s cEOS, 30 s a
+   ping host), from the first pass that saw it absent, kept in the core's memory and dropped by a
+   pass that sees it run. Inside it the pass writes nothing and looks again within 5 s. Past it,
+   with no run in flight, `Ready` is False for `twin.node.missing`, written once and only where
+   the twin runs what its spec asks, and a restore run left queued by a take cut short (a core
+   stopped between making the run and the record's naming it) is ended before it started, as a
+   create's or a step's is by the run taken after it, since no pass takes a restore while a node
+   is missing; with a restore in flight, the restore ends `failed`. A twin
+   so reported whose nodes all run again is restored before it is Ready again: what holds nothing
+   readied and pushed, and verify run, which is advisory.
+7. **A missing node is named** in a WARNING line, and under a restore by the run's `ready failed`
+   event and one finding per node, its object the node: the record's condition has no member for
+   it.
+8. **A step to the bundle the twin runs pushes what holds nothing** (supersedes D-050's
+   unchanged step in part, and corrects D-067's rejected option). It ends at `compiled` only
+   when every device node holds the twin's bundle. Otherwise it readies, pushes and verifies those
+   nodes, with no plan, `changes` or apply, and a failure there leaves the twin up and not
+   diverged, as a failed restore does. So a new spec is the remedy after a restore that failed or
+   was cancelled; since an identical spec changes nothing, a client toggles `allow_restart` or
+   names the bundle. Such a step records `last_step.phase` `compiled` whatever it pushed, and when
+   its push fails its run ends `failed` while `last_step` reads `rejected`: twin record 1 has no
+   outcome `failed`, and none is added. It never clears `twin.node.missing`, which is the settled
+   pass's to clear. Resumed, it finishes what it began and does not take up a newer spec.
+9. **`Ready` stays as any run sets it**: a restore whose wait expired ends `ok`, `Ready` True.
+10. **A cancel** of a restore, by a client or by the twin's deletion, is read between phases,
+    before each node and during every call on the runtime; it ends the run `failed` with
+    `run.cancelled` and tears nothing down. Any authenticated principal may cancel the core's own
+    restore, and the cancel is audited: there are no roles in phase 6. A deletion asked between a
+    pass's `inspect` and its take of the restore is served once the restore ends: late, not lost,
+    as for a step. A node replaced again after a running restore's `inspect` is pushed, and
+    restored again at the next pass.
+11. **Left, and known.** A probe host a failed restore never readied is not seen by the
+    unchanged step's test, since probe hosts hold nothing and their readiness is not recorded; a
+    verify shows it. On a twin that does not run what its spec asks, a restore ended for a
+    missing node leaves the conditions as they were, so a node that returns at its old
+    incarnation (a paused container unpaused, on the local driver) stays unpushed until a step.
+    On clabernetes, while a pod's renewal keeps failing (a role without the right to delete pods,
+    an admission webhook), the twins whose pods the watch lists after that pod are named by the
+    resync alone, and the round repeats at most once a minute (item 13). And:
+    - **A node running with no address at a new incarnation** is not absent, so its restore is
+      taken at once and fails for `readiness.timeout` with nothing waited for, and it is not
+      repeated when the address comes: the new incarnation is recorded holding nothing (item 4).
+      Reproduced on the fake, not read on a runtime; it needs a pod that runs before its Service
+      has an address. A new spec is the remedy (item 8).
+    - **A node that returned and went again between two passes** keeps its first sighting, since
+      only a pass that sees it run drops it: where the events between were missed, it is
+      reported, or its restore ended, with no further wait.
+    - **Restore runs are not bounded** for a node that keeps restarting: one stored run for each
+      incarnation, at the pace of the kubelet's backoff for a left pod and of Docker's under
+      `always` for a local probe host. Neither pace was read here, and each backoff starts short
+      and doubles to its ceiling. The renewal's bound limits the pods, not the runs, and nothing
+      prunes runs; a retention rule for runs is a later phase's.
+    - **A renewal inside a hot-add's window**, between `apply`'s read of the pods' uids and the
+      controller's pass, replaces the pod from the definition before; the hot-add's own deletion
+      then reads it already replaced, so the added port does not arrive, and verify reports it.
+      It needs a container to end in that window.
+    - **What the clabernetes source read of a pod deleted while lightkube's watch was down** is
+      kept until the source's own next restart: a fresh watch never delivers that `DELETED`. It
+      grows slowly, and is left.
+    - **Two cores on one cluster each renew.** The renewal goes by labels, which name no core:
+      the deployed core and an in-process loop of a test tier would each renew the other's twins'
+      pods (a deletion of a pod already gone is a 404, and fine) and each count its own three.
+      This phase runs them one at a time for that reason; a label naming the core is later work.
+    - **A renewal is counted and audited though the pod was already gone.** A deletion answered
+      404 is taken as made, so a pod another hand deleted between the watch's delivery and the
+      renewal's own deletion still gets its audit line and one of the node's three.
+    - **A restore run left queued can outlast a quiet twin** where the core starts again without
+      the twin's packages or its driver: the pass that would report the node missing, and end
+      the run (item 6), is then never made. The run is ended once the core has both again.
+    - **A left pod is not revisited.** The final review would revisit a left pod once, when its
+      window has room, since a node that ended four times in ten minutes and then runs on is the
+      node the renewal exists for, and it stays `Ready` False with no remedy through the API.
+      Recorded as an option not taken: no timer is added in this plan (item 13).
+12. **Links.** On the local driver a restore recovers a node's configuration, not its links:
+    every Docker restart path read (`docker stop` then `start`, `docker restart`, Docker's own
+    restart policy) loses the node's veths and its peers' ports, and the restore ends `ok` with
+    `step.wait.expired`, `Ready` True, as after a step whose wait expired. Inferred, not read: a
+    probe host Docker restarts (containerlab gives a `linux` node the restart policy `always`)
+    comes back without its link and its address, since containerlab's `exec` lines set the
+    address after the links are made and a restart runs neither, and ping's readiness expects the
+    address on the interface; its restore ends `failed` for `readiness.timeout` after 30 s.
+    `containerlab start --node` keeps links, and the remedy for such a twin is a delete and a
+    create. On clabernetes, read: a replaced SR Linux or cEOS node's pod comes back with its links
+    and its neighbours, and its restore's verify held at its first try; a replaced probe host's pod
+    was readied and its restore's verify, its probe's burst through the host's link among the
+    assertions, held after 31.6–32.6 s. A probe host's own links and neighbours were not read.
+13. **A container ended or restarted in its pod on clabernetes** (details D-069, with D-057's
+    remedy). Read on clabernetes 0.10.1, on an SR Linux node alone: a node whose container
+    restarted in its pod keeps its links, its configuration and its servers, but its management
+    subinterface, a DHCP client, holds no address again, and none of its ports answers from
+    outside (240 s and 420 s read), while its pod reads `Ready`. That this is why the address
+    answers nothing, and that no lease is served again, are inferred, not read; a cEOS node and a
+    probe host were not read. Pushing such a node again cannot work, so the driver's `events`
+    deletes a pod not being deleted whose container has ended in it or restarted in it, for every
+    kind of node alike, before it names the twin, and the Deployment makes the node anew; the
+    settled pass restores the new pod as any replaced one.
+    - **What reads as ended:** the container's state `terminated`, read on the cluster at the
+      count it had, about 25 s before the kubelet restarts it, a state no starting pod passes
+      through (a pod starting shows no status, then `waiting` with no last state, then
+      `running`); or `waiting` after a last state `terminated`, the form a container in the
+      kubelet's backoff shows, which was not read on the cluster. A restart count above 0 is
+      renewed too. Renewed at the end, the replacement runs inside the node's boot window. Read in
+      three runs: the end was delivered 0.71–1.32 s after the kill and the pod deleted 0.04–0.06 s
+      later; the replacement ran 41.1–47.3 s after the deletion, and the restore was taken
+      12.7–18.9 s inside the 60 s window and ended `ok`, verify held, `Ready` True, 60.5–61.1 s
+      after the kill, with no `twin.node.missing` at any time.
+    - **The deletion** is held to the test the hot-add's deletions pass: the twin's own
+      namespace, the twin's by its labels, the pod standing there at its uid, a node's, not being
+      deleted. It comes before the twin is named: a pass the name kicks finds the pod being
+      deleted, never the node running at an address that does not answer, where it would take a
+      restore that could only time out. The rule reads the pod as delivered, not its move: an end
+      or a restart during lightkube's own reconnect is delivered then, and one a fresh watch
+      missed is renewed when that watch delivers the pod. Each deletion is one audit line by the
+      core's own principal, `core`, the restore's, naming the twin, the node and the pod: it
+      changes a twin under no run ([Constitution X](constitution.md#x-report-honestly)).
+    - **The bound.** A node is renewed at most three times in ten minutes, counted in the
+      driver's memory by twin and node, since a container that keeps ending would otherwise be
+      made anew at its crash rate, where the kubelet slows it to one restart in five minutes, each
+      round a pod, a restore run in the store and its log lines. Past that its pod is left, with
+      one WARNING per restart, and its twin named: the node then reads as the in-place restart
+      read before this rule, its restore `failed` for `readiness.timeout` and `Ready` False. No
+      timer revisits a left pod. It is left until it is delivered again with room in the window
+      (its next end or restart), until the core restarts, or until someone deletes the pod; a left
+      pod that then runs on unchanged is not delivered again, and its twin stays `Ready` False for
+      the restore's rule. That is the bound's cost, and its likeliest case is a pushed
+      configuration that ends the node's container: the left pod boots again without the push,
+      which cannot reach it, and stays up. The counts go with the twin: `destroy` drops them once
+      it is gone, so a twin made again under its name starts afresh.
+    - **`twin.node.missing` can still be read** for a node renewed late, its end missed by the
+      watch and renewed at its restart count about 25 s later, and for a node left, whose
+      container restarts in place under the kubelet's backoff and can be down past its window.
+    - **A deletion that fails** names the pod's twin, ends the watch with a WARNING naming the
+      pod's renewal by the failure's type and status, and waits a backoff of its own, growing
+      whatever the round named before it, reset by a round that ends otherwise; the next watch
+      delivers the pod again.
+    - The loop is unchanged: it never makes a node and never applies in a restore. The restart
+      count stays in the incarnation (D-069): it shows the loop a node that restarted where the
+      watch was down, or before its pod is deleted.
+
+**The trigger** (details D-058):
+
+14. **What names a twin on clabernetes**: a pod of the owner added or deleted, or modified in its
+    uid, its restart count, its phase, its deletion, its container's state or its `Ready`: what
+    the loop reads of it through `inspect`, and whether it is Ready, which is more than D-058's
+    "uid or readiness". A `Ready` blink costs two kicks and two inspects that write nothing. The
+    watch is the driver's one call at cluster scope.
+15. **What each source drops.** The local source passes over, at DEBUG and never quoting it, a
+    line that is no JSON object or carries no lab label. The clabernetes source names nothing for
+    a pod modified in nothing of the above, or that names no twin. A name that is no twin name is
+    dropped below the seam.
+16. **Gaps.** The clabernetes source relies on the watch's own reconnect: lightkube asks again at
+    the version it reached and delivers what changed meanwhile, and after a version too old, a
+    fresh watch after a failure or the driver's own restart, it lists every pod again; a twin
+    whose every pod went during such a gap is named by the resync alone. The local source names,
+    after a restart, every lab on the host and every twin it has a directory for under its root,
+    so a twin whose every container went is still named; then it follows; an event between the
+    listing and the subscription (about the docker CLI's start, at the core's start and after a
+    stream failure) waits for the resync. Kept, since the resync bounds it, and a `die` whose
+    `start` falls in the gap is caught by the absent node's poll.
+17. **A core killed with SIGKILL** leaves its `docker events` running until the next event it
+    prints.
+18. **A driver's event never brings a twin's pass forward of its backoff.** A runtime's own
+    events follow every apply and destroy, so a pass that failed after it changed the runtime
+    (a deploy that made containers, a destroy part-way) is kicked by its own events; were they to
+    bring the retry forward, the backoff, the loop's one bound on a failure that repeats
+    ([D-023](#d-023)), would be lost, and on the fake such a deploy ran 634 times 0.01 s apart in
+    3.5 s. So an event received while the failing pass runs, or while the twin waits its backoff
+    out, queues it no earlier than the backoff's end, and the retry then reads whatever the event
+    was about. A client's write (a spec, a deletion, a cancel) brings the pass forward as it did
+    before: a twin waiting out its backoff is served at once, and one whose pass is running is
+    served again as soon as that pass ends. So do the resync and a core's start. A pass that did
+    not fail is unchanged: its own events cost the one settled pass after it. The backoff's
+    growth and ceiling are as they were. A pass that fails in a way the loop does not class (a
+    fault outside the seam's contract) is still the worker's to log with its traceback, and its
+    twin now waits the same backoff before its next pass: before this plan such a twin waited
+    for the resync or a write, and with events its own apply's event served it again at once
+    (on the fake, 201 applies 6 ms apart in 20 s). The local reading of `docker rm -f` in
+    [verified-facts.md](verified-facts.md) was made under the rule before, where the `destroy`'s
+    kick ran a failed pass's retry at once.
+19. **A source's failure is logged by its type and status**, never its text, and a transport
+    failure's text is in no `KubeFailed`, at DEBUG alone: an error's text can name the cluster's
+    API address, and a driver's failure reaches the run's events.
+20. **The resync is a setting**, `FYLGJA_RESYNC_S`, an integer of 1 or more, default 300, refused
+    otherwise as `FYLGJA_STEP_WAIT_S` is.
+21. **No path of the loop reconfigures on a driver that declares `reapply`** (details D-068): a
+    resumed create applies plainly, with no `inspect` before it, and a resumed step never asks
+    `reconfigure`. On clabernetes `apply(reconfigure=True)` compares no Topology and writes no
+    hot-add annotation, so a reconfigure cut short and resumed plainly would leave a port added
+    after boot unarrived; no path reaches it.
+
+#### Consequences
+
+- D-042's list gains `FYLGJA_RESYNC_S`; the facts of both drivers' sources and of the cluster's
+  restore are in [verified-facts.md](verified-facts.md).
+- API 1's `BundleDiff.unchanged` says "the orchestrator skips a step on it". An orchestrator
+  that goes by the diff alone never gives the remedy of item 8: after a restore that failed, it
+  steps the twin to the spec it has, `allow_restart` toggled or the bundle named.
+- The rule catalogue ([docs/rules.md](../docs/rules.md)) says each rule as built.
+
+<a id="d-071"></a>
+### D-071 — The core as a pod as built: the Lease's Role, one Kubernetes client above the seam, and the stop at a lost Lease
+
+**Status:** Accepted 2026-11-07. Details [D-062](#d-062) (the Lease's rule, a Role beside the one
+ClusterRole; what the Lease promises and what it does not; what the server does when it loses it;
+what a store's fault on a read route answers) and [D-064](#d-064) (the client made in one module
+above the seam, so three modules import lightkube, not two).
+
+Status note (2026-11-07, plan 6 Task 8): item 3 holds only while the event loop runs. The
+store's calls run on the loop, each bounded by `s3.TIMEOUT_S`; two in a row held it past the
+deadline on the cluster (the holder stopped 21.08 s after its last renewal was sent, 6.08 s
+late, while a waiter takes the Lease from about 15.5 s). Nothing checks the Lease's deadline
+before a store write of the loop's, as each renewal checks it before its own write. Moving the
+store's calls off the loop, or bounding them under the Lease, is a later decision's.
+
+#### Context
+
+D-062 and D-064 fixed the core's Lease, its role and its Kubernetes client before code. Building
+them (phase 6, plan 6) found two places where they could not be built as written, and what they
+leave unsaid.
+
+- D-062's one ClusterRole holds "Leases in its own namespace". A ClusterRoleBinding grants a
+  ClusterRole's rules in every namespace, so no rule it binds ends at a namespace.
+- D-064 has the clabernetes driver and the Lease alone import lightkube. The Lease cannot call the
+  driver's client: a module above the seam that imports the driver's package names a runtime
+  ([D-046](#d-046)). Nor can it make its own by lightkube's default configuration, which falls
+  back to `~/.kube/config` where the driver's refuses it by design; and a client lightkube cannot
+  make raises more than its `ConfigError` ([verified-facts.md](verified-facts.md)).
+- D-062 says the server exits when no renewal has succeeded within the duration. It does not say
+  how a waiting core judges a holder whose clock it does not share, what a Lease deleted under its
+  holder means, or what becomes of the requests in flight at a loss.
+
+#### Options considered
+
+The Lease's rule:
+
+- **In the ClusterRole.** Rejected: bound cluster-wide, it lets the core's account write every
+  Lease in the cluster, those of the cluster's own controllers among them.
+- **A ClusterRole of its own, bound by a RoleBinding in the core's namespace.** Not taken: a
+  cluster-scoped object for a rule that lives in one namespace.
+- **A Role and a RoleBinding in the core's namespace.** Chosen.
+
+The client:
+
+- **The Lease makes its own lightkube client.** Rejected: two ways to reach the cluster, one of
+  them reading `~/.kube/config`, which the driver refuses.
+- **The Lease calls the driver's `client()`.** Rejected: a runtime named above the seam.
+- **One module above the seam that names no runtime, `fylgja_core.kubeapi`.** Chosen.
+
+The server at a loss:
+
+- **uvicorn's graceful shutdown.** Rejected: it waits for every connection, a watch held open
+  among them, so a request in flight could write after the duration the next holder waits.
+- **The loop's stop begun and every connection cut before uvicorn's own shutdown, nothing
+  released.** Chosen.
+
+A store's fault on a read route:
+
+- **A problem document a watch resumes from.** Not taken now: a change to API 1 and to the
+  client, before what a gateway stopped under an open watch does has been read.
+- **`500 server.error`, as before.** Chosen.
+
+#### Decision
+
+1. **The Lease's rule** (details D-062's role). A Role in the core's namespace,
+   `fylgja-core-lease`, bound to the core's service account by a RoleBinding: `get` and `update`
+   on the one Lease the core takes (`FYLGJA_LEASE`, `fylgja-core` in the base), and `create` on
+   Leases, which a rule's resource names cannot confine (Kubernetes's RBAC documentation). The one
+   ClusterRole holds the rest of D-062's rules: its `watch` on pods is the clabernetes driver's
+   `events`, one watch across every namespace ([D-070](#d-070) item 14), and its `list` on pods
+   lists a twin's pods in its namespace; its `delete` on pods is the renewal's and the hot-add's
+   (D-070 item 13, [D-057](#d-057)); and an exec asks `get` and `create` on `pods/exec`, where
+   D-062 names `create`, since its WebSocket upgrade is authorised as `get` and then as `create`
+   ([verified-facts.md](verified-facts.md)). The base under
+   `deploy/` states both roles and `core/tests/test_deploy.py` holds their rules as tables; they
+   are read from inside a pod before they are relied on (D-062).
+2. **One Kubernetes client, above the seam** (details D-064). `fylgja_core.kubeapi` makes the
+   client from the service account in a pod, and from the file `KUBECONFIG` names off the
+   cluster, never from `~/.kube/config`; what keeps it from making one is `Unconfigured`, naming
+   the variable at fault. It names no runtime. `fylgja_core.clabernetes.kube` and
+   `fylgja_core.lease` make their clients there, and the boundary test allows lightkube and httpx2
+   in those three modules and no other. The Lease answers `Unconfigured` with a refusal carrying
+   the variable, which the server names as it exits 2.
+3. **What the Lease promises** (details D-062's Lease):
+   - A holder is judged by the waiter's own clock, never by the Lease's times: a record (its
+     holder and `renewTime`) seen unchanged for the duration, counted from the answer of the read
+     that first saw it, is taken, replaced at the `resourceVersion` read. Two pods' clocks need
+     not agree.
+   - A holder stops at its deadline, the duration after the last renewal that succeeded was sent,
+     and writes nothing then: each renewal, and the sleep before it, is bounded by the deadline.
+     One renewal failing costs nothing.
+   - A Lease deleted or emptied under its holder by another hand is lost at once, since a waiter
+     creates a Lease that is not there, and takes one no one holds, at once. One deleted between a
+     waiter's read and its take is read again.
+4. **What it does not promise.**
+   - `time.monotonic` does not count the time a host is suspended, so a host suspended past its
+     deadline wakes holding the Lease by its own clock. The refusal of its next renewal stops it:
+     a 409, the Lease read back held by another or by no one, or a 404, the Lease deleted. That
+     comes within three times `RENEW_S` (5 s) of waking, since the sleep before that renewal, its
+     write and a 409's read-back are each bounded by `RENEW_S`.
+   - Two cores on one host share a holder name, the host's, so the second takes the first's Lease
+     at once, as held under its own name. In a pod the name is the pod's, and each has its own.
+5. **The server at a loss** (details D-062's exit): one ERROR line, rule `lease.lost`; the loop's
+   stop begun and given `LOST_STOP_S` (2 s); every connection dropped, those uvicorn does not hold
+   yet (a TLS handshake not done, a connection just accepted) among them, and each request in
+   flight cancelled, none answered and none given grace, so no request writes after the loss; then
+   uvicorn's own shutdown; nothing released; exit status 1. The cut rests on uvicorn 0.54.0's h11
+   protocol and asyncio's event loop, both named in the server's configuration, and on an `assert`
+   in asyncio that `-O` strips, so the server refuses to start optimised (`server.optimised`, exit
+   2) ([verified-facts.md](verified-facts.md)).
+6. **A store's fault on a read route** answers `500 server.error`, as before. A watch ends at once
+   on a 5xx that carries a problem document, so a transient fault of an object store ends a
+   client's watch. What a gateway stopped under an open watch does is read on the cluster first; a
+   change is a later decision's.
+
+#### Consequences
+
+- The base carries two roles: the ClusterRole, stated in [SECURITY.md](../SECURITY.md), and a Role
+  whose rights end at the core's namespace and its one Lease.
+- A module that needs the cluster takes its client from `kubeapi`; a fourth module importing
+  lightkube takes a new entry that supersedes this one, and a change to the boundary test.
+- Left: a host suspended past its deadline can act beside the next holder for up to three times
+  `RENEW_S` after it wakes.
+- The server never runs optimised, and an upgrade of uvicorn or of Python reads the cut's facts
+  again.
+
+<a id="d-072"></a>
+### D-072 — The core's own loop resumes on both drivers; the Temporal fallback is retired
+
+**Status:** Accepted 2026-11-07. Supersedes [D-023](#d-023) in its fallback: Temporal is no longer
+kept for a loop whose resume proves fragile; the rest of D-023 stands.
+
+#### Context
+
+D-023 chose the core's own reconcile loop and kept Temporal, through its Python SDK, as the
+fallback should resuming mid-phase prove fragile. The local half was read in phases 4 and 5: a
+server killed with SIGKILL at every phase boundary of a create and of a step, during a deploy and
+during a destroy, resumed the same run each time it found the run unfinished
+([verified-facts.md](verified-facts.md)). The clabernetes half waited for the core to run as a pod
+([D-062](#d-062)): plan 6 read one pod deleted mid-apply resume its run with no gap in its events,
+and left two readings to phase 6's conformance suite, a kill at every phase boundary and a kill that
+releases nothing.
+
+The suite (phase 6, plan 7) holds the kill scenarios once, for both drivers, and in each the dying
+core hands nothing over to the next:
+
+- **Locally** the harness sends the server SIGKILL: no handler runs, and nothing is released.
+- **On the cluster** a pod's deletion, forced or not, still delivers SIGTERM, and the server
+  releases the Lease within half a second, a graceful restart. So the harness kills the core in four
+  steps ([verified-facts.md](verified-facts.md), "the conformance suite's cluster harness" and "the
+  conformance suite on the cluster"):
+  1. It labels the pod that holds the Lease and cuts its egress by a NetworkPolicy of its own.
+  2. The cut leaves alone the connection the Lease's client holds, so the renewals usually ride on;
+     where a renewal opens a new connection the cut refuses it, and the renewals stop. They stopped
+     in two kills of one lifecycle run and in four of nine of another; that a new connection was
+     the cause is the facts' explanation, not a reading.
+  3. It writes an annotation on the Lease between two renewals, or once one is 6 s overdue: in the
+     whole run, 15 of the 18 kills between two renewals and 3 of the 18 at the overdue mark.
+  4. It deletes the pod with no grace, and the release the dying pod's SIGTERM handler sends meets a
+     Conflict and is refused.
+
+  The next pod takes the Lease 15 s after, as it would from a holder lost with its host.
+
+On the cluster (k3s v1.37.1+k3s1, clabernetes 0.10.1, the core's image `c6be28acb35b`,
+2026-11-07), every kill scenario of the suite passed with no step by hand, in its module's runs and
+in the whole suite's: 35 kills, 9 more after the lifecycle module's review, and 18 in the whole run
+([verified-facts.md](verified-facts.md), "the conformance suite on the cluster"). Locally, this
+phase's two runs of the same scenarios made 18 kills a session, every one passing
+([verified-facts.md](verified-facts.md), "the conformance suite on the local driver"). Every next
+pod on the cluster waited for the Lease the pod that went still held, and the core answered again
+21.2 to 26.5 s after each deletion. Every resume was the same run, its events without a gap: from
+`applied` on, after the phase killed at, or after the next where the run had reached it before the
+deletion (a step's `pushed`, resumed after `pushed` or `verified`), every node at the incarnation
+the record held; at `compiled`, `admitted` and `planned`, after `planned`, applying again
+([D-068](#d-068)). A waiting `twin create` and a waiting `twin destroy` each rode through its kill,
+and a deletion asked after a kill in a step's apply ended the step `diverged` and the twin
+destroyed. Two runs failed on the way, neither in the loop: a verify asked while a kept node's
+Service was without its endpoint, now asked again while its only errors are nodes unread, and two
+kills whose Lease was not renewed under the cut, now written at the overdue mark.
+
+Two boundaries were not resumed on the cluster. The kill at a create's `pushed` and the kill at a
+step's `verified` landed after the run had ended, in every run (the explanation, not measured
+against those phases, is that the harness's wait for the renewal window outlasts them); nothing
+resumed there ("the conformance suite on the cluster":
+at `pushed` "the run had ended before the cut", at `verified` "the run had ended and nothing
+resumed"). Locally the kill at a create's `pushed` found the run unfinished, and the resume wrote
+its end (phase 4's block); a step's `verified` is past every resume there too, its `flows` phase
+and the run's end taking about 10 ms (phase 5's steps block: "Killed after `verified`, the run had
+already ended in each run"). So the resume at a create's `pushed` rests on the local harness
+alone, and at a step's `verified` no kill on either driver finds a run to resume.
+
+#### Options considered
+
+- **Adopt Temporal now.** Rejected: no resume failed for it to fix, and it is one more stateful
+  service to run, D-023's reason for rejecting short workflows.
+- **Keep the fallback open.** Rejected: the question it was kept for is answered on both drivers.
+- **Retire the fallback: the core's own loop is the control plane on both drivers.** Chosen.
+
+#### Decision
+
+- D-023's loop stands on both drivers. Its resume was read by kills that release nothing: locally
+  SIGKILL of the process; on the cluster the four steps above, the pod that holds the Lease labelled
+  and its egress cut by a NetworkPolicy of its own, an annotation written on the Lease between two
+  renewals or once one is 6 s overdue, and the pod deleted with no grace, so the release the dying
+  pod sends is refused. It was read during an apply and during a destroy on both drivers, and at
+  every phase boundary of a create and of a step but a step's `verified` on the local driver, and
+  on the cluster at all of those but a create's `pushed` too, where the kill found the run ended.
+  At a step's `verified` the run ends within about 10 ms, and no kill on either driver finds it
+  unfinished.
+- Temporal is no longer the fallback. A proposal to adopt it, or another workflow engine, is a
+  design document first ([D-033](#d-033)), with the kill the loop did not survive.
+
+#### Consequences
+
+- The kill scenarios of `core/tests/conformance/` guard the resume: a change to the loop's resume,
+  or to a driver's `apply`, runs them on both drivers.
+- The cluster's kill is not a partition: the holder dies with its pod. A holder that lives on, cut
+  off from the API, keeps its Lease while the connection it holds lasts
+  ([verified-facts.md](verified-facts.md)), and one held past its deadline by a slow store is
+  [D-071](#d-071)'s status note; neither is answered here.
+- design/core.md stops naming Temporal as the fallback.
+
 
 ## The API and its clients
 
@@ -1950,6 +3202,9 @@ for both operations.
 ### D-025 — The API is the core's boundary: API 1, with the twin as a resource in Kubernetes's shape
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-063](#d-063) on 2026-11-05: TLS ends at the server, not an ingress;
+added to by [D-067](#d-067) (the run operation `restore`) and [D-068](#d-068) (the
+capability `reapply`); the rest stands.
 
 #### Context
 
@@ -2092,6 +3347,7 @@ compiles to"), and is a client of the API ([D-025](#d-025)).
 
 **Status:** Accepted 2026-11-03; added to by [D-052](#d-052) on 2026-11-04: pygnmi for the
 gNMI reader; the rest stands.
+Added to by [D-064](#d-064) on 2026-11-05: lightkube for Kubernetes.
 
 #### Context
 
@@ -2135,6 +3391,10 @@ at least two weeks old.
 **Status:** Accepted 2026-11-03; added to by [D-050](#d-050) on 2026-11-04:
 `FYLGJA_STEP_WAIT_S`; the rest stands. Answers the credential provider's local naming, open
 since the baseline.
+Added to by [D-057](#d-057), [D-061](#d-061), [D-062](#d-062) and [D-063](#d-063) on
+2026-11-05: the clabernetes driver's two variables, the object store's, `FYLGJA_LEASE`, a
+pull credential's `_REGISTRY`, and the TLS variables. Added to by [D-070](#d-070) on
+2026-11-06: `FYLGJA_RESYNC_S`.
 
 #### Context
 
@@ -2169,6 +3429,88 @@ names.
 
 - `.env.example` is the list of names, and `local/.env` the one place values live.
 - A missing variable is refused at start, naming the variable and never its value.
+
+<a id="d-063"></a>
+### D-063 — TLS ends at the server
+
+**Status:** Accepted 2026-11-05. Supersedes [D-025](#d-025) in where TLS ends (an ingress);
+adds to [D-042](#d-042): `FYLGJA_TLS_CERT`, `FYLGJA_TLS_KEY` and `FYLGJA_API_CA`.
+
+#### Context
+
+[D-025](#d-025) ends TLS at an ingress. The cluster has none: its prerequisites disable
+k3s's ([D-036](#d-036)), and MetalLB gives a Service an address on the LAN. A client's
+bearer token crosses that LAN, and a watch is a stream held open for minutes.
+
+#### Options considered
+
+- **An ingress or a gateway.** Not taken: a component to run and a proxy under every watch,
+  for one backend.
+- **Plain HTTP on the LAN.** Rejected: the token in clear.
+- **`kubectl port-forward`.** Rejected: every client would need the cluster's credentials,
+  and the orchestrator will hold only its token.
+- **The server's own TLS behind a LoadBalancer Service.** Chosen.
+
+#### Decision
+
+- `FYLGJA_TLS_CERT` and `FYLGJA_TLS_KEY` name a certificate and its key, set together or not
+  at all; with them the server serves TLS, and without them HTTP, as on loopback today. A
+  listen address off loopback without them is logged as a warning at start.
+- A client's `FYLGJA_API_CA` names a CA file its `https://` address is verified against;
+  absent, the system's trust is used.
+- On the cluster the core's Service is a LoadBalancer, and the pair comes from a Secret,
+  signed by a private CA as the registry's certificate is.
+
+#### Consequences
+
+- A new certificate takes a restart of the pod.
+- An ingress, should one arrive with OIDC, would sit in front of this unchanged.
+
+<a id="d-064"></a>
+### D-064 — Phase 6's libraries: lightkube for Kubernetes, and none for S3
+
+**Status:** Accepted 2026-11-05. Adds to [D-039](#d-039); the rest stands.
+Detailed by [D-071](#d-071) on 2026-11-07: the client is made in one module above the seam,
+`fylgja_core.kubeapi`, which the clabernetes driver and the Lease import, so three modules
+import lightkube.
+
+#### Context
+
+The clabernetes driver and the Lease need the Kubernetes API from an asyncio process: core
+objects and a custom resource, a watch that survives its stream's end, an exec with separate
+streams and an exit status, and a Lease replaced under its resourceVersion. The object store
+needs four S3 calls ([D-061](#d-061)).
+
+#### Options considered
+
+- **The official client's asyncio half.** Rejected: 23 packages and about 98 MB, a sync stack
+  beside it, and an exec whose channels are split by hand.
+- **kubernetes-asyncio.** Rejected: aiohttp as a second stack, one maintainer, and no release
+  for Kubernetes 1.37.
+- **kr8s.** Rejected: no release since January 2026, a deprecation warning on Python 3.14,
+  and a watch and a Lease still to write.
+- **`kubectl` as a subprocess**, as the local driver runs containerlab ([D-018](#d-018)).
+  Rejected: a 59 MiB binary in the image, a process a call, and errors as text.
+- **REST over the pinned httpx, with httpx-ws.** Not taken: two packages, and 500 to 700
+  lines of authentication, watch and exec protocol to write and keep. It is the fallback.
+- **lightkube.** Chosen.
+
+#### Decision
+
+- **lightkube 1.0.1** with lightkube-models 1.37.0.8 carries every Kubernetes call. It
+  brings httpx2 2.16.0 and msgspec 0.22.0: ten packages in all, each release at least two
+  weeks old. What the driver relies on was read against the cluster on 2026-11-05
+  ([verified-facts.md](verified-facts.md)).
+- **Only the clabernetes driver and the Lease import it**, held by the test over imports.
+- **The Lease is written in the core** over it: lightkube has no leader election.
+- **httpx stays** for the push, readiness and the object store. The core holds two HTTP
+  stacks until a decision moves it to httpx2.
+
+#### Consequences
+
+- lightkube has one maintainer and a 1.0 three months old; its facts are re-verified on any
+  upgrade, and the fallback above is what replaces it.
+- Its models are for Kubernetes 1.37, the cluster's.
 
 
 ## Pushing, stepping and verifying
@@ -2738,7 +4080,9 @@ where D-051's unread node names device nodes alone.
 
 **Status:** Accepted 2026-11-04; added to by [D-055](#d-055) on 2026-11-04: the stray deploy's
 wait, item 14, is `destroy`'s too, and a stray ends at its next write once the core is gone;
-superseded in part by [D-056](#d-056) on 2026-11-04: a stray runs to completion.
+superseded in part by [D-056](#d-056) on 2026-11-04: a stray runs to completion;
+superseded in part by [D-070](#d-070) on 2026-11-06: item 5, an unchanged step, which pushes
+what holds nothing and leaves `Ready` False for `twin.node.missing` as it is.
 Supersedes [D-050](#d-050) in part: the dispatch, the record before `applied`, the generation a
 run works toward, the cancel's and the ending's readings, and a refused step's verdict. Details
 [D-029](#d-029) (the record a diverged twin keeps) and [D-051](#d-051) (the bundle verify judges
@@ -3001,6 +4345,41 @@ those paths, and nothing resolves them.
 
 - The namespace is metadata, not part of any format, so it moves no format version.
 
+<a id="d-066"></a>
+### D-066 — The formats ship inside the package, built from `formats/`
+
+**Status:** Accepted 2026-11-05.
+
+#### Context
+
+`schemas.formats_dir()` finds `formats/` by walking up from the module to the repository's
+root, so the server and the client validate nothing once installed outside the tree. Phase 6
+installs the server into an image. `formats/` at the root is where a format is changed and
+where every document links.
+
+#### Options considered
+
+- **Move `formats/` under the package.** Rejected: the tree's most-read directory would sit
+  four levels down, and every link to it would move.
+- **A second copy committed in the package, checked against the first.** Rejected: two
+  copies of a contract.
+- **Fetch each schema by its `$id`.** Rejected: a network read at start, from a URL that is
+  an identifier ([D-035](#d-035)).
+- **The build copies `formats/` into the wheel.** Chosen.
+
+#### Decision
+
+- `formats/` at the root stays the one place a format lives in the tree. The wheel carries
+  it as the package's data, and `schemas.formats_dir()` reads it from the installed package;
+  in a checkout it resolves to the root's `formats/`.
+- A test builds the wheel, installs it into an empty environment outside the tree and
+  validates a fixture there.
+
+#### Consequences
+
+- The client library the orchestrator will share validates wherever it is installed.
+- How the build copies the directory is the builder's.
+
 ---
 
 <a id="parked"></a>
@@ -3023,17 +4402,31 @@ becomes an entry then.
 <a id="open-questions"></a>
 ## Open questions
 
-- **An SR Linux configuration marker after a pod replacement** on clabernetes
-  ([D-015](#d-015)). In one reading the marker was present after a link-mode switch to
-  `restart` or `recreate` replaced the pod, and absent after the switch to `live`.
-  Unexplained. The multi-host trial pushed no marker, so it was not re-checked there; the
-  driver conformance suite's step scenarios read it.
 - **Scheduling at the packages' requests.** The multi-host trial ran on clabernetes' default
   requests (200m CPU, 512 Mi), so neither the spread nor the drain was exercised with the
-  packages' 0.5 CPU and 1.5–2 GiB ([D-036](#d-036)). The driver conformance suite's
-  five-twin scenario does.
-- **The Temporal fallback** ([D-023](#d-023)). Whether the core killed mid-run on
-  clabernetes resumes without a manual step.
+  packages' 0.5 CPU and 1.5–2 GiB ([D-036](#d-036)). Phase 7's five-twin scenario does.
+- **A condition carrying the last verify's status** ([D-070](#d-070), [D-032](#d-032)).
+  `Ready` has never meant conforming, so a step or a restore whose wait expired ends `ok`,
+  `Ready` True, and only its verdict says verify did not hold. A condition carrying the last
+  verify's status, set by every run that verifies, would show it on the record; whether to add
+  it, and what it says between runs, is a later phase's.
+- **A holder that outlives its Lease under a slow store** ([D-071](#d-071), [D-062](#d-062)).
+  The store's calls run on the event loop, each bounded by its 10 s timeout, and the stop at a
+  lost Lease comes on time only while the loop runs: two such calls back to back held a holder on
+  the cluster until 21.08 s after its last renewal was sent, 6.08 s past its 15 s deadline, where
+  a waiting core takes the Lease from about 15.5 s (D-071's status note,
+  [verified-facts.md](verified-facts.md)). The remedy, the store's calls moved off the loop or
+  bounded under the Lease, is a decision entry of a later plan.
+- **The release on a Conflict** ([D-062](#d-062), [D-071](#d-071), [D-072](#d-072)).
+  `Lease.release` (`core/src/fylgja_core/lease.py`) writes the Lease held by no one at the version
+  it holds, and gives up on a Conflict with one WARNING, the next holder taking it once its
+  duration has passed ([verified-facts.md](verified-facts.md)): right for now, the duration being
+  D-062's promise to that holder. A read-back, then one more write where the Lease is still this
+  holder's, would release at once where another hand wrote the Lease's metadata or this holder's
+  own renewal landed unanswered, as `renew` already reads back. The conformance suite's cluster
+  kill depends on the present behaviour, the annotation it writes refusing the release, and with a
+  read-back would have to move the Lease's `holderIdentity` instead. The change is a decision
+  entry of a later plan, after the slow-store question above.
 - **A cEOS node with no data link refuses `ip routing`**: its forwarding agent never starts
   ([verified-facts.md](verified-facts.md)), so the push of a configuration carrying it is
   refused. Whether the compiler reports it as a finding, or the driver gives such a node a

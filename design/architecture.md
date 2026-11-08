@@ -56,17 +56,27 @@ writes them.
   for the four fixtures, and refusing an uncompilable blueprint with every fault in one
   pass; its rules are in the catalogue, [`docs/rules.md`](../docs/rules.md).
 - **The state store** (section 4.6) as a local directory, held locked for one core
-  ([D-041](decisions.md#d-041)).
+  ([D-041](decisions.md#d-041)), and as objects behind S3's conditional writes, which the
+  server opens once it runs under a Lease.
 - **The local driver** (section 4.4): containerlab behind the seam, its pure `plan` and
   `changes` and its live `admit`, `apply`, `inspect`, `destroy` and `exec`, with the two
   recovery rules, every behaviour it relies on recorded for containerlab 0.81.0 in
-  [verified-facts.md](verified-facts.md).
+  [verified-facts.md](verified-facts.md); every command it runs gets an environment from an
+  allow-list, with no variable of the core's ([D-065](decisions.md#d-065)).
 - **Readiness and the push**: the credential provider, a node's push transport answering an
   authenticated request, and the two replace mechanisms, JSON-RPC for SR Linux and eAPI for
   EOS ([D-027](decisions.md#d-027)).
-- **The reconcile loop** (section 4.5) for a create, a step and a destroy: runs and their
-  events, admission one twin at a time, cancellation, and a resume after a kill at the phase
-  after the one recorded ([D-023](decisions.md#d-023), [D-054](decisions.md#d-054)).
+- **The clabernetes driver** (section 4.4): a twin as a Topology in a namespace of its own on
+  the three-server k3s cluster, reached through lightkube; its pure `plan` and `changes` and its
+  live calls, each behaviour it relies on recorded for clabernetes 0.10.1 on k3s
+  ([D-057](decisions.md#d-057), [D-069](decisions.md#d-069)).
+- **The reconcile loop** (section 4.5) for a create, a step, a restore and a destroy: runs and
+  their events, admission one twin at a time, cancellation, and a resume after a kill at the
+  phase after the one recorded ([D-023](decisions.md#d-023), [D-054](decisions.md#d-054)).
+  Each driver's `events` kicks the twins whose runtime changed, and a pass on a settled twin
+  restores a node replaced behind the core's back and reports one missing, without waiting for
+  the resync ([D-058](decisions.md#d-058), [D-067](decisions.md#d-067),
+  [D-070](decisions.md#d-070)).
 - **Steps and verify**: the bundle diff; a step's refusals before it touches the twin, its
   wait for verify, and a twin left diverged when a step fails or is cancelled after touching
   it ([D-050](decisions.md#d-050), [D-054](decisions.md#d-054)); verify over gNMI, each
@@ -77,10 +87,39 @@ writes them.
   events; `fylgja-core` is its client. A twin is created, shown, watched, stepped, verified
   and destroyed end to end, with the server killed at every phase boundary of a create and
   of a step and resumed each time.
+- **The Lease** ([D-062](decisions.md#d-062), [D-071](decisions.md#d-071)): a
+  `coordination.k8s.io/v1` Lease, taken before the server opens an object store, renewed every
+  5 s, and lost 15 s after the last renewal that succeeded was sent, when the server stops at
+  once and releases nothing; a core that finds it held waits, binding nothing. The stop comes on
+  time only while the event loop runs: the store's calls run on it, and two in a row held a
+  holder on the cluster 6.08 s past its deadline (D-071's status note).
+- **TLS at the server** ([D-063](decisions.md#d-063)): `fylgja-core-server` ends TLS with the
+  pair it is given, and the thin CLI verifies the server against the CA it names or the
+  system's trust.
+- **The image and the base** ([D-062](decisions.md#d-062)): the core's image, built from the
+  `Dockerfile` in the tree and tagged by its commit, and a kustomize base under
+  [`deploy/`](../deploy/README.md) that a site's overlay completes.
+- **The core deployed on the cluster**: one pod under its Lease on the k3s cluster, its store
+  Versity S3 Gateway in its namespace, behind a LoadBalancer over TLS. A twin is created, shown
+  and destroyed through it from a workstation; a second pod waits and reconciles nothing; a pod
+  deleted mid-create is resumed from the record by the next
+  ([verified-facts.md](verified-facts.md)).
+- **The driver conformance suite** (`core/tests/conformance/`): one set of scenarios, written
+  once, over a harness per driver: locally `fylgja-core-server` run as a process and killed with
+  SIGKILL, and on the cluster the deployed core driven over TLS and killed by its pod's deletion
+  with no grace, its egress cut and its Lease written first so the release it sends is refused and
+  the Lease is left to its duration. A twin is created, stepped through every step fixture with
+  verify after each, killed at every phase boundary of a create and of a step and during an apply
+  and a destroy, given a node replaced behind the core's back, and destroyed leaving nothing; two
+  twins refuse each other where the driver isolates them by the network. It passed on both drivers
+  on 2026-11-07, but for the cluster's cEOS scenarios, failed by a site whose deployed core held no
+  EOS login. The core's own loop resumed every run a kill found unfinished, on both drivers; on the
+  cluster the kill at a create's `pushed` found its run ended, as the kill at a step's `verified`
+  does on both ([D-072](decisions.md#d-072), [verified-facts.md](verified-facts.md)).
 
-**Designed, not yet built:** everything else in section 4: the probes' flows, the
-clabernetes driver, many twins at once, and the cut-over that moves the orchestrator onto
-API 1. They are built in the phases of [design/core.md](core.md#sequence).
+**Designed, not yet built:** everything else in section 4: the probes' flows, many twins at
+once, and the cut-over that moves the orchestrator onto API 1. They are built in the phases of
+[design/core.md](core.md#sequence).
 
 **The reference implementation** is the **frozen Go core** in the archived repository
 ([D-001](decisions.md#d-001)): one twin at a time under a fixed lab name on one lab host,
@@ -193,15 +232,16 @@ given.
 
 | Call | What it does |
 |---|---|
-| `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network. |
+| `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network, finish an apply cut short by applying again (`reapply`, [D-068](decisions.md#d-068)). |
 | `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason; or, for a step, keeps the allocation the twin holds and checks the added demand ([D-049](decisions.md#d-049)). |
-| `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)). |
+| `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)) or, on clabernetes, a gated image whose registry the allocation lacks ([D-057](decisions.md#d-057)). |
 | `changes(before, after, packages)` | Pure. Answers what the runtime does to each node to go from one deployment to another: `kept`, `added`, `removed`, `recabled`, `restarted`, `recreated` or `unsupported`, each with its reasons, and the links added and removed ([D-049](decisions.md#d-049)). |
-| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)). |
+| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)), asked only of a driver that does not declare `reapply` ([D-068](decisions.md#d-068)). |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
 | `destroy(deployment, files, packages)` | Removes everything the twin holds, the residue of a killed destroy included, within its packages' measured destroy timeouts, and releases its allocation. |
 | `endpoints(twin)` | Returns each node's management address. |
 | `exec(twin, node, argv, timeout_s)` | Runs an argument vector inside a node and answers its exit code and output, bounded in time and bytes: the one way to reach a node with no management transport, which only probe hosts are ([D-049](decisions.md#d-049)). |
+| `events()` | Names, for good, each twin whose runtime may have changed; the name is all the loop is given, since it reads what is true with `inspect`. A driver may also act where only the runtime can mend a node: the clabernetes driver deletes a pod whose container ended or restarted in it before it names the twin, so the cluster makes the node anew ([D-070](decisions.md#d-070)). It never fails: it starts its source again after a backoff and then names every twin its source can name, on clabernetes each twin with a pod, a twin whose every pod went being the resync's ([D-058](decisions.md#d-058)). |
 
 `plan` is the only step that binds a bundle to a twin and a runtime. It is pure, so what it
 binds to must exist first: that is why `admit` reserves the allocation.
@@ -222,16 +262,20 @@ in software and hardware in silicon, so it is computed per deployment and never 
 | `clabernetes` | production, on Kubernetes | a namespace per twin, with a NetworkPolicy | a LoadBalancer per node, `externalTrafficPolicy: Local` ([D-020](decisions.md#d-020), [D-037](decisions.md#d-037)) |
 | `hardware` | a later release | a reservation of devices from a pool | the devices' own management addresses |
 
-- Both containerlab drivers render the same `topology.clab.yml`, named for the twin, with
-  production interface names where the kind has aliases and renamed ports where it does
-  not. The clabernetes driver wraps it in a `Topology` resource.
+- Both containerlab drivers render the same containerlab definition, named for the twin,
+  with production interface names where the kind has aliases and renamed ports where it
+  does not: `topology.clab.yml` locally, with the lab's management network; on clabernetes
+  inside a `Topology`, less the `mgmt` block and with each node's declared ports, beside the
+  twin's Namespace and NetworkPolicy ([D-057](decisions.md#d-057)).
 - Account-gated images, such as cEOS, live in a private registry the cluster trusts
   ([D-021](decisions.md#d-021)). Locally, a gated image is a presence check at admission
   (`admission.image.absent`) and is never pulled; an ungated one is containerlab's to pull
-  at deploy ([D-015](decisions.md#d-015)). kind is the cluster for developing the
-  clabernetes driver ([D-022](decisions.md#d-022)). The production cluster is three k3s
-  servers with embedded etcd on SSD, MetalLB in layer 2, and the registry on a host outside
-  the cluster ([D-036](decisions.md#d-036)).
+  at deploy ([D-015](decisions.md#d-015)). On clabernetes the plan writes a gated image
+  under its registry's prefix and names the pull secrets, which `apply` makes. The
+  clabernetes driver is developed on a three-server k3s cluster
+  ([D-060](decisions.md#d-060)). The production cluster is three k3s servers with embedded
+  etcd on SSD, MetalLB in layer 2, and the registry on a host outside the cluster
+  ([D-036](decisions.md#d-036)).
 - The hardware driver is not built; its paper shape checks the seam. The local driver
   stays sufficient for development and the live tier, so neither needs Kubernetes.
 
@@ -256,28 +300,35 @@ through its driver ([Constitution VIII](constitution.md#viii-reconcile-to-desire
 - **Conditions.** `Ready`, `Stepping` and `Diverged`, each with a stable reason. Clients
   branch on them.
 - **Incarnation.** Each node's current instance is recorded: the container's start time
-  locally, the pod's uid on clabernetes. A changed incarnation voids what the node holds,
-  and the loop pushes it again.
-- **Recovery rules.** A lab present while the record lacks `applied` is probed, and applied
-  again with reconfiguration if a node stays silent. A destroy that finds residue and no lab
-  deploys, then destroys. Cleanup runs on every failure and deletion path.
+  locally, the pod's uid and its container's restart count on clabernetes
+  ([D-069](decisions.md#d-069)). A changed incarnation voids what the node holds, and the
+  loop pushes it again: in a step, or under a `restore` run when a kick finds it on a settled
+  twin, which the loop inspects ([D-067](decisions.md#d-067)).
+- **Recovery rules.** On a driver that declares it cannot apply again (`reapply` false), a
+  lab present while the record lacks `applied` is probed, and applied again with
+  reconfiguration if a node stays silent; on one that can, it is applied again, with no probe
+  ([D-068](decisions.md#d-068)). A destroy that finds residue and no lab deploys, then
+  destroys. Cleanup runs on every failure and deletion path.
 
-**Runs.** Every long operation (create, step, destroy) is a **run**: a ULID, the principal
-who asked, a state, and once ended a verdict. Its **events** (a sequence number, a time, a
-phase, an outcome) are read by cursor, and timings are events. A run can be cancelled. Only
-one run acts on a twin at a time. The API and the loop run in one process; on Kubernetes,
-the core runs as one replica holding a Lease, and locally it holds a lock on its store.
+**Runs.** Every long operation (create, step, restore, destroy) is a **run**: a ULID, the
+principal who asked (the core's own for a restore), a state, and once ended a verdict. Its
+**events** (a sequence number, a time, a phase, an outcome) are read by cursor, and timings
+are events. A run can be cancelled. Only one run acts on a twin at a time. The API and the
+loop run in one process; on Kubernetes, the core runs as one replica holding a Lease, and
+locally it holds a lock on its store.
 
 **Scheduling** ([D-023](decisions.md#d-023)). The loop's work goes through a **work queue**
 keyed by twin name, served by a bounded pool of workers.
-- **Triggers queue the twin:** a client's write, a change the driver reports (Docker's
-  events locally, a watch on the twin's `Topology` and pods on clabernetes), a periodic
-  **resync** of every twin, and the core's start.
+- **Triggers queue the twin:** a client's write, a change the driver reports through
+  `events` (Docker's events for its labs' containers locally, one watch on its twins' pods on
+  clabernetes, [D-058](decisions.md#d-058)), a periodic **resync** of every twin, every
+  `FYLGJA_RESYNC_S`, and the core's start.
 - **Each twin has at most one worker at a time,** and so one run. A name already queued is
   not queued twice, and one that arrives while its twin is busy is queued again afterwards.
 - **Waiting releases the worker.** A worker runs phases until the twin converges, must wait
   on the runtime, or fails. A twin that waits goes back on the queue with a delay. A
-  transient failure goes back with a growing backoff. A failure only a new spec can clear
+  transient failure goes back with a growing backoff, as does a failure the loop does not
+  class, which is logged with its traceback. A failure only a new spec can clear
   stops until the spec is written again.
 
 **Steps.** A step takes a running twin to another blueprint or bundle without a rebuild.
@@ -302,11 +353,15 @@ store interface ([Constitution IX](constitution.md#ix-state-lives-behind-one-sto
 | Store | Where | Use |
 |---|---|---|
 | `local` | a directory, each twin record in its own file (`twins/<name>.json`) | development and a single lab host |
-| `object` | S3-compatible object storage (MinIO in development) | production |
+| `object` | an S3 endpoint that honours conditional writes, proved at start; keys of the local store's shape, a run's events one object each | production |
 
 - Blueprints and bundles are kept by id and never overwritten.
 - A twin record changes only by **compare-and-set** on its revision, so concurrent runs on
   two twins never collide ([`twin-record-1.schema.json`](../formats/twin-record-1.schema.json)).
+- On the object store the compare-and-set is the endpoint's condition: `If-None-Match: *`
+  creates, `If-Match` at the ETag read replaces and deletes. Only a settled refusal, the
+  endpoint's 412, is taken as proof that an object exists; an unsettled one, a 409 while
+  another write to the key is in flight, is raised ([D-061](decisions.md#d-061)).
 - There is no database. One returns only through a decision naming a question only a
   database answers.
 
@@ -346,20 +401,23 @@ stored, so there is one representation of a twin.
 - **The thin CLI**, `fylgja-core`, is a client like any other: `twin create|step|show|
   verify|destroy|list`, `run get|watch|cancel`, `blueprint push`, `bundle build|get|diff`,
   and `--json`. It exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport
-  failure, and 3 for a twin left dirty.
+  failure, and 3 for a twin left dirty. A watch the server ends before its end is resumed by
+  the client library from the last revision or event it saw, for up to about three minutes
+  before it gives up, each try given 5 s to connect.
 
 ### 4.8 Credentials and principals
 
 - **Clients.** Each client has its own bearer token, mapped to a **principal**: from
   Secrets on a cluster, or a local file of token hashes in development. Several tokens are
-  valid at once, for rotation. `401` and `403` stay distinct, and TLS ends at the ingress.
+  valid at once, for rotation. `401` and `403` stay distinct, and TLS ends at the server
+  ([D-063](decisions.md#d-063)).
   OIDC and roles wait for the first outside user.
 - **Audit.** Every request's principal is written to the audit log and to the runs it
   starts, so every change to a twin is attributable.
 - **Node logins** come from one **credential provider**: the environment locally, Secrets
   on a cluster. A platform package names its login by a `credentials` name, never a value;
-  the provider reads `FYLGJA_CREDENTIAL_<NAME>_USERNAME` and `_PASSWORD`
-  ([D-042](decisions.md#d-042)).
+  the provider reads `FYLGJA_CREDENTIAL_<NAME>_USERNAME` and `_PASSWORD`, and `_REGISTRY` too
+  for a pull credential ([D-042](decisions.md#d-042), [D-057](decisions.md#d-057)).
 - **No credential** appears in a blueprint, bundle, deployment, record, finding or log
   ([Constitution X](constitution.md#x-report-honestly)).
 
@@ -376,7 +434,9 @@ Every twin has a name and its own isolation unit
   found by a label sweep: through containerlab locally, and by deleting the namespace on
   clabernetes.
 - A twin that cannot fit is refused at admission (`admission.capacity`), with the reason.
-- On clabernetes, a NetworkPolicy per namespace keeps other twins' pods out. Each node's
+- On clabernetes, a NetworkPolicy per namespace keeps other twins' pods out: it admits the
+  twin's own pods, clabernetes' namespace, sources outside the pod CIDR and the core's
+  namespace ([D-019](decisions.md#d-019), [D-059](decisions.md#d-059)). Each node's
   LoadBalancer is set to `externalTrafficPolicy: Local` so the policy sees the client's own
   address ([D-037](decisions.md#d-037)).
 - Locally, two labs' management networks reach each other through the host. That is
@@ -437,8 +497,8 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 
 | Path | What it holds |
 |---|---|
-| `core/` | The core, the Python package `fylgja_core`: the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler; the state store and its local directory; the driver seam, its registry and the containerlab driver (`containerlab/`); the credential provider, readiness and the push; the reconcile loop; the server (`server/`, the console script `fylgja-core-server`); and the client library with the thin CLI (`fylgja-core`). Its tests are under `core/tests/`, the live tier's under `core/tests/live/` |
-| `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README |
+| `core/` | The core, the Python package `fylgja_core`: the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler; the state store, its local directory and its object store with the S3 signer; the driver seam, its registry, the containerlab driver (`containerlab/`) and the clabernetes driver (`clabernetes/`: its plan and changes, its reach into Kubernetes, and the driver class); the credential provider, readiness and the push; the reconcile loop; the server (`server/`, the console script `fylgja-core-server`); and the client library with the thin CLI (`fylgja-core`). Its tests are under `core/tests/`, the live tier's under `core/tests/live/`, the cluster tier's under `core/tests/cluster/`, and the driver conformance suite's under `core/tests/conformance/`: its scenarios, written once, and a harness for each driver |
+| `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README; the wheel carries the schemas and the OpenAPI document as the package's data ([D-066](decisions.md#d-066)) |
 | `psp/` | The platform packages, SR Linux and EOS |
 | `probes/` | The probe package `ping` |
 | `testdata/blueprint/` | The four blueprint fixtures, converted once from the earlier format at the repository's start |
@@ -446,7 +506,9 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 | `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match, and the compiler's rejection fixtures |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
 | `testdata/deployment/` | The golden deployments, per driver and fixture: the rendered runtime files and the deployment document each plan must reproduce (`scripts/render-goldens.py` writes them); and under `rejected/`, the blueprints a driver's plan must refuse |
-| `scripts/` | The link checker (`linkcheck.py`), and the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`) |
+| `scripts/` | The link checker (`linkcheck.py`), the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`), the check that the wheel validates outside the tree (`wheelcheck.py`), and the check of the core's image as it runs (`imagecheck.py`) |
+| `Dockerfile` | The core's image ([D-062](decisions.md#d-062)): two stages on `python:3.14.9-slim` pinned by digest, the newest Python 3.14 release at least two weeks old when it was chosen, the wheel built from `core/` and `formats/`, the packages under `psp/` and `probes/`, `fylgja-core-server` its entry point, run as a user that is not root. Its build context is `.dockerignore`'s allow-list, so nothing under `local/` reaches a layer |
+| `deploy/` | The core's kustomize base ([D-062](decisions.md#d-062)): the namespace `fylgja`; the core's service account, its one ClusterRole and the Lease's Role ([D-071](decisions.md#d-071)); the core's Deployment, one replica under `Recreate`, and its LoadBalancer Service; and its store, Versity S3 Gateway over a `local-path` volume, shut to every pod but the core's. It holds no address and no value: a site's overlay under `local/deploy/` sets the image, the Secrets and the addresses, as the README there shows |
 | `design/` | How the project is governed and designed: the constitution, the decisions, this architecture, the verified facts, and design documents ([core.md](core.md) is the core's) |
 | `docs/` | Documentation for people using Fylgja; today the glossary and the rule catalogue |
 | `CONTRIBUTING.md` | How to set up, build, test and change Fylgja |

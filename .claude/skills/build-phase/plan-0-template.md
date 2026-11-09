@@ -30,6 +30,8 @@ Constraints, and the plan that consumes it is corrected before it starts.
 ### Where the design's plan list is bent
 
 - <what lands in another plan than the design says, and why>
+- <each bend of a decision's text ruled while the plans ran, with the entry it bends: the
+  landing's as-built entries are written from this list>
 
 ### Test tiers and markers
 

@@ -86,8 +86,17 @@ written.
   test already determines.
 - **A step that rests on behaviour not yet read** on a running system begins with the
   reading, and says what the task does if the reading differs.
+- **A reading the design leaves to a plan goes to a test whose path runs the code read.**
+  Trace it before the plan is written: a live test that drives the driver alone never
+  pushes, so it cannot read what pushing does (phase 7 moved such a reading a plan later).
+- **Before a step names a tool, read the rules its file is held to.** A conformance
+  scenario starts no process, by the suite's own pure check; a step that has it run a
+  command cannot be built as written.
 - Plans drafted side by side are reconciled where they meet, and plan 0 gains a section
   saying what was settled.
+- **Plan 0 keeps the bends.** Each place a plan, or later a ruling, departs from a
+  decision's text is added to plan 0 when it is made, with the entry it bends. The landing
+  writes its decision entries from that list.
 - The maintainer reviews the plans and chooses how they are executed.
 
 ## 3. Execute
@@ -122,8 +131,19 @@ written.
 - **Live runs are one at a time**: the local live tier in one worktree, the cluster's tests
   for one plan, and never both together where they share hardware. The controller says
   whose turn it is.
+- **A plan whose cluster run needs the phase's core** gets it from the controller: the
+  integration branch's image built, pushed and deployed before that plan's window, its tag
+  in the ledger. Two cores never run on the cluster: the deployed one is scaled to nothing
+  before a test starts its own.
+- **A fix that changes a test run live is followed by one run of that test**, so that the
+  merged code has run; where no window allows it, the landing says at which commit the
+  facts were read.
+- **A fact is a reading.** A reviewer is asked whether each new fact says only what its run
+  showed. A figure worked out from others is called a derivation, and whether a bound or a
+  wider wait is needed is a ruling, recorded in the ledger and entered at the landing.
 - **A plan ends** with one review of its whole branch on the most capable model, one fix
-  wave, and one check of that wave. Then its commits' trailers are made uniform, it is merged
+  wave, and one check of that wave. The last plan's reviewer is also asked for every line
+  of the design documents the phase has made untrue. Then its commits' trailers are made uniform, it is merged
   into the integration branch (`--no-ff`), and the next plan's branch is cut.
 - **The controller rules and goes on.** It stops for four things alone: an operation that
   cannot be undone, a security-sensitive action, a side effect outside the phase's own
@@ -136,13 +156,22 @@ Only on the maintainer's word.
 
 1. When every plan is merged and the phase's "done when" holds, tell the maintainer, with
    every ruling made on their behalf and what each costs if wrong.
-2. Squash the integration branch onto `main` as one commit, `feat: phase N, <what it built>`,
-   its body saying why.
+2. **Write the phase as built**, in one gated commit on the integration branch
+   (`docs(design): phase N as built, …`), so that the squash carries it:
+   - a decision entry for the bends of each topic ("… as built"), from plan 0's list and the
+     ledgers' rulings, with its index row and a status note on every entry it supersedes in
+     part;
+   - every line of `design/core.md`, `design/architecture.md` and
+     `design/verified-facts.md` the phase made untrue, corrected;
+   - the item of "Sequence" marked done, with its date, what it built and what it left to
+     later phases; what it left unanswered goes under "Open questions".
 3. Tag the integration branch `archive/phase-N-integration`, so the hashes the ledgers name
    still resolve.
-4. Copy each plan's workspace to `local/sdd/phase-N/<plan>/`, and the collected rulings to
-   `local/sdd/phase-N/rulings.md`.
-5. Remove the worktrees and the phase's branches. Never push unless asked.
-6. In `design/core.md`, mark the item of "Sequence" done, with its date, what it built and
-   what it left to later phases.
+4. Squash the integration branch onto `main` as one commit, `feat: phase N, <what it built>`,
+   its body saying why, what was verified and what was not run. The squash's tree is the
+   gated one: `git diff main phase-N-integration` prints nothing.
+5. Copy each plan's workspace to `local/sdd/phase-N/<plan>/`, the collected rulings to
+   `local/sdd/phase-N/rulings.md`, and the logs of the runs the facts were read from.
+6. Remove the worktrees and the phase's branches, once each branch is an ancestor of the
+   tag (`git merge-base --is-ancestor`). Never push unless asked.
 7. Amend this file, `house-rules.md` and `CONTRIBUTING.md` with whatever the phase taught.

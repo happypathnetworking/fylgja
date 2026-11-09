@@ -26,6 +26,9 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
   one at a time, and you remove whatever you started.
 - **A behaviour of a running system** is read before a line relies on it, and recorded in
   `design/verified-facts.md` with the version and the date, in that document's style.
+- **A fact says what a run showed, and no more.** A figure worked out from other figures is
+  called a derivation. Whether a reading calls for a bound, a wider wait or nothing is not
+  yours to write into a fact: put it in your report's concerns, and the controller rules.
 - **Formats change in `formats/`**, in the same commit as the code. `design/decisions.md` is
   append-only: never rewrite an entry.
 - **Prose** in documents and docstrings follows the text around it: plain and specific.

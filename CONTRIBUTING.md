@@ -71,10 +71,13 @@ statement for people, and is the one that is right where the two disagree.
    - A plan's whole branch is reviewed once more, then merged into the integration branch.
    - Live runs are one at a time.
 4. **Land.** On the maintainer's word:
+   - the phase is written as built on the integration branch: a decision entry for each
+     place the build departed from a decision, the sentences it made untrue corrected, and
+     the item in "Sequence" marked done, with what it left to later phases;
    - the integration branch is squashed onto `main` as one commit;
    - its history is kept under the local tag `archive/phase-N-integration`;
-   - the build's records (ledgers, briefs, reviews, rulings) go to `local/sdd/phase-N/`;
-   - the item in "Sequence" is marked done, with what it left to later phases.
+   - the build's records (ledgers, briefs, reviews, rulings, run logs) go to
+     `local/sdd/phase-N/`.
 
 ## Tooling
 

@@ -51,6 +51,11 @@ and returns it unchanged. It was earlier called a *snapshot*.
 list must arrive sorted and unique; the core rejects one that is not
 (`blueprint.unsorted`, `blueprint.duplicate`) and never sorts it.
 
+**Build phase** — One item of the "Sequence" in [core.md](../design/core.md#sequence), such as
+"phase 7", built in four stages: settle, plan, execute, land
+([D-080](../design/decisions.md#d-080), [CONTRIBUTING.md](../CONTRIBUTING.md#how-a-phase-is-built)). Not the reconcile
+loop's *phase*.
+
 **Bundle** — What the compiler makes of one blueprint and the loaded packages: a
 `manifest.json` (nodes, *mapping rows*, links, placed probes, the blueprint id) and one
 `configs/<node>.cfg` per node that carries a configuration
@@ -196,6 +201,10 @@ incarnations as the driver writes them, and never reads one.
 **Infrahub** *(orchestrator)* — OpsMill's source of truth, from which the orchestrator reads
 devices, cables and each device's configuration rendered by a template.
 
+**Integration branch** — `phase-N-integration`, the branch a *build phase*'s plans are merged
+into, cut from `main` with the phase's design merged in. It is squashed onto `main` at the
+*landing*, and its history is kept under the tag `archive/phase-N-integration` ([D-080](../design/decisions.md#d-080)).
+
 **Isolation unit** — What a driver gives each twin so twins share nothing mutable: a lab
 with its own management network, a namespace, or a device reservation
 ([Constitution VII](../design/constitution.md#vii-twins-are-named-and-isolated),
@@ -207,11 +216,19 @@ with its own management network, a namespace, or a device reservation
 package states only what the kind does not ([D-015](../design/decisions.md#d-015)); for a kind with
 no aliases (cEOS), that includes a *rename rule* from production names to the kind's ports.
 
+**Landing** — The end of a *build phase*, on the maintainer's word: the phase written as built,
+the *integration branch* squashed onto `main` as one commit and its history tagged, and the
+build's records copied to `local/sdd/phase-N/` ([D-080](../design/decisions.md#d-080)).
+
 **Lease** — On a cluster, the `coordination.k8s.io/v1` object one core holds so that no second
 core reconciles its store beside it ([D-062](../design/decisions.md#d-062)): held under the pod's
 name for 15 s, and renewed every 5 s. A core waiting for it takes it once it has seen it
 unchanged for 15 s by its own clock, never by the Lease's times; a core whose renewals have not
 succeeded for 15 s stops (`lease.lost`). A release frees it for the next at once.
+
+**Ledger** — The record of one plan's build, kept outside the tree by the session running the
+phase: the tasks done with their commits, every *ruling*, and the findings deferred
+([D-080](../design/decisions.md#d-080)).
 
 **`link_apply_mode`** — How a link change reaches a running node of a kind: `live`,
 re-cabled with no restart, or `restart`. Set by the platform package, written on each node
@@ -233,7 +250,8 @@ and the *conditions* `Ready`, `Stepping` and `Diverged`, each with a stable reas
 stages, rehearses proposed changes and reports on them. It lives in the archived repository
 for now, and will write blueprint 1 and call API 1 ([D-003](../design/decisions.md#d-003)).
 
-**Phase** — One ordered stage of the reconcile loop: `compiled`, `admitted`, `planned`,
+**Phase** — (For an item of the build's "Sequence", see *build phase*.) One ordered stage of the
+reconcile loop: `compiled`, `admitted`, `planned`,
 `applied`, `ready`, `pushed`, `verified`, `flows`, and `destroyed` for a deletion. Each is
 recorded before the next begins, so a restarted core resumes
 ([Constitution VIII](../design/constitution.md#viii-reconcile-to-desired-state)).
@@ -242,6 +260,10 @@ recorded before the next begins, so a restarted core resumes
 allocation, and returns a *deployment*. It is the only binding step
 ([D-011](../design/decisions.md#d-011)). It refuses a runtime port two cabled interfaces
 share (`interface.port.shared`, [D-045](../design/decisions.md#d-045)).
+
+**Plan 0** — The working document that holds a *build phase*'s branches, the order of its
+plans, its rule for live runs, the names the plans share, and each place the build has bent
+a decision's text. Plans live under `local/plans/`, outside the tree ([D-080](../design/decisions.md#d-080)).
 
 **Platform package** — The data that makes one network operating system supported:
 interface rules, push, readiness, gNMI paths, conformance, fidelity, and a section per
@@ -326,6 +348,10 @@ by default), so a missed runtime event is only late, never lost
 **Revision** — A twin record's write counter, bumped by every write, the client's or the
 loop's. The API serves it as the ETag; a client sends it back as `If-Match`, and the write
 fails `412` if the record has moved ([D-025](../design/decisions.md#d-025)).
+
+**Ruling** — A decision taken during a *build phase* on the maintainer's behalf, written in the
+*ledger* as what was decided, why, and what it costs if wrong, and reported before the
+*landing*. One that departs from a decision's text becomes a new entry then ([D-080](../design/decisions.md#d-080)).
 
 **Run** — One long operation on a twin (create, step, restore or destroy): a ULID, the
 principal, a state and, once ended, a *verdict*. A write to the twin queues it, or the loop

@@ -45,7 +45,7 @@ pull request** ([D-033](design/decisions.md#d-033)).
 ## How a phase is built
 
 A phase is one item of the "Sequence" in [design/core.md](design/core.md). It goes through
-the flow above in four stages. The procedure an agent follows, with the rules every
+the flow above in four stages ([D-080](design/decisions.md#d-080)). The procedure an agent follows, with the rules every
 implementer and reviewer is handed and the template for a phase's branch plan, is
 [`.claude/skills/build-phase/`](.claude/skills/build-phase/SKILL.md); this section is its
 statement for people, and is the one that is right where the two disagree.

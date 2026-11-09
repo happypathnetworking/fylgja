@@ -103,6 +103,7 @@ already have been weighed.
 | [D-077](#d-077) | Capacity and the deploy lock as built: the reading is given the reserved twins, a step is judged on the sum, and a pod's request is the scheduler's own | Runtimes and drivers |
 | [D-078](#d-078) | Contention as read on the many-twins runs: no bound on the node clients, and no wait widened | Pushing, stepping and verifying |
 | [D-079](#d-079) | The capacity read as built: `capacity show`, and `read_at` from the core's one clock | The API and its clients |
+| [D-080](#d-080) | A phase is built in four stages on an integration branch and lands on `main` as one squash | Process and repository |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -4754,7 +4755,8 @@ The bound:
 <a id="d-033"></a>
 ### D-033 — A lighter process: design document, decision entry, pull request
 
-**Status:** Accepted at the baseline (2026-10-31).
+**Status:** Accepted at the baseline (2026-10-31); added to by [D-080](#d-080) on 2026-11-09:
+how the flow runs for a phase.
 
 #### Context
 
@@ -4887,6 +4889,85 @@ where every document links.
 ---
 
 <a id="parked"></a>
+<a id="d-080"></a>
+### D-080 — A phase is built in four stages on an integration branch and lands on `main` as one squash
+
+**Status:** Accepted 2026-11-09. Adds to [D-033](#d-033): how its flow runs for a phase of
+[core.md](core.md#sequence)'s "Sequence", what gives each plan the review a pull request would,
+and where the build's working records live. D-033 stands, and binds every change that is not a
+phase as before.
+
+#### Context
+
+D-033 gives a change three steps: a design document, a decision entry where a decision
+changes, a pull request. A phase is larger than one change: several plans, each a branch, built
+by agents under the maintainer's direction, with live runs that share hardware. Phases 4 to 7
+were built one way without that way being written down, and each new session recovered it from
+the last phase's records. Phase 7 followed a written draft of it, and its landing amended the
+draft with what the phase taught.
+
+Three things in that practice are not in D-033. The plans' branches are merged into an
+integration branch and not into `main`, which takes the phase as one commit. The plans, the
+ledgers of the build and its reviews are working documents that never enter the tree. And
+decisions are taken during the build on the maintainer's behalf.
+
+#### Options considered
+
+How a phase reaches `main`:
+
+- **Each plan a pull request onto `main`.** Not taken: `main` would hold a phase half built
+  between plans, and a later plan's review often changes an earlier plan's code.
+- **The integration branch merged, its history on `main`.** Not taken: the commits of a phase
+  are its tasks and fix rounds, 42 in phase 7 and 210 in phase 6, and what they record is the
+  ledgers'.
+- **One squash onto `main`, the branch's history under a tag.** Chosen.
+
+Where the build's records live:
+
+- **In the tree.** Not taken: a plan is how a branch gets built, and is spent once it is; the
+  design, this log and [verified-facts.md](verified-facts.md) are the record.
+- **Under `local/`, git-ignored.** Chosen.
+
+Decisions during the build:
+
+- **Stop and ask at each.** Not taken: a build parked on a question waits for the maintainer
+  and buys nothing a recorded decision does not.
+- **Rule, record what it costs if wrong, and report before the landing.** Chosen, with four
+  stops.
+
+#### Decision
+
+- **A phase goes through four stages**: settle, plan, execute, land.
+  [CONTRIBUTING.md](../CONTRIBUTING.md#how-a-phase-is-built) states them, and
+  `.claude/skills/build-phase/` is the procedure an agent follows, with the rules every
+  implementer and reviewer is handed. CONTRIBUTING is right where the two disagree.
+- **Settle is D-033's first two steps**: the phase's section in [core.md](core.md) and its
+  decision entries, on the branch `phase-N-design`, with the behaviour they rest on read first
+  and recorded. No plan is written before the maintainer approves the design.
+- **Each plan is a branch** `phase-N/<n>-<name>`, merged into `phase-N-integration`. Its
+  review is a fresh reviewer for each task and one for the whole branch, before it merges.
+- **A decision taken during the build is a ruling**, written in the plan's ledger with what it
+  costs if wrong and reported to the maintainer before the landing. One that departs from a
+  decision's text becomes a new entry at the landing. The build stops for four things alone:
+  an operation that cannot be undone, a security-sensitive action, a merge into `main` or a
+  push, and a plan so broken that every way forward is a guess.
+- **A phase lands only on the maintainer's word**, as one squash commit on `main`, after the
+  phase is written as built on the integration branch. That branch's history is kept under the
+  tag `archive/phase-N-integration`. Nothing is pushed unless the maintainer asks.
+- **Plans and the build's records stay out of the tree**: plans under `local/plans/`, the
+  ledgers, briefs, reviews, rulings and run logs under `local/sdd/phase-N/`. What a later reader
+  needs from them is in the design, this log and verified-facts.md.
+
+#### Consequences
+
+- `main`'s history says what each phase built, one commit a phase. Why a line is as it is is
+  read from the design and this log, not from a task's commit.
+- The archive tag is local until it is pushed, so the hashes a ledger names resolve only where
+  the tag is.
+- The procedure is amended at each landing with what the phase taught.
+- The new terms are in [glossary.md](../docs/glossary.md).
+
+
 ## Parked
 
 Directions neither adopted nor rejected until the scope that needs them is planned. Each

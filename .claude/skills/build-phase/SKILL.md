@@ -7,7 +7,7 @@ description: Use when starting, designing, planning, executing or landing a phas
 
 A phase is one item of the "Sequence" in `design/core.md`. It moves through the project's one
 process (a design document, a decision entry where a decision changes, then pull requests;
-D-033) in four stages: settle, plan, execute, land. `CONTRIBUTING.md`, "How a phase is
+D-033, and D-080 for a phase) in four stages: settle, plan, execute, land. `CONTRIBUTING.md`, "How a phase is
 built", states the same for people; where the two disagree, that section is right and this
 file is corrected.
 

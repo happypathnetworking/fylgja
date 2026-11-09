@@ -117,8 +117,8 @@ writes them.
   cluster the kill at a create's `pushed` found its run ended, as the kill at a step's `verified`
   does on both ([D-072](decisions.md#d-072), [verified-facts.md](verified-facts.md)).
 
-**Designed, not yet built:** everything else in section 4: the probes' flows, many twins at
-once, and the cut-over that moves the orchestrator onto API 1. They are built in the phases of
+**Designed, not yet built:** everything else in section 4: the probes' flows, and the cut-over
+that moves the orchestrator onto API 1. They are built in the phases of
 [design/core.md](core.md#sequence).
 
 **The reference implementation** is the **frozen Go core** in the archived repository
@@ -233,15 +233,16 @@ given.
 | Call | What it does |
 |---|---|
 | `capabilities()` | Says what the driver can do: provision nodes or claim them, change links on a running twin, forward in software or hardware, reach nodes directly or through a proxy, keep twins apart by names alone or by the network, finish an apply cut short by applying again (`reapply`, [D-068](decisions.md#d-068)). |
-| `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason; or, for a step, keeps the allocation the twin holds and checks the added demand ([D-049](decisions.md#d-049)). |
+| `admit(bundle, twin)` | Reserves what the twin is bound to (a lab name and management subnet, a namespace, a device reservation) into the twin record by compare-and-set, or refuses with the reason, a shortfall of the runtime's room among them, and the allocation carries the demand it reserved ([D-073](decisions.md#d-073)); or, for a step, keeps the allocation the twin holds and checks the added demand ([D-049](decisions.md#d-049)), and the record gets that allocation with the target's `demand` at `admitted` ([D-073](decisions.md#d-073)). |
 | `plan(bundle, twin, allocation)` | Pure. Binds the bundle to the twin and the runtime, and returns a deployment, or refuses a runtime port two cabled interfaces share ([D-045](decisions.md#d-045)) or, on clabernetes, a gated image whose registry the allocation lacks ([D-057](decisions.md#d-057)). |
 | `changes(before, after, packages)` | Pure. Answers what the runtime does to each node to go from one deployment to another: `kept`, `added`, `removed`, `recabled`, `restarted`, `recreated` or `unsupported`, each with its reasons, and the links added and removed ([D-049](decisions.md#d-049)). |
-| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)), asked only of a driver that does not declare `reapply` ([D-068](decisions.md#d-068)). |
+| `apply(deployment, files, packages, reconfigure)` | Makes the runtime match the deployment and its rendered files, within its packages' measured deploy timeouts. With `reconfigure`, rebuilds the whole lab: every node is made anew, so every node's incarnation changes and its `holds` is void. That is the loop's remedy for a node that stays silent ([D-023](decisions.md#d-023)), asked only of a driver that does not declare `reapply` ([D-068](decisions.md#d-068)). Locally one `containerlab deploy` at a time ([D-074](decisions.md#d-074)): another twin's apply waits its turn, outside its deploy's timeout; a destroy is not held. |
 | `inspect(twin)` | Reads what the runtime holds for the twin, each node's incarnation included. |
 | `destroy(deployment, files, packages)` | Removes everything the twin holds, the residue of a killed destroy included, within its packages' measured destroy timeouts, and releases its allocation. |
 | `endpoints(twin)` | Returns each node's management address. |
 | `exec(twin, node, argv, timeout_s)` | Runs an argument vector inside a node and answers its exit code and output, bounded in time and bytes: the one way to reach a node with no management transport, which only probe hosts are ([D-049](decisions.md#d-049)). |
 | `events()` | Names, for good, each twin whose runtime may have changed; the name is all the loop is given, since it reads what is true with `inspect`. A driver may also act where only the runtime can mend a node: the clabernetes driver deletes a pod whose container ended or restarted in it before it names the twin, so the cluster makes the node anew ([D-070](decisions.md#d-070)). It never fails: it starts its source again after a backoff and then names every twin its source can name, on clabernetes each twin with a pod, a twin whose every pod went being the resync's ([D-058](decisions.md#d-058)). |
+| `capacity(reserved)` | The runtime's room as `admit` would read it now: each host's total and free CPU and memory, and the demand of every twin of `reserved`, the other twins' allocations, whose pods or containers are not yet up, less what the runtime already holds for it. `admit` is written over it, passing its own `reserved`, and `GET /v1/capacity` answers it, passing every twin record's allocation ([D-073](decisions.md#d-073), [D-076](decisions.md#d-076)). |
 
 `plan` is the only step that binds a bundle to a twin and a runtime. It is pure, so what it
 binds to must exist first: that is why `admit` reserves the allocation.
@@ -249,7 +250,8 @@ binds to must exist first: that is why `admit` reserves the allocation.
 **The deployment** is what `plan` returns
 ([`deployment-1.schema.json`](../formats/deployment-1.schema.json)): the driver, the twin,
 the allocation, the bundle id, the rendered files with their hashes, the **demand** (nodes,
-CPU, memory) admission compares with free capacity, and the fidelity of this twin on this
+CPU, memory) admission compares with the runtime's free room, which the driver reads at
+`admit` ([D-073](decisions.md#d-073)), and the fidelity of this twin on this
 runtime. Its id hashes the driver, twin, bundle id and files, so the same plan gets the
 same id and `apply` is idempotent. Fidelity depends on the runtime, since containers forward
 in software and hardware in silicon, so it is computed per deployment and never hashed.
@@ -325,6 +327,9 @@ keyed by twin name, served by a bounded pool of workers.
   `FYLGJA_RESYNC_S`, and the core's start.
 - **Each twin has at most one worker at a time,** and so one run. A name already queued is
   not queued twice, and one that arrives while its twin is busy is queued again afterwards.
+- **Admission is one at a time** across twins, over the driver's reading of the runtime's
+  free room less the demand of every twin admitted whose pods or containers are not yet up;
+  a twin that does not fit is refused, never queued ([D-073](decisions.md#d-073)).
 - **Waiting releases the worker.** A worker runs phases until the twin converges, must wait
   on the runtime, or fails. A twin that waits goes back on the queue with a delay. A
   transient failure goes back with a growing backoff, as does a failure the loop does not
@@ -380,6 +385,7 @@ stored, so there is one representation of a twin.
 | `GET /v1/bundles/{a}/diff/{b}` | The step between two bundles. |
 | `POST /v1/packages:validate` | Validate platform and probe packages. |
 | `GET /v1/drivers` | The drivers served and their capabilities. |
+| `GET /v1/capacity` | The running driver's reading of the runtime's room: each host's total and free CPU and memory, and the admitted twins' pending demand ([D-076](decisions.md#d-076)). |
 | `GET /v1/twins`, `GET /v1/twins/{name}` | List twins; show one. With `?watch=true`, a stream of server-sent events, one per change, each carrying the whole record. |
 | `PUT /v1/twins/{name}` | Write a twin's spec: create it, or step it to another blueprint. `If-Match` (or `If-None-Match: *` to create only) guards against overwriting another client's write; `412` when it would. The loop starts a run toward the new spec. |
 | `PUT /v1/twins/{name}?dry_run=true` | What writing that spec would do: admission and the driver's plan, with nothing written. |
@@ -400,7 +406,7 @@ stored, so there is one representation of a twin.
   stops it.
 - **The thin CLI**, `fylgja-core`, is a client like any other: `twin create|step|show|
   verify|destroy|list`, `run get|watch|cancel`, `blueprint push`, `bundle build|get|diff`,
-  and `--json`. It exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport
+  `capacity show`, and `--json`. It exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport
   failure, and 3 for a twin left dirty. A watch the server ends before its end is resumed by
   the client library from the last revision or event it saw, for up to about three minutes
   before it gives up, each try given 5 s to connect.
@@ -433,7 +439,9 @@ Every twin has a name and its own isolation unit
 - Every resource a twin uses carries the twin's label and is removed with it. An orphan is
   found by a label sweep: through containerlab locally, and by deleting the namespace on
   clabernetes.
-- A twin that cannot fit is refused at admission (`admission.capacity`), with the reason.
+- A twin that cannot fit is refused at admission (`admission.capacity`), with the reason:
+  the runtime's free room read then, less the admitted twins' pending demand, against the
+  twin's demand and its largest node ([D-073](decisions.md#d-073)).
 - On clabernetes, a NetworkPolicy per namespace keeps other twins' pods out: it admits the
   twin's own pods, clabernetes' namespace, sources outside the pod CIDR and the core's
   namespace ([D-019](decisions.md#d-019), [D-059](decisions.md#d-059)). Each node's

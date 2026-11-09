@@ -86,6 +86,67 @@ the local driver and the step; a fact re-verified there gets a *(0.81.0, date)* 
   (1.6 s) left `drv-live-2` running, with its hosts block whole. **The route between two
   labs, which `isolation: names` rests on, was not re-exercised in phase 4**: it stands from
   0.79.0.
+- **Three labs at once through the driver.** *(0.81.0, 2026-11-08)* `ml-1`, `ml-2` and `ml-3`,
+  three SR Linux nodes each, applied under `asyncio.gather` on the development host, with no container running (load
+  1.0 at the first sample)
+  (`core/tests/live/test_many_labs_live.py`): the deploys ran one after the other under the
+  driver's lock (D-074), in apply order, each `deploy.log`'s first line at or after the
+  previous one's last timed line (to the second: 85170 to 85208, 85208 to 85249, 85249 to
+  85297, seconds of the day). They took 37.7 s, 41.2 s and 48.3 s, 127.2 s in all, against
+  about 53 s for two labs deployed together. Every deploy passed its post-deploy: each `apply`
+  returned, and each twin's `inspect` showed three nodes running. The 1-minute load average,
+  sampled every 2 s, rose from 1.0 to 11.47 against 10 CPUs and was still rising when the run
+  ended (6.7 after the first lab, 9.9 after the second, 11.5 at the end), so 11.47 is where
+  the run ended, not a plateau. Host-wide established TCP connections (`ss`, every
+  connection on the host, unrelated traffic included) stayed between 25 and 36 against a
+  baseline near 30. All three labs were then
+  destroyed, and the host held none of their containers, hosts lines, ssh configs or
+  networks. The test drove `driver.apply`, `inspect` and `destroy` alone: the containerlab
+  driver never touches the node HTTP client, whose push and readiness belong to the reconciler,
+  and that did not run. So the `ss` reading is unrelated host traffic and says nothing about
+  whether the node client needs a bound; its connections are to be read where twins are
+  created through the core (phase 7's many-twins scenario, the next bullet).
+- **Three twins at once through the core.** *(0.81.0, 2026-11-09)* The conformance suite's
+  many-twins scenario (`core/tests/conformance/test_many.py`) on the development host, quiet
+  before it (load under 2), three times: the module alone, within the whole suite, and the module
+  alone again after the review's fixes. `cf-many-1` and
+  `cf-many-3` from `three-node` and `cf-many-2` from `mixed`, created through the CLI with
+  `--no-wait` in 0.5 s, were all admitted within 0.9 s of the last ask. The capacity read then
+  showed 10 CPU and 25605–25642 MiB free, with all nine nodes pending (4.5 CPU and 17408 MiB, every
+  twin's whole demand). The deploys ran one after the other under the driver's lock (D-074): the
+  three were Ready 57.5–65.2 s, 122.6–143.0 s and 163.9–177.2 s after their asks, their applies
+  36.9–44.3 s, 98.0–108.6 s and 139.2–150.0 s, the later two's holding their wait for the lock.
+  Each apply, its wait for the lock included, stayed within its deploy's budget, 240 s for an SR
+  Linux twin and 360 s for a mixed one, which starts only when the deploy does; the deploys' own
+  times were not read apart from their waits. Once all were Ready the read showed 5.5 CPU and
+  12688–12768 MiB free and nothing pending: the free memory had fallen 12834–12961 MiB from the
+  reading before any twin, against a demand of
+  17408 MiB, being the kernel's figure and not the packages'.
+  - Each twin was then stepped while the others ran, the three steps asked within 1.0 s:
+    `cf-many-1` to `three-node-unlinked` in 2.3–2.4 s; `cf-many-2` to `mixed-e2-port`, its two
+    EOS nodes recreated, in 80.3–88.6 s (the apply 64.8–73.7 s); `cf-many-3` to
+    `three-node-unlinked` in 66.1–75.1 s, its apply of 65.1–74.0 s nearly all its wait for
+    `cf-many-2`'s deploy, where `cf-many-1`'s apply took 1.4–1.5 s. Every step ended `ok` with its
+    wait settled at the first verify, after 0.26–0.64 s of its 90 s budget, with no node unread and
+    no wait expired, and each `twin verify` after it held at its first ask.
+  - A twin of forty SR Linux nodes, `cf-big`, was refused in a dry run (422 in 0.35–0.55 s) in
+    the words "The twin needs 20 CPUs, and the host has 5.5 free with 0 pending. The twin needs
+    81920 MiB of memory, and the host has 12684 MiB free with 0 MiB pending." (12674 MiB and
+    12655 MiB in the later runs). The capacity read just after said 12686 MiB, 12669 MiB and
+    12652 MiB free with nothing pending, within 5 MiB of the refusal's own reading. Its create was
+    refused alike (exit 1, the run `rejected` in 0.47–0.53 s, nothing in the runtime), its own
+    sentence reading 12679 MiB, 12690 MiB and 12663 MiB free.
+  - The three destroys, asked together, took 2.4–3.7 s each, and all three were gone within
+    4.3 s; the read then showed 10 CPU and 25488–25577 MiB free, nothing pending and no twin.
+  - The host's established TCP connections to ports 443, 57400 and 6030, read every 2 s from
+    `/proc/net/tcp` and `/proc/net/tcp6` (whose count equalled `ss -Htn state established
+    '( dport = :57400 or dport = :443 or dport = :6030 )' | wc -l` read beside it, five times
+    before the runs, iproute2 6.19.0), were at most 7 during the creates (5, 5 and 7 over the three
+    runs) and at most 7 during the steps and verifies (7, 4 and 7), against 1–5 at the quiet samples before, between and after. The count holds the
+    host's own connections to port 443 beside the core's, and misses one opened and closed between
+    two samples: it rose at most 2 above its first sample during the creates (5 against 3, 5
+    against 4 and 7 against 5) and at most 4 during the steps (7 against 3, 4 against 1 and 7
+    against 4).
 - **Residue.** *(2026-10-30)*
   - `docker rm` of a lab's containers, followed by `destroy --cleanup`, leaves the
     management network, the `/etc/hosts` lines and
@@ -524,7 +585,7 @@ did the fourth, in the whole tier.
   loop's default executor (min(32, CPUs + 4) workers, 14 on this 10-CPU host), where under
   sustained node loss healthy nodes' reads could queue behind abandoned ones. That design note
   is answered by phase 5's plan 5: each read is a daemon thread of its own, at most 16 at once
-  (`gnmi.READ_THREADS`) and one per node's address, so a node whose last read still runs is
+  (`gnmi.READ_THREADS`; since D-075, 2026-11-08, the sixteen are a twin's own pool) and one per node's address, so a node whose last read still runs is
   unreadable at once and its retries never add threads, and a read finding all 16 busy waits
   for one within its budget. The pure tier holds each of these. On Python 3.14.4 a read held in
   its thread neither held `asyncio.run`'s close nor the process's exit: the process exited in
@@ -1333,7 +1394,8 @@ Three Proxmox VMs, each 8 vCPU, 24 GiB and 80 GB on spinning disks the VMs share
 26.04.1, kernel 7.0.0-42; k3s with embedded etcd, containerd 2.3.4-k3s1, flannel VXLAN and
 k3s's embedded network policy controller (kube-router v2.6.3); MetalLB 0.16.0 in layer 2 on
 the LAN; clabernetes 0.10.1 at its default requests (200m CPU, 512 Mi). Five twins: three
-three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
+three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux). A bullet of a run through
+the deployed core says so, and its twins ran at the packages' requests.
 
 - **The cluster stands as recorded, with nothing left on it.** *(2026-11-05)* Read before
   phase 6, through its kubeconfig and one node's shell:
@@ -1349,6 +1411,85 @@ three-node SR Linux twins and two mixed ones (two cEOS, one SR Linux).
     private registry, which answers 401 without credentials on its TLS port;
   - on the node read, k3s's config holds the two relaxed etcd timings and
     `registries.yaml` the registry's `ca_file`.
+
+- **The cluster's room, as an admission by capacity would read it.** *(2026-11-08)* Read
+  through its kubeconfig before phase 7, with the core's pod and its gateway the only thing
+  of Fylgja's running and no twin:
+  - each of the three hosts reports 8 CPU and 24603252–24603268 Ki (23.46 GiB) as both
+    `capacity` and `allocatable`: k3s reserves nothing for the system by default, so
+    allocatable is the figure to read and equals the machine's;
+  - the pods on a host request 70m–320m CPU and 192–460 MiB in all, from clabernetes'
+    manager and planner pods (10m and 32 Mi, 50m and 128 Mi each), k3s's own (100m and
+    70 Mi each) and the core's namespace (250m and 256 Mi for the core, 50m and 64 Mi for
+    the gateway); MetalLB's speakers and controller request nothing, and so are invisible to
+    a reading by requests, as they are to the scheduler; `kubectl describe node`'s "Allocated
+    resources" sums the same requests (320m and 460 Mi, 300m and 320 Mi, 70m and 192 Mi);
+  - so allocatable less requests leaves 7.7–7.9 CPU and about 23 GiB a host, about 23 CPU and
+    70 GiB in all: five three-node SR Linux twins at the package's requests (0.5 CPU and
+    2048 MiB a node) take 7.5 CPU and 30 GiB, and a twin of 36 such nodes does not fit.
+  - read through the driver (`ClabernetesDriver.capacity()`) on 2026-11-08, with no twin of the
+    tier up: three hosts of 8 CPU and 24026 MiB total, free 7.68–7.95 CPU and 23566–23962 MiB
+    a host, 23.56 CPU and 71362 MiB in all, nothing pending, the core's pod scaled off for the
+    run and its gateway not: the gateway's 50m and 64 MiB stayed on one host, the one with
+    7.95 CPU and 23962 MiB free, which is 8 CPU and 24026 MiB less exactly those;
+  - with the two-node SR Linux twin admitted and reserved and not applied, the same free
+    room and 2 nodes, 1 CPU and 4096 MiB pending; with its pods running, the free memory had
+    fallen by exactly 4096 MiB (to 67266 MiB, 22.56 CPU free) and nothing was pending: the
+    pods' requests are what the reading takes, and the twin's demand and its pods' requests
+    agree.
+
+- **The quantities and the pod shapes a reading by requests meets.** *(2026-11-08)* Read
+  through the kubeconfig, read-only, a pod of clabernetes' namespace, the core's pod and the
+  nodes; no twin's pod was read (a twin's pod has two init containers, `clabwire`
+  restartable: "The Topology's requests are by node name"):
+  - nodes' `capacity` and `allocatable` are strings: `cpu` a whole number (`"8"`) and `memory`
+    in Ki (`"24603252Ki"`), each equal in the two;
+  - requests across every pod of the cluster come as `cpu` in milli (`250m`) and `memory` in
+    `Mi` (`256Mi`) or in `M`; no CPU in whole numbers or decimals, no memory in bytes, `Gi`
+    or an exponent, though `cpu` and `mib` parse them all;
+  - clabernetes' manager pod has one init container, not restartable (`restartPolicy`
+    absent), with its own request (50m and 128 Mi), so a pod with an init container is met
+    here; the core's pod has none; four pods of the cluster have one; no pod read carries
+    `overhead` (it is absent, null).
+
+- **Five twins at once through the core.** *(2026-11-09)* The conformance suite's many-twins
+  scenario (`core/tests/conformance/test_many.py`) against the core deployed at its image
+  `d909573040e0`, with `FYLGJA_RESYNC_S` 3600 and the step's wait at its default 180 s, twice:
+  the module alone, then within the whole suite, the development host quiet. Before any twin the
+  capacity read showed three hosts, 23.31 CPU and 71106 MiB free and nothing pending. `cf-many-1`,
+  `cf-many-3` and `cf-many-5` from `three-node` and `cf-many-2` and `cf-many-4` from `mixed`,
+  created through the CLI with `--no-wait` in 2.4–2.7 s, were all admitted within 1.0 s of the
+  last ask, the read then showing the same free room with all fifteen nodes pending (7.5 CPU and
+  28672 MiB). The SR Linux twins were Ready 142.7–170.3 s after their asks and the mixed ones
+  200.7–224.2 s, the last 206.7–226.1 s after the first ask; their applies took 108.8–135.6 s and
+  151.9–177.1 s, within budgets of 240 s and 360 s. Once all were Ready the read showed 15.81 CPU
+  and 42434 MiB free and nothing pending: the free room had fallen by exactly the twins' demand,
+  7.5 CPU and 28672 MiB, the pods' requests being what it counts.
+  - **The placement at the packages' requests**: the scheduler put the fifteen pods, 0.5 CPU and
+    1536–2048 MiB each, five on each of the three hosts, after the creates and again after the
+    steps, in both runs.
+  - Each twin was then stepped while the others ran, the five steps asked within 5.6 s: the SR
+    Linux twins to `three-node-unlinked` in 10.8–21.5 s (the applies 8.5–19.6 s), and the mixed
+    ones to `mixed-e2-port` in 186.3–206.4 s, their applies of 159.6–171.6 s replacing the four
+    cEOS pods together, where the multi-host stage replaced one twin's two in 136–138 s. Every
+    step ended `ok` with its wait settled at the first verify, after 0.31–0.80 s of its 180 s, with
+    no node unread and no wait expired, and each `twin verify` after it held at its first ask:
+    the suite's 30 s tolerance for a Service without its endpoint was not used.
+  - A twin of forty SR Linux nodes, `cf-big`, was refused in a dry run (422 in 0.43–0.62 s) and at
+    its create (exit 1, the run `rejected` in 0.71–0.72 s, no namespace made), in the words "The
+    twin needs 20 CPUs, and the cluster has 15.81 free with 0 pending. The twin needs 81920 MiB of
+    memory, and the cluster has 42434 MiB free with 0 MiB pending." in both runs. The capacity
+    read just after said 15.81 CPU and 42434 MiB free with nothing pending, the refusal's own
+    reading to the MiB.
+  - The five destroys, asked together, took 16.6–17.1 s for an SR Linux twin and 46.9–48.9 s for
+    a mixed one, all gone within 50.4 s; the read then showed 23.31 CPU and 71106 MiB free again,
+    nothing pending and no twin, and no namespace of a twin was left.
+  - The development host's established TCP connections to ports 443, 57400 and 6030, counted
+    every 2 s as the local run counts them, were at most 5–8 during the creates and 3–7 during
+    the steps. The core runs in its pod, so the count is the suite's own connections to the core,
+    the CLI's and the harness's, on port 443, which the suite's address names by giving no port,
+    beside the host's other traffic: it says nothing of the core's connections to the nodes, which
+    the local run read.
 
 - **etcd on spinning disks shared by the hosts** loses its leader when the three hosts
   unpack a 5.2 GB image at once. Applies took 5 s against an expected 100 ms, and k3s
@@ -3361,6 +3502,12 @@ Verified on Ubuntu 26.04.1 LTS, kernel 7.0, Docker 29.8.1 (Compose 5.6.0, cgroup
 Facts dated up to 2026-10-08 were first verified on Ubuntu 24.04.1, kernel 6.8, Docker 27.5.1,
 and each says whether it was re-verified on 26.04.
 
+- **The development host** has 10 CPUs and 31 GiB (`MemTotal` 31811440 kB), of which the
+  kernel reports 25.3 GiB `MemAvailable` idle, with no container running. *(2026-11-08)*
+  Three three-node SR Linux labs deployed one after the other through the driver took its
+  1-minute load average to 11.47 and held its host-wide established TCP connections between
+  25 and 36, with no push or readiness run: unrelated host traffic, no reading of the node
+  HTTP client. *(0.81.0, 2026-11-08)*
 - **SR Linux's `rsyslogd` needs an AppArmor widening on Ubuntu hosts.** *(2026-09-30; 26.04,
   2026-10-08)*
   - Ubuntu's `/etc/apparmor.d/usr.sbin.rsyslogd` attaches to the `rsyslogd` inside every

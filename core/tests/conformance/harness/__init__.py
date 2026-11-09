@@ -107,6 +107,16 @@ class Harness(Protocol):
         `{}` when it holds none."""
         ...
 
+    def hosts(self, twin: str) -> dict[str, str]:
+        """Each node the runtime holds of the twin, with the host it runs on as the runtime says
+        it; a node not yet placed on a host is left out, and `{}` when it holds none."""
+        ...
+
+    def many(self) -> int:
+        """How many twins of three nodes the many-twins scenario creates together: the runtime's
+        room for them, and more that do not fit being the scenario's `BIG` twin's."""
+        ...
+
     def twins(self) -> set[str]:
         """Every twin the runtime holds anything of, by the twin label."""
         ...

@@ -49,6 +49,7 @@ Rules = dict[tuple[str, str, tuple[str, ...]], set[str]]
 # pods is the renewal's and the hot-add's (D-070). An exec's WebSocket handshake asks `get` and `create` on `pods/exec`.
 CLUSTER_RULES: Rules = {
     ("", "namespaces", ()): {"get", "create", "patch", "delete"},
+    ("", "nodes", ()): {"get", "list"},
     ("", "secrets", ()): {"create", "patch"},
     ("networking.k8s.io", "networkpolicies", ()): {"create", "patch"},
     ("c9s.run", "topologies", ()): {"get", "create", "patch"},

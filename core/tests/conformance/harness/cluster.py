@@ -545,17 +545,30 @@ class ClusterHarness(_Api):
 
         return sorted(self._kube(read))
 
-    def nodes(self, twin: str) -> dict[str, str]:
-        """Each node of the twin in `namespace_of(twin)`, by its pods' `NODE_LABEL`, with the
-        incarnation the driver writes, `<uid>/<restarts>` (D-069), of the pod that stands for it as
-        the driver reads it: its newest not being deleted, or the newest where every one is."""
+    def _standing_pods(self, twin: str) -> dict[str, Pod]:
+        """Each node of the twin in `namespace_of(twin)`, by its pods' `NODE_LABEL`, with the pod that
+        stands for it as the driver reads it: its newest not being deleted, or the newest where every
+        one is. `_standing` is stricter, never a pod being deleted, for a call that acts on it."""
         pods = self._kube(lambda c: LightKube(c).pods(namespace_of(twin), {OWNER_LABEL: OWNER, TWIN_LABEL: twin}))
-        found: dict[str, str] = {}
+        found: dict[str, Pod] = {}
         for node in sorted({p.labels[NODE_LABEL] for p in pods if p.labels.get(NODE_LABEL)}):
             mine = [p for p in pods if p.labels.get(NODE_LABEL) == node]
-            standing = max([p for p in mine if not p.deleting] or mine, key=lambda p: (p.created, p.name))
-            found[node] = f"{standing.uid}/{standing.restarts}"
+            found[node] = max([p for p in mine if not p.deleting] or mine, key=lambda p: (p.created, p.name))
         return found
+
+    def nodes(self, twin: str) -> dict[str, str]:
+        """Each node of the twin with the incarnation the driver writes, `<uid>/<restarts>` (D-069),
+        of the pod that stands for it (`_standing_pods`)."""
+        return {node: f"{pod.uid}/{pod.restarts}" for node, pod in self._standing_pods(twin).items()}
+
+    def hosts(self, twin: str) -> dict[str, str]:
+        """Each node of the twin with the node of the cluster its standing pod (`_standing_pods`) is
+        scheduled on, its `spec.nodeName`; a pod not yet scheduled is left out."""
+        return {node: pod.host for node, pod in self._standing_pods(twin).items() if pod.host}
+
+    def many(self) -> int:
+        """Five twins of three nodes: fifteen SR Linux nodes over the cluster's hosts."""
+        return 5
 
     def twins(self) -> set[str]:
         """The `TWIN_LABEL` of every namespace labelled `OWNER_LABEL=OWNER`, as the driver makes each."""

@@ -17,8 +17,9 @@ import itertools
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
-from fylgja_core import blueprint, deployment, gnmi, mapping, push
+from fylgja_core import blueprint, capacity, deployment, gnmi, mapping, push
 from fylgja_core.bundle import Manifest
+from fylgja_core.capacity import Host, Reading, Resources
 from fylgja_core.credentials import Credential
 from fylgja_core.deployment import Deployment
 from fylgja_core.driver import (
@@ -106,10 +107,14 @@ class FakeDriver:
         self.refuse = refuse
         self.fail_apply = fail_apply
         self.fail_destroy = False
+        self.fail_capacity = False
+        self.fail_capacity_with: Exception | None = None
         self.fail_inspect_once = False
         self.fail_events_once = False
         self.fail_after: str | None = None
         self.block: str | None = None
+        self._waiting: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Event]] = {}
+        self._released: set[str] = set()
         self.labs: dict[str, dict[str, NodeState]] = {}
         self.residue: set[str] = set()
         self.silent: set[tuple[str, str]] = set()
@@ -146,8 +151,22 @@ class FakeDriver:
             taken = {a.get("mgmt_subnet") for a in reserved}
             n = next(n for n in itertools.count(1) if f"10.0.{n}.0/24" not in taken)
             allocation = {"lab": twin, "mgmt_subnet": f"10.0.{n}.0/24"}
+        count = len(manifest.nodes) + len(hosts(manifest))
         self._killed_after("admit")
-        return allocation
+        return capacity.with_demand(allocation, deployment.Demand(nodes=count, cpu=0.5 * count, memory_mb=2048 * count))
+
+    async def capacity(self, reserved: Sequence[Allocation]) -> Reading:
+        """The fake's room, its labs' nodes taken at 0.5 CPU and 2048 MiB each; nothing of `reserved` is pending."""
+        self.calls.append(("capacity",))
+        await self._held("capacity")
+        if self.fail_capacity_with is not None:
+            raise self.fail_capacity_with
+        if self.fail_capacity:
+            raise DriverFailed("the fake's runtime cannot be read")
+        nodes = sum(len(lab) for lab in self.labs.values())
+        room = Resources(8.0, 16384)
+        free = Resources(8.0 - 0.5 * nodes, 16384 - 2048 * nodes)
+        return Reading((Host(self.name, room, free),), capacity.NOTHING)
 
     def plan(
         self,
@@ -369,8 +388,22 @@ class FakeDriver:
 
     async def _held(self, call: str) -> None:
         await asyncio.sleep(0)
-        if self.block == call:
-            await asyncio.get_running_loop().create_future()  # never answered: waits until cancelled
+        if self.block == call and call not in self._released:
+            loop, event = asyncio.get_running_loop(), asyncio.Event()
+            self._waiting[call] = (loop, event)
+            try:
+                await event.wait()  # waits until cancelled, or until `release(call)` goes on
+            finally:
+                self._waiting.pop(call, None)
+
+    def release(self, call: str) -> None:
+        """Let the blocked `call` go on, and any later one: thread-safe, for a test whose call has no run to cancel.
+        One waiter per call name is supported, as `_waiting` holds one slot for each."""
+        self._released.add(call)
+        waiting = self._waiting.get(call)
+        if waiting is not None:
+            loop, event = waiting
+            loop.call_soon_threadsafe(event.set)
 
     def _killed_after(self, call: str) -> None:
         if self.fail_after == call:
@@ -482,15 +515,16 @@ class FakeReader:
     answer that once the reader collects them, verified-facts.md "gNMI"). It names the node by
     the driver's address, raises `Unreadable` for a node in `unreadable` or an address no node
     holds, and answers each asked path it has, leaving the rest out, as a node leaves out a
-    value it does not hold. Each call is recorded as `(node, paths)`. `seed` writes facts
-    consistent with a manifest, an entry's members without module prefixes; a test perturbs
-    them."""
+    value it does not hold. Each call is recorded as `(node, paths)`, and the pool it named in
+    `pools`. `seed` writes facts consistent with a manifest, an entry's members without module
+    prefixes; a test perturbs them."""
 
     def __init__(self, driver: FakeDriver) -> None:
         self.driver = driver
         self.facts: dict[tuple[str, str], dict[str, Any]] = {}
         self.unreadable: set[tuple[str, str]] = set()
         self.calls: list[tuple[str, tuple[str, ...]]] = []
+        self.pools: list[str] = []
 
     async def __call__(
         self,
@@ -500,9 +534,11 @@ class FakeReader:
         paths: Sequence[str],
         *,
         timeout_s: float = gnmi.GNMI_TIMEOUT_S,
+        pool: str = "",
     ) -> dict[str, Any]:
         at = self.driver.node_at(address)
         self.calls.append((at[1] if at is not None else address, tuple(paths)))
+        self.pools.append(pool)
         await asyncio.sleep(0)
         if at is None or at in self.unreadable:
             raise Unreadable(f"{address}:{package.gnmi.port}", "UNAVAILABLE")

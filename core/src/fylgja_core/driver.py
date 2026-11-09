@@ -1,4 +1,4 @@
-"""The driver seam: the ten calls a runtime answers (Constitution XIII, D-017, D-049, D-058).
+"""The driver seam: the eleven calls a runtime answers (Constitution XIII, D-017, D-049, D-058, D-073).
 
 Everything above the seam calls these and nothing else; nothing above it names a runtime.
 Every call but `exec` is idempotent: `exec` runs what it is given. `plan` is synchronous and
@@ -19,13 +19,15 @@ from typing import Any, Literal, Protocol
 
 from fylgja_core import findings
 from fylgja_core.bundle import Manifest
+from fylgja_core.capacity import Reading
 from fylgja_core.deployment import Deployment
 from fylgja_core.findings import Finding
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 
-# The driver's own shape: what admit reserves for a twin and plan reads back.
-# The local driver's is {"lab": str, "mgmt_subnet": str}.
+# The driver's own shape: what admit reserves for a twin and plan reads back. The local driver's is
+# {"lab": str, "mgmt_subnet": str, "demand": {"nodes": int, "cpu": float, "memory_mb": int}}; the clabernetes
+# driver's carries `demand` too, the room the twin reserved (D-073).
 Allocation = Mapping[str, Any]
 
 EVENTS_BACKOFF_FIRST_S = 1.0
@@ -56,7 +58,7 @@ class Capabilities:
 
 
 class DriverFailed(Exception):
-    """A runtime failure of `admit`, `apply`, `inspect` or `destroy` (and of `endpoints`,
+    """A runtime failure of `admit`, `capacity`, `apply`, `inspect` or `destroy` (and of `endpoints`,
     which inspects): a command or a request the runtime failed or did not answer in time, or
     an answer it should not have given. It is transient: the loop backs off and retries.
     Each driver's own failures subclass it, so nothing above the seam names a runtime to
@@ -211,7 +213,21 @@ class Driver(Protocol):
 
         `held` is the deployment a stepping twin has applied (D-049): the twin keeps its lab and
         subnet, so the answer is `held.allocation`, and the capacity checked is the demand the
-        manifest adds over `held.demand`. Without it, the twin is new and gets a fresh allocation."""
+        manifest adds over `held.demand`. Without it, the twin is new and gets a fresh allocation.
+
+        The reading of the runtime's room is taken first (`capacity`, given this `reserved`), and
+        the allocation answered carries `demand`, the demand it reserved (D-073), a step's refreshed
+        to the target's."""
+        ...
+
+    async def capacity(self, reserved: Sequence[Allocation]) -> Reading:
+        """The runtime's room as `admit` would take it now for a twin whose other twins' allocations are
+        `reserved`; `DriverFailed` when the runtime cannot be read.
+
+        The caller names the reserved twins, as it does to `admit`, which passes on the `reserved` it is
+        given. A standalone read (the API's) passes every twin record's allocation, so it counts the right
+        twins after a restart, after a destroy and for the twin admitted last, which a driver's memory of its
+        last admission would not."""
         ...
 
     def plan(

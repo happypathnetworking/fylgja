@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import inspect
 import types
 import typing
 from pathlib import Path
@@ -22,6 +23,7 @@ from fylgja_core import (
     schemas,
 )
 from fylgja_core.bundle import Manifest
+from fylgja_core.capacity import NOTHING, Host, Reading, Resources
 from fylgja_core.clabernetes import plan as clabernetes_plan
 from fylgja_core.clabernetes.driver import ClabernetesDriver
 from fylgja_core.containerlab import changes as clab_changes
@@ -50,17 +52,36 @@ from fylgja_core.driver import (
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {p.id: p for p in map(platform_package.load, [ROOT / "psp/nokia_srlinux.yaml"])}
 PROBES = {p.format: p for p in [probe_package.load(ROOT / "probes/ping.yaml")]}
-NO_MANIFEST = typing.cast(Manifest, None)  # the fake's admit never reads it
+NO_MANIFEST = typing.cast(Manifest, types.SimpleNamespace(nodes=(), probes=()))  # the fake's admit reads its nodes
 
 
-CALLS = {"capabilities", "admit", "plan", "changes", "apply", "inspect", "destroy", "endpoints", "exec", "events"}
+CALLS = {"capabilities", "admit", "plan", "changes", "apply", "inspect", "destroy", "endpoints", "exec", "events",
+         "capacity"}
 
 
-def test_the_seam_has_ten_calls() -> None:
+def test_the_seam_has_eleven_calls() -> None:
     declared = {name for name, value in vars(Driver).items() if callable(value) and not name.startswith("_")}
     assert declared == CALLS
     for driver in (fakes.FakeDriver, ContainerlabDriver, ClabernetesDriver):
         assert all(callable(getattr(driver, call, None)) for call in CALLS), driver.__name__
+
+
+def test_the_fake_reads_its_room() -> None:
+    room = Resources(8.0, 16384)
+    assert asyncio.run(fakes.FakeDriver().capacity([])) == Reading((Host("fake", room, room),), NOTHING)
+    driver, _, _ = _lab("t", "node r1", "node r2", "node r3")
+    reserved = [{"lab": "u", "mgmt_subnet": "10.0.2.0/24", "demand": {"nodes": 2, "cpu": 1.0, "memory_mb": 4096}}]
+    assert asyncio.run(driver.capacity(reserved)) == Reading((Host("fake", room, Resources(6.5, 10240)),), NOTHING)
+    assert driver.calls[-1] == ("capacity",)
+    driver.fail_capacity = True
+    with pytest.raises(DriverFailed):
+        asyncio.run(driver.capacity([]))
+
+
+def test_every_drivers_capacity_takes_the_reserved_allocations() -> None:
+    # What `admit` would take now for a twin whose other twins' allocations are `reserved`: the caller names them.
+    for driver in (Driver, fakes.FakeDriver, ContainerlabDriver, ClabernetesDriver):
+        assert list(inspect.signature(driver.capacity).parameters) == ["self", "reserved"], driver.__name__
 
 
 def test_the_events_backoff_doubles_from_one_second_to_a_minute() -> None:
@@ -250,7 +271,8 @@ def test_the_fakes_admit_with_the_held_deployment_answers_its_allocation_and_can
     held = typing.cast(Deployment, types.SimpleNamespace(allocation={"lab": "t", "mgmt_subnet": "10.0.7.0/24"}))
     driver = fakes.FakeDriver()
     reserved = [{"lab": "u", "mgmt_subnet": "10.0.1.0/24"}]
-    assert asyncio.run(driver.admit(NO_MANIFEST, {}, {}, "t", reserved, held=held)) == held.allocation
+    assert asyncio.run(driver.admit(NO_MANIFEST, {}, {}, "t", reserved, held=held)) == {
+        **held.allocation, "demand": {"nodes": 0, "cpu": 0.0, "memory_mb": 0}}
     driver.fail_after = "admit"
     with pytest.raises(RuntimeError, match="killed"):
         asyncio.run(driver.admit(NO_MANIFEST, {}, {}, "t", reserved, held=held))

@@ -45,7 +45,7 @@ from cluster.conftest import Site, gated, run, say, until, watching
 from fylgja_core import blueprint, compiler, mapping, packages, probe_package
 from fylgja_core.clabernetes import namespace_of
 from fylgja_core.clabernetes.driver import RECREATE_ANNOTATION, ClabernetesDriver
-from fylgja_core.clabernetes.kube import Kube, LightKube, Namespace, Pod, Service
+from fylgja_core.clabernetes.kube import Kube, LightKube, Namespace, Node, Pod, Service
 from fylgja_core.credentials import Provider
 from fylgja_core.driver import Allocation, Changes, DriverFailed, Exec, Inspection, Planned, Refusal
 
@@ -101,6 +101,12 @@ class Killing:
 
     async def services(self, namespace: str) -> list[Service]:
         return await self.kube.services(namespace)
+
+    async def nodes(self) -> list[Node]:
+        return await self.kube.nodes()
+
+    async def all_pods(self) -> list[Pod]:
+        return await self.kube.all_pods()
 
     async def patch_service(self, namespace: str, name: str, patch: Mapping[str, Any]) -> None:
         await self.kube.patch_service(namespace, name, patch)

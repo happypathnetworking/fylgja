@@ -57,6 +57,12 @@ clabernetes driver's calls"):
   as `LightKube`'s does only for what is neither the API's nor the transport's failure:
   `undecodable` makes that failure, a line lightkube cannot decode, as lightkube raises it.
 
+- A pod a pass makes carries the request its node's entry in the Topology's
+  `spec.deployment.resources` gives, else the `default` entry, else none (verified-facts.md,
+  "The Topology's requests are by node name"), and, as its `host`, the nodes `add_node` added in
+  turn, the k-th pod made taking the k-th node round the list; with no node added its host is None.
+  `nodes` answers the nodes added and `all_pods` every pod of every namespace.
+
 What a test reads: `namespaces`; `objects`, every mapping applied, by `(kind, namespace, name)`,
 as it was given; `calls`, every call of `Kube` in order with its arguments; and `watches` and
 `queued`, the watches open and the changes they hold unread. `fail` names a call and the
@@ -82,7 +88,8 @@ from typing import Any
 import yaml
 from lightkube.core import decoders
 
-from fylgja_core.clabernetes.kube import NODE_LABEL, KubeFailed, Namespace, Pod, Service
+from fylgja_core.capacity import Resources
+from fylgja_core.clabernetes.kube import NO_REQUEST, NODE_LABEL, KubeFailed, Namespace, Node, Pod, Service, cpu, mib
 from fylgja_core.driver import Exec
 
 TOPOLOGY_OWNER_LABEL = "c9s.run/topologyOwner"
@@ -118,6 +125,7 @@ class FakeKube:
         self.address_s: dict[str, float] = {}
         self.exec_answers: dict[tuple[str, str], Exec | KubeFailed] = {}
         self.fail: dict[str, list[Exception | None]] = {}
+        self._nodes: list[Node] = []
         self._pods: dict[tuple[str, str], Pod] = {}
         self._services: dict[tuple[str, str], Service] = {}
         self._generations: dict[tuple[str, str], int] = {}
@@ -201,6 +209,14 @@ class FakeKube:
     async def services(self, namespace: str) -> list[Service]:
         self._call("services", namespace)
         return sorted((s for (ns, _), s in self._services.items() if ns == namespace), key=lambda s: s.name)
+
+    async def nodes(self) -> list[Node]:
+        self._call("nodes")
+        return sorted(self._nodes, key=lambda n: n.name)
+
+    async def all_pods(self) -> list[Pod]:
+        self._call("all_pods")
+        return sorted(self._pods.values(), key=lambda p: (p.namespace, p.name))
 
     async def patch_service(self, namespace: str, name: str, patch: Mapping[str, Any]) -> None:
         """Merge `patch` into the Service; of its members, the fake reads
@@ -296,7 +312,8 @@ class FakeKube:
                     current = self._retire(current, replaced=True)
                 if current is None:
                     labels = {**defaults, NODE_LABEL: node, TOPOLOGY_OWNER_LABEL: name}
-                    current = self._make(namespace, labels, phase="Running", ready_s=self.ready_s)
+                    current = self._make(namespace, labels, phase="Running", ready_s=self.ready_s,
+                                         requests=_requested(doc, node))
                 if spec.get("ports") and (namespace, node) not in self._services:
                     address = f"192.0.2.{_k(current)}"
                     withheld = node in self.address_s
@@ -323,6 +340,24 @@ class FakeKube:
         """A namespace made by someone else, labelled `labels`; no call is recorded."""
         self.namespaces[name] = Namespace(name, {**labels, NAME_LABEL: name}, False)
 
+    def add_node(self, name: str, cpus: float, memory_mb: int) -> None:
+        """A node of the cluster with `cpus` and `memory_mb` allocatable; no call is recorded."""
+        self._nodes.append(Node(name, Resources(cpus, memory_mb)))
+
+    def add_pod(
+        self, namespace: str, name: str, host: str | None, requests: Resources, labels: Mapping[str, str] | None = None
+    ) -> None:
+        """A pod of someone else's on `host` (None: bound to no host yet), `Running` with its container running,
+        carrying `labels` (none: it is no twin's unless they say so) and asking `requests`; no call is recorded."""
+        self._put("ADDED", Pod(name=name, namespace=namespace, uid=f"uid-added-{name}", labels=dict(labels or {}),
+                               phase="Running", ready=True, deleting=False,
+                               created=(EPOCH + timedelta(seconds=self.now)).isoformat(), restarts=0,
+                               container_running=True, host=host, requests=requests))
+
+    def fail_next(self, call: str) -> None:
+        """Make the next call of `call` (`nodes`, `all_pods`, ...) raise `KubeFailed`, no status."""
+        self.fail.setdefault(call, []).append(KubeFailed(f"{call}: the cluster did not answer", None))
+
     def pod_of(self, namespace: str, node: str) -> Pod:
         """The node's pod: the one not being deleted, else the last made."""
         found = sorted((p for p in self._pods.values() if p.namespace == namespace
@@ -339,14 +374,15 @@ class FakeKube:
     def set_phase(self, namespace: str, node: str, phase: str) -> None:
         """The node's pod at `phase`; its container runs only while the pod is `Running`."""
         pod = self.pod_of(namespace, node)
-        self._put("MODIFIED", replace(pod, phase=phase, container_running=pod.container_running and phase == "Running"))
+        self._put("MODIFIED", replace(pod, phase=phase, container_running=pod.container_running and phase == "Running",
+                                      ended=phase in ("Succeeded", "Failed")))
 
     def terminate(self, namespace: str, node: str) -> None:
         """The node's pod being deleted and staying, `Ready`, beside a second pod of the node,
         `Pending` and not `Ready` until a test says so: a deletion's window, held open."""
         pod = self.pod_of(namespace, node)
         self._put("MODIFIED", replace(pod, deleting=True))
-        self._make(namespace, dict(pod.labels), phase="Pending", ready_s=None)
+        self._make(namespace, dict(pod.labels), phase="Pending", ready_s=None, requests=pod.requests)
 
     def restart(self, namespace: str, node: str) -> None:
         """The node's container ended in its pod, as the cluster was read to keep it: the same pod,
@@ -438,12 +474,14 @@ class FakeKube:
         found = [p for p in self._pods_of(namespace, topology) if p.labels.get(NODE_LABEL) == node and not p.deleting]
         return max(found, key=_k) if found else None
 
-    def _make(self, namespace: str, labels: dict[str, str], *, phase: str, ready_s: float | None) -> Pod:
+    def _make(self, namespace: str, labels: dict[str, str], *, phase: str, ready_s: float | None,
+              requests: Resources = NO_REQUEST) -> Pod:
         self._made += 1
         k = self._made
+        host = self._nodes[(k - 1) % len(self._nodes)].name if self._nodes else None
         pod = Pod(name=_pod_name(labels[NODE_LABEL], k), namespace=namespace, uid=f"uid-{k}", labels=labels,
                   phase=phase, ready=False, deleting=False, created=(EPOCH + timedelta(seconds=self.now)).isoformat(),
-                  restarts=0, container_running=phase == "Running")
+                  restarts=0, container_running=phase == "Running", host=host, requests=requests)
         self._put("ADDED", pod)
         if ready_s is not None:
             self.at(ready_s, lambda: self._made_ready(pod))
@@ -460,7 +498,8 @@ class FakeKube:
         later, at once when that is 0. The replacement, or None."""
         old = replace(pod, deleting=True)
         self._put("MODIFIED", old)
-        new = self._make(pod.namespace, dict(pod.labels), phase="Pending", ready_s=self.ready_s) if replaced else None
+        new = self._make(pod.namespace, dict(pod.labels), phase="Pending", ready_s=self.ready_s,
+                         requests=pod.requests) if replaced else None
         if self.terminate_s > 0:
             self.at(self.terminate_s, lambda: self._ended(old))
         else:
@@ -520,6 +559,13 @@ def undecodable(line: bytes = b"not json") -> ValueError:
     except ValueError as e:
         return e
     raise AssertionError(f"lightkube decodes {line!r} as a watch event")
+
+
+def _requested(topology: Mapping[str, Any], node: str) -> Resources:
+    """What the Topology asks of `node`'s pod: its entry of `spec.deployment.resources`, else `default`'s."""
+    resources = (topology["spec"].get("deployment") or {}).get("resources") or {}
+    asked = (resources.get(node) or resources.get("default") or {}).get("requests") or {}
+    return Resources(cpu(asked["cpu"]) if "cpu" in asked else 0.0, mib(asked["memory"]) if "memory" in asked else 0)
 
 
 def _carries(labels: Mapping[str, str], wanted: Mapping[str, str]) -> bool:

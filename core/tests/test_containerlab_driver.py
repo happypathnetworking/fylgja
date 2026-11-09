@@ -8,15 +8,18 @@ import dataclasses
 import json
 import logging
 import os
+import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
 from typing import Any
 
 import pytest
-from aio import bounded, cancelled, closed
+from aio import BOUND_S, bounded, cancelled, closed
 
 from fylgja_core import blueprint, bundle, compiler, containerlab, logs, platform_package, probe_package
+from fylgja_core.capacity import LOCAL_HOST, Host, Reading, Resources
+from fylgja_core.capacity import NOTHING as NO_DEMAND
 from fylgja_core.containerlab import cli
 from fylgja_core.containerlab import driver as driver_module
 from fylgja_core.containerlab import plan as clab_plan
@@ -27,6 +30,7 @@ from fylgja_core.containerlab.driver import (
     EXEC_OUTPUT_KEPT,
     RULE_CAPACITY,
     RULE_IMAGE,
+    RUNNING_ARGV,
     ContainerlabDriver,
     deploy_budget,
     destroy_budget,
@@ -35,7 +39,7 @@ from fylgja_core.containerlab.driver import (
 )
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
-from fylgja_core.deployment import Deployment
+from fylgja_core.deployment import Demand, Deployment
 from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, events_backoff
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -112,6 +116,8 @@ def meminfo(tmp_path: Path, available_kb: int) -> Path:
 
 
 ROOMY_KB = 64 * 1024 * 1024  # 64 GiB
+THREE_NODE = {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}
+TWO_NODE = {"nodes": 2, "cpu": 1.0, "memory_mb": 4096}
 
 
 def admit(
@@ -145,15 +151,16 @@ def test_the_drivers_plan_is_the_pure_plan(tmp_path: Path) -> None:
 def test_admit_takes_the_first_subnet_neither_docker_nor_another_twin_holds(tmp_path: Path) -> None:
     runner = FakeRunner(HOLDING_172_20_0)
     allocation = admit(tmp_path, runner, reserved=[{"lab": "u", "mgmt_subnet": "172.20.1.0/24"}])
-    assert allocation == {"lab": "t", "mgmt_subnet": "172.20.2.0/24"}
+    assert allocation == {"lab": "t", "mgmt_subnet": "172.20.2.0/24", "demand": THREE_NODE}
     # Every network's config is read in one inspect; SR Linux's image is public, so never inspected.
     assert runner.calls == [NETWORK_LS, (*NETWORK_INSPECT, "net0", "net1", "net2", "net3")]
 
 
 def test_a_twin_admitted_beside_one_recorded_but_not_deployed_gets_another_subnet(tmp_path: Path) -> None:
-    first = admit(tmp_path, FakeRunner(docker("[]")))
-    assert first == {"lab": "t", "mgmt_subnet": "172.20.0.0/24"}
-    assert admit(tmp_path, FakeRunner(docker("[]")), reserved=[first]) == {"lab": "t", "mgmt_subnet": "172.20.1.0/24"}
+    first = admit(tmp_path, FakeRunner({**docker("[]"), RUNNING_ARGV: ""}))
+    assert first == {"lab": "t", "mgmt_subnet": "172.20.0.0/24", "demand": THREE_NODE}
+    assert admit(tmp_path, FakeRunner({**docker("[]"), RUNNING_ARGV: ""}), reserved=[first]) == {
+        "lab": "t", "mgmt_subnet": "172.20.1.0/24", "demand": THREE_NODE}
 
 
 def test_admit_logs_the_twin_the_subnet_and_the_demand(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -174,12 +181,15 @@ def test_an_exhausted_pool_is_refused_for_capacity(tmp_path: Path) -> None:
 
 def test_a_twin_larger_than_the_hosts_available_memory_is_refused_naming_the_shortfall(tmp_path: Path) -> None:
     refused = admit(tmp_path, FakeRunner(HOLDING_172_20_0), available_kb=1048576)
-    assert refused == Refusal(RULE_CAPACITY, "The twin needs 6144 MiB of memory, and the host has 1024 MiB available.")
+    # The node sentences follow: no SR Linux node (2048 MiB) fits 1024 MiB either.
+    assert isinstance(refused, Refusal) and refused.rule == RULE_CAPACITY
+    assert refused.message.startswith(
+        "The twin needs 6144 MiB of memory, and the host has 1024 MiB free with 0 MiB pending. The node n1 needs ")
 
 
 def test_a_twin_needing_more_cpu_than_the_host_has_is_refused(tmp_path: Path) -> None:
     refused = admit(tmp_path, FakeRunner(HOLDING_172_20_0), cpus=1)
-    assert refused == Refusal(RULE_CAPACITY, "The twin needs 1.5 CPUs, and the host has 1.")
+    assert refused == Refusal(RULE_CAPACITY, "The twin needs 1.5 CPUs, and the host has 1 free with 0 pending.")
 
 
 def test_every_shortfall_is_named_in_one_refusal(tmp_path: Path) -> None:
@@ -188,8 +198,134 @@ def test_every_shortfall_is_named_in_one_refusal(tmp_path: Path) -> None:
     assert isinstance(refused, Refusal) and refused.rule == RULE_CAPACITY
     assert refused.message == (
         "The pool 172.20.0.0/24 has no /24 that neither a Docker network nor another twin holds. "
-        "The twin needs 6144 MiB of memory, and the host has 1024 MiB available. "
-        "The twin needs 1.5 CPUs, and the host has 1.")
+        "The twin needs 1.5 CPUs, and the host has 1 free with 0 pending. "
+        "The twin needs 6144 MiB of memory, and the host has 1024 MiB free with 0 MiB pending. "
+        + " ".join(
+            f"The node {n} needs 0.5 CPUs and 2048 MiB, and the roomiest host, host, has 1 CPUs and 1024 MiB free."
+            for n in ("n1", "n2", "n3")))
+
+
+def test_a_node_larger_than_the_host_is_refused_by_the_node_sentence(tmp_path: Path) -> None:
+    big = dataclasses.replace(PLATFORMS["chassisos"], runtime=dataclasses.replace(
+        PLATFORMS["chassisos"].runtime, containerlab=dataclasses.replace(
+            PLATFORMS["chassisos"].runtime.containerlab,
+            resources=dataclasses.replace(PLATFORMS["chassisos"].runtime.containerlab.resources, memory_mb=40000))))
+    driver = ContainerlabDriver(tmp_path, runner=FakeRunner(HOLDING_172_20_0),
+                                meminfo=meminfo(tmp_path, 25907 * 1024), cpus=64)
+    refused = asyncio.run(driver.admit(manifest("lossy"), {**PLATFORMS, "chassisos": big}, PROBES, "t", []))
+    assert isinstance(refused, Refusal) and refused.rule == RULE_CAPACITY
+    assert "The node c1 needs " in refused.message and "and the roomiest host, host, has" in refused.message
+
+
+def meminfo_of(tmp_path: Path, total_kb: int, available_kb: int) -> Path:
+    path = tmp_path / "meminfo"
+    path.write_text(f"MemTotal:       {total_kb} kB\nMemFree:         1000000 kB\nMemAvailable:   {available_kb} kB\n")
+    return path
+
+
+def reading_driver(tmp_path: Path, running: str, *, available_kb: int = ROOMY_KB, cpus: int = 10) -> ContainerlabDriver:
+    runner = FakeRunner({**docker("[]"), RUNNING_ARGV: running})
+    return ContainerlabDriver(tmp_path, runner=runner, meminfo=meminfo(tmp_path, available_kb), cpus=cpus)
+
+
+def test_capacity_reads_the_host_as_one_host_named_host(tmp_path: Path) -> None:
+    driver = ContainerlabDriver(tmp_path, runner=FakeRunner({RUNNING_ARGV: ""}),
+                                meminfo=meminfo_of(tmp_path, 31811440, 26529548), cpus=10)
+    assert LOCAL_HOST == "host"
+    assert asyncio.run(driver.capacity([])) == Reading(
+        (Host("host", Resources(10.0, 31065), Resources(10.0, 25907)),), NO_DEMAND)
+
+
+def test_a_reserved_twin_whose_lab_is_not_up_is_pending_and_one_whose_lab_is_up_holds_cpu(tmp_path: Path) -> None:
+    reserved = [{"lab": "u", "mgmt_subnet": "172.20.1.0/24", "demand": THREE_NODE},
+                {"lab": "v", "mgmt_subnet": "172.20.2.0/24", "demand": TWO_NODE}]
+    reading = asyncio.run(reading_driver(tmp_path, "v\nv\n").capacity(reserved))
+    assert reading.pending == Demand(nodes=3, cpu=1.5, memory_mb=6144)
+    assert reading.free.cpu == 9.0
+    assert asyncio.run(reading_driver(tmp_path, "v\n").capacity(reserved)).pending == Demand(
+        nodes=5, cpu=2.5, memory_mb=10240)
+
+
+def test_capacity_counts_the_reserved_it_is_given_and_nothing_an_admission_left(tmp_path: Path) -> None:
+    # A standalone read, the API's, passes every twin record's allocation: so it counts a twin before any admission
+    # since a restart, and one an admission was given and that has gone since counts no more.
+    u = {"lab": "u", "mgmt_subnet": "172.20.1.0/24", "demand": THREE_NODE}
+    driver = reading_driver(tmp_path, "")
+    assert asyncio.run(driver.capacity([u])).pending == Demand(nodes=3, cpu=1.5, memory_mb=6144)
+    asyncio.run(driver.admit(manifest("three-node"), PLATFORMS, PROBES, "t", [u]))
+    assert asyncio.run(driver.capacity([])).pending == NO_DEMAND
+
+
+def test_a_reserved_allocation_without_demand_counts_as_nothing_and_is_logged_once(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    reserved = [{"lab": "u", "mgmt_subnet": "172.20.1.0/24"}]
+    driver = reading_driver(tmp_path, "")
+    asyncio.run(driver.admit(manifest("three-node"), PLATFORMS, PROBES, "t", reserved))
+    asyncio.run(driver.admit(manifest("three-node"), PLATFORMS, PROBES, "t", reserved))
+    assert asyncio.run(driver.capacity(reserved)).pending == NO_DEMAND
+    assert len([r for r in caplog.records if "u" in r.getMessage().split() and "demand" in r.getMessage()
+                and r.levelname == "INFO" and not r.getMessage().startswith("admit")]) == 1
+
+
+def test_a_reserved_allocation_whose_demand_will_not_read_counts_as_nothing_and_is_warned_of_once(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    reserved = [{"lab": "u", "mgmt_subnet": "172.20.1.0/24", "demand": {"nodes": "x"}}]
+    driver = reading_driver(tmp_path, "")
+    for _ in range(2):
+        answer = asyncio.run(driver.admit(manifest("three-node"), PLATFORMS, PROBES, "t", reserved))
+        assert isinstance(answer, dict) and answer["mgmt_subnet"] == "172.20.0.0/24"
+    assert asyncio.run(driver.capacity(reserved)).pending == NO_DEMAND
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warned) == 1 and "u" in warned[0].split()
+
+
+def test_an_unknown_cpu_count_is_a_driver_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
+    driver = ContainerlabDriver(tmp_path, runner=FakeRunner({}), meminfo=meminfo(tmp_path, ROOMY_KB))
+    with pytest.raises(DriverFailed, match="the CPU count"):
+        asyncio.run(driver.capacity([]))
+
+
+@pytest.mark.parametrize(("text", "named"), [
+    ("MemTotal:       65536000 kB\nMemFree:         1000000 kB\n", "MemAvailable"),
+    ("MemTotal:       65536000 kB\nMemAvailable:   12x45 kB\n", "MemAvailable"),
+    ("MemTotal:       65536000\nMemAvailable:   1234567 kB\n", "MemTotal"),
+], ids=["absent", "garbled", "no-unit"])
+def test_a_meminfo_without_a_figure_as_the_kernel_writes_it_is_a_driver_failure_naming_the_key(
+    tmp_path: Path, text: str, named: str
+) -> None:
+    path = tmp_path / "meminfo"
+    path.write_text(text)
+    driver = ContainerlabDriver(tmp_path, runner=FakeRunner({}), meminfo=path, cpus=8)
+    with pytest.raises(DriverFailed, match=named) as raised:
+        asyncio.run(driver.capacity([]))
+    assert str(path) in str(raised.value)
+    assert not any(figure in str(raised.value) for figure in ("65536000", "12x45", "1234567"))
+
+
+def test_an_unreadable_meminfo_is_a_driver_failure_naming_the_file(tmp_path: Path) -> None:
+    missing = tmp_path / "no-meminfo"
+    driver = ContainerlabDriver(tmp_path, runner=FakeRunner({}), meminfo=missing, cpus=8)
+    with pytest.raises(DriverFailed, match="no-meminfo"):
+        asyncio.run(driver.capacity([]))
+
+
+def test_admit_writes_the_demand_into_the_allocation(tmp_path: Path) -> None:
+    assert admit(tmp_path, FakeRunner(HOLDING_172_20_0)) == {
+        "lab": "t", "mgmt_subnet": "172.20.1.0/24", "demand": THREE_NODE}
+
+
+def test_pending_demand_refuses_a_twin_the_free_figure_alone_would_admit(tmp_path: Path) -> None:
+    reserved = [{"lab": "u", "mgmt_subnet": "172.20.1.0/24", "demand": {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}}]
+    runner = FakeRunner({**HOLDING_172_20_0, RUNNING_ARGV: ""})
+    driver = ContainerlabDriver(tmp_path, runner=runner, meminfo=meminfo(tmp_path, 8192 * 1024), cpus=64)
+    refused = asyncio.run(driver.admit(manifest("three-node"), PLATFORMS, PROBES, "t", reserved))
+    assert refused == Refusal(
+        RULE_CAPACITY, "The twin needs 6144 MiB of memory, and the host has 8192 MiB free with 6144 MiB pending.")
 
 
 def test_an_absent_gated_image_is_refused_naming_it(tmp_path: Path) -> None:
@@ -203,7 +339,8 @@ def test_an_absent_gated_image_is_refused_naming_it(tmp_path: Path) -> None:
 
 def test_a_present_gated_image_is_admitted(tmp_path: Path) -> None:
     runner = FakeRunner({**HOLDING_172_20_0, IMAGE_INSPECT: "sha256:4c2b\n"})
-    assert admit(tmp_path, runner, "mixed") == {"lab": "t", "mgmt_subnet": "172.20.1.0/24"}
+    answer = admit(tmp_path, runner, "mixed")
+    assert isinstance(answer, dict) and answer["mgmt_subnet"] == "172.20.1.0/24"
 
 
 def stepping(
@@ -235,25 +372,43 @@ def held() -> Deployment:
 def test_a_step_keeps_the_held_allocation_when_the_host_has_room_for_the_added_node(tmp_path: Path) -> None:
     runner = FakeRunner({})
     answer = stepping(tmp_path, runner, with_a_fourth_node(), held(), available_kb=ONE_NODE_KB)
-    assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24"}
+    assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24",
+                      "demand": {"nodes": 4, "cpu": 2.0, "memory_mb": 8192}}
     assert runner.calls == []  # no `docker network` command: the twin's own network is not read
 
 
 def test_a_step_the_host_has_no_room_for_is_refused_naming_the_added_demand(tmp_path: Path) -> None:
     refused = stepping(tmp_path, FakeRunner({}), with_a_fourth_node(), held(), available_kb=ONE_NODE_KB // 2)
-    assert refused == Refusal(RULE_CAPACITY, "The step adds 2048 MiB of memory, and the host has 1024 MiB available.")
+    assert refused == Refusal(
+        RULE_CAPACITY, "The step adds 2048 MiB of memory, and the host has 1024 MiB free with 0 MiB pending.")
 
 
-def test_a_step_that_adds_cpu_the_host_lacks_is_refused(tmp_path: Path) -> None:
-    refused = stepping(tmp_path, FakeRunner({}), with_a_fourth_node(), held(), cpus=0)
-    assert refused == Refusal(RULE_CAPACITY, "The step adds 0.5 CPUs, and the host has 0.")
+def test_a_step_counts_the_cpu_its_own_running_lab_holds(tmp_path: Path) -> None:
+    # The loop leaves the stepping twin out of `reserved`, and the kernel reports no CPU reservation: the twin's lab
+    # holds its running deployment's CPU, so a host of no more CPUs than that has none for what the step adds.
+    two = planned("steps/two-node", subnet="172.20.7.0/24").deployment
+    assert two.demand == Demand(nodes=2, cpu=1.0, memory_mb=4096)
+    refused = stepping(tmp_path, FakeRunner({}), manifest("three-node"), two, cpus=1)
+    assert refused == Refusal(RULE_CAPACITY, "The step adds 0.5 CPUs, and the host has 0 free with 0 pending.")
+    answer = stepping(tmp_path, FakeRunner({}), manifest("three-node"), two, cpus=2)
+    assert isinstance(answer, dict) and answer["demand"] == THREE_NODE
 
 
 def test_a_step_that_shrinks_the_demand_is_admitted_on_a_host_with_no_free_memory(tmp_path: Path) -> None:
-    runner = FakeRunner({})
-    answer = stepping(tmp_path, runner, manifest("steps/two-node"), held(), available_kb=0, cpus=0)
-    assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24"}
+    runner = FakeRunner({})  # two CPUs: the held lab's 1.5, and half of one to spare
+    answer = stepping(tmp_path, runner, manifest("steps/two-node"), held(), available_kb=0, cpus=2)
+    assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24", "demand": TWO_NODE}
     assert runner.calls == []
+
+
+def test_a_steps_admission_adds_over_what_it_holds_and_checks_no_node(tmp_path: Path) -> None:
+    base = held()
+    answer = stepping(tmp_path, FakeRunner({}), manifest("steps/two-node"), base, available_kb=100)
+    assert answer == {**base.allocation, "demand": TWO_NODE}
+    assert answer["mgmt_subnet"] == base.allocation["mgmt_subnet"]
+    refused = stepping(tmp_path, FakeRunner({}), manifest("three-node-probed"), base, available_kb=60 * 1024)
+    assert refused == Refusal(
+        RULE_CAPACITY, "The step adds 64 MiB of memory, and the host has 60 MiB free with 0 MiB pending.")
 
 
 def test_a_step_whose_gated_image_is_absent_is_refused(tmp_path: Path) -> None:
@@ -624,25 +779,27 @@ NETWORK_RM: tuple[str, ...] = ("docker", "network", "rm", "clab-t")
 
 
 def container(
-    node: str, running: bool = True, address: str = "", started: str = "2026-11-03T12:00:00.416491086Z"
+    node: str, running: bool = True, address: str = "", started: str = "2026-11-03T12:00:00.416491086Z",
+    twin: str = "t",
 ) -> dict[str, Any]:
-    """A `docker inspect` member of a containerlab node, the members the driver reads in their
-    real shape; `address` is the one containerlab assigned it."""
+    """A `docker inspect` member of a containerlab node of the lab `twin`, the members the driver
+    reads in their real shape; `address` is the one containerlab assigned it."""
     network = {"IPAMConfig": {"IPv4Address": address} if address else None, "IPAddress": address if running else "",
                "Gateway": "172.20.2.1" if running else ""}
     return {
         "Id": f"{node}0123456789abcdef",
-        "Name": f"/clab-t-{node}",
+        "Name": f"/clab-{twin}-{node}",
         "State": {"Status": "running" if running else "exited", "Running": running, "StartedAt": started},
-        "Config": {"Labels": {"containerlab": "t", "clab-node-name": node, "clab-node-kind": "nokia_srlinux",
-                              "clab-node-longname": f"clab-t-{node}", "fylgja.twin": "t"}},
-        "NetworkSettings": {"Networks": {"clab-t": network}},
+        "Config": {"Labels": {"containerlab": twin, "clab-node-name": node, "clab-node-kind": "nokia_srlinux",
+                              "clab-node-longname": f"clab-{twin}-{node}", "fylgja.twin": twin}},
+        "NetworkSettings": {"Networks": {f"clab-{twin}": network}},
     }
 
 
-def lab(*containers: dict[str, Any]) -> dict[tuple[str, ...], str]:
+def lab(*containers: dict[str, Any], twin: str = "t") -> dict[tuple[str, ...], str]:
     names = [c["Name"].lstrip("/") for c in containers]
-    return {PS: "".join(f"{n}\n" for n in names), (*INSPECT, *names): json.dumps(list(containers))}
+    ps = (*PS[:4], f"label=containerlab={twin}", *PS[5:])
+    return {ps: "".join(f"{n}\n" for n in names), (*INSPECT, *names): json.dumps(list(containers))}
 
 
 RUNNING = lab(container("n2", address="172.20.2.3", started="2026-11-03T12:00:01.418188892Z"),
@@ -991,6 +1148,198 @@ def test_a_failed_network_removal_is_logged_and_raised_and_leaves_the_directory(
     assert runner.calls[-1] == NETWORK_RM
     assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
     assert any(r.levelname == "WARNING" and "destroy t failed" in r.getMessage() for r in caplog.records)
+
+
+# Twins applied at once (D-074): one `containerlab deploy` at a time on the host, the hot-add
+# removals before it held with it; a twin's wait for its own stray deploy comes before the lock,
+# and a destroy is never held.
+
+U_SUBNET = "172.20.3.0/24"
+
+
+class HeldRunner(FakeRunner):
+    """A `FakeRunner` for twins applied at once. The `containerlab deploy` of a twin in `held`
+    answers, or fails as `fail` says, only once that twin's event is set. Beside each command line
+    it records when it started (`started`, by `time.monotonic()`); `order` is the timeline, each
+    command line as it starts and `("returned", <twin>)` as each deploy returns or raises, an
+    `RmRunner` given it adding the removals."""
+
+    def __init__(self, answers: Mapping[tuple[str, ...], str], **kw: Any) -> None:
+        super().__init__(answers, **kw)
+        self.held: dict[str, asyncio.Event] = {}
+        self.started: list[float] = []
+        self.order: list[tuple[str, ...]] = []
+
+    async def __call__(self, argv: Sequence[str], **kw: Any) -> str:
+        self.started.append(time.monotonic())
+        self.order.append(tuple(argv))
+        twin = Path(argv[3]).parent.name if tuple(argv[:2]) == DEPLOY else None
+        try:
+            return await super().__call__(argv, **kw)  # recorded, and answered or failed, at once
+        finally:  # but a deploy returns, or raises, only once its twin is released
+            if twin is not None:
+                if twin in self.held:
+                    await self.held[twin].wait()
+                self.order.append(("returned", twin))
+
+
+def deploy_of(root: Path, twin: str) -> tuple[str, ...]:
+    return ("containerlab", "deploy", "-t", str(root / "containerlab" / twin / TOPOLOGY))
+
+
+def at_once(driver: ContainerlabDriver, *twins: Planned) -> asyncio.Future[list[BaseException | None]]:
+    """Each twin's apply on `driver`, all at once and started in the order given: each one's
+    exception, or None."""
+    return asyncio.gather(*(driver.apply(p.deployment, p.files, PLATFORMS, PROBES) for p in twins),
+                          return_exceptions=True)
+
+
+def test_two_twins_applied_at_once_deploy_one_after_the_other(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Eight SR Linux nodes booting at once took the host to a load of 33 and crashed sr_cli in
+    # containerlab's post-deploy (verified-facts.md, 2026-11-03): the second twin's deploy, and the
+    # hot-add removals before it, wait for the first's to return.
+    t = planned("three-node")
+    u = planned("steps/mixed-e2-port", twin="u", subnet=U_SUBNET)
+    (tmp_path / "containerlab/u").mkdir(parents=True)  # u ran `mixed`: e1 and e2 gain a port they cannot add
+    (tmp_path / "containerlab/u" / TOPOLOGY).write_bytes(planned("mixed", twin="u", subnet=U_SUBNET).files[TOPOLOGY])
+    runner = HeldRunner({DEPLOY: ""})
+    driver = ContainerlabDriver(tmp_path, runner=runner, status_runner=RmRunner(runner.order))
+
+    async def body() -> list[tuple[str, ...]]:
+        runner.held["t"] = released = asyncio.Event()
+        both = at_once(driver, t, u)
+        await asyncio.sleep(0.1)
+        meanwhile = list(runner.order)
+        released.set()
+        assert await both == [None, None]
+        return meanwhile
+
+    with caplog.at_level("INFO", logger="fylgja.containerlab"):
+        assert bounded(body) == [deploy_of(tmp_path, "t")]  # nothing of u's while t's deploy runs
+    waiting = [r.getMessage() for r in caplog.records if "deploy lock" in r.getMessage()]
+    assert len(waiting) == 1 and waiting[0].startswith("apply u: ") and "(D-074)" in waiting[0]  # once, never t
+    assert runner.order == [deploy_of(tmp_path, "t"), ("returned", "t"), ("docker", "rm", "-f", "clab-u-e1"),
+                            ("docker", "rm", "-f", "clab-u-e2"), deploy_of(tmp_path, "u"), ("returned", "u")]
+    for p in (t, u):
+        assert (tmp_path / "containerlab" / p.deployment.twin / TOPOLOGY).read_bytes() == p.files[TOPOLOGY]
+
+
+def test_a_deploy_that_fails_releases_the_lock(tmp_path: Path) -> None:
+    t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
+    runner = HeldRunner({DEPLOY: ""}, fail=[deploy_of(tmp_path, "t")])
+    driver = ContainerlabDriver(tmp_path, runner=runner)
+
+    async def body() -> list[BaseException | None]:
+        runner.held["t"] = released = asyncio.Event()
+        both = at_once(driver, t, u)
+        await asyncio.sleep(0.05)
+        released.set()
+        done, _ = await asyncio.wait({both}, timeout=BOUND_S)
+        assert both in done, f"u's deploy did not run within {BOUND_S:g} s of t's failing: the lock was kept"
+        return both.result()
+
+    failed, deployed = bounded(body)
+    assert isinstance(failed, DriverFailed) and deployed is None
+    assert runner.order == [deploy_of(tmp_path, "t"), ("returned", "t"), deploy_of(tmp_path, "u"), ("returned", "u")]
+
+
+def test_the_deploys_budget_starts_once_the_lock_is_held(tmp_path: Path) -> None:
+    # The wait for another twin's deploy is outside this one's budget (D-074): a budget spent
+    # waiting would kill a deploy that had barely begun.
+    t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
+    runner = HeldRunner({DEPLOY: ""})
+    driver = ContainerlabDriver(tmp_path, runner=runner)
+
+    async def body() -> None:
+        runner.held["t"] = released = asyncio.Event()
+        both = at_once(driver, t, u)
+        await asyncio.sleep(0.3)
+        released.set()
+        assert await both == [None, None]
+
+    bounded(body)
+    assert runner.calls == [deploy_of(tmp_path, "t"), deploy_of(tmp_path, "u")]
+    assert runner.started[1] - runner.started[0] > 0.25  # u's deploy waited out t's, held 0.3 s
+    assert runner.budgets == [deploy_budget(u.files, PLATFORMS, PROBES)] * 2 == [180 + 60] * 2
+
+
+def test_the_stray_wait_precedes_the_lock(tmp_path: Path) -> None:
+    # A resume's wait for a stray deploy of its own twin (D-055, D-056) holds no other twin's
+    # deploy: it comes before the lock (D-074).
+    t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
+    runner = HeldRunner({DEPLOY: ""})
+    polls: list[int] = []  # how many commands had run at each poll of t's topology
+
+    def strays(topology: str) -> list[int]:
+        if topology != deploy_of(tmp_path, "t")[-1]:
+            return []
+        polls.append(len(runner.calls))
+        return [4242] if len(polls) <= 2 else []
+
+    driver = ContainerlabDriver(tmp_path, runner=runner, strays=strays, stray_poll_s=0.01)
+
+    async def body() -> None:
+        assert await at_once(driver, t, u) == [None, None]
+
+    bounded(body)
+    assert polls == [0, 1, 1]  # t still waited for its stray once u's deploy had run
+    assert runner.calls == [deploy_of(tmp_path, "u"), deploy_of(tmp_path, "t")]
+
+
+def test_destroy_is_not_held_by_a_deploy(tmp_path: Path) -> None:
+    # A destroy beside another twin's deploy is what D-055 handles: only deploys are held (D-074).
+    t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
+    network_u = ("docker", "network", "inspect", "clab-u")
+    runner = HeldRunner({**lab(container("n1", address="172.20.3.2", twin="u"), twin="u"), DEPLOY: "", DESTROY: ""},
+                        fail=[network_u])
+    d = driver(tmp_path, runner)
+
+    async def body() -> list[tuple[str, ...]]:
+        runner.held["t"] = released = asyncio.Event()
+        deploying = at_once(d, t)
+        await asyncio.sleep(0.05)
+        destroying = asyncio.ensure_future(d.destroy(u.deployment, u.files, PLATFORMS, PROBES))
+        done, _ = await asyncio.wait({destroying}, timeout=BOUND_S)
+        assert destroying in done, f"u's destroy did not end within {BOUND_S:g} s beside t's deploy: it was held"
+        destroying.result()
+        meanwhile = list(runner.order)
+        released.set()
+        assert await deploying == [None]
+        return meanwhile
+
+    root = tmp_path / "root"
+    assert bounded(body) == [deploy_of(root, "t"), (*PS[:4], "label=containerlab=u", *PS[5:]),
+                             (*INSPECT, "clab-u-n1"),
+                             ("containerlab", "destroy", "-t", str(root / "containerlab/u" / TOPOLOGY), "--cleanup"),
+                             network_u]  # all while t's deploy runs
+    assert runner.order[-1] == ("returned", "t")
+    assert not (root / "containerlab/u").exists()
+
+
+def test_the_lock_is_remade_on_another_loop(tmp_path: Path) -> None:
+    # asyncio's primitives bind to the first loop that waits on them, and the pure tier runs one
+    # driver under several. A lock is waited on only while it is held, so each run applies two twins
+    # at once, and the second waits.
+    t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
+    runner = HeldRunner({DEPLOY: ""})
+    driver = ContainerlabDriver(tmp_path, runner=runner)
+    locks: list[asyncio.Lock] = []
+
+    async def body() -> None:
+        locks.append(driver._deploy_lock())
+        assert driver._deploy_lock() is locks[-1]  # one lock on one loop
+        runner.held["t"] = released = asyncio.Event()
+        both = at_once(driver, t, u)
+        await asyncio.sleep(0.05)
+        released.set()
+        assert await both == [None, None]
+
+    bounded(body)
+    bounded(body)  # no RuntimeError: the lock is made anew on this loop
+    assert locks[0] is not locks[1]
+    assert runner.calls == [deploy_of(tmp_path, "t"), deploy_of(tmp_path, "u")] * 2
 
 
 class FakeStatusRunner:

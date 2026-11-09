@@ -57,7 +57,7 @@ def test_settings_from_a_full_environment() -> None:
 def test_defaults() -> None:
     env = {k: FULL[k] for k in REQUIRED}
     s = config.from_environ(env)
-    assert (s.listen, s.driver, s.workers, s.step_wait_s) == (("127.0.0.1", 7650), "containerlab", 4, 180)
+    assert (s.listen, s.driver, s.workers, s.step_wait_s) == (("127.0.0.1", 7650), "containerlab", 8, 180)
 
 
 @pytest.mark.parametrize("variable", REQUIRED)

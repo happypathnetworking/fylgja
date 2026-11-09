@@ -25,9 +25,12 @@ import pytest
 from conformance import reads
 from conformance.harness import PROBE_LABEL, Fylgja, Harness, _probe_manifests, make
 
-from fylgja_core import probe_package
+from fylgja_core import blueprint, compiler, packages, probe_package
 from fylgja_core.clabernetes import OWNER_LABEL, TWIN_LABEL
+from fylgja_core.containerlab import plan
+from fylgja_core.deployment import Demand
 
+ROOT = Path(__file__).resolve().parents[2]
 CONFORMANCE = Path(__file__).resolve().parent / "conformance"
 HARNESS = CONFORMANCE / "harness"
 SCENARIOS = sorted(p for p in CONFORMANCE.rglob("*.py") if HARNESS not in p.parents)
@@ -354,3 +357,34 @@ def test_the_probe_pod_runs_the_ping_package_s_image_once_and_mounts_no_secret_o
     assert spec.get("automountServiceAccountToken") is False
     assert not {"volumes", "imagePullSecrets"} & spec.keys(), sorted(spec)
     assert not {"volumeMounts", "env", "envFrom"} & container.keys(), sorted(container)
+
+
+def test_the_many_twins_are_named_and_no_twin_of_the_suite_is_a_prefix_of_another() -> None:
+    assert {f"{reads.MANY}{n}" for n in range(1, 6)} | {reads.BIG} <= set(reads.TWINS)
+    assert len(set(reads.TWINS)) == len(reads.TWINS)
+    clashes = [(a, b) for a in reads.TWINS for b in reads.TWINS if a != b and b.startswith(a)]
+    assert not clashes, clashes
+
+
+def test_each_harness_gives_the_count_of_twins_and_each_node_s_host() -> None:
+    from conformance.harness.cluster import ClusterHarness
+    from conformance.harness.local import LocalHarness
+
+    for harness in (LocalHarness, ClusterHarness):
+        assert callable(getattr(harness, "many", None)), harness
+        assert callable(getattr(harness, "hosts", None)), harness
+    members = {n for n in vars(Harness) if not n.startswith("_")}
+    assert {"many", "hosts"} <= members
+
+
+def test_the_big_blueprint_is_valid_compiles_to_forty_nodes_and_demands_what_no_runtime_has(tmp_path: Path) -> None:
+    path = reads.big_blueprint(tmp_path / "big.json")
+    assert path == tmp_path / "big.json" and path.is_file()
+    doc = json.loads(path.read_text())
+    assert blueprint.validate(doc) == []
+    loaded = packages.load([ROOT / "psp", ROOT / "probes"])
+    compiled = compiler.compile(blueprint.decode(doc), loaded.platforms, loaded.probes)
+    assert len(compiled.manifest.nodes) == reads.BIG_NODES == 40
+    assert len(compiled.manifest.links) == 39
+    demand = plan.demand(compiled.manifest, loaded.platforms, loaded.probes)
+    assert demand == Demand(nodes=40, cpu=20.0, memory_mb=81920)

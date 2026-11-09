@@ -15,7 +15,9 @@ is refused (`admission.namespace.taken`). A pull credential the provider cannot 
 registry set and its login not, refuses it too, under the credential's own rule, and so does a
 registry key whose pull secret is no name Kubernetes accepts; a stepping twin's admission reads
 each of its held credentials again, so a step is refused before it touches anything. The message
-names the variable, never its value. Admission by capacity is phase 7's.
+names the variable, never its value. Admission by capacity is the cluster's room as `capacity` reads it
+(D-073): each node's allocatable less the requests of every pod on it that has not ended, whoever owns it,
+and a create or a step that does not fit is refused (`admission.capacity`) with the shortfalls named.
 
 `apply` applies the deployment's files as rendered, and a pull secret for each registry of the
 allocation, made from the credential provider and handed to the cluster alone: no Secret is a
@@ -69,8 +71,9 @@ from typing import Any
 
 import yaml
 
-from fylgja_core import credentials, logs, platform_package, probe_package
+from fylgja_core import capacity, credentials, logs, platform_package, probe_package
 from fylgja_core.bundle import Manifest
+from fylgja_core.capacity import Host, Reading, Resources
 from fylgja_core.clabernetes import (
     CAPABILITIES,
     NAME,
@@ -85,8 +88,9 @@ from fylgja_core.clabernetes import plan as clabernetes_plan
 from fylgja_core.clabernetes.changes import sections_of, wrapped
 from fylgja_core.clabernetes.kube import NODE_LABEL, Kube, KubeFailed, Namespace, Pod
 from fylgja_core.clabernetes.plan import NAMESPACE, POLICY, TOPOLOGY
+from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.credentials import RULE_MALFORMED, Malformed, Missing, Provider
-from fylgja_core.deployment import Deployment
+from fylgja_core.deployment import Demand, Deployment
 from fylgja_core.driver import (
     Allocation,
     Capabilities,
@@ -106,6 +110,7 @@ from fylgja_core.store import check_twin_name
 
 # Rule ids. Clients and tests match on them; the catalogue is docs/rules.md.
 RULE_NAMESPACE = "admission.namespace.taken"
+RULE_CAPACITY = "admission.capacity"
 
 RECREATE_ANNOTATION = "fylgja.recreate"
 """The annotation on the Topology an `apply` makes with a pod to replace: a JSON object of each
@@ -159,7 +164,6 @@ _SUBDOMAIN = re.compile(r"[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-
 
 _log = logging.getLogger("fylgja.clabernetes")
 
-
 class ClabernetesDriver:
     """The clabernetes driver, over `kube`, its reach into the cluster, and `credentials`, the
     provider of the pull credentials. `controller_namespace` is clabernetes' namespace,
@@ -199,6 +203,9 @@ class ClabernetesDriver:
         # counts again, which its own restarts bound.
         self._renewals: dict[tuple[str, str], list[float]] = {}
         self._left: set[tuple[str, str, int]] = set()
+        # The twins whose reserved allocation records no demand, and those whose demand will not read, logged once each.
+        self._unrecorded: set[str] = set()
+        self._unread: set[str] = set()
 
     def capabilities(self) -> Capabilities:
         return CAPABILITIES
@@ -223,6 +230,64 @@ class ClabernetesDriver:
     ) -> Changes:
         return clabernetes_changes.changes(before, after, platforms, probe_packages)
 
+    async def capacity(self, reserved: Sequence[Allocation]) -> Reading:
+        """The runtime's room as `admit` would take it now for a twin whose other twins' allocations are
+        `reserved`, and not a reservation (D-073).
+
+        A host for each node of the cluster: its total is the node's allocatable, and its free that less
+        the requests of every pod on it that has not ended, whoever owns the pod. A twin held is the sum of
+        the requests of its own pods (`twin_of`) bound to a host the reading lists, so each unit of its
+        demand is counted once, as a bound pod's request or as pending; what each twin of `reserved` has yet
+        to take, its recorded demand less what it holds, is pending (`capacity.pending`). `reserved` is the
+        caller's, and `admit` passes on its own: a standalone read (the API's) passes every twin record's
+        allocation, so it counts the right twins after a restart, after a destroy and for the twin admitted
+        last. An allocation with no `demand`, as every one before phase 7 is, counts as nothing and is logged
+        once a twin; one whose `demand` will not read (`capacity.demand_of`) counts as nothing too, and is
+        warned of once a twin. One `nodes` and one `all_pods` call; a `KubeFailed` is the `DriverFailed` it
+        is."""
+        nodes = await self.kube.nodes()
+        pods = [pod for pod in await self.kube.all_pods() if not pod.ended]
+        taken = {node.name: Resources(0.0, 0) for node in nodes}
+        held: dict[str, Demand] = {}
+        for pod in pods:
+            if pod.host not in taken:  # bound to no host yet, or to one not listed: its twin's demand is pending
+                continue
+            taken[pod.host] = _plus(taken[pod.host], pod.requests)
+            twin = twin_of(pod)
+            if twin is not None:
+                before = held.get(twin, capacity.NOTHING)
+                held[twin] = Demand(nodes=before.nodes + 1, cpu=before.cpu + pod.requests.cpu,
+                                    memory_mb=before.memory_mb + pod.requests.memory_mb)
+        twins = []
+        for allocation in reserved:
+            twin = allocation["namespace"].removeprefix(namespace_of(""))
+            try:
+                demand = capacity.demand_of(allocation)
+            except ValueError:
+                if twin not in self._unread:
+                    self._unread.add(twin)
+                    _log.warning("capacity: the reserved allocation of %s records a demand that will not read, and "
+                                 "counts as nothing", twin)
+                continue
+            if demand is None:
+                if twin not in self._unrecorded:
+                    self._unrecorded.add(twin)
+                    _log.info("capacity: the reserved allocation of %s records no demand, and counts as nothing",
+                              twin)
+                continue
+            twins.append((demand, held.get(twin, capacity.NOTHING)))
+        reading = Reading(
+            tuple(Host(node.name, node.allocatable, Resources(node.allocatable.cpu - taken[node.name].cpu,
+                                                              node.allocatable.memory_mb
+                                                              - taken[node.name].memory_mb))
+                  for node in nodes),
+            capacity.pending(twins),
+        )
+        _log.debug("capacity: %d hosts, free %g CPU and %d MiB, pending %g CPU and %d MiB",
+                   len(reading.hosts), reading.free.cpu, reading.free.memory_mb,
+                   reading.pending.cpu, reading.pending.memory_mb)
+        return reading
+
     async def admit(
         self,
         manifest: Manifest,
@@ -245,14 +310,20 @@ class ClabernetesDriver:
         a DNS-1123 subdomain of at most 253 characters), under `credential.malformed`. Each
         message names the variable, never a value; no login is kept.
 
-        With `held`, the deployment a stepping twin has applied, the answer is
-        `held.allocation` unchanged, and the cluster is not read: the twin keeps its namespace
-        and the registries it was admitted with (D-049). Each of those credentials is read from
-        the provider again, so that a step is refused before it touches anything: one the
-        provider refuses under its own rule, and one whose registry is no longer the prefix the
-        twin was admitted with under `credential.malformed`. `apply` reads them again, for a
-        credential removed while a run is under way. `reserved` is not read: a namespace is the
-        twin's by its name, so no other twin's allocation can hold it."""
+        The allocation records the `demand` the manifest makes (`containerlab.plan.demand`), after the
+        cluster's room is read (`capacity`): a create must fit it in its sum, and each node of its
+        packages must fit the roomiest host; a refusal (`admission.capacity`) names every shortfall.
+        `reserved` is passed to `capacity`; it is not read for a namespace, which is the twin's by its name,
+        so no other twin's allocation can hold it.
+
+        With `held`, the deployment a stepping twin has applied, the answer is `held.allocation` with
+        the `demand` set to the manifest's and nothing else changed: the twin keeps its namespace and
+        the registries it was admitted with (D-049), and the namespace is not read. Each of those
+        credentials is read from the provider again, so that a step is refused before it touches
+        anything: one the provider refuses under its own rule, and one whose registry is no longer the
+        prefix the twin was admitted with under `credential.malformed`. `apply` reads them again, for a
+        credential removed while a run is under way. What a step must fit is the sum alone, of the demand
+        it adds over `held.demand`, per component and floored at zero."""
         if held is not None:
             try:
                 for key, prefix in sorted(held.allocation["registries"].items()):
@@ -260,8 +331,14 @@ class ClabernetesDriver:
                         return _refuse(twin, RULE_MALFORMED, f"{RULE_MALFORMED}: {_drifted(key, twin)}")
             except (Missing, Malformed) as e:
                 return _refuse(twin, e.rule, str(e))
+            demand = clab_plan.demand(manifest, platforms, probe_packages)
+            reading = await self.capacity(reserved)
+            short = capacity.shortfalls(reading, capacity.added(demand, held.demand), (), verb="The step adds",
+                                        where="cluster")
+            if short:
+                return _refuse(twin, RULE_CAPACITY, " ".join(short))
             _log.info("admit %s: held allocation, namespace %s", twin, held.allocation["namespace"])
-            return dict(held.allocation)
+            return capacity.with_demand(held.allocation, demand)
         namespace = namespace_of(twin)
         found = await self.kube.namespace(namespace)
         if found is not None and not _owned(found, twin):
@@ -281,12 +358,18 @@ class ClabernetesDriver:
                                f"{RULE_MALFORMED}: the environment variable FYLGJA_CREDENTIAL_{key}_REGISTRY gives "
                                f"the pull secret {secret}, which is no name Kubernetes accepts: a DNS-1123 subdomain "
                                f"of at most {SECRET_NAME_MAX} characters")
+        demand = clab_plan.demand(manifest, platforms, probe_packages)
+        reading = await self.capacity(reserved)
+        short = capacity.shortfalls(reading, demand, clab_plan.node_resources(manifest, platforms, probe_packages),
+                                    verb="The twin needs", where="cluster")
+        if short:
+            return _refuse(twin, RULE_CAPACITY, " ".join(short))
         allocation = {"namespace": namespace, "controller_namespace": self.controller_namespace,
                       "pod_cidr": self.pod_cidr, "registries": registries}
         if self.core_namespace is not None:
             allocation["core_namespace"] = self.core_namespace
         _log.info("admit %s: namespace %s; registries %s", twin, namespace, ", ".join(registries) or "none")
-        return allocation
+        return capacity.with_demand(allocation, demand)
 
     async def apply(
         self,
@@ -993,6 +1076,10 @@ def _failure(e: Exception) -> tuple[str, dict[str, Any]]:
     if isinstance(e, KubeFailed) and e.status is not None:
         return f"{type(e).__name__}, status {e.status}", {"error": type(e).__name__, "status": e.status}
     return type(e).__name__, {"error": type(e).__name__}
+
+
+def _plus(a: Resources, b: Resources) -> Resources:
+    return Resources(a.cpu + b.cpu, a.memory_mb + b.memory_mb)
 
 
 def _labels(twin: str) -> dict[str, str]:

@@ -378,6 +378,15 @@ DRIVERS: dict[str, Any] = {
     ]
 }
 
+CAPACITY: dict[str, Any] = {
+    "driver": "containerlab",
+    "read_at": "2026-11-09T00:00:00Z",
+    "hosts": [{"name": "host", "cpu": {"total": 10, "free": 10}, "memory_mb": {"total": 31065, "free": 25907}}],
+    "pending": {"nodes": 0, "cpu": 0, "memory_mb": 0},
+    "twins": 0,
+}
+"""The fake server's reading of the room: one host, nothing pending, no twins."""
+
 NODES = [
     {"name": "n1", "handle": "clab-three-node-n1", "address": "172.20.1.11", "holds": BUNDLE_ID},
     {"name": "n2", "handle": "clab-three-node-n2", "address": "172.20.1.12", "access": "bastion.example",

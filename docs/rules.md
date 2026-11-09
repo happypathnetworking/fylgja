@@ -98,9 +98,11 @@ ends the run `rejected` ([Conditions and runs](#conditions-and-runs)).
 
 | Rule | Filed by | Means |
 |---|---|---|
-| `admission.capacity` | the local driver | the host cannot fit the twin: the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)), or the deployment's demand exceeds the host's available memory (`/proc/meminfo`'s `MemAvailable`) or its CPU count |
+| `admission.capacity` | both drivers | the runtime cannot fit the twin: on the local driver the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)); on either, the demand exceeds the runtime's free room less the admitted twins' pending demand, or a node fits no host ([D-073](../design/decisions.md#d-073)). The message is one sentence per shortfall, naming what the twin needs, what the reading found free and pending, or the node and the roomiest host |
 | `admission.image.absent` | the local driver | a package the twin's nodes use has an account-gated image (one with a `pull_secret`) that is not on the host, which the local driver never pulls ([D-015](../design/decisions.md#d-015)); an ungated image is containerlab's to pull at deploy |
 | `admission.namespace.taken` | the clabernetes driver | the namespace `fylgja-twin-<twin>` exists and does not carry the twin's labels ([D-057](../design/decisions.md#d-057)); nothing is reserved |
+
+A client may read the room before it asks, `GET /v1/capacity` ([D-076](../design/decisions.md#d-076)); a dry run's 422 carries the same shortfall a create's `rejected` run would.
 
 ## Problems and findings: the credential provider, readiness and the push
 
@@ -135,7 +137,7 @@ by name, a port as `device:interface` in production names, or a burst as `probe/
 | `verify.claim` | error | the record does not claim the node holds the bundle verified against; a node with no configuration makes no claim ([D-048](../design/decisions.md#d-048)) |
 | `verify.burst` | error | a probe's burst, from one host toward the other's address, left an echo of the package's count unanswered; each direction is its own assertion |
 | `verify.skipped` | info | an assertion not made, and why: a port intent disables, and its link at both ends; a synthesized link's neighbour; a neighbour whose far node reports no host name to judge it against; the claim of a node with no configuration; a configured node's host name, naming the host name read; both bursts of a probe whose endpoint intent disables, naming the port, since the probe cannot pass by intent, and no echo is sent; every assertion of a node that could not be read, a probe host's burst among them, and each neighbour facing it |
-| `verify.node.unread` | error | a node could not be read: the record holds no such node or no address for it, its package's credential is missing (the message is the provider's), its `Get` failed or did not end within the read's budget (the message names the address, the port and the gRPC status or the error's type, `TimeoutError` for the budget, never a credential), a read of this node is still running (another read of it in flight, or one whose caller stopped waiting: this one is refused at once), no read thread was free within the read's budget (sixteen at most, [D-054](../design/decisions.md#d-054)), or `exec` could not reach a probe host for its burst |
+| `verify.node.unread` | error | a node could not be read: the record holds no such node or no address for it, its package's credential is missing (the message is the provider's), its `Get` failed or did not end within the read's budget (the message names the address, the port and the gRPC status or the error's type, `TimeoutError` for the budget, never a credential), a read of this node is still running (another read of it in flight, or one whose caller stopped waiting: this one is refused at once), no read thread of its twin's own was free within the read's budget (sixteen a twin, [D-054](../design/decisions.md#d-054), [D-075](../design/decisions.md#d-075)), or `exec` could not reach a probe host for its burst |
 
 The status is `failed` when a node could not be read, whatever else was found; else
 `nonconforming` when an assertion failed; else `ok`. A node that could not be read is never
@@ -362,4 +364,5 @@ with every problem a finding whose object is its pointer.
 | `bundle.rejected` | 422 | the blueprint compiles to no bundle; the findings give every reason |
 | `plan.rejected` | 422 | the bundle has no plan on the driver; the findings give every reason |
 | an `admission.*` rule | 422 | a dry run's admission refused the twin; the one finding is the refusal's ([admission refused](#findings-admission-refused)), since a refusal reserves nothing to plan with |
+| `capacity.unread` | 503 | the running driver could not read its runtime's room for `GET /v1/capacity`; the answer names nothing of the fault, which the log holds ([D-076](../design/decisions.md#d-076)) |
 | `server.error` | 500 | the server failed; the answer names nothing of the fault, which its log holds with the traceback |

@@ -21,8 +21,9 @@ from aio import bounded, cancelled
 from fake_kube import FakeKube, undecodable
 
 from fylgja_core import blueprint, compiler, platform_package, probe_package
+from fylgja_core.capacity import Resources
 from fylgja_core.clabernetes import plan as clabernetes_plan
-from fylgja_core.clabernetes.kube import NODE_LABEL, KubeFailed, Namespace, Pod, Service
+from fylgja_core.clabernetes.kube import NODE_LABEL, KubeFailed, Namespace, Node, Pod, Service
 from fylgja_core.driver import Exec
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -544,3 +545,58 @@ async def watched(
     await cancelled(task)
     assert fake.watches == 0
     return seen
+
+
+def test_a_node_added_is_read_by_nodes() -> None:
+    fake = FakeKube()
+    fake.add_node("h1", 8.0, 24026)
+    assert asyncio.run(fake.nodes()) == [Node("h1", Resources(8.0, 24026))]
+
+
+def test_a_topologys_pods_take_the_nodes_in_turn_and_the_requests_the_topology_declares() -> None:
+    fake = FakeKube()
+    fake.add_node("h1", 8.0, 24026)
+    fake.add_node("h2", 8.0, 24026)
+    created(fake)
+    pods = read(fake)[0]
+    assert [p.host for p in pods] == ["h1", "h2", "h1"]
+    assert {p.requests for p in pods} == {Resources(0.5, 2048)}
+    assert not any(p.ended for p in pods)
+
+
+def test_a_pod_made_with_no_node_added_has_no_host() -> None:
+    fake = FakeKube()
+    created(fake)
+    assert {p.host for p in read(fake)[0]} == {None}
+
+
+def test_all_pods_lists_every_namespaces_pods() -> None:
+    fake = FakeKube()
+    created(fake)
+    fake.feed("ADDED", dataclasses.replace(POD, name="other", namespace="elsewhere", host="h9",
+                                           requests=Resources(0.25, 256)))
+    found = asyncio.run(fake.all_pods())
+    assert sorted((p.namespace, p.host) for p in found) == sorted(
+        [(NS, None)] * 3 + [("elsewhere", "h9")])
+    assert ("all_pods",) in fake.calls
+
+
+def test_a_pod_added_is_listed_by_all_pods_on_its_host_with_its_requests_and_no_twins_labels() -> None:
+    fake = FakeKube()
+    fake.add_pod("c9s", "dns", "h1", Resources(0.3, 460))
+    fake.add_pod("c9s", "mine", "h2", Resources(1.0, 64), {"fylgja.owner": "core"})
+    found = asyncio.run(fake.all_pods())
+    assert [(p.name, p.host, p.requests, dict(p.labels)) for p in found] == [
+        ("dns", "h1", Resources(0.3, 460), {}), ("mine", "h2", Resources(1.0, 64), {"fylgja.owner": "core"})]
+    assert all(p.phase == "Running" and p.container_running and not p.ended and not p.deleting for p in found)
+    assert fake.calls == [("all_pods",)]
+
+
+def test_fail_next_makes_the_next_call_of_that_name_alone_raise_with_no_status() -> None:
+    fake = FakeKube()
+    fake.fail_next("nodes")
+    with pytest.raises(KubeFailed) as raised:
+        asyncio.run(fake.nodes())
+    assert raised.value.status is None
+    assert asyncio.run(fake.nodes()) == []
+    assert asyncio.run(fake.all_pods()) == []

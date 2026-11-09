@@ -10,6 +10,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -29,8 +30,10 @@ from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from fylgja_core import blueprint, bundle, deployment, packages, run, schemas
+from fylgja_core.capacity import Reading
 from fylgja_core.client import Message, messages
 from fylgja_core.credentials import Provider
+from fylgja_core.deployment import Demand
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding, Subject, Verdict
 from fylgja_core.local_store import LocalStore
@@ -39,7 +42,7 @@ from fylgja_core.reconcile import Reconciler, set_condition
 from fylgja_core.run import Run
 from fylgja_core.run import State as RunState
 from fylgja_core.server import auth
-from fylgja_core.server.app import create_app
+from fylgja_core.server.app import capacity_document, create_app
 from fylgja_core.store import Conflict
 from fylgja_core.twin_record import Spec, Status, TwinRecord
 from fylgja_core.verify import Verifier
@@ -180,6 +183,91 @@ def test_the_drivers_are_listed_with_the_default_and_capabilities(api: TestClien
     assert doc == {"drivers": [{"name": "fake", "default": True, "capabilities": {
         "nodes": "provisions", "relink": True, "forwarding": "software", "access": "direct", "isolation": "names",
         "reapply": False}}]}
+
+
+# The capacity read (D-076).
+
+
+def test_the_capacity_read_answers_the_default_drivers_reading(api: TestClient) -> None:
+    doc = answered(api.get("/v1/capacity"), 200)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z", doc["read_at"])
+    assert doc == {"driver": "fake", "read_at": doc["read_at"],
+                   "hosts": [{"name": "fake", "cpu": {"total": 8.0, "free": 8.0},
+                              "memory_mb": {"total": 16384, "free": 16384}}],
+                   "pending": {"nodes": 0, "cpu": 0.0, "memory_mb": 0}, "twins": 0}
+    assert list(schemas.api_validator("Capacity").iter_errors(doc)) == []
+    create(api)
+    doc = answered(api.get("/v1/capacity"), 200)
+    assert doc["twins"] == 1 and doc["hosts"][0]["cpu"]["free"] == 6.5
+
+
+def test_the_capacity_read_fails_as_503_when_the_runtime_cannot_be_read(
+    api: TestClient, core: Core, caplog: pytest.LogCaptureFixture
+) -> None:
+    core.driver.fail_capacity = True
+    with caplog.at_level(logging.ERROR, logger="fylgja.server"):
+        r = api.get("/v1/capacity")
+    problem = refused(r, 503, "capacity.unread")
+    assert problem["detail"] == "The runtime could not be read; the log has the fault."
+    assert "DriverFailed" not in r.text and "fake" not in problem["detail"]
+    (record,) = [x for x in caplog.records if x.name == "fylgja.server"]
+    assert record.exc_info is not None and "the fake's runtime cannot be read" in str(record.exc_info[1])
+
+
+def test_the_capacity_read_needs_a_token(core: Core) -> None:
+    with TestClient(core.app) as bare:
+        refused(bare.get("/v1/capacity"), 401, "auth.token.missing")
+        head = bare.head("/v1/capacity", headers={"Authorization": f"Bearer {ALICE}"})
+    assert head.status_code == 200 and head.content == b""
+
+
+def test_the_capacity_read_holds_no_lock_an_admission_needs(served: httpx2.Client, core: Core) -> None:
+    core.driver.block = "capacity"
+    reader = httpx2.Client(base_url=served.base_url, headers=dict(served.headers), timeout=30.0, trust_env=False)
+    outcome: list[object] = []
+
+    def read() -> None:
+        try:
+            outcome.append(reader.get("/v1/capacity"))
+        except httpx2.HTTPError as e:
+            outcome.append(e)
+        finally:
+            reader.close()
+
+    thread = threading.Thread(target=read, name="capacity-read", daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: True if ("capacity",) in core.driver.calls else None)
+        answered(put(served, "t", {"blueprint_id": file_blueprint(served)}), 201)
+        wait_for(lambda: True if any(call[0] == "admit" for call in core.driver.calls) else None, timeout_s=5.0)
+        assert thread.is_alive() and outcome == []  # the read still blocks
+    finally:
+        core.driver.release("capacity")
+        thread.join(timeout=10)
+    assert not thread.is_alive() and len(outcome) == 1
+    doc = answered(outcome[0], 200)  # type: ignore[arg-type]
+    assert doc["driver"] == "fake" and doc["twins"] == 0  # counted as the read began, before the create
+
+
+def test_a_fault_other_than_the_drivers_in_the_capacity_read_is_the_servers_500(api: TestClient, core: Core) -> None:
+    core.driver.fail_capacity_with = ValueError("a malformed allocation")
+    problem = stray(api.get("/v1/capacity"), 500, "server.error")
+    assert "malformed" not in json.dumps(problem)
+
+
+def test_a_dry_run_refused_by_capacity_carries_the_shortfall_sentence(api: TestClient, core: Core) -> None:
+    sentence = "The twin needs 6144 MiB of memory, and the host has 1024 MiB free with 0 MiB pending."
+    core.driver.refuse = Refusal("admission.capacity", sentence)
+    problem = refused(dry_run(api, {"blueprint_id": file_blueprint(api)}), 422, "admission.capacity")
+    assert problem["findings"] == [{"rule": "admission.capacity", "severity": "error", "object": "t",
+                                    "message": sentence}]
+
+
+def test_capacity_document_is_what_the_schema_says() -> None:
+    nothing = Demand(nodes=0, cpu=0.0, memory_mb=0)
+    doc = capacity_document("fake", Reading((), nothing), 0, "2026-11-08T12:00:00.000000Z")
+    assert doc["hosts"] == [] and doc["read_at"] == "2026-11-08T12:00:00.000000Z"
+    assert list(schemas.api_validator("Capacity").iter_errors(doc)) == []
 
 
 # Blueprints.

@@ -54,8 +54,9 @@ from fylgja_core import (
     twin_record,
 )
 from fylgja_core import run as runs
+from fylgja_core.capacity import Reading
 from fylgja_core.documents import Rejected
-from fylgja_core.driver import Driver, Unplannable
+from fylgja_core.driver import Driver, DriverFailed, Unplannable
 from fylgja_core.findings import Finding, Subject, Verdict
 from fylgja_core.packages import Loaded
 from fylgja_core.reconcile import Reconciler
@@ -84,6 +85,7 @@ RULE_TWIN_DIVERGED = "twin.diverged"
 RULE_RUN_ENDED = "run.ended"
 RULE_TWIN_NOT_RUNNING = "twin.not_running"
 RULE_SERVER = "server.error"
+RULE_CAPACITY_UNREAD = "capacity.unread"
 
 API = "1"
 
@@ -106,6 +108,23 @@ def _refuse(request: Request, status: int, rule: str, detail: str, **kw: Any) ->
 
 def _json(doc: Any, status: int = 200, headers: Mapping[str, str] | None = None) -> Response:
     return JSONResponse(doc, status_code=status, headers=headers)
+
+
+def capacity_document(driver: str, reading: Reading, twins: int, at: str) -> dict[str, Any]:
+    """The capacity read's answer (D-076): the driver's reading as `Capacity` in API 1 has it, taken `at`."""
+    hosts = []
+    for h in reading.hosts:
+        cpu = {"total": h.total.cpu, "free": h.free.cpu}
+        memory_mb = {"total": h.total.memory_mb, "free": h.free.memory_mb}
+        hosts.append({"name": h.name, "cpu": cpu, "memory_mb": memory_mb})
+    pending = reading.pending
+    return {
+        "driver": driver,
+        "read_at": at,
+        "hosts": hosts,
+        "pending": {"nodes": pending.nodes, "cpu": pending.cpu, "memory_mb": pending.memory_mb},
+        "twins": twins,
+    }
 
 
 def _constant(name: str) -> Any:
@@ -252,6 +271,20 @@ class _Api:
                    "capabilities": documents.encode(self.drivers[name].capabilities())}
                   for name in sorted(self.drivers)]
         return _json({"drivers": listed})
+
+    async def get_capacity(self, request: Request) -> Response:
+        """The default driver's reading of its runtime's room, taken now and outside the admission lock: advisory,
+        never a reservation, and the handler writes nothing."""
+        reserved = [t.status.allocation for t in self.store.list_twins() if t.status.allocation is not None]
+        at = clock.now()
+        try:
+            reading = await self.drivers[self.default_driver].capacity(reserved)
+        except DriverFailed:
+            _log.exception("GET %s: the runtime could not be read", request.url.path,
+                           **logs.fields(method=request.method, path=request.url.path))
+            raise _refuse(request, 503, RULE_CAPACITY_UNREAD,
+                          "The runtime could not be read; the log has the fault.") from None
+        return _json(capacity_document(self.default_driver, reading, len(reserved), at))
 
     # blueprints
 
@@ -709,6 +742,7 @@ def _routes(api: _Api) -> list[Route]:
         "/v1/bundles/{bundle_id}/diff/{to_bundle_id}": {"GET": api.diff_bundles},
         "/v1/packages:validate": {"POST": api.validate_package},
         "/v1/drivers": {"GET": api.list_drivers},
+        "/v1/capacity": {"GET": api.get_capacity},
         "/v1/twins": {"GET": api.list_twins},
         "/v1/twins/{name}": {"GET": api.get_twin, "PUT": api.put_twin, "DELETE": api.delete_twin},
         "/v1/twins/{name}/verifications": {"POST": api.verify_twin},

@@ -145,4 +145,6 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
 - **Image acquisition locally.** With `pull_secret` set, the image must be present. Without
   it, may the local driver pull a platform or probe image?
 - **Admission's demand.** Are `cpu` and `memory_mb` sums enough, or does clabernetes need
-  per-node requests in the deployment?
+  per-node requests in the deployment? *Settled 2026-11-08* ([D-073](../design/decisions.md#d-073)):
+  the sums suffice; the per-node figures are in the rendered Topology and in the packages the
+  fit rule reads. Phase 7 adds `demand` to the allocation instead, on both drivers.

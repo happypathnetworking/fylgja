@@ -74,6 +74,15 @@ def file_blueprint(store: LocalStore, path: str = "testdata/blueprint/three-node
     return blueprint_id
 
 
+THREE = {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}  # the fake's demand of the three-node fixture
+
+
+def held(allocation: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The allocation a twin holds, without the demand a step refreshes (D-073)."""
+    assert allocation is not None
+    return {k: v for k, v in allocation.items() if k != "demand"}
+
+
 def new_twin(
     store: LocalStore, blueprint_id: str | None, name: str = "t", *, bundle_id: str | None = None, driver: str = "fake"
 ) -> None:
@@ -155,7 +164,7 @@ def test_a_create_runs_every_phase_and_ends_ready(store: LocalStore) -> None:
     assert status.observed_generation == record.generation == 1
     assert status.phase == "pushed" and status.run_id is None
     assert status.blueprint_id == blueprint_id and status.bundle_id is not None
-    assert status.allocation == {"lab": "t", "mgmt_subnet": "10.0.1.0/24"}
+    assert status.allocation == {"lab": "t", "mgmt_subnet": "10.0.1.0/24", "demand": THREE}
     assert [n.name for n in status.nodes] == DEVICES
     assert all(n.address and n.incarnation == "boot-1" and n.holds == status.bundle_id for n in status.nodes)
     bundle_files = store.get_bundle(status.bundle_id)
@@ -304,7 +313,8 @@ def test_a_spec_naming_a_bundle_is_planned_with_no_compile(store: LocalStore) ->
     second = store.get_twin("second")
     assert ready_of(second).status == "True"
     assert second.status.bundle_id == first.bundle_id and second.status.blueprint_id == first.blueprint_id
-    assert second.status.allocation == {"lab": "second", "mgmt_subnet": "10.0.2.0/24"}  # first's is reserved
+    assert second.status.allocation == {"lab": "second", "mgmt_subnet": "10.0.2.0/24",
+                                           "demand": THREE}  # first's is reserved
     assert seen(store, only_run(store, "second").id) == CREATE
 
 
@@ -849,7 +859,8 @@ def test_killed_after_admitted_a_resume_plans_with_the_recorded_allocation(killi
     killing.kill_at = "admitted"
     killed(make(killing, driver))
     status = killing.get_twin("t").status
-    assert status.phase == "admitted" and status.allocation == {"lab": "t", "mgmt_subnet": "10.0.1.0/24"}
+    assert status.phase == "admitted" and status.allocation == {"lab": "t", "mgmt_subnet": "10.0.1.0/24",
+                                                                "demand": THREE}
     assert status.bundle_id is not None
 
     driver.refuse = Refusal("admission.capacity", "a second admission would be refused")
@@ -1289,7 +1300,7 @@ def test_a_dry_run_plans_against_the_live_reservations_and_writes_nothing(store:
 
     planned, verdict, changes = asyncio.run(r.dry_run("t", spec_of(blueprint_id)))
     assert planned is not None and planned.twin == "t" and changes is None  # a create's changes nothing that runs
-    assert planned.allocation == {"lab": "t", "mgmt_subnet": "10.0.2.0/24"}
+    assert planned.allocation == {"lab": "t", "mgmt_subnet": "10.0.2.0/24", "demand": THREE}
     assert deployment.validate(documents.encode(planned)) == []
     assert verdict.operation == "plan" and verdict.status == "ok" and verdict.findings == ()
     assert verdict.subject == Subject(twin="t", blueprint_id=blueprint_id, bundle_id=planned.bundle_id,
@@ -1858,9 +1869,9 @@ def assert_refused(
         assert status.last_step.from_ == before.status.bundle_id
     assert status.observed_generation == record.generation - written == before.generation
     assert status.run_id is None and status.generation_in_flight is None
-    assert (status.phase, status.blueprint_id, status.bundle_id, status.deployment_id, status.allocation,
+    assert (status.phase, status.blueprint_id, status.bundle_id, status.deployment_id, held(status.allocation),
             status.nodes) == (before.status.phase, before.status.blueprint_id, before.status.bundle_id,
-                              before.status.deployment_id, before.status.allocation, before.status.nodes)
+                              before.status.deployment_id, held(before.status.allocation), before.status.nodes)
     return record
 
 
@@ -1923,6 +1934,39 @@ def test_a_step_that_recreates_a_node_without_allow_restart_is_refused_after_pla
     assert all(n.holds == before.status.bundle_id for n in record.status.nodes)
     assert driver.calls[calls:] == [("admit", "t", "held"), ("plan", "t"), ("changes", "t")]
     assert pusher.calls == [] and "t" in driver.labs
+
+
+def test_admission_records_the_demand_in_the_allocation(store: LocalStore) -> None:
+    ready_twin(store, FakeDriver())
+    allocation = store.get_twin("t").status.allocation
+    assert allocation is not None and allocation["demand"] == {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}
+
+
+def test_a_steps_admission_records_the_targets_demand(store: LocalStore) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    respec(store, "testdata/blueprint/steps/two-node.json")
+    asyncio.run(make(store, driver).reconcile("t"))
+    (run,) = steps(store)
+    assert run.state == "ended"
+    allocation = store.get_twin("t").status.allocation
+    assert before.status.allocation is not None and allocation is not None
+    assert allocation["demand"]["nodes"] == 2
+    assert allocation["mgmt_subnet"] == before.status.allocation["mgmt_subnet"]
+
+
+def test_a_step_refused_after_planned_keeps_the_targets_demand_recorded(store: LocalStore) -> None:
+    driver = FakeDriver()
+    ready_twin(store, driver)
+    driver.recreates = {"n3"}
+    before = respec(store, "testdata/blueprint/steps/three-node-n3-eos.json")
+    asyncio.run(make(store, driver).reconcile("t"))
+    (run,) = steps(store)
+    assert_refused(store, before, run, "step.restart.required")
+    record = store.get_twin("t")
+    assert record.status.allocation is not None and before.status.allocation is not None
+    assert record.status.allocation["demand"] == {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}
+    assert record.status.bundle_id == before.status.bundle_id
 
 
 def test_killed_after_a_refused_step_ended_the_next_pass_records_the_refusal(killing: KillingStore) -> None:
@@ -2208,7 +2252,8 @@ def assert_stepped(store: LocalStore, before: TwinRecord, run: Run, *, waited: b
                                         run_id=run.id)
     assert status.deployment_id is not None and status.deployment_id != before.status.deployment_id
     target, _ = store.get_deployment(status.deployment_id)
-    assert target.bundle_id == status.bundle_id and target.allocation == status.allocation == before.status.allocation
+    assert target.bundle_id == status.bundle_id and target.allocation == status.allocation
+    assert held(status.allocation) == held(before.status.allocation)
     assert status.blueprint_id == before.spec.blueprint_id
     assert (status.phase, status.run_id, status.generation_in_flight) == ("flows", None, None)
     assert status.observed_generation == before.generation
@@ -2954,9 +2999,9 @@ def assert_step_cancelled(store: LocalStore, before: TwinRecord, run: Run, phase
     assert [c.type for c in status.conditions if c.type == "Diverged"] == []
     assert status.observed_generation == record.generation == before.generation
     assert status.run_id is None and status.generation_in_flight is None
-    assert (status.phase, status.blueprint_id, status.bundle_id, status.deployment_id, status.allocation,
+    assert (status.phase, status.blueprint_id, status.bundle_id, status.deployment_id, held(status.allocation),
             status.nodes) == (before.status.phase, before.status.blueprint_id, before.status.bundle_id,
-                              before.status.deployment_id, before.status.allocation, before.status.nodes)
+                              before.status.deployment_id, held(before.status.allocation), before.status.nodes)
     return record
 
 

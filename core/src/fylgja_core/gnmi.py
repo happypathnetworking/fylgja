@@ -3,9 +3,10 @@
 pygnmi is the one mechanism, keyed by the package's `gnmi` section: TLS or plaintext, the
 port, json_ietf, and a boot-time certificate accepted unverified. pygnmi is synchronous, so
 the call runs in a daemon thread of its own, the whole read bounded by its budget: at most
-`READ_THREADS` at once, a read finding none free waiting for one within its budget, and at most
-one per node's address, so a node whose last read still runs is unreadable at once. A message
-names where and what, never a credential or an answer.
+`READ_THREADS` at once in the caller's pool, a twin's own (D-075), a read finding none free
+waiting for one within its budget, and at most one per node's address whatever its pool, so a
+node whose last read still runs is unreadable at once. A message names where and what, never a
+credential or an answer.
 
 The answer is mapped back to the paths asked element by element, a module prefix stripped
 from each name (verified-facts.md, "gNMI" under SR Linux and cEOS). An update at or under an
@@ -41,20 +42,40 @@ from fylgja_core.platform_package import PlatformPackage
 
 GNMI_TIMEOUT_S = 15.0
 RULE_UNREAD = "verify.node.unread"
-READ_THREADS = 16
+READ_THREADS = 16  # a pool's, so a twin's
 SLOT_POLL_S = 0.05  # between looks for a free read thread
+
+
+class _Pool:
+    """One pool's read threads: `slots` bound them at `READ_THREADS`, and `users` counts the
+    reads holding a slot or waiting for one, a read whose caller stopped waiting holding its slot
+    until pygnmi returns."""
+
+    def __init__(self) -> None:
+        self.slots = threading.BoundedSemaphore(READ_THREADS)
+        self.users = 0
+
 
 # The reads' threads. pygnmi's Get has no deadline, so a read abandoned at its budget runs on in
 # its thread until the node's TCP gives up (verified-facts.md, "An abandoned read keeps its
 # thread"). Each read is a daemon thread of its own, never one of an executor's: the loop's close
 # joins its default executor (`asyncio.Runner.close` waits up to 300 s) and the interpreter's exit
-# joins every executor's workers, while neither waits on a daemon thread. `_SLOTS` bounds them, and
-# a thread frees its slot when pygnmi returns, whether or not its caller still waits. `_READING`
-# holds the addresses whose read's thread still runs: a node is read by one thread at a time, so a
-# lost node's retries never add stuck threads.
-_SLOTS = threading.BoundedSemaphore(READ_THREADS)
+# joins every executor's workers, while neither waits on a daemon thread. A pool's `slots` bound its
+# threads, and a thread frees its slot when pygnmi returns, whether or not its caller still waits.
+# `_POOLS` holds a pool by the name its callers give, the verifier's the twin's (D-075) and `""` that
+# of a caller naming none, made on first use and dropped once no read holds or waits for its slots,
+# so one twin's busy threads never make another's node unread. `_READING` holds the addresses whose
+# read's thread still runs, whatever its pool: a node is read by one thread at a time, so a lost
+# node's retries never add stuck threads.
+_POOLS: dict[str, _Pool] = {}
 _READING: set[str] = set()
 _LOCK = threading.Lock()
+
+
+def pools() -> dict[str, int]:
+    """Each pool's reads holding or waiting for a slot, by the pool's name; for tests and a log line."""
+    with _LOCK:
+        return {pool: share.users for pool, share in _POOLS.items()}
 
 
 class Unreadable(Exception):
@@ -79,6 +100,7 @@ class ReadFn(Protocol):
         paths: Sequence[str],
         *,
         timeout_s: float = ...,
+        pool: str = ...,
     ) -> Awaitable[dict[str, Any]]: ...
 
 
@@ -242,31 +264,43 @@ def _read(
         return client.get(path=list(paths), encoding="json_ietf")
 
 
-def _claim(address: str) -> bool:
-    """Whether `address` was free to read, and is now marked being read."""
+def _claim(address: str, pool: str) -> _Pool | None:
+    """The pool `pool`, made on first use and counting one more read, if `address` was free to
+    read and is now marked being read; else None, and no pool touched."""
     with _LOCK:
         if address in _READING:
-            return False
+            return None
         _READING.add(address)
-        return True
+        share = _POOLS.get(pool)
+        if share is None:
+            share = _POOLS[pool] = _Pool()
+        share.users += 1
+        return share
 
 
-def _unclaim(address: str) -> None:
+def _unclaim(address: str, pool: str, share: _Pool, *, held: bool) -> None:
+    """A read's end: `address` unclaimed, the slot freed where the read `held` one, and the read
+    counted out of its pool, which is dropped once no read holds or waits for its slots."""
     with _LOCK:
         _READING.discard(address)
+        if held:
+            share.slots.release()
+        share.users -= 1
+        if share.users == 0:
+            del _POOLS[pool]
 
 
-async def _slot(where: str, deadline: float) -> None:
-    """A read thread's slot, taken once one is free before `deadline`; else `Unreadable`."""
-    while not _SLOTS.acquire(blocking=False):
+async def _slot(share: _Pool, where: str, deadline: float) -> None:
+    """A slot of `share`'s threads, taken once one is free before `deadline`; else `Unreadable`."""
+    while not share.slots.acquire(blocking=False):
         if time.monotonic() >= deadline:
             raise Unreadable(where, "no read thread free")
         await asyncio.sleep(SLOT_POLL_S)
 
 
 def _reading(
-    loop: asyncio.AbstractEventLoop, answer: asyncio.Future[Any], address: str, package: PlatformPackage,
-    credential: Credential, paths: Sequence[str], timeout_s: float,
+    loop: asyncio.AbstractEventLoop, answer: asyncio.Future[Any], pool: str, share: _Pool, address: str,
+    package: PlatformPackage, credential: Credential, paths: Sequence[str], timeout_s: float,
 ) -> None:
     """A read thread's work: pygnmi's Get, then the slot and the address freed, then the reply or
     the error handed to the loop, unless its caller has stopped waiting or the loop has closed."""
@@ -277,8 +311,7 @@ def _reading(
     except Exception as e:
         error = e
     finally:
-        _unclaim(address)
-        _SLOTS.release()
+        _unclaim(address, pool, share, held=True)
 
     def hand() -> None:
         if answer.done():  # the caller's budget ran out first
@@ -299,28 +332,31 @@ async def get(
     paths: Sequence[str],
     *,
     timeout_s: float = GNMI_TIMEOUT_S,
+    pool: str = "",
 ) -> dict[str, Any]:
     """One Get of every path; each requested path mapped to its value, a path unreported left out.
-    `Unreadable` at once while the address's last read still runs, and once the budget has passed
-    with no read thread free."""
+    The read's thread is one of the pool `pool`'s, the verifier's the twin's own. `Unreadable` at
+    once while the address's last read still runs, whatever its pool, and once the budget has
+    passed with no thread of the pool free."""
     where = authority(address, package.gnmi.port)
-    if not _claim(address):
+    share = _claim(address, pool)
+    if share is None:
         raise Unreadable(where, "a read of this node is still running")
     deadline = time.monotonic() + timeout_s
     try:
-        await _slot(where, deadline)
-    except BaseException:
-        _unclaim(address)
+        await _slot(share, where, deadline)
+    except BaseException:  # its budget passed, or its caller cancelled it while it waited
+        _unclaim(address, pool, share, held=False)
         raise
     loop = asyncio.get_running_loop()
     answer: asyncio.Future[Any] = loop.create_future()
-    thread = threading.Thread(target=_reading, args=(loop, answer, address, package, credential, paths, timeout_s),
+    thread = threading.Thread(target=_reading,
+                              args=(loop, answer, pool, share, address, package, credential, paths, timeout_s),
                               name=f"fylgja-gnmi {where}", daemon=True)
     try:
         thread.start()
-    except BaseException:
-        _unclaim(address)
-        _SLOTS.release()
+    except Exception:  # the thread never started: nothing else frees its slot
+        _unclaim(address, pool, share, held=True)
         raise
     try:
         # pygnmi fetches a TLS node's certificate with no timeout, and its Get has none: a

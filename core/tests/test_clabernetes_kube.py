@@ -22,11 +22,13 @@ import pytest
 from aio import bounded, cancelled, closed
 from lightkube import ApiError, AsyncClient, KubeConfig, codecs
 from lightkube.models.meta_v1 import Status
+from lightkube.resources.core_v1 import Node as NodeModel
 from lightkube.resources.core_v1 import Pod as PodModel
 from lightkube.resources.core_v1 import Service as ServiceModel
 from lightkube.types import OnErrorAction
 
 from fylgja_core import kubeapi, logs
+from fylgja_core.capacity import Resources
 from fylgja_core.clabernetes import kube
 from fylgja_core.clabernetes.driver import ClabernetesDriver
 from fylgja_core.containerlab import driver as containerlab_driver
@@ -495,3 +497,147 @@ def test_a_line_the_watch_cannot_decode_is_raised_past_lightkubes_retries_and_wa
         ("fylgja.clabernetes", "the pod watch ended (DecodeError): it is watched again in 0s, and names the twin of "
                                "each pod there again")]
     assert "not json" not in caplog.text
+
+
+@pytest.mark.parametrize(("quantity", "cores"), [("500m", 0.5), ("2", 2.0), ("0.5", 0.5), ("8", 8.0)])
+def test_a_cpu_quantity_reads_in_cores(quantity: str, cores: float) -> None:
+    assert kube.cpu(quantity) == cores
+
+
+@pytest.mark.parametrize(("quantity", "megabytes"), [
+    ("2048Mi", 2048), ("1Gi", 1024), ("1536M", 1464), ("24603252Ki", 24026), ("1073741824", 1024), ("512e6", 488),
+])
+def test_a_memory_quantity_reads_in_mebibytes_rounded_down(quantity: str, megabytes: int) -> None:
+    assert kube.mib(quantity) == megabytes
+
+
+@pytest.mark.parametrize("quantity", ["", "x", "1.5.2", "-1", "-1Gi", " 1", "1 ", "1e999999999"])
+def test_a_quantity_that_is_none_raises_value_error(quantity: str) -> None:
+    for read in (kube.cpu, kube.mib):
+        with pytest.raises(ValueError):
+            read(quantity)
+
+
+def _pod_model(spec: dict[str, Any], status: dict[str, Any] | None = None) -> PodModel:
+    doc: dict[str, Any] = {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "p1", "namespace": "ns",
+                                                                           "uid": "u1"}, "spec": spec}
+    if status is not None:
+        doc["status"] = status
+    model = codecs.from_dict(doc)
+    assert isinstance(model, PodModel)
+    return model
+
+
+def _container(name: str, cpu: str | None = None, memory: str | None = None, **more: Any) -> dict[str, Any]:
+    asked = {k: v for k, v in (("cpu", cpu), ("memory", memory)) if v is not None}
+    return {"name": name, "image": "i", **({"resources": {"requests": asked}} if asked else {}), **more}
+
+
+def test_requests_of_is_the_schedulers_effective_request() -> None:
+    two = _pod_model({"containers": [_container("a", "250m", "256Mi"), _container("b", "50m", "64Mi")]})
+    assert kube.requests_of(two) == Resources(0.3, 320)
+    init = _container("i", "1", "1Gi")
+    one = [_container("a", "200m", "512Mi")]
+    assert kube.requests_of(_pod_model({"containers": one, "initContainers": [init]})) == Resources(1.0, 1024)
+    always = {**init, "restartPolicy": "Always"}
+    assert kube.requests_of(_pod_model({"containers": one, "initContainers": [always]})) == Resources(1.2, 1536)
+    assert kube.requests_of(_pod_model({"containers": [_container("a"), _container("b")]})) == Resources(0.0, 0)
+    over = _pod_model({"containers": one, "overhead": {"cpu": "100m", "memory": "64Mi"}})
+    assert kube.requests_of(over) == Resources(0.3, 576)
+
+
+def test_requests_of_a_pod_with_no_spec_is_nothing() -> None:
+    model = codecs.from_dict({"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "p", "namespace": "ns"}})
+    assert isinstance(model, PodModel)
+    assert kube.requests_of(model) == Resources(0.0, 0)
+
+
+def test_pod_from_reads_host_requests_and_ended() -> None:
+    spec = {"containers": [_container("a", "250m", "256Mi")]}
+    placed = kube.pod_from(_pod_model({**spec, "nodeName": "h1"}, {"phase": "Succeeded"}))
+    assert (placed.host, placed.requests, placed.ended) == ("h1", Resources(0.25, 256), True)
+    assert kube.pod_from(_pod_model(spec, {"phase": "Failed"})).ended is True
+    unplaced = kube.pod_from(_pod_model(spec, {"phase": "Running"}))
+    assert (unplaced.host, unplaced.ended) == (None, False)
+    assert kube.pod_from(_pod_model(spec)).ended is False
+
+
+def test_node_from_reads_the_allocatable() -> None:
+    model = codecs.from_dict({"apiVersion": "v1", "kind": "Node", "metadata": {"name": "h1"},
+                              "status": {"allocatable": {"cpu": "8", "memory": "24603252Ki"}}})
+    assert isinstance(model, NodeModel)
+    assert kube.node_from(model) == kube.Node("h1", Resources(8.0, 24026))
+    bare = codecs.from_dict({"apiVersion": "v1", "kind": "Node", "metadata": {"name": "h2"}, "status": {}})
+    assert isinstance(bare, NodeModel)
+    with pytest.raises(ValueError, match="h2"):
+        kube.node_from(bare)
+
+
+def test_requests_of_follows_kubernetes_in_init_container_order() -> None:
+    plain = _container("i", "1", "1Gi")
+    side = {**plain, "name": "s", "restartPolicy": "Always"}
+    one = [_container("a", "200m", "512Mi")]
+    # The sidecar first: the init starts after it, 1 + 1 against the containers' 0.2 + 1.
+    first = _pod_model({"containers": one, "initContainers": [side, plain]})
+    assert kube.requests_of(first) == Resources(2.0, 2048)
+    # The init first: it runs alone at 1, against the containers' 0.2 + 1.
+    last = _pod_model({"containers": one, "initContainers": [plain, side]})
+    assert kube.requests_of(last) == Resources(1.2, 1536)
+
+
+def test_requests_of_takes_the_pods_own_requests_over_its_containers_per_resource() -> None:
+    # Pod-level resources (Kubernetes 1.34+): `spec.resources.requests` replaces the containers' figure for each
+    # resource it sets, and `overhead` is added after.
+    containers = [_container("a", "150m", "256Mi"), _container("b", "50m", "256Mi")]
+    assert kube.requests_of(_pod_model({"containers": containers})) == Resources(0.2, 512)
+    both = _pod_model({"containers": containers, "resources": {"requests": {"cpu": "1", "memory": "3Gi"}}})
+    assert kube.requests_of(both) == Resources(1.0, 3072)
+    cpu_alone = _pod_model({"containers": containers, "resources": {"requests": {"cpu": "1"}}})
+    assert kube.requests_of(cpu_alone) == Resources(1.0, 512)
+    over = _pod_model({"containers": containers, "resources": {"requests": {"memory": "3Gi"}},
+                       "overhead": {"cpu": "100m", "memory": "64Mi"}})
+    assert kube.requests_of(over) == Resources(0.3, 3136)
+
+
+def test_requests_of_sums_the_memory_exactly_and_rounds_it_down_once() -> None:
+    # 1536M is 1464.84375 MiB: two make 2929.6875, which is 2929, where rounding each first would make 2928.
+    two = _pod_model({"containers": [_container("a", memory="1536M"), _container("b", memory="1536M")]})
+    assert kube.requests_of(two) == Resources(0.0, 2929)
+
+
+@pytest.mark.parametrize("call", ["pods", "all_pods"])
+def test_a_pod_whose_request_will_not_read_is_a_kube_failed_naming_the_call_and_the_pod(call: str) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        pod = {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "p1", "namespace": "ns"},
+               "spec": {"containers": [_container("a", "x")]}}
+        return httpx2.Response(200, json={"apiVersion": "v1", "kind": "PodList", "metadata": {}, "items": [pod]})
+
+    async def read() -> list[kube.Pod]:
+        reach = reaching(handler)
+        try:
+            return await (reach.pods("ns", {}) if call == "pods" else reach.all_pods())
+        finally:
+            await reach.close()
+
+    with pytest.raises(kube.KubeFailed) as raised:
+        asyncio.run(read())
+    assert str(raised.value) == f"{call} Pod ns/p1: ValueError"
+    assert raised.value.status is None
+
+
+def test_nodes_with_no_allocatable_is_a_kube_failed_naming_the_call_and_the_node() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        node = {"apiVersion": "v1", "kind": "Node", "metadata": {"name": "h2"}, "status": {}}
+        return httpx2.Response(200, json={"apiVersion": "v1", "kind": "NodeList", "metadata": {}, "items": [node]})
+
+    async def read() -> list[kube.Node]:
+        reach = reaching(handler)
+        try:
+            return await reach.nodes()
+        finally:
+            await reach.close()
+
+    with pytest.raises(kube.KubeFailed) as raised:
+        asyncio.run(read())
+    assert str(raised.value) == "nodes Node h2: ValueError"
+    assert raised.value.status is None

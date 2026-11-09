@@ -205,7 +205,8 @@ class Verifier:
         )
 
     async def _read(self, record: TwinRecord, manifest: Manifest, node: Node, package: PlatformPackage) -> _Read:
-        """One Get of every path the node's assertions need, or why the node could not be read."""
+        """One Get of every path the node's assertions need, its thread one of the twin's own
+        (D-075), or why the node could not be read."""
         state = next((n for n in record.status.nodes if n.name == node.name), None)
         if state is None:
             return _Read(failure="the record holds no such node")
@@ -214,7 +215,7 @@ class Verifier:
         try:
             credential = self.credentials.login(package.credentials)
             answer = await self.reader(state.address, package, credential, paths(manifest, node.name, package),
-                                       timeout_s=self.read_timeout_s)
+                                       timeout_s=self.read_timeout_s, pool=record.name)
         except (Missing, gnmi.Unreadable) as error:
             return _Read(failure=str(error))
         return _Read(answer=answer)

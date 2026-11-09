@@ -7,8 +7,9 @@ pure tier stands a fake in for both. The driver's working files live under
 `<root>/containerlab/<twin>/`, `root` being the directory the server gives it.
 
 `admit` reserves what `plan` binds: a /24 of the pool that no Docker network and no other
-twin's allocation holds. It refuses a twin the host cannot fit (`admission.capacity`: the
-pool exhausted, or the demand above the host's available memory or its CPU count), and one
+twin's allocation holds, and writes the twin's demand into the allocation. It refuses a twin the
+host cannot fit (`admission.capacity`: the pool exhausted, the demand above the host's free room less
+the demand of twins admitted whose nodes are not yet up, or a node above the host's room, D-073), and one
 whose account-gated image is not on the host (`admission.image.absent`), since locally a
 `pull_secret` is a presence check and the image is never pulled (D-015). An ungated image is
 containerlab's to pull at deploy.
@@ -28,6 +29,22 @@ budget of the deployment it destroys, since a deletion asked after such a kill w
 tear down a lab the deploy goes on making. The pure tier holds `apply`'s wait; the live tier
 holds `destroy`'s, with a deletion asked right after a kill mid-deploy (D-055). `apply`'s has
 not fired live: each stray had ended before a step's resume reached its apply (D-056).
+
+`apply` deploys one lab at a time on the host (D-074). Two labs deploy together without harm,
+but eight SR Linux nodes booting at once took the host to a load of 33 and SR Linux's `sr_cli`
+segfaulted in containerlab's post-deploy, failing the deploy (verified-facts.md, 2026-11-03):
+CPU was the limit, not memory, and admission by capacity admits such twins. So the deploy, and
+the hot-add removals before it, run under one lock the driver holds (`_deploy_lock`): the boots
+are serialised, the host's load is what one deploy makes, and a second twin's apply waits its
+turn, which is waiting and not failing, its deploy's budget starting when its deploy does. The
+stray wait comes before the lock, so a resume waiting out its own stray holds no other twin's
+deploy. Only `apply` takes it (rule 2's deploy inside `destroy` is an `apply`); `destroy`
+itself, `inspect`, `exec`, `endpoints` and `events` never do, a destroy beside another twin's
+deploy being what D-055 handles. One core runs per host (D-024), on one event loop, so the
+lock is the host's; it is made on the running loop, and made anew on another, since asyncio's
+primitives bind to the first loop that waits on them. The lock does not cover a `containerlab deploy`
+of another twin that a killed core left running: a new deploy may run beside it, and two labs at once deploy
+without harm (verified-facts.md, "Two labs at once").
 
 `inspect` finds the twin's containers by containerlab's label `containerlab=<lab>` and reads
 each one's node name from the label `clab-node-name`, its incarnation from `State.StartedAt`
@@ -68,6 +85,7 @@ import os
 import secrets
 import shutil
 import time
+from collections import Counter
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
@@ -75,13 +93,14 @@ from typing import Any
 
 import yaml
 
-from fylgja_core import containerlab, logs, platform_package, probe_package
+from fylgja_core import capacity, containerlab, logs, platform_package, probe_package
 from fylgja_core.bundle import Manifest
+from fylgja_core.capacity import Host, Reading, Resources
 from fylgja_core.containerlab import changes as clab_changes
 from fylgja_core.containerlab import cli, pool
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.containerlab.plan import TOPOLOGY
-from fylgja_core.deployment import Demand, Deployment
+from fylgja_core.deployment import Deployment
 from fylgja_core.driver import (
     Allocation,
     Capabilities,
@@ -138,6 +157,11 @@ LABS_ARGV = ("docker", "ps", "-a", "--filter", "label=containerlab", "--format",
 """Every lab on the host: one line per container carrying the label, its lab's name, a lab of two
 containers twice and a container whose label is empty an empty line (Docker 29.8.1,
 verified-facts.md)."""
+
+RUNNING_ARGV = ("docker", "ps", "--filter", "label=containerlab", "--format", '{{.Label "containerlab"}}')
+"""The running containers that carry the lab label: one line each, its lab's name, so a lab of two
+running containers twice. `capacity` counts them to tell a lab that is up from one admitted and not yet
+deployed (D-073)."""
 
 DEPLOY_LOG = "deploy.log"
 """The file in the twin's directory that holds the last deploy's stdout and stderr (D-056): the
@@ -235,6 +259,11 @@ class ContainerlabDriver:
         self._stray_poll_s = stray_poll_s
         self._follow = follower
         self._backoff = backoff
+        # The deploy lock and the loop it was made on (`_deploy_lock`): one `containerlab deploy` at a time (D-074).
+        self._deploying: tuple[asyncio.AbstractEventLoop, asyncio.Lock] | None = None
+        # The twins whose reserved allocation records no demand, and those whose demand will not read, logged once each.
+        self._unrecorded: set[str] = set()
+        self._unread: set[str] = set()
 
     def capabilities(self) -> Capabilities:
         return containerlab.CAPABILITIES
@@ -259,6 +288,63 @@ class ContainerlabDriver:
     ) -> Changes:
         return clab_changes.changes(before, after, platforms, probe_packages)
 
+    async def capacity(self, reserved: Sequence[Allocation]) -> Reading:
+        """The runtime's room as `admit` would take it now for a twin whose other twins' allocations are
+        `reserved`, and not a reservation (D-073).
+
+        One host, named `capacity.LOCAL_HOST`: its total is the CPU count and `MemTotal`, and its free
+        memory is `MemAvailable`. Its free CPU is the CPU count less the demand of each twin of `reserved`
+        whose lab is up, a lab being up when the running containers that carry its label number at least
+        the demand's nodes. Such a twin holds its demand; any other holds nothing, so what it is yet to take
+        is pending (`capacity.pending`).
+
+        A step refused or cancelled before `applied` leaves the target's demand recorded while the lab runs
+        the old deployment (D-073): to a smaller bundle, the lab has at least the target's nodes running and
+        reads as up, holding the target's CPU, so the CPU its running deployment holds beyond that is
+        under-counted until its next step.
+
+        `reserved` is the caller's, and `admit` passes on its own: a standalone read (the API's) passes every
+        twin record's allocation, so it counts the right twins after a restart, after a destroy and for the
+        twin admitted last. An allocation with no `demand`, as every one before phase 7 is, counts as
+        nothing and is logged once a twin; one whose `demand` will not read (`capacity.demand_of`) counts as
+        nothing too, and is warned of once a twin. `DriverFailed` when the host's room cannot be read: an
+        unknown CPU count, or a `meminfo` that cannot be read or lacks either figure as the kernel writes it."""
+        total_memory, available = _meminfo_mib(self._meminfo, "MemTotal"), _meminfo_mib(self._meminfo, "MemAvailable")
+        cpus = self._cpus if self._cpus is not None else os.cpu_count()
+        if cpus is None:
+            raise DriverFailed("the CPU count of the host is unknown")
+        recorded = []
+        for allocation in reserved:
+            try:
+                demand = capacity.demand_of(allocation)
+            except ValueError:
+                if allocation["lab"] not in self._unread:
+                    self._unread.add(allocation["lab"])
+                    _log.warning("capacity: the reserved allocation of %s records a demand that will not read, and "
+                                 "counts as nothing", allocation["lab"])
+                continue
+            if demand is None:
+                if allocation["lab"] not in self._unrecorded:
+                    self._unrecorded.add(allocation["lab"])
+                    _log.info("capacity: the reserved allocation of %s records no demand, and counts as nothing",
+                              allocation["lab"])
+                continue
+            recorded.append((allocation["lab"], demand))
+        running: Counter[str] = Counter()
+        if recorded:
+            running = Counter((await self._run(RUNNING_ARGV, timeout_s=DOCKER_TIMEOUT_S)).splitlines())
+        twins = [(demand, demand if running[lab] >= demand.nodes else capacity.NOTHING) for lab, demand in recorded]
+        held_cpu = sum(held.cpu for _, held in twins)
+        reading = Reading(
+            (Host(capacity.LOCAL_HOST, Resources(float(cpus), total_memory),
+                  Resources(float(cpus) - held_cpu, available)),),
+            capacity.pending(twins),
+        )
+        _log.debug("capacity: %d hosts, free %g CPU and %d MiB, pending %g CPU and %d MiB",
+                   len(reading.hosts), reading.free.cpu, reading.free.memory_mb,
+                   reading.pending.cpu, reading.pending.memory_mb)
+        return reading
+
     async def admit(
         self,
         manifest: Manifest,
@@ -268,19 +354,23 @@ class ContainerlabDriver:
         reserved: Sequence[Allocation],
         held: Deployment | None = None,
     ) -> Allocation | Refusal:
-        """The first free /24 of the pool as the twin's allocation, or a refusal naming every
-        shortfall (`admission.capacity`) or every absent gated image (`admission.image.absent`).
+        """The first free /24 of the pool as the twin's allocation, with the demand it reserves of the
+        host's room, or a refusal naming every shortfall (`admission.capacity`) or every absent gated
+        image (`admission.image.absent`).
 
-        With `held`, the deployment a stepping twin has applied, the answer is `held.allocation`
-        unchanged: the twin keeps its lab and subnet, so the pool and the Docker networks are not
-        consulted. The capacity checked is the demand the manifest adds over `held.demand`, per
-        component and floored at zero; every gated image the manifest's packages use is checked
-        for presence (D-049).
+        A create must fit the reading (`capacity`) in its sum, and each node must fit the host. With
+        `held`, the deployment a stepping twin has applied, the answer is `held.allocation` with the
+        demand set to the manifest's and nothing else changed: the twin keeps its lab and subnet, so
+        the pool and the Docker networks are not consulted. The capacity checked is the sum alone, of
+        the demand the manifest adds over `held.demand`, per component and floored at zero, against the
+        host's free CPU less `held.demand.cpu`, which the twin's running lab holds; every gated image
+        the manifest's packages use is checked for presence (D-049).
+
+        `reserved` is passed to `capacity`.
 
         The contract: the loop admits a twin once and records the allocation in its record; a
         resume plans with the recorded allocation and never admits again. So the twin's own
         management network, which holds its subnet once deployed, never counts against it."""
-        demand = clab_plan.demand(manifest, platforms, probe_packages)
         shortfalls = []
         subnet = None
         if held is None:
@@ -289,20 +379,21 @@ class ContainerlabDriver:
             if subnet is None:
                 shortfalls.append(
                     f"The pool {self.pool} has no /24 that neither a Docker network nor another twin holds.")
-            needs, verb = demand, "The twin needs"
+        demand = clab_plan.demand(manifest, platforms, probe_packages)
+        reading = await self.capacity(reserved)
+        if held is None:
+            shortfalls += capacity.shortfalls(
+                reading, demand, clab_plan.node_resources(manifest, platforms, probe_packages),
+                verb="The twin needs", where="host")
         else:
-            needs = Demand(nodes=max(0, demand.nodes - held.demand.nodes),
-                           cpu=max(0.0, demand.cpu - held.demand.cpu),
-                           memory_mb=max(0, demand.memory_mb - held.demand.memory_mb))
-            verb = "The step adds"
-        available = self._memory_available_mib()
-        if needs.memory_mb > available:
-            shortfalls.append(f"{verb} {needs.memory_mb} MiB of memory, and the host has {available} MiB "
-                              "available.")
-        cpus = self._cpus if self._cpus is not None else os.cpu_count()
-        if cpus is not None and needs.cpu > cpus:
-            shortfalls.append(f"{verb} {needs.cpu:g} CPUs, and the host has {cpus}.")
-        if shortfalls or (held is None and subnet is None):
+            # The loop leaves the stepping twin out of `reserved`, and the kernel reports no CPU reservation: its lab
+            # holds the running deployment's CPU, which the step's room is without; its memory is out of `MemAvailable`.
+            (host,) = reading.hosts
+            reading = Reading((Host(host.name, host.total, Resources(host.free.cpu - held.demand.cpu,
+                                                                     host.free.memory_mb)),), reading.pending)
+            shortfalls += capacity.shortfalls(
+                reading, capacity.added(demand, held.demand), (), verb="The step adds", where="host")
+        if shortfalls:
             return _refuse(twin, RULE_CAPACITY, " ".join(shortfalls))
         absent = [(package, image) for package, image in _images(manifest, platforms, probe_packages)
                   if image.pull_secret is not None and not await self._image_present(image.ref)]
@@ -311,13 +402,13 @@ class ContainerlabDriver:
                 f"The image {image.ref} ({package}) is account-gated and not on the host, and the local driver "
                 "never pulls it: import it under that tag." for package, image in absent))
         if held is not None:
-            _log.info("admit %s: held allocation %s; added demand %d nodes, %g CPU, %d MiB",
-                      twin, held.allocation["mgmt_subnet"], needs.nodes, needs.cpu, needs.memory_mb)
-            return dict(held.allocation)
+            _log.info("admit %s: held allocation %s; demand %d nodes, %g CPU, %d MiB",
+                      twin, held.allocation["mgmt_subnet"], demand.nodes, demand.cpu, demand.memory_mb)
+            return capacity.with_demand(held.allocation, demand)
         assert subnet is not None
         _log.info("admit %s: subnet %s; demand %d nodes, %g CPU, %d MiB",
                   twin, subnet, demand.nodes, demand.cpu, demand.memory_mb)
-        return pool.allocation(twin, subnet)
+        return capacity.with_demand(pool.allocation(twin, subnet), demand)
 
     async def apply(
         self,
@@ -345,9 +436,17 @@ class ContainerlabDriver:
         one still running once the deploy's budget has passed is `DriverFailed`, the loop's to
         retry, with nothing written or run.
 
-        The order is: wait for a stray deploy, read the previous topology, compute the changes,
-        remove each hot-add container, write the new files, deploy. The on-disk topology is the record of what the lab
-        was built from, so it moves only once the containers that must go are gone: a core killed
+        Then, from reading the previous topology to the deploy's return, failing or not, it holds
+        the driver's deploy lock (`_deploy_lock`, D-074): one `containerlab deploy` at a time on the
+        host, the hot-add removals held with it, and another twin's apply waits its turn, in the
+        order asked. The deploy's budget is its own whatever the wait took, starting when the
+        deploy does. The stray wait comes before the lock, so a resume waiting out its own stray
+        holds no other twin's deploy.
+
+        The order is: wait for a stray deploy, take the deploy lock, read the previous topology,
+        compute the changes, remove each hot-add container, write the new files, deploy, release
+        the lock. The on-disk topology is the record of what the lab was built from, so it moves
+        only once the containers that must go are gone: a core killed
         before the write leaves the old topology, the retry computes the same hot-add, and the
         removal tolerates the containers already gone. Written first, a kill would leave a retry
         that sees no hot-add and deploys the port into a container never recreated.
@@ -360,23 +459,28 @@ class ContainerlabDriver:
         twin = deployment.twin
         previous = self._directory(twin) / TOPOLOGY
         await self._await_strays(twin, previous, budget, "apply", "deploying")
-        hot_added: list[str] = []
-        if previous.is_file() and not reconfigure:
-            try:
-                diff = clab_changes.changes(
-                    Planned(deployment, {TOPOLOGY: previous.read_bytes()}), Planned(deployment, dict(files)),
-                    platforms, probe_packages)
-            except Exception as e:
-                raise DriverFailed(f"the twin {twin}'s previous topology {previous} cannot be compared: "
-                                   f"{type(e).__name__}: {e}") from e
-            hot_added = [n.node for n in diff.nodes if n.action == "recreated" and "hot_add" in n.reasons]
-        for node in hot_added:
-            await self._remove("apply", twin, node, f"clab-{twin}-{node}",
-                               "since it gains a port its kind cannot add after boot")
-        directory = self._write(twin, files)
-        argv = ["containerlab", "deploy", "-t", str(directory / TOPOLOGY)]
-        await self._run([*argv, "--reconfigure"] if reconfigure else argv, timeout_s=budget, cwd=directory,
-                        log=directory / DEPLOY_LOG)
+        lock = self._deploy_lock()
+        if lock.locked():
+            _log.info("apply %s: another twin's deploy holds the host's deploy lock: waiting for it to end before "
+                      "deploying (D-074)", twin, **logs.fields(twin=twin))
+        async with lock:  # released however this ends: returned, raised or cancelled
+            hot_added: list[str] = []
+            if previous.is_file() and not reconfigure:
+                try:
+                    diff = clab_changes.changes(
+                        Planned(deployment, {TOPOLOGY: previous.read_bytes()}), Planned(deployment, dict(files)),
+                        platforms, probe_packages)
+                except Exception as e:
+                    raise DriverFailed(f"the twin {twin}'s previous topology {previous} cannot be compared: "
+                                       f"{type(e).__name__}: {e}") from e
+                hot_added = [n.node for n in diff.nodes if n.action == "recreated" and "hot_add" in n.reasons]
+            for node in hot_added:
+                await self._remove("apply", twin, node, f"clab-{twin}-{node}",
+                                   "since it gains a port its kind cannot add after boot")
+            directory = self._write(twin, files)
+            argv = ["containerlab", "deploy", "-t", str(directory / TOPOLOGY)]
+            await self._run([*argv, "--reconfigure"] if reconfigure else argv, timeout_s=budget, cwd=directory,
+                            log=directory / DEPLOY_LOG)
 
     async def inspect(self, twin: str) -> Inspection:
         """The twin's containers, by node name, `present` when there is one; else `residue` when
@@ -425,6 +529,9 @@ class ContainerlabDriver:
         nodes its file names (verified-facts.md, 0.81.0): a step whose apply was cut short before
         `applied` leaves the record naming the deployment it ran, and the node its deploy added
         would otherwise hold the management network (D-055).
+
+        It never takes the deploy lock, so it never waits for another twin's deploy: a destroy
+        beside one is D-055's (D-074). Rule 2's deploy is an `apply`, and takes the lock as any does.
 
         A command that fails (the destroy, rule 2's deploy, or the network's removal) raises
         `CommandFailed`, logged at WARNING, and leaves the rest undone: the next destroy finds
@@ -559,6 +666,16 @@ class ContainerlabDriver:
         """The twin's working directory; containerlab makes the lab's own, `clab-<twin>/`, inside it."""
         return self.root / "containerlab" / check_twin_name(twin)
 
+    def _deploy_lock(self) -> asyncio.Lock:
+        """The lock `apply` deploys under (D-074), for the running loop: made at its first use, and
+        made anew when the running loop is not the one it was made on, since asyncio's primitives
+        bind to the first loop that waits on them and the pure tier runs one driver under several
+        loops. The server runs one loop, so it is the one lock of the host's one core (D-024)."""
+        loop = asyncio.get_running_loop()
+        if self._deploying is None or self._deploying[0] is not loop:
+            self._deploying = (loop, asyncio.Lock())
+        return self._deploying[1]
+
     async def _await_strays(self, twin: str, topology: Path, budget: float, operation: str, before: str) -> None:
         """Return once no `containerlab deploy` of `topology` runs, asking `strays` every
         `stray_poll_s`; the wait is logged once, at INFO, naming the `operation` and what it does
@@ -656,13 +773,23 @@ class ContainerlabDriver:
             return False
         return True
 
-    def _memory_available_mib(self) -> int:
-        """The host's `MemAvailable`, in MiB."""
-        for line in self._meminfo.read_text().splitlines():
-            key, _, value = line.partition(":")
-            if key == "MemAvailable":
-                return int(value.split()[0]) // 1024  # the kernel writes kB, which are KiB
-        raise ValueError(f"{self._meminfo} has no MemAvailable")
+
+def _meminfo_mib(meminfo: Path, key: str) -> int:
+    """The `/proc/meminfo` figure `key` (`MemTotal`, `MemAvailable`), in MiB. `DriverFailed` naming the file
+    when it cannot be read, and the key when the file has no such line or its figure is not a count of kB as
+    the kernel writes it; never a value the file holds."""
+    try:
+        text = meminfo.read_text()
+    except (OSError, ValueError) as e:  # a ValueError: UnicodeDecodeError
+        raise DriverFailed(f"{meminfo} cannot be read: {type(e).__name__}") from None
+    for line in text.splitlines():
+        name, _, value = line.partition(":")
+        if name == key:
+            words = value.split()
+            if len(words) != 2 or words[1] != "kB" or not (words[0].isascii() and words[0].isdecimal()):
+                raise DriverFailed(f"{meminfo} gives {key} as no count of kB")
+            return int(words[0]) // 1024  # the kernel writes kB, which are KiB
+    raise DriverFailed(f"{meminfo} has no {key}")
 
 
 def deploy_budget(

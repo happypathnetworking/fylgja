@@ -13,6 +13,7 @@ import pytest
 import yaml
 
 from fylgja_core import blueprint, compiler, deployment, documents, platform_package, probe_package
+from fylgja_core.capacity import Resources
 from fylgja_core.containerlab import plan as clab_plan
 from fylgja_core.driver import Planned, Unplannable
 from fylgja_core.findings import Finding
@@ -83,6 +84,13 @@ def test_the_demand_sums_the_packages_per_node_resources() -> None:
     c, p = planned("three-node-probed")
     assert p.deployment.demand == deployment.Demand(nodes=5, cpu=1.7, memory_mb=3 * 2048 + 2 * 32)
     assert clab_plan.demand(c.manifest, PLATFORMS, PROBES) == p.deployment.demand
+
+
+def test_node_resources_are_each_device_then_each_probes_two_hosts_with_its_packages_resources() -> None:
+    c, _ = planned("three-node-probed")
+    assert clab_plan.node_resources(c.manifest, PLATFORMS, PROBES) == [
+        ("n1", Resources(0.5, 2048)), ("n2", Resources(0.5, 2048)), ("n3", Resources(0.5, 2048)),
+        ("n1-loop-a", Resources(0.1, 32)), ("n1-loop-b", Resources(0.1, 32))]
 
 
 def test_the_deployment_is_valid_names_its_one_file_and_hashes_as_d044_says() -> None:
@@ -218,7 +226,7 @@ def test_a_refusal_names_the_port_and_the_other_interfaces_on_it() -> None:
 
 PURE_IMPORTS = {"__future__", "collections.abc", "dataclasses", "hashlib", "ipaddress", "math", "shlex", "typing",
                 "yaml"}
-MODEL_IMPORTS = {f"fylgja_core.{m}" for m in ("blueprint", "bundle", "containerlab", "deployment", "driver",
+MODEL_IMPORTS = {f"fylgja_core.{m}" for m in ("blueprint", "bundle", "capacity", "containerlab", "deployment", "driver",
                                               "findings", "mapping", "platform_package", "probe_package")}
 
 

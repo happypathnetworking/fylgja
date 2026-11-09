@@ -30,7 +30,7 @@ from conformance.reads import (
     BLUEPRINT,
     IN_APPLY_S,
     RESTART,
-    ROOT,
+    STEPS,
     Expected,
     apply_ended,
     apply_started,
@@ -56,7 +56,6 @@ from fylgja_core import schemas
 
 SKILL = "cf-skill"
 CANCEL = "cf-cancel"
-STEPS = ROOT / "testdata" / "blueprint" / "steps"
 TWO_NODE = STEPS / "two-node.json"
 UNLINKED = STEPS / "three-node-unlinked.json"
 KILL_AT = ("compiled", "admitted", "planned", "applied", "ready", "pushed", "verified")

@@ -35,6 +35,7 @@ from typing import Any, Literal
 import yaml
 
 from fylgja_core import blueprint, bundle, deployment, mapping, probe_package
+from fylgja_core.capacity import Resources
 from fylgja_core.containerlab import CAPABILITIES, NAME
 from fylgja_core.driver import Allocation, Planned, Unplannable
 from fylgja_core.findings import Finding
@@ -172,13 +173,27 @@ def demand(
     manifest: bundle.Manifest, platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
 ) -> deployment.Demand:
     """What the deployment needs: a node per device and per probe host, and the sum of their
-    packages' per-node resources."""
-    devices = [platforms[node.platform].runtime.containerlab.resources for node in manifest.nodes]
-    hosts = [probe_packages[probe.format].runtime.containerlab.resources for probe in manifest.probes for _ in "ab"]
-    resources = [(r.cpu, r.memory_mb) for r in devices] + [(r.cpu, r.memory_mb) for r in hosts]
+    packages' per-node resources (`node_resources`)."""
+    nodes = node_resources(manifest, platforms, probe_packages)
     return deployment.Demand(
-        nodes=len(resources), cpu=math.fsum(cpu for cpu, _ in resources), memory_mb=sum(mb for _, mb in resources)
+        nodes=len(nodes), cpu=math.fsum(r.cpu for _, r in nodes), memory_mb=sum(r.memory_mb for _, r in nodes)
     )
+
+
+def node_resources(
+    manifest: bundle.Manifest, platforms: Mapping[str, PlatformPackage], probe_packages: Mapping[str, ProbePackage]
+) -> list[tuple[str, Resources]]:
+    """Each node of the twin and its package's per-node resources: the devices, then each probe's
+    two hosts. Both containerlab drivers check each against the roomiest host (D-073)."""
+    nodes = [
+        (n.name, Resources(r.cpu, r.memory_mb))
+        for n in manifest.nodes
+        for r in [platforms[n.platform].runtime.containerlab.resources]
+    ]
+    for probe in manifest.probes:
+        r = probe_packages[probe.format].runtime.containerlab.resources
+        nodes += [(host, Resources(r.cpu, r.memory_mb)) for host, _near, _far in blueprint.hosts(probe)]
+    return nodes
 
 
 def deployment_id(driver_name: str, twin: str, bundle_id: str, files: Sequence[deployment.File]) -> str:

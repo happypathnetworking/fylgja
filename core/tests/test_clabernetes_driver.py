@@ -35,6 +35,8 @@ from fakes import FakeDriver, FakeReader, fake_push, fake_ready
 from test_containerlab_driver import apply_hot_add
 
 from fylgja_core import blueprint, clabernetes, compiler, credentials, logs, platform_package, probe_package
+from fylgja_core.bundle import Manifest
+from fylgja_core.capacity import NOTHING, Reading, Resources
 from fylgja_core.clabernetes import changes as clabernetes_changes
 from fylgja_core.clabernetes import plan as clabernetes_plan
 from fylgja_core.clabernetes.driver import (
@@ -56,7 +58,7 @@ from fylgja_core.clabernetes.kube import NODE_LABEL, KubeFailed, Pod, Service
 from fylgja_core.clabernetes.plan import NAMESPACE, POLICY, TOPOLOGY
 from fylgja_core.containerlab import driver as containerlab_driver
 from fylgja_core.credentials import Provider
-from fylgja_core.deployment import Deployment, File
+from fylgja_core.deployment import Demand, Deployment, File
 from fylgja_core.driver import (
     Allocation,
     DriverFailed,
@@ -87,6 +89,8 @@ ENVIRON = {
 NS = "fylgja-twin-t"
 ADMITTED: dict[str, Any] = {"namespace": NS, "controller_namespace": "c9s", "pod_cidr": "10.244.0.0/16",
                             "registries": {"ARISTA_CEOS": "registry.example:5000/lab"}}
+MIXED_DEMAND = {"nodes": 3, "cpu": 1.5, "memory_mb": 5120}
+WITH_DEMAND = {"demand": MIXED_DEMAND}
 TAKEN = ("The namespace fylgja-twin-t exists and is not the twin t's: it lacks the labels fylgja.owner=core and "
          "fylgja.twin=t.")
 
@@ -117,16 +121,30 @@ def driver(fake: FakeKube, provider: Provider | None = None, core_namespace: str
                              sleep=fake.sleep)
 
 
+def hosted() -> FakeKube:
+    """A cluster of three hosts of 8 CPUs and 24026 MiB, a system pod on each asking 0.3 CPU and 460 MiB, in
+    clabernetes' namespace: each host has 7.7 CPUs and 23566 MiB free, the three 70698 MiB."""
+    fake = FakeKube()
+    for host in ("h1", "h2", "h3"):
+        fake.add_node(host, 8.0, 24026)
+        fake.add_pod("c9s", f"system-{host}", host, Resources(0.3, 460))
+    return fake
+
+
 def admit(
     fake: FakeKube,
     *,
     provider: Provider | None = None,
     core_namespace: str | None = None,
     held: Deployment | None = None,
+    reserved: list[Allocation] | None = None,
+    manifest: Manifest | None = None,
+    platforms: Mapping[str, platform_package.PlatformPackage] | None = None,
 ) -> Allocation | Refusal:
     c = compiled("mixed")
-    return asyncio.run(driver(fake, provider, core_namespace).admit(c.manifest, PLATFORMS, PROBES, "t", [],
-                                                                    held=held))
+    return asyncio.run(driver(fake, provider, core_namespace).admit(
+        c.manifest if manifest is None else manifest, PLATFORMS if platforms is None else platforms, PROBES, "t",
+        [] if reserved is None else reserved, held=held))
 
 
 def test_the_driver_is_clabernetes() -> None:
@@ -162,12 +180,12 @@ def test_the_drivers_plan_and_changes_are_the_pure_ones_and_reach_no_cluster() -
 
 
 def test_admit_reserves_the_twins_namespace_and_the_sites_values() -> None:
-    fake = FakeKube()
-    assert admit(fake) == ADMITTED
-    assert fake.calls == [("namespace", NS)]
+    fake = hosted()
+    assert admit(fake) == {**ADMITTED, **WITH_DEMAND}
+    assert fake.calls == [("namespace", NS), ("nodes",), ("all_pods",)]
     # The core's namespace is a member only when the core runs as a pod.
-    assert admit(FakeKube(), core_namespace="fylgja") == {**ADMITTED, "core_namespace": "fylgja"}
-    assert admit(FakeKube(), provider=Provider({})) == {**ADMITTED, "registries": {}}
+    assert admit(hosted(), core_namespace="fylgja") == {**ADMITTED, **WITH_DEMAND, "core_namespace": "fylgja"}
+    assert admit(hosted(), provider=Provider({})) == {**ADMITTED, **WITH_DEMAND, "registries": {}}
 
 
 @pytest.mark.parametrize("labels", [{"fylgja.owner": "core", "fylgja.twin": "u"}, {}, {"fylgja.twin": "t"}],
@@ -185,12 +203,12 @@ def test_a_namespace_of_the_twins_name_that_is_not_the_twins_refuses_it(
 
 @pytest.mark.parametrize("deleting", [False, True], ids=["standing", "deleting"])
 def test_a_namespace_carrying_the_twins_labels_is_the_twins(deleting: bool) -> None:
-    fake = FakeKube()
+    fake = hosted()
     fake.add_namespace(NS, {"fylgja.owner": "core", "fylgja.twin": "t",
                             "pod-security.kubernetes.io/enforce": "privileged"})
     fake.namespaces[NS] = dataclasses.replace(fake.namespaces[NS], deleting=deleting)
     # One still being deleted is the twin's too: apply acts once it is gone.
-    assert admit(fake) == ADMITTED
+    assert admit(fake) == {**ADMITTED, **WITH_DEMAND}
 
 
 OTHER = {"FYLGJA_CREDENTIAL_OTHER_REGISTRY": "registry.example:5000/other",
@@ -204,14 +222,17 @@ def held_on(allocation: Allocation) -> Deployment:
     return clabernetes_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "t", allocation).deployment
 
 
-def test_a_stepping_twin_keeps_its_allocation_and_admit_reaches_no_cluster(caplog: pytest.LogCaptureFixture) -> None:
+def test_a_stepping_twin_keeps_its_allocation_and_admit_reads_the_cluster_for_its_room_alone(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     # The provider holds another registry now too: the twin keeps the registries it was admitted with.
     held_allocation = {**ADMITTED, "registries": {"OTHER": "registry.example:5000/other"}}
-    fake = FakeKube()
+    fake = hosted()
     fake.add_namespace(NS, {})
     with caplog.at_level(logging.INFO, logger="fylgja.clabernetes"):
-        assert admit(fake, provider=Provider({**ENVIRON, **OTHER}), held=held_on(held_allocation)) == held_allocation
-    assert fake.calls == []
+        assert admit(fake, provider=Provider({**ENVIRON, **OTHER}), held=held_on(held_allocation)) == {
+            **held_allocation, **WITH_DEMAND}
+    assert fake.calls == [("nodes",), ("all_pods",)]
     assert f"admit t: held allocation, namespace {NS}" in caplog.messages
 
 
@@ -227,8 +248,8 @@ def test_a_stepping_twin_keeps_its_allocation_and_admit_reaches_no_cluster(caplo
 def test_a_stepping_twins_pull_credential_the_provider_cannot_give_whole_refuses_the_step_reading_no_cluster(
     environ: dict[str, str], rule: str, variable: str,
 ) -> None:
-    # Refused at admission, before the step touches anything; else every apply after would fail.
-    fake = FakeKube()
+    # Refused at admission, before the step touches anything or reads the cluster; else every apply after would fail.
+    fake = hosted()
     answer = admit(fake, provider=Provider(environ), held=held_on(ADMITTED))
     assert isinstance(answer, Refusal)
     assert answer.rule == rule and answer.message.startswith(f"{rule}: ") and variable in answer.message
@@ -248,7 +269,7 @@ def test_admit_logs_what_it_reserved_by_twin_and_never_a_value_of_a_credential(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     with caplog.at_level(logging.DEBUG):
-        admit(FakeKube())
+        admit(hosted())
     assert f"admit t: namespace {NS}; registries ARISTA_CEOS" in caplog.messages
     assert "registry.example" not in caplog.text and "s3cret-value" not in caplog.text
 
@@ -288,8 +309,167 @@ def test_a_registry_key_whose_pull_secret_kubernetes_would_refuse_refuses_the_tw
 def test_a_pull_secret_name_of_253_characters_is_one_kubernetes_accepts() -> None:
     key = "A" * 241
     assert len(clabernetes.pull_secret(key)) == 253
-    answer = admit(FakeKube(), provider=Holding({key: "registry.example:5000/lab"}))
-    assert answer == {**ADMITTED, "registries": {key: "registry.example:5000/lab"}}
+    answer = admit(hosted(), provider=Holding({key: "registry.example:5000/lab"}))
+    assert answer == {**ADMITTED, **WITH_DEMAND, "registries": {key: "registry.example:5000/lab"}}
+
+
+# Admission by capacity (D-073): the cluster's room, read.
+
+FREE = Resources(7.7, 23566)
+"""Each host of `hosted()` has this free: 8 CPUs and 24026 MiB less the system pod's 0.3 and 460."""
+
+
+def reserved_of(twin: str, demand: dict[str, Any]) -> Allocation:
+    return {"namespace": clabernetes.namespace_of(twin), "demand": demand}
+
+
+def reading(fake: FakeKube, reserved: list[Allocation] | None = None) -> Reading:
+    """`capacity(reserved)` of a driver over `fake`, nothing reserved by default."""
+    return asyncio.run(driver(fake).capacity([] if reserved is None else reserved))
+
+
+def test_capacity_reads_each_hosts_allocatable_less_its_pods_requests() -> None:
+    fake = hosted()
+    answered = reading(fake)
+    assert [h.name for h in answered.hosts] == ["h1", "h2", "h3"]
+    assert answered.hosts[0].total == Resources(8.0, 24026)
+    assert answered.hosts[0].free.memory_mb == 23566 and answered.hosts[0].free.cpu == pytest.approx(7.7)
+    assert answered.free.memory_mb == 70698
+    assert answered.pending == NOTHING
+    assert fake.calls == [("nodes",), ("all_pods",)]
+
+
+def test_capacity_counts_the_reserved_it_is_given_and_nothing_an_admission_left() -> None:
+    # A standalone read, the API's, passes every twin record's allocation: so it counts a twin before any admission
+    # since a restart, and one an admission was given and that has gone since counts no more.
+    u = reserved_of("u", {"nodes": 2, "cpu": 1.0, "memory_mb": 4096})
+    d = driver(hosted())
+    assert asyncio.run(d.capacity([u])).pending == Demand(nodes=2, cpu=1.0, memory_mb=4096)
+    asyncio.run(d.admit(compiled("mixed").manifest, PLATFORMS, PROBES, "t", [u]))
+    assert asyncio.run(d.capacity([])).pending == NOTHING
+
+
+def test_a_twins_pods_hold_its_demand_and_the_rest_is_pending() -> None:
+    fake = hosted()
+    fake.add_namespace(clabernetes.namespace_of("u"), {"fylgja.owner": "core", "fylgja.twin": "u"})
+    c = compiled("steps/two-node")
+    p = clabernetes_plan.plan(c.manifest, c.id, PLATFORMS, PROBES, "u", {**BARE, "namespace": "fylgja-twin-u"})
+    asyncio.run(driver(fake).apply(p.deployment, p.files, PLATFORMS, PROBES))
+    assert [(pod.host, pod.requests) for pod in asyncio.run(fake.pods("fylgja-twin-u", {}))] == [
+        ("h1", Resources(0.5, 2048)), ("h2", Resources(0.5, 2048))]
+    answered = reading(fake, [reserved_of("u", {"nodes": 3, "cpu": 1.5, "memory_mb": 6144})])
+    assert answered.pending == Demand(nodes=1, cpu=0.5, memory_mb=2048)
+    assert answered.hosts[0].free.memory_mb == 23566 - 2048
+    assert answered.hosts[2].free == FREE
+
+
+def test_a_reserved_twins_unbound_pods_are_pending_and_take_no_hosts_room() -> None:
+    # Each unit of a twin's demand is counted once: as a bound pod's request, or as pending.
+    fake = FakeKube()
+    fake.add_node("h1", 8.0, 24026)
+    owned = {"fylgja.owner": "core", "fylgja.twin": "u"}
+    for name in ("n1", "n2"):
+        fake.add_pod(clabernetes.namespace_of("u"), name, None, Resources(0.5, 2048), owned)
+    answered = reading(fake, [reserved_of("u", {"nodes": 2, "cpu": 1.0, "memory_mb": 4096})])
+    assert answered.pending == Demand(nodes=2, cpu=1.0, memory_mb=4096)
+    assert answered.hosts[0].free == Resources(8.0, 24026)
+
+
+def test_a_reserved_allocation_whose_demand_will_not_read_counts_as_nothing_and_is_warned_of_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    d, c = driver(hosted()), compiled("mixed")
+    garbled = [reserved_of("u", {"nodes": "x"})]
+    with caplog.at_level(logging.INFO, logger="fylgja.clabernetes"):
+        assert not isinstance(asyncio.run(d.admit(c.manifest, PLATFORMS, PROBES, "t", garbled)), Refusal)
+        assert asyncio.run(d.capacity(garbled)).pending == NOTHING
+    warned = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warned) == 1 and "u" in warned[0].split()
+
+
+def test_a_pod_that_ended_takes_no_room() -> None:
+    fake = hosted()
+    fake.add_pod("elsewhere", "done", "h1", Resources(1.0, 1024))
+    fake._pods[("elsewhere", "done")] = dataclasses.replace(fake._pods[("elsewhere", "done")], phase="Succeeded",
+                                                              container_running=False, ended=True)
+    h1 = reading(fake).hosts[0]
+    assert h1.free.memory_mb == 23566 and h1.free.cpu == pytest.approx(7.7)
+
+
+def bundle_of_36() -> Manifest:
+    m = compiled("three-node").manifest
+    nodes = tuple(dataclasses.replace(m.nodes[0], name=f"n{k:02d}") for k in range(1, 37))
+    return dataclasses.replace(m, nodes=nodes, mapping=(), links=(), probes=())
+
+
+def test_admit_refuses_a_twin_the_cluster_cannot_fit_with_the_shortfalls() -> None:
+    # 36 SR Linux nodes of 0.5 CPU and 2048 MiB: 18 CPUs and 73728 MiB, to 23.1 CPUs and 70698 MiB free.
+    answer = admit(hosted(), manifest=bundle_of_36())
+    assert answer == Refusal("admission.capacity", "The twin needs 73728 MiB of memory, and the cluster has "
+                                                   "70698 MiB free with 0 MiB pending.")
+
+
+def test_a_node_larger_than_the_roomiest_host_is_refused_by_the_node_sentence() -> None:
+    big = dataclasses.replace(PLATFORMS["chassisos"], runtime=dataclasses.replace(
+        PLATFORMS["chassisos"].runtime, containerlab=dataclasses.replace(
+            PLATFORMS["chassisos"].runtime.containerlab,
+            resources=dataclasses.replace(PLATFORMS["chassisos"].runtime.containerlab.resources, memory_mb=30000))))
+    answer = admit(hosted(), manifest=compiled("lossy").manifest, platforms={**PLATFORMS, "chassisos": big})
+    assert isinstance(answer, Refusal) and answer.rule == "admission.capacity"
+    assert "The node c1 needs 1 CPUs and 30000 MiB, and the roomiest host, h1, has 7.7 CPUs and 23566 MiB free." in (
+        answer.message)
+    assert "The node c2 needs " in answer.message
+
+
+def test_admit_writes_the_demand_and_a_step_refreshes_it_over_the_held_allocation() -> None:
+    created = admit(hosted())
+    assert isinstance(created, dict) and created["demand"] == {"nodes": 3, "cpu": 1.5, "memory_mb": 5120}
+    held = held_on(ADMITTED | {"demand": {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}})
+    fake = hosted()
+    c = compiled("steps/two-node")
+    stepped = asyncio.run(driver(fake).admit(c.manifest, PLATFORMS, PROBES, "t", [], held=held))
+    assert stepped == {**held.allocation, "demand": {"nodes": 2, "cpu": 1.0, "memory_mb": 4096}}
+    assert fake.calls == [("nodes",), ("all_pods",)]
+
+
+def test_a_step_that_adds_more_than_the_cluster_has_free_is_refused_by_what_it_adds() -> None:
+    held = dataclasses.replace(held_on(ADMITTED), demand=NOTHING)
+    answer = asyncio.run(driver(hosted()).admit(bundle_of_36(), PLATFORMS, PROBES, "t", [], held=held))
+    assert isinstance(answer, Refusal) and answer.rule == "admission.capacity"
+    assert answer.message.startswith("The step adds 73728 MiB of memory, and the cluster has 70698 MiB free")
+
+
+@pytest.mark.parametrize("call", ["nodes", "all_pods"])
+def test_a_failure_reading_the_cluster_is_a_driver_failure(call: str) -> None:
+    fake = hosted()
+    fake.fail_next(call)
+    with pytest.raises(DriverFailed):
+        reading(fake)
+    fake.fail_next(call)
+    with pytest.raises(DriverFailed):
+        admit(fake)
+
+
+def test_admit_logs_the_reading_at_debug_and_no_host_name_at_info(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.DEBUG, logger="fylgja.clabernetes"):
+        admit(hosted())
+    assert any(m.startswith("capacity: 3 hosts, free ") for m in caplog.messages)
+    assert not any("h1" in r.getMessage() for r in caplog.records if r.levelno >= logging.INFO)
+
+
+def test_an_allocation_without_a_demand_counts_as_nothing_and_is_logged_once_a_twin(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = hosted()
+    d = driver(fake)
+    c = compiled("mixed")
+    old = [{"namespace": "fylgja-twin-old"}]
+    with caplog.at_level(logging.INFO, logger="fylgja.clabernetes"):
+        asyncio.run(d.admit(c.manifest, PLATFORMS, PROBES, "t", old))
+        asyncio.run(d.capacity(old))
+        asyncio.run(d.capacity(old))
+    assert asyncio.run(d.capacity(old)).pending == NOTHING
+    assert len([m for m in caplog.messages if "records no demand" in m]) == 1
 
 
 # apply.
@@ -1858,7 +2038,7 @@ def test_through_the_loop_a_container_ended_in_its_pod_ends_restored_at_its_repl
     `test_a_pods_renewal_is_made_before_its_twin_is_named`'s."""
     environ = {**ENVIRON, "FYLGJA_CREDENTIAL_SRLINUX_USERNAME": "admin", "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD": "pw"}
     provider = Provider(environ)
-    fake = FakeKube()
+    fake = hosted()
     d = ClabernetesDriver(fake, provider, controller_namespace="c9s", pod_cidr="10.244.0.0/16", clock=fake.clock,
                           sleep=fake.sleep, backoff=lambda _: 0.0)
     book = AddressBook()

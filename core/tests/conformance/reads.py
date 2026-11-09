@@ -14,6 +14,7 @@ follows (`stepped_until`), and its resume held to the same run (`assert_resumed`
 from __future__ import annotations
 
 import functools
+import itertools
 import json
 import re
 import time
@@ -44,6 +45,8 @@ does not set, so only a push puts it there."""
 MIXED = ROOT / "testdata" / "blueprint" / "mixed.json"
 MIXED_NODES = ("e1", "e2", "s1")
 """`MIXED`'s nodes: `e1` and `e2` run EOS."""
+STEPS = ROOT / "testdata" / "blueprint" / "steps"
+"""The step fixtures (testdata/blueprint/steps/README.md)."""
 UNMADE = "cf-none"
 """The twin `needs_ceos` dry-runs a create of: never made, so not one of `TWINS`."""
 RESTART = "step.restart.required"
@@ -51,9 +54,17 @@ RESTART = "step.restart.required"
 RELINK = "step.relink.unsupported"
 """A step's refusal for a change of links the driver cannot make on a running twin."""
 TWINS = ("cf-life", "cf-ckill", "cf-akill", "cf-dkill", "cf-wkill", "cf-del", "cf-step", "cf-eos", "cf-skill",
-         "cf-cancel", "cf-restore", "cf-iso-a", "cf-iso-b")
+         "cf-cancel", "cf-restore", "cf-iso-a", "cf-iso-b", "cf-many-1", "cf-many-2", "cf-many-3", "cf-many-4",
+         "cf-many-5", "cf-big")
 """Every twin the suite makes, none a prefix of another: each is removed at the session's end
 (`Harness.close`)."""
+MANY = "cf-many-"
+"""The many-twins scenario's twins are `MANY` and a number, 1 to `Harness.many()`."""
+BIG = "cf-big"
+"""The twin of `BIG_NODES` nodes, which no runtime has room for."""
+BIG_NODES = 40
+"""The nodes of `big_blueprint`: SR Linux requests 0.5 CPU and 2048 MiB a node, so twenty CPUs and
+eighty GiB in all, more than either runtime's room, and each node alone fits a host."""
 DEADLINE_S = 600.0
 """Every wait's budget: a create of three SR Linux nodes takes about 60-90 s."""
 QUIET_S = 120.0
@@ -333,6 +344,24 @@ def devices(fixture: Path) -> frozenset[str]:
     hosts."""
     doc = json.loads(fixture.read_text())
     return frozenset(device["name"] for device in doc["network"]["devices"])
+
+
+def big_blueprint(path: Path) -> Path:
+    """The `three-node` fixture's document with its devices replaced by `BIG_NODES` SR Linux
+    devices `d01` ... without configuration, linked in a chain (`dNN:ethernet-1/1` to
+    `dMM:ethernet-1/2` of the next), and no probe; written as JSON to `path`, which is returned."""
+    doc = json.loads(BLUEPRINT.read_text())
+    names = [f"d{n:02d}" for n in range(1, BIG_NODES + 1)]
+    ports = [{"name": name, "mgmt_only": name == "mgmt0", "enabled": True}
+             for name in ("ethernet-1/1", "ethernet-1/2", "mgmt0")]
+    doc["network"]["devices"] = [{"name": name, "platform": "nokia_srlinux", "interfaces": ports} for name in names]
+    doc["network"]["links"] = [
+        {"a": {"device": a, "interface": "ethernet-1/1"}, "b": {"device": b, "interface": "ethernet-1/2"}}
+        for a, b in itertools.pairwise(names)
+    ]
+    doc["probes"] = []
+    path.write_text(json.dumps(doc, indent=1) + "\n")
+    return path
 
 
 def twin_nodes(fixture: Path) -> frozenset[str]:

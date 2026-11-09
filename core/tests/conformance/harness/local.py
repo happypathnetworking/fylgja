@@ -33,6 +33,7 @@ from live import host
 
 from conformance.harness import RESYNC_S, Mark, Resume, _Api
 from conformance.reads import ROOT, remove, wait_for
+from fylgja_core.capacity import LOCAL_HOST
 from fylgja_core.containerlab import cli as clab_cli
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.server import auth
@@ -293,6 +294,14 @@ class LocalHarness(_Api):
             node, started_at = line.split()
             found[node] = started_at
         return found
+
+    def hosts(self, twin: str) -> dict[str, str]:
+        """Each node `nodes(twin)` lists on the one host the driver runs on."""
+        return dict.fromkeys(self.nodes(twin), LOCAL_HOST)
+
+    def many(self) -> int:
+        """Three twins of three nodes: nine SR Linux nodes within the local host's room."""
+        return 3
 
     def twins(self) -> set[str]:
         """The `fylgja.twin` label of every container on the host, which each of the driver's

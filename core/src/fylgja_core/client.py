@@ -282,6 +282,10 @@ class Client:
         drivers: list[dict[str, Any]] = _member("GET", "/v1/drivers", self._call("GET", "/v1/drivers"), "drivers", list)
         return drivers
 
+    def capacity(self) -> dict[str, Any]:
+        """The default driver's reading of its runtime's room, whole; a 503 `capacity.unread` is a problem."""
+        return self._call("GET", "/v1/capacity")
+
     # twins
 
     def list_twins(self) -> list[dict[str, Any]]:

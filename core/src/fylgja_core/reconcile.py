@@ -35,7 +35,8 @@ and the record's bundle, blueprint, deployment, nodes and `phase` stay the runni
   those phases ends the step `failed`, `last_step` `rejected`, Ready and Stepping False for its
   rule, the twin up and not diverged: no apply began. Otherwise `last_step` names the step
   `running` from the twin's bundle to it, Stepping is True and Ready False for `twin.stepping`;
-- `admitted`: the driver's `admit` with the deployment the twin runs, whose allocation it keeps;
+- `admitted`: the driver's `admit` with the deployment the twin runs, whose allocation it keeps,
+  and the record gets its answer, that allocation with the target's `demand` (D-073);
 - `planned`: the target's pure `plan` with that allocation, the deployment filed, and the
   driver's `changes` from the running deployment to it. Then, before anything is touched, the
   refusals: a diverged twin (`step.twin.diverged`), a change the driver cannot make
@@ -466,7 +467,7 @@ class Reconciler:
         probe_packages: Mapping[str, ProbePackage],
         credentials: Provider,
         *,
-        workers: int = 4,
+        workers: int = 8,
         resync_s: float = 300.0,
         pusher: PushFn = push.push,
         readiness: ReadyFn = await_transport,
@@ -1722,7 +1723,8 @@ class Reconciler:
 
     async def _admit(self, p: _Pass) -> None:
         """`admitted`: the driver's `admit`; a step's with the deployment the twin runs, whose
-        allocation the driver keeps, checking only the demand the target adds (D-049)."""
+        allocation the driver keeps, checking only the demand the target adds (D-049). A step's
+        allocation is recorded for its `demand` (D-073), and is otherwise the one the twin holds."""
         async with self._step(p, "admit"), self._admission:
             manifest, reserved = self._manifest(p), self._reserved(p.name)
             held = self._held(p)[0] if p.run.operation == "step" else None
@@ -1731,10 +1733,7 @@ class Reconciler:
             if isinstance(answer, Refusal):
                 raise _Failed("rejected", answer.rule, [Finding(rule=answer.rule, severity="error", object=p.name,
                                                                 message=answer.message)])
-            if held is not None:  # the allocation is the one the twin holds
-                self._recorded(p, "admitted")
-            else:
-                self._recorded(p, "admitted", allocation=dict(answer))
+            self._recorded(p, "admitted", allocation=dict(answer))
 
     async def _plan(self, p: _Pass) -> None:
         if p.run.operation == "step":

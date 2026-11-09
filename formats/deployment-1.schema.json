@@ -37,7 +37,7 @@
     "allocation": {
       "type": "object",
       "minProperties": 1,
-      "description": "What admit() reserved for this twin and recorded in its twin record by compare-and-set, passed to the pure plan as an input (D-017): containerlab {lab, mgmt_subnet}, two labs on one host needing disjoint subnets; clabernetes {namespace, core_namespace, controller_namespace, pod_cidr, registries}: the twin's namespace and what the site decides that the plan writes, the core's namespace absent off the cluster, registries mapping each pull credential's key to its image prefix (D-057); hardware {reservation, devices}. Its shape is the driver's; it is not hashed itself, and reaches the id through the files it shapes (D-044).",
+      "description": "What admit() reserved for this twin and recorded in its twin record by compare-and-set, passed to the pure plan as an input (D-017): containerlab {lab, mgmt_subnet, demand}, two labs on one host needing disjoint subnets; clabernetes {namespace, core_namespace, controller_namespace, pod_cidr, registries, demand}: the twin's namespace and what the site decides that the plan writes, the core's namespace absent off the cluster, registries mapping each pull credential's key to its image prefix (D-057); hardware {reservation, devices}. demand {nodes, cpu, memory_mb} is what admit reserved of the runtime's room, refreshed by a step to its target's (D-073). Its shape is the driver's; it is not hashed itself, and reaches the id through the files it shapes (D-044).",
       "additionalProperties": {
         "type": [
           "string",

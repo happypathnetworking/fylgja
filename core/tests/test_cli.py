@@ -23,6 +23,7 @@ from fake_api import (
     BLUEPRINT_ID,
     BUNDLE,
     BUNDLE_ID,
+    CAPACITY,
     COMPILE_RESULT,
     DESTROY_RUN_ID,
     ENDED_AT,
@@ -368,6 +369,34 @@ def test_twin_list_renders_a_line_per_twin_and_json_the_records(capsys: pytest.C
     assert all(list(schemas.validator("twin-record-1").iter_errors(doc)) == [] for doc in r.json())
     api.on("GET", "/v1/twins", ok({"twins": []}))
     assert fylgja(capsys, api, "twin", "list").lines() == ["no twins"]
+
+
+# capacity show.
+
+
+def test_capacity_show_renders_a_line_per_host_then_pending_and_twins(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("GET", "/v1/capacity", ok(CAPACITY))
+    r = fylgja(capsys, api, "capacity", "show")
+    assert (r.code, r.lines()) == (0, [
+        "host: cpu 10 of 10 free, memory 25907 of 31065 MiB free",
+        "pending: 0 nodes, 0 CPU, 0 MiB",
+        "twins: 0",
+    ])
+    r = fylgja(capsys, api, "capacity", "show", "--json")
+    assert (r.code, r.json()) == (0, CAPACITY)
+
+
+def test_capacity_show_with_no_host_prints_pending_and_twins_alone(capsys: pytest.CaptureFixture[str]) -> None:
+    doc = {**CAPACITY, "hosts": [], "pending": {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}, "twins": 2}
+    api = FakeAPI().on("GET", "/v1/capacity", ok(doc))
+    r = fylgja(capsys, api, "capacity", "show")
+    assert (r.code, r.lines()) == (0, ["pending: 3 nodes, 1.5 CPU, 6144 MiB", "twins: 2"])
+
+
+def test_capacity_show_on_a_503_exits_2_with_the_problems_lines(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI().on("GET", "/v1/capacity", refuse(503, "capacity.unread", "The runtime cannot be read."))
+    r = fylgja(capsys, api, "capacity", "show")
+    assert (r.code, r.out, r.err) == (2, "", "503 capacity.unread: The runtime cannot be read.\n")
 
 
 # twin create.

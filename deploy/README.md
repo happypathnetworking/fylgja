@@ -23,7 +23,9 @@ it.
 ([SECURITY.md](../SECURITY.md)). The ClusterRole holds what the clabernetes driver does to a
 twin, each verb one its calls were read to need from inside a pod under this account
 ([verified-facts.md](../design/verified-facts.md)): its namespace made, read, changed and
-deleted; its Secrets, NetworkPolicy and Topology made and changed by server-side apply, which asks
+deleted; the cluster's nodes read and listed, for the room admission by capacity reads
+([D-073](../design/decisions.md#d-073)); its Secrets, NetworkPolicy and Topology made and changed by
+server-side apply, which asks
 `create` beside `patch`, and deleted with the namespace; its Topology read; its Services listed
 and patched; its pods listed, watched and deleted; and `get` and `create` on `pods/exec`, both of
 which an exec's WebSocket handshake asks. `watch` on pods is cluster-wide because the driver's

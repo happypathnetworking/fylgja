@@ -24,6 +24,7 @@ from fake_api import (
     BLUEPRINT_ID,
     BUNDLE,
     BUNDLE_ID,
+    CAPACITY,
     COMPILE_RESULT,
     DRIVERS,
     EVENTS,
@@ -51,7 +52,7 @@ from fake_api import (
     watch,
 )
 
-from fylgja_core import documents, drivers
+from fylgja_core import documents, drivers, schemas
 from fylgja_core.client import (
     EVENT_STREAM,
     JSON_TYPES,
@@ -286,6 +287,20 @@ def test_reads_of_a_blueprint_a_bundle_and_the_drivers() -> None:
     assert json.loads(api.last("POST", "/v1/bundles").content) == {"blueprint_id": BLUEPRINT_ID}
     assert c.get_bundle(BUNDLE_ID) == BUNDLE
     assert c.list_drivers() == DRIVERS["drivers"]
+
+
+def test_reads_the_capacity() -> None:
+    api = FakeAPI().on("GET", "/v1/capacity", ok(CAPACITY))
+    doc = connect(api).capacity()
+    assert doc == CAPACITY
+    assert list(schemas.api_validator("Capacity").iter_errors(doc)) == []
+
+
+def test_a_capacity_read_the_server_refuses_is_a_problem_error() -> None:
+    api = FakeAPI().on("GET", "/v1/capacity", refuse(503, "capacity.unread", "The runtime cannot be read."))
+    with pytest.raises(ProblemError) as e:
+        connect(api).capacity()
+    assert (e.value.status, e.value.problem.rule) == (503, "capacity.unread")
 
 
 def test_the_canned_drivers_declare_what_each_real_driver_declares() -> None:

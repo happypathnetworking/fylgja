@@ -7,18 +7,22 @@ meets it in a blueprint's `source` or in these documents. See also
 
 **Admission** — The check that a twin fits before anything is applied. `admit` reserves its
 allocation, and the deployment's *demand* (runtime nodes, and the sums of the packages'
-per-node CPU and memory) is compared with the driver's free capacity. A twin that does not
-fit is refused with rule `admission.capacity` ([D-019](../design/decisions.md#d-019)).
+per-node CPU and memory) is compared with the runtime's free room as the driver reads it at
+`admit`, less the demand of twins admitted whose nodes are not yet up
+([D-073](../design/decisions.md#d-073)). A twin that does not fit is refused with rule
+`admission.capacity` ([D-019](../design/decisions.md#d-019)). The room is read by
+`GET /v1/capacity` and `fylgja-core capacity show` ([D-076](../design/decisions.md#d-076)).
 
 **`admit`** — The driver call that reserves what a twin is bound to (a lab name and
 management subnet, a namespace, a device reservation) and records it in the twin record by
 *compare-and-set*, or refuses with the reason ([D-017](../design/decisions.md#d-017)).
 
-**Allocation** — What `admit` reserved for one twin: `{lab, mgmt_subnet}` on containerlab,
-`{namespace, core_namespace, controller_namespace, pod_cidr, registries}` on clabernetes,
-`{reservation, devices}` on hardware; clabernetes' `registries` maps a *pull credential*'s
-key (its name as its variables write it) to its image prefix. `plan` takes it as an input,
-and `destroy` releases it.
+**Allocation** — What `admit` reserved for one twin: `{lab, mgmt_subnet, demand}` on
+containerlab, `{namespace, core_namespace, controller_namespace, pod_cidr, registries, demand}`
+on clabernetes, `{reservation, devices}` on hardware; clabernetes' `registries` maps a *pull
+credential*'s key (its name as its variables write it) to its image prefix, and `demand`
+(`{nodes, cpu, memory_mb}`) is the room the twin reserved, a step's refreshed to the target's
+([D-073](../design/decisions.md#d-073)). `plan` takes it as an input, and `destroy` releases it.
 
 **API 1** — The core's HTTP interface and the only way a client reaches it: resources under
 `/v1/`, every long operation a *run*, verdicts as findings and refusals as problem

@@ -42,6 +42,7 @@ from conformance.reads import (
     NODES,
     RESTART,
     ROOT,
+    STEPS,
     addresses,
     assert_settled_ready,
     created,
@@ -60,7 +61,6 @@ from fylgja_core.push import Unreachable
 
 STEP = "cf-step"
 EOS_TWIN = "cf-eos"
-STEPS = ROOT / "testdata" / "blueprint" / "steps"
 UNLINKED = STEPS / "three-node-unlinked.json"
 DISABLED = STEPS / "three-node-n1-disabled.json"
 UNMANAGED = ROOT / "testdata" / "blueprint" / "three-node-unmanaged.json"

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import re
 import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -32,12 +33,14 @@ P2 = "/interface[name=ethernet-1/1]/state"
 
 @pytest.fixture(autouse=True)
 def reads_end() -> Iterator[None]:
-    """Every test's read threads end with it: a node still being read would be unreadable to the next test."""
+    """Every test's read threads end with it, and their pools: a node still being read would be
+    unreadable to the next test, and a pool kept would keep its bound."""
     yield
     deadline = time.monotonic() + 10
-    while gnmi._READING and time.monotonic() < deadline:
+    while (gnmi._READING or gnmi.pools()) and time.monotonic() < deadline:
         time.sleep(0.01)
     assert not gnmi._READING, "a read thread outlived its test"
+    assert not gnmi.pools(), "a pool outlived its test"
 
 
 class FakeClient:
@@ -98,6 +101,25 @@ def test_updates_at_no_path_asked_answer_nothing_whatever_their_count(monkeypatc
 def test_get_joins_the_notification_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeClient(notification(("information", 1), ("interface[name=ethernet-1/1]/state", 2), prefix="system"))
     assert read(fake, monkeypatch) == {P1: 1}
+
+
+def test_a_read_thread_that_never_started_frees_its_slot_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeClient(notification((P1, 1)))
+    monkeypatch.setattr(gnmi, "gNMIclient", fake.factory)
+    start = threading.Thread.start
+
+    def refuse(self: threading.Thread) -> None:
+        raise RuntimeError("can't start new thread")
+
+    async def reads() -> dict[str, Any]:
+        monkeypatch.setattr(threading.Thread, "start", refuse)
+        with pytest.raises(RuntimeError, match="can't start new thread"):  # not `Unreadable`
+            await gnmi.get("10.0.0.5", SRLINUX, CRED, [P1])
+        assert gnmi.pools() == {} and not gnmi._READING
+        monkeypatch.setattr(threading.Thread, "start", start)
+        return await gnmi.get("10.0.0.5", SRLINUX, CRED, [P1])  # the slot was freed: a thread, an answer
+
+    assert asyncio.run(reads()) == {P1: 1}
 
 
 def test_get_leaves_an_unreported_path_out(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -409,37 +431,135 @@ def test_a_node_whose_last_read_still_runs_is_unreadable_at_once_until_that_read
     assert asyncio.run(gnmi.get("10.0.0.5", SRLINUX, CRED, [P1], timeout_s=1)) == {P1: 1}
 
 
-def test_a_read_finding_every_thread_busy_waits_out_its_budget_and_a_returned_read_frees_its_thread(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+Read = Callable[..., Awaitable[dict[str, Any]]]
+
+
+def every_thread_busy(monkeypatch: pytest.MonkeyPatch, read: Read) -> dict[str, int]:
+    """A pool of two threads, both held by nodes that never answer, each read through `read`: a
+    third node's read waits out its budget unread, and reads once their threads return. The
+    pools as the unread read left them."""
     stuck, answering = StuckClient(), FakeClient(notification((P1, 1)))
 
     def factory(**kwargs: Any) -> FakeClient:
         return (answering if kwargs["target"][0] == "10.0.0.7" else stuck).factory(**kwargs)
 
     monkeypatch.setattr(gnmi, "gNMIclient", factory)
-    monkeypatch.setattr(gnmi, "_SLOTS", threading.BoundedSemaphore(2))
+    monkeypatch.setattr(gnmi, "READ_THREADS", 2)
 
-    async def reads() -> float:
+    async def reads() -> tuple[float, dict[str, int]]:
         for address in ("10.0.0.5", "10.0.0.6"):  # both threads held by nodes that never answer
             with pytest.raises(gnmi.Unreadable, match="TimeoutError"):
-                await gnmi.get(address, SRLINUX, CRED, [P1], timeout_s=0.05)
+                await read(address, SRLINUX, CRED, [P1], timeout_s=0.05)
         start = time.monotonic()
         busy = re.escape("10.0.0.7:57400 unreadable over gNMI: no read thread free")
         with pytest.raises(gnmi.Unreadable, match=busy):
-            await gnmi.get("10.0.0.7", SRLINUX, CRED, [P1], timeout_s=0.2)
-        return time.monotonic() - start
+            await read("10.0.0.7", SRLINUX, CRED, [P1], timeout_s=0.2)
+        return time.monotonic() - start, gnmi.pools()
 
     try:
-        assert 0.2 <= asyncio.run(reads()) < 1
+        took, seen = asyncio.run(reads())
+        assert 0.2 <= took < 1
         assert "10.0.0.7" not in gnmi._READING  # a read that never had a thread holds no node
     finally:
         stuck.release.set()
 
     async def again() -> dict[str, Any]:  # the stuck reads return: their threads are free again
-        return await gnmi.get("10.0.0.7", SRLINUX, CRED, [P1], timeout_s=2)
+        return await read("10.0.0.7", SRLINUX, CRED, [P1], timeout_s=2)
 
     assert asyncio.run(again()) == {P1: 1}
+    return seen
+
+
+def test_a_read_finding_every_thread_busy_waits_out_its_budget_and_a_returned_read_frees_its_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The two abandoned reads' threads still hold their slots; the unread one holds none.
+    assert every_thread_busy(monkeypatch, functools.partial(gnmi.get, pool="a")) == {"a": 2}
+
+
+def test_the_unnamed_pool_is_one_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert every_thread_busy(monkeypatch, gnmi.get) == {"": 2}
+
+
+def gone(pool: str) -> bool:
+    """Whether `pool` is dropped within 5 s, its threads returned."""
+    deadline = time.monotonic() + 5
+    while pool in gnmi.pools() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return pool not in gnmi.pools()
+
+
+def test_a_twins_busy_threads_do_not_make_another_twins_node_unread(monkeypatch: pytest.MonkeyPatch) -> None:
+    stuck, answering = StuckClient(), FakeClient(notification((P1, 1)))
+
+    def factory(**kwargs: Any) -> FakeClient:
+        return (answering if kwargs["target"][0] == "10.0.0.7" else stuck).factory(**kwargs)
+
+    monkeypatch.setattr(gnmi, "gNMIclient", factory)
+    monkeypatch.setattr(gnmi, "READ_THREADS", 2)
+
+    async def reads() -> tuple[dict[str, Any], float, dict[str, int]]:
+        for address in ("10.0.0.5", "10.0.0.6"):  # both of a's threads held by nodes that never answer
+            with pytest.raises(gnmi.Unreadable, match="TimeoutError"):
+                await gnmi.get(address, SRLINUX, CRED, [P1], timeout_s=0.05, pool="a")
+        start = time.monotonic()
+        answer = await gnmi.get("10.0.0.7", SRLINUX, CRED, [P1], timeout_s=1, pool="b")
+        return answer, time.monotonic() - start, gnmi.pools()
+
+    try:
+        answer, took, seen = asyncio.run(reads())
+        assert answer == {P1: 1} and took < 0.1
+        # a's threads still run, each holding its slot; b's read has returned, and b is dropped.
+        assert seen == {"a": 2} and sorted(gnmi._READING) == ["10.0.0.5", "10.0.0.6"]
+    finally:
+        stuck.release.set()
+    assert gone("a") and gnmi.pools() == {}
+
+
+class SeeingClient(FakeClient):
+    """A `FakeClient` that notes the pools as each Get finds them."""
+
+    def __init__(self, reply: dict[str, Any]) -> None:
+        super().__init__(reply)
+        self.seen: list[dict[str, int]] = []
+
+    def get(self, **kwargs: Any) -> dict[str, Any]:
+        self.seen.append(gnmi.pools())
+        return super().get(**kwargs)
+
+
+def test_a_pool_is_dropped_when_idle_and_made_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    seeing = SeeingClient(notification((P1, 1)))
+    monkeypatch.setattr(gnmi, "gNMIclient", seeing.factory)
+    for _ in range(2):
+        assert asyncio.run(gnmi.get("10.0.0.5", SRLINUX, CRED, [P1], timeout_s=1, pool="a")) == {P1: 1}
+        assert "a" not in gnmi.pools()  # its thread returned, and no read waits on it
+    assert seeing.seen == [{"a": 1}, {"a": 1}]  # made on first use, and again once dropped
+
+
+def test_a_read_cancelled_while_waiting_leaves_the_pool_consistent(monkeypatch: pytest.MonkeyPatch) -> None:
+    stuck = StuckClient()
+    monkeypatch.setattr(gnmi, "gNMIclient", stuck.factory)
+    monkeypatch.setattr(gnmi, "READ_THREADS", 2)
+
+    async def reads() -> tuple[dict[str, int], dict[str, int]]:
+        for address in ("10.0.0.5", "10.0.0.6"):  # both of a's threads held by nodes that never answer
+            with pytest.raises(gnmi.Unreadable, match="TimeoutError"):
+                await gnmi.get(address, SRLINUX, CRED, [P1], timeout_s=0.05, pool="a")
+        waiting = asyncio.ensure_future(gnmi.get("10.0.0.7", SRLINUX, CRED, [P1], timeout_s=5, pool="a"))
+        await asyncio.sleep(0.01)
+        during = gnmi.pools()
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(waiting, 0.01)  # cancelled while it waits for a slot
+        return during, gnmi.pools()
+
+    try:
+        during, after = asyncio.run(reads())
+        assert during == {"a": 3}  # the two threads, and the read waiting for a slot
+        assert after == {"a": 2} and "10.0.0.7" not in gnmi._READING
+    finally:
+        stuck.release.set()
+    assert gone("a") and gnmi.pools() == {}
 
 
 EXITS = """

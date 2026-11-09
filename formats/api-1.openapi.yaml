@@ -226,6 +226,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /v1/capacity:
+    get:
+      tags: [drivers]
+      operationId: getCapacity
+      summary: The running driver's reading of its runtime's room, so a client can look before it asks.
+      description: >-
+        The default driver's reading, taken now and outside admission: advisory, never a reservation, so a
+        create the reading seemed to fit can still be refused at admission (D-076).
+      responses:
+        "200":
+          description: The reading.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capacity" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /v1/twins:
     get:
       tags: [twins]
@@ -604,6 +622,11 @@ components:
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
+    Unavailable:
+      description: The running driver could not read its runtime (capacity.unread).
+      content:
+        application/problem+json:
+          schema: { $ref: "problem-1.schema.json" }
     Unprocessable:
       description: >-
         Well-formed but not compilable (bundle.rejected) or not plannable on the driver (plan.rejected),
@@ -793,6 +816,62 @@ components:
         object:
           $ref: "twin-record-1.schema.json"
           description: The whole record after the change (its last state for DELETED); its revision is the watch's cursor.
+
+    Capacity:
+      type: object
+      additionalProperties: false
+      required: [driver, read_at, hosts, pending, twins]
+      properties:
+        driver:
+          $ref: "deployment-1.schema.json#/$defs/driver"
+          description: The default driver whose runtime was read; the orchestrator reads it to know which runtime answered, and `capacity show --json` carries it.
+        read_at:
+          type: string
+          format: date-time
+          description: >-
+            When the server took the reading, in the core's clock form (RFC 3339 UTC with microseconds and a `Z`,
+            as every other date-time the core writes); the orchestrator reads it to know how old the room is, and
+            `capacity show --json` carries it.
+        hosts:
+          type: array
+          description: The runtime's hosts in the driver's order; the orchestrator sums them before it asks and the CLI lists them.
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, cpu, memory_mb]
+            properties:
+              name:
+                type: string
+                description: The host's name as the driver reports it; the CLI shows it.
+              cpu:
+                type: object
+                additionalProperties: false
+                required: [total, free]
+                properties:
+                  total: { type: number, description: The host's CPUs in all; the CLI shows it. }
+                  free: { type: number, description: The host's CPUs free now; the orchestrator compares a demand with it. }
+                description: The host's CPU room, in CPUs; the orchestrator and the CLI read it.
+              memory_mb:
+                type: object
+                additionalProperties: false
+                required: [total, free]
+                properties:
+                  total: { type: integer, description: The host's memory in all, in MiB; the CLI shows it. }
+                  free: { type: integer, description: The host's memory free now, in MiB; the orchestrator compares a demand with it. }
+                description: The host's memory room, in MiB; the orchestrator and the CLI read it.
+        pending:
+          type: object
+          additionalProperties: false
+          required: [nodes, cpu, memory_mb]
+          properties:
+            nodes: { type: integer, minimum: 0, description: The nodes admitted twins have yet to start; the CLI shows it. }
+            cpu: { type: number, minimum: 0, description: The CPUs those nodes will take; the orchestrator subtracts it from the free room. }
+            memory_mb: { type: integer, minimum: 0, description: The MiB those nodes will take; the orchestrator subtracts it from the free room. }
+          description: What admitted twins have yet to take of the room, which admission subtracts; the orchestrator and the CLI read it.
+        twins:
+          type: integer
+          minimum: 0
+          description: The twin records holding an allocation, every one of which the reading was given (D-076).
 
     Driver:
       type: object

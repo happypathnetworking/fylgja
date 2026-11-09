@@ -124,6 +124,22 @@ def test_the_topology_observes_its_generation_and_its_pods_and_itself_turn_ready
     say(f"topology status keys: {sorted(status)}")
 
 
+def test_nodes_and_every_pod_are_read_with_allocatable_and_requests(
+    twin: Twin, loop: asyncio.Runner, kube: LightKube, site: Site
+) -> None:
+    nodes = run(loop, kube.nodes(), "nodes")
+    assert len(nodes) == 3
+    for node in nodes:
+        assert node.allocatable.cpu == 8.0 and 20000 < node.allocatable.memory_mb < 25000
+    pods = run(loop, kube.all_pods(), "all_pods")
+    say(f"{len(nodes)} nodes, {len(pods)} pods, requests of {sum(p.requests.cpu for p in pods):g} CPU in all")
+    assert any(p.namespace == site.controller_namespace and p.requests.cpu > 0 for p in pods)
+    listed = {n.name for n in nodes}
+    unlisted = sum(1 for p in pods if p.host and p.host not in listed)  # a count: a failure names no host
+    assert unlisted == 0, f"{unlisted} pods are bound to a host the nodes do not list"
+    assert not [p.name for p in pods if p.namespace == NAMESPACE and p.ended]
+
+
 def test_the_twins_pods_run_and_each_node_has_a_load_balancer_whose_policy_patches_to_local(
     twin: Twin, loop: asyncio.Runner, kube: LightKube
 ) -> None:

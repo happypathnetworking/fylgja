@@ -96,6 +96,13 @@ already have been weighed.
 | [D-070](#d-070) | The trigger and the restore as built | The reconcile loop and state |
 | [D-071](#d-071) | The core as a pod as built: the Lease's Role, one Kubernetes client above the seam, and the stop at a lost Lease | The reconcile loop and state |
 | [D-072](#d-072) | The core's own loop resumes on both drivers; the Temporal fallback is retired | The reconcile loop and state |
+| [D-073](#d-073) | Admission by capacity: the runtime's free room, read at `admit`, less the admitted twins' pending demand | Runtimes and drivers |
+| [D-074](#d-074) | The local driver deploys one lab at a time | Runtimes and drivers |
+| [D-075](#d-075) | Contention becomes waiting, never a verdict: read threads a twin's own, the client's limits bound, eight workers | Pushing, stepping and verifying |
+| [D-076](#d-076) | `GET /v1/capacity`: the running driver's reading, for a client that looks before it asks | The API and its clients |
+| [D-077](#d-077) | Capacity and the deploy lock as built: the reading is given the reserved twins, a step is judged on the sum, and a pod's request is the scheduler's own | Runtimes and drivers |
+| [D-078](#d-078) | Contention as read on the many-twins runs: no bound on the node clients, and no wait widened | Pushing, stepping and verifying |
+| [D-079](#d-079) | The capacity read as built: `capacity show`, and `read_at` from the core's one clock | The API and its clients |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -1047,6 +1054,7 @@ SR Linux first, then EOS. The order after that is [parked](#parked).
 **Status:** Accepted at the baseline (2026-10-31); superseded in part by [D-049](#d-049) on
 2026-11-04: the seam has nine calls, `changes` and `exec` joining; the rest stands.
 Superseded in part by [D-058](#d-058) on 2026-11-05: the seam has ten calls, `events` joining.
+Superseded in part by [D-073](#d-073) on 2026-11-08: the seam has eleven calls, `capacity` joining.
 
 #### Context
 
@@ -1094,6 +1102,7 @@ grew the seam to seven calls.
 ### D-018 — The containerlab driver runs the `containerlab` CLI
 
 **Status:** Accepted at the baseline (2026-10-31).
+Added to by [D-074](#d-074) on 2026-11-08: `containerlab deploy` runs under one lock in the driver.
 
 #### Context
 
@@ -1125,6 +1134,7 @@ other driver reaches its runtime by its own means: clabernetes through the Kuber
 **Status:** Accepted at the baseline (2026-10-31).
 Superseded in part by [D-059](#d-059) on 2026-11-05: the policy also admits the core's
 namespace; the rest stands.
+Detailed by [D-073](#d-073) on 2026-11-08: what `admission.capacity` compares the demand with.
 
 #### Context
 
@@ -1399,6 +1409,8 @@ and not others.
 
 **Status:** Accepted 2026-11-03. Details [D-018](#d-018) and [D-019](#d-019).
 Added to by [D-065](#d-065) on 2026-11-05: a command's environment is an allow-list.
+Added to by [D-073](#d-073) on 2026-11-08: the local reading subtracts the admitted twins' pending
+demand, and the allocation carries `demand`; and by [D-074](#d-074): one deploy at a time.
 
 #### Context
 
@@ -1474,6 +1486,8 @@ declared capability.
 **Status:** Accepted 2026-11-04. Supersedes [D-017](#d-017) in its count of calls: nine, not
 seven. The rest of D-017 stands.
 Superseded in part by [D-058](#d-058) on 2026-11-05: the seam has ten calls.
+Added to by [D-073](#d-073) on 2026-11-08: a step's admission answers the held allocation with its
+`demand` refreshed to the target's; the rest of the allocation stays.
 
 #### Context
 
@@ -1701,6 +1715,7 @@ namespace of the twin's name that is not the twin's is `absent` to `inspect`, le
 `destroy` and refused by `apply` and `exec`; superseded in part by it the same day: a
 link-mode change replaces the pods of the nodes whose mode changed, not every pod. The rest
 stands.
+Detailed by [D-073](#d-073) on 2026-11-08: admission by capacity, and the allocation's `demand`.
 
 #### Context
 
@@ -2112,6 +2127,277 @@ or the cluster contradicted:
   One left without its login refuses any admission, a new twin's included. One added reaches
   a twin only when it is admitted anew ([D-057](#d-057)).
 
+<a id="d-073"></a>
+### D-073 — Admission by capacity: the runtime's free room, read at `admit`, less the admitted twins' pending demand
+
+**Status:** Accepted 2026-11-08 (phase 7). Supersedes [D-017](#d-017) in its count of calls:
+eleven, `capacity` joining; the rest stands. Details [D-019](#d-019) (what `admission.capacity`
+compares with), [D-043](#d-043) (the local reading), [D-049](#d-049) (a step's admission, whose
+held allocation now carries the target's demand) and [D-057](#d-057), which left capacity here.
+Superseded in part by [D-077](#d-077) on 2026-11-09: the call takes the reserved allocations, a
+step is judged on the sum alone, and a pod's effective request is the scheduler's own sum.
+
+#### Context
+
+The requirement is about five concurrent twins of tens of nodes on a 2–3-node cluster
+([core.md](core.md#requirements)). The deployment carries a demand, the sum of its nodes'
+package resources, and [architecture.md](architecture.md) says admission compares it with
+"free capacity" and refuses with `admission.capacity`; what free capacity is was left to this
+phase. As built, the local driver refuses a twin whose demand exceeds the kernel's
+`MemAvailable` or the CPU count, counting no twin admitted whose lab is not yet up, and the
+clabernetes driver admits every twin. A twin that does not fit the cluster would then have its
+namespace, policy, Topology and pods made, and end `failed` when the deploy's budget ran out
+with pods still Pending, holding room meanwhile. The orchestrator becomes a concurrent client
+as soon as two proposed changes are open, and its check already treats a refused admission as
+"held, ask again" every 30 s. The maintainer's answer to where free capacity comes from was
+the cluster, not a number the site declares.
+
+Read on 2026-11-08 ([verified-facts.md](verified-facts.md)): each host reports 8 CPU and
+23.46 GiB as both capacity and allocatable (k3s reserves nothing by default), the system's own
+pods request 70m–320m CPU and 192–460 MiB a host, and MetalLB's pods request nothing. Five
+three-node SR Linux twins at the packages' requests take 7.5 CPU and 30 GiB of about 23 CPU
+and 70 GiB; a twin of 36 such nodes does not fit.
+
+#### Options considered
+
+- **A budget the site declares**, `FYLGJA_MAX_TWINS`, or CPU and memory totals in settings.
+  Rejected: a second number to keep right beside the cluster's own, wrong whenever the
+  cluster grows, shrinks or runs something else, and it was not what the maintainer asked
+  for.
+- **Queue a twin that does not fit until room frees.** Rejected: the wait would be invisible
+  to the orchestrator, whose rehearsal deadline assumes a run starts at once, and the
+  architecture already refuses; a refusal keeps the wait where the client can see it.
+- **Let the scheduler decide**: admit, apply, and read Pending pods. Rejected: a twin that
+  does not fit touches the cluster and ends `failed` after minutes rather than `rejected` in a
+  second, and its partial pods hold room others could take.
+- **Count twins alone**: allocatable less the twins' demand. Rejected: clabernetes, k3s, the
+  core and anything else the cluster runs request CPU and memory too; counting twins alone
+  admits into room that is not there.
+- **Bin-pack nodes onto hosts in the core.** Rejected: the scheduler's job, and a second
+  placement to keep in agreement with it. The core checks the sum and the largest node.
+- **Read the runtime at `admit`**: allocatable less every pod's requests, less the demand of
+  twins admitted whose pods are not yet requesting. Chosen.
+
+Where the admitted twins' demand is kept:
+
+- **Look up each twin's deployment.** Rejected: a deployment exists only after `plan`, and
+  the loop would add a store call per reserved twin to every admission.
+- **In the allocation.** Chosen: the allocation is what `admit` reserved, and the room is
+  part of it. Both drivers write it; a step refreshes it.
+
+#### Decision
+
+- **`capacity()`** is the seam's eleventh call. It answers a **reading**: the hosts, each
+  with a name and its total and free CPU and memory; and the **pending** demand (nodes, CPU,
+  memory), the sum over every other twin's recorded `demand` (its allocation's) less what
+  the runtime already holds for that twin, each twin floored at zero. On clabernetes a
+  host's total is its allocatable and its free that less the effective request of every pod
+  on it that has not ended, computed as the scheduler does (the larger of the init
+  containers' requests and the containers' sum, plus a restartable init container's, plus
+  overhead), whoever owns the pod; a twin's pods are found by its label. Locally there is one
+  host: its total is the CPU count and `MemTotal`, its free memory `MemAvailable`, its free
+  CPU the count less the demand of every twin whose lab has every container running (the
+  kernel reports no CPU reservation); a twin's demand is pending until every container of
+  its lab runs. `admit` takes the reading first, under the loop's admission lock, so two admissions
+  never read the same room.
+- **The fit rule** is pure and shared by both drivers. A demand fits when its CPU and its
+  memory each fit the sum of the hosts' free less the pending demand, and each of its nodes'
+  package resources fit the roomiest host, CPU and memory each. A step's demand is what the
+  target adds over `held.demand`, per component floored at zero ([D-049](#d-049)), and its
+  own twin is not in the pending sum.
+- **The refusal** is `admission.capacity`, one sentence per shortfall: what the twin needs of
+  the resource, what the reading found free and pending; or the node no host can take, with
+  the roomiest host's free. The local driver's subnet-pool refusal keeps its sentence. A
+  refused twin ends `rejected` with that finding, and a dry run answers 422 with it.
+- **The allocation gains `demand`** `{nodes, cpu, memory_mb}`, on both drivers, written by
+  `admit`; a step's admission answers the allocation the twin holds with `demand` set to the
+  target's and nothing else changed, and the loop records that answer at `admitted` for a
+  step as it does for a create, where today it drops a step's answer
+  (`reconcile.py`, `_admit`). A step's own added demand is still judged against
+  `held.demand`, the running deployment's ([D-049](#d-049)); the allocation's `demand` serves
+  the pending sum alone. Deployment 1's and twin record 1's descriptions of the allocation
+  name it.
+- **The core's ClusterRole** gains `get` and `list` on `nodes`; `list` on pods it has.
+- The reading is also what `GET /v1/capacity` answers ([D-076](#d-076)).
+
+#### Consequences
+
+- The reading is a moment, not a reservation: the scheduler places, and a pod another
+  workload makes between the reading and the Topology's apply is its to fit. The pending
+  demand covers the core's own twins, which is the race that matters here.
+- A pod with no requests is invisible to the reading, as it is to the scheduler.
+- Locally the kernel's figure counts whatever the host is doing, as it does today.
+- A twin whose packages change their resources between a step's admission and its apply is
+  counted at the target's demand, which is what the Topology will request.
+- A step refused or cancelled before `applied` leaves the target's demand in the allocation
+  while the twin runs the old deployment, so the pending sum over-counts that twin, by at most
+  its own demand, until its next step. Conservative, and accepted.
+- A twin whose destroy is retrying keeps its allocation ([D-055](#d-055)) and, its containers
+  or pods gone, its whole demand pending, so it holds its room until the destroy succeeds.
+  Conservative, and intended.
+- Locally a node grows for about a minute after its container starts, and that minute is
+  counted by neither the kernel's figure nor the pending sum; under [D-074](#d-074)'s lock one
+  twin at a time is in it, and a fixture that does not fit must exceed the host by more than
+  one twin's demand.
+- The orchestrator reads `admission.capacity` as "ask again", as its check does today for the
+  Go core's refusals; keeping that is phase 8's.
+- The facts the reading rests on were read on 2026-11-08 and are re-read by a cluster-tier
+  test of phase 7's plan 1.
+
+<a id="d-074"></a>
+### D-074 — The local driver deploys one lab at a time
+
+**Status:** Accepted 2026-11-08 (phase 7). Details [D-018](#d-018) and [D-043](#d-043);
+[D-055](#d-055)'s destroy stands. Superseded in part by [D-077](#d-077) on 2026-11-09: the
+deploy a destroy's recovery makes takes the lock.
+
+#### Context
+
+Two labs deploy together in 48–53 s without harm ([verified-facts.md](verified-facts.md),
+"Two labs at once"). On 2026-11-03 two live tiers ran at once on the development host, eight
+SR Linux nodes booting between them on 10 cores: the load reached about 33 and SR Linux's
+`sr_cli` segfaulted in containerlab's post-deploy, failing the deploy
+([verified-facts.md](verified-facts.md), "Under memory pressure its own `sr_cli` can segfault",
+the 2026-11-03 reading: 22 GiB available, the load at 33). Memory was not
+the limit; CPU was. Three twins created together would boot nine nodes at once, and
+admission by capacity ([D-073](#d-073)) admits them: the steady 0.5 core a node says nothing
+about a boot.
+
+#### Options considered
+
+- **No bound.** Rejected: the crash.
+- **A bound by setting**, so many deploys at once. Rejected: a number to tune per host, and
+  the boot's load is not the package's steady figure, so no reading sizes it.
+- **Admit by CPU with a boot factor.** Rejected: admission would refuse twins the host can
+  run once booted, for a minute's load.
+- **One `containerlab deploy` at a time**, under a lock in the driver. Chosen: a boot is a
+  minute, the second twin's create waits in its apply, which is waiting and not failing, and
+  the host's load stays what one deploy makes.
+
+#### Decision
+
+- `apply`'s `containerlab deploy`, and the hot-add container removals before it
+  ([D-049](#d-049)), run under one lock held by the driver instance. The wait for the lock is
+  outside the deploy's budget, which starts when the deploy does; the lock is taken in the
+  order asked.
+- `destroy` is not held: a destroy during another twin's deploy is what [D-055](#d-055)
+  already handles, and a resume's wait for a stray deploy of its own twin
+  ([D-056](#d-056)) precedes the lock.
+- On clabernetes nothing is held: the scheduler spreads the boots over the hosts.
+- The live test of phase 7's plan 3 creates three labs together and reads the host's load.
+
+#### Consequences
+
+- Three twins created together locally reach Ready in about three deploys' time; the
+  conformance suite's many-twins scenario records what that is.
+- One core runs per host (one core per store, [D-024](#d-024)), so the lock in the driver
+  instance is the only one needed.
+
+
+<a id="d-077"></a>
+### D-077 — Capacity and the deploy lock as built: the reading is given the reserved twins, a step is judged on the sum, and a pod's request is the scheduler's own
+
+**Status:** Accepted 2026-11-09 (phase 7's landing). Supersedes [D-073](#d-073) in three parts: the
+call's signature, a step's fit and the arithmetic of a pod's effective request; and
+[D-074](#d-074) in one: the deploy a destroy's recovery makes. The rest of both stands.
+
+#### Context
+
+D-073 and D-074 were settled before code. Building them (phase 7, plans 1 and 3) found four
+places where they could not be built as written, and what they leave unsaid.
+
+- D-073's `capacity()` takes nothing, so the driver must itself know which twins are admitted.
+  As first built it kept the `reserved` of its last `admit`. A read made for the API
+  ([D-076](#d-076)) then counted the wrong twins: none after a restart, one too many after a
+  destroy, and never the twin admitted last, which is in no `reserved` of its own.
+- D-073's fit rule checks each of a twin's nodes against the roomiest host. A step's `admit`
+  is given the deployment the twin holds and not the nodes the target adds, and a check over
+  every node of the target would refuse a step that adds nothing on a full cluster, whose
+  running nodes already hold their room.
+- D-073's parenthetical for a pod's effective request ("the larger of the init containers'
+  requests and the containers' sum, plus a restartable init container's, plus overhead") is an
+  approximation of "as the scheduler does", its binding words. It differs from the scheduler's
+  sum where a restartable init container comes before a larger init container, and it knows
+  nothing of a request set on the pod itself.
+- D-074 says `destroy` is not held. A destroy that finds a twin's residue and no lab deploys
+  the lab before it destroys it (recovery rule 2, [D-019](#d-019), [D-023](#d-023)), and that
+  deploy boots every node: the load the lock exists for.
+
+#### Options considered
+
+Which twins a reading counts:
+
+- **The driver keeps the `reserved` of its last `admit`.** Rejected: the three miscounts above.
+  "A look and not a reservation" covers a race, not a wrong set of twins.
+- **The driver reads the twin records.** Rejected: a driver knows no store.
+- **The caller passes the allocations.** Chosen.
+
+A step's fit:
+
+- **The sum, and every node of the target against the roomiest host.** Rejected: it refuses a
+  step that adds nothing where the hosts are full.
+- **The sum, and the nodes the step adds against the roomiest host.** Not taken: `admit` is
+  not given them, and the seam's `changes` answers them only after admission.
+- **The sum alone.** Chosen.
+
+A pod's effective request:
+
+- **D-073's parenthetical.** Rejected: not the scheduler's figure in the two cases above.
+- **Kubernetes' own sum**, in init-container order, a request on the pod replacing it. Chosen.
+
+The deploy a destroy's recovery makes:
+
+- **Outside the lock, as D-074 has every destroy.** Rejected: nodes booting beside another
+  twin's deploy.
+- **Through `apply`, under the lock.** Chosen; a destroy that deploys nothing takes no lock.
+
+#### Decision
+
+1. **The seam's call is `capacity(reserved: Sequence[Allocation]) -> Reading`.** `admit` passes
+   the `reserved` the loop gave it; `GET /v1/capacity` passes every twin record's allocation. A
+   driver keeps no set of twins between calls.
+2. **A create must fit in its sum and in each node; a step in its sum alone.** A step's demand
+   is what the target adds over `held.demand`, per component floored at zero, and a component
+   of zero is never short: a step that adds nothing is admitted whatever the reading. Locally
+   a step's reading also subtracts the stepping twin's own held CPU, which the loop leaves out
+   of `reserved`.
+3. **A pod's effective request is Kubernetes' own sum**, per resource. The containers' total is
+   the sum over the containers. The init containers are walked in order, keeping the running
+   sum of the restartable ones seen so far: a restartable one adds its request to the
+   containers' total and to the running sum, and its figure is the running sum; another's
+   figure is its request plus the running sum before it. The request is the larger of the
+   containers' total and the largest init figure; a request the pod itself sets
+   (`spec.resources.requests`) replaces that figure, for CPU and for memory each; then the
+   overhead is added. Memory is summed in bytes and floored to MiB once.
+4. **What a twin holds on the cluster is its pods bound to a host the reading lists.** A pod
+   bound to no host yet takes no host's room and leaves its twin's demand pending, so each
+   unit of a twin's demand is counted once, as a bound pod's request or as pending.
+5. **A reading that cannot be taken is `DriverFailed`**: on the cluster a node with no
+   allocatable or a quantity that will not parse, through the Kube protocol's failure; locally
+   an unknown CPU count, a missing or garbled `/proc/meminfo` key, or the file unread. No host
+   is skipped in silence. The local host's kilobytes are floored to MiB.
+6. **An allocation whose `demand` is absent**, as every one admitted before phase 7 is, counts
+   as nothing and is logged once a twin at INFO; one whose `demand` will not read counts as
+   nothing and is logged once a twin at WARNING. Neither blocks an admission.
+7. **The local host is named `host`** in the reading, never the machine's name, so the API's
+   answer holds no site value on the local driver either.
+8. **The refusal's sentences** begin "The twin needs" for a create and "The step adds" for a
+   step, and name "the host" locally and "the cluster" on clabernetes; a node no host can take
+   is named with the roomiest host and its free CPU and memory.
+9. **The deploy of a destroy's recovery rule 2 is an `apply` and takes the deploy lock.** A
+   destroy that deploys nothing takes none. An apply that must wait logs once that it waits.
+
+#### Consequences
+
+- A step that adds a node larger than any host's free passes admission and fails at its apply
+  with the pod Pending, as before the phase.
+- A destroy of a twin with residue and no lab can wait behind another twin's deploy.
+- A twin admitted before phase 7 is counted at nothing until its next step records its demand.
+- Three twins created together locally were Ready 163.9–177.2 s after their asks, the deploys
+  one after the other ([verified-facts.md](verified-facts.md), "Three twins at once through the
+  core"), which is the figure D-074 left to the many-twins scenario.
+- [core.md](core.md) and [architecture.md](architecture.md) name the call as built.
+
 
 ## The reconcile loop and state
 
@@ -2127,6 +2413,7 @@ of its backoff (item 18). Superseded in part by [D-072](#d-072) on 2026-11-07: T
 longer the fallback, the core's own loop having resumed every run a kill of the conformance suite
 found unfinished, on both drivers; on the cluster the kills at a create's `pushed` and a step's
 `verified` found the run ended, and locally the one at a step's `verified` did.
+Added to by [D-075](#d-075) on 2026-11-08: the pool's default is eight workers.
 
 #### Context
 
@@ -3205,6 +3492,7 @@ alone, and at a step's `verified` no kill on either driver finds a run to resume
 Superseded in part by [D-063](#d-063) on 2026-11-05: TLS ends at the server, not an ingress;
 added to by [D-067](#d-067) (the run operation `restore`) and [D-068](#d-068) (the
 capability `reapply`); the rest stands.
+Added to by [D-076](#d-076) on 2026-11-08: `GET /v1/capacity`.
 
 #### Context
 
@@ -3511,6 +3799,85 @@ needs four S3 calls ([D-061](#d-061)).
 - lightkube has one maintainer and a 1.0 three months old; its facts are re-verified on any
   upgrade, and the fallback above is what replaces it.
 - Its models are for Kubernetes 1.37, the cluster's.
+
+<a id="d-076"></a>
+### D-076 — `GET /v1/capacity`: the running driver's reading, for a client that looks before it asks
+
+**Status:** Accepted 2026-11-08 (phase 7). Adds a path to [D-025](#d-025)'s API 1; answers
+[D-073](#d-073)'s reading. Superseded in part by [D-079](#d-079) on 2026-11-09: the CLI's
+command is `fylgja-core capacity show`.
+
+#### Context
+
+The orchestrator decides when to open a rehearsal. Today it learns that a twin does not fit
+only by asking: a create ends `rejected`, or a dry run answers 422. With several proposed
+changes open it would ask and be refused in turn, each a run. The maintainer asked that a
+client be able to read the core's room before it asks.
+
+#### Options considered
+
+- **The refusal alone.** Rejected by the maintainer's call.
+- **Capacity in `GET /v1/drivers`.** Rejected: that lists every driver and its static
+  capabilities without reaching a runtime; the reading reaches the runtime and takes a
+  moment.
+- **A fit check for a given demand.** Rejected: the dry run is that already, with the compile
+  and the plan.
+- **`GET /v1/capacity`.** Chosen.
+
+#### Decision
+
+- `GET /v1/capacity` answers 200 with the running driver's reading ([D-073](#d-073)), taken
+  then and outside the admission lock, a look and not a reservation: `driver`, `read_at`,
+  `hosts` (each `name`, `cpu` and `memory_mb`, each `{total, free}`), `pending`
+  (`{nodes, cpu, memory_mb}`) and `twins`, the count of twins with an allocation. Any
+  authenticated principal may read it, as `GET /v1/drivers`. A runtime the driver cannot
+  read answers 503 with a problem of rule `capacity.unread`, naming nothing of the fault the
+  log does not.
+- The CLI shows it as `fylgja-core capacity`: one row a host, then the pending demand and the
+  count.
+- The numbers are advisory: admission decides, with the same reading taken under its lock.
+
+#### Consequences
+
+- API 1 gains a path and a `Capacity` schema, additive.
+- Whether and when the orchestrator reads it is phase 8's.
+
+
+<a id="d-079"></a>
+### D-079 — The capacity read as built: `capacity show`, and `read_at` from the core's one clock
+
+**Status:** Accepted 2026-11-09 (phase 7's landing). Supersedes [D-076](#d-076) in the CLI's
+command; details what the document's `read_at` and `twins` are. The rest stands.
+
+#### Context
+
+D-076 names the CLI's command `fylgja-core capacity`. The CLI is noun then verb
+([D-026](#d-026)), and its parser gives every noun a verb. The plan of the route had `read_at`
+in whole seconds, taken when the reading returned; `clock.py` promises that every date-time the
+core writes comes from its `now()`.
+
+#### Options considered
+
+- **`fylgja-core capacity`, a noun alone.** Rejected: the one command of the CLI with no verb.
+- **`fylgja-core capacity show`.** Chosen, as `twin show`.
+- **`read_at` in seconds, at the reading's return.** Rejected: a second date-time form in
+  API 1.
+- **`read_at` from `clock.now()`, taken before the reading is awaited.** Chosen.
+
+#### Decision
+
+- The CLI's command is `fylgja-core capacity show`: one line a host with its free and total
+  CPU and memory, then the pending demand, then the count of twins; `--json` prints the
+  document.
+- `read_at` is the core's clock read before the driver is asked, in the form of every other
+  date-time of API 1.
+- `twins` is the count of twin records with an allocation, the same records whose allocations
+  the handler passes to the driver as `reserved` ([D-077](#d-077)).
+- The reading is the default driver's.
+
+#### Consequences
+
+- [core.md](core.md) names the command as built.
 
 
 ## Pushing, stepping and verifying
@@ -3896,6 +4263,8 @@ judges a neighbour's `port-id` against the far port's node name, not its product
 rest stands. Supersedes [D-031](#d-031) in part: the host name is asserted against the device
 name only where no configuration could have set it, and a neighbour is judged against the far
 node's read host name. Details [D-008](#d-008) and [D-032](#d-032).
+Added to by [D-075](#d-075) on 2026-11-08: the read threads a node is unread for want of are a twin's
+own, never another twin's.
 
 #### Context
 
@@ -3986,6 +4355,7 @@ The probes in phase 5:
 **Status:** Accepted 2026-11-04; added to by [D-054](#d-054) on 2026-11-04: the reads of a
 step's wait run on daemon threads, sixteen at most and one per node; the rest stands. Adds to
 [D-039](#d-039).
+Added to by [D-075](#d-075) on 2026-11-08: the sixteen read threads are per twin.
 
 #### Context
 
@@ -4244,6 +4614,140 @@ deploying again plainly, would run beside.
 - The live tier of plan 6 exercises 1, 4, 6 and 14 on containerlab 0.81.0, the last with a
   server killed mid-deploy, and records what it finds in [verified-facts.md](verified-facts.md).
 
+<a id="d-075"></a>
+### D-075 — Contention becomes waiting, never a verdict: read threads a twin's own, the client's limits bound, eight workers
+
+**Status:** Accepted 2026-11-08 (phase 7). Adds to [D-051](#d-051) and [D-052](#d-052) (the
+read threads) and to [D-023](#d-023) (the pool's default). Superseded in part by
+[D-078](#d-078) on 2026-11-09: the connections were read in plan 4, for three twins on the
+local run; nothing is bound, and no wait or budget was widened.
+
+#### Context
+
+Verify's gNMI reads run on daemon threads bounded by one process-wide semaphore of sixteen
+(phase 5's plan 5; [verified-facts.md](verified-facts.md), "An abandoned read keeps its
+thread"). A read that finds no thread free within its 15 s budget is `verify.node.unread`,
+and one unread node makes the verdict `failed` ([D-051](#d-051)). Five twins verifying
+together, three nodes each, take fifteen threads; twins of tens of nodes would exceed
+sixteen, and a step's wait verifies every `verify_poll_s`. The push and the readiness wait
+each make a node HTTP client of their own per call (`push.py`, `readiness.py`), so no shared
+limit binds them. The worker pool's default is four
+(`FYLGJA_WORKERS`), and an apply holds its worker for the deploy's budget. The step's wait
+(180 s) and the deploys' budgets were measured with one twin on the runtime. The maintainer
+named the phase's one anti-goal: a verdict that fails from contention rather than intent.
+
+#### Options considered
+
+The read threads:
+
+- **One pool, raised.** Rejected: any shared number lets a twin of tens of nodes starve
+  another.
+- **Wait past the budget until a thread frees.** Rejected: the maintainer's call is that an
+  unread node stays unread; a verify that waits hides the wait inside the step's wait.
+- **A pool per twin**, sixteen each, made on first use and dropped when idle, the claim of
+  one running read per address staying global. Chosen.
+
+Unread under load:
+
+- **Mark such a node `unread` with a reason of its own, and the verdict `ok`.** Rejected by
+  [D-051](#d-051): a script would take it for a pass.
+- **Leave it `verify.node.unread`, the verdict `failed`, the orchestrator asking again.**
+  Chosen, by the maintainer.
+
+#### Decision
+
+- Each twin's reads have a bounded pool of their own, of the same sixteen threads; a node is
+  reported unread for want of a thread only when its own twin's are busy. The per-address
+  claim stays global.
+- An unread node stays `verify.node.unread` and the verdict `failed`, as D-051 has it; the
+  core does not wait past the read's budget.
+- What five twins pushing together do to the host's connections, each push a client of its
+  own, is read in phase 7's plan 3 and recorded; nothing is bound unless the reading shows a
+  need.
+- `FYLGJA_WORKERS` defaults to eight: five twins created together each hold a worker through
+  an apply, with room for steps beside.
+- The step's wait and the deploys' budgets are measured on the many-twins run and widened
+  where it shows them short, each a fact; none is shortened.
+
+#### Consequences
+
+- Up to sixteen read threads a twin at once, each ending when pygnmi returns; the memory is
+  small, and the threads of an idle twin are gone.
+- The verdict vocabulary does not change, and findings 1 says what `failed` means for verify.
+- The settings' table and `.env.example` show the new default.
+
+
+<a id="d-078"></a>
+### D-078 — Contention as read on the many-twins runs: no bound on the node clients, and no wait widened
+
+**Status:** Accepted 2026-11-09 (phase 7's landing). Details [D-075](#d-075): where the host's
+connections were read and what that reading covers, and the waits and budgets as measured.
+Supersedes it in one part: the connections were read in phase 7's plan 4, not its plan 3.
+
+#### Context
+
+D-075 left two things to readings. What twins pushing together do to the host's connections
+was to be read in plan 3 and bound only if the reading showed a need; the step's wait and the
+deploys' budgets were to be measured on the many-twins run and widened where short.
+
+Plan 3's live test creates three labs through the driver alone, and the driver never pushes:
+the push and the readiness wait are the loop's. Its connection count was the host's own
+traffic ([verified-facts.md](verified-facts.md), "Three labs at once through the driver"). The
+many-twins scenario creates through the core, so its local run is where the core's node
+clients and its gNMI reads share a host with the reading. A scenario may start no process, by
+the suite's own rule that it reads the API, the CLI, the nodes and the harness alone, so it
+cannot run `ss`. On the cluster the core is a pod, and the suite's host sees none of its
+connections to the nodes.
+
+#### Options considered
+
+Where the connections are read:
+
+- **Plan 3's live test, as D-075 has it.** Rejected: it pushes nothing.
+- **The many-twins scenario's local run**, from the kernel's tables. Chosen.
+
+The five-twin reading on the cluster:
+
+- **A route or a metric in the core that counts its node connections.** Not taken: a surface
+  built for one reading, before any reading has shown a need for a bound.
+- **Record that it was not read.** Chosen.
+
+The bound:
+
+- **A shared limit on the node HTTP clients now.** Rejected: the reading shows no need, and a
+  shared number is what D-075 moved the read threads away from.
+- **None, the reading recorded with what it does not cover.** Chosen.
+
+#### Decision
+
+- **The connections were read on the local run for three twins**, every 2 s, as the host's
+  established TCP connections to the push and gNMI ports (443, 57400, 6030), from
+  `/proc/net/tcp` and `/proc/net/tcp6`, whose count equalled `ss`'s beside it. Over three runs
+  the count was at most 7 during the creates and during the steps and verifies, against 1–5
+  at the quiet samples, and rose at most 4 above a phase's first sample
+  ([verified-facts.md](verified-facts.md), "Three twins at once through the core"). The count
+  holds the host's own connections to port 443 and misses one opened and closed between
+  samples.
+- **Nothing is bound.** Five twins' connections from the core to their nodes on the cluster
+  were not read.
+- **No wait and no budget was widened, and none shortened.** Every step's wait settled at its
+  first verify, after 0.26–0.64 s of its budget locally and 0.31–0.80 s of 180 s on the
+  cluster. Every apply ended within its deploy's budget: on the cluster 108.8–135.6 s of 240 s
+  for an SR Linux twin and 151.9–177.1 s of 360 s for a mixed one; locally within the same
+  budgets with the wait for the deploy lock counted in.
+- **No node was unread and no wait expired** on any run of the scenario: three twins locally
+  and five on the cluster, of three nodes each.
+- **A twin's pool is dropped when its last read returns.** Its count holds every read holding
+  or waiting for a thread, an abandoned read's among them, so a pool whose threads still run
+  is kept until they end.
+
+#### Consequences
+
+- The anti-goal, a verdict failing from contention, held for the counts the phase names. Twins
+  of tens of nodes verifying and pushing together are not read; a bound, where a later reading
+  shows the need, is a new entry ([open questions](#open-questions)).
+- The scenario's connection count is a handful read every 2 s, not an exact figure.
+
 
 ## Process and repository
 
@@ -4402,9 +4906,23 @@ becomes an entry then.
 <a id="open-questions"></a>
 ## Open questions
 
-- **Scheduling at the packages' requests.** The multi-host trial ran on clabernetes' default
+- **A drain at the packages' requests.** The multi-host trial ran on clabernetes' default
   requests (200m CPU, 512 Mi), so neither the spread nor the drain was exercised with the
-  packages' 0.5 CPU and 1.5–2 GiB ([D-036](#d-036)). Phase 7's five-twin scenario does.
+  packages' 0.5 CPU and 1.5–2 GiB ([D-036](#d-036)). Phase 7's many-twins scenario read the
+  spread on 2026-11-09: five twins' fifteen pods at the packages' requests, five on each of
+  the three hosts ([verified-facts.md](verified-facts.md), "Five twins at once through the
+  core"). The drain at those requests stays open.
+- **The node clients under larger twins** ([D-075](#d-075), [D-078](#d-078)). The host's
+  connections were read for three twins of three nodes on the local run, and nothing is
+  bound. What five twins' pushes and reads open from the core on the cluster, and what twins
+  of tens of nodes do on either runtime, is unread: the cluster harness sees only the suite's
+  own host. A reading from inside the core, and a bound where it shows the need, is a later
+  phase's.
+- **The size of the twin the many-twins scenario expects refused** ([D-073](#d-073)). It is
+  fixed at forty SR Linux nodes, 20 CPUs and 81920 MiB, above every runtime the suite has
+  met. On a runtime with more than about 80 GiB free the dry run would answer 200 and the
+  scenario fail, having made no twin. Sizing that twin from the capacity read taken before
+  it, as D-073 sizes admission from the runtime and not from a number, is a later plan's.
 - **A condition carrying the last verify's status** ([D-070](#d-070), [D-032](#d-032)).
   `Ready` has never meant conforming, so a step or a restore whose wait expired ends `ok`,
   `Ready` True, and only its verdict says verify did not hold. A condition carrying the last

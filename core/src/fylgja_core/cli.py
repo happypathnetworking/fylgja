@@ -204,6 +204,9 @@ def _parser() -> argparse.ArgumentParser:
     twin("verify", "Read every node once and judge it against its bundle; exit by the verdict.",
          _twin_verify).add_argument("name")
 
+    verbs("capacity", "read the runtime's room")("show", "Show the room the runtime has: a line a host, what is "
+                                                 "pending, and the twins.", _capacity_show)
+
     run = verbs("run", "read, follow and cancel runs")
     run("get", "Show a run and, once it has ended, its verdict.", _run_get).add_argument("id")
     run("watch", "Print a run's events until it ends; exit by its verdict.", _run_watch).add_argument("id")
@@ -292,6 +295,24 @@ def _twin_list(ctx: Context, args: argparse.Namespace) -> int:
     ]
     ctx.show(twins, lines or ["no twins"])
     return 0
+
+
+def _capacity_show(ctx: Context, args: argparse.Namespace) -> int:
+    doc = ctx.client.capacity()
+    ctx.show(doc, _capacity_lines(doc))
+    return 0
+
+
+def _capacity_lines(doc: Mapping[str, Any]) -> list[str]:
+    lines = [
+        f"{h['name']}: cpu {h['cpu']['free']:g} of {h['cpu']['total']:g} free, "
+        f"memory {h['memory_mb']['free']} of {h['memory_mb']['total']} MiB free"
+        for h in doc["hosts"]
+    ]
+    pending = doc["pending"]
+    lines.append(f"pending: {pending['nodes']} nodes, {pending['cpu']:g} CPU, {pending['memory_mb']} MiB")
+    lines.append(f"twins: {doc['twins']}")
+    return lines
 
 
 def _twin_destroy(ctx: Context, args: argparse.Namespace) -> int:

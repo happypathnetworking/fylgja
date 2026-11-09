@@ -439,13 +439,14 @@ def test_the_nodes_are_read_at_once_and_the_bursts_after_one_at_a_time(store: Lo
         paths: Sequence[str],
         *,
         timeout_s: float = gnmi.GNMI_TIMEOUT_S,
+        pool: str = "",
     ) -> dict[str, Any]:
         nonlocal in_flight, peak
         in_flight += 1
         peak = max(peak, in_flight)
         budgets.add(timeout_s)
         try:
-            return await lab.reader(address, package, credential, paths, timeout_s=timeout_s)
+            return await lab.reader(address, package, credential, paths, timeout_s=timeout_s, pool=pool)
         finally:
             in_flight -= 1
             seen.append("read")
@@ -461,6 +462,14 @@ def test_the_nodes_are_read_at_once_and_the_bursts_after_one_at_a_time(store: Lo
 
     assert verdict.status == "ok" and peak == 3 and budgets == {2.5}
     assert seen == ["read"] * 3 + ["exec n1-loop-a 8", "exec n1-loop-b 8"]
+
+
+def test_verify_reads_in_the_twins_own_pool(store: LocalStore) -> None:
+    lab = ready(store)
+    assert verified(lab).status == "ok"
+
+    # Each node's read takes its thread from the twin's own pool, never another twin's (D-075).
+    assert len(lab.reader.calls) == 3 and lab.reader.pools == [lab.record.name] * 3
 
 
 def test_no_password_reaches_a_finding_or_a_log_line(store: LocalStore) -> None:

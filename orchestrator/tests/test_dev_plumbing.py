@@ -156,8 +156,19 @@ def test_the_runner_is_given_its_own_tokens_and_none_of_composes() -> None:
         assert str(raised.value) == f"{missing} is not set: run make orchestrator-env and load local/.env"
 
 
+class Override(yaml.SafeLoader):
+    """YAML as Compose reads an override: a list under Compose's own tag `!override`, read as the list."""
+
+
+def replaced(loader: Override, node: yaml.SequenceNode) -> list[Any]:
+    return loader.construct_sequence(node)
+
+
+Override.add_constructor("!override", replaced)
+
+
 def test_the_override_gives_the_workers_the_address_and_the_auth_alone() -> None:
-    override: dict[str, Any] = yaml.safe_load(OVERRIDE.read_text())
+    override: dict[str, Any] = yaml.load(OVERRIDE.read_text(), Loader=Override)
     worker = override["services"]["task-worker"]
     fylgja = {name: value for name, value in worker["environment"].items() if name.startswith("FYLGJA_")}
     assert fylgja == {

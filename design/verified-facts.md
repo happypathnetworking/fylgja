@@ -5820,6 +5820,23 @@ interpolates `${A:-unset}`, `${B:-unset}` and `${C:-unset}`; no container starte
   `unset`.
 - **A `#` after a value and a space ends the value.** `C=val # note` rendered `C: val`.
 
+Read on 2026-11-12 with `docker compose config` over Infrahub 1.11.11's published file and a
+second file, in a scratch project directory; no container started. *(2026-11-12)*
+
+- **The published file publishes four ports with no address**, so each on every interface:
+  `infrahub-server` 8000, `message-queue` 15692, and `database` 2004 and 6362. Rendered alone,
+  none of the four had a `host_ip`.
+- **A `ports` list in a second file is added to the first's.** With `127.0.0.1:8000:8000`
+  under `infrahub-server` in the second file, the service rendered two bindings of 8000: the
+  published one, with no `host_ip`, and the second, with `host_ip: 127.0.0.1`.
+- **`!override` on the list replaces it.** With `ports: !override` and the same entry, the
+  service rendered the one binding, `host_ip: 127.0.0.1`; and so for the other two services.
+  `ports: !reset []` rendered the service with no `ports` at all.
+- **The tree's override renders all four on loopback.** The published file with
+  `infrahub/dev/compose.override.yml` rendered `host_ip: 127.0.0.1` on each of the four and
+  no other published port. Rendered only: no Infrahub was started under it, and the host's
+  listeners were not read.
+
 ---
 
 ## GitHub Actions, `ubuntu-26.04`

@@ -6119,6 +6119,12 @@ repository when this run was read; the runs below read them, written under
   `connected_endpoints_type`. A device's holds `platform {id, name, slug}`, with no
   manufacturer; the platform's own representation holds `manufacturer {name}`. A device whose
   template is its platform's reads `config_template: null`. *(2026-11-12)*
+- **A platform's row holds no version, and platforms nest.** `GET /api/dcim/platforms/` with
+  the reader's token answered the seed's one row: `name`, `slug`, `manufacturer`,
+  `config_template`, `description`, `comments`, `tags`, `custom_fields` (empty), `owner`,
+  `device_count`, and `parent` (null) with `_depth` 0. No member names a software release.
+  A child platform was not made, and what a device of one reads was not read.
+  *(2026-11-12)*
 - **A configuration context made on a branch is the branch's alone**, 1 by its name under the
   header and 0 on `main`. One with no assignment and `is_active: true` is in every device's
   `config_context`; set `is_active: false` it is in none, and is still listed by its name with

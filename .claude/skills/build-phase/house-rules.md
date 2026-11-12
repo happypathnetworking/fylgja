@@ -9,6 +9,8 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
 - **Gates.** Every commit passes `make lint` and `make test`, run from the worktree's root,
   and `make linkcheck` where Markdown changed. Read a gate's status directly, never through a
   pipe: `if make lint > /tmp/lint.log 2>&1; then echo ok; else tail -20 /tmp/lint.log; fi`.
+  A gate that outlasts the foreground limit is run whole in one background call of the tool,
+  and its status read from the notification, never re-run in pieces.
 - **Tests first means run first.** Run each new test and see it fail before the code that
   makes it pass exists, and keep that output for your report.
 - **Never run a formatter.** The tree is wrapped by hand, and a reflow of lines your task did
@@ -26,12 +28,17 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
   one at a time, and you remove whatever you started.
 - **A behaviour of a running system** is read before a line relies on it, and recorded in
   `design/verified-facts.md` with the version and the date, in that document's style.
+- **A time budget a live test rests on is a reading**, and readings of a shared system drift.
+  The test's docstring names the readings the budget was sized from and its ratio to the
+  slowest of them.
 - **A fact says what a run showed, and no more.** A figure worked out from other figures is
   called a derivation. Whether a reading calls for a bound, a wider wait or nothing is not
   yours to write into a fact: put it in your report's concerns, and the controller rules.
 - **Formats change in `formats/`**, in the same commit as the code. `design/decisions.md` is
-  append-only: never rewrite an entry.
+  append-only: never rewrite an entry. Its preface is conventions, not an entry.
 - **Prose** in documents and docstrings follows the text around it: plain and specific.
+  Wording that counts the phases, or names the last one, goes stale with the next item of
+  "Sequence": say what is built, without a count.
 - **When the brief and the code disagree**, and neither the brief nor the plan's constraints
   says which is right, stop and report `NEEDS_CONTEXT` with the file and the line. Never
   rewrite a decision or widen the task to make it fit.

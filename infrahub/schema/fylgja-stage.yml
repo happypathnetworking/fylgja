@@ -1,0 +1,35 @@
+---
+# The kind FylgjaStage: a mark the operator records on a branch, one stage of its proposed change between the branch
+# point and the head (D-088). It is the example's, loaded on main by `make infrahub-seed` (infrahub/seed/seed.py,
+# --schema), and the example orchestrator reads it.
+#
+# A mark names its branch as text and has no relationship to a proposed change, so it can be written before any
+# proposed change of its branch exists: Infrahub runs a proposed change's checks when it is created, and the
+# maintainer's creating one is what starts the rehearsal, which must then find the marks already there. The kind is
+# branch-agnostic, so a mark is written and read through main's endpoint; a mark whose branch and label are another
+# mark's is refused, and a mark is absent from its branch's diff (design/verified-facts.md, "Infrahub 1.11.11").
+#
+# `as_of` is the time the mark stands at, answered as written; where it is absent the mark stands at its own writing.
+# It is not `at`, which every other part of Fylgja says, since Infrahub refuses an attribute name shorter than three
+# characters (the same section).
+version: "1.0"
+nodes:
+  - name: Stage
+    namespace: Fylgja
+    branch: agnostic
+    uniqueness_constraints:
+      - - branch__value
+        - label__value
+    attributes:
+      - name: branch
+        kind: Text
+        optional: false
+      - name: label
+        kind: Text
+        optional: false
+      - name: as_of
+        kind: DateTime
+        optional: true
+      - name: description
+        kind: Text
+        optional: true

@@ -1,0 +1,12 @@
+# The reader document for the seeded fixture network: the reader of Infrahub (readers/infrahub/) maps each device
+# whose manufacturer and platform are a pair below to the platform package named beside them (psp/nokia_srlinux.yaml's
+# id), takes each device's configuration from its artifact named `artifact`, and reads the probes, the seed's
+# FylgjaProbe n1-loop (main/7-probes.yml). Its format is the reader's, formats/infrahub-reader-1.schema.json, and
+# infrahub/tests/test_fixture.py holds its values.
+reader_version: "1"
+platforms:
+  - manufacturer: Nokia
+    platform: SR Linux
+    package: nokia_srlinux
+artifact: device-config
+probes: true

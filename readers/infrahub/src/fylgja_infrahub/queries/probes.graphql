@@ -1,0 +1,23 @@
+# Every probe declared in Infrahub: each FylgjaProbe with its ten attributes, its two ends flat, a then b. The kind is
+# branch-agnostic, and read through the branch's endpoint at the read's own time as every other list: pinned a
+# microsecond after a write, it answers the probe as it stood then (design/verified-facts.md, "Infrahub 1.11.11").
+query Probes($limit: Int!, $offset: Int!) {
+  FylgjaProbe(limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        id
+        name { value }
+        format { value }
+        a_device { value }
+        a_interface { value }
+        a_address { value }
+        a_gateway { value }
+        b_device { value }
+        b_interface { value }
+        b_address { value }
+        b_gateway { value }
+      }
+    }
+  }
+}

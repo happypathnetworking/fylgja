@@ -6,7 +6,12 @@ with the code that files each rule ([`findings-1.schema.json`](../formats/findin
 A **problem** is a refusal at the door, answered as a problem document
 ([`problem-1.schema.json`](../formats/problem-1.schema.json)), each with a JSON pointer to
 the member at fault. A **finding** is part of a verdict, each naming the object it is about.
-Rules the API, the drivers, the push and verify file arrive with their code.
+Rules the API, the drivers, the push and verify file arrive with their code. The example
+orchestrator's rules are its own, never the core's, and its catalogue is
+[`orchestrator/rules.md`](../orchestrator/rules.md).
+
+The Infrahub reader's rules are its own too, and its catalogue is
+[`readers/infrahub/rules.md`](../readers/infrahub/rules.md).
 
 ## Problems: a document refused by its loader
 
@@ -43,6 +48,7 @@ Rules the API, the drivers, the push and verify file arrive with their code.
 
 | Rule | Filed by | Means |
 |---|---|---|
+| `server.extra.missing` | the console script | `fylgja-core-server` was run from a base install: a module of the server's libraries is not installed. The line names the module and the extra, `fylgja-core[server]`, and the server exits 2 ([D-084](../design/decisions.md#d-084)) |
 | `server.optimised` | the server's start | Python runs with `-O` or `PYTHONOPTIMIZE`, which strip the `assert` inside asyncio that drops a connection accepted in the turn before a lost Lease's cut; the server exits 2 without reading a setting ([D-062](../design/decisions.md#d-062)) |
 | `lease.lost` | the Lease | no renewal succeeded within the Lease's 15 s, or another holder took it; the server stops at once and exits 1 ([D-062](../design/decisions.md#d-062)) |
 | `package.id.duplicate` | the packages registry | two packages under `FYLGJA_PACKAGES` share an id (platform) or a format (probe); the message names both files |

@@ -1,0 +1,15 @@
+# The artifact validators of a proposed change, on main, unpinned or at a past time: each one's state and completed_at,
+# which reads the empty string while it runs (design/verified-facts.md, "Infrahub 1.11.11", "The artifact validation
+# of a proposed change", "A validator at a past time").
+query ArtifactValidation($change: ID!) {
+  CoreArtifactValidator(proposed_change__ids: [$change]) {
+    count
+    edges {
+      node {
+        id
+        state { value }
+        completed_at { value }
+      }
+    }
+  }
+}

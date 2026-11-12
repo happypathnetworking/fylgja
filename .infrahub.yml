@@ -1,0 +1,38 @@
+---
+# What Infrahub imports from this repository, registered as the read-only repository `fylgja`: the query
+# device_config; the Jinja2 transform of the same name, which renders one device's SR Linux configuration from it;
+# the artifact definition device-config, which generates that configuration for each member of the group
+# fylgja-devices; and the two checks of a proposed change, fylgja-step and fylgja-twin, global, each binding the query
+# fylgja_branch and starting a deployment of the edge's Prefect through the glue beside them (infrahub/checks/). An
+# import loads these and nothing else: no schema and no object. The schema library's DCIM, under infrahub/schema/dcim/,
+# is loaded apart from it. A proposed change runs the checks as its source branch was made with them: a branch made
+# before an import keeps the commit it was made with.
+
+queries:
+  - name: device_config
+    file_path: infrahub/queries/device_config.gql
+  - name: fylgja_branch
+    file_path: infrahub/queries/fylgja_branch.gql
+
+jinja2_transforms:
+  - name: device_config
+    description: "One device's SR Linux configuration, from the schema library's DCIM."
+    query: device_config
+    template_path: infrahub/templates/device_config.j2
+
+artifact_definitions:
+  - name: device-config
+    artifact_name: device-config
+    parameters:
+      device: name__value
+    content_type: text/plain
+    targets: fylgja-devices
+    transformation: device_config
+
+check_definitions:
+  - name: fylgja-step
+    file_path: infrahub/checks/fylgja_step.py
+    class_name: FylgjaStep
+  - name: fylgja-twin
+    file_path: infrahub/checks/fylgja_twin.py
+    class_name: FylgjaTwin

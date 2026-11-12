@@ -1,9 +1,17 @@
 # Glossary
 
-The terms Fylgja uses, alphabetically. A term marked *(orchestrator)* belongs to the
-orchestrator, in the archived repository for now: the core never uses it, but a reader
-meets it in a blueprint's `source` or in these documents. See also
+The terms Fylgja uses, alphabetically. A term marked *(orchestrator)* belongs to the Infrahub
+reader under `readers/infrahub/` or the example orchestrator under `orchestrator/`, beside the
+core in this repository, and to the source of truth they join: the core never uses it, but it
+is met in a blueprint's `source` or in these documents. See also
 [architecture.md](../design/architecture.md) and the formats in [`formats/`](../formats/README.md).
+
+**Acceptance run** — Phase 8's own gate: the seeded branch's proposed change, created by the
+maintainer in the development Infrahub, rehearsed through Infrahub's own check `fylgja-twin` once
+with the core on the local driver and once with the core deployed on the cluster, the maintainer
+reading each report in its thread. Its every command, and the block that says the maintainer can
+act, are in [CONTRIBUTING.md](../CONTRIBUTING.md#the-acceptance-run)
+([core.md](../design/core.md#phase-8-the-infrahub-reader-and-the-example-orchestrator-settled-2026-11-09)).
 
 **Admission** — The check that a twin fits before anything is applied. `admit` reserves its
 allocation, and the deployment's *demand* (runtime nodes, and the sums of the packages'
@@ -39,6 +47,18 @@ after a pass that failed in a way the loop does not class: doubling from 1 s to 
 reset by a pass that completes ([D-023](../design/decisions.md#d-023)). A driver's event never shortens it, since a runtime's
 own events follow every apply; a client's write does ([D-070](../design/decisions.md#d-070)).
 
+**Base install** — `fylgja-core` installed with no extra: the model package, the client
+library and the thin CLI, over httpx, jsonschema, referencing and PyYAML as ranges, which a
+reader or an integrator's platform installs. The server's libraries are the extra
+`fylgja-core[server]`, pinned exactly ([D-084](../design/decisions.md#d-084)), and
+`fylgja-core-server` from a base install exits 2 saying so.
+
+**Baseline stage** *(orchestrator)* — The first stage of a change that builds, which a
+*rehearsal*'s twin is created at and whose failures are not the change's: what verify still
+finds failing there once the *settle* has ended is recorded as failing before the change, and a
+later stage is failed only for a failure of another rule or object
+([D-086](../design/decisions.md#d-086)).
+
 **Blueprint** — The core's one input: the network (devices, interfaces, links, each device's
 rendered configuration, where it has one) and the probes declared beside it, with an opaque
 *source envelope* ([`blueprint-1.schema.json`](../formats/blueprint-1.schema.json),
@@ -50,6 +70,10 @@ and returns it unchanged. It was earlier called a *snapshot*.
 `{network, probes}` alone, so the same topology read from two branches has one id. Every
 list must arrive sorted and unique; the core rejects one that is not
 (`blueprint.unsorted`, `blueprint.duplicate`) and never sorts it.
+
+**Branch point** *(orchestrator)* — The first *stage* of a proposed change: the default branch
+as it stood when the change's branch was cut, read at the time Infrahub gives that cut
+([D-088](../design/decisions.md#d-088)).
 
 **Build phase** — One item of the "Sequence" in [core.md](../design/core.md#sequence), such as
 "phase 7", built in four stages: settle, plan, execute, land
@@ -73,6 +97,13 @@ claim them, change links on a running twin, forward in software or hardware, rea
 directly or by proxy, keep twins apart by names alone or by the network, and finish an apply
 cut short by applying again (`reapply`, [D-068](../design/decisions.md#d-068)). Code above the
 *driver seam* may branch on a capability, never on a runtime.
+
+**Change source** *(orchestrator)* — The example orchestrator's side of one source of
+truth, behind a seam of four calls: the change a trigger names, its stages in order, a stage
+read into a blueprint or the findings that refused it, and the report posted. The first is
+Infrahub's, `fylgja_orchestrator.infrahub`, which finds the open proposed change of a branch and
+posts the report as a thread of two comments ([D-085](../design/decisions.md#d-085),
+[integrating.md](integrating.md#the-seams)).
 
 **clabernetes** — containerlab on Kubernetes, one pod per node. The production *driver*,
 with a namespace and a NetworkPolicy per twin and a LoadBalancer per node
@@ -149,6 +180,12 @@ clabernetes driver with no cluster to reach, is `Unmakeable`, naming the variabl
 `changes`, `apply`, `inspect`, `destroy`, `endpoints`, `exec` and `events`. Each but `exec` is
 idempotent.
 
+**Edge** *(orchestrator)* — The example orchestrator's outer layer, above its rehearsal library
+and its *change source*: the two Prefect flows Infrahub's checks start, `stage-plan` and
+`twin-rehearse`, each a thin wrap of the library that files its document as the run's
+artifact; the command line; and the two checks. Only its flows and its *runner* import Prefect
+([D-085](../design/decisions.md#d-085)).
+
 **`endpoints`** — The driver call that returns each node's management address. The push,
 readiness, verify and flows dial it, whatever the runtime.
 
@@ -174,10 +211,17 @@ Findings make up a *verdict* or a problem document's `findings`.
 **Flow** — Traffic a step runs between a probe's two hosts while it changes the twin. Its
 *transient loss* (packets lost, the longest gap) is reported, never asserted.
 
-**Frozen Go core** — The core as built in Go, kept as the reference implementation in the
-*archived repository*, which also holds the orchestrator and the earlier formats
-([D-005](../design/decisions.md#d-005)). It explains behaviour and supplies test scenarios, gets fixes
-only, and is retired once the new core replaces it ([D-001](../design/decisions.md#d-001)).
+**Frozen Go core** — The core as built in Go, in the *archived repository*, which also holds
+the prototype orchestrator and the earlier formats ([D-005](../design/decisions.md#d-005)). It was
+the reference implementation while the new core was built, explaining behaviour and supplying test
+scenarios, and was retired at the cut-over ([D-001](../design/decisions.md#d-001),
+[D-081](../design/decisions.md#d-081)): it gets no more fixes, and nothing tracked here needs it or
+the archived repository to build, test or run.
+
+**`FylgjaProbe`** — The Infrahub kind a *probe* is declared in, beside intent and not in it: one
+object a probe, its two ends flat attributes. Its schema ships with the Infrahub *reader*, which
+reads its objects into a blueprint's `probes` where the *reader document* asks for them
+([D-082](../design/decisions.md#d-082)).
 
 **Generation** — A twin's counter of what was asked: it goes up by one with every change of
 *spec* and with a deletion request. The loop copies it to `status.observed_generation`
@@ -187,6 +231,16 @@ once it has acted on it, so a client can tell whether the status is current
 **Hardware driver** — A later release's driver: it claims devices from a pool rather than
 creating nodes, cannot re-cable, and resets each device to a stored baseline. Its paper
 shape checks the seam ([design/core.md](../design/core.md)).
+
+**Head** — The first instant after a branch's latest write, as the Infrahub *reader*'s `head`
+answers it for a scope: a microsecond after the later of the newest stamp of the scope's devices,
+their platforms, manufacturers, interfaces, addresses, cables and artifacts' checksums, of every
+`FylgjaProbe` where the branch has the kind, and the newest event of the branch since it was made
+and of `main` up to then, nothing discounted. A read pinned there meets every
+write before it, where a read pinned at a write's own stamp meets only part of it
+([D-082](../design/decisions.md#d-082)). *(orchestrator)* The last *stage* of a proposed change
+is its branch read at its head, after the *branch point* and the *marks*
+([D-088](../design/decisions.md#d-088)).
 
 **`hot_add_ports`** — A platform package's statement of whether a port added after boot
 appears in the network operating system when a link to it is added live. cEOS: `false`.
@@ -198,8 +252,8 @@ When it changes, the node lost its push, and the loop pushes it again
 finds it on a settled twin ([D-067](../design/decisions.md#d-067)). The loop compares
 incarnations as the driver writes them, and never reads one.
 
-**Infrahub** *(orchestrator)* — OpsMill's source of truth, from which the orchestrator reads
-devices, cables and each device's configuration rendered by a template.
+**Infrahub** *(orchestrator)* — OpsMill's source of truth, from which the Infrahub *reader*
+reads devices, cables and each device's configuration rendered by a template.
 
 **Integration branch** — `phase-N-integration`, the branch a *build phase*'s plans are merged
 into, cut from `main` with the phase's design merged in. It is squashed onto `main` at the
@@ -234,6 +288,11 @@ phase: the tasks done with their commits, every *ruling*, and the findings defer
 re-cabled with no restart, or `restart`. Set by the platform package, written on each node
 at create, and never changed on a running twin.
 
+**Look** *(orchestrator)* — A dry run of each stage of a change as the twin it would make,
+before a *rehearsal* creates anything: a stage the runtime has no room for, lacks an image
+for or cannot build is refused there, and nothing is made
+([D-086](../design/decisions.md#d-086)).
+
 **Lossy** — A rename that drops a placeholder of its rule's match, so that two production
 names can land on one runtime port. The plan counts lossy mappings and shared ports per
 deployment, and omits an uncabled interface whose port a cabled one holds (`shared`).
@@ -242,19 +301,43 @@ deployment, and omits an uncabled interface whose port a cabled one holds (`shar
 production interface name, the rule that matched, the *disposition* (`cabled`, `uncabled`,
 `management` or `omitted`), the node's own port name, and an omission's reason.
 
+**Mark** *(orchestrator)* — A *stage* the operator records on a branch: a `FylgjaStage` in
+Infrahub, branch-agnostic, naming its branch as text, with a label unique within that branch, an
+optional `as_of`, the time it stands at, and an optional description. It has no relationship to
+a proposed change, so it is written before one exists, and it outlives its branch. A change's
+marks stand between its *branch point* and its *head*, in order of their time
+([D-088](../design/decisions.md#d-088)).
+
+**Not rehearsed** *(orchestrator)* — The status of a *rehearsal* that could not be carried
+through for a reason that is not the change's: no stage to build, no room on the runtime, an
+image absent, the runtime's set-up, the core not answering or refusing, the source not
+answering, or an earlier twin still there. Nothing is retried: a refusal for room is asked
+again by running the checks again ([D-086](../design/decisions.md#d-086)).
+
 **Observed state** — The part of a twin record only the reconcile loop writes: the
 generation it acted on, the phase, run, blueprint, bundle, deployment, nodes and last step,
 and the *conditions* `Ready`, `Stepping` and `Diverged`, each with a stable reason.
 
-**Orchestrator** *(orchestrator)* — The other deployable: it reads Infrahub, resolves
-stages, rehearses proposed changes and reports on them. It lives in the archived repository
-for now, and will write blueprint 1 and call API 1 ([D-003](../design/decisions.md#d-003)).
+**Orchestrator** *(orchestrator)* — The example orchestrator: a worked example of joining
+the core and a *reader* to a system that already exists. It resolves stages, rehearses
+proposed changes and reports on them, and is not hardened ([D-081](../design/decisions.md#d-081),
+[D-085](../design/decisions.md#d-085)). It is `fylgja-orchestrator`, under `orchestrator/`, in
+three layers, a rehearsal library, a *change source* and an *edge*, written to be read once and
+replaced ([integrating.md](integrating.md)); its prototype, the orchestrator in the archived
+repository, was the reference it was written against.
 
 **Phase** — (For an item of the build's "Sequence", see *build phase*.) One ordered stage of the
 reconcile loop: `compiled`, `admitted`, `planned`,
 `applied`, `ready`, `pushed`, `verified`, `flows`, and `destroyed` for a deletion. Each is
 recorded before the next begins, so a restarted core resumes
 ([Constitution VIII](../design/constitution.md#viii-reconcile-to-desired-state)).
+
+**Pin** *(orchestrator)* — What fixes the moment a *stage* is read at, in a form only its
+*change source* reads. For Infrahub it is the stage's kind, a branch, a time and the proposed
+change's id. The *head*'s has no time until its read resolves one, once the proposed change's
+artifact validation is waited for: the later of the reader's `head` and the validation's
+completion, or the `head` alone where none completes ([D-085](../design/decisions.md#d-085),
+[D-088](../design/decisions.md#d-088)).
 
 **`plan`** — The pure driver call that binds a bundle to a twin and a runtime, given its
 allocation, and returns a *deployment*. It is the only binding step
@@ -309,12 +392,26 @@ package names: JSON-RPC for SR Linux, eAPI for EOS, once the node is ready (its 
 transport answers). Every push is a *replace*; Fylgja renders no configuration
 ([D-007](../design/decisions.md#d-007)).
 
+**Reader** — A library that turns one source of truth into blueprints, by one documented
+mapping, reporting every fault in one pass and writing no blueprint on failure
+([Constitution III](../design/constitution.md#iii-the-blueprint-is-the-contract)). The first
+is the Infrahub reader, `fylgja-infrahub` ([D-082](../design/decisions.md#d-082)), under
+[`readers/infrahub/`](../readers/infrahub/README.md): the library and a command of that name.
+
+**Reader document** — The input a read of Infrahub takes beside its branch, time and scope:
+which manufacturer and platform pair is which platform package, the name of the artifact
+that holds a device's configuration, and whether probes are read. It holds no address and
+no credential ([D-082](../design/decisions.md#d-082)).
+
 **Reconcile loop** — The core's own loop that drives each twin's observed state toward its
 desired state through its driver, phase by phase ([D-023](../design/decisions.md#d-023)).
 
-**Rehearsal** *(orchestrator)* — A twin created at a proposed change's first stage, stepped
-to each later stage and verified after each, destroyed whatever happened, with the report
-posted on the proposed change.
+**Rehearsal** *(orchestrator)* — A twin created at a change's *baseline stage*, stepped to
+each later stage and verified after each, destroyed whatever happened, with the report posted
+on the change: one twin a rehearsal, named from the change and the run
+([D-086](../design/decisions.md#d-086)). It ends `passed`; `failed`, where the change failed
+at a stage; *not rehearsed*; or `stopped`, where it was stopped before anything could be said
+of the change.
 
 **Rejection fixture** — A document under `testdata/` that a loader or the compiler must
 refuse, carrying one fault, named in its file name and its header comment or `source`
@@ -361,6 +458,17 @@ id, its events by cursor, and cancelled by id (`202`). One run acts on a twin at
 **Run event** — One event of a run: a sequence number, a time, a phase and an outcome,
 read after a cursor (`GET /v1/runs/{id}/events?after=N`). Timings are events.
 
+**Runner** *(orchestrator)* — The process that serves the *edge*'s two flows to a Prefect
+server, as the deployments `stage-plan/main` and `twin-rehearse/main`, each run a process of
+its own beneath it. It holds the two tokens a rehearsal needs, the core's for the principal
+`orchestrator` and one of the Infrahub account `fylgja-orchestrator`; a check holds neither
+([D-085](../design/decisions.md#d-085)).
+
+**Settle** *(orchestrator)* — Verify asked again after a *rehearsal*'s create, every 5 s,
+until it holds or the settle budget passes, 180 s by default: verify does not wait outside a
+step's run, and a twin's protocols take a moment to come up. What still fails then belongs to
+the *baseline stage* ([D-086](../design/decisions.md#d-086)).
+
 **Site overlay** — The kustomize overlay under `local/deploy/`, never committed, that deploys
 the core on one cluster over the base under `deploy/`: the image's registry and tag, the Secrets
 and the ConfigMap the base's pods name, made from files of mode `0600`, and the Service's
@@ -376,14 +484,29 @@ returns it, and never reads or hashes it
 ([Constitution VI](../design/constitution.md#vi-intent-is-addressed)).
 
 **Source of truth** *(orchestrator)* — The system that holds a network's intent, today
-Infrahub. Only the orchestrator reads one.
+Infrahub. A *reader* reads its intent; a *change source* reads its changes and posts the
+report to it.
 
-**Stage** *(orchestrator)* — A moment of a proposed change: its branch point, a mark the
-operator records, or its head. The orchestrator resolves a stage to a blueprint.
+**Stage** *(orchestrator)* — A moment of a proposed change: its *branch point*, a *mark* the
+operator records on the branch, or its *head* ([D-088](../design/decisions.md#d-088)). The orchestrator resolves
+a stage to a blueprint through the *reader*.
+
+**Stage record** *(orchestrator)* — The example's file a twin, saying which change and *stage*
+a twin made by `twin create` or `twin step` stands at, and the blueprint id that stage read as.
+It is trusted only while that id is the twin's, and `twin step` with no stage named takes the
+twin to the stage after it ([D-086](../design/decisions.md#d-086)).
 
 **Spec** — The part of a twin record a client writes: the blueprint or bundle, the driver,
 and whether the loop may restart nodes. Writing a new spec creates or steps the twin
 ([D-025](../design/decisions.md#d-025)).
+
+**Stale configuration** — A device's configuration artifact generated before the latest write to
+the intent it renders from: the device, the names of its platform and manufacturer, its
+interfaces, their addresses, its cables and the names of their far ports and far devices, by their
+stamps and the events of the branch and of `main` up to the branch's making, the task workers' own
+writes not counting. The Infrahub *reader* refuses it by device, `artifact.stale`, since Infrahub
+regenerates an artifact only when asked; a caller that knows a regeneration completed gives that
+time as `generated_since` ([D-082](../design/decisions.md#d-082)).
 
 **State store** — The one interface behind which twin records, runs and their events,
 blueprints, bundles and deployments live: a directory locally, S3-compatible object storage

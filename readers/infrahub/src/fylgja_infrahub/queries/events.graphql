@@ -1,0 +1,26 @@
+# The events of the branches asked, a branch's own and main's, since a time, newest first: each event's name, time,
+# account and branch, its primary node and its related nodes, and, for a node's own write, the attributes and the
+# relationships it changed. Infrahub answers at most 50 a page, and the same from main's endpoint or the branch's
+# (design/verified-facts.md, "Infrahub 1.11.11", "The branch's events"). main's are a branch's history up to the
+# branch's branched_from (P3-45).
+query Events($branches: [String!]!, $since: DateTime!, $limit: Int!, $offset: Int!) {
+  InfrahubEvent(branches: $branches, since: $since, order: DESC, limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        __typename
+        id
+        event
+        occurred_at
+        branch
+        account_id
+        primary_node { id kind }
+        related_nodes { id }
+        ... on NodeMutatedEvent {
+          attributes { name }
+          relationships { name peer { id } }
+        }
+      }
+    }
+  }
+}

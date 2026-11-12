@@ -1,11 +1,13 @@
 # Formats
 
-Every format and interface the core reads and writes, version 1. Each has one version,
+Every format of the three distributions, version 1: each format and interface the core reads
+and writes, the reader document the Infrahub reader takes, and the example orchestrator's two
+documents. Each has one version,
 specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). The
 design they follow is [design/core.md](../design/core.md). A change found while
 building the core is made here, in the same change as the code.
 
-The wheel carries these files as the package's data, copied when it is built ([D-066](../design/decisions.md#d-066)); this directory stays the one place a format is changed.
+The core's wheel carries the core's formats as the package's data, copied when it is built from the list in `core/setup.py` ([D-066](../design/decisions.md#d-066), [D-084](../design/decisions.md#d-084)); a format another distribution reads is carried by that distribution's wheel. This directory stays the one place a format is changed.
 
 Version 1 of every format starts at the repository's baseline. The earlier formats are in
 the project's archived repository, where the input was called a snapshot
@@ -29,6 +31,9 @@ relative to them.
 | [`findings-1.schema.json`](findings-1.schema.json) | [D-025](../design/decisions.md#d-025) |
 | [`problem-1.schema.json`](problem-1.schema.json) | [D-025](../design/decisions.md#d-025) |
 | [`api-1.openapi.yaml`](api-1.openapi.yaml) | [D-025](../design/decisions.md#d-025) |
+| [`infrahub-reader-1.schema.json`](infrahub-reader-1.schema.json) | [D-082](../design/decisions.md#d-082) |
+| [`plan-1.schema.json`](plan-1.schema.json) | [D-086](../design/decisions.md#d-086) |
+| [`rehearsal-1.schema.json`](rehearsal-1.schema.json) | [D-086](../design/decisions.md#d-086) |
 
 ## Notes
 
@@ -63,8 +68,12 @@ relative to them.
    run, and the step's wait budget is the server's setting.
 10. **A twin's name is a DNS-1123 label of at most 40 characters.** Run ids are ULIDs. A
     problem's `type` is a class, and `rule` is the specific id, so no fact is stored twice.
-11. **Findings hold the core's rules alone.** Rules for readers, stages and rehearsals are
-    the orchestrator's ([D-003](../design/decisions.md#d-003)).
+11. **Findings hold the core's rules alone.** A reader's rules are its own, in its own
+    `rules.md`: the Infrahub reader's are in
+    [`readers/infrahub/rules.md`](../readers/infrahub/rules.md)
+    ([D-082](../design/decisions.md#d-082)). Rules for stages and rehearsals are the example
+    orchestrator's ([D-081](../design/decisions.md#d-081)), in
+    [`orchestrator/rules.md`](../orchestrator/rules.md).
 12. **A device name is a DNS-1123 label** of at most 63 characters
     ([D-038](../design/decisions.md#d-038)). It becomes the node's host name, its container
     or pod name and its bundle file name, so the blueprint requires the one form all of them
@@ -111,6 +120,9 @@ relative to them.
     found replaced on a settled twin ([D-067](../design/decisions.md#d-067)). Its verdict
     carries verify's counts and the wait, as a step's does, and no loss. A run's verdict
     names its run's operation, so findings 1 gains `restore` beside API 1.
+23. **The plan and the rehearsal are the example orchestrator's documents** since phase 8,
+    carried by its wheel and not the core's ([D-084](../design/decisions.md#d-084)). Each
+    `$ref`s nothing outside the two files, so that wheel resolves them alone.
 
 ## Settled by measurement (2026-10-30)
 

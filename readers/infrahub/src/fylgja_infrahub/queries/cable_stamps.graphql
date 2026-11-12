@@ -1,0 +1,36 @@
+# The stale rule's stamps of the scope's cables: each physical port of the scope's devices that has a connector, by
+# its id, since a connector is listed once for each port it ends, with its device and the connector's stamp on the
+# port's connector edge, which a cable re-ended away from another port moves (design/verified-facts.md,
+# "Infrahub 1.11.11", "Which stamps each write moved"); and each end of the connector, on an interface, with when its
+# name and its device's were last written, the far end's names being what a configuration renders of it
+# (infrahub/queries/device_config.gql). The ends carry their count, which rows.incomplete holds them to.
+query CableStamps($devices: [ID], $limit: Int!, $offset: Int!) {
+  InterfacePhysical(device__ids: $devices, connector__isnull: false, limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        id
+        device { node { id } }
+        connector {
+          node_metadata { updated_at updated_by { id } created_at }
+          node {
+            id
+            ... on DcimCable { label { value } }
+            connected_endpoints {
+              count
+              edges {
+                node {
+                  id
+                  ... on DcimInterface {
+                    name { updated_at }
+                    device { node { id name { updated_at } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

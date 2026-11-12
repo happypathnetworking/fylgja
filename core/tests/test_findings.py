@@ -62,7 +62,9 @@ def test_a_compile_verdict_carries_no_counts_wait_or_loss() -> None:
 
 def test_another_version_is_refused_first() -> None:
     other = {**doc(), "findings_version": "2"}
-    assert findings.validate(other) == [Problem("/findings_version", RULE_VERSION, "version '2'; this core reads 1")]
+    assert findings.validate(other) == [
+        Problem("/findings_version", RULE_VERSION, "version '2'; only version 1 is read")
+    ]
 
 
 def test_a_measured_loss_without_its_counters_is_a_schema_fault() -> None:

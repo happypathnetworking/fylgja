@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/rehearsal-1.schema.json",
+  "title": "Fylgja rehearsal 1",
+  "description": "The example orchestrator's rehearsal of a change on one twin (D-086): its plan, what each stage came to on the twin, and the rehearsal's own findings, the cause first. The check fylgja-twin concludes from its status alone and the command twin rehearse exits by it; the report is rendered from this document and nothing else (D-087). It is the example's document and not the core's, and refers to no file but this one and plan 1 (formats/README.md, note 23).",
+  "$comment": "STATUS. Given by the first error finding of findings, the cause, and by nothing else (orchestrator/rules.md): passed where there is none; failed where the change failed at a stage; not_rehearsed where the rehearsal could not be carried through for a reason that is not the change's; stopped where it was stopped before anything could be said of the change. A rehearsal ended by an exception it does not conclude from, an interrupt, a cancel or a deadline of whoever runs it among them, writes no document: its caller concludes stopped (D-085).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rehearsal_version", "status", "headline", "plan", "twin", "run_id", "took_s", "stages", "already_failing", "reclaimed", "findings"],
+  "properties": {
+    "rehearsal_version": {
+      "const": "1",
+      "description": "The format's version; a check refuses any other."
+    },
+    "status": {
+      "enum": ["passed", "failed", "not_rehearsed", "stopped"],
+      "description": "The rehearsal's verdict, which its cause fixes: passed, failed, not_rehearsed or stopped. A check concludes from it alone and the command twin rehearse exits by it, passed alone passing."
+    },
+    "headline": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The verdict and its cause, two lines of plain text: the check's message, and the report's heading and first sentence."
+    },
+    "plan": {
+      "if": { "type": "null" },
+      "else": { "$ref": "plan-1.schema.json" },
+      "description": "The change's plan, a plan 1 document whole, so that no fact is stored twice; null where the rehearsal ended before its plan began (an earlier twin still held, the core refusing or not answering before the plan, or the time limit passing during the reclaim). The report's table, its detail and its last paragraph read it."
+    },
+    "twin": {
+      "$ref": "#/$defs/twin_name",
+      "description": "The twin the rehearsal made, named from the change and the run; the report's detail and the sentences that name the twin give it."
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The run of whoever ran the rehearsal, which the twin is named from; the report's detail cites it."
+    },
+    "took_s": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Seconds the rehearsal took; the report's last paragraph gives it."
+    },
+    "stages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stage" },
+      "description": "What each stage of the plan came to on the twin, one for each of the plan's in its order, none where the plan is null; the report's table reads its result and its checks."
+    },
+    "already_failing": {
+      "type": "array",
+      "items": { "$ref": "plan-1.schema.json#/$defs/finding" },
+      "description": "Verify's errors at the baseline once its settle budget passed, which a later stage is not failed for, compared by rule and object; the report lists them under Already failing before this change."
+    },
+    "room": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The capacity read when the runtime had no room, a line a host and then what is pending; present only where a refusal for room was read. The report lists it under The room when it was refused."
+    },
+    "reclaimed": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/twin_name" },
+      "description": "The twins of the change's earlier rehearsals this one removed before it started; the report's detail names them."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "plan-1.schema.json#/$defs/finding" },
+      "description": "The rehearsal's own findings (orchestrator/rules.md), the cause first, then the warnings: the report's first sentence is the cause's message, and its detail gives the warnings'. A command exits by the status, which the cause fixes."
+    }
+  },
+  "$defs": {
+    "twin_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$",
+      "description": "A twin's name as the core takes it: a DNS-1123 label of at most 40 characters."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "A run of the core's, a ULID, as the core gives it."
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result"],
+      "properties": {
+        "result": {
+          "enum": ["created", "passed", "failed", "skipped", "empty", "not_reached"],
+          "description": "What the stage came to: created, the baseline the twin was created at; passed, stepped to and verified with no failure the baseline did not have; failed; skipped, its bundle the one before on a Ready twin, so nothing was asked; empty, a stage the plan passed over; not_reached. The report's table shows it."
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["held", "failed", "skipped"],
+          "properties": {
+            "held": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Assertions that held; the report's table shows it."
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Assertions that failed; the report's table shows it."
+            },
+            "skipped": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Assertions not made; the report's detail gives it where it is not zero."
+            }
+          },
+          "description": "Verify's assertion counts at the stage, its last verify's; present once verified. The report's table shows them."
+        },
+        "failures": {
+          "type": "array",
+          "items": { "$ref": "plan-1.schema.json#/$defs/finding" },
+          "description": "What failed the stage: verify's errors the baseline did not have, or the error findings of the run or the dry run that refused it, but a diverged step's step.diverged, since the first sentence says the step left the twin diverged. The report lists them under What failed, and its first sentence quotes the first."
+        },
+        "run_id": {
+          "$ref": "#/$defs/run_id",
+          "description": "The core's run that created the twin at the stage or stepped it there; the report's detail cites it."
+        },
+        "took_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds the stage took on the twin; the report's detail gives it."
+        },
+        "wait": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["budget_s", "after_s"],
+          "properties": {
+            "budget_s": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The wait's bound in seconds; the report's line on the wait states it."
+            },
+            "after_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Seconds the wait ran before it ended; the report's detail gives it."
+            }
+          },
+          "description": "A wait for verify to hold that expired at the stage, the baseline's settle or a step's; present only then. The report gives it one line."
+        }
+      },
+      "description": "What one stage of the plan came to on the twin."
+    }
+  }
+}

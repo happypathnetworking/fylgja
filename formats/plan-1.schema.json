@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/plan-1.schema.json",
+  "title": "Fylgja plan 1",
+  "description": "The example orchestrator's plan of a change: each of its stages, in the change's order, read from the change's source under one scope, filed and built by the core, and diffed against the stage built before it (D-086). The check fylgja-step concludes from its status alone and the command stage plan prints it; a rehearsal 1 document holds it whole, and its report reads it there. It is the example's document and not the core's, and refers to no file but this one (formats/README.md, note 23).",
+  "$comment": "OUTCOMES. A stage is empty where the scope selects no device in it before any stage built, and passed over; the first that builds is the baseline. A stage that selects no device after one built, that the source gives no blueprint for, that the core refuses to file or that the compiler refuses, is refused, and ends the plan: the stages after it are not_read, never read. STATUS. refused with a refused stage; else planned with a built stage; else empty; unfinished where a fault that is no stage's stopped the plan, the stage it met and those after it not_read.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_version", "status", "headline", "change", "scope", "read_at", "findings", "stages"],
+  "properties": {
+    "plan_version": {
+      "const": "1",
+      "description": "The format's version; a check refuses any other."
+    },
+    "status": {
+      "enum": ["planned", "refused", "empty", "unfinished"],
+      "description": "What the plan concluded: planned, a stage built and none refused; refused, a stage could not be built; empty, no stage selects a device in the scope; unfinished, a fault that is no stage's stopped it, met only inside a rehearsal's document, whose report reads it. The check fylgja-step concludes from it and the command stage plan exits by it, planned alone passing."
+    },
+    "headline": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The plan's heading and its cause, two lines of plain text, the second left out of an unfinished plan's: the check's message, and the command's first lines."
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "where"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The source's id for the change; the report's detail cites it."
+        },
+        "where": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The change in words, as its source gives them; the report's last paragraph begins with it, and a command names the change by it."
+        }
+      },
+      "description": "The change planned; the report's detail and its last paragraph name it, and so does a command."
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The scope every stage was read under; the report's last paragraph states it, and rehearsal.stages.none's sentence, its first, names it."
+    },
+    "read_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "When the stages were read, RFC 3339 in UTC to the second; the report's last paragraph gives it, and says that later edits are not rehearsed."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" },
+      "description": "The plan's own findings: stage.refused, its object the refused stage's label, or rehearsal.stages.none (orchestrator/rules.md). The report's first sentence is the first one's message, and the command prints them."
+    },
+    "stages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stage" },
+      "description": "Every stage of the change, in its order, each one once; the report's table has a row a stage, and the command stage plan a row a stage."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A lowercase-hex SHA-256 content address, as the core gives a blueprint's and a bundle's."
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "severity", "message"],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+          "description": "A stable dotted rule id, the core's, the source's or the example's own (orchestrator/rules.md); the report quotes it after the message, and a check and a command match on it, never on the message."
+        },
+        "severity": {
+          "enum": ["error", "warning", "info"],
+          "description": "error, warning or info; the report lists the errors that failed a stage under What failed and the findings that are no error under Not modelled on the twin, and a command prints it."
+        },
+        "object": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the finding is about, where it names something (a device, an interface, a stage's label); the report puts it before the message."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One plain sentence of the fault's facts, never markup or a credential; the report gives it whole, and a command prints it."
+        }
+      },
+      "description": "One finding, in the shape of the core's: a rule, a severity, what it is about and a sentence."
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "where", "outcome"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stage's label, as its source gives it; the report's table and the command's row show it."
+        },
+        "where": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stage's pin in words, as its source gives them; the report's detail gives it."
+        },
+        "outcome": {
+          "enum": ["built", "empty", "refused", "not_read"],
+          "description": "What the plan made of the stage: built, filed and built into a bundle; empty, the scope selects no device in it, before any stage built; refused; not_read, never read, after a refusal or a fault. The report's result for a stage the rehearsal never ran, and the command's row."
+        },
+        "blueprint_id": {
+          "$ref": "#/$defs/id",
+          "description": "The blueprint the stage was filed as, present once filed; the report's detail cites it."
+        },
+        "bundle_id": {
+          "$ref": "#/$defs/id",
+          "description": "The bundle the stage built, present once built; the report's detail cites it, and the command stage plan cites it in its row."
+        },
+        "changed": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What changed from the stage built before it, in words from the bundle diff, the first built stage's beginning `baseline:`; present once built. The report's table and the command's row show it."
+        },
+        "unchanged": {
+          "type": "boolean",
+          "description": "Whether the stage's bundle is the one built before it; present once built. The report's table shows such a stage skipped as unchanged, and the command's row says so."
+        },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" },
+          "description": "The findings of the stage's read and its build, the source's and the compiler's; the report lists a refused stage's errors under What failed, those that are no error under Not modelled on the twin and every one in its detail, and the command prints them."
+        },
+        "omitted": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/omitted" },
+          "description": "The interfaces the twin of the stage does not represent, as the core's build answers them; the report lists them under Not modelled on the twin, and its detail."
+        },
+        "approximations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/approximation" },
+          "description": "What the packages the stage uses approximate, as the core's build answers it; the report's detail gives each package's sentence once."
+        }
+      },
+      "if": { "properties": { "outcome": { "const": "built" } } },
+      "then": { "required": ["blueprint_id", "bundle_id", "changed", "unchanged"] },
+      "description": "One stage of the change and what the plan made of it."
+    },
+    "omitted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "interface", "omission"],
+      "properties": {
+        "device": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The device the omitted interface is on; the report names it."
+        },
+        "interface": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The production interface the twin leaves out; the report names it."
+        },
+        "omission": {
+          "enum": ["out_of_range", "no_rule", "extra_management", "shared"],
+          "description": "Why, as the core's build gives it: out of its rule's range, matched by no rule, a further management-only interface, or its port taken by a cabled interface. The report says it in words."
+        }
+      },
+      "description": "One interface the twin does not represent, a row of the build's fidelity; asserted, never measured."
+    },
+    "approximation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "text"],
+      "properties": {
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The platform id or probe format whose package asserts it; the report's detail gives each package's sentence once by it."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The package's sentence, verbatim; the report's detail gives it."
+        }
+      },
+      "description": "One thing a package says its platform's twin approximates, a row of the build's fidelity."
+    }
+  }
+}

@@ -1,0 +1,88 @@
+---
+# The kind FylgjaProbe: a probe declared in Infrahub, beside intent and not in it, which the reader reads into a
+# blueprint's probes where the reader document asks for them (readers/infrahub/mapping.md, D-082). It ships with the
+# reader, and is loaded on main by `make infrahub-seed` (infrahub/seed/seed.py, --schema).
+#
+# One object is one probe of blueprint 1 (formats/blueprint-1.schema.json, `probe`), its two endpoints flat attributes,
+# a then b, so a read gives the probe by renaming alone. Every attribute is Text: `format` is no Dropdown, so a probe
+# package is added with no schema change (Constitution II), and an address is no IPHost, which Infrahub would write
+# back in a form of its own. The patterns are blueprint 1's. A probe names its devices by their names in Infrahub and
+# has no relationship to a device, which may be on one branch alone; the kind is branch-agnostic, and a probe is read
+# through any branch's endpoint.
+version: "1.0"
+nodes:
+  - name: Probe
+    namespace: Fylgja
+    description: A probe of two hosts on two uncabled ports of the intent, each pinging the other through the twin.
+    label: Probe
+    branch: agnostic
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - - name__value
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^[a-z0-9][a-z0-9-]{0,23}$'
+        description: The probe's name; its hosts are <name>-a and <name>-b.
+        order_weight: 1000
+      - name: format
+        kind: Text
+        optional: false
+        default_value: ping
+        parameters:
+          regex: '^[a-z0-9][a-z0-9_]*$'
+        description: The probe package that runs the hosts, by its format.
+        order_weight: 1100
+      - name: a_device
+        kind: Text
+        optional: false
+        description: Host a's device, by its name in Infrahub.
+        order_weight: 1200
+      - name: a_interface
+        kind: Text
+        optional: false
+        description: Host a's port on that device, uncabled and not for management.
+        order_weight: 1210
+      - name: a_address
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$'
+        description: Host a's IPv4 address with its prefix length.
+        order_weight: 1220
+      - name: a_gateway
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$'
+        description: Host a's gateway, an IPv4 address within its prefix.
+        order_weight: 1230
+      - name: b_device
+        kind: Text
+        optional: false
+        description: Host b's device, by its name in Infrahub.
+        order_weight: 1300
+      - name: b_interface
+        kind: Text
+        optional: false
+        description: Host b's port on that device, uncabled and not for management.
+        order_weight: 1310
+      - name: b_address
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$'
+        description: Host b's IPv4 address with its prefix length.
+        order_weight: 1320
+      - name: b_gateway
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$'
+        description: Host b's gateway, an IPv4 address within its prefix.
+        order_weight: 1330

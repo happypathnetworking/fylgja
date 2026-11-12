@@ -80,7 +80,8 @@ Its exit status:
   `PYTHONOPTIMIZE`, rule `server.optimised`), a package refused, a token file it cannot
   read, a driver it does not serve, a cluster the clabernetes driver cannot reach (`KUBECONFIG`,
   or in a pod `KUBERNETES_SERVICE_HOST` or `KUBERNETES_SERVICE_PORT`), an address it cannot
-  listen on (`FYLGJA_LISTEN`).
+  listen on (`FYLGJA_LISTEN`), or, run by the console script from a base install, one of the
+  server's libraries not installed (rule `server.extra.missing`).
 
 Waiting for a Lease another holds is no exit: one INFO line a holder, and no socket bound.
 """

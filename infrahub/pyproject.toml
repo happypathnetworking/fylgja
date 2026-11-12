@@ -1,0 +1,9 @@
+# The tests of infrahub/, pytest's settings alone: nothing here is a distribution. ruff and mypy check it from
+# core/, with the core's settings (make lint).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["seed", "../scripts"]
+markers = [
+    "contract: reads and writes the development Infrahub, under tests/contract; deselected by default",
+]
+addopts = "-p no:cacheprovider -m 'not contract'"

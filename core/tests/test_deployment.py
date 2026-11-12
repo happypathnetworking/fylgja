@@ -68,7 +68,7 @@ def test_the_compile_fidelity_is_the_runtime_independent_part() -> None:
 def test_another_version_is_refused_first() -> None:
     other = {**doc(), "deployment_version": "2"}
     assert deployment.validate(other) == [
-        Problem("/deployment_version", RULE_VERSION, "version '2'; this core reads 1")
+        Problem("/deployment_version", RULE_VERSION, "version '2'; only version 1 is read")
     ]
 
 

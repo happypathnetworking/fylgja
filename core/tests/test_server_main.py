@@ -1788,6 +1788,34 @@ def test_the_console_script_is_the_entry_module() -> None:
     assert project["project"]["scripts"]["fylgja-core-server"] == "fylgja_core.server.entry:main"
 
 
+def _console_script_probe(blocked: str) -> subprocess.CompletedProcess[str]:
+    probe = (f"import sys; sys.modules[{blocked!r}] = None; "
+             "from fylgja_core.server.entry import main; sys.exit(main())")
+    return subprocess.run([sys.executable, "-I", "-c", probe], capture_output=True, text=True, timeout=DEADLINE_S)
+
+
+def test_the_console_script_without_the_server_extra_says_so_in_one_line_and_exits_2() -> None:
+    done = _console_script_probe("uvicorn")
+    assert done.returncode == 2
+    assert done.stdout == ""
+    assert "Traceback" not in done.stderr
+    lines = done.stderr.splitlines()
+    assert len(lines) == 1
+    line = json.loads(lines[0])
+    assert line["level"] == "ERROR"
+    assert line["rule"] == "server.extra.missing"
+    assert "uvicorn" in line["message"]
+    assert "fylgja-core[server]" in line["message"]
+
+
+def test_a_missing_module_of_the_cores_own_is_not_taken_for_the_extra() -> None:
+    done = _console_script_probe("fylgja_core.config")
+    assert done.returncode == 1
+    assert "Traceback" in done.stderr
+    assert "fylgja_core.config" in done.stderr
+    assert "server.extra.missing" not in done.stderr
+
+
 def test_sigterm_while_the_console_script_imports_the_server_exits_143_with_nothing_logged_or_opened(
     environ: dict[str, str], tmp_path: Path
 ) -> None:

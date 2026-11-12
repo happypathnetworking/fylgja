@@ -1,0 +1,48 @@
+# One device of the schema library's DCIM, by its name: its description, its platform with the platform's
+# manufacturer, and each of its interfaces with its kind, name, status and role; for a physical port, its addresses
+# and its cable's ends, each end's port and that port's device. The cable is reached through the generic
+# DcimConnector and its ends through DcimEndpoint, whose ports DcimInterface names; the addresses are
+# InterfaceLayer3's, which InterfacePhysical inherits, so they are selected in its fragment.
+query device_config($device: String!) {
+  DcimDevice(name__value: $device) {
+    edges {
+      node {
+        name { value }
+        description { value }
+        platform {
+          node {
+            name { value }
+            manufacturer { node { name { value } } }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name { value }
+              status { value }
+              role { value }
+              ... on InterfacePhysical {
+                ip_addresses { edges { node { address { value } } } }
+                connector {
+                  node {
+                    connected_endpoints {
+                      edges {
+                        node {
+                          ... on DcimInterface {
+                            name { value }
+                            device { node { name { value } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -11,14 +11,15 @@ already have been weighed.
   its status line names the entry that superseded it, the date, and the part, when only a
   part. The constitution is amended only by citing an entry.
 - **Every entry here is in force**, except where its status line says a later entry
-  superseded it. Decisions taken before the baseline, and the
-  orchestrator's own (reading Infrahub, stages, the checks, the rehearsal's report), are
-  recorded in the project's archived repository. The orchestrator's decisions return here,
-  restated, when it moves here.
+  superseded it. Decisions taken before the baseline are recorded in the project's archived
+  repository, and so are the prototype orchestrator's (reading Infrahub, stages, the checks,
+  the rehearsal's report), which bind nothing here: those kept were restated in
+  [D-082](#d-082), [D-086](#d-086), [D-087](#d-087) and [D-088](#d-088).
 - **Citing an entry.** Cite it by its number, `D-0NN`, and link it by its anchor:
   `decisions.md#d-0nn` from `design/`, or `design/decisions.md#d-0nn` from the repository root.
-- **The frozen Go core**, in the archived repository, is the reference implementation of
-  the core ([D-001](#d-001)). Where an entry describes its behaviour, it says so.
+- **The frozen Go core**, in the archived repository, was the reference implementation of
+  the core ([D-001](#d-001)) and is retired ([D-081](#d-081), [D-094](#d-094)). Where an
+  entry describes its behaviour, it says so.
 
 ## Index
 
@@ -104,6 +105,20 @@ already have been weighed.
 | [D-078](#d-078) | Contention as read on the many-twins runs: no bound on the node clients, and no wait widened | Pushing, stepping and verifying |
 | [D-079](#d-079) | The capacity read as built: `capacity show`, and `read_at` from the core's one clock | The API and its clients |
 | [D-080](#d-080) | A phase is built in four stages on an integration branch and lands on `main` as one squash | Process and repository |
+| [D-081](#d-081) | Three pieces at three standards: the core, a reader for each source, and an example orchestrator written new here | The project and its shape |
+| [D-082](#d-082) | The Infrahub reader: read-only, complete or refused, and a configuration older than its intent is refused | Intent and the blueprint |
+| [D-083](#d-083) | The reader speaks plain HTTP through httpx, states the Infrahub versions it passed on, and is tested against a real one | The API and its clients |
+| [D-084](#d-084) | What an integrator installs and calls: the core's base install is the model and the client, and the client follows a run | The API and its clients |
+| [D-085](#d-085) | The example orchestrator: a rehearsal library, a change source behind a seam, and Prefect at the edge alone | The API and its clients |
+| [D-086](#d-086) | The example's rehearsal: one twin a rehearsal, a look before it asks, "ask again" without a retry, and what it leaves out | The API and its clients |
+| [D-087](#d-087) | The rehearsal's report: the verdict first, each failure with its message, and no loss | The API and its clients |
+| [D-088](#d-088) | A stage mark names its branch, so marks can be written before the proposed change exists | Intent and the blueprint |
+| [D-089](#d-089) | The Infrahub reader as built: the stale rule reads every node a configuration renders from, a read is pinned the instant after a write, and the schema is checked by its structure | Intent and the blueprint |
+| [D-090](#d-090) | The base install and the client's following as built: four libraries, and a follow that takes no timeout | The API and its clients |
+| [D-091](#d-091) | The development Infrahub and its seed as built: `infrahub/` at the root, the task workers given a `.git` directory, and each worker holding the registered commit | The API and its clients |
+| [D-092](#d-092) | The example's rehearsal, its clean-up and its report as built: a fourth status, a deletion read until the twin is gone, and no document after a cancel | The API and its clients |
+| [D-093](#d-093) | The Infrahub change source, the two checks and the edge as built: four permissions, the head read once the validation has completed, and a draft planned but not rehearsed | The API and its clients |
+| [D-094](#d-094) | The cut-over as made: a proposed change rehearsed through Infrahub's own check on both drivers, and what is left to the maintainer's word | The project and its shape |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -185,6 +200,9 @@ There is no outside user to keep compatible with.
 ### D-003 — Fylgja is two deployables: a core, and an orchestrator that drives it through the API alone
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-081](#d-081) and [D-085](#d-085) on 2026-11-09 (phase 8):
+the orchestrator is an example and not a product, a reader for each source is a library of
+its own, and Prefect is at the example's edge alone. Its boundary, the API alone, stands.
 
 #### Context
 
@@ -231,6 +249,8 @@ code for every new source.
 ### D-004 — Infrahub is the first source of truth, and the core knows none
 
 **Status:** Accepted at the baseline (2026-10-31).
+Detailed by [D-081](#d-081) and [D-082](#d-082) on 2026-11-09 (phase 8): the
+Infrahub reader is a library of its own, not the orchestrator's adapter.
 
 #### Context
 
@@ -270,6 +290,11 @@ an address to build a twin of) and a **flexible schema**.
 ### D-005 — The production project lives in a new repository, the core first
 
 **Status:** Accepted at the baseline (2026-10-31).
+Detailed by [D-081](#d-081) on 2026-11-09 (phase 8): what moves here is the
+orchestrator's capability, written new, and the cut-over is the example rehearsing a proposed
+change on the new core.
+Detailed by [D-094](#d-094) on 2026-11-12 (phase 8's landing): the cut-over as made, and what of
+it is left to the maintainer's word.
 
 #### Context
 
@@ -322,6 +347,142 @@ What the first commit holds:
 - Links to the archived repository's releases break once it goes private.
 - This repository's code cites no commit of the archived one, and holds no converter between
   the two repositories' formats ([D-002](#d-002)).
+
+<a id="d-081"></a>
+### D-081 — Three pieces at three standards: the core, a reader for each source, and an example orchestrator written new here
+
+**Status:** Accepted 2026-11-09 (phase 8). Supersedes [D-003](#d-003) in what the
+orchestrator is and in who reads a source; its boundary, the API alone, stands. Details
+[D-005](#d-005): what moves here is the capability, written new. Details [D-004](#d-004): the
+reader is a library of its own, not the orchestrator's adapter.
+Detailed by [D-091](#d-091) and [D-094](#d-094) on 2026-11-12: what Infrahub fetches lives in
+`infrahub/` at the root, not under `orchestrator/`; and the cut-over as made.
+
+#### Context
+
+D-003 made Fylgja two deployables and the orchestrator a product: it read the source,
+resolved stages, rehearsed and reported. Its revisit clause names the case that has come:
+"once the orchestrator is decided to be a contract rather than a product". On 2026-11-09 the
+maintainer described who phase 8 is for. Someone who runs Infrahub takes the core and an
+Infrahub integration, and joins them to the orchestration platform they already have, or to
+code of their own. The orchestrator's "primary purpose is to serve as an example of how to
+integrate fylgja with an existing system"; it "is not meant to be production-ready"; the
+Infrahub integration is developed "with some rigor" and "should be usable in a production
+workflow". NetBox is to follow, and its user is to rehearse a multi-step proposed change.
+
+D-005 moves the orchestrator here "when the new core runs twins". The prototype in the
+archived repository is about 12,000 lines against the Go core's API and formats, of which
+about half would carry over unchanged or with small edits. On 2026-11-05 the maintainer read
+D-005 as cutting over the orchestrator's capability and not its code.
+
+#### Options considered
+
+- **The orchestrator as a product, moved here** (D-003 as written). Not taken: a user with a
+  platform of their own would have to run a second one, or take the reader out of it by
+  hand.
+- **The reader inside the example**, as the prototype's adapter was. Not taken: the part
+  held to a production standard would live in the part that is not, and would learn its
+  stages and its workflow engine.
+- **The reader inside the core's package.** Rejected by D-003: the core knows no source.
+- **Port the prototype.** Not taken: its documents are held byte for byte to the Go core's,
+  its tests seed Infrahub through a Go tool, and its flows assume one twin on one host.
+- **Three pieces, written new, the prototype the reference.** Chosen.
+
+#### Decision
+
+- **Fylgja ships three pieces.** The **core**, as built. A **reader** for each source, a
+  library that turns that source into a blueprint: the first is `fylgja-infrahub`, under
+  `readers/infrahub/` ([D-082](#d-082)). And an **example orchestrator**,
+  `fylgja-orchestrator`, under `orchestrator/`, which rehearses a proposed change and posts
+  the report ([D-085](#d-085)).
+- **Their standards differ.** The reader is held to what a production workflow needs. The
+  example is honest on its main path and on plain failures, and is not hardened
+  ([D-086](#d-086)).
+- **Imports run one way**, held by a test over imports: the reader imports the core's model
+  and client and nothing of the example; the example imports the reader, the core's client
+  and model, and its workflow engine; the core imports neither.
+- **Stages, the source's checks and the report's post are the example's**, not the reader's
+  (the maintainer, 2026-11-09).
+- **Both are written new in this repository**, with the prototype as the reference for
+  behaviour. Nothing of its code, its formats or its test data is carried without being read
+  against the new contracts.
+- **The cut-over of D-005 is this**: once the example rehearses a proposed change through
+  Infrahub's own check on the new core, Infrahub's registration moves to this repository,
+  the Go core is retired, and the archived repository may go private.
+
+#### Consequences
+
+- [Constitution](constitution.md)'s opening and its principles I and III speak of two
+  deployables and of the orchestrator reading sources. It is amended citing this entry: the
+  reader is the constitution's "reader", and the example is a client like any other.
+- A NetBox user needs a second reader and a second change source ([D-085](#d-085)), and
+  nothing of the rehearsal changes.
+- The example is not a supported product. A defect in it is a defect in the documentation of
+  how to integrate.
+
+
+<a id="d-094"></a>
+### D-094 — The cut-over as made: a proposed change rehearsed through Infrahub's own check on both drivers, and what is left to the maintainer's word
+
+**Status:** Accepted 2026-11-12 (phase 8's landing). Details [D-005](#d-005) and
+[D-081](#d-081): what of the cut-over was made, and what was not. Supersedes nothing.
+
+#### Context
+
+D-081 makes the cut-over this: "once the example rehearses a proposed change through
+Infrahub's own check on the new core, Infrahub's registration moves to this repository, the Go
+core is retired, and the archived repository may go private". The phase was done when the
+maintainer had created a proposed change of a seeded branch and read the rehearsal's report on
+it, once with the core on the local driver and once on the cluster
+([core.md](core.md#phase-8-the-infrahub-reader-and-the-example-orchestrator-settled-2026-11-09)).
+Phase 8's plan 6 made those runs on 2026-11-12, each after a dry run of its own
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"; rulings P5-8, P5-56, P6-22, P6-27,
+P6-40, P6-43, P6-46 and P6-47).
+
+#### Options considered
+
+The cluster run's criterion, of which the maintainer said "The rehearsal passed as before":
+
+- **Take the sentence as a reading of the thread.** Not taken alone: the criterion is the
+  maintainer's own act, not an inference from their words.
+- **Ask.** Chosen. The maintainer confirmed on 2026-11-12 that they had read the cluster
+  rehearsal's report in its thread, as in the local run.
+
+#### Decision
+
+- **The acceptance was met on both drivers on 2026-11-12.** Each time, a proposed change the
+  maintainer created in Infrahub's UI, of the seeded branch with its two marks, started the
+  rehearsal with nothing else done by hand. On the local driver and on the cluster's core,
+  reached over TLS, each rehearsal ended `passed`: a twin created at the branch point, stepped
+  and verified through the two marks, the head unchanged, the twin destroyed, and the report
+  posted in the proposed change's thread. The maintainer read each report there
+  ([verified-facts.md](verified-facts.md), "A proposed change created by the maintainer in the
+  UI, rehearsed through its own check, on the local driver" and "… on the cluster's core").
+- **Infrahub, Prefect and the runner ran on the development host both times.** Plan 6's
+  runs, the dry runs first, were the first to run the two checks on a task worker, and the
+  first in which a task worker reached Prefect.
+- **Infrahub's registration is this repository's**, `.infrahub.yml` at its root, read by the
+  development Infrahub from the main checkout's `.git` ([D-091](#d-091)).
+- **The Go core is retired**: it gets no more fixes, and nothing tracked here needs it or the
+  archived repository to build, test or run.
+- **Not made, each the maintainer's to ask for**, being a push or an act outside the phase's
+  branches: pointing the registration at this repository on GitHub, which no reading covers,
+  and making the archived repository private.
+- **One test constant changed in plan 6**, a plan that was to change no code. At its closing
+  gate the contract test of a check's cancel failed: the rehearsal had made no call on the
+  runtime when the test's deadline passed. The test now gives its check a `timeout` of 660 s,
+  so a deadline 420 s after it begins, where it gave 420 s and 180 s, and nothing it tests
+  changed. In the plan's two closing runs of the tier the four stages were planned in 187.3 s
+  and 211.6 s and `fylgja-step` concluded in 206.5 s and 236.7 s, where plan 5's run of the
+  tier had read it at 105.9 s ([verified-facts.md](verified-facts.md), "Prefect 3.9.2").
+
+#### Consequences
+
+- Why the reads had slowed is not established, and is an [open question](#open-questions).
+- The contract tier last passed whole at the commit that widened that deadline. The one
+  change to code after it was a docstring, and the tier was not run again (ruling P6-47).
+- [core.md](core.md)'s "Sequence" marks item 8 done.
+
 
 ## Intent and the blueprint
 
@@ -589,6 +750,290 @@ configuration is a working layer-1 node.
   configuration carries that line.
 - `testdata/` gains a blueprint fixture with a device that carries no configuration, and
   the compile, plan and push tests read it.
+
+
+<a id="d-082"></a>
+### D-082 — The Infrahub reader: read-only, complete or refused, and a configuration older than its intent is refused
+
+**Status:** Accepted 2026-11-09 (phase 8). Details [D-006](#d-006)'s producer for Infrahub
+and [D-004](#d-004)'s adapter. Restates, for this repository, what the archived repository's
+D-012, D-045, D-046, D-048, D-058 and D-060 decided about a pinned read and a stale
+configuration; those entries bind nothing here.
+Superseded in part by [D-089](#d-089) on 2026-11-12: nothing regenerates unasked; the stale
+rule reads every node a configuration renders from, the task workers' account discounted and
+`__system__` never; a read is pinned the instant after a write; and the schema is checked by
+its structure, at no commit.
+
+#### Context
+
+[Constitution III](constitution.md#iii-the-blueprint-is-the-contract) says what a reader
+must do: one documented mapping, every approximation recorded, every finding in one pass, no
+blueprint on failure. The maintainer asked what else could go wrong for a user six months
+in. The worst is a twin that is quietly not the network: a valid blueprint of less than the
+source holds, or of a configuration rendered before the intent it is read with. Infrahub
+regenerates an artifact some time after the intent behind it changes, so a read just after
+an edit meets the old configuration. The prototype refused such a read, and that rule was
+the largest part of its stage code. Part of it read the proposed change's artifact
+validation, which a reader that knows no proposed change ([D-081](#d-081)) cannot.
+
+The DCIM library's platform kind holds a name and a manufacturer and nothing that names a
+platform package, and the packages hold no source matching ([D-015](#d-015)). The name of
+the artifact that holds a device's configuration is the installation's own.
+
+#### Options considered
+
+Staleness:
+
+- **Leave it to the caller.** Not taken: every caller would have to rebuild the rule, and the
+  one that does not gets the quietly wrong twin.
+- **Refuse it in the reader, the proposed change's part given as a time.** Chosen.
+
+Where the matching and the artifact's name come from:
+
+- **An attribute added to Infrahub's platform kind.** Not taken for the first version: it
+  would require a schema of Fylgja's on every installation, where the DCIM library alone is
+  required.
+- **Environment variables.** Not taken: a table does not fit one.
+- **A configuration file for the reader.** Rejected by [D-042](#d-042)'s reasoning where it
+  would hold an address or a credential.
+- **An input document with a format, given to each read**, as a probe declaration is.
+  Chosen. It is not D-006's rejected "mapping declared as data per install": it maps no
+  kind and no attribute, and holds two lookups the schema cannot carry.
+
+#### Decision
+
+- **The reader is a typed library with a command of its own**, `fylgja-infrahub`. It takes a
+  connection, a branch, a time, a scope and a reader document, and answers a blueprint with
+  its source envelope, or the findings that refused it. It checks the schema, reads the
+  network, matches platforms to packages, and reads probes where the document asks.
+- **It is read-only**: it sends no mutation, and its token never reaches a blueprint, a
+  finding, a log line or an error.
+- **Complete or refused.** Every list is counted against the total Infrahub answers for it
+  ([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"). Every scoped device has its
+  configuration artifact, ready, its content matching its checksum. A gap is an error and
+  no blueprint, or a fidelity row. Nothing is defaulted in silence.
+- **A configuration older than its intent is refused**, by device, with the remedy. How the
+  two are told apart is the prototype's rule, a hypothesis until plan 2 reads it on the
+  version built against: the latest write to the device's own attributes and relationships
+  at the time read, by stamps and by the branch's events, a write by Infrahub's own account
+  not counting, against its artifact's checksum stamp. `generated_since` is an optional
+  time the caller gives, at which it knows every artifact was regenerated, and it stands for
+  the checksum stamp where it is later.
+- **No read is pinned at a time from the reader's clock.** A read is pinned at a time
+  Infrahub returned or the first instant after one; `observed_at` in the source envelope
+  ([D-006](#d-006)) says when the read was made, and pins nothing. `head` answers the first instant after a branch's latest
+  write, for a caller that wants the present.
+- **The same read gives the same blueprint id.**
+- **The schema is checked before the read**, each fault naming the kind, attribute or
+  relationship. The first version requires the OpsMill DCIM library at the commit the
+  mapping names (the maintainer, 2026-11-09).
+- **Every finding names its object in Infrahub**, in findings 1's finding shape, under rule
+  ids of the reader's own.
+- **The reader document** ([`formats/`](../formats/README.md), a new format) holds the pairs
+  of manufacturer and platform with the package id of each, the artifact's name, and whether
+  probes are read. It holds no address and no credential: those are `FYLGJA_INFRAHUB_ADDRESS`
+  and `FYLGJA_INFRAHUB_TOKEN` ([D-042](#d-042)).
+- **The `FylgjaProbe` kind's schema ships with the reader**, and an Infrahub without it is
+  no fault unless the document asks for probes.
+
+#### Consequences
+
+- What the reader reads of an artifact (its status, checksum, storage and content, at a
+  past time too), the stale rule's stamps, events and own account, a branch's latest write,
+  and how the DCIM library's commit is told were read on Infrahub 1.11.2 in the archived
+  repository alone. Each is read again on the version built against before code depends on
+  it, and the rule is restated if a reading differs.
+- A caller that knows of a regeneration the stamps do not show says so through
+  `generated_since`. The example's change source fills it from the proposed change
+  ([D-085](#d-085)).
+- A second schema, or a mapping a user can change, is a later entry.
+
+
+<a id="d-088"></a>
+### D-088 — A stage mark names its branch, so marks can be written before the proposed change exists
+
+**Status:** Accepted 2026-11-09 (phase 8). The maintainer confirmed on 2026-11-09 that "open
+the proposed change" means creating it in Infrahub's UI, with marks on the branch so that
+the rehearsal has several stages. Restates the archived repository's D-045 for this repository, with
+one change: the mark's key.
+Superseded in part by [D-093](#d-093) on 2026-11-12: of the two checks only `fylgja-twin`
+concludes over a draft without starting anything; `fylgja-step` plans it.
+
+#### Context
+
+Phase 8 is done when the maintainer opens a seeded proposed change and that alone starts the
+rehearsal. Infrahub 1.11.11 runs a proposed change's user checks at its creation, a draft or
+not, and on a run-check; setting `is_draft` to false starts nothing
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"). The prototype's stage kind
+required a relationship to its proposed change, so no mark could exist before it. A proposed
+change the maintainer creates would be rehearsed at once, with no marks to find.
+
+#### Options considered
+
+- **Marks on the proposed change, the seed making it too**, and the maintainer pressing
+  "re-run checks". Not taken: the act that starts the rehearsal is then a re-run, not the
+  opening.
+- **No marks in the acceptance run.** Not taken: a rehearsal of one step shows less than the
+  example exists to show.
+- **A new trigger on leaving draft** (a webhook or an event rule). Not taken: a third path
+  beside the two checks, for the acceptance run alone.
+- **The mark names its branch as text.** Chosen. A mark so keyed was written before any
+  proposed change existed, read from the default branch, refused when duplicated, and
+  absent from the branch's diff (the same reading).
+
+#### Decision
+
+- **`FylgjaStage` is branch-agnostic and names its branch as text**, with a `label` unique
+  within that branch, an optional `as_of` and an optional description. It has no
+  relationship to a proposed change. Its schema is the example's, loaded on the default
+  branch.
+- **A change's stages, in order**: the branch point, read on the default branch at the
+  time the branch was cut; each mark of the branch in order of its time; and the head.
+- **The operator writes marks; Fylgja reads them.**
+- **A draft is not rehearsed.** Infrahub runs the check on it, and the check concludes
+  without starting anything.
+- **The seeded branch is made after the registration is imported**: a branch runs the checks
+  it saw when it was made (the same reading).
+
+#### Consequences
+
+- A mark outlives its branch, and may name a branch that does not exist. The example reads
+  marks by a branch's name and cleans up none.
+- A source whose change is only a branch, as NetBox's may be, is not at odds with the stage's
+  shape.
+- What the prototype built around a mark, its orphaning, its refusals after a rebase and
+  its warnings, is not restated. One line of it is kept where plan 5's reading allows: the
+  report says when the default branch has moved since the branch was cut.
+- The time a branch was cut, what a rebase does to it, and a mark's time where `as_of` is
+  absent were not read. Plan 5 reads them first, and a mark with no `as_of` is refused if
+  Infrahub gives its writing no time.
+
+
+<a id="d-089"></a>
+### D-089 — The Infrahub reader as built: the stale rule reads every node a configuration renders from, a read is pinned the instant after a write, and the schema is checked by its structure
+
+**Status:** Accepted 2026-11-12 (phase 8's landing). Supersedes [D-082](#d-082) in four parts:
+what its Context says of regeneration, what the stale rule reads, the time a read is pinned
+at, and how the schema's library is told. Details it in `generated_since`, in `head` and in
+which devices are judged. The rest stands.
+
+#### Context
+
+D-082 called its stale rule "a hypothesis until plan 2 reads it on the version built against",
+and said the rule is restated if a reading differs. Phase 8's plan 2 read Infrahub 1.11.11
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11", "What a stale rule can be built
+on"), and plan 3 built the rule on those readings (rulings P2-25, P2-30, P3-24 to P3-31, P3-36,
+P3-38, P3-42, P3-44, P3-45, P3-50 and P3-51 of the phase's ledgers). The readings differed from
+what D-082 supposes in five places.
+
+- **Nothing was regenerated unasked.** D-082's Context has Infrahub regenerate an artifact "some
+  time after" its intent changes. On 1.11.11 an artifact was rewritten only when a generation
+  was asked, so a stale configuration stays stale until someone asks.
+- **A configuration's intent is more than "the device's own attributes and relationships".**
+  An address's edit moved the address's own stamp alone, and its event named the address
+  alone; an address made moved its port's stamp and logged no event. A removal left no stamp,
+  or moved one back, and only an event showed it.
+- **"A write by Infrahub's own account not counting" is required, and not enough.** The task
+  workers' account restamps the nodes that join a query group after a generation, so a
+  newest-stamp rule with no discount reads stale right after every generation. An operator's
+  create and edit of an address are written as `__system__`, so that id can never be
+  discounted. And a discount loses an operator's write that lies under a restamp.
+- **A read pinned at exactly a write's stamp** answered the write's values with the earlier
+  stamps; a microsecond after, the write. D-082's "a time Infrahub returned" is unsafe for a
+  write's own stamp.
+- **Nothing on the instance names the schema library's commit.** A kind's hash is the
+  instance's own: one file loaded on two branches gave two hashes.
+
+#### Options considered
+
+What the rule reads beside the device:
+
+- **The device's own stamps and events**, as D-082 words it. Rejected by the readings: an
+  address's edit would go unseen.
+- **Every node stamp of everything the template touches**, the platform's, the manufacturer's
+  and each cable's far end's among them. Rejected: a device made on a shared platform moves the
+  platform's node stamp, and an address made on a neighbour moves the far port's, so every
+  device beside them would read stale for a write its configuration does not render.
+- **The members of the artifact's internal query group**, which lists the nodes its query
+  read. Not taken: it was not read, and it is named in the reader's `mapping.md` as the
+  direction to read next.
+- **The device's own nodes whole, and of the platform, the manufacturer and each cable's far
+  port and far device their names alone**, since the names are what the configuration renders
+  of them. Chosen.
+
+Which events are a device's:
+
+- **An event naming the device's platform among its related nodes.** Rejected: a device made
+  elsewhere names the shared platform there, and every device on it would be refused.
+- **An event whose primary node is one of the nodes above, or whose related nodes name one of
+  the device's own.** Chosen.
+
+How the schema's library is told:
+
+- **A hash or a commit**, as D-082's "at the commit the mapping names" supposes. Rejected: the
+  instance holds neither in a form that can be compared.
+- **The structure of the kinds the mapping reads.** Chosen.
+
+#### Decision
+
+1. **The stale rule reads what a configuration renders from**: the device's own stamp; each of
+   its interfaces', of either kind; each address's on them; each cable's at its ports; and the
+   `name` attribute's stamp of its platform, of its manufacturer and of each cable's far port
+   and far device, whether or not the far device is in the scope.
+2. **The task workers' account is discounted, and `__system__` never.** A stamp last written
+   by an account that made the query groups of the scope's artifacts counts at the node's
+   creation and not at the restamp. Nothing but an account's name tells it from an operator's.
+3. **The events are read too**: the branch's own, and `main`'s where they occurred no later
+   than the branch was made, since a branch inherits a configuration already stale on `main`
+   with the write that made it so. An event is a device's when its primary node is one of
+   the nodes of item 1, a far end's only where it names the attribute `name`, or when its
+   related nodes name one of the device's own: the device, an interface, an address or a
+   cable. The platform and the manufacturer count through events whose primary node they
+   are, alone. The reverse relationships a platform's `devices` and a manufacturer's
+   `platforms`, and the group, artifact, profile and template relationships, are no intent.
+   An event the task workers' account wrote, or one later than the time read, counts for
+   none.
+4. **A device is stale when the latest of its stamps and events is strictly later than when
+   its configuration was generated**: its artifact's checksum stamp, or `generated_since` where
+   that is later. A `generated_since` later than the time read is refused (`at.invalid`): it
+   vouches for a regeneration the bytes read at that time cannot carry. The events are read
+   from the later of the scope's earliest checksum stamp and `generated_since`, since no event
+   before that floor can change a verdict.
+5. **Every scoped device's artifact is selected, fetched and judged**, whether or not a
+   package was chosen for it, so that every finding comes in one pass
+   ([Constitution III](constitution.md#iii-the-blueprint-is-the-contract)).
+6. **A read is pinned the first instant after a write, never at the write's own stamp.**
+   `head` answers a microsecond after the branch's latest write, in the layout Infrahub
+   answered the time in. It takes the latest of every stamp of item 1, of the platform's and
+   the manufacturer's node stamps and of each checksum's, nothing discounted; of every
+   `FylgjaProbe`'s stamp where the branch's schema holds the kind; and of every event of the
+   branch's history, intent's or not. It checks the schema first.
+7. **Only `head` raises its refusal**, `Refused`, carrying the findings: `scope.*`,
+   `read.incomplete` and `schema.*`. It answers a bare time and has nowhere else to put one.
+   `read` answers a result whose blueprint is absent where a finding is an error.
+8. **The schema check compares structure**: the names, attributes and relationships of the
+   kinds the mapping reads, the generics its queries select through among them, each
+   difference a `schema.*` finding naming the branch. The commit in the reader's mapping is
+   the mapping's claim of what it was written against, and is not verified; the hash in the
+   source envelope is the instance's.
+
+#### Consequences
+
+- Where the rule was given a choice it errs toward refusing: a write it counts and a template
+  does not render refuses a read that could have passed. What it cannot see is a write to
+  something a template renders that is none of item 1, such as an attribute of a far end or
+  of a platform other than its name, which counts by its event alone or not at all.
+- What the rule does not yet rest on a reading of is listed in the reader's `mapping.md`,
+  "The stale rule": an artifact reading `Error`, a device's platform changed, an address moved
+  to another port, a rebase, and whether a proposed change's validation regenerates an
+  artifact with other bytes, among others.
+- A read's events are every event of the logs read since the floor, 50 a page, whatever the
+  scope. What that costs as an instance's history grows is an
+  [open question](#open-questions).
+- A `head` taken within about 10 s of a write may answer a time a write falls after, since
+  Infrahub logs a write's events up to seconds after it; the caller waits that out, as the
+  seed and the example's change source do.
+- [core.md](core.md) says the rule and the schema check as built.
 
 
 ## The compiler and the bundle
@@ -3601,6 +4046,8 @@ API 1 ([formats/api-1.openapi.yaml](../formats/api-1.openapi.yaml)):
 ### D-026 — The thin CLI: noun-verb, a client like any other
 
 **Status:** Accepted at the baseline (2026-10-31).
+Detailed by [D-084](#d-084) on 2026-11-09 (phase 8): following a run moves from
+the CLI into the client library.
 
 #### Context
 
@@ -3637,6 +4084,10 @@ compiles to"), and is a client of the API ([D-025](#d-025)).
 **Status:** Accepted 2026-11-03; added to by [D-052](#d-052) on 2026-11-04: pygnmi for the
 gNMI reader; the rest stands.
 Added to by [D-064](#d-064) on 2026-11-05: lightkube for Kubernetes.
+Added to by [D-083](#d-083) and [D-084](#d-084) on 2026-11-09 (phase 8): httpx is
+the reader's one library, and the server's libraries become the `server` extra.
+Superseded in part by [D-093](#d-093) on 2026-11-12: Prefect 3.9.2 was pinned three days old,
+on the maintainer's word.
 
 #### Context
 
@@ -3807,6 +4258,8 @@ needs four S3 calls ([D-061](#d-061)).
 **Status:** Accepted 2026-11-08 (phase 7). Adds a path to [D-025](#d-025)'s API 1; answers
 [D-073](#d-073)'s reading. Superseded in part by [D-079](#d-079) on 2026-11-09: the CLI's
 command is `fylgja-core capacity show`.
+Answered by [D-086](#d-086) on 2026-11-09 (phase 8): the example looks with a dry
+run, and reads the capacity when it is refused for room.
 
 #### Context
 
@@ -3879,6 +4332,713 @@ core writes comes from its `now()`.
 #### Consequences
 
 - [core.md](core.md) names the command as built.
+
+
+<a id="d-083"></a>
+### D-083 — The reader speaks plain HTTP through httpx, states the Infrahub versions it passed on, and is tested against a real one
+
+**Status:** Accepted 2026-11-09 (phase 8). Adds to [D-039](#d-039): httpx is the reader's
+one library beside the core's package. [D-034](#d-034) stands and binds the reader's tests.
+Superseded in part by [D-091](#d-091) on 2026-11-12: the development Infrahub held 4.46 GiB,
+not about 5.5.
+
+#### Context
+
+The maintainer's first worry for the reader is "trouble maintaining the module for an
+updated Infrahub". The prototype read through `infrahub-sdk` and used one call of it,
+`execute_graphql`, then undid two of its habits: the SDK rewrites a read's time, and its
+errors drop the HTTP status Infrahub answered. `infrahub-sdk` 1.23.2 and 1.24.0b1 both
+require `whenever<0.10`, and beside either a resolver picks Prefect 3.8.8 where 3.9.2 is
+current (resolved 2026-11-09), so the SDK would hold back whatever platform the reader is
+installed into. Infrahub 1.11.11 answered to curl each read tried of it: GraphQL on
+`/graphql/<branch>` with `at`, a list's `count`, the schema and the version
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"). An artifact's status, checksum
+and content, the stamps and the events were not among them; plan 2 reads them first.
+
+#### Options considered
+
+The library:
+
+- **`infrahub-sdk`.** Not taken: one call used, two habits undone, and a pin that reaches
+  the host platform.
+- **A GraphQL client library.** Not taken: the reader sends a few fixed documents and needs
+  no query builder.
+- **httpx, which the core's client already uses.** Chosen.
+
+How the pure tier is fed:
+
+- **Recorded Infrahub answers**, as the prototype kept. Rejected by [D-034](#d-034):
+  recordings go stale as the system changes, which is the maintainer's worry exactly.
+- **The mapping tested on rows built in the tests; everything that meets Infrahub tested on
+  a real one.** Chosen.
+
+#### Decision
+
+- **The reader depends on `fylgja-core` and httpx**, and on no SDK.
+- **All of the reader's contact with Infrahub is in one transport module**, and every GraphQL document is a
+  file in one directory. Nothing else in the reader builds a request.
+- **The versions it passed on are stated** in the reader's README. At connect the reader
+  reads Infrahub's version, and files a warning when it is not one of them.
+- **Its contract tier runs against a real Infrahub**, seeded, at a version one make target
+  takes: every read rule of [D-082](#d-082), and the same read twice giving one id. Its
+  pure tier holds the mapping, the ordering and the completeness rule over rows built in the
+  tests, and the import boundary.
+- **An upgrade is a procedure**: start the new version, seed it, run the contract tier, read
+  again the recorded facts the code leans on, and extend the list.
+- **Infrahub is seeded by data files and a short script**, with Infrahub's own
+  `infrahubctl` where it is the easy way, run from an environment of its own, so that the
+  SDK meets nothing else. The archived repository's Go seeding tool is not carried.
+
+#### Consequences
+
+- The reader holds its own paging and its own error sentences, which the SDK would have
+  given.
+- A change in Infrahub's GraphQL schema shows as a contract-tier failure at the upgrade,
+  not as a stale recording that still passes.
+- The contract tier needs a running Infrahub, about 5.5 GiB on the development host.
+
+
+<a id="d-084"></a>
+### D-084 — What an integrator installs and calls: the core's base install is the model and the client, and the client follows a run
+
+**Status:** Accepted 2026-11-09 (phase 8). Adds to [D-039](#d-039), [D-052](#d-052) and
+[D-064](#d-064): their libraries are the `server` extra's. Adds to [D-066](#d-066): each
+distribution carries its own formats and is checked from its wheel. Details [D-026](#d-026): the CLI's following moves
+into the client library it shares.
+Superseded in part by [D-090](#d-090) on 2026-11-12: the base install is four libraries,
+`referencing` among them.
+
+#### Context
+
+[Constitution I](constitution.md#i-one-language-typed) asks for one model package for every
+format two pieces read. It is inside `fylgja-core`, which pins twelve packages exactly,
+among them the server's: starlette, uvicorn, grpcio, protobuf, pygnmi, lightkube. The
+modules a reader needs (the blueprint, the probes, the findings, the schemas, the client)
+import PyYAML, jsonschema and httpx alone. A reader installed into someone's platform would
+bring the server and its exact pins with it.
+
+Every integrator that writes a twin's spec must then find the run that write started and
+follow it to its verdict. The thin CLI does this in private functions, and the client
+library offers the calls beneath them and not the whole.
+
+#### Options considered
+
+- **A second distribution for the model.** Not taken: two packages and two versions for one
+  model, and a move of every import.
+- **Leave it.** Not taken: the reader would be hard to install, which the maintainer's
+  standard for it rules out.
+- **The server's libraries as an extra of the one distribution.** Chosen.
+
+#### Decision
+
+- **`fylgja-core`'s base install is the model and the client**: PyYAML, jsonschema and
+  httpx, as ranges. **`fylgja-core[server]`** adds the server's libraries and repeats those
+  three, all at today's exact pins ([D-039](#d-039)), so an install of the extra is today's
+  install. The image, `make venv` and the wheel check install the extra. A test over
+  imports holds that the model and the client import nothing of the extra.
+- **The client library follows a run**: given the record a write answered, it finds the run
+  the write started and follows it to its end and its verdict, riding through a reconnect.
+  The CLI calls it there.
+- **Nothing is published in phase 8.** Each of the three distributions is built and
+  installed from its wheel into an empty environment, as the core's is today. The reader
+  names `fylgja-core` with no version range until a first release gives it one.
+- **Each wheel carries the formats its own code reads.** `formats/` at the root stays the
+  one place a format lives. The core's wheel carries the core's, as today; the reader's the
+  reader document; the example's its two documents.
+- **Python 3.14 stays the floor** of all three.
+
+#### Consequences
+
+- A user on an older Python cannot install the reader. Lowering the floor is a later entry,
+  with what it costs the core.
+- An install of the base alone cannot run the server, and its console script says so.
+- API 1 does not change.
+
+
+<a id="d-085"></a>
+### D-085 — The example orchestrator: a rehearsal library, a change source behind a seam, and Prefect at the edge alone
+
+**Status:** Accepted 2026-11-09 (phase 8). Supersedes [D-003](#d-003) in "a Python project on
+Prefect": Prefect serves the two deployments a source's check starts, and nothing else of
+the example imports it. Builds on [D-081](#d-081).
+Superseded in part on 2026-11-12 by [D-091](#d-091): the task workers are given the main
+checkout's `.git` directory, not a clone; by [D-092](#d-092): the clean-up after a cancel is the
+library's, one request, and no document is filed; and by [D-093](#d-093): the example's
+account holds four permissions.
+
+#### Context
+
+The example exists to be read and taken apart ([D-081](#d-081)). Someone with another
+workflow engine should keep its rehearsal and replace its edge; someone with NetBox should
+keep its rehearsal and its edge and write the source's side. The maintainer said Prefect is
+not required, and is fine where replacing it would mean more bespoke code.
+
+Infrahub's check needs something it can start over HTTP, wait on for many minutes, cancel,
+and read a document from. Prefect 3.9.2 gives each of those to a caller with httpx alone,
+installs beside the core, and after a cancel or a time limit gives the flow's body about
+30 s of clean-up after a cancel; after a time limit clean-ups of 20 s ran whole, and longer
+was not read ([verified-facts.md](verified-facts.md), "Prefect 3.9.2"). Calling a
+decorated flow with no server starts one, 10 to 34 s a call.
+
+What NetBox offers was read from its documentation on 2026-11-09 (NetBox 4.7.4,
+netbox-branching 1.2.3, NetBox Change Management 1.1.3) and on no running system. As
+documented: a change is a bare branch, with a change request only in NetBox Cloud and
+Enterprise; a branch is one flat state, with no ordered steps and no read as of an earlier
+time; the trigger is a webhook, sent once and waiting for nothing; a report would be a
+comment on a change request or a journal entry on the branch; there is no check object; and
+configuration is rendered on request.
+
+#### Options considered
+
+What runs a rehearsal a check starts:
+
+- **A small HTTP run service of the example's own.** Not taken: a service, a store of runs,
+  its auth and its cancel, all bespoke, where Prefect has them.
+- **The rehearsal inside Infrahub's check.** Rejected: the core's token, the reader and the
+  rehearsal's code would live in Infrahub's workers.
+- **Prefect for every command, as the prototype.** Not taken: each command would need a
+  server, and the rehearsal would be written in the engine's terms.
+- **Prefect for the two deployments a check starts, and plain functions beneath.** Chosen.
+
+#### Decision
+
+- **Three layers.** The **rehearsal library** holds the plan, the create, the step, the
+  rehearsal, the documents and the report, and imports the core's client and model alone.
+  The **Infrahub change source** finds a proposed change and its stages, reads them through
+  the reader, and posts the report. The **edge** is two Prefect deployments, the command
+  line and Infrahub's two checks.
+- **The seam to a source is four calls**: the change a trigger names; its stages, in order;
+  a stage read into a blueprint or its findings; and the report posted with its status. A
+  stage carries a label, a description and a pin that only its source reads.
+- **The library assumes none of these**: that a stage can be read later; that the source has
+  an object of review; that the trigger is reliable, comes once or waits for the answer; that
+  the source holds a verdict; that the report is a comment; that configuration is a stored
+  artifact.
+- **The Infrahub change source** finds the open proposed change by its source branch, takes
+  its stages as [D-088](#d-088) orders them, gives the reader `generated_since` where the
+  proposed change's artifact validation gives it one ([D-082](#d-082)), and posts the report
+  as a thread. It has a transport of its own for its few queries and its two mutations; the
+  reader's transport is the reader's alone.
+  Its account needs the three permissions a thread and a comment take
+  ([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"); the reader beneath it still
+  sends no mutation.
+- **All six of the prototype's capabilities stay** (the maintainer, 2026-11-05). `intent
+  read` and `schema check` are the reader's own commands. `stage list`, `stage plan`, `twin
+  create`, `twin step` and `twin rehearse` are commands of the example that call the library
+  in the command's own process, with no Prefect. **`stage-plan` and `twin-rehearse` are also
+  deployments**, since a check starts them.
+- **The two checks**, `fylgja-step` and `fylgja-twin`, use the standard library and httpx.
+  Each finds the proposed change, starts its deployment, asks once more on a 503, waits,
+  reads the run's document and concludes from its status alone. Neither holds the core's
+  token. A check's timeout is set above the rehearsal's time limit. A draft is not
+  rehearsed.
+- **Clean-up after a cancel or a time limit is the flow's `finally`**: it asks the core to
+  cancel the run in progress and to delete the twin, two requests that each answer at once,
+  and waits for neither to finish; the core's destroy goes on by itself. It files the
+  document it has if it can. A run that ends with no document is concluded by the check from
+  the run's state: the rehearsal was stopped, and the twin's deletion asked.
+- **Infrahub's registration** is `.infrahub.yml` at the root. It carries the development
+  fixture's configuration template and artifact definition, which the reader's contract tier
+  needs, and the example's two checks. While phase 8 is built, and for the acceptance run,
+  Infrahub reads it from a clone mounted into its task workers. Pointing it at this
+  repository on GitHub needs a push, so it is the landing's, on the maintainer's word.
+- **Read first in plan 5**, none of it read yet on the version built against: how a proposed
+  change is found by its source branch, with its draft flag; what its artifact validation
+  says and when, and what the reader meets while that validation still runs, as it does when
+  a check starts at the proposed change's creation; a check's timeout, its environment and
+  what its message shows; and Infrahub's task workers reaching Prefect on the host. The
+  change source is meant to wait, under a bound, for an artifact validation still running
+  before it reads the head; the entry is restated if the reading shows that is not enough.
+
+#### Consequences
+
+- The example needs a Prefect server and a runner beside the core, which Infrahub's task
+  workers must reach, and a token of the core's for a principal of its own.
+- What a NetBox user does to mark the steps of a change is that phase's question; the seam
+  only keeps from ruling an answer out.
+- The NetBox lines above are documentation, and are read on a running NetBox before code
+  depends on them.
+
+
+<a id="d-086"></a>
+### D-086 — The example's rehearsal: one twin a rehearsal, a look before it asks, "ask again" without a retry, and what it leaves out
+
+**Status:** Accepted 2026-11-09 (phase 8). The maintainer confirmed on 2026-11-09 that
+`admission.capacity` is kept as "ask again" with no retry in the example; the look by dry
+run and the capacity read on a refusal are this entry's own. Answers what [D-076](#d-076) and phase 7 left to phase 8: when the orchestrator reads
+the capacity, and what it does with `admission.capacity`. Restates the archived repository's
+rehearsal for this repository, without its hardening.
+Superseded in part by [D-092](#d-092) on 2026-11-12: the reclaim takes a twin under the
+rehearsal's own name too; a deletion is read until the twin is gone, not followed; the time
+limit is a deadline the library checks; and `stopped` is a fourth status.
+
+#### Context
+
+The maintainer said on 2026-11-09 that the example may drop the prototype's hardening:
+reclaiming a dead rehearsal's twin, a deadline summed from package budgets, and retrying
+while the runtime is busy. Phase 7 refuses a twin that does not fit, queues nothing, and
+says "the orchestrator asks again" ([D-073](#d-073)); it built `GET /v1/capacity` because
+the maintainer asked that a client be able to look before it asks ([D-076](#d-076)).
+Verify does not wait outside a step's run, and a twin's protocols take a moment to settle
+after a create.
+
+#### Options considered
+
+A refusal for room:
+
+- **Retry inside the rehearsal, under a deadline**, as the prototype. Not taken: the
+  hardening the maintainer said the example may leave out.
+- **A queue in the example.** Not taken: an integrator's platform has its own.
+- **End as not rehearsed, and say "ask again".** Chosen.
+
+Looking before asking:
+
+- **Not at all.** Rejected by D-076's context.
+- **Read the capacity and compare it with the twin's demand in the example.** Not taken: the
+  fit rule is the core's, and a dry run is the core applying it.
+- **A dry run of each stage before anything is created, and the capacity read shown when one
+  is refused.** Chosen.
+
+#### Decision
+
+- **One twin a rehearsal, named from the change and the run.** At its start a rehearsal
+  deletes every other twin named for its change, left by a dead rehearsal or held by a live
+  one, and follows each deletion to its end, so the newest rehearsal of a change is the one
+  that stands. At its end it deletes its own twin and no other. A rehearsal whose twin was
+  deleted under it says so in its report. This is the whole of the example's reclaim.
+- **The path.** Plan: each stage read, filed and built, each bundle diffed against the one
+  before. Leading stages that select no device are passed over, and the first that builds
+  is the baseline. Look: a dry run of each stage as the twin it would make, which shows room
+  and images, and not what a step alone would refuse. Create the
+  baseline and follow its run. Settle: verify asked again until it holds or a fixed budget
+  passes, what still fails then being recorded as failing before the change. Step to each
+  later stage, restarts allowed, and verify; a failure the baseline did not have is the change's. Stop at the
+  first stage that fails, later ones not reached. Destroy the twin on every path. Write the
+  document, render the report, post it.
+- **A stage whose bundle is unchanged is skipped only while the twin is Ready.**
+- **`admission.capacity` means "ask again".** A dry run or a run refused for room ends the
+  rehearsal as **not rehearsed**, a status of its own beside failed. The example then reads
+  `GET /v1/capacity` and shows the room in the report. Nothing is retried: asking again is a
+  re-run of the checks, or the retry of whatever platform an integrator runs.
+- **Other plain failures are reported and not retried**: an image absent, the core
+  unreachable or refusing the token, a run cancelled, a destroy that leaves something. Each
+  report says which, and what to do.
+- **One fixed time limit** bounds a rehearsal.
+- **Left out**: any reclaim beyond the twin's name; a deadline computed from the packages;
+  a retry on a busy runtime; a bound on how many rehearsals run at once; loss across a step.
+- **Two documents of the example's own**, the plan and the rehearsal, each with a format in
+  [`formats/`](../formats/README.md), every field read by the report, a check or a command.
+- **A record per twin**, a file in a directory, for `twin step` and `stage list`: the
+  change, the stage and the blueprint id, trusted only while that id is the twin's.
+
+#### Consequences
+
+- On a busy runtime a proposed change's check fails with "ask again" until someone re-runs
+  it. An integrator who wants more writes it in their platform, with the capacity read.
+- A runner that dies mid-rehearsal leaves a twin until that change is rehearsed again or
+  someone deletes it; `fylgja-core twin list` shows it, named for its change.
+- Two rehearsals of one change at once end as one report of a rehearsal and one of a twin
+  deleted under it.
+- The dry run of a later stage is judged as a whole twin, where the step that follows adds
+  only what the stage adds, so the look can refuse what the step would have fitted. Erring
+  that way starts nothing that cannot finish.
+
+
+<a id="d-087"></a>
+### D-087 — The rehearsal's report: the verdict first, each failure with its message, and no loss
+
+**Status:** Accepted 2026-11-09 (phase 8). Restates the archived repository's report (its
+D-053) for this repository, in a new form. Lets findings 1's `loss` stand without a consumer
+until the flow is built.
+Superseded in part by [D-092](#d-092) on 2026-11-12: the heading gives a fourth verdict,
+stopped; and the summary keeps one duration, and names the twin where the cause is the twin.
+
+#### Context
+
+The maintainer asked that loss be removed from the report and that the report be improved
+otherwise. The prototype's report was a table of ten columns with times and hashes, a
+diagram, and findings named by rule id alone, cut to fit one comment. A comment's text is at
+most 4,092 bytes on Infrahub 1.11.11, and a thread takes more than one comment
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11").
+
+#### Options considered
+
+- **One comment, findings by id**, as the prototype. Not taken: the reader of the report
+  must look elsewhere for why.
+- **A link to a document kept elsewhere.** Not taken: the proposed change would not hold its
+  own report.
+- **A summary comment and a detail comment in one thread.** Chosen.
+
+#### Decision
+
+- **The heading is the verdict**: passed, failed at which stage of how many, or not
+  rehearsed. The first sentence gives the cause.
+- **One table of five columns**: the stage's number, its label, what changed in words (from
+  the bundle diff), the result, and verify's count. Times, ids, the twin's name and the run
+  go in the detail comment.
+- **Each failure is given with its message.** What the twin does not model is listed in
+  plain words, and so is what was already failing before the change.
+- **The wait is mentioned only when it expired. Loss is not reported.**
+- **The report says when the stages were read**, that later edits are not rehearsed, and
+  that fidelity is asserted, not measured
+  ([Constitution X](constitution.md#x-report-honestly)).
+- **The summary is the thread's first comment and the detail its second**, each within the
+  bound; what does not fit the detail is cut with a line saying so.
+- **The check's message** is the heading and its first sentence, and says the report is in
+  the proposed change's thread.
+- **A report that cannot be posted** does not change the rehearsal's status; the document
+  carries a warning naming the proposed change.
+
+#### Consequences
+
+- The report is tested by what it says, and is held byte for byte to nothing.
+- How a thread of two comments renders in Infrahub's view was not read; the plan that builds
+  the post reads it.
+- Findings 1 names the report as the consumer of `loss`. The core measures none
+  ([D-051](#d-051)), so with the report's column gone the field has no consumer. It stays,
+  by this entry, until the phase that builds the flow gives it one
+  ([Constitution XII](constitution.md#xii-every-field-earns-its-place)).
+
+
+<a id="d-090"></a>
+### D-090 — The base install and the client's following as built: four libraries, and a follow that takes no timeout
+
+**Status:** Accepted 2026-11-12 (phase 8's landing). Supersedes [D-084](#d-084) in one part:
+the base install is four libraries, not three. Details it in how the client follows a run and
+in where a distribution finds its formats. The rest stands.
+
+#### Context
+
+D-084 counts three libraries the model and the client import: PyYAML, jsonschema and httpx.
+Phase 8's plan 1 found a fourth: `schemas.py` imports `referencing` directly. D-084 says the
+client "follows a run … to its end and its verdict" and not what ends a follow that should
+stop; plan 4's rehearsal needed one time limit over many follows, and plan 0's reconciliation
+settled how (its items 3 and 14; rulings P1-4 and P1-5).
+
+#### Options considered
+
+- **`referencing` left to arrive with jsonschema**, which requires it. Rejected: a library
+  the base imports by name is the base's to declare.
+- **A `timeout` on `follow` and on each of the client's calls.** Not taken: a caller with one
+  limit over several calls would have to share it out among them.
+- **No timeout: the caller's limit is a deadline it checks itself**, between calls and in the
+  `progress` it hands `follow`. Chosen.
+
+#### Decision
+
+- **The base install is httpx, jsonschema, PyYAML and referencing**, as ranges.
+  `fylgja-core[server]` repeats the four at exact pins and adds the server's libraries.
+  `fylgja-core-server` run from a base install refuses with `server.extra.missing` and exits 2,
+  naming the module it lacks ([docs/rules.md](../docs/rules.md)).
+- **`Client.follow(record, operations, *, progress=None)`** answers the last record seen, the
+  run the write started, ended and carrying its verdict, and whether the twin is gone. It
+  takes no timeout, and neither do the client's other calls. An exception that `progress`
+  raises leaves `follow`, held by a test, so a caller ends a follow at its own deadline from
+  there.
+- **The CLI's `twin destroy` follows as it did**, to the twin gone, and prints what it
+  printed.
+- **`schemas.formats_dir(package)`** answers `<package>/formats` in a wheel, and for a package
+  under a checkout's `src/` the first `formats/` above it, so each distribution's code finds
+  the formats its own wheel carries.
+- **One development venv**, `core/.venv`, holds the three distributions editable. That the
+  reader installs with the base alone is proven by the wheel check, not by that venv.
+
+#### Consequences
+
+- A watch on which the core reports nothing calls no `progress`, so a deadline checked there
+  does not fire. The example bounds that case from outside, by its flow's time limit
+  ([D-092](#d-092)); an integrator's platform must do the same.
+- [core.md](core.md) names the four libraries.
+
+
+<a id="d-091"></a>
+### D-091 — The development Infrahub and its seed as built: `infrahub/` at the root, the task workers given a `.git` directory, and each worker holding the registered commit
+
+**Status:** Accepted 2026-11-12 (phase 8's landing). Supersedes [D-083](#d-083) in one part,
+the memory the development Infrahub takes, and [D-085](#d-085) in one, what Infrahub's task
+workers read the registration from. Details [D-081](#d-081), D-083 and [D-088](#d-088) in
+where what Infrahub fetches lives and in what the seed makes. The rest of each stands.
+
+#### Context
+
+The phase's design left "to the builder" where the development Compose files and the seed's
+data live, and put what Infrahub fetches with the example, under `orchestrator/`. Plan 2
+built the development Infrahub before `orchestrator/` existed, and the reader's contract tier
+uses the same registration and seed. D-085 has Infrahub read the registration "from a clone
+mounted into its task workers". D-083 gives the instance "about 5.5 GiB", read at the end of
+a throwaway instance on 2026-11-09. Plans 2, 3 and 5 read the rest on Infrahub 1.11.11
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"; plan 0's bends and its
+reconciled items 1, 11 and 20; rulings P2-23, P5-17, P5-29, P5-31, P5-53 and P5-54).
+
+#### Options considered
+
+What the task workers are given:
+
+- **The main checkout, mounted.** Rejected: the checkout holds `local/.env`, and the workers
+  run repository code.
+- **A bare mirror kept beside it.** Not built: it was the fallback had the `.git` of a
+  checkout with linked worktrees not answered git in the workers, and it did (ruling P2-5).
+- **The main checkout's `.git` directory alone, read-only.** Chosen.
+
+A recreated worker, which holds no clone of the registration:
+
+- **One task worker**, so that one import reaches every worker. Not taken: `fylgja-twin` holds
+  a worker for as long as a rehearsal, and the validation the change source waits on would
+  queue behind it; whether a worker runs tasks side by side was not read.
+- **Two workers, and a registration that is settled only once each holds the commit's tree.**
+  Chosen.
+
+#### Decision
+
+- **What Infrahub fetches, and what the development Infrahub is given, live in `infrahub/` at
+  the root**: the queries, the template, the two checks and their glue, the schema library's
+  DCIM and the example's stage kind, the seed, and the Compose override under `dev/`.
+  `.infrahub.yml` is at the root. `infrahub/` is no distribution. What a run makes (the
+  fetched Compose file, `infrahubctl`'s venv, `seed.json`) is under `local/infrahub/`.
+- **The task workers are given the main checkout's `.git` directory, read-only**, and one
+  directory of throwaway repositories beside it, read-only too. Nothing else under `local/`
+  reaches a worker.
+- **Every task worker must hold the registered commit's tree before a proposed change is
+  opened.** A recreated worker holds none, and a user check that lands on it fails. `make
+  infrahub-register` imports until each worker holds the tree, and refuses at 300 s naming a
+  worker that lacks it and saying to run it again. It follows every `make infrahub-up` that
+  recreates a worker.
+- **The instance held 4.46 GiB** on the development host, Neo4j capped by the override: a
+  derivation, the sum of its containers' memory as read once.
+- **The seed.** `infrahubctl` runs from a venv of its own under `local/infrahub/`. A stage's
+  time in `seed.json` is the reader's own `head` of the branch, taken once the instance is
+  quiet, so the seed and the reader cannot disagree; the seed imports the reader for it, the
+  one Fylgja package it imports. `make infrahub-seed` always makes its branch anew: the
+  branch's marks and its open proposed change are removed first, then the branch. The fixture
+  is loaded on `main` only where `main` holds none of its devices; a hand-edited `main` is
+  restored by a purge and a seed.
+
+#### Consequences
+
+- Any deployment's task workers must each hold the commit before a proposed change is opened
+  ([docs/integrating.md](../docs/integrating.md)). Whether a check ever lands on a worker that
+  lacks its branch's commit was not read ([open questions](#open-questions)).
+- A closed proposed change and its thread were read to stay through a later seed.
+- The registration is still read from the mounted `.git`. Pointing it at this repository on
+  GitHub is the maintainer's to ask for ([D-094](#d-094)).
+- [core.md](core.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) say where each piece lives.
+
+
+<a id="d-092"></a>
+### D-092 — The example's rehearsal, its clean-up and its report as built: a fourth status, a deletion read until the twin is gone, and no document after a cancel
+
+**Status:** Accepted 2026-11-12 (phase 8's landing). Supersedes [D-085](#d-085) in one part,
+the clean-up after a cancel or a time limit; [D-086](#d-086) in four, the reclaim, how a
+deletion is waited for, what a time limit is and the fourth status; and [D-087](#d-087) in
+two, the verdicts a heading can give and what the summary holds. Details the seam's types, the
+twin's record and the report's two comments. The rest of each stands.
+
+#### Context
+
+Phase 8's plan 4 built the rehearsal library, and plan 5 its edge. Five things could not be
+built as D-085, D-086 and D-087 word them (plan 0's bends and its reconciled items 2, 3, 4
+and 15; rulings P4-2, P4-3, P4-7, P4-10, P4-11, P4-13, P4-14, P4-17 to P4-22 and P5-46).
+
+- D-085 has the flow's `finally` send the core a cancel and a delete, "two requests", and file
+  "the document it has if it can". API 1's `DELETE /v1/twins/{name}` marks the run in flight
+  `cancelling` itself, so one request does both; and a rehearsal ended by a cancel has written
+  no document to file.
+- D-086 has a rehearsal follow "each deletion to its end". This core files no verdict for a
+  destroy and retries a failed one without end, so a destroy has no end to follow to.
+- D-086's reclaim deletes "every other twin named for its change". A rehearsal retried under
+  the same run id would then meet its own earlier twin, and `twin.exists`, for ever.
+- D-086's "one fixed time limit" does not say how it is kept. The client's calls take no
+  timeout ([D-090](#d-090)).
+- D-086 names two statuses beside passed, failed and not rehearsed, and D-087's heading the
+  same three verdicts. A rehearsal that passed its limit, whose run another client cancelled
+  or whose twin was deleted under it is none of them: nothing can be said of the change, and
+  nothing was wrong with the runtime.
+
+#### Options considered
+
+The clean-up after a cancel:
+
+- **In the flow's `finally`, two requests and a filing**, as D-085. Rejected: the second
+  request is redundant, the engine's terms would enter the clean-up, and there is no document.
+- **In the library, on any exception it does not conclude from: ask the deletion, and raise
+  again.** Chosen.
+
+A deletion's end:
+
+- **Follow the destroy's run.** Rejected: it has no verdict.
+- **Ask, and wait for nothing.** Not taken for the reclaim: the next create would meet the
+  twin still there.
+- **Ask, then read the twin until it is gone, under a bound.** Chosen.
+
+A stopped rehearsal's status:
+
+- **`failed`.** Rejected: the report would blame the change.
+- **`not_rehearsed`.** Not taken: its remedy is the runtime's set-up, and here there is none.
+- **A status of its own, `stopped`.** Chosen.
+
+#### Decision
+
+1. **The clean-up after a cancel or a flow's time limit is the library's, and one request.**
+   `rehearse` asks the twin's deletion on any exception it does not conclude from, an
+   interrupt and the engine's cancel among them, waits for nothing, posts nothing and raises
+   it again. The flow's `finally` files a document only where it was handed one, and then
+   closes the source and the core's client, which sends nothing. After a cancel no document is
+   filed, and the check concludes from the run's state: stopped, the twin's deletion asked.
+2. **A deletion is asked, then the twin is read until it is gone, for at most 120 s**, for the
+   rehearsal's own twin and for each it reclaims. A reclaimed twin still there then ends the
+   rehearsal `not_rehearsed` (`rehearsal.twin.held`); its own twin still there is a warning
+   that names it and the command that removes it (`rehearsal.twin.left`). Where the core
+   cannot be read, the deletion is asked once and the report says it was not confirmed.
+3. **The reclaim takes a twin under the rehearsal's own name too**, beside every other twin
+   named for its change: at its start nothing is this rehearsal's yet.
+4. **The limit is a deadline the library checks itself**: between calls, in its own waits, and
+   in the `progress` it hands `follow`. It is 3,600 s. A rehearsal the library stops there
+   returns its document as any other, and then cleans up for up to the 120 s of item 2. A
+   watch on which the core reports nothing is bounded from outside, by the flow's own limit
+   ([D-093](#d-093)) or an interrupt of a command.
+5. **Four statuses**, given by the document's first error finding and by nothing else:
+   `passed`; `failed`, where the change failed at a stage; `not_rehearsed`, where the
+   rehearsal could not be carried through for a reason that is not the change's (room, an
+   image, another refusal for the runtime's set-up, the core unreachable or refusing, the
+   source failed, an earlier twin still held, nothing to build); and `stopped`, where it was
+   stopped before anything could be said of the change (the limit, a run cancelled by another
+   client, the twin deleted under it). A step the core ended `diverged` with `step.diverged`
+   its only error was cancelled by another client after its apply began, and is `stopped`. A
+   create or a step refused for the runtime's set-up (`admission.*`, `credential.*`) is
+   `not_rehearsed`, at the look or after it. The rules are in `orchestrator/rules.md`.
+6. **The seam's types carry more than D-085 lists.** A change carries the reference it was
+   named by, the source's id for it, its name and `where`, the change in words. A stage
+   carries `where`, its pin in words, beside its label, its description and its pin. A read
+   says whether the scope selected no device. The source states `comment_limit`, the bytes one
+   part of a report may take.
+7. **The twin's record** holds the reference the change was named by, the scope and when it
+   was written, beside the change, the stage and the blueprint id. It is written where a step
+   ended `ok` and also where the twin already ran the target's blueprint, so that `twin step`
+   moves past an unchanged stage.
+8. **The report.** Its heading gives one of four verdicts, `stopped` among them, and names one
+   stage or none. "What failed" appears in a `failed` report alone; a `not_rehearsed` or
+   `stopped` report carries its cause in the first sentence and in the detail. The summary
+   keeps one duration, and names the twin only where the cause is the twin. The detail puts
+   first what the summary points to, then each stage, with its wait where one expired, its
+   skipped checks and the twins reclaimed. A rehearsal that ended before its plan was read
+   files `plan` as null, and its summary says the stages were not read.
+
+#### Consequences
+
+- A cancelled rehearsal leaves no document: its only account is the check's message and the
+  core's own record of the twin and its runs.
+- A reclaim can take up to 120 s a twin before the rehearsal starts, and the clean-up up to
+  120 s after its limit.
+- A step that diverged for a reason the core filed no finding for reads as cancelled.
+- How a thread of two comments renders, which D-087 left unread, the maintainer read in a
+  browser on 2026-11-12: both comments as markdown, the summary's table as a table
+  ([verified-facts.md](verified-facts.md), "A proposed change created by the maintainer in the
+  UI, rehearsed through its own check, on the local driver").
+- [core.md](core.md) says the clean-up and the statuses as built.
+
+
+<a id="d-093"></a>
+### D-093 — The Infrahub change source, the two checks and the edge as built: four permissions, the head read once the validation has completed, and a draft planned but not rehearsed
+
+**Status:** Accepted 2026-11-12 (phase 8's landing). Supersedes [D-085](#d-085) in one part,
+the permissions the example's Infrahub account needs; [D-088](#d-088) in one, what the checks
+do with a draft; and [D-039](#d-039) in one, for one pin, Prefect's. Details D-085 in how the
+head is read, in the times of the checks and the flows and in the two calls the edge asks of
+a source beyond the seam's four; and D-088 in how the branch point is decided and when a mark
+is refused. The rest of each stands.
+
+#### Context
+
+D-085 and D-088 each end with what plan 5 was to read first on Infrahub 1.11.11 and Prefect
+3.9.2, and say the entry is restated if a reading shows the design is not enough. Plan 5 read
+them ([verified-facts.md](verified-facts.md), "Infrahub 1.11.11" and "Prefect 3.9.2"), and
+built on the readings (plan 0's bends and its reconciled items 12, 16 and 17; rulings P5-1,
+P5-9, P5-13, P5-27, P5-28, P5-36, P5-42, P5-43 and P5-58).
+
+- D-085 gives the example's account "the three permissions a thread and a comment take". An
+  account holding those three alone read nothing: every kind was refused 403.
+- D-085 means the source to wait, under a bound, for an artifact validation still running
+  before it reads the head. The reader refuses a `generated_since` later than the time read
+  ([D-089](#d-089)), and a validation's completion is likely later than the reader's `head` of
+  the branch. And a proposed change that changes no device was read to get no artifact
+  validator at all.
+- D-088 keeps one line of the prototype's, "the report says when the default branch has moved
+  since the branch was cut". Every write to `main` moves its head, a mark, a thread and a
+  proposed change among them, so a time alone cannot say the intent there moved.
+- D-088 says of a draft that "the check concludes without starting anything". Of the two
+  checks only `fylgja-twin` was built so: plan 0's reconciliation has `fylgja-step` plan a
+  draft (its item 17), a plan making no twin.
+
+#### Options considered
+
+The account's reads:
+
+- **A view permission for each kind the reader reads.** Not taken: a row for every kind, to
+  be kept in step with the mapping.
+- **The instance's own view of every kind, on every branch.** Chosen.
+
+Where no artifact validator appears:
+
+- **Wait the whole bound.** Not taken: a branch that changes no device never gets one.
+- **Wait a shorter bound for one to appear, then read the head on its artifacts' stamps
+  alone, and say so.** Chosen.
+
+Whether `main` moved:
+
+- **Compare times.** Rejected: `main`'s head moves for writes that are no intent.
+- **Compare `main`'s blueprint at the cut with its blueprint at its head.** Chosen.
+
+#### Decision
+
+1. **The example's Infrahub account holds four permissions** in one role: the two that a
+   thread and its comments take, the one to edit the default branch, on which both are
+   written, and a view of every kind on every branch. `make orchestrator-env` brings the role
+   to exactly those four, and replaces a token line Infrahub refuses. The reader beneath the
+   source still sends no mutation.
+2. **A change is the one open proposed change of the branch a trigger names.** None is no
+   change; two are refused naming both, never picked between.
+3. **The stages** are the branch point, the branch's marks and the head, as D-088 orders
+   them. Each stage's pin is the source's own, and carries the proposed change's id beside the
+   branch and the time; the head's has no time until its read resolves one. A mark labelled
+   `branch-point` or `head` is refused (`stage.label.reserved`), and so is a mark with no
+   `as_of` to which Infrahub gave no time of writing, or whose time does not parse
+   (`stage.at.unresolved`).
+4. **The head is read once the proposed change's artifact validation has completed**, waited
+   for up to 240 s, at the later of the reader's `head` and the validation's completion, with
+   that completion as `generated_since`. Where no validator has appeared after 120 s, or the
+   validation has not completed in its bound, the head is read on its artifacts' stamps alone,
+   with no `generated_since`, and the stage carries a finding that says so
+   (`stage.validation.absent`, an info, or `stage.validation.unfinished`, a warning).
+5. **The branch point is `main` read at the time the branch was cut.** `main`'s head is then
+   read as a comparison alone, and `stage.main.moved` is filed where its blueprint there is not
+   the cut's.
+6. **Only `fylgja-twin` passes over a draft**, starting nothing. `fylgja-step` plans a draft
+   as it plans any proposed change. The `twin-rehearse` flow refuses a draft too, before the
+   core is asked anything. The edge asks two calls of a source beyond the seam's four,
+   `is_draft` and `close` (`EdgeSource`), so a second source for the edge gives both.
+7. **The times.** The rehearsal's own limit is 3,600 s ([D-092](#d-092)). The flows'
+   `timeout_seconds` are 600 (`stage-plan`) and 3,900 (`twin-rehearse`). Each check's `timeout`
+   is 900 and 4,260 s; at 240 s before it the check asks the run's cancel, and it concludes in
+   what is left.
+8. **The source's rules are catalogued in `orchestrator/rules.md`**, in a section of their
+   own, beside the rehearsal's.
+9. **Prefect is pinned at 3.9.2**, three days old when it was read, against the two weeks
+   D-039 asks of every pin: the maintainer's word, 2026-11-09 ("prefect 3.9.2 is fine").
+   [CONTRIBUTING.md](../CONTRIBUTING.md) says so where the libraries are listed.
+
+#### Consequences
+
+- The example's account can read every object of the instance, wider than its reads need. It
+  writes threads and comments, and nothing else.
+- By the rule's construction, and by no reading, too short a bound on the validation can
+  only refuse a stage, as stale or unready on its stamps; it cannot pass one.
+- A rehearsal reads `main` again at its head, for the comparison alone.
+- In the acceptance runs `fylgja-twin` concluded within 485 s of the proposed change's
+  creation. A check that runs for most of its 4,260 s was not read
+  ([open questions](#open-questions)).
+- The checks first ran on a task worker, and the workers first reached Prefect on the host,
+  in the acceptance runs of 2026-11-12, the dry runs first ([D-094](#d-094)).
+- [core.md](core.md) and [docs/integrating.md](../docs/integrating.md) say each as built.
 
 
 ## Pushing, stepping and verifying
@@ -4855,6 +6015,8 @@ those paths, and nothing resolves them.
 ### D-066 — The formats ship inside the package, built from `formats/`
 
 **Status:** Accepted 2026-11-05.
+Added to by [D-084](#d-084) on 2026-11-09 (phase 8): each distribution is checked
+from its wheel.
 
 #### Context
 
@@ -5030,3 +6192,46 @@ becomes an entry then.
   ([verified-facts.md](verified-facts.md)), so the push of a configuration carrying it is
   refused. Whether the compiler reports it as a finding, or the driver gives such a node a
   port, is open.
+- **What a read of Infrahub costs as an instance's history grows** ([D-089](#d-089),
+  [D-094](#d-094)). On one development instance the reader's contract tier rose run over run:
+  396 s and 402 s, then 757 s, 895 s, 1,602 s and 1,783 s, the last two on 2026-11-12
+  ([verified-facts.md](verified-facts.md), "Infrahub 1.11.11" and "Prefect 3.9.2";
+  [CONTRIBUTING.md](../CONTRIBUTING.md), the contract tier's row). The seed's own line did
+  not: 242.52 s and 254.12 s in those last two runs. Why is not established. One hypothesis, read
+  from the code and from the reader's README ("What it sends") and not verified on the
+  instance: a read pages every event of the logs it reads since the oldest checksum stamp among
+  the scoped devices; a regeneration that stores the same bytes moves no checksum stamp, so
+  that floor stays where the first seed put it, while every seed, mark, proposed change and
+  contract run adds events above it. The test, not run before phase 8 landed: time one read,
+  purge the instance, seed it, and time the same read. If the hypothesis holds, a stage's read
+  costs more the older an instance's artifacts are, which bears on the reader's standard
+  ([D-081](#d-081)) and on `fylgja-step`'s flow, which has 600 s for a plan that took 187.3 s
+  and 211.6 s on three devices. `InfrahubEvent` was read to take an `until`
+  ([verified-facts.md](verified-facts.md), "The events' upper bound, and a completion as their
+  floor"), which the reader does not send. Whether the events read is bounded or rebuilt is a
+  later phase's.
+- **A core test whose margin is the host's load.**
+  `core/tests/test_containerlab_driver.py::test_the_deploys_budget_starts_once_the_lock_is_held`,
+  phase 7's and untouched by phase 8, failed once under load during phase 8's plan 6 with
+  `assert 0.2468 > 0.25`, and passed in the runs after. It holds one deploy for 0.3 s and
+  asserts that the second started more than 0.25 s after the first, a margin of 50 ms. The
+  margin is the test's, not the driver's. Mending it, so that it does not turn on when the
+  first deploy started, is a later plan's.
+- **A check on a task worker that lacks its branch's commit, and a check that runs for most of
+  its `timeout`** ([D-091](#d-091), [D-093](#d-093)). In every acceptance run both checks ran
+  on a worker that held the commit's tree, and `fylgja-twin` concluded within 485 s of the
+  proposed change's creation under a `timeout` of 4,260 s
+  ([verified-facts.md](verified-facts.md), "Infrahub 1.11.11"). A recreated worker was read to
+  hold no clone, and a check on it to fail; whether a check lands on such a worker once `make
+  infrahub-register` has ended, and what a check of about an hour does on a worker, were not
+  read. Nor was a check concluding `failure` from a rehearsal run through Infrahub.
+- **What the stale rule does not yet rest on a reading of** ([D-089](#d-089)). The reader's
+  `mapping.md`, "The stale rule", lists it: among others an artifact reading `Error`, a
+  device's platform changed, an address moved to another port, a rebase of a branch, whether
+  the task workers' restamp moves an attribute's own stamp, and an artifact that a proposed
+  change's validation regenerates with other bytes. Which role of Infrahub's grants the
+  reader's reads and no more was not read either; the development Infrahub gives the reader
+  the admin's token.
+- **A registration read from GitHub** ([D-085](#d-085), [D-094](#d-094)). The development
+  Infrahub reads the registration from the main checkout's `.git`. What Infrahub does with this
+  repository registered from GitHub was not read, and waits on the maintainer's word.

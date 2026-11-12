@@ -1,0 +1,8 @@
+# A thread on a proposed change, unresolved, under the label the source gives its reports (design/verified-facts.md,
+# "Infrahub 1.11.11", "A thread posted by the example's account").
+mutation ThreadCreate($change: String!, $label: String!) {
+  CoreChangeThreadCreate(data: {change: {id: $change}, label: {value: $label}, resolved: {value: false}}) {
+    ok
+    object { id }
+  }
+}

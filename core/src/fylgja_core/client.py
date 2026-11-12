@@ -20,6 +20,17 @@ grow, each try is given `RECONNECT_CONNECT_S` to connect, and the watch gives up
 the server's address drops what is sent to it, as a LoadBalancer's does while no pod is ready
 behind it (verified-facts.md). A refusal, an answer that is no stream, an event the client
 cannot read and a certificate it does not trust end it at once.
+
+Following a write is one call, `follow` (D-084). Given the record a write of a twin's spec
+answered, it watches the twin until the loop has acted on that generation or the twin is gone,
+then finds the run the write started and follows it to its end and its verdict. Its watches
+reconnect as any watch does. A deletion's twin found gone, a 404 at an open of its watch, is
+the deletion's end; every other refusal is raised. It takes no timeout, and nothing in it bounds
+the wait: a watch's reads have no bound, so a core that keeps a watch open and reports nothing
+holds it for ever. What the caller's `progress` raises is not caught and may end a wait early,
+but `progress` is no deadline: it is called only when a phase moves, never while the twin stands
+still, while a watch waits to reconnect or while the run is followed. The bound is the caller's
+own, from outside the call: a worker's time limit, an interrupt.
 """
 
 from __future__ import annotations
@@ -30,7 +41,7 @@ import json
 import re
 import ssl
 import time
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self
@@ -93,6 +104,12 @@ class _Interrupted(TransportError):
 class Untrusted(TransportError):
     """The server's certificate failed verification against the client's trust. A watch ends at
     once: a certificate not trusted does not become trusted by waiting."""
+
+
+class FollowError(Exception):
+    """A write could not be followed to a verdict: the twin's watch ended before the loop acted
+    on its generation, the twin has no run of the operations asked, or its run ended with no
+    verdict."""
 
 
 class UnsupportedVersion(ValueError):
@@ -200,6 +217,16 @@ def trust(ca: Path | None) -> ssl.SSLContext:
         return ssl.create_default_context(cafile=ca)
     except OSError:
         raise InvalidCA("names no file of CA certificates that can be read") from None
+
+
+@dataclass(frozen=True)
+class Followed:
+    """How a write was followed (`Client.follow`): the last record seen, the run the write
+    started, ended and carrying its verdict, and whether the twin is gone."""
+
+    record: dict[str, Any]
+    run: dict[str, Any]
+    gone: bool
 
 
 class Client:
@@ -348,6 +375,94 @@ class Client:
                 why = str(e)
             early += 1
             self._early_end(why, early)
+
+    def follow(
+        self,
+        record: Mapping[str, Any],
+        operations: Sequence[str],
+        *,
+        progress: Callable[[str], None] | None = None,
+    ) -> Followed:
+        """The run a write of a twin's spec started, followed to its verdict. `record` is what the
+        write answered, and `operations` the runs it may have started, a step's `("step",
+        "create")`, since a twin whose create never applied runs its create again (D-050).
+
+        A record the loop has acted on already is answered as it is, with no watch: a caller that
+        must know whether its write started a run compares its two generations first. Otherwise
+        the twin is watched after the record's revision until a record shows its generation
+        acted on, or DELETED; for a record that asks a deletion, a 404 at an open of the watch is
+        the twin gone too. `progress` is given `"<twin>: <phase>"` each time the phase a record
+        shows its run in flight at moves (`_phase`); the settling record and DELETED say none,
+        since a step that ends short of `applied` leaves `phase` the running twin's. The run is
+        the last a record named, if it is of the operations, else the twin's newest of them; one
+        not ended is followed to its end and read again.
+
+        It takes no timeout, and nothing in it bounds the wait: a watch's reads have no bound, so
+        a core that keeps a watch open and reports nothing holds it for ever. An exception
+        `progress` raises is not caught: it leaves `follow` as it was raised, the watch closed
+        behind it, and so may end a wait early. But `progress` is called only when a phase moves,
+        never while the twin stands still, while a watch waits to reconnect or while the run is
+        followed, and is no deadline. The bound is the caller's own, from outside the call: a
+        worker's time limit, an interrupt."""
+        last, seen, gone = self._settle(dict(record), progress)
+        run = self._run_of(record["name"], operations, seen)
+        if run["state"] != "ended":
+            for _ in self.watch_run(run["id"]):  # its events are not said
+                pass
+            run = self.get_run(run["id"])
+        if "verdict" not in run:
+            raise FollowError(f"run {run['id']} is {run['state']}, with no verdict")
+        return Followed(last, run, gone)
+
+    def _settle(
+        self, record: dict[str, Any], progress: Callable[[str], None] | None
+    ) -> tuple[dict[str, Any], str | None, bool]:
+        """`follow`'s wait for the loop: the last record seen, the last run a record named, and
+        whether the twin is gone."""
+        seen: str | None = record["status"].get("run_id")
+        if record["status"]["observed_generation"] == record["generation"]:
+            return record, seen, False
+        name, phase = record["name"], _phase(record["status"])
+        deleting = "deletion_requested_at" in record
+        events = self.watch_twin(name, since_revision=record["revision"])
+        try:
+            while True:
+                # The watch's reads alone are caught: what `progress` raises leaves as it was raised.
+                try:
+                    event = next(events, None)
+                except ProblemError as e:
+                    # A deletion's twin gone before its watch opened, or between two of its streams.
+                    if e.status == 404 and deleting:
+                        return record, seen, True
+                    raise
+                if event is None:
+                    raise FollowError(f"the watch of twin {name} ended before the loop acted on generation "
+                                      f"{record['generation']}")
+                record = event["object"]
+                seen = record["status"].get("run_id", seen)
+                if event["type"] == "DELETED":
+                    return record, seen, True
+                if record["status"]["observed_generation"] == record["generation"]:
+                    return record, seen, False
+                now = _phase(record["status"])
+                if now is not None and now != phase:
+                    phase = now
+                    if progress is not None:
+                        progress(f"{name}: {phase}")
+        finally:
+            if isinstance(events, Generator):  # its stream closed however the wait ends
+                events.close()
+
+    def _run_of(self, twin: str, operations: Sequence[str], seen: str | None) -> dict[str, Any]:
+        """The run a record last named, if it is of one of the operations, else the twin's newest of them."""
+        if seen is not None:
+            run = self.get_run(seen)
+            if run["operation"] in operations:
+                return run
+        for run in self.list_runs(twin=twin):
+            if run["operation"] in operations:
+                return run
+        raise FollowError(f"twin {twin} has no {' or '.join(operations)} run")
 
     # runs
 
@@ -582,3 +697,15 @@ def _seq(path: str, event: Any) -> int:
     if not isinstance(seq, int) or isinstance(seq, bool):
         raise TransportError(f"GET {path} sent an Event with no seq")
     return seq
+
+
+def _phase(status: Mapping[str, Any]) -> str | None:
+    """The phase a record shows its run last completed: a running step's `last_step.phase`, which
+    moves before `phase` does (until `applied` a step records its phases there alone), else
+    `phase`; None when the record shows neither."""
+    last = status.get("last_step")
+    if last is not None and last["outcome"] == "running":
+        step_phase: str = last["phase"]
+        return step_phase
+    phase: str | None = status.get("phase")
+    return phase

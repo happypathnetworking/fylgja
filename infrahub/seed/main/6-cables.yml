@@ -1,0 +1,27 @@
+---
+# The fixture network on main, read by infrahubctl object load (infrahub/seed/seed.py): its cables, the links of
+# testdata/blueprint/three-node.json less the one between n1 and n3, which the seeded branch adds. Each end is a port
+# the devices' file made, named by its device and its name and nested in the cable, so the load finds that port and
+# makes none. The label is the cable's human-friendly id: its two ends, sorted, joined by a bar. An unlabelled cable
+# would be found again as any other unlabelled one (design/verified-facts.md, "Infrahub 1.11.11").
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - label: n1:ethernet-1/1|n2:ethernet-1/1
+      connected_endpoints:
+        kind: InterfacePhysical
+        data:
+          - name: ethernet-1/1
+            device: n1
+          - name: ethernet-1/1
+            device: n2
+    - label: n2:ethernet-1/2|n3:ethernet-1/1
+      connected_endpoints:
+        kind: InterfacePhysical
+        data:
+          - name: ethernet-1/2
+            device: n2
+          - name: ethernet-1/1
+            device: n3

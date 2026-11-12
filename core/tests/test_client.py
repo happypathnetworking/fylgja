@@ -1,8 +1,9 @@
 """The client library of API 1: each call's request as the OpenAPI document declares it (the
 fake server checks every one), its answer as a document, a refusal as a `ProblemError`
 carrying the server's problem document, what happened to the client a `TransportError`, a
-twin's or a run's server-sent events parsed, a watch the server ends early resumed, and an
-https:// address verified against the CA given or the system's trust."""
+twin's or a run's server-sent events parsed, a watch the server ends early resumed, an
+https:// address verified against the CA given or the system's trust, and a write followed
+to the verdict of the run it started."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import re
 import socket
 import ssl
 import threading
+import types
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -26,10 +28,13 @@ from fake_api import (
     BUNDLE_ID,
     CAPACITY,
     COMPILE_RESULT,
+    DESTROY_RUN_ID,
     DRIVERS,
     EVENTS,
     NOT_HELD,
     PLAN,
+    PUSH_REFUSED,
+    RESTART_REQUIRED,
     RUN_ID,
     TOKEN,
     TWIN,
@@ -40,6 +45,7 @@ from fake_api import (
     application,
     cut,
     event_stream,
+    last_step,
     ok,
     record,
     refuse,
@@ -60,6 +66,8 @@ from fylgja_core.client import (
     TIMEOUT_S,
     VERIFY_TIMEOUT,
     Client,
+    Followed,
+    FollowError,
     InvalidAddress,
     InvalidCA,
     InvalidToken,
@@ -75,9 +83,12 @@ from fylgja_core.client import (
     trust,
 )
 from fylgja_core.findings import Finding
+from fylgja_core.problem import ProblemDocument
 
 TWIN_PATH = f"/v1/twins/{TWIN}"
+RUN_PATH = f"/v1/runs/{RUN_ID}"
 EVENTS_PATH = f"/v1/runs/{RUN_ID}/events"
+DESTROY_PATH = f"/v1/runs/{DESTROY_RUN_ID}"
 SPEC = {"blueprint_id": BLUEPRINT_ID, "driver": "containerlab", "allow_restart": False}
 
 
@@ -991,3 +1002,251 @@ def test_a_connection_closed_mid_chunk_is_an_early_end() -> None:
                      f"GET {TWIN_PATH}?watch=true&since_revision=2 HTTP/1.1".encode()]
     assert sleeps == [0.5]
     assert len(notices) == 1 and notices[0].endswith("; reconnecting"), notices
+
+
+# Following a write to its run's verdict.
+
+COMPILED = record(2, 1, 0, phase="compiled", run_id=RUN_ID)
+READY = record(4, 1, 1, phase="pushed", ready=("True", None), nodes=True)
+DELETING = record(5, 2, 1, deleting=True, run_id=DESTROY_RUN_ID)
+"""The record a deletion of the three-node twin answered."""
+DESTROYED = record(6, 2, 1, deleting=True, phase="destroyed", run_id=DESTROY_RUN_ID)
+NEWER_RUN_ID = "01JB8ZZZZV4W6X7Y8Z9A0B1C2F"
+NOT_FOUND = refuse(404, "twin.not_found", "No twin is named three-node.")
+
+
+class Stop(BaseException):
+    """What a caller's `progress` raises to end a wait, as a deadline would: no `Exception`."""
+
+
+def kept(answer: Answer, responses: list[httpx.Response]) -> Answer:
+    """`answer`'s stream with its body streamed, each response kept in `responses` so a test can
+    see whether the client closed it."""
+
+    def stream(request: httpx.Request) -> httpx.Response:
+        body = answer(request).content
+        response = httpx.Response(200, headers={"content-type": EVENT_STREAM}, content=iter([body]))
+        responses.append(response)
+        return response
+
+    return stream
+
+
+def test_follow_watches_a_create_to_the_record_that_settles_it_and_answers_its_run() -> None:
+    pushed = record(3, 1, 0, phase="pushed", run_id=RUN_ID)
+    api = FakeAPI().on("GET", TWIN_PATH, watch(COMPILED, pushed, READY)).on("GET", RUN_PATH, ok(run()))
+    said: list[str] = []
+    followed = connect(api).follow(record(run_id=RUN_ID), ("create",), progress=said.append)
+    assert followed == Followed(READY, run(), False)
+    assert said == ["three-node: compiled", "three-node: pushed"]
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {RUN_PATH}"]
+    assert api.last("GET", TWIN_PATH).url.params.multi_items() == [("watch", "true"), ("since_revision", "1")]
+
+
+def test_follow_of_a_record_already_settled_opens_no_watch() -> None:
+    given = record(9, 2, 2, run_id=RUN_ID)
+    api = FakeAPI().on("GET", RUN_PATH, ok(run("step")))
+    said: list[str] = []
+    assert connect(api).follow(given, ("step", "create"), progress=said.append) == Followed(given, run("step"), False)
+    assert api.calls() == [f"GET {RUN_PATH}"]
+    assert said == []
+
+
+def test_a_step_that_ends_short_of_applied_never_says_the_running_twins_phase() -> None:
+    # Refused after planned: until applied a step records its phases in last_step alone, so the settling record's
+    # phase is still the running twin's, `flows`, which this run never reached.
+    given = record(5, 2, 1, phase="flows", ready=("True", "twin.ready"), nodes=True)
+    running = record(6, 2, 1, phase="flows", ready=("False", "twin.stepping"), nodes=True, run_id=RUN_ID,
+                     last_step=last_step("running", "planned"))
+    ended = record(9, 2, 2, phase="flows", ready=("False", "step.restart.required"), nodes=True,
+                   last_step=last_step("rejected", "planned"))
+    rejected = run("step", status="rejected", findings=[RESTART_REQUIRED])
+    api = FakeAPI().on("GET", TWIN_PATH, watch(running, ended)).on("GET", RUN_PATH, ok(rejected))
+    said: list[str] = []
+    assert connect(api).follow(given, ("step", "create"), progress=said.append) == Followed(ended, rejected, False)
+    assert said == ["three-node: planned"]
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {RUN_PATH}"]
+
+
+def test_follow_of_a_deletion_ends_at_deleted_and_says_gone() -> None:
+    destroy = run("destroy", run_id=DESTROY_RUN_ID)
+    api = FakeAPI().on("GET", TWIN_PATH, watch(DESTROYED, deleted=True)).on("GET", DESTROY_PATH, ok(destroy))
+    said: list[str] = []
+    followed = connect(api).follow(DELETING, ("destroy",), progress=said.append)
+    assert (followed.gone, followed.record, followed.run) == (True, DESTROYED, destroy)
+    assert followed.run["operation"] == "destroy"
+    assert said == ["three-node: destroyed"]
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
+    assert api.last("GET", TWIN_PATH).url.params.multi_items() == [("watch", "true"), ("since_revision", "5")]
+
+
+def test_a_deletion_whose_twin_is_gone_is_gone_and_any_other_refusal_is_raised() -> None:
+    destroy = run("destroy", run_id=DESTROY_RUN_ID)
+    # Gone before the watch opened: the last record seen is the one given.
+    said: list[str] = []
+    api = FakeAPI().on("GET", TWIN_PATH, NOT_FOUND).on("GET", DESTROY_PATH, ok(destroy))
+    assert connect(api).follow(DELETING, ("destroy",), progress=said.append) == Followed(DELETING, destroy, True)
+    assert said == []
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
+    # Gone between two of the watch's streams: the last record seen is the one before the 404, and the run followed
+    # is the one that record names, never the given record's.
+    said.clear()
+    sleeps: list[float] = []
+    streamed = record(6, 2, 1, deleting=True, phase="destroyed", run_id=NEWER_RUN_ID)
+    newer = run("destroy", run_id=NEWER_RUN_ID)
+    api = (FakeAPI().on("GET", TWIN_PATH, cut("WatchEvent", [changed(streamed)]), NOT_FOUND)
+           .on("GET", DESTROY_PATH, ok(destroy)).on("GET", f"/v1/runs/{NEWER_RUN_ID}", ok(newer)))
+    assert connect(api, sleeps).follow(DELETING, ("destroy",), progress=said.append) == Followed(streamed, newer, True)
+    assert said == ["three-node: destroyed"] and sleeps == [0.5]
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET /v1/runs/{NEWER_RUN_ID}"]
+    # A record that asks no deletion: the same two 404s are the server's refusal, and no run is read.
+    for answers in ([NOT_FOUND], [cut("WatchEvent", [changed(COMPILED)]), NOT_FOUND]):
+        api = FakeAPI().on("GET", TWIN_PATH, *answers).on("GET", RUN_PATH, ok(run()))
+        with pytest.raises(ProblemError) as refused:
+            connect(api).follow(record(run_id=RUN_ID), ("create",))
+        assert (refused.value.status, refused.value.problem.rule) == (404, "twin.not_found")
+        assert api.calls() == [f"GET {TWIN_PATH}"] * len(answers)
+    # Any other refusal of a deletion's watch is raised as it is.
+    api = (FakeAPI().on("GET", TWIN_PATH, refuse(401, "auth.token.unknown", "the bearer token is not known"))
+           .on("GET", DESTROY_PATH, ok(destroy)))
+    with pytest.raises(ProblemError) as refused:
+        connect(api).follow(DELETING, ("destroy",))
+    assert (refused.value.status, refused.value.problem.rule) == (401, "auth.token.unknown")
+    assert api.calls() == [f"GET {TWIN_PATH}"]
+
+
+def test_follow_finds_the_newest_run_of_the_operations_when_none_or_another_was_named() -> None:
+    # No record names a run: the twin's newest create, a destroy newer than it.
+    runs = [run("destroy", run_id=NEWER_RUN_ID), run(), run("destroy", run_id=DESTROY_RUN_ID)]
+    api = FakeAPI().on("GET", TWIN_PATH, watch(READY)).on("GET", "/v1/runs", ok({"runs": runs}))
+    assert connect(api).follow(record(), ("create",)).run == run()
+    assert api.calls() == [f"GET {TWIN_PATH}", "GET /v1/runs"]
+    assert api.last("GET", "/v1/runs").url.params.multi_items() == [("twin", TWIN)]
+    # A deletion during a create: the records name the create, and the twin's newest destroy is followed.
+    failed = run(status="failed", findings=[PUSH_REFUSED])
+    api = (FakeAPI().on("GET", TWIN_PATH, watch(record(6, 2, 1, deleting=True, run_id=RUN_ID), deleted=True))
+           .on("GET", RUN_PATH, ok(failed))
+           .on("GET", "/v1/runs", ok({"runs": [run("destroy", run_id=DESTROY_RUN_ID), failed]})))
+    followed = connect(api).follow(record(5, 2, 1, deleting=True, run_id=RUN_ID), ("destroy",))
+    assert followed.run == run("destroy", run_id=DESTROY_RUN_ID)
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {RUN_PATH}", "GET /v1/runs"]
+    # A step that started no step run: a twin whose create never applied runs its create again (D-050).
+    api = (FakeAPI().on("GET", TWIN_PATH, watch(record(8, 2, 2, phase="pushed", ready=("True", "twin.ready"),
+                                                       nodes=True)))
+           .on("GET", "/v1/runs", ok({"runs": [run(), run("destroy", run_id=DESTROY_RUN_ID)]})))
+    assert connect(api).follow(record(5, 2, 1, phase="pushed", nodes=True), ("step", "create")).run == run()
+    assert api.calls() == [f"GET {TWIN_PATH}", "GET /v1/runs"]
+
+
+def test_a_twin_with_no_run_of_the_operations_is_a_follow_error() -> None:
+    api = FakeAPI().on("GET", "/v1/runs", ok({"runs": [run("destroy", run_id=DESTROY_RUN_ID)]}))
+    with pytest.raises(FollowError) as e:
+        connect(api).follow(READY, ("create",))
+    assert str(e.value) == "twin three-node has no create run"
+    with pytest.raises(FollowError) as e:
+        connect(api).follow(READY, ("step", "create"))
+    assert str(e.value) == "twin three-node has no step or create run"
+
+
+def test_follow_waits_out_a_run_not_yet_ended_and_reads_it_again() -> None:
+    unclean = run(status="unclean", findings=[PUSH_REFUSED])
+    api = (FakeAPI().on("GET", TWIN_PATH, watch(COMPILED, READY))
+           .on("GET", RUN_PATH, ok(run(state="running")), ok(unclean))
+           .on("GET", EVENTS_PATH, event_stream(*EVENTS)))
+    said: list[str] = []
+    followed = connect(api).follow(record(run_id=RUN_ID), ("create",), progress=said.append)
+    assert followed == Followed(READY, unclean, False) and followed.run["verdict"]["status"] == "unclean"
+    assert api.calls() == [f"GET {TWIN_PATH}", f"GET {RUN_PATH}", f"GET {EVENTS_PATH}", f"GET {EVENTS_PATH}",
+                           f"GET {RUN_PATH}"]
+    assert said == ["three-node: compiled"]  # the twin's phases alone: no event of the run
+
+
+def test_a_run_that_ends_with_no_verdict_is_a_follow_error() -> None:
+    api = FakeAPI().on("GET", RUN_PATH, ok(run(state="running"))).on("GET", EVENTS_PATH, event_stream(*EVENTS))
+    with pytest.raises(FollowError) as e:
+        connect(api).follow(record(4, 1, 1, run_id=RUN_ID), ("create",))
+    assert str(e.value) == f"run {RUN_ID} is running, with no verdict"
+
+
+def test_follow_rides_through_a_watch_cut_off_and_a_server_gone() -> None:
+    sleeps: list[float] = []
+    notices: list[str] = []
+    said: list[str] = []
+    api = FakeAPI().on("GET", TWIN_PATH, watch(COMPILED), unreachable, watch(READY)).on("GET", RUN_PATH, ok(run()))
+    followed = connect(api, sleeps, notices).follow(record(run_id=RUN_ID), ("create",), progress=said.append)
+    assert followed == Followed(READY, run(), False)
+    assert sleeps == [0.5, 1.0]
+    assert notices == [f"{ENDED_EARLY}; reconnecting"]
+    assert said == ["three-node: compiled"]
+    assert [r.url.params["since_revision"] for r in streams(api, TWIN_PATH)] == ["1", "2", "2"]
+
+
+def test_a_watch_given_up_on_ends_the_follow_as_the_watchs_own_error() -> None:
+    api = FakeAPI().on("GET", TWIN_PATH, watch(COMPILED), watch()).on("GET", RUN_PATH, ok(run()))
+    with pytest.raises(TransportError, match=r"ended before its end; not resumed after 15 reconnects$") as e:
+        connect(api).follow(record(run_id=RUN_ID), ("create",))
+    assert not isinstance(e.value, FollowError)
+    assert api.calls() == [f"GET {TWIN_PATH}"] * 16
+    # The server came back with a certificate the client does not trust.
+    sleeps: list[float] = []
+    api = FakeAPI().on("GET", TWIN_PATH, watch(COMPILED), untrusted).on("GET", RUN_PATH, ok(run()))
+    with pytest.raises(Untrusted):
+        Client("https://core.example", TOKEN, transport=api.transport, sleep=sleeps.append).follow(
+            record(run_id=RUN_ID), ("create",))
+    assert sleeps == [0.5] and api.calls() == [f"GET {TWIN_PATH}"] * 2
+
+
+def test_a_watch_that_returns_before_the_loop_acted_is_a_follow_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def nothing(self: Client, name: str, since_revision: int | None = None) -> Iterator[dict[str, Any]]:
+        return iter(())
+
+    monkeypatch.setattr(Client, "watch_twin", nothing)
+    api = FakeAPI().on("GET", RUN_PATH, ok(run()))
+    with pytest.raises(FollowError) as e:
+        connect(api).follow(record(run_id=RUN_ID), ("create",))
+    assert str(e.value) == "the watch of twin three-node ended before the loop acted on generation 1"
+    assert api.calls() == []
+
+
+def test_follow_takes_any_mapping_and_needs_no_progress() -> None:
+    settled = record(4, 1, 1, run_id=RUN_ID)
+    api = FakeAPI().on("GET", RUN_PATH, ok(run()))
+    followed = connect(api).follow(types.MappingProxyType(settled), ["create"])
+    assert type(followed.record) is dict and followed == Followed(settled, run(), False)
+    # A phase moved, with no one to say it to.
+    api = FakeAPI().on("GET", TWIN_PATH, watch(COMPILED, READY)).on("GET", RUN_PATH, ok(run()))
+    assert connect(api).follow(record(run_id=RUN_ID), ("create",)) == Followed(READY, run(), False)
+
+
+@pytest.mark.parametrize(
+    ("given", "watched", "line", "raised"),
+    [
+        (record(run_id=RUN_ID), watch(COMPILED, READY), "three-node: compiled", Stop()),
+        (record(run_id=RUN_ID), watch(COMPILED, READY), "three-node: compiled", RuntimeError("the deadline passed")),
+        # The one refusal `follow` takes as an end, a deletion's 404, raised by `progress` and not by the watch.
+        (DELETING, watch(DESTROYED, deleted=True), "three-node: destroyed",
+         ProblemError(404, ProblemDocument(type="about:blank", title="Not Found", status=404, rule="twin.not_found",
+                                           detail="No twin is named three-node."))),
+    ],
+    ids=["base-exception", "exception", "a-deletions-404"],
+)
+def test_an_exception_progress_raises_leaves_follow(
+    given: dict[str, Any], watched: Answer, line: str, raised: BaseException
+) -> None:
+    # What `progress` raises leaves `follow` as raised, and its clean-up runs after. `progress` is called only when a
+    # phase moves, so it is no deadline: `follow` takes no timeout, and the bound is the caller's, from outside it.
+    said: list[str] = []
+
+    def progress(said_now: str) -> None:
+        said.append(said_now)
+        raise raised
+
+    responses: list[httpx.Response] = []
+    api = (FakeAPI().on("GET", TWIN_PATH, kept(watched, responses)).on("GET", RUN_PATH, ok(run()))
+           .on("GET", DESTROY_PATH, ok(run("destroy", run_id=DESTROY_RUN_ID))))
+    with pytest.raises(type(raised)) as e:
+        connect(api).follow(given, ("create", "destroy"), progress=progress)
+    assert e.value is raised
+    assert said == [line]
+    assert api.calls() == [f"GET {TWIN_PATH}"]  # no run is read
+    assert [r.is_closed for r in responses] == [True]  # the watch closed behind it

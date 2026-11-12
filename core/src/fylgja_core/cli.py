@@ -8,9 +8,10 @@ and, where it is set, `FYLGJA_API_CA`, the CA file an https:// address is verifi
 else the system's trust (D-063); it never prints the token.
 
 Exit codes: 0 ok; 1 a negative verdict (rejected, failed, nonconforming); 2 a problem
-document, a transport failure (a server certificate not trusted among them), or a failure of
-the CLI's own (a variable not set or one it cannot use, a file it cannot read, a blueprint the
-model package refuses); 3 a twin left dirty (unclean, diverged).
+document, a transport failure (a server certificate not trusted among them), a write the client
+library could not follow to its verdict (`FollowError`), or a failure of the CLI's own (a
+variable not set or one it cannot use, a file it cannot read, a blueprint the model package
+refuses); 3 a twin left dirty (unclean, diverged).
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import httpx
 from fylgja_core import blueprint, documents, findings
 from fylgja_core.client import (
     Client,
+    FollowError,
     ProblemError,
     TransportError,
     UnsupportedVersion,
@@ -143,7 +145,7 @@ def _run(args: argparse.Namespace, transport: httpx.BaseTransport | None, sleep:
     except Untrusted as e:
         _error(str(e))
         _error(f"{CA} names the CA file an https:// address is verified against")
-    except (TransportError, UnsupportedVersion) as e:
+    except (TransportError, UnsupportedVersion, FollowError) as e:
         _error(str(e))
     except Failure as e:
         for line in e.lines:
@@ -245,10 +247,9 @@ def _twin_create(ctx: Context, args: argparse.Namespace) -> int:
     if args.no_wait:
         ctx.show(record, _twin_lines(record))
         return 0
-    settled = _settle(ctx, record)
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, ("create",), settled.run_id))
-    ctx.show(run, _twin_lines(settled.record) + _run_lines(run))
-    return EXIT[_verdict(run).status]
+    followed = ctx.client.follow(record, ("create",), progress=ctx.progress)
+    ctx.show(followed.run, _twin_lines(followed.record) + _run_lines(followed.run))
+    return EXIT[_verdict(followed.run).status]
 
 
 def _twin_step(ctx: Context, args: argparse.Namespace) -> int:
@@ -273,11 +274,10 @@ def _twin_step(ctx: Context, args: argparse.Namespace) -> int:
         # A written spec moves the generation past the observed one: this one was the twin's already.
         ctx.show(record, [*_twin_lines(record), "the twin's spec is this already: no run started"])
         return 0
-    settled = _settle(ctx, record)
     # The run toward the spec is a step, or a create for a twin whose create never applied (D-050).
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, ("step", "create"), settled.run_id))
-    ctx.show(run, _twin_lines(settled.record) + _run_lines(run))
-    return EXIT[_verdict(run).status]
+    followed = ctx.client.follow(record, ("step", "create"), progress=ctx.progress)
+    ctx.show(followed.run, _twin_lines(followed.record) + _run_lines(followed.run))
+    return EXIT[_verdict(followed.run).status]
 
 
 def _twin_show(ctx: Context, args: argparse.Namespace) -> int:
@@ -320,18 +320,12 @@ def _twin_destroy(ctx: Context, args: argparse.Namespace) -> int:
     if args.no_wait:
         ctx.show(record, _twin_lines(record))
         return 0
-    try:
-        settled = _settle(ctx, record)
-    except ProblemError as e:
-        # Gone before the watch began, or between two of its streams: the destroy run says how it went.
-        if e.status != 404:
-            raise
-        settled = Settled(record, record["status"].get("run_id"), gone=True)
-    run = _ended(ctx.client, _run_of(ctx.client, args.name, ("destroy",), settled.run_id))
-    # Deleted only when the twin is gone; a teardown that kept the record shows where it stands.
-    head = [f"twin {args.name} deleted"] if settled.gone else _twin_lines(settled.record)
-    ctx.show(run, head + _run_lines(run))
-    return EXIT[_verdict(run).status]
+    followed = ctx.client.follow(record, ("destroy",), progress=ctx.progress)
+    # Deleted only when the twin is gone, and then no record is shown, not even the last one seen; a
+    # teardown that kept the record shows where it stands.
+    head = [f"twin {args.name} deleted"] if followed.gone else _twin_lines(followed.record)
+    ctx.show(followed.run, head + _run_lines(followed.run))
+    return EXIT[_verdict(followed.run).status]
 
 
 def _twin_verify(ctx: Context, args: argparse.Namespace) -> int:
@@ -356,9 +350,12 @@ def _run_watch(ctx: Context, args: argparse.Namespace) -> int:
         events.append(event)
         if not ctx.json:
             print(_event_line(event))
-    run = _ended(ctx.client, ctx.client.get_run(args.id))
+    # The events end once the run has: it is read once. A run with no verdict prints nothing more, and
+    # `_verdict` refuses it; one whose verdict it cannot read has its events printed first.
+    run = ctx.client.get_run(args.id)
     if ctx.json:
-        print(json.dumps(events, indent=2))
+        if "verdict" in run:
+            print(json.dumps(events, indent=2))
     else:
         # The exit code is the verdict's, so the text says which and why.
         for line in _verdict_lines(_verdict(run)):
@@ -400,79 +397,13 @@ def _bundle_diff(ctx: Context, args: argparse.Namespace) -> int:
     return 0
 
 
-# Waiting.
-
-
-@dataclass(frozen=True)
-class Settled:
-    """How a wait for a twin ended: the last record seen, the last run the records named, and
-    whether the twin is gone."""
-
-    record: dict[str, Any]
-    run_id: str | None
-    gone: bool = False
-
-
-def _settle(ctx: Context, record: dict[str, Any]) -> Settled:
-    """Watch a twin until the loop has acted on its generation or the twin is gone, with a
-    progress line each time the phase a record shows its run in flight at moves (`_phase`). The
-    record that settles the run, or the twin's deletion, prints none: a step that ended short of
-    `applied` leaves `phase` the running twin's, which is no phase the run reached."""
-    seen: str | None = record["status"].get("run_id")
-    if record["status"]["observed_generation"] == record["generation"]:
-        return Settled(record, seen)
-    name, phase = record["name"], _phase(record["status"])
-    for event in ctx.client.watch_twin(name, since_revision=record["revision"]):
-        record = event["object"]
-        seen = record["status"].get("run_id", seen)
-        settled = record["status"]["observed_generation"] == record["generation"]
-        now = _phase(record["status"])
-        if not settled and event["type"] != "DELETED" and now is not None and now != phase:
-            phase = now
-            ctx.progress(f"{name}: {phase}")
-        if event["type"] == "DELETED":
-            return Settled(record, seen, gone=True)
-        if settled:
-            return Settled(record, seen)
-    raise Failure(f"the watch of twin {name} ended before the loop acted on generation {record['generation']}")
-
-
-def _phase(status: Mapping[str, Any]) -> str | None:
-    """The phase a record shows its run last completed: a running step's `last_step.phase`, which
-    moves before `phase` does (until `applied` a step records its phases there alone), else
-    `phase`; None when the record shows neither."""
-    last = status.get("last_step")
-    if last is not None and last["outcome"] == "running":
-        step_phase: str = last["phase"]
-        return step_phase
-    phase: str | None = status.get("phase")
-    return phase
-
-
-def _run_of(client: Client, twin: str, operations: Sequence[str], seen: str | None) -> dict[str, Any]:
-    """The run a record last named, if it is of one of the operations, else the twin's newest of them."""
-    if seen is not None:
-        run = client.get_run(seen)
-        if run["operation"] in operations:
-            return run
-    for run in client.list_runs(twin=twin):
-        if run["operation"] in operations:
-            return run
-    raise Failure(f"twin {twin} has no {' or '.join(operations)} run")
-
-
-def _ended(client: Client, run: dict[str, Any]) -> dict[str, Any]:
-    """The run once it has ended: its events followed until the run has ended, then read again."""
-    if run["state"] != "ended":
-        for _ in client.watch_run(run["id"]):
-            pass
-        run = client.get_run(run["id"])
-    if "verdict" not in run:
-        raise Failure(f"run {run['id']} is {run['state']}, with no verdict")
-    return run
+# Verdicts.
 
 
 def _verdict(run: Mapping[str, Any]) -> Verdict:
+    """A run's verdict, which it carries once it has ended; a run with none is a failure."""
+    if "verdict" not in run:
+        raise Failure(f"run {run['id']} is {run['state']}, with no verdict")
     try:
         return findings.decode(run["verdict"])
     except Rejected as e:

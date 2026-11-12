@@ -67,13 +67,16 @@ statement for people, and is the one that is right where the two disagree.
    - Each task is built from its own brief, test first, and its diff is read by a fresh
      reviewer before the next task starts.
    - Each decision taken along the way is written down as a ruling, with what it costs if
-     wrong.
+     wrong; one that leaves an item for the landing also puts it in one list, as it is ruled.
    - A plan's whole branch is reviewed once more, then merged into the integration branch.
    - Live runs are one at a time.
+   - The maintainer's word on an acceptance run says what they read, the report in its
+     thread, not only that it passed.
 4. **Land.** On the maintainer's word:
    - the phase is written as built on the integration branch: a decision entry for each
      place the build departed from a decision, the sentences it made untrue corrected, and
      the item in "Sequence" marked done, with what it left to later phases;
+   - that commit is reviewed afresh, and its findings fixed, before the history is tagged;
    - the integration branch is squashed onto `main` as one commit;
    - its history is kept under the local tag `archive/phase-N-integration`;
    - the build's records (ledgers, briefs, reviews, rulings, run logs) go to

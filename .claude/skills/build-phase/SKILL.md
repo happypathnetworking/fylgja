@@ -52,6 +52,9 @@ Branch `phase-N-design`, cut from `main`.
 4. **Write the decision entries**, each at the next free number, at the end of its topic's
    section of `design/decisions.md`, with its index row. Give every entry it supersedes or
    adds to a status note; the old entry's text stays. Read the rejected alternatives first.
+   A design branch cut before the previous phase lands takes its numbers provisionally:
+   that landing takes the next free numbers on its own integration branch, and this design
+   renumbers when it is rebased onto `main`.
 5. **Search `design/architecture.md` and `design/core.md`** for every sentence the new
    entries make untrue, and correct it.
 6. **Have a fresh reader check the draft.** A subagent given only the documents and the code
@@ -116,7 +119,9 @@ written.
   - each task's brief (the task's text, extracted from the plan), its report, and the diff
     its reviewer read.
 
-  The ledger, not the session's memory, says what is done.
+  The ledger, not the session's memory, says what is done. An item ruled "for the landing"
+  goes into plan 0's bends or the ledger's "For the landing" list as it is ruled, never only
+  into the ruling's text: the landing's brief is written from those lists.
 - **Every implementer and reviewer is handed** `house-rules.md` (beside this file), the
   task's brief, the plan's Global Constraints and Review Focus, and a report file. Never the
   whole plan, and never the session's history.
@@ -141,6 +146,12 @@ written.
 - **A fact is a reading.** A reviewer is asked whether each new fact says only what its run
   showed. A figure worked out from others is called a derivation, and whether a bound or a
   wider wait is needed is a ruling, recorded in the ledger and entered at the landing.
+- **A time budget a live test rests on is a reading too**, and readings of a shared system
+  drift: phase 8 sized a deadline from one run of Infrahub's reads, which doubled in two
+  days, and it failed later on the same code. The test's docstring names the readings it
+  rests on and the budget's ratio to the slowest; the closing gate's run is read against them.
+- **The maintainer's word on an acceptance run names what they read.** Its runbook asks them
+  to say they read the report in its thread, not only that the run passed.
 - **A plan ends** with one review of its whole branch on the most capable model, one fix
   wave, and one check of that wave. The last plan's reviewer is also asked for every line
   of the design documents the phase has made untrue. Then its commits' trailers are made uniform, it is merged
@@ -163,8 +174,13 @@ Only on the maintainer's word.
      part;
    - every line of `design/core.md`, `design/architecture.md` and
      `design/verified-facts.md` the phase made untrue, corrected;
+   - a line of `design/decisions.md`'s preface the phase made untrue, corrected: the preface
+     is conventions, not an entry, and append-only binds the entries;
    - the item of "Sequence" marked done, with its date, what it built and what it left to
      later phases; what it left unanswered goes under "Open questions".
+
+   Before the tag, the as-built commit gets a fresh review on the most capable model, one fix
+   wave and one re-review, as a plan's last review does.
 3. Tag the integration branch `archive/phase-N-integration`, so the hashes the ledgers name
    still resolve.
 4. Squash the integration branch onto `main` as one commit, `feat: phase N, <what it built>`,
@@ -173,5 +189,6 @@ Only on the maintainer's word.
 5. Copy each plan's workspace to `local/sdd/phase-N/<plan>/`, the collected rulings to
    `local/sdd/phase-N/rulings.md`, and the logs of the runs the facts were read from.
 6. Remove the worktrees and the phase's branches, once each branch is an ancestor of the
-   tag (`git merge-base --is-ancestor`). Never push unless asked.
+   tag (`git merge-base --is-ancestor`), with `git branch -D`: `-d` refuses, since a squash
+   is no merge. Never push unless asked.
 7. Amend this file, `house-rules.md` and `CONTRIBUTING.md` with whatever the phase taught.

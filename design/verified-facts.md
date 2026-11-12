@@ -3332,6 +3332,49 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
 
 ---
 
+## SR Linux 26.7.2
+
+Read on 2026-11-12 on the development host with containerlab 0.81.0, through a core of this
+tree started on a port and a store of its own, with a copy of `psp/nokia_srlinux.yaml` whose
+image was `ghcr.io/nokia/srlinux:26.7.2` and no other value changed. The development NetBox
+ran beside it, and no other twin. Each line is one run, measured once.
+*(0.81.0, 2026-11-12)*
+
+- **The image** is public on `ghcr.io/nokia/srlinux` under the tag `26.7.2`, built on
+  2026-08-19 by its own configuration; `docker pull` took 108 s and Docker lists it at
+  3.2 GB, beside 24.7.1's 5.19 GB.
+- **A twin of three nodes on it was created, pushed and Ready in 79 s**, the image present,
+  by the 24.7.1 package's values unchanged: its kind, its JSON-RPC push on port 443, its
+  readiness, its gNMI on 57400 over TLS and its `conformance` paths. `three-node-probed`,
+  whose configurations were written for 24.7.1, was pushed whole and refused on no line. The
+  same twin on 24.7.1, created after it, took 70 s.
+- **Its version leaf** `/system/information/version` reads `v26.7.2-519-g94fbd638fa8`
+  (`sr_cli`, `info from state`); `show version` gives `v26.7.2` and build
+  `519-g94fbd638fa8`. 24.7.1's reads `v24.7.1-330-g38f237abfe`: each begins with `v`, which
+  the packages' `versions` entries (`"24.7"`) do not.
+- **Verify held on it as on 24.7.1**: 19 assertions held, none failed and 5 skipped, the
+  counts 24.7.1 gave on the same blueprint in the same session.
+- **One booted node held 1,774 to 1,779 MiB** (cgroup `memory.current`, three nodes, read
+  once about 90 s after the create ended, not over a minute), its `memory.peak` 1,928 to
+  1,930 MiB. 24.7.1's steady reading was 1,641 MiB; the package's `memory_mb`, 2,048, is
+  that reading times 1.25, and 1,779 times 1.25 is 2,224 (a derivation). `docker stats`
+  printed `0B / 0B` for each SR Linux container and a figure for each probe host.
+- **Stepped through four fixtures, each step `ok` and verify `ok` after it**:
+  `three-node-n1-disabled` in 4.9 s, `three-node-unlinked` in 2.7 s, `two-node` in 3.0 s,
+  and back to `three-node-probed`, which makes `n3` and the two probe hosts again, in 46.3 s.
+  Destroyed in 2.9 s, no container and no network left.
+- **One node of a running twin moved from 24.7.1 to 26.7.2 in place.** With a second
+  package, a copy under another id naming the 26.7.2 image, a twin of three 24.7.1 nodes was
+  stepped to a blueprint that named the second package for `n3` alone. The dry run answered
+  `n3: recreated (image)` and every other node `kept`, and without `allow_restart` the step
+  was refused, `step.restart.required`. With it the step ended `ok` in 44.8 s: `n3` a new
+  container on the 26.7.2 image, its version leaf 26.7.2's, and `n1`, `n2` and both probe
+  hosts the containers they were, by their ids. Verify after it held 19 and failed none: a
+  24.7.1 node and a 26.7.2 node are LLDP neighbours, and the configuration written for
+  24.7.1 was pushed to the 26.7.2 node unchanged.
+
+---
+
 ## cEOS 4.32.0.2F
 
 - **The image is account-gated**: downloaded from Arista with an account and imported with
@@ -8130,6 +8173,13 @@ and each says whether it was re-verified on 26.04.
   deploy passes. *(26.04, 2026-10-08)*
 - A guest that does not nest has no `/dev/kvm`, which only a `vrnetlab_vm` platform
   package would need. *(2026-09-30; 26.04, 2026-10-08)*
+- **A Compose project's default network can take the local driver's whole pool.** On the
+  development host Docker 29.8.1 gave each Compose project's default network the next /16
+  after its bridge's, and the third made, the development NetBox's, 172.20.0.0/16. That
+  is the local driver's default pool of lab subnets, and while a network holds
+  it, a stopped project's kept one too, a create is refused before anything is deployed:
+  `admission.capacity`, "The pool 172.20.0.0/16 has no /24 that neither a Docker network nor
+  another twin holds." The server has no setting for the pool. *(26.04, 2026-11-12)*
 - **Booting a twin beside another heavy workload starves a host with little memory to
   spare**: deploys are cut short, and the other workload's requests time out. Read
   `free -m` before booting a twin. *(2026-09-15)*

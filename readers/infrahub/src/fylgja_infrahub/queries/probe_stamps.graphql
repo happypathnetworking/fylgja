@@ -1,0 +1,12 @@
+# Every probe's stamp, for head: each FylgjaProbe's id and the node_metadata of its edge, read through the branch's
+# endpoint as it stands. A probe is the blueprint's as much as a device, so a write to one is a write head counts
+# (P3-38); a probe read through a branch answers its present stamp there (design/verified-facts.md, "Infrahub 1.11.11").
+query ProbeStamps($limit: Int!, $offset: Int!) {
+  FylgjaProbe(limit: $limit, offset: $offset) {
+    count
+    edges {
+      node_metadata { updated_at updated_by { id } created_at }
+      node { id }
+    }
+  }
+}

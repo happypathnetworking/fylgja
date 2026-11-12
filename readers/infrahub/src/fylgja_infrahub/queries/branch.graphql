@@ -1,0 +1,8 @@
+# The branch by its name, and when it was made, which the branch's events are read since (design/verified-facts.md,
+# "Infrahub 1.11.11", "No latest write in what was read of a branch").
+query BranchPoint($name: String!) {
+  Branch(name: $name) {
+    name
+    branched_from
+  }
+}

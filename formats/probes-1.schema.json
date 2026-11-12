@@ -2,20 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/probes-1.schema.json",
   "title": "Fylgja probe declaration 1",
-  "description": "A file an operator writes to declare probes outside intent; the orchestrator reads it (or the FylgjaProbe kind, which only it reads) and writes the probes, sorted by name, into a blueprint's probes list. The core never reads this file: it reads probes inside a blueprint.",
-  "$comment": "Each element is exactly a blueprint probe (blueprint-1.schema.json#/$defs/probe), so the declaration and the blueprint share one definition. Unlike the blueprint, the declaration's order is free: the orchestrator sorts by name when it writes the blueprint. Rules the reader holds across fields: names unique (probe.name.duplicate), gateway inside the address's prefix (probe.gateway.outside), no two endpoints on one host address (probe.address.duplicate). An empty file declares no probes.",
+  "description": "A file an operator writes to declare probes outside intent, held to its rules by the core's declaration loader for a producer of blueprints, which writes the probes, sorted by name, into a blueprint's probes list: the Infrahub reader holds the probes of the FylgjaProbe kind to it so, and the example orchestrator consumes the blueprint the reader gives. The core never reads this file: it reads probes inside a blueprint.",
+  "$comment": "Each element is exactly a blueprint probe (blueprint-1.schema.json#/$defs/probe), so the declaration and the blueprint share one definition. Unlike the blueprint, the declaration's order is free: a producer sorts by name when it writes the blueprint. Rules the reader holds across fields: names unique (probe.name.duplicate), gateway inside the address's prefix (probe.gateway.outside), no two endpoints on one host address (probe.address.duplicate). An empty file declares no probes.",
   "type": "object",
   "additionalProperties": false,
   "required": ["probes_version", "probes"],
   "properties": {
     "probes_version": {
       "const": "1",
-      "description": "The format's version; the orchestrator's reader refuses any other."
+      "description": "The format's version; the declaration's loader refuses any other."
     },
     "probes": {
       "type": "array",
       "items": { "$ref": "blueprint-1.schema.json#/$defs/probe" },
-      "description": "The declared probes; the orchestrator copies them, sorted by name, into the blueprint it writes."
+      "description": "The declared probes; a producer copies them, sorted by name, into the blueprint it writes."
     }
   }
 }

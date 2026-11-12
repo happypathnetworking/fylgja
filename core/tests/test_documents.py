@@ -3,6 +3,7 @@ a file, and how a rejection is carried."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Any, Literal
 
 import pytest
 
-from fylgja_core import documents
+from fylgja_core import documents, schemas
 from fylgja_core.documents import Problem, Rejected
 
 
@@ -110,9 +111,26 @@ def test_a_schema_violation_is_a_problem_with_its_pointer() -> None:
     assert {p.pointer for p in found} == {"/probes/0"}
 
 
+def test_schema_problems_reads_another_packages_format(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    formats = tmp_path / "site" / "pkg_f" / "formats"
+    formats.mkdir(parents=True)
+    (formats.parent / "__init__.py").write_text("")
+    thing = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{schemas.ID_PREFIX}thing-1.schema.json",
+        "type": "object",
+        "required": ["device"],
+        "properties": {"device": {"$ref": "blueprint-1.schema.json#/$defs/device_name"}},
+    }
+    (formats / "thing-1.schema.json").write_text(json.dumps(thing))
+    monkeypatch.syspath_prepend(tmp_path / "site")
+    found = documents.schema_problems("thing-1", {"device": 7}, "thing.invalid", package="pkg_f")
+    assert [(p.pointer, p.rule) for p in found] == [("/device", "thing.invalid")]
+
+
 def test_another_version_is_one_problem() -> None:
     assert documents.unsupported_version({"v": "2"}, "v", "1", "x.version") == [
-        Problem("/v", "x.version", "version '2'; this core reads 1")
+        Problem("/v", "x.version", "version '2'; only version 1 is read")
     ]
     assert documents.unsupported_version({"v": "1"}, "v", "1", "x.version") == []
     assert documents.unsupported_version("not a document", "v", "1", "x.version") == []

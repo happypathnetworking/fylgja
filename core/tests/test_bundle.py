@@ -62,7 +62,7 @@ def test_an_omitted_row_carries_its_omission_and_no_node_name() -> None:
 
 def test_another_version_is_refused_first() -> None:
     other = {**doc(), "bundle_version": "2"}
-    assert bundle.validate(other) == [Problem("/bundle_version", RULE_VERSION, "version '2'; this core reads 1")]
+    assert bundle.validate(other) == [Problem("/bundle_version", RULE_VERSION, "version '2'; only version 1 is read")]
 
 
 def test_a_schema_fault_is_reported_with_its_pointer_and_decode_refuses_it() -> None:

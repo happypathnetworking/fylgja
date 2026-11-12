@@ -1,0 +1,19 @@
+---
+# The seeded branch's first stage, read by infrahubctl object load (infrahub/seed/seed.py): the one cable main lacks
+# of testdata/blueprint/three-node.json's links, between n1's and n3's ethernet-1/2, after which the network is the
+# fixture's. Each end is a port main's devices' file made, named by its device and its name and nested in the cable,
+# so the load finds that port and makes none; the label is the cable's human-friendly id, its two ends sorted and
+# joined by a bar, as main's cables have it (infrahub/seed/main/6-cables.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - label: n1:ethernet-1/2|n3:ethernet-1/2
+      connected_endpoints:
+        kind: InterfacePhysical
+        data:
+          - name: ethernet-1/2
+            device: n1
+          - name: ethernet-1/2
+            device: n3

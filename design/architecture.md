@@ -1,7 +1,9 @@
 # Architecture
 
-This document describes the Fylgja core: what it is, what is built at this commit, and the
-architecture it is being built to. The non-negotiables are in the
+This document describes Fylgja as this repository holds it: the core, at length, and the two
+pieces beside it, the Infrahub reader and the example orchestrator (section 5;
+[D-081](decisions.md#d-081)). It says what each is, what is built at this commit, and the
+architecture the core is being built to. The non-negotiables are in the
 [constitution](constitution.md), the reasons in the [decision log](decisions.md), and the
 terms in the [glossary](../docs/glossary.md). The full design is [design/core.md](core.md),
 and every format is specified under [`formats/`](../formats/README.md).
@@ -28,17 +30,20 @@ Four rules shape the rest:
 
 ## 2. The core and its boundary
 
-This repository builds the **core**. It takes blueprints and knows no source of truth.
-Whatever writes a blueprint is a **producer**. The one Fylgja ships is the
-**orchestrator**, which reads Infrahub and resolves a branch or a stage of a proposed
-change into a blueprint. It lives in the archived repository until it moves here
-(section 5). Until then, blueprints come from files: the fixtures under
+This repository builds three pieces ([D-081](decisions.md#d-081)), and the **core** is the
+first. It takes blueprints and knows no source of truth.
+Whatever writes a blueprint is a **producer**. The one Fylgja ships is the **Infrahub
+reader**, a library that reads a branch of Infrahub into a blueprint; an **example
+orchestrator** resolves a stage of a proposed change through it and rehearses the change
+([D-081](decisions.md#d-081)). Both are in this repository, under `readers/infrahub/` and
+`orchestrator/` (section 5), written new; their prototype in the archived repository was the
+reference they were written against. A blueprint may equally come from a file: the fixtures under
 `testdata/blueprint/`, or any file written to `formats/blueprint-1.schema.json`.
 
 Every client reaches the core through **API 1** alone
 ([Constitution XI](constitution.md#xi-the-api-is-the-boundary),
-[D-025](decisions.md#d-025)): the thin CLI, the orchestrator, and later a web UI or an
-agent. The state store and the runtime's resources are the core's internals, and no client
+[D-025](decisions.md#d-025)): the thin CLI, the example orchestrator, and later a web UI or
+an agent. The state store and the runtime's resources are the core's internals, and no client
 writes them.
 
 ## 3. The state at this commit
@@ -116,16 +121,31 @@ writes them.
   EOS login. The core's own loop resumed every run a kill found unfinished, on both drivers; on the
   cluster the kill at a create's `pushed` found its run ended, as the kill at a step's `verified`
   does on both ([D-072](decisions.md#d-072), [verified-facts.md](verified-facts.md)).
+- **The Infrahub reader and the example orchestrator** (section 5,
+  [D-081](decisions.md#d-081)): the reader under `readers/infrahub/`, which reads a branch of
+  Infrahub into a blueprint, and the example under `orchestrator/`, which rehearses a proposed
+  change on a twin through Infrahub's own check `fylgja-twin` and posts its report in the
+  change's thread, with what the development Infrahub is given under `infrahub/`. The two
+  acceptance runs were made on 2026-11-12: a proposed change the maintainer created in
+  Infrahub's UI was rehearsed through its check, once with the core on the local driver and
+  once with the core deployed on the cluster, and each ended `passed`, a twin created at the
+  baseline stage, stepped and verified through the two stages after it and destroyed, the
+  head skipped as unchanged, and the report posted in the thread
+  ([verified-facts.md](verified-facts.md), "Infrahub 1.11.11", "A proposed change created by
+  the maintainer in the UI, rehearsed through its own check, on the local driver" and "A
+  proposed change created by the maintainer in the UI, rehearsed through its own check, on the
+  cluster's core").
 
-**Designed, not yet built:** everything else in section 4: the probes' flows, and the cut-over
-that moves the orchestrator onto API 1. They are built in the phases of
-[design/core.md](core.md#sequence).
+**Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
+They are left to later phases.
 
-**The reference implementation** is the **frozen Go core** in the archived repository
-([D-001](decisions.md#d-001)): one twin at a time under a fixed lab name on one lab host,
-on Temporal, in the earlier formats. It gets fixes only. It explains behaviour and supplies
-test scenarios, and is not translated. The compiler facts under `testdata/compiler/` came
-from it, and the new compiler must state the same facts for the same fixtures.
+**The Go core is retired** ([D-081](decisions.md#d-081)): the frozen Go core in the archived
+repository ([D-001](decisions.md#d-001)), one twin at a time under a fixed lab name on one lab
+host, on Temporal, in the earlier formats, gets no more fixes, and nothing tracked here needs
+it or the archived repository to build, test or run. It was the reference while this core was
+built: it explained behaviour and supplied test scenarios, and was not translated. The
+compiler facts under `testdata/compiler/` came from it, and the new compiler must state the
+same facts for the same fixtures.
 
 **A clean break** ([D-002](decisions.md#d-002)): every format starts at version 1, and the
 core reads nothing older.
@@ -135,7 +155,7 @@ core reads nothing older.
 ```mermaid
 flowchart LR
   subgraph producers[Producers]
-    ORCH[Orchestrator<br/>archived repository]
+    ORCH[Infrahub reader and<br/>example orchestrator]
     FILE[Blueprint file]
   end
   CLI[fylgja-core<br/>thin CLI]
@@ -409,7 +429,9 @@ stored, so there is one representation of a twin.
   `capacity show`, and `--json`. It exits 0 for ok, 1 for a negative verdict, 2 for a problem or transport
   failure, and 3 for a twin left dirty. A watch the server ends before its end is resumed by
   the client library from the last revision or event it saw, for up to about three minutes
-  before it gives up, each try given 5 s to connect.
+  before it gives up, each try given 5 s to connect. Following the run a write started to its
+  verdict is the client library's `follow`, which the CLI and every other client call
+  ([D-084](decisions.md#d-084)).
 
 ### 4.8 Credentials and principals
 
@@ -481,32 +503,45 @@ package ([Constitution II](constitution.md#ii-platforms-are-data-never-code),
 The shipped packages, in platform package 1 and probe package 1, are
 `psp/nokia_srlinux.yaml`, `psp/arista_eos.yaml` and `probes/ping.yaml`.
 
-## 5. The orchestrator, outside this repository for now
+## 5. The reader and the example orchestrator
 
-The orchestrator is Fylgja's other deployable ([D-003](decisions.md#d-003)). It is Python on
-Prefect, and lives in the archived repository until it moves here, once the new core runs
-twins on the local driver.
+Beside the core Fylgja ships two more pieces ([D-081](decisions.md#d-081)), designed in
+[core.md](core.md), "Phase 8", and built in phase 8, in this repository: the reader under
+`readers/infrahub/` and the example under `orchestrator/`.
 
-It owns everything that names a source of truth. It reads a branch of Infrahub, optionally
-at a point in time, under a scope, by one documented mapping of the OpsMill schema
-library's DCIM ([D-006](decisions.md#d-006)). It resolves a **stage** of a proposed change
-(its branch point, a mark the operator records, or its head) to what it reads. It **rehearses** a proposed
-change: a twin created at its first stage, stepped and verified through every later stage,
-destroyed whatever happened, and a report posted on the proposed change, whose check fails
-when a stage fails.
+**The Infrahub reader** is a library with a command of its own
+([D-082](decisions.md#d-082), [D-083](decisions.md#d-083)). It reads a branch of Infrahub at
+a point in time, under a scope, by one documented mapping of the OpsMill schema library's
+DCIM ([D-006](decisions.md#d-006)), over plain HTTP. It answers a blueprint, or the faults
+that refused it: a list it could not read whole, a device with no ready configuration, a
+configuration older than the intent it is read with. It sends no mutation and knows no
+stage, proposed change or twin. It is held to what a production workflow needs.
 
-Today it drives the frozen Go core through that core's API and writes snapshot 2. At the
-cut-over it will write blueprint 1 and call API 1, in the same change
-([D-002](decisions.md#d-002)). It will reach the core through the API alone, never the store
-or the runtime, and will render every report itself from the core's documents. This
-repository holds no bridge between the two formats ([D-006](decisions.md#d-006)).
+**The example orchestrator** shows how to join the core and a reader to a system that
+already exists ([D-085](decisions.md#d-085)). It resolves a **stage** of a proposed change
+(its branch point, a mark the operator records on the branch, or its head;
+[D-088](decisions.md#d-088)) to what the reader reads. It **rehearses** a proposed change:
+a twin created at its first stage, stepped and verified through every later stage, destroyed
+whatever happened, and a report posted on the proposed change, whose check fails when a
+stage fails ([D-086](decisions.md#d-086), [D-087](decisions.md#d-087)). Its rehearsal is a
+library that names neither Infrahub nor a workflow engine; Infrahub's side is behind a seam,
+and Prefect serves only the two deployments Infrahub's checks start. It is an example, and
+is not hardened.
+
+Both reach the core through the API alone, never the store or the runtime, and the example
+renders every report itself from the core's documents. Their prototype, the orchestrator in
+the archived repository, did both jobs against the frozen Go core's API, writing snapshot 2; it
+was the reference for their behaviour, and none of its code or formats is here. This repository
+holds no bridge between the two formats ([D-006](decisions.md#d-006)).
 
 ## 6. Where things live
 
 | Path | What it holds |
 |---|---|
-| `core/` | The core, the Python package `fylgja_core`: the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler; the state store, its local directory and its object store with the S3 signer; the driver seam, its registry, the containerlab driver (`containerlab/`) and the clabernetes driver (`clabernetes/`: its plan and changes, its reach into Kubernetes, and the driver class); the credential provider, readiness and the push; the reconcile loop; the server (`server/`, the console script `fylgja-core-server`); and the client library with the thin CLI (`fylgja-core`). Its tests are under `core/tests/`, the live tier's under `core/tests/live/`, the cluster tier's under `core/tests/cluster/`, and the driver conformance suite's under `core/tests/conformance/`: its scenarios, written once, and a harness for each driver |
-| `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README; the wheel carries the schemas and the OpenAPI document as the package's data ([D-066](decisions.md#d-066)) |
+| `core/` | The core, the Python package `fylgja_core`: the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler; the state store, its local directory and its object store with the S3 signer; the driver seam, its registry, the containerlab driver (`containerlab/`) and the clabernetes driver (`clabernetes/`: its plan and changes, its reach into Kubernetes, and the driver class); the credential provider, readiness and the push; the reconcile loop; the server (`server/`, the console script `fylgja-core-server`); and the client library with the thin CLI (`fylgja-core`). Installed alone it is the model package, the client library and the thin CLI, and the server's libraries are the extra `server` ([D-084](decisions.md#d-084)). Its tests are under `core/tests/`, the live tier's under `core/tests/live/`, the cluster tier's under `core/tests/cluster/`, and the driver conformance suite's under `core/tests/conformance/`: its scenarios, written once, and a harness for each driver |
+| `readers/infrahub/` | The Infrahub reader, the Python package `fylgja_infrahub` ([D-082](decisions.md#d-082), [D-083](decisions.md#d-083)), a library and the command `fylgja-infrahub` (`cli.py`): its rows, Infrahub's answers as typed values, with the rule that every list is whole (`rows.py`); the reader document each read is given and its loader (`document.py`); Infrahub's times (`times.py`); the transport, the one module that speaks to Infrahub, over httpx (`transport.py`), with every GraphQL document a file under `queries/`; the schema check's table (`schema.py`); the mapping (`mapping.py`); each device's configuration from its artifact (`artifacts.py`); the stale rule and `head`'s arithmetic (`stale.py`); the probes (`probes.py`); and the read, `head` and the schema check (`read.py`). Its wheel carries its format, `infrahub-reader-1`, by the list in `setup.py`, and its queries. Beside the package: the kind `FylgjaProbe` (`schema/fylgja-probe.yml`), the mapping (`mapping.md`), the rule catalogue (`rules.md`), and a README with the Infrahub versions it passed on and the upgrade procedure. It imports the core's base install and httpx alone, which a test over its imports holds. Its tests, under `readers/infrahub/tests/`, build the rows they read, and its contract tier's, under `tests/contract/`, read the development Infrahub (`make contract`) |
+| `orchestrator/` | The example orchestrator, the Python package `fylgja_orchestrator` ([D-085](decisions.md#d-085)), in three layers: its rehearsal library (`rehearsal/`), which imports the core's client and model alone; its Infrahub change source (`infrahub/`), which finds the open proposed change of a branch, orders its stages, the branch point, the marks of the stage kind `FylgjaStage` and the head, reads each through the reader, waiting for the proposed change's artifact validation before the head, and posts the report as a thread of two comments, over a transport of its own with its GraphQL documents under `infrahub/queries/` ([D-088](decisions.md#d-088)); and its edge (`edge/`): its settings, the library and the source wired to them with no Prefect (`run.py`), the two Prefect flows `stage-plan` and `twin-rehearse` (`flows.py`) and the runner that serves them (`serve.py`), the only modules that import Prefect, and the command `fylgja-orchestrator` (`cli.py`); and its rule catalogue (`rules.md`). Its wheel carries `plan-1` and `rehearsal-1` and the change source's queries. Its tests, under `orchestrator/tests/`, run the core's own server on its fake runtime, the change source over a fake of Infrahub's HTTP, the flows' bodies with Prefect's run context replaced, the checks' glue over a fake of Prefect's API, the stage kind's file read as YAML, and `scripts/edge_dev.py` over fakes of its processes and listeners; its contract tier's, under `tests/contract/`, the change source against the development Infrahub, and the two deployments served on a real Prefect and started, cancelled and read as a check does (`make contract`) |
+| `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README; the core's wheel carries the core's schemas and the OpenAPI document as the package's data, by the list in `core/setup.py`, and a format another distribution reads is carried by that distribution's wheel, `infrahub-reader-1` by the reader's and `plan-1` and `rehearsal-1` by the example orchestrator's ([D-066](decisions.md#d-066), [D-084](decisions.md#d-084)) |
 | `psp/` | The platform packages, SR Linux and EOS |
 | `probes/` | The probe package `ping` |
 | `testdata/blueprint/` | The four blueprint fixtures, converted once from the earlier format at the repository's start |
@@ -514,11 +549,13 @@ repository holds no bridge between the two formats ([D-006](decisions.md#d-006))
 | `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match, and the compiler's rejection fixtures |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
 | `testdata/deployment/` | The golden deployments, per driver and fixture: the rendered runtime files and the deployment document each plan must reproduce (`scripts/render-goldens.py` writes them); and under `rejected/`, the blueprints a driver's plan must refuse |
-| `scripts/` | The link checker (`linkcheck.py`), the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`), the check that the wheel validates outside the tree (`wheelcheck.py`), and the check of the core's image as it runs (`imagecheck.py`) |
-| `Dockerfile` | The core's image ([D-062](decisions.md#d-062)): two stages on `python:3.14.9-slim` pinned by digest, the newest Python 3.14 release at least two weeks old when it was chosen, the wheel built from `core/` and `formats/`, the packages under `psp/` and `probes/`, `fylgja-core-server` its entry point, run as a user that is not root. Its build context is `.dockerignore`'s allow-list, so nothing under `local/` reaches a layer |
+| `scripts/` | The link checker (`linkcheck.py`), the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`), the check of the core's wheel outside the tree, installed with the `server` extra and alone at the floors of the base's ranges, the reader's wheel beside the base alone, and the example orchestrator's beside the base and the reader's, where nothing of the server's libraries is installed but the two Prefect brings (`wheelcheck.py`), the check of the core's image as it runs (`imagecheck.py`), the development Infrahub's Compose project, its secrets generated into `local/.env` and the project started, stopped and purged (`infrahub_dev.py`, `make infrahub-up` and `make infrahub-down`), and the example orchestrator's edge on the development host, its lines generated into `local/.env`, its Prefect server started and stopped, and its runner given its own tokens (`edge_dev.py`, `make orchestrator-env`, `make prefect-up`, `make prefect-down` and `make orchestrator-serve`) |
+| `Dockerfile` | The core's image ([D-062](decisions.md#d-062)): two stages on `python:3.14.9-slim` pinned by digest, the newest Python 3.14 release at least two weeks old when it was chosen, the wheel built from `core/` and `formats/` and installed with its `server` extra, the packages under `psp/` and `probes/`, `fylgja-core-server` its entry point, run as a user that is not root. Its build context is `.dockerignore`'s allow-list, so nothing under `local/` reaches a layer |
 | `deploy/` | The core's kustomize base ([D-062](decisions.md#d-062)): the namespace `fylgja`; the core's service account, its one ClusterRole and the Lease's Role ([D-071](decisions.md#d-071)); the core's Deployment, one replica under `Recreate`, and its LoadBalancer Service; and its store, Versity S3 Gateway over a `local-path` volume, shut to every pod but the core's. It holds no address and no value: a site's overlay under `local/deploy/` sets the image, the Secrets and the addresses, as the README there shows |
+| `infrahub/` | What the development Infrahub is given from this repository, and what writes to it ([D-083](decisions.md#d-083)): the OpsMill schema library's DCIM at one commit, six of its files and its licence as the library holds them, never edited, and the commit in `COMMIT` (`schema/dcim/`, [D-082](decisions.md#d-082)); the example's stage kind `FylgjaStage` (`schema/fylgja-stage.yml`); the queries and the Jinja2 template `.infrahub.yml` registers (`queries/`, `templates/`), and the example's two checks, `fylgja-step` and `fylgja-twin`, glue on the task worker of the standard library and httpx that starts a deployment of the edge's Prefect, waits, cancels at its own deadline and concludes from the document's `status` (`checks/`); the Compose override `make infrahub-up` starts Infrahub with, two read-only mounts, the edge's Prefect's address and basic auth for the task workers, and a cap on Neo4j's memory (`dev/`); every write to Infrahub, run by `core/.venv`'s Python (`seed/`), the seed importing one Fylgja package, the reader, for its `head`: one transport and the bounded wait, with `infrahubctl` as a child (`hub.py`), the library, the group and the registration, its commit's tree on each task worker (`register.py`, `make infrahub-register`), the fixture network on `main` and the seeded branch with its two staged edits, each regenerated, timed by the reader's `head` into `local/infrahub/seed.json` and marked, and with `PROPOSED_CHANGE=1` its proposed change (`seed.py`, `make infrahub-seed`), from the object files under `main/` and `stages/`, and the example's account `fylgja-orchestrator`, its role of four permissions and its token's line in `local/.env` (`account.py`, `make orchestrator-env`); the reader document for the fixture (`seed/reader.yaml`); and the pure tier's tests of these files, of `seed/`, of `scripts/infrahub_dev.py` and of the names and addresses the tracked tree holds (`tests/`), the contract tier's against the running instance (`tests/contract/`, `make contract`), with pytest's settings for them (`pyproject.toml`) |
+| `.infrahub.yml` | The repository's registration in Infrahub ([D-081](decisions.md#d-081)): the query `device_config`, the Jinja2 transform of that name, which renders one device's SR Linux configuration, and the artifact definition `device-config`, which generates it for each member of the group `fylgja-devices`; and the example's two checks of a proposed change, `fylgja-step` and `fylgja-twin`, each binding the query `fylgja_branch` ([D-085](decisions.md#d-085)). An import loads these and nothing else, no schema and no object. A proposed change runs the checks as its source branch was made with them |
 | `design/` | How the project is governed and designed: the constitution, the decisions, this architecture, the verified facts, and design documents ([core.md](core.md) is the core's) |
-| `docs/` | Documentation for people using Fylgja; today the glossary and the rule catalogue |
+| `docs/` | Documentation for people using Fylgja: the glossary, the rule catalogue, and how to integrate Fylgja with a source of truth and a platform of one's own ([integrating.md](../docs/integrating.md)) |
 | `CONTRIBUTING.md` | How to set up, build, test and change Fylgja |
 
 ## 7. Open questions

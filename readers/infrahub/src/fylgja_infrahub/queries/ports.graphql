@@ -1,0 +1,38 @@
+# The physical ports of the scope's devices, each with its role, its status and what it is connected by: the
+# connector's kind, its label where it is a DcimCable, and its ends, each by its kind and, where it is a physical port,
+# its device and its name. The ends carry their count, which rows.incomplete holds them to: Infrahub answers a nested
+# list whole, with no limit (design/verified-facts.md, "Infrahub 1.11.11").
+query Ports($devices: [ID], $limit: Int!, $offset: Int!) {
+  InterfacePhysical(device__ids: $devices, limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        id
+        name { value }
+        role { value }
+        status { value }
+        device { node { id } }
+        connector {
+          node {
+            __typename
+            id
+            ... on DcimCable { label { value } }
+            connected_endpoints {
+              count
+              edges {
+                node {
+                  __typename
+                  id
+                  ... on InterfacePhysical {
+                    name { value }
+                    device { node { id } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

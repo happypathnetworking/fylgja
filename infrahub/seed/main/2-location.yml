@@ -1,0 +1,21 @@
+---
+# The fixture network on main, read by infrahubctl object load (infrahub/seed/seed.py): the site lab, under its metro,
+# its country and its region, each the parent of the next.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRegion
+  data:
+    - name: Lab region
+      children:
+        kind: LocationCountry
+        data:
+          - name: Lab country
+            children:
+              kind: LocationMetro
+              data:
+                - name: Lab metro
+                  children:
+                    kind: LocationSite
+                    data:
+                      - name: lab

@@ -11,9 +11,10 @@ read directly. The image:
   line on stderr, JSON, whose `variable` is `FYLGJA_TOKENS`: its entry point is
   `fylgja-core-server`, which opened its store under `/tmp` as that user and loaded the packages
   inside against the wheel's formats before the token file stopped it;
-- carries the formats `core/setup.py` copies (`formats/*.schema.json`, `formats/api-1.openapi.yaml`)
-  equal to the tree's by name and by bytes, and `schemas.formats_dir()` reads them there, so no
-  stale build directory shipped one since removed;
+- carries the core's formats, those `core/setup.py` copies by its list `CORE_FORMATS`, equal to
+  the tree's by name and by bytes, and `schemas.formats_dir()` reads them there, so no stale
+  build directory shipped one since removed and no other distribution's format in `formats/`
+  shipped;
 - holds, in its copies of the tree's `psp/` and `probes/` (the `Dockerfile` copies each whole),
   the files git tracks there and no other, by path (`find -type f` against `git ls-files`): a
   file git ignores under a directory the context allows (an editor's `*.swp` or `*~`, a nested
@@ -25,6 +26,7 @@ Exit 0, the tag checked the last line printed; 1 with the reason on stderr other
 
 from __future__ import annotations
 
+import ast
 import base64
 import json
 import subprocess
@@ -32,7 +34,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PATTERNS = ("*.schema.json", "api-1.openapi.yaml")  # core/setup.py's
 COPIES = {"psp": "/opt/fylgja/psp", "probes": "/opt/fylgja/probes"}  # the Dockerfile's whole copies of the tree's
 USER = "10001"
 REFUSED = "FYLGJA_TOKENS"
@@ -52,6 +53,31 @@ print(json.dumps({"here": str(here), "read": str(schemas.formats_dir()), "files"
 
 class Failure(Exception):
     pass
+
+
+def core_formats(setup: Path = ROOT / "core" / "setup.py") -> tuple[str, ...]:
+    """The core's formats, `CORE_FORMATS` in `setup`, read by `ast` from its assignment there and
+    never by import, since the file runs `setup()`. `scripts/wheelcheck.py` holds a copy, since `-I`
+    gives a script no sibling to import, and `core/tests/test_core_formats.py` holds the two alike."""
+    try:
+        module = ast.parse(setup.read_text(), str(setup))
+    except (OSError, SyntaxError) as e:
+        raise Failure(f"{setup} cannot be read: {e}") from e
+    assigned = [
+        statement.value
+        for statement in module.body
+        if isinstance(statement, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "CORE_FORMATS" for target in statement.targets)
+    ]
+    if not assigned:
+        raise Failure(f"{setup} assigns no CORE_FORMATS")
+    try:
+        found = ast.literal_eval(assigned[-1])
+    except (ValueError, TypeError) as e:
+        raise Failure(f"{setup}'s CORE_FORMATS is no literal: {e}") from e
+    if not isinstance(found, tuple) or not all(isinstance(name, str) for name in found):
+        raise Failure(f"{setup}'s CORE_FORMATS is no tuple of strings: {found!r}")
+    return found
 
 
 def docker(argv: list[str], status: int = 0) -> subprocess.CompletedProcess[str]:
@@ -100,12 +126,16 @@ def check_formats(image: str) -> int:
     if found["read"] != found["here"]:
         raise Failure(f"schemas.formats_dir() is {found['read']}, not the package's {found['here']}")
     carried = {name: base64.b64decode(data) for name, data in found["files"].items()}
-    tree = {p.name: p.read_bytes() for pattern in PATTERNS for p in (ROOT / "formats").glob(pattern)}
+    try:
+        tree = {name: (ROOT / "formats" / name).read_bytes() for name in core_formats()}
+    except OSError as e:
+        raise Failure(f"a format CORE_FORMATS lists cannot be read from formats/: {e}") from e
     problems = [f"missing from the image: {n}" for n in sorted(tree.keys() - carried.keys())]
     problems += [f"extra in the image: {n}" for n in sorted(carried.keys() - tree.keys())]
     problems += [f"differs from formats/: {n}" for n in sorted(tree.keys() & carried.keys()) if tree[n] != carried[n]]
     if problems:
-        raise Failure("the image's formats differ from formats/:\n" + "\n".join(problems))
+        raise Failure("the image's formats differ from CORE_FORMATS in core/setup.py, read from formats/:\n"
+                      + "\n".join(problems))
     return len(carried)
 
 
@@ -158,7 +188,7 @@ def main(argv: list[str]) -> int:
         return 1
     print(f"imagecheck: {image} runs as {USER}")
     print(f"imagecheck: given no token file it exits 2 naming {REFUSED}: {refusal}")
-    print(f"imagecheck: it carries formats/'s {count} formats, byte for byte, and reads them there")
+    print(f"imagecheck: it carries the core's {count} formats, formats/'s byte for byte, and reads them there")
     print(f"imagecheck: its copies of {' and '.join(f'{tree}/' for tree in COPIES)} hold git's {copied} tracked "
           "files there, and no other")
     print(image.rpartition(":")[2])

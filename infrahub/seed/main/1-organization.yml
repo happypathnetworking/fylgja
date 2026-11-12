@@ -1,0 +1,8 @@
+---
+# The fixture network on main, read by infrahubctl object load (infrahub/seed/seed.py): its one manufacturer.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationManufacturer
+  data:
+    - name: Nokia

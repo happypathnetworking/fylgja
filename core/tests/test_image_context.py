@@ -1,8 +1,9 @@
 """The core's image as the tree states it (D-062): the build context is an allow-list, so nothing
 under `local/` can reach a layer, and the `Dockerfile` copies from the context nothing else; both
-stages are one base pinned by digest; the image runs as a user that is not root, takes no build
-argument, and never runs Python optimised, which strips the `assert` inside asyncio that a lost
-Lease's cut rests on (verified-facts.md, uvicorn 0.54.0). `make imagecheck` builds and runs it."""
+stages are one base pinned by digest; the image installs the wheel with its `server` extra (D-084),
+runs as a user that is not root, takes no build argument, and never runs Python optimised, which
+strips the `assert` inside asyncio that a lost Lease's cut rests on (verified-facts.md, uvicorn
+0.54.0). `make imagecheck` builds and runs it."""
 
 from __future__ import annotations
 
@@ -97,6 +98,12 @@ def test_both_stages_are_one_base_pinned_by_digest() -> None:
     digests = [_DIGEST.search(base) for base in bases]
     assert all(digests), f"a FROM without @sha256:<64 hex>: {bases}"
     assert len({d.group(1) for d in digests if d}) == 1
+
+
+def test_the_image_installs_the_wheel_with_the_server_extra() -> None:
+    installs = [args for keyword, args in _instructions() if keyword == "RUN" and "pip install" in args]
+    assert len(installs) == 1, installs
+    assert "[server]" in installs[0]
 
 
 def test_the_image_runs_as_a_user_that_is_not_root() -> None:

@@ -1,0 +1,8 @@
+# The branch by its name, and the time it was cut, branched_from, which a rebase moves; an empty list for a name that
+# is no branch (design/verified-facts.md, "Infrahub 1.11.11", "The time a branch was cut").
+query BranchCut($name: String!) {
+  Branch(name: $name) {
+    name
+    branched_from
+  }
+}

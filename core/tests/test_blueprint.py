@@ -83,7 +83,7 @@ def test_another_version_is_refused_first() -> None:
     doc = load("three-node")
     doc["blueprint_version"] = "2"
     assert blueprint.validate(doc) == [
-        Problem("/blueprint_version", blueprint.RULE_VERSION, "version '2'; this core reads 1")
+        Problem("/blueprint_version", blueprint.RULE_VERSION, "version '2'; only version 1 is read")
     ]
 
 

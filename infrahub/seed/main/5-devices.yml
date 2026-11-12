@@ -1,0 +1,81 @@
+---
+# The fixture network on main, read by infrahubctl object load (infrahub/seed/seed.py): the devices n1, n2 and n3 of
+# testdata/blueprint/three-node.json, each active at the site lab on SR Linux, tagged fylgja, a member of the group
+# fylgja-devices, with its physical ports nested under it and each address nested under its port.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDevice
+  data:
+    - name: n1
+      status: active
+      description: FYLGJA-MARKER-fixture
+      location: lab
+      platform: SR Linux
+      tags: [fylgja]
+      member_of_groups: [fylgja-devices]
+      interfaces:
+        kind: InterfacePhysical
+        data:
+          - name: mgmt0
+            role: management
+          - name: ethernet-1/1
+          - name: ethernet-1/2
+          - name: ethernet-1/10
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.1.10.1/24
+          - name: ethernet-1/11
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.1.11.1/24
+    - name: n2
+      status: active
+      description: FYLGJA-MARKER-fixture
+      location: lab
+      platform: SR Linux
+      tags: [fylgja]
+      member_of_groups: [fylgja-devices]
+      interfaces:
+        kind: InterfacePhysical
+        data:
+          - name: mgmt0
+            role: management
+          - name: ethernet-1/1
+          - name: ethernet-1/2
+          - name: ethernet-1/10
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.2.10.1/24
+          - name: ethernet-1/11
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.2.11.1/24
+    - name: n3
+      status: active
+      description: FYLGJA-MARKER-fixture
+      location: lab
+      platform: SR Linux
+      tags: [fylgja]
+      member_of_groups: [fylgja-devices]
+      interfaces:
+        kind: InterfacePhysical
+        data:
+          - name: mgmt0
+            role: management
+          - name: ethernet-1/1
+          - name: ethernet-1/2
+          - name: ethernet-1/10
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.3.10.1/24
+          - name: ethernet-1/11
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.3.11.1/24

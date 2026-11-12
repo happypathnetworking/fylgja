@@ -1,0 +1,32 @@
+# The scope's devices: every DcimDevice that carries the tag, with its platform, that platform's manufacturer and every
+# artifact it has. Each list carries its count, the nested one too, which rows.incomplete holds it to: Infrahub
+# answers a nested list whole, with no limit (design/verified-facts.md, "Infrahub 1.11.11").
+query Devices($tag: String!, $limit: Int!, $offset: Int!) {
+  DcimDevice(tags__name__value: $tag, limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        id
+        name { value }
+        platform {
+          node {
+            name { value }
+            manufacturer { node { name { value } } }
+          }
+        }
+        artifacts {
+          count
+          edges {
+            node {
+              id
+              status { value }
+              checksum { value }
+              storage_id { value }
+              definition { node { artifact_name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

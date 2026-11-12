@@ -72,7 +72,9 @@ def test_a_new_record_encodes_without_what_it_does_not_know_yet() -> None:
 
 def test_another_version_is_refused_first() -> None:
     other = {**doc(), "record_version": "2"}
-    assert twin_record.validate(other) == [Problem("/record_version", RULE_VERSION, "version '2'; this core reads 1")]
+    assert twin_record.validate(other) == [
+        Problem("/record_version", RULE_VERSION, "version '2'; only version 1 is read")
+    ]
 
 
 def test_a_spec_naming_both_a_blueprint_and_a_bundle_is_a_schema_fault() -> None:

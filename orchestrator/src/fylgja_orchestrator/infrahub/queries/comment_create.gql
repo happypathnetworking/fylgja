@@ -1,0 +1,8 @@
+# One comment in a thread, its text Markdown (design/verified-facts.md, "Infrahub 1.11.11", "A thread posted by the
+# example's account").
+mutation CommentCreate($thread: String!, $text: String!) {
+  CoreThreadCommentCreate(data: {thread: {id: $thread}, text: {value: $text}}) {
+    ok
+    object { id }
+  }
+}

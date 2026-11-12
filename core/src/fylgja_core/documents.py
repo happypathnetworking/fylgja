@@ -64,14 +64,14 @@ def unsupported_version(doc: Any, key: str, version: str, rule: str) -> list[Pro
     """The one problem to report when `doc` states a version other than `version`, else none.
     A document that states no version, or is no object, is left to the schema."""
     if isinstance(doc, dict) and key in doc and doc[key] != version:
-        return [Problem(f"/{key}", rule, f"version {doc[key]!r}; this core reads {version}")]
+        return [Problem(f"/{key}", rule, f"version {doc[key]!r}; only version {version} is read")]
     return []
 
 
-def schema_problems(name: str, doc: Any, rule: str) -> list[Problem]:
-    """Every violation of the schema `name` (a file stem under formats/), sorted and unique,
-    each under `rule` at its pointer."""
-    errors = schemas.validator(name).iter_errors(doc)
+def schema_problems(name: str, doc: Any, rule: str, package: str = "fylgja_core") -> list[Problem]:
+    """Every violation of the schema `name` (a file stem among the core's formats and
+    `package`'s), sorted and unique, each under `rule` at its pointer."""
+    errors = schemas.validator(name, package).iter_errors(doc)
     return sorted({Problem(pointer(e.absolute_path), rule, e.message) for e in errors})
 
 

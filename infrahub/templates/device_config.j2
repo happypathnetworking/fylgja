@@ -1,0 +1,36 @@
+{#- One device's SR Linux configuration, rendered by Infrahub from the answer of the query device_config over the
+    OpsMill schema library's DCIM (infrahub/schema/dcim/). It renders the physical ports alone, in the order of their
+    names as strings: the management port as a comment, left to the platform; every other port with its far end where
+    it is cabled, its admin state, its one subinterface, its addresses in the order of their values, and its place in
+    the default network-instance. Every line follows from the device, its platform and manufacturer, its ports, their
+    cables and their addresses, and nothing is added. A device with no platform renders too, so that a generation
+    does not fail on one. -#}
+{% set dev = data.DcimDevice.edges[0].node -%}
+{% set platform = dev.platform.node -%}
+{% set manufacturer = platform.manufacturer.node if platform else none -%}
+{% set about = ((manufacturer.name.value if manufacturer else '') ~ ' ' ~ (platform.name.value if platform else '')) | trim -%}
+# {{ dev.name.value }}: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform {{ about }}{{ ('; ' ~ dev.description.value) if dev.description.value else '' }}
+set / system name host-name {{ dev.name.value }}
+set / network-instance default type default
+{% for edge in dev.interfaces.edges | sort(attribute='node.name.value', case_sensitive=true) if edge.node['__typename'] == 'InterfacePhysical' -%}
+{% set port = edge.node -%}
+{% if port.role.value == 'management' -%}
+# {{ port.name.value }}: out-of-band management, left to the platform
+{% else -%}
+{% if port.connector.node -%}
+{% for far in port.connector.node.connected_endpoints.edges if far.node.name.value != port.name.value or far.node.device.node.name.value != dev.name.value -%}
+set / interface {{ port.name.value }} description "to {{ far.node.device.node.name.value }} {{ far.node.name.value }}"
+{% endfor -%}
+{% endif -%}
+set / interface {{ port.name.value }} admin-state {{ 'disable' if port.status.value == 'disabled' else 'enable' }}
+set / interface {{ port.name.value }} subinterface 0 admin-state enable
+{% if port.ip_addresses.edges -%}
+set / interface {{ port.name.value }} subinterface 0 ipv4 admin-state enable
+{% for address in port.ip_addresses.edges | sort(attribute='node.address.value', case_sensitive=true) -%}
+set / interface {{ port.name.value }} subinterface 0 ipv4 address {{ address.node.address.value }}
+{% endfor -%}
+{% endif -%}
+set / network-instance default interface {{ port.name.value }}.0
+{% endif -%}
+{% endfor -%}

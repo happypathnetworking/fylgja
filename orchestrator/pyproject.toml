@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fylgja-orchestrator"
+version = "0.0.0"
+description = "Fylgja's example orchestrator: a proposed change rehearsed on a twin through the core's API."
+license = "Apache-2.0"
+requires-python = ">=3.14"
+# The core's base install, the model package and the client library, with no range of its own: the core states its
+# libraries' ranges (D-084). The reader, which the Infrahub change source reads through (D-082), and httpx, the
+# source's own transport, at the core's range (D-083). Prefect, pinned as read, for the edge's two flows alone (D-085).
+dependencies = ["fylgja-core", "fylgja-infrahub", "httpx>=0.27.0,<1", "prefect==3.9.2"]
+
+[project.scripts]
+fylgja-orchestrator = "fylgja_orchestrator.edge.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "mypy==2.4.0",
+    "pytest==9.2.0",
+    "ruff==0.17.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fylgja_orchestrator = ["py.typed", "infrahub/queries/*.gql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tests/ on the path, and the core's beside it, so the example's tests import the core's fakes and its boundary's lists.
+pythonpath = ["tests", "../core/tests"]
+markers = [
+    "contract: runs against the development Infrahub; make contract",
+]
+addopts = "-p no:cacheprovider -m 'not contract'"
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+files = ["src", "tests", "../infrahub/checks/fylgja_glue.py"]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/../core/tests"
+
+[[tool.mypy.overrides]]
+module = ["jsonschema.*", "rfc8785.*", "referencing.*", "pygnmi.*", "grpc.*"]
+ignore_missing_imports = true

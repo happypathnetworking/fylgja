@@ -1,0 +1,10 @@
+---
+# The fixture network on main, read by infrahubctl object load (infrahub/seed/seed.py): the platform SR Linux, of the
+# manufacturer Nokia, named by its name.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPlatform
+  data:
+    - name: SR Linux
+      manufacturer: Nokia

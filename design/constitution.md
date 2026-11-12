@@ -2,19 +2,21 @@
 
 Fylgja builds a twin of a network, wired as a blueprint of intent says, on a runtime: network
 operating system images in containers on one host or a cluster, and later real hardware. It
-is two deployables. The **core** turns a blueprint into a named twin, and steps, verifies,
-shows and destroys it. The **orchestrator** reads sources of truth, resolves stages,
-rehearses changes, and drives the core through its API. This document holds the
+is three pieces. The **core** turns a blueprint into a named twin, and steps, verifies,
+shows and destroys it. A **reader** turns one source of truth into blueprints. The
+**example orchestrator** resolves stages, rehearses changes, and drives the core through its
+API, as an integrator's own platform would. This document holds the
 non-negotiables; the reasons are in `design/decisions.md`.
 
 ## Principles
 
 ### I. One Language, Typed
-Both deployables MUST be Python, with strict type checking, one toolchain and one test
-framework. They MUST share one model package for every format they both read. The core's
+Every piece MUST be Python, with strict type checking, one toolchain and one test
+framework. They MUST share one model package for every format two of them read. The core's
 critical path MUST have no second language runtime besides the twin runtimes its drivers
-drive. The orchestrator MAY call a tool in another language; the core MUST NOT link one.
-*Rationale: [D-001](decisions.md#d-001).*
+drive. The example orchestrator MAY call a tool in another language; the core MUST NOT link
+one.
+*Rationale: [D-001](decisions.md#d-001), [D-081](decisions.md#d-081).*
 
 ### II. Platforms Are Data, Never Code
 A platform MUST be added by writing a platform package, and a probe format by writing a probe
@@ -75,8 +77,8 @@ cancelled.
 ### IX. State Lives Behind One Store; No Database
 Twin records, runs and their events, blueprints and bundles MUST live behind one store
 interface: a directory in development, object storage in production. Blueprints and bundles
-are kept by id and never overwritten. A twin record changes only by compare-and-set. Neither
-deployable introduces a database without a decision naming the question only a database can
+are kept by id and never overwritten. A twin record changes only by compare-and-set. No
+piece introduces a database without a decision naming the question only a database can
 answer.
 *Rationale: [D-024](decisions.md#d-024), [D-023](decisions.md#d-023).*
 
@@ -140,7 +142,8 @@ A plan's check MUST cite the principle for each gate it passes or justifies.
 - **Tiers.**
   - **Pure tests** gate every PR and need no infrastructure: the model, the compiler, every
     driver's `plan`, and the packages.
-  - **Contract tests** run against real systems, never fakes: Infrahub for the orchestrator.
+  - **Contract tests** run against real systems, never fakes: Infrahub for its reader and
+    for the example orchestrator.
   - **Live tests** on booted images run on demand on the local driver.
   - **The driver conformance suite** runs on each driver's own runtime, a cluster for
     clabernetes.
@@ -160,4 +163,4 @@ A plan's check MUST cite the principle for each gate it passes or justifies.
   is added or materially expanded, PATCH for wording.
 - The amendment history lives in git, not in this file.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-31 | **Last Amended**: 2026-10-31
+**Version**: 1.1.0 | **Ratified**: 2026-10-31 | **Last Amended**: 2026-11-09

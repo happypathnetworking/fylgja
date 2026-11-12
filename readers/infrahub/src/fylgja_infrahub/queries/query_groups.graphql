@@ -1,0 +1,12 @@
+# The internal query groups of the queries the scope's artifacts render through, each with the account that made it:
+# the task workers', whose joins after a generation restamp every node they add (design/verified-facts.md,
+# "Infrahub 1.11.11", "Infrahub's own account").
+query QueryGroups($queries: [ID], $limit: Int!, $offset: Int!) {
+  CoreGraphQLQueryGroup(group_type__value: "internal", query__ids: $queries, limit: $limit, offset: $offset) {
+    count
+    edges {
+      node_metadata { created_by { id } }
+      node { id }
+    }
+  }
+}

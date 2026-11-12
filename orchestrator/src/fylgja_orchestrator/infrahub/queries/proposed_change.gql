@@ -1,0 +1,17 @@
+# The open proposed changes whose source branch is the one asked, on main: Infrahub keeps one open a branch, and
+# answers none for a branch with no proposed change or a name that is no branch (design/verified-facts.md, "Infrahub
+# 1.11.11", "A proposed change by its source branch").
+query ProposedChange($branch: String!) {
+  CoreProposedChange(source_branch__value: $branch, state__value: "open") {
+    count
+    edges {
+      node {
+        id
+        name { value }
+        is_draft { value }
+        source_branch { value }
+        destination_branch { value }
+      }
+    }
+  }
+}

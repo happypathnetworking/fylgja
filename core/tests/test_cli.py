@@ -491,6 +491,21 @@ def test_twin_create_follows_a_run_not_yet_ended_to_its_verdict(capsys: pytest.C
                            f"GET {RUN_PATH}/events", f"GET {RUN_PATH}"]
 
 
+def test_the_cli_keeps_no_copy_of_the_following() -> None:
+    # Following a write to its verdict is the client library's `follow` (D-084).
+    assert [name for name in ("Settled", "_settle", "_phase", "_run_of", "_ended") if hasattr(cli, name)] == []
+    assert "watch_twin" not in Path(cli.__file__).read_text()
+
+
+def test_a_twin_with_no_run_to_follow_exits_2_saying_so(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI()
+    api.on("PUT", TWIN_PATH, ok(record(), 201, CREATED))
+    api.on("GET", TWIN_PATH, watch(READY))
+    api.on("GET", "/v1/runs", ok({"runs": [run("destroy", run_id=DESTROY_RUN_ID)]}))
+    r = fylgja(capsys, api, "twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab")
+    assert r == Result(2, "", "twin three-node has no create run\n")
+
+
 def test_a_twin_deleted_while_it_is_created_exits_by_the_create_runs_verdict(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -808,6 +823,36 @@ def test_twin_destroy_whose_watch_is_cut_and_then_answered_404_reads_the_destroy
     assert api.calls() == [f"DELETE {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
 
 
+def test_twin_destroy_gone_between_two_streams_prints_the_destroy_run_and_no_record_it_saw(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The deletion's answer names the twin's last run, a create; the record the loop wrote next names the destroy run.
+    destroyed = record(6, 2, 1, deleting=True, phase="destroyed", run_id=DESTROY_RUN_ID)
+    unclean = run("destroy", status="unclean", findings=[PUSH_REFUSED], run_id=DESTROY_RUN_ID)
+    streamed = cut("WatchEvent", [("MODIFIED", None, {"type": "MODIFIED", "object": destroyed})])
+    gone = refuse(404, "twin.not_found", "No twin is named three-node.")
+
+    def api() -> FakeAPI:
+        return (destroying(FakeAPI(), run_id=RUN_ID, status="unclean").on("GET", TWIN_PATH, streamed, gone)
+                .on("GET", RUN_PATH, ok(run())).on("GET", "/v1/runs", ok({"runs": [unclean, run()]})))
+
+    served = api()
+    r = fylgja(capsys, served, "twin", "destroy", TWIN)
+    assert r.code == 3
+    assert served.calls() == [f"DELETE {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {TWIN_PATH}", f"GET {DESTROY_PATH}"]
+    assert r.lines() == [
+        "twin three-node deleted",
+        f"run {DESTROY_RUN_ID}: destroy of twin three-node, ended",
+        f"asked by alice at {AT}, ended at {ENDED_AT}",
+        "verdict: unclean",
+        "  error push.refused n1: The node refused the configuration: commit failed.",
+    ]
+    assert r.err.splitlines() == ["three-node: destroyed",
+                                  f"GET http://127.0.0.1:7650{TWIN_PATH} failed: connection reset; reconnecting"]
+    r = fylgja(capsys, api(), "--json", "twin", "destroy", TWIN)
+    assert (r.code, r.json(), r.err) == (3, unclean, "")
+
+
 def test_twin_destroy_whose_teardown_kept_the_record_shows_it_and_does_not_say_deleted(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -898,7 +943,7 @@ def test_a_verdict_of_another_findings_version_is_refused(capsys: pytest.Capture
     code = cli.main(["run", "get", RUN_ID], transport=httpx.MockTransport(handle))
     assert (code, capsys.readouterr().err.splitlines()) == (2, [
         f"run {RUN_ID}'s verdict is no findings 1 document:",
-        "  findings.version.unsupported at /findings_version: version '2'; this core reads 1",
+        "  findings.version.unsupported at /findings_version: version '2'; only version 1 is read",
     ])
 
 
@@ -949,6 +994,39 @@ def test_run_watch_rides_through_a_cut_printing_each_event_once(capsys: pytest.C
     assert r.err == f"GET http://127.0.0.1:7650{RUN_PATH}/events failed: connection reset; reconnecting\n"
     assert api.calls() == [f"GET {RUN_PATH}/events"] * 3 + [f"GET {RUN_PATH}"]
     assert api.last("GET", f"{RUN_PATH}/events").url.params.multi_items() == [("after", "3")]
+
+
+def test_run_watch_of_a_run_with_no_verdict_exits_2_saying_so(capsys: pytest.CaptureFixture[str]) -> None:
+    api = FakeAPI()
+    api.on("GET", f"{RUN_PATH}/events", event_stream(*EVENTS))
+    api.on("GET", RUN_PATH, ok(run(state="running")))
+    r = fylgja(capsys, api, "run", "watch", RUN_ID)
+    assert r.code == 2
+    assert r.err.splitlines()[-1] == f"run {RUN_ID} is running, with no verdict"
+    r = fylgja(capsys, api, "--json", "run", "watch", RUN_ID)
+    assert (r.code, r.out, r.err) == (2, "", f"run {RUN_ID} is running, with no verdict\n")
+
+
+def test_run_watch_json_of_a_verdict_of_another_findings_version_prints_the_events_and_exits_2(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    events = event_stream(*EVENTS)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/version":
+            return httpx.Response(200, json=VERSION)
+        if request.url.path == f"{RUN_PATH}/events":
+            return events(request)
+        doc = run()
+        doc["verdict"]["findings_version"] = "2"
+        return httpx.Response(200, json=doc)
+
+    code = cli.main(["--json", "run", "watch", RUN_ID], transport=httpx.MockTransport(handle))
+    captured = capsys.readouterr()
+    assert (code, json.loads(captured.out), captured.err.splitlines()) == (2, EVENTS, [
+        f"run {RUN_ID}'s verdict is no findings 1 document:",
+        "  findings.version.unsupported at /findings_version: version '2'; only version 1 is read",
+    ])
 
 
 # Blueprints and bundles.

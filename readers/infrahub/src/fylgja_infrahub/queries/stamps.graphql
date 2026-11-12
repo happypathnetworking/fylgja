@@ -1,0 +1,66 @@
+# The stale rule's stamps of the scope's devices: each node a configuration renders from but its cables, by the
+# node_metadata of the edge it is read through (when it was last written, by which account, and when it was made):
+# the device, its platform, that platform's manufacturer, each of its interfaces of either kind, and each address under
+# an interface's ip_addresses, whose edit moves its own stamp alone. ip_addresses is InterfaceLayer3's, which both kinds
+# inherit, so it is selected on that generic. The platform's and the manufacturer's `name` stamps beside: a device made
+# on the platform moves the platform's node stamp, and the configuration renders the two by their names alone (P3-44;
+# "The platform's node stamp moves with a device made on it"). And each artifact by its id, with its checksum stamp,
+# its definition's artifact_name and the query its transformation renders through. Each nested list carries its count,
+# which rows.incomplete holds it to (design/verified-facts.md, "Infrahub 1.11.11", "What a stale rule can be built
+# on").
+query Stamps($tag: String!, $limit: Int!, $offset: Int!) {
+  DcimDevice(tags__name__value: $tag, limit: $limit, offset: $offset) {
+    count
+    edges {
+      node_metadata { updated_at updated_by { id } created_at }
+      node {
+        id
+        name { value }
+        platform {
+          node_metadata { updated_at updated_by { id } created_at }
+          node {
+            id
+            name { updated_at }
+            manufacturer {
+              node_metadata { updated_at updated_by { id } created_at }
+              node { id name { updated_at } }
+            }
+          }
+        }
+        interfaces {
+          count
+          edges {
+            node_metadata { updated_at updated_by { id } created_at }
+            node {
+              id
+              ... on InterfaceLayer3 {
+                ip_addresses {
+                  count
+                  edges {
+                    node_metadata { updated_at updated_by { id } created_at }
+                    node { id }
+                  }
+                }
+              }
+            }
+          }
+        }
+        artifacts {
+          count
+          edges {
+            node {
+              id
+              checksum { updated_at }
+              definition {
+                node {
+                  artifact_name { value }
+                  transformation { node { query { node { id } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

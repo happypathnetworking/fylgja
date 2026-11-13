@@ -126,6 +126,12 @@ already have been weighed.
 | [D-099](#d-099) | The NetBox reader's versions and tests and the development NetBox as built: NetBox 4.7.5 pinned two days old, a Compose network off the lab pool, and a contract tier with a marker of its own | The API and its clients |
 | [D-100](#d-100) | The example's NetBox change source as built: a branch refused before its tag is taken, a mark held by its blueprint's id, a warning for a branch behind `main`, and Prefect's credential readable in NetBox's changelog | The API and its clients |
 | [D-101](#d-101) | The NetBox acceptance as made: a seeded branch rehearsed from its tag on both drivers, the build's output shown to the maintainer counted as their watching, and phase 8's rehearsal made once more | The project and its shape |
+| [D-102](#d-102) | A platform package lists its versions, each with its image; one a package until a device can name one | Platforms and packages |
+| [D-103](#d-103) | The local driver's pool is a setting | Runtimes and drivers |
+| [D-104](#d-104) | The demonstration targets: one command a source, over the change the seeds make | Process and repository |
+| [D-105](#d-105) | What 1.0 promises: semantic versions, and version 1 of the API and the formats held within major 1 | The project and its shape |
+| [D-106](#d-106) | The first release: one version, three wheels on PyPI, the packages in the core's wheel | Process and repository |
+| [D-107](#d-107) | User documentation is reference in `docs/`, held to the code by tests | Process and repository |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -176,6 +182,8 @@ identity) run through every layer, and its tests are tied to Go and Temporal.
 ### D-002 — A clean break: every format and interface starts at version 1
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-105](#d-105) on 2026-11-13 (phase 10): from 1.0.0 version 1 of each format is held
+compatible within major version 1; one current version of each stands.
 
 #### Context
 
@@ -597,6 +605,72 @@ The Infrahub contract tier at the phase's closing gates:
   of the cluster's run alone.
 - [core.md](core.md)'s "Sequence" marks item 9 done.
 
+<a id="d-105"></a>
+### D-105 — What 1.0 promises: semantic versions, and version 1 of the API and the formats held within major 1
+
+**Status:** Accepted 2026-11-13 (phase 10). Supersedes [D-002](#d-002) in one part: from
+1.0.0 there is an outside user to keep compatible with. D-002's one current version of each
+format stands.
+
+#### Context
+
+Until now every format could change in place, "there being no outside user to keep
+compatible with" ([D-002](#d-002)), and each phase changed some. A 1.0 says the opposite to
+whoever installs it, whether or not anything is written down. The constitution allows one
+current version of a format and no reader of an older one
+([Constitution XII](constitution.md#xii-every-field-earns-its-place)).
+
+#### Options considered
+
+- **Release as 0.x, promising nothing.** Rejected by the maintainer's choice of 1.0.
+- **Promise everything in the repository.** Rejected: the example orchestrator is written
+  to be read and replaced ([D-085](#d-085)), and the make targets and scripts are
+  development tooling.
+- **Keep a reader of a format's older version beside its new one.** Rejected, as D-002
+  rejected it: every retired field survives as a reader.
+- **Semantic versions, a stated surface held within a major version, and a format's next
+  version only at the next major.** Chosen.
+
+#### Decision
+
+- **The three published distributions share one version and follow semantic versioning**
+  from 1.0.0 ([D-106](#d-106)).
+- **Held within major version 1:** API 1 as `api-1.openapi.yaml` states it; each format at
+  version 1 that a user writes or the core answers with (the blueprint, the platform and
+  probe packages, the probe declaration, the two reader documents, findings, problems, the
+  twin record, the bundle and the deployment); the commands `fylgja-core`,
+  `fylgja-core-server`, `fylgja-infrahub` and `fylgja-netbox`, with their options and exit
+  statuses; the names of the variables those commands read, a credential's by its pattern;
+  and the Python names given by the pages under `docs/` and by the two readers' READMEs
+  ([D-107](#d-107)), not those of `docs/integrating.md`, which are the example's.
+- **Held means:** a document or a request valid under one 1.x is valid under every later
+  one and means the same; what the core answers may gain a member, a route, a rule id or a
+  finding, in a minor release, and loses none. A refusal lifted is no loss.
+- **A reader of an answer ignores a member it does not know.** The client library and the
+  example hold each answer to the closed schema of their own wheel today, and would refuse
+  the first answer that gained a member. From 1.0 they read what they use, refuse an
+  answer that lacks it, and pass over the rest. What a user writes is still held to its
+  schema whole.
+- **The promise is a page of the user documentation** ([D-107](#d-107)).
+- **A format's version 2 comes only with a major release**, and replaces version 1.
+- **Not promised:** the example orchestrator, its commands and its two documents; the make
+  targets, the scripts, the demonstrations and `deploy/`; the wording of a message; a
+  bundle's or a deployment's id from one release to the next, which the packages' content
+  moves; modules and names the documentation does not give; and a store with twins in it
+  read by a later release, which each release's notes speak to, the default being to
+  destroy twins before an upgrade.
+
+#### Consequences
+
+- A change to a held format is now reviewed for whether it only adds. One that does not
+  waits for a major release, which is why [D-102](#d-102) is made first.
+- A consumer of its own that checks an answer against a schema uses the schema of the
+  release it talks to: an answer may hold a member an older schema lacks.
+- The tests that hold every answer of the server to the API's document stay as they are:
+  they run one release against itself.
+- The blueprint's id is the format's own definition ([D-006](#d-006)) and is held with it.
+- The pull request template's line that formats stay at version 1 stays true, and gains
+  "and only add".
 
 ## Intent and the blueprint
 
@@ -1790,6 +1864,8 @@ make D-013 a slogan.
 **Status:** Accepted at the baseline (2026-10-31).
 Superseded in part by [D-069](#d-069) on 2026-11-05: on clabernetes a link-mode change
 replaces the pods of the nodes whose mode changed, not every pod; the rest stands.
+Superseded in part by [D-102](#d-102) on 2026-11-13 (phase 10): a runtime section names an image for each
+version the package lists, not one image; the rest stands.
 
 #### Context
 
@@ -1876,6 +1952,101 @@ SR Linux first, then EOS. The order after that is [parked](#parked).
   still ahead.
 - **A second vendor finds what one cannot**: a second push mechanism, a second gNMI transport
   and CLI syntax ([D-014](#d-014)). cEOS reads `!` as a comment and refuses `#` at token 0.
+
+<a id="d-102"></a>
+### D-102 — A platform package lists its versions, each with its image; one a package until a device can name one
+
+**Status:** Accepted 2026-11-13 (phase 10). Supersedes [D-015](#d-015) in one part: a
+runtime section names an image for each version the package lists, not one image. Adds to
+[D-054](#d-054): a deletion that meets a node no loaded package runs is refused as its item
+4 refuses a step. Builds on [D-013](#d-013), [D-014](#d-014) and [D-030](#d-030).
+
+#### Context
+
+A platform package names one image, `runtime.containerlab.image`, and holds `versions`, a
+list of texts "the package was measured on, as prefixes", which nothing reads. A network
+runs more than one release of an operating system, and a second release read on 2026-11-12
+ran by its package's values with the image alone changed
+([verified-facts.md](verified-facts.md), "SR Linux 26.7.2"): a release is a line of a
+package. Support for several is not built in this phase (the maintainer, 2026-11-13). But
+1.0 holds every format ([D-105](#d-105)), and one image a package cannot become several
+without breaking each package written to it.
+
+Read of the core itself on 2026-11-12 ([core.md](core.md), "Phase 10"): a deployment whose
+package is not loaded is refused its step and its teardown once ([D-054](#d-054)), by a
+check of the bundle's package ids. A package whose image was edited passes that check. Its
+twin's step is still refused, `bundle.rejected`, from the error the driver's `changes`
+raises; its deletion is not: the same error, raised by the local driver's `destroy` as it
+works out its bounds, before any command runs, goes uncaught, on every pass, without end.
+The clabernetes driver's `destroy` takes the same lookup, by its code.
+
+`versions` and `conformance.version`, the path of a node's version leaf, are read by no
+code. [D-030](#d-030) names the version among the observed facts and the conformance suite
+as its reader; the suite never read it.
+
+#### Options considered
+
+- **Leave the format, and hold it at 1.0.** Rejected: the first user's packages would be
+  written to a shape already known to be wrong, and its mending a `platform-package-2` and a
+  major release.
+- **Leave the package format out of what 1.0 holds.** Rejected by the maintainer's
+  instruction to prepare it instead; and a format a site writes its own documents in is the
+  one a promise matters most for.
+- **Build the whole of it now**: a device naming its version, a second release listed and
+  measured, verify asserting it. Set aside by the maintainer for its cost; a design of it
+  was drafted and is unmerged.
+- **Change the package's shape now, and run one version a package.** Chosen.
+- **Accept a package that lists several, and run its first.** Rejected: the others would be
+  lines nothing reads ([Constitution XII](constitution.md#xii-every-field-earns-its-place)),
+  and a user would take a listed version for a supported one.
+- **A deletion that goes through without its packages**, bounded by the largest bound
+  loaded. Rejected: a driver's `destroy` takes the packages for its bounds, and the standing
+  rule is that a core without them waits for one that has them ([D-054](#d-054)). The
+  defect is that one case raises where it should be refused.
+
+#### Decision
+
+- **`versions` is an ordered list of versions, each an object with a name.** A runtime
+  section names one image for each version, by its name, in place of its one image; each
+  is the `image` object the format defines today, a reference and, for a gated image, its
+  pull secret's name. The loader refuses a version with no image in a runtime section, an
+  image for a version not listed, and two versions of one name.
+- **`conformance.version` stays, unread.** It is the path at which the version this entry
+  names is read on a node, and [D-030](#d-030)'s; its reader, the suite's or verify's,
+  comes with support for several versions. Until then it is the one member of a package
+  with no consumer, held at 1.0 knowingly
+  ([Constitution XII](constitution.md#xii-every-field-earns-its-place)).
+- **The probe package keeps its one image.** A probe host is no platform: its image is the
+  package's own tool, no network names its release, and another image is another probe
+  package.
+- **A package that lists more than one version is refused at load**, by a rule that says
+  this build runs one version a package. The rule goes when a device can name its version.
+- **The core runs a package's one version.** A driver's `plan` writes its image, and a
+  running node's package is found by its kind and that image. `blueprint-1`, `bundle-1` and
+  every rendered deployment are unchanged, and so is every id.
+- **Every other member of a package holds for each version it lists**, and a release that
+  needs another push, path or rule is another package. No code branches on a version or
+  names a release ([D-014](#d-014)).
+- **A deletion that meets a node no loaded package runs is refused once, as a step is.**
+  Each driver's `destroy` finds such a node before it touches the runtime and says which;
+  the loop refuses the deletion `bundle.rejected`, the finding naming the node, its image
+  and the remedy, a core whose packages list it, and waits. A device node and a probe host
+  alike, on both drivers. The seam gains no call ([D-017](#d-017)). Show and verify answer.
+  No pass raises for it.
+
+#### Consequences
+
+- What is left for later only adds: a device's optional `version`, a second listed version
+  with its readings, a version's further members, the reader of the version's leaf, and
+  the rule's removal, which is a refusal lifted and takes nothing from a user. None
+  breaks a package valid at 1.0.
+- `platform-package-1` changes once more at version 1 ([D-002](#d-002)); the shipped
+  packages and the tests' own are rewritten, and a site's would be, there being none yet.
+- A package's image is edited only once no twin runs it; until then a core loaded with the
+  edit neither steps nor deletes those twins, and says why.
+- `versions`' names gain their consumer, the images' keys. The schema's descriptions of
+  `versions` and of `conformance.version` say what reads each today, which for the second
+  is nothing yet.
 
 ## Runtimes and drivers
 
@@ -2242,6 +2413,8 @@ and not others.
 Added to by [D-065](#d-065) on 2026-11-05: a command's environment is an allow-list.
 Added to by [D-073](#d-073) on 2026-11-08: the local reading subtracts the admitted twins' pending
 demand, and the allocation carries `demand`; and by [D-074](#d-074): one deploy at a time.
+Added to by [D-103](#d-103) on 2026-11-13 (phase 10): the pool is a setting of the server's, its default
+unchanged.
 
 #### Context
 
@@ -3230,6 +3403,50 @@ The deploy a destroy's recovery makes:
 - [core.md](core.md) and [architecture.md](architecture.md) name the call as built.
 
 
+<a id="d-103"></a>
+### D-103 — The local driver's pool is a setting
+
+**Status:** Accepted 2026-11-13 (phase 10). Adds to [D-043](#d-043): the pool is read from
+the server's settings ([D-042](#d-042)); its default stands.
+
+#### Context
+
+`admit` takes each lab's management subnet, a /24, from a pool, `172.20.0.0/16` by default,
+skipping any subnet a Docker network holds ([D-043](#d-043)). Docker gives a Compose
+project's default network a /16 of its own choosing. On the development host the third
+project made, the development NetBox's, was given the pool's own /16, and from then no /24
+of the pool was free: every create was refused, `admission.capacity`, though the host was
+idle ([verified-facts.md](verified-facts.md), "Ubuntu hosts"). The server has no setting for
+the pool, and the refusal names neither the network nor a remedy. A demonstration starts a
+source's Compose project and then a twin beside it ([D-104](#d-104)).
+
+#### Options considered
+
+- **Pin the development Compose projects' networks elsewhere.** Rejected as the remedy: it
+  mends this host and no user's, whose own Compose projects Docker numbers the same way,
+  and it writes a private range into the tree.
+- **Move the default pool outside the ranges Docker gives.** Rejected: any private range
+  may be a site's LAN or a cluster's pod network, and a default that meets one fails later
+  and less plainly than this.
+- **A setting, and a refusal that says what holds the pool.** Chosen.
+
+#### Decision
+
+- **The local driver reads its pool from the server's settings**, an IPv4 network in CIDR
+  form holding at least one /24; its default is `172.20.0.0/16`, as now. A value that is no
+  such network is refused at start.
+- **A create refused because no /24 of the pool is free names each Docker network that
+  holds part of it**, and the setting.
+- **The demonstrations' script reads the same** once its source is up, since the source's
+  own network may be the one that holds the pool, and stops there, the source left up, with
+  that refusal's words.
+
+#### Consequences
+
+- A host with several Compose projects runs twins by one line of its environment.
+- Twins made under one pool keep their subnets when the setting changes: an allocation is
+  recorded with its twin ([D-043](#d-043)).
+
 ## The reconcile loop and state
 
 <a id="d-023"></a>
@@ -3613,6 +3830,7 @@ The client:
 Detailed by [D-071](#d-071) on 2026-11-07: the Lease's rule is a Role in the core's namespace,
 beside the one ClusterRole; what the Lease promises and what it does not; what the server does
 when it loses it; and what a store's fault on a read route answers.
+Detailed by [D-106](#d-106) on 2026-11-13 (phase 10): no image is published at 1.0; it stays built in the tree.
 
 #### Context
 
@@ -4522,6 +4740,8 @@ Added to by [D-057](#d-057), [D-061](#d-061), [D-062](#d-062) and [D-063](#d-063
 2026-11-05: the clabernetes driver's two variables, the object store's, `FYLGJA_LEASE`, a
 pull credential's `_REGISTRY`, and the TLS variables. Added to by [D-070](#d-070) on
 2026-11-06: `FYLGJA_RESYNC_S`.
+Added to by [D-103](#d-103) and [D-106](#d-106) on 2026-11-13 (phase 10): the local driver's pool is a
+setting, and `FYLGJA_PACKAGES` has a default, the packages the wheel carries.
 
 #### Context
 
@@ -4794,6 +5014,8 @@ distribution carries its own formats and is checked from its wheel. Details [D-0
 into the client library it shares.
 Superseded in part by [D-090](#d-090) on 2026-11-12: the base install is four libraries,
 `referencing` among them.
+Superseded in part by [D-106](#d-106) on 2026-11-13 (phase 10): three distributions are published to PyPI,
+and each reader names the core with a range.
 
 #### Context
 
@@ -6581,6 +6803,8 @@ Supersedes [D-050](#d-050) in part: the dispatch, the record before `applied`, t
 run works toward, the cancel's and the ending's readings, and a refused step's verdict. Details
 [D-029](#d-029) (the record a diverged twin keeps) and [D-051](#d-051) (the bundle verify judges
 a stepping twin against); adds to [D-052](#d-052) (the threads the wait's reads run on).
+Added to by [D-102](#d-102) on 2026-11-13 (phase 10): a running node whose image no loaded package lists is
+refused as item 4's are, at the step and at the deletion, before the driver is called.
 
 #### Context
 
@@ -6980,6 +7204,8 @@ those paths, and nothing resolves them.
 **Status:** Accepted 2026-11-05.
 Added to by [D-084](#d-084) on 2026-11-09 (phase 8): each distribution is checked
 from its wheel.
+Added to by [D-106](#d-106) on 2026-11-13 (phase 10): the core's wheel carries the platform and probe
+packages too, and `FYLGJA_PACKAGES`, unset, means them.
 
 #### Context
 
@@ -7092,6 +7318,197 @@ Decisions during the build:
 - The procedure is amended at each landing with what the phase taught.
 - The new terms are in [glossary.md](../docs/glossary.md).
 
+
+<a id="d-104"></a>
+### D-104 — The demonstration targets: one command a source, over the change the seeds make
+
+**Status:** Accepted 2026-11-13 (phase 10). Builds on [D-085](#d-085), [D-091](#d-091),
+[D-096](#d-096) and [D-097](#d-097), and changes none of them: no seed, fixture, template or
+installed code changes.
+
+#### Context
+
+A rehearsal can be watched only by following a runbook: about ten steps a source, make
+targets in order with `local/.env` loaded between them, the core started by hand in a shell
+of its own, and then the change opened ([CONTRIBUTING.md](../CONTRIBUTING.md), "Running the
+example orchestrator"). Every step already has a target or a script: each source's `up` and
+seed, the example's environment, the edge's Prefect, the runner, and the change itself,
+which the Infrahub seed opens as a proposed change (`PROPOSED_CHANGE=1`) and the NetBox seed
+by its tag (`NETBOX_TAG=1`). What is missing is their order, the core, and the wait.
+
+#### Options considered
+
+- **Document the runbook better.** Rejected: a first run of ten steps by hand is where a
+  newcomer stops, and the steps are the same every time.
+- **A Compose file that runs the core, Prefect and the runner beside the source.**
+  Rejected: the local driver runs `containerlab` and `docker` on the host
+  ([D-018](#d-018)), and a core in a container would need the host's Docker socket and
+  namespaces, which is a second, less safe way to run it.
+- **A command of the example orchestrator's.** Rejected: bringing a source up and seeding
+  it is development tooling, and the example is what an integrator reads and replaces
+  ([D-085](#d-085)).
+- **A script behind make targets, over the development scripts there are.** Chosen.
+- **New changes to demonstrate** (an upgrade, a migration, a step that fails). Set aside by
+  the maintainer on 2026-11-13; the change the seeds make is the one shown.
+
+#### Decision
+
+- **`make infrahub-demo`, `make netbox-demo` and `make demo-down`.** One script,
+  development tooling beside `scripts/infrahub_dev.py`, `netbox_dev.py` and `edge_dev.py`,
+  which it calls. It runs that source's runbook in the runbook's own order
+  ([CONTRIBUTING.md](../CONTRIBUTING.md)), loading `local/.env` again wherever a step
+  writes to it, with the core, the edge's Prefect and the runner in the background, and
+  ends by opening the change: the seeded branch's proposed change in Infrahub, the tag on
+  the seeded branch in NetBox.
+- **It reads the verdict from the edge's Prefect**: the flow run the change started, waited
+  for, and the rehearsal's document filed with it, read as Infrahub's check reads it
+  ([D-085](#d-085)), with the edge's own credential from `local/.env`. It prints the
+  verdict and where the report is read, and exits 0 for `passed` and 1 otherwise.
+- **It runs the core on the local driver**, from the checkout. What the core needs and can
+  be generated, the script writes under `local/` where it is missing, never printed: the
+  store's directory, the token file and a client's token.
+- **It checks what only the host's owner can give, and stops naming what is missing**:
+  Docker and containerlab with their groups; the AppArmor widening SR Linux needs on
+  Ubuntu; memory and free ports; the node login's two lines in `local/.env`, which the
+  script never holds; a branch checked out, where the source registers the repository at
+  one; and, once the source is up, a pool no Docker network holds whole
+  ([D-103](#d-103)). A public image that is absent it pulls. These are the host's
+  preconditions, stated where the demonstrations are documented ([D-107](#d-107)).
+- **It is not installed.** No wheel carries it.
+- **The two never run together**, and each refuses while the other's runner is up.
+- **`make demo-down`** destroys a twin the demonstration left, ends what the script
+  started, the core, the runner and Prefect, by their recorded processes and no other, and
+  stops the source. The source's containers, network and volumes stay, as its own `down`
+  leaves them, until `PURGE=1`.
+
+#### Consequences
+
+- A demonstration is the acceptance run a newcomer can make, and the user documentation
+  walks through one ([D-107](#d-107)).
+- The script is a second statement of each runbook's order; a test holds it to the targets
+  it calls, and `CONTRIBUTING.md` keeps the runbook for whoever must take it apart.
+- The demonstrations run on the local driver. One on a cluster is a later phase's.
+
+<a id="d-106"></a>
+### D-106 — The first release: one version, three wheels on PyPI, the packages in the core's wheel
+
+**Status:** Accepted 2026-11-13 (phase 10). Supersedes [D-084](#d-084) in two parts: three
+distributions are published, and each reader names the core with a range. Adds to
+[D-066](#d-066): the wheel carries the platform and probe packages beside the formats; and
+to [D-042](#d-042): `FYLGJA_PACKAGES` has a default. Details [D-062](#d-062): no image is
+published at 1.0.
+
+#### Context
+
+Every distribution is version `0.0.0`, and nothing is published ([D-084](#d-084)). The API's
+document says `build` is "version and commit" and that each command's `--version` shows it;
+`build` is the distribution's version alone and no command has the option. The core's wheel
+holds the formats and no platform package (read on 2026-11-12), so a server installed from
+it needs a checkout for `FYLGJA_PACKAGES`, which is required. Each distribution's build
+copies its formats from `formats/` at the repository's root, so a source distribution of
+`core/` alone cannot build its wheel. A reader's wheel names `fylgja-core` as a dependency,
+which `pip` resolves on PyPI whoever holds the name there.
+
+#### Options considered
+
+- **A GitHub release alone, wheels attached.** Rejected: the readers' dependency on the
+  core would be resolved on PyPI under a name anyone could take.
+- **All four distributions on PyPI.** Rejected: the example orchestrator is not hardened,
+  pins Prefect exactly, and is installed from a clone by whoever reads it.
+- **Source distributions too.** Not taken now: each would need the repository's `formats/`
+  and packages inside it, a second build path to hold true, for no user yet asking.
+- **The image published.** Not taken at 1.0 ([D-062](#d-062)): the shipped cEOS package
+  names an image a site must fetch itself, and a site's registry holds the core's image
+  beside it.
+- **The packages left in the tree, the documentation saying to clone.** Rejected by the
+  maintainer on 2026-11-12: an installed server that cannot start is not installed.
+- **Three wheels, one version, the packages inside the core's.** Chosen.
+
+#### Decision
+
+- **One version, written in one place**, read by every distribution's build, the example's
+  among them. A release is the tag `v<version>` on `main`.
+- **Each reader requires the core at its own version or later, within the major**: a
+  candidate's readers accept the candidate's core.
+- **`fylgja-core`, `fylgja-infrahub` and `fylgja-netbox` are published to PyPI as wheels**,
+  built from the tagged tree by a workflow the tag starts, through trusted publishing, with
+  no stored token, behind a GitHub environment whose approval is the maintainer's. A
+  candidate's tag, `v1.0.0rc1`, sits on the phase's integration branch and its wheels go to
+  TestPyPI, where they are installed into an empty environment before any upload to PyPI;
+  a release's tag sits on `main` and its wheels go to PyPI. The workflow tells the two by
+  the version's form. A GitHub release carries the same wheels and the notes.
+- **Each command answers `--version`** with the version and the commit the wheel was built
+  from, and `GET /v1/version` gives the same as `build`, as the API's document says.
+- **The core's wheel carries `psp/` and `probes/`**, copied at build as the formats are, and
+  `FYLGJA_PACKAGES`, unset, means them. Set, it names every directory read. The image takes
+  its packages from the wheel it installs, and its own copy of them and its setting of the
+  variable go.
+- **`CHANGELOG.md`** holds what each release changed for a user, and its known limits.
+- **Nothing is pushed, tagged or uploaded but on the maintainer's word for that act.** A
+  version uploaded is never uploaded again.
+
+#### Consequences
+
+- The PyPI names and their publishers are the maintainer's to register, before the
+  candidate; nobody has read whether the names are free.
+- `make wheelcheck` holds that a server installed from the core's wheel, given a store and
+  a token file and no `FYLGJA_PACKAGES`, loads the shipped packages and answers
+  `GET /v1/version`; `make imagecheck` that the image's packages are the wheel's.
+- A wheel is built from the repository alone, as now; the release's notes say so.
+- The example orchestrator is installed from a clone at the release's tag. A demonstration
+  on Infrahub needs a branch checked out there, since Infrahub registers the repository at
+  a branch ([D-104](#d-104)).
+
+<a id="d-107"></a>
+### D-107 — User documentation is reference in `docs/`, held to the code by tests
+
+**Status:** Accepted 2026-11-13 (phase 10). Builds on [D-033](#d-033) and on the convention
+that user-facing documentation lives in `docs/` ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+
+#### Context
+
+The commands and the server's settings are described in `CONTRIBUTING.md`, for someone
+building the tree. Of the core's fourteen commands, five appear in no document a user
+reads, and none is described with its options, its output and its exit statuses; the API
+has no description beside its OpenAPI file and one table in the architecture; the client
+library has a paragraph. The two readers' READMEs are the exception, each with its command
+and its tables, held to the code by tests. Nothing compares the server's routes with the
+OpenAPI's paths as sets.
+
+#### Options considered
+
+- **A documentation site, built by a generator.** Rejected for now: a build and a host to
+  keep, where the forge renders Markdown and the link check already holds it.
+- **Reference generated from the parsers and the OpenAPI file.** Rejected as the whole of
+  it: exact, and a listing no newcomer learns from. Its exactness is taken as tests.
+- **Pages written by hand, each held to the code by a test.** Chosen.
+
+#### Decision
+
+- **The pages**, plain Markdown under `docs/`: installing; running the server, with its
+  settings, its token file and its exit statuses; the core's two commands, with their
+  options, what they print and their exit statuses; the API, by task, over the checked-in
+  OpenAPI (watches, `ETag` and `If-Match`, the dry run, problems); the client library's
+  calls and errors; the two demonstrations and the host's preconditions ([D-104](#d-104));
+  and what 1.0 holds ([D-105](#d-105)). The readers' commands stay in their READMEs, which
+  the pages link to.
+- **A test for each page that names what the code has** compares the two as sets: a
+  command's subcommands and options with its parser's, the settings with the
+  configuration's, the exit statuses with each command's, the API page's routes with the
+  OpenAPI's paths, the client page's calls and errors with the client's public names, and
+  the demonstrations' targets with the Makefile's. One more compares the server's routes
+  with the OpenAPI's paths. The installing page and the promise's are held by the link
+  check and by review.
+- **`README.md` is for a user**: what Fylgja is, installing, a first twin, a demonstration,
+  and where to read on. `CONTRIBUTING.md` keeps what a contributor needs, and links to the
+  pages for what moved.
+- **The names a page gives are the ones 1.0 holds** ([D-105](#d-105)).
+
+#### Consequences
+
+- A command, an option or a route added without its line in a page fails the pure tier.
+- The architecture's table of routes and its line of commands stay, as design.
+- The example orchestrator's commands stay in `docs/integrating.md`, with the example.
 
 ## Parked
 

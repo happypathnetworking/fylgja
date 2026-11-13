@@ -81,7 +81,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import ipaddress
 import json
 import logging
 import os
@@ -380,7 +379,8 @@ class ContainerlabDriver:
         subnet = None
         if held is None:
             networks = await self._docker_networks()
-            taken = [held_by for _, held_by in networks] + [IPv4Network(a["mgmt_subnet"]) for a in reserved]
+            taken = [docker_subnet for _, docker_subnet in networks]
+            taken += [IPv4Network(a["mgmt_subnet"]) for a in reserved]
             subnet = pool.choose(self.pool, taken)
             if subnet is None:
                 shortfalls.append(pool.refusal(self.pool, pool.holders(self.pool, networks)))
@@ -758,23 +758,13 @@ class ContainerlabDriver:
 
     async def _docker_networks(self) -> list[tuple[str, IPv4Network]]:
         """Every Docker network on the host with an IPv4 subnet: its name with each such subnet it
-        holds, a pair a subnet. A network with none, as `host` and `none`, is not among them."""
+        holds, a pair a subnet, as `pool.networks` reads Docker's answer to `pool.FORMAT`. A
+        network with none, as `host` and `none`, is not among them."""
         ids = (await self._run(["docker", "network", "ls", "--format", "{{.ID}}"], timeout_s=DOCKER_TIMEOUT_S)).split()
         if not ids:
             return []
-        answered = await self._run(
-            ["docker", "network", "inspect", "--format", "{{json .Name}} {{json .IPAM.Config}}", *ids],
-            timeout_s=DOCKER_TIMEOUT_S)
-        networks = []
-        for line in answered.splitlines():  # a network a line: its name, a space, and its config, a list or null
-            if not line.strip():
-                continue
-            name, end = json.JSONDecoder().raw_decode(line)
-            for config in json.loads(line[end:]) or []:
-                network = ipaddress.ip_network(config["Subnet"], strict=False) if config.get("Subnet") else None
-                if isinstance(network, IPv4Network):
-                    networks.append((str(name), network))
-        return networks
+        return pool.networks(await self._run(["docker", "network", "inspect", "--format", pool.FORMAT, *ids],
+                                             timeout_s=DOCKER_TIMEOUT_S))
 
     async def _image_present(self, ref: str) -> bool:
         """Whether Docker holds the image `ref`; a hung `docker` is a driver error, not an absence."""

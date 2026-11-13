@@ -107,8 +107,8 @@ NETWORK = f"{PROJECT}_default"
 
 SUBNET = "198.51.100.0/24"
 """The override's subnet for `NETWORK`: a documentation range, outside the private ranges Docker takes its networks'
-subnets from, so that it never meets the local driver's lab pool (core/src/fylgja_core/containerlab/pool.py) nor a
-network Docker gives itself."""
+subnets from, so that it never meets the local driver's default lab pool (core/src/fylgja_core/containerlab/pool.py)
+nor a network Docker gives itself."""
 
 RECREATE = ["down", "--timeout", str(STOP_TIMEOUT_S)]
 """Compose's verb that removes the project's containers and network and keeps its volumes, each container given

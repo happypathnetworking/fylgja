@@ -1209,14 +1209,14 @@ says so; every other reading fell inside.
 Docker 29.8.1, SR Linux 24.7.1, 2026-11-13)*
 
 `core/tests/live/test_containerlab_driver_live.py` ran alone (`cd core && .venv/bin/pytest -q -rA
--m live tests/live/test_containerlab_driver_live.py`), ending by 19:11Z: **8 passed in
-251.08 s**, exit 0. Its
+-m live tests/live/test_containerlab_driver_live.py`), ending at 19:11Z, the log's last write:
+**8 passed in 251.08 s**, exit 0. Its
 `test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_removes_nothing` pins
 what follows ([D-102](decisions.md#d-102)), but the host before the run and after the module,
 which were read by hand and are no assertion of the module's.
 
-- **The host before the run**, read by hand: `docker ps -a -q --filter label=containerlab` and
-  `docker ps -q` each printed nothing, and `docker network inspect` of each network `docker
+- **The host before the run**, read by hand at 19:05Z: `docker ps -a -q --filter
+  label=containerlab` and `docker ps -q` each printed nothing, and `docker network inspect` of each network `docker
   network ls` listed gave no subnet inside or over 172.20.0.0/16.
 - **The call.** The twin `drv-live`, `three-node` planned under the shipped packages, ran its
   three SR Linux containers, made anew by the `apply` with `reconfigure` of the test before. The
@@ -1224,22 +1224,27 @@ which were read by hand and are no assertion of the module's.
   change: `nokia_srlinux`'s image reference with `-moved` appended, as a package edited to another
   image while a twin runs the one it had.
 - **It was refused in 0.01 s**, by `Unpackaged`: `no package given runs the node n1
-  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`, naming `n1`, the first node of the topology
-  file, its kind and the image as that file writes it.
-- **The host held what it held before the call**: the three containers under the lab's label, the
-  lab's block of `/etc/hosts` (its two markers and a line a node), the ssh config
-  `clab-drv-live.conf` and the network `clab-drv-live`. `inspect` answered the same three nodes,
+  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`. The test compared the error's node to `n1`, its
+  kind to `nokia_srlinux` and its image to the shipped package's reference. That the node named
+  is the first of the topology file, in its order, and the image the one that file writes, is
+  the pure tier's reading
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_command`), not this run's.
+- **What the test read of the lab was as before the call**: the names of the containers under
+  the lab's label, the lab's lines of `/etc/hosts` (its two markers and a line a node), that the
+  ssh config `clab-drv-live.conf` and the network `clab-drv-live` exist, `inspect`'s three nodes,
   each at the incarnation (`State.StartedAt`) and the address it had before the call, and the
-  twin's directory under the driver's root held the entries it held. That no command runs before
-  the refusal is the pure tier's reading of the driver
-  (`test_destroy_meets_a_node_no_given_package_runs_before_any_command`); this run read the host.
-- **The destroy with the shipped packages**, the module's next test, took 1.67 s and left nothing:
-  no container, host entry, ssh config or network of the lab, `inspect` `absent`, and the twin's
-  directory gone.
-- **The host after the module**, read by hand: `docker ps -a -q --filter label=containerlab`
-  printed nothing, `docker network ls` listed no network named `clab-`, `grep -c clab-drv-live
-  /etc/hosts` printed 0, `/etc/ssh/ssh_config.d` listed no `clab` file and `pgrep -x containerlab`
-  found no process. The module itself asserts each twin's leftovers gone at that twin's destroy.
+  names of the entries of the twin's directory under the driver's root. That no command runs
+  before the refusal is the pure tier's reading of the driver
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_command`); this run read those,
+  and nothing else of the host.
+- **The destroy with the shipped packages**, the module's next test, took 1.67 s, after which the
+  test read no container under the lab's label, none of the lab's lines in `/etc/hosts`, no ssh
+  config and no network of the lab, `inspect` `absent`, and the twin's directory gone.
+- **The host after the module**, read by hand, at a time not kept: `docker ps -a -q --filter
+  label=containerlab` printed nothing, `docker network ls` listed no network named `clab-`,
+  `grep -c clab-drv-live /etc/hosts` printed 0 and `pgrep -x containerlab` found no process. The
+  module itself asserts each twin's leftovers gone at that twin's destroy, its ssh config among
+  them.
 
 **The dry run**
 
@@ -2544,8 +2549,9 @@ captured output until the harness kept its readings for the session's end):
   step to `mixed-e2-port` was refused without `--allow-restart` and made with it, as the dry run
   answered. No namespace was left. With this the suite has passed whole on both drivers.
 
-**fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(k3s
-v1.37.1+k3s1, clabernetes 0.10.1, SR Linux 24.7.1, lightkube 1.0.1, 2026-11-13)*
+**fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(SR Linux
+24.7.1, 2026-11-13; k3s v1.37.1+k3s1, clabernetes 0.10.1 and lightkube 1.0.1 are the cluster's
+and the core's pin as this file records them elsewhere, and no output of this run holds them)*
 
 `core/tests/cluster/test_clabernetes_driver_cluster.py` ran alone from the development host (`cd
 core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver_cluster.py`,
@@ -2555,9 +2561,9 @@ Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` pins 
 but the cluster before the run and after the module, which were read by hand and are no
 assertion of the module's.
 
-- **The cluster before the run**, read by hand with `kubectl`: `get deployment fylgja-core -n
-  fylgja` gave the deployed core's replicas as 0 with none ready. Listings of the namespaces named
-  `fylgja-twin-*`, and of the pods, Services and Secrets, in every namespace, that carry the label
+- **The cluster before the run**, read by hand with `kubectl` at about 19:25Z: `get deployment
+  fylgja-core -n fylgja` gave the deployed core's replicas as 0 with none ready. Listings of the
+  namespaces named `fylgja-twin-*`, and of the pods, Services and Secrets, in every namespace, that carry the label
   `fylgja.owner=core` or `fylgja.twin`, each counted no line; the counts were of the lines
   printed, the listings' errors not kept. The module's first test asserts that `inspect` answers
   `absent` for the twin before it is admitted.
@@ -2566,9 +2572,11 @@ assertion of the module's.
   `destroy` was given that deployment and its files, and the shipped packages with one change:
   `nokia_srlinux`'s image reference with `-moved` appended.
 - **It was refused in 0.02 s**, by `Unpackaged`: `no package given runs the node n1
-  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`, naming `n1`, the first node of the Topology's
-  definition, its kind and the image as the Topology writes it, which for this image, not gated,
-  is the package's own reference.
+  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`. The test compared the error's node to `n1`, its
+  kind to `nokia_srlinux` and its image to the shipped package's reference. That the node named
+  is the first of the Topology's definition, and the image the one the Topology writes, a gated
+  one under its registry's prefix, is the pure tier's reading
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_call`), not this run's.
 - **The namespace and the nodes were as before the call**: the namespace `fylgja-twin-drv-k8s`
   stood and was not being deleted, and `inspect` answered the three nodes running, each at the
   incarnation (its pod's uid and restart count) and the address it had before the call. That no
@@ -2577,9 +2585,10 @@ assertion of the module's.
   namespace and `inspect`, and nothing else of the cluster.
 - **The destroy with the shipped packages**, the module's next test, took 14.16 s, after which
   `inspect` answered `absent` and the namespace was gone.
-- **The module's end** deleted the twin's namespace and the refused twin's and read each gone,
-  which its fixture asserts. Read by hand after it, with `kubectl`: the same listings as before
-  the run each counted no line, the counts again of the lines printed.
+- **The module's end** asked the deletion of the twin's namespace and of `drv-k8s-taken`'s, the
+  twin whose admission was refused, and read each gone, which its fixture asserts. Read by hand
+  after it, with `kubectl`, at a time not kept: the same listings as before the run each counted
+  no line, the counts again of the lines printed.
 - **The rest of the module**, read beside it: the first apply took 69.10 s, its repeat 2.24 s, the
   apply with `reconfigure` 65.51 s, and the residue's destroy 6.08 s.
 
@@ -3439,7 +3448,8 @@ ran beside it, and no other twin. Each line is one run, measured once.
 - **Its version leaf** `/system/information/version` reads `v26.7.2-519-g94fbd638fa8`
   (`sr_cli`, `info from state`); `show version` gives `v26.7.2` and build
   `519-g94fbd638fa8`. 24.7.1's reads `v24.7.1-330-g38f237abfe`: each begins with `v`, which
-  the packages' `versions` entries (`"24.7"`) do not.
+  the packages' `versions` entries (`"24.7"`) do not. *(Since 2026-11-13 the entry is the
+  version's name, `"24.7.1"`, [D-102](decisions.md#d-102); the reading stands as it was made.)*
 - **Verify held on it as on 24.7.1**: 19 assertions held, none failed and 5 skipped, the
   counts 24.7.1 gave on the same blueprint in the same session.
 - **One booted node held 1,774 to 1,779 MiB** (cgroup `memory.current`, three nodes, read
@@ -8287,15 +8297,16 @@ and each says whether it was re-verified on 26.04.
   another twin holds." The server then had no setting for the pool. *(26.04, 2026-11-12)* The
   development NetBox's network was pinned off the pool the day after ("NetBox 4.7.5 with
   netbox-branching 1.2.3", "The project's network and the local driver's lab pool").
-  The pool is since the server's setting `FYLGJA_LAB_POOL`, and the refusal says what holds
-  it ([D-103](decisions.md#d-103)). In the live tier, a driver made on a pool of one /24,
+  Since 2026-11-13 the pool is the server's setting `FYLGJA_LAB_POOL`, and the refusal says what
+  holds it ([D-103](decisions.md#d-103)). In the live tier, a driver made on a pool of one /24,
   192.0.2.0/24, with a Docker network `fylgja-live-pool` made over that subnet, refused a
   three-node twin at `admit`, nothing deployed: `admission.capacity`, "The pool 192.0.2.0/24
   has no /24 that neither a Docker network nor another twin holds. Docker networks holding
   part of it: fylgja-live-pool (192.0.2.0/24). Set FYLGJA_LAB_POOL to an IPv4 network with a
   free /24, and start the core again." The network, removed by the test, was gone after it.
-  *(26.04, Docker 29.8.1, containerlab 0.81.0, 2026-11-13: one run of
-  `core/tests/live/test_containerlab_driver_live.py` alone, 9 passed in 260.71 s, ending 20:56 UTC)*
+  *(Docker 29.8.1, 2026-11-13: one run of `core/tests/live/test_containerlab_driver_live.py`
+  alone, 9 passed in 260.71 s, ending 20:56 UTC; containerlab 0.81.0 and Ubuntu 26.04.1 were read
+  on the host after the run, at 21:15 UTC, by `containerlab version` and `/etc/os-release`)*
 - **Booting a twin beside another heavy workload starves a host with little memory to
   spare**: deploys are cut short, and the other workload's requests time out. Read
   `free -m` before booting a twin. *(2026-09-15)*

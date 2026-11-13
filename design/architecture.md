@@ -311,7 +311,7 @@ in software and hardware in silicon, so it is computed per deployment and never 
 
 | Driver | Use | Isolation unit | Node access |
 |---|---|---|---|
-| `containerlab` (local) | development, the live tier, a single lab host | a lab named for the twin, with its own management network and subnet | the host's management network |
+| `containerlab` (local) | development, the live tier, a single lab host | a lab named for the twin, with its own management network and subnet, a /24 of the driver's pool, which is the server's setting ([D-043](decisions.md#d-043), [D-103](decisions.md#d-103)) | the host's management network |
 | `clabernetes` | production, on Kubernetes | a namespace per twin, with a NetworkPolicy | a LoadBalancer per node, `externalTrafficPolicy: Local` ([D-020](decisions.md#d-020), [D-037](decisions.md#d-037)) |
 | `hardware` | a later release | a reservation of devices from a pool | the devices' own management addresses |
 

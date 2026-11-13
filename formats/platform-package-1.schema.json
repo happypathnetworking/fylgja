@@ -117,11 +117,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "description": "The gNMI port verify and the conformance suite dial at the node's management address."
+          "description": "The gNMI port verify dials at the node's management address; the clabernetes driver's plan declares it among each node's ports, so that the node's LoadBalancer serves it."
         },
         "tls": {
           "type": "boolean",
-          "description": "Whether verify and the conformance suite dial gNMI over TLS (the boot-time certificate accepted unverified) or plaintext."
+          "description": "Whether verify dials gNMI over TLS (the boot-time certificate accepted unverified) or plaintext."
         }
       },
       "description": "How a node's state is read; encoding is always json_ietf."
@@ -190,7 +190,7 @@
           "description": "Per-port reads; {node_name} renders the port's node name."
         }
       },
-      "description": "The gNMI paths verify and the conformance suite read on a booted node."
+      "description": "The gNMI paths verify reads on a booted node; version alone has no reader yet."
     },
     "fidelity": {
       "type": "object",

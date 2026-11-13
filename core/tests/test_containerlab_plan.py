@@ -224,8 +224,12 @@ def test_a_refusal_names_the_port_and_the_other_interfaces_on_it() -> None:
     assert "interface.port.shared on c1:Ethernet1/1" in str(Unplannable(refused("port-shared-probe.json")))
 
 
-PURE_IMPORTS = {"__future__", "collections.abc", "dataclasses", "hashlib", "ipaddress", "math", "shlex", "typing",
-                "yaml"}
+# What a pure module of the local driver may import beside the model: none of these opens a file or a socket, reads
+# a clock or the environment, or starts a process. `json` and `re` are here for `pool`, which reads Docker's answer
+# as text it is handed and quotes a network's name (D-103): `json` reads and writes text in memory alone, and `re`
+# matches text in memory alone, as in the compiler's own list.
+PURE_IMPORTS = {"__future__", "collections.abc", "dataclasses", "hashlib", "ipaddress", "json", "math", "re", "shlex",
+                "typing", "yaml"}
 MODEL_IMPORTS = {f"fylgja_core.{m}" for m in ("blueprint", "bundle", "capacity", "containerlab", "deployment", "driver",
                                               "findings", "mapping", "platform_package", "probe_package")}
 

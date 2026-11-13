@@ -132,8 +132,10 @@ the loop reads itself, and one a node of which no loaded package runs (its packa
 edited while the twin ran it), which only the driver can say, by `Unpackaged` from its `destroy`
 before it touches the runtime (`_teardown`, D-102). A later pass of this core finds what was said
 and calls nothing; a create's cleanup, its cancel's and its `apply` that meet such a node keep the
-lab the same way, and a deletion asked of this core after any of them is refused as one that met
-the node itself.
+lab the same way. A deletion asked of this core after any of them is refused in a teardown's
+words before the loop takes a run (`_lacking`): the driver is not called, and the run the request
+queued ends `rejected` with no `destroy` event, where a deletion that met the node itself has
+the pair, `started` and `failed`.
 
 Every phase emits run events: `started`, then `done`, `skipped`, `failed`, `timed_out` or
 `cancelled`, with the seconds since `started`, and on a failure the rule; `ready` and `push`

@@ -260,6 +260,10 @@ def test_8_a_pool_a_docker_network_holds_is_refused_naming_it_and_the_setting(tm
     # on that pool, which reads every network of the host as the driver's format prints them (verified-facts.md):
     # a line a network, its name as a JSON string, one space, and its IPAM config, a list, or `null` as for `host`.
     # Nothing is deployed, and no time is held to.
+    #
+    # It needs 192.0.2.0/24 held by no Docker network of the host, and the name `fylgja-live-pool` free. It leaves
+    # nothing: the network is removed whatever the `admit` did. A run killed between the create and the `finally`
+    # leaves `fylgja-live-pool`, which is removed by hand (`docker network rm fylgja-live-pool`) before the next run.
     network, held = "fylgja-live-pool", ipaddress.IPv4Network("192.0.2.0/24")
     form = "{{json .Name}} {{json .IPAM.Config}}"
     c = compiler.compile(blueprint.load(ROOT / "testdata/blueprint/three-node.json"), PLATFORMS, PROBES)

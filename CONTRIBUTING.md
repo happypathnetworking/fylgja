@@ -510,7 +510,7 @@ make contract-netbox      # the NetBox contract tier against it
   superuser's again and replaces its line, and the next `make netbox-seed` makes the two accounts
   and their tokens again and replaces their lines, every other line kept.
 - The project's network is a documentation range, 198.51.100.0/24, named in
-  `netbox/dev/compose.override.yml`, so that it never meets the local driver's lab pool, from which
+  `netbox/dev/compose.override.yml`, so that it never meets the local driver's default lab pool, from which
   each twin's lab takes its subnet. `make netbox-up` recreates a project network that stands
   with another subnet: it removes the project's containers and network, keeps the volumes, and
   starts it again, which makes the network with the override's range, as read once on kept

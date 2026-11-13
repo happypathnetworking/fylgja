@@ -442,8 +442,9 @@ def test_a_step_keeps_the_held_allocation_when_the_host_has_room_for_the_added_n
 
 
 def test_a_step_reads_no_network(tmp_path: Path) -> None:
-    # A stepping twin keeps the subnet its record holds, under a pool that has since moved and with a Docker
-    # network over both (D-043, D-103): neither the pool nor a network is consulted.
+    # A stepping twin keeps the subnet its record holds, under a pool that has since moved, and with a Docker
+    # network over that subnet and the default pool it came from, though not over the moved pool (D-043, D-103):
+    # neither the pool nor a network is consulted.
     runner = FakeRunner(docker('[{"Subnet":"172.16.0.0/12","Gateway":"172.16.0.1"}]', names=("source_default",)))
     driver = ContainerlabDriver(tmp_path, pool=IPv4Network("198.51.100.0/24"), runner=runner,
                                 meminfo=meminfo(tmp_path, ROOMY_KB), cpus=64)

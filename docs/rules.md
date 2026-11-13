@@ -36,7 +36,7 @@ well, and its catalogue is [`readers/netbox/rules.md`](../readers/netbox/rules.m
 | `package.ranges.placeholder` | the platform package loader | a `ranges` key is no placeholder of the rule's match |
 | `package.rename.coverage` | the platform package loader | a rename names no data rule or names one twice, or a data rule has no rename while the kind has no aliases |
 | `package.versions.name` | the platform package loader | two versions share a name |
-| `package.images.coverage` | the platform package loader | a listed version has no image under `runtime.containerlab.images`, or a key there is no listed version's name; a key YAML read as a number is the name of none, which is why a name is quoted |
+| `package.images.coverage` | the platform package loader | a listed version has no image under `runtime.containerlab.images`, or a key there is no listed version's name; a key YAML read as a number is the name of none, which is why a name is quoted. `POST /v1/packages:validate` takes the package as JSON, whose keys are text, so such a key is refused by the core's own load of the file and not by the route |
 | `package.versions.several` | the platform package loader | the package lists more than one version, and this build runs one version a package ([D-102](../design/decisions.md#d-102)) |
 | `package.format.unsupported` | the probe package loader | the format names a mechanism this build does not run ([D-014](../design/decisions.md#d-014)) |
 | `probes.version.unsupported` | the declaration loader | `probes_version` is not `1` |
@@ -108,7 +108,7 @@ ends the run `rejected` ([Conditions and runs](#conditions-and-runs)).
 
 | Rule | Filed by | Means |
 |---|---|---|
-| `admission.capacity` | both drivers | the runtime cannot fit the twin: on the local driver the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)), and the message names each Docker network that holds part of the pool, by its name and subnet, and the setting that moves the pool, `FYLGJA_LAB_POOL` ([D-103](../design/decisions.md#d-103)); on either, the demand exceeds the runtime's free room less the admitted twins' pending demand, or a node fits no host ([D-073](../design/decisions.md#d-073)). Each of those is one sentence of the message, naming what the twin needs, what the reading found free and pending, or the node and the roomiest host |
+| `admission.capacity` | both drivers | the runtime cannot fit the twin: on the local driver the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)), and the message names each Docker network that holds part of the pool, by its name, written as a JSON string where it holds more than letters, digits, `_`, `.` and `-`, and its subnet, and the setting that moves the pool, `FYLGJA_LAB_POOL` ([D-103](../design/decisions.md#d-103)); on either, the demand exceeds the runtime's free room less the admitted twins' pending demand, or a node fits no host ([D-073](../design/decisions.md#d-073)). Each of those is one sentence of the message, naming what the twin needs, what the reading found free and pending, or the node and the roomiest host |
 | `admission.image.absent` | the local driver | a package the twin's nodes use has an account-gated image (one with a `pull_secret`) that is not on the host, which the local driver never pulls ([D-015](../design/decisions.md#d-015)); an ungated image is containerlab's to pull at deploy |
 | `admission.namespace.taken` | the clabernetes driver | the namespace `fylgja-twin-<twin>` exists and does not carry the twin's labels ([D-057](../design/decisions.md#d-057)); nothing is reserved |
 
@@ -205,13 +205,14 @@ the deletion; a core started again asks its driver again, under a destroy run of
 cancelled or failed create's cleanup that meets such a node keeps the lab and its allocation
 too, the run ending by its own rule, and a create resumed after `planned` whose apply meets it
 ends `rejected` with `bundle.rejected` (`cannot be applied`), nothing torn down. A deletion asked
-of the same core after any of the three is refused as above (`cannot be torn down`), with no
-call on the driver.
+of the same core after any of the three is refused by the same finding (`cannot be torn down`)
+before the loop takes a run: its destroy run ends `rejected` with no call on the driver and no
+`destroy` event, where a deletion that met the node itself has the pair, `started` and `failed`.
 
 A restore is a run too ([D-067](../design/decisions.md#d-067)), the loop's own, by the
 principal `core`. A pass on a settled twin (no deletion asked, its generation observed, a
 deployment applied, no run in flight, not diverged) inspects it, unless this core lacks a
-package its deployment names, or, for this core's life, a cancelled or failed create's clean-up
+package its deployment names, or, for this core's life, a cancelled or failed create's cleanup
 kept the deployment because one of its nodes runs an image no loaded package lists (above). A
 node at another incarnation than the record holds was replaced
 behind the core's back and lost its push: it is readied and pushed again, and verify is run,

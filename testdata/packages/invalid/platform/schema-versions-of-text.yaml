@@ -1,6 +1,6 @@
 # The shape before a package listed its versions with their images, versions a list of texts and one image: the schema refuses both, package.invalid at /versions/0 and at /runtime/containerlab.
 # A platform package 1 rejection fixture (formats/platform-package-1.schema.json): the
-# synthetic platform testos, never deployed, with this one fault; tests/test_platform_package.py
+# synthetic platform testos, never deployed, in the earlier shape; tests/test_platform_package.py
 # says what the loader must report.
 platform_package_version: "1"
 id: testos

@@ -471,7 +471,7 @@ def test_6_a_deleted_pod_is_another_uid_at_the_same_address_and_reconfigure_repl
     assert not elsewhere, f"the addresses of {elsewhere} moved"
 
 
-def test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused_before_any_request(
+def test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused(
     loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, twin: Twin
 ) -> None:
     # D-102's premise, on the cluster: a core whose SR Linux package was edited to another image is

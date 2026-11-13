@@ -167,8 +167,10 @@ event carries the error's rule when it has one, no finding is filed, and the pha
 
 A cancelled create stops where it is, stopping a call on the runtime in flight, tears down
 what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels a create in
-flight that way, then a destroy run tears the twin down and deletes its record; it ends `ok`,
-and a destroy run is never stopped halfway. In the partial-lab probe a node that refuses the
+flight that way, then a destroy run tears the twin down and deletes its record, ending `ok`; or,
+where this core's packages cannot account for the twin's deployment, it tears nothing down and
+ends `rejected`, the lab and the record kept (below). A destroy run is never stopped halfway.
+In the partial-lab probe a node that refuses the
 login is not silent: the run fails at once with `readiness.unauthorized`, since a reconfigure
 would not help. The probe does not run on a driver that declares `reapply`
 ([D-068](../design/decisions.md#d-068)): a resumed apply there applies again, and a node
@@ -199,12 +201,16 @@ deployment, its allocation and its nodes, until a core whose packages list the i
 the deletion; a core started again asks its driver again, under a destroy run of its own. A
 cancelled or failed create's cleanup that meets such a node keeps the lab and its allocation
 too, the run ending by its own rule, and a create resumed after `planned` whose apply meets it
-ends `rejected` with `bundle.rejected` (`cannot be applied`), nothing torn down.
+ends `rejected` with `bundle.rejected` (`cannot be applied`), nothing torn down. A deletion asked
+of the same core after any of the three is refused as above (`cannot be torn down`), with no
+call on the driver.
 
 A restore is a run too ([D-067](../design/decisions.md#d-067)), the loop's own, by the
 principal `core`. A pass on a settled twin (no deletion asked, its generation observed, a
 deployment applied, no run in flight, not diverged) inspects it, unless this core lacks a
-package its deployment names. A node at another incarnation than the record holds was replaced
+package its deployment names, or, for this core's life, a cancelled or failed create's clean-up
+kept the deployment because one of its nodes runs an image no loaded package lists (above). A
+node at another incarnation than the record holds was replaced
 behind the core's back and lost its push: it is readied and pushed again, and verify is run,
 under a `restore` run, as a step does for a node whose incarnation moved. `ready` waits for each device
 node holding nothing and every probe host, `push` pushes each node not holding the twin's

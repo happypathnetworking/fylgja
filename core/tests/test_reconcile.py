@@ -1898,10 +1898,23 @@ def test_a_create_resumed_where_no_package_lists_its_image_is_rejected_not_raise
     assert record.status.run_id is None and record.status.observed_generation == 1
     assert kept_of(record) == kept_of(planned) and record.status.deployment_id is not None
     assert "t" not in driver.labs and r.backoff == {} and r.queue.waiting() == []
+    # What `apply` met is kept before the run ends, so its cleanup keeps what is there and asks no `destroy`.
+    assert ("destroy", "t") not in driver.calls
 
     revision, calls = record.revision, len(driver.calls)
     asyncio.run(r.reconcile("t"))
     assert killing.get_twin("t").revision == revision and len(killing.list_runs("t")) == 1
+    assert driver.calls[calls:] == [] and r.backoff == {}
+
+    # What is kept of the deployment is what this core cannot do next, its teardown: a deletion asked of the same
+    # core is refused by it, in a teardown's words, and the driver is still not asked.
+    destroy = request_deletion(killing)
+    asyncio.run(r.reconcile("t"))
+    refused = killing.get_run(destroy.id).verdict
+    assert refused is not None and refused.status == "rejected"
+    assert [(f.rule, f.object, f.message) for f in refused.findings] == [
+        ("bundle.rejected", "t", UNACCOUNTED.format(done="torn down"))]
+    assert kept_of(killing.get_twin("t")) == kept_of(planned)
     assert driver.calls[calls:] == [] and r.backoff == {}
 
 

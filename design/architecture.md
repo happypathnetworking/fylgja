@@ -165,8 +165,8 @@ writes them.
 They are left to later phases.
 
 **Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): a
-platform package that lists its versions with their images, one a package, and a deletion
-the loaded packages cannot account for refused once ([D-102](decisions.md#d-102)), where
+platform package that lists its versions with their images, one a package
+([D-102](decisions.md#d-102)), where
 section 4.10 describes the one image there is today;
 the local driver's pool as a setting ([D-103](decisions.md#d-103)); one make target a
 source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version for
@@ -366,6 +366,14 @@ through its driver ([Constitution VIII](constitution.md#viii-reconcile-to-desire
   reconfiguration if a node stays silent; on one that can, it is applied again, with no probe
   ([D-068](decisions.md#d-068)). A destroy that finds residue and no lab deploys, then
   destroys. Cleanup runs on every failure and deletion path.
+- **A deployment the loaded packages cannot account for is kept**
+  ([D-054](decisions.md#d-054), [D-102](decisions.md#d-102)). A driver's `destroy` takes the
+  packages, so a deployment whose bundle names a package this core has not loaded, or one of
+  whose nodes runs an image no loaded package lists, is not torn down by it: its step and its
+  deletion are each refused once, `bundle.rejected`, no pass raises, and the lab waits with its
+  record for a core whose packages account for it. The first the loop reads from the bundle;
+  the second only the driver can say, by an error of the seam's from its `changes`, `apply`
+  and `destroy`, the last two before they touch the runtime.
 
 **Runs.** Every long operation (create, step, restore, destroy) is a **run**: a ULID, the
 principal who asked (the core's own for a restore), a state, and once ended a verdict. Its

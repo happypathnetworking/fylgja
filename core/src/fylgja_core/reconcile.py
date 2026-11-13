@@ -87,7 +87,8 @@ diverged: the lab is the running twin's, or what the step made of it.
 
 A pass that begins with no run to do on a settled twin (`settled`: no deletion asked, the
 generation observed, a deployment applied, no run in flight, not diverged), whose packages this
-core has loaded, inspects it (D-067); a pass that settles an ended run, or ends one, takes no
+core has loaded and whose teardown its driver has not refused (`_lacking`),
+inspects it (D-067); a pass that settles an ended run, or ends one, takes no
 settled pass after it. A recorded node, device node or probe host, is absent when the inspection
 lacks it or says it is not running, and moved when its incarnation is not the one the record
 holds; incarnations are compared as the driver writes them, never read. An absent node is waited
@@ -131,7 +132,8 @@ the loop reads itself, and one a node of which no loaded package runs (its packa
 edited while the twin ran it), which only the driver can say, by `Unpackaged` from its `destroy`
 before it touches the runtime (`_teardown`, D-102). A later pass of this core finds what was said
 and calls nothing; a create's cleanup, its cancel's and its `apply` that meet such a node keep the
-lab the same way.
+lab the same way, and a deletion asked of this core after any of them is refused as one that met
+the node itself.
 
 Every phase emits run events: `started`, then `done`, `skipped`, `failed`, `timed_out` or
 `cancelled`, with the seconds since `started`, and on a failure the rule; `ready` and `push`
@@ -755,7 +757,10 @@ class Reconciler:
         (D-067); or `named`, a restore run in flight, resumed by the same code. It answers whether a
         restore run ended in this pass, so the pass goes on to a spec or a deletion written
         meanwhile. A twin whose deployment names a package this core lacks is not inspected:
-        nothing could be readied or pushed. One `inspect`, the pass's only call on the runtime
+        nothing could be readied or pushed. Nor is one whose deployment was kept because a
+        cancelled or failed create's cleanup met a node of it that no loaded package runs
+        (`_teardown`), for this core's life (`_lacking`).
+        One `inspect`, the pass's only call on the runtime
         unless a restore follows. A resume reads its cancel before that `inspect` and during it
         (`_runtime`), so a cancelled restore never waits out a node's boot window, nor on an
         `inspect` that keeps failing: it ends cancelled at once (`_cancel_restore`). A recorded
@@ -1604,8 +1609,8 @@ class Reconciler:
         The deployment's, not the record's `bundle_id`, which a newer compile may have written.
         Empty without a deployment. The store is read once per deployment (`_lacks`), not at every
         settled pass. Where the driver's `destroy` or `apply` has met a node of the deployment that
-        no loaded package runs, the answer is the finding kept then (`_teardown`, `_apply`), with
-        no call on the driver (D-102)."""
+        no loaded package runs, the answer is the finding kept then (`_teardown`, `_apply`), that
+        the deployment cannot be torn down, with no call on the driver (D-102)."""
         deployment_id = record.status.deployment_id
         if deployment_id is None:
             return []
@@ -1868,9 +1873,11 @@ class Reconciler:
         plainly, never with `reconfigure`, and `step.node.silent` cannot arise (D-068). A driver's
         `apply` that meets a node no loaded package runs (`Unpackaged`, before it touches the
         runtime: a create resumed after `planned` by a core one of whose packages no longer lists
-        the image) is `bundle.rejected`, the `apply` step's ending event carrying the rule; the
-        finding is kept first as what this core lacks for the deployment (`_lacks`), so the cleanup
-        that follows keeps what is there and calls no `destroy` (D-102)."""
+        the image) is `bundle.rejected`, the `apply` step's ending event carrying the rule, the
+        run's finding saying the deployment cannot be applied. What this core lacks for the
+        deployment is kept first (`_lacks`), as the finding that it cannot be torn down, for the
+        same node: the cleanup that follows keeps what is there and calls no `destroy`, and a
+        deletion asked of this core later is refused by that finding (D-102)."""
         stepping = p.run.operation == "step"
         reapply = p.driver.capabilities().reapply
         # Read before this pass writes its own `apply started`: any earlier one began the apply, a transient
@@ -1912,9 +1919,10 @@ class Reconciler:
                         await self._runtime(p, p.driver.apply, deployment, files, self.platforms,
                                             self.probe_packages)
             except Unpackaged as e:  # the driver's `apply`, before it touched the runtime (D-102)
-                found = (_unaccounted(p.name, "applied", e),)
-                self._lacks[deployment.id] = found  # first: the cleanup that follows keeps what is there
-                raise _Failed("rejected", RULE_BUNDLE_REJECTED, found) from e
+                # Kept first, and in a teardown's words: the cleanup that follows keeps what is there, and a later
+                # deletion is refused by what this core cannot do then.
+                self._lacks[deployment.id] = (_unaccounted(p.name, "torn down", e),)
+                raise _Failed("rejected", RULE_BUNDLE_REJECTED, [_unaccounted(p.name, "applied", e)]) from e
             inspection = await self._runtime(p, p.driver.inspect, p.name)
             nodes = tuple(Node(name=n.name, handle=n.handle, address=n.address, incarnation=n.incarnation)
                           for n in sorted(inspection.nodes, key=lambda n: n.name))

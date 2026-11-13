@@ -1196,12 +1196,15 @@ says so; every other reading fell inside.
 Docker 29.8.1, SR Linux 24.7.1, 2026-11-13)*
 
 `core/tests/live/test_containerlab_driver_live.py` ran alone (`cd core && .venv/bin/pytest -q -rA
--m live tests/live/test_containerlab_driver_live.py`), from 19:06 to 19:11Z: **8 passed in
-251.08 s**, exit 0. Before it the host held no container carrying the lab label and no Docker
-network inside or over 172.20.0.0/16, and no other container ran. Its
+-m live tests/live/test_containerlab_driver_live.py`), ending by 19:11Z: **8 passed in
+251.08 s**, exit 0. Its
 `test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_removes_nothing` pins
-what follows ([D-102](decisions.md#d-102)).
+what follows ([D-102](decisions.md#d-102)), but the host before the run and after the module,
+which were read by hand and are no assertion of the module's.
 
+- **The host before the run**, read by hand: `docker ps -a -q --filter label=containerlab` and
+  `docker ps -q` each printed nothing, and `docker network inspect` of each network `docker
+  network ls` listed gave no subnet inside or over 172.20.0.0/16.
 - **The call.** The twin `drv-live`, `three-node` planned under the shipped packages, ran its
   three SR Linux containers, made anew by the `apply` with `reconfigure` of the test before. The
   driver's `destroy` was given that deployment and its files, and the shipped packages with one
@@ -1220,8 +1223,10 @@ what follows ([D-102](decisions.md#d-102)).
 - **The destroy with the shipped packages**, the module's next test, took 1.67 s and left nothing:
   no container, host entry, ssh config or network of the lab, `inspect` `absent`, and the twin's
   directory gone.
-- **The module's end** left no container carrying the lab label, no `clab-` network, no line of
-  `/etc/hosts` naming `clab-drv-live` and no `containerlab` process.
+- **The host after the module**, read by hand: `docker ps -a -q --filter label=containerlab`
+  printed nothing, `docker network ls` listed no network named `clab-`, `grep -c clab-drv-live
+  /etc/hosts` printed 0, `/etc/ssh/ssh_config.d` listed no `clab` file and `pgrep -x containerlab`
+  found no process. The module itself asserts each twin's leftovers gone at that twin's destroy.
 
 **The dry run**
 
@@ -2532,12 +2537,17 @@ v1.37.1+k3s1, clabernetes 0.10.1, SR Linux 24.7.1, lightkube 1.0.1, 2026-11-13)*
 `core/tests/cluster/test_clabernetes_driver_cluster.py` ran alone from the development host (`cd
 core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver_cluster.py`,
 `local/.env` loaded), from 19:26:31 to 19:30:49Z: **8 passed in 255.63 s**, exit 0, none skipped.
-The deployed core's Deployment was at no replica, with no pod, and the cluster held no namespace,
-Topology, pod, Service or Secret of a twin before the run. Its
-`test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused_before_any_request` pins what
-follows ([D-102](decisions.md#d-102)), as the local driver's block does above ("containerlab
-0.79.0").
+Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` pins what follows
+([D-102](decisions.md#d-102)), as the local driver's block does above ("containerlab 0.79.0"),
+but the cluster before the run and after the module, which were read by hand and are no
+assertion of the module's.
 
+- **The cluster before the run**, read by hand with `kubectl`: `get deployment fylgja-core -n
+  fylgja` gave the deployed core's replicas as 0 with none ready. Listings of the namespaces named
+  `fylgja-twin-*`, and of the pods, Services and Secrets, in every namespace, that carry the label
+  `fylgja.owner=core` or `fylgja.twin`, each counted no line; the counts were of the lines
+  printed, the listings' errors not kept. The module's first test asserts that `inspect` answers
+  `absent` for the twin before it is admitted.
 - **The call.** The twin `drv-k8s`, `three-node` planned under the shipped packages, ran its three
   SR Linux pods, each made anew by the `apply` with `reconfigure` of the test before. The driver's
   `destroy` was given that deployment and its files, and the shipped packages with one change:
@@ -2546,15 +2556,17 @@ follows ([D-102](decisions.md#d-102)), as the local driver's block does above ("
   (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`, naming `n1`, the first node of the Topology's
   definition, its kind and the image as the Topology writes it, which for this image, not gated,
   is the package's own reference.
-- **The cluster held what it held before the call**: the namespace `fylgja-twin-drv-k8s` stood and
-  was not being deleted, and `inspect` answered the three nodes running, each at the incarnation
-  (its pod's uid and restart count) and the address it had before the call. That no request is
-  made before the refusal is the pure tier's reading of the driver
-  (`test_destroy_meets_a_node_no_given_package_runs_before_any_call`); this run read the cluster.
-- **The destroy with the shipped packages**, the module's next test, took 14.16 s and left
-  nothing: `inspect` `absent` and the namespace gone.
-- **The module's end** left no namespace, Topology, pod, Service or Secret carrying the twins'
-  labels.
+- **The namespace and the nodes were as before the call**: the namespace `fylgja-twin-drv-k8s`
+  stood and was not being deleted, and `inspect` answered the three nodes running, each at the
+  incarnation (its pod's uid and restart count) and the address it had before the call. That no
+  request is made before the refusal is the pure tier's reading of the driver
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_call`); this run read the
+  namespace and `inspect`, and nothing else of the cluster.
+- **The destroy with the shipped packages**, the module's next test, took 14.16 s, after which
+  `inspect` answered `absent` and the namespace was gone.
+- **The module's end** deleted the twin's namespace and the refused twin's and read each gone,
+  which its fixture asserts. Read by hand after it, with `kubectl`: the same listings as before
+  the run each counted no line, the counts again of the lines printed.
 - **The rest of the module**, read beside it: the first apply took 69.10 s, its repeat 2.24 s, the
   apply with `reconfigure` 65.51 s, and the residue's destroy 6.08 s.
 

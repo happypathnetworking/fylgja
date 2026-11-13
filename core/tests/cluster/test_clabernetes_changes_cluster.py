@@ -231,7 +231,11 @@ def step(loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, t: St
     after = planned(driver, t, name)
     held = run(loop, driver.admit(c.manifest, PLATFORMS, PROBES, t.twin, [], held=current.deployment),
                f"admit {name} with the held deployment")
-    kept = held == t.allocation
+    # A step keeps the twin's allocation in every member but the demand, which becomes the target's (D-073).
+    assert t.allocation is not None, f"{t.twin} was never admitted: an earlier test failed"
+    target = after.deployment.demand
+    demand = {"nodes": target.nodes, "cpu": target.cpu, "memory_mb": target.memory_mb}
+    kept = held == {**t.allocation, "demand": demand}
     assert kept, f"admit {name} with the held deployment answered another allocation, or refused"
     answer = driver.changes(current, after, PLATFORMS, PROBES)
     before, base = uids(loop, driver, t.twin), t.name

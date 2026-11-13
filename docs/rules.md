@@ -35,6 +35,9 @@ well, and its catalogue is [`readers/netbox/rules.md`](../readers/netbox/rules.m
 | `package.patterns.placeholders` | both package loaders | a template uses a placeholder its match does not capture (`node_name`, a rename's `port`), a match captures one twice, a probe package's command or readiness text names a placeholder that does not exist, or a host's start-up command (`host.address`, `host.route`) names one the plan does not render there: it may name `{address}`, `{interface}`, `{far_address}` and `{gateway}` alone |
 | `package.ranges.placeholder` | the platform package loader | a `ranges` key is no placeholder of the rule's match |
 | `package.rename.coverage` | the platform package loader | a rename names no data rule or names one twice, or a data rule has no rename while the kind has no aliases |
+| `package.versions.name` | the platform package loader | two versions share a name |
+| `package.images.coverage` | the platform package loader | a listed version has no image under `runtime.containerlab.images`, or a key there is no listed version's name; a key YAML read as a number is the name of none, which is why a name is quoted |
+| `package.versions.several` | the platform package loader | the package lists more than one version, and this build runs one version a package ([D-102](../design/decisions.md#d-102)) |
 | `package.format.unsupported` | the probe package loader | the format names a mechanism this build does not run ([D-014](../design/decisions.md#d-014)) |
 | `probes.version.unsupported` | the declaration loader | `probes_version` is not `1` |
 | `probes.invalid` | the declaration loader | the declaration violates its schema at the pointer |

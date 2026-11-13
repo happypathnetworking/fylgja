@@ -195,7 +195,7 @@ def test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_rem
     before, nodes, files = leftovers(TWIN), inspect(lab).nodes, sorted(f.name for f in directory.iterdir())
     assert {n.name: n.incarnation for n in nodes} == lab.incarnations
     srl = PLATFORMS["nokia_srlinux"]
-    listed = srl.runtime.containerlab.image.ref
+    listed = platform_package.image(srl).ref
     moved = {**PLATFORMS, "nokia_srlinux": with_image(srl, ref=listed + "-moved")}
     start = time.monotonic()
     with pytest.raises(Unpackaged) as refused:

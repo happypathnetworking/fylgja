@@ -42,7 +42,7 @@ import yaml
 from fakes import with_image
 
 from cluster.conftest import GATED, Site, run, say, until, watching
-from fylgja_core import blueprint, compiler, packages, push
+from fylgja_core import blueprint, compiler, packages, platform_package, push
 from fylgja_core.clabernetes import OWNER, OWNER_LABEL, TWIN_LABEL, namespace_of
 from fylgja_core.clabernetes.driver import RULE_NAMESPACE, ClabernetesDriver
 from fylgja_core.clabernetes.kube import NODE_LABEL, LightKube, Pod
@@ -481,7 +481,7 @@ def test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused(
     p = twin.deployed()
     before = present(loop, driver)
     srl = PLATFORMS["nokia_srlinux"]
-    listed = srl.runtime.containerlab.image.ref
+    listed = platform_package.image(srl).ref
     unlisted = {**PLATFORMS, "nokia_srlinux": with_image(srl, ref=listed + "-moved")}
     with pytest.raises(Unpackaged) as refused:
         run(loop, driver.destroy(p.deployment, p.files, unlisted, PROBES),

@@ -164,10 +164,7 @@ writes them.
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
 They are left to later phases.
 
-**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): a
-platform package that lists its versions with their images, one a package
-([D-102](decisions.md#d-102)), where
-section 4.10 describes the one image there is today;
+**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"):
 the local driver's pool as a setting ([D-103](decisions.md#d-103)); one make target a
 source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version for
 every distribution, three wheels published and the packages inside the core's
@@ -526,9 +523,12 @@ package ([Constitution II](constitution.md#ii-platforms-are-data-never-code),
   ([`platform-package-1.schema.json`](../formats/platform-package-1.schema.json)) states
   only what the runtime's kind does not already know: its interface rules, push, readiness,
   gNMI and conformance paths, fidelity, and a `credentials` name.
-- **Its `runtime.containerlab` section** serves both containerlab drivers: the kind, the
-  image, per-node resources, measured timeouts, `alias`, `rename`, `link_apply_mode` and
-  `hot_add_ports`. A `runtime.hardware` section arrives with that driver.
+- **Its `runtime.containerlab` section** serves both containerlab drivers: the kind, an
+  image for each version the package lists, by the version's name, per-node resources,
+  measured timeouts, `alias`, `rename`, `link_apply_mode` and `hot_add_ports`. A package
+  lists one version in this build, and the core runs it: a second is refused when the
+  package is loaded, until a device can name the version it runs
+  ([D-102](decisions.md#d-102)). A `runtime.hardware` section arrives with that driver.
 - **Aliases.** SR Linux's kind accepts production interface names, so its package needs no
   name templates. cEOS's kind has none, so its package keeps one rename rule per data rule.
 - **No bootstrap.** The kinds' baselines keep the host name, linked ports, LLDP and gNMI

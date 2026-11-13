@@ -18,7 +18,7 @@ import itertools
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
-from fylgja_core import blueprint, capacity, deployment, gnmi, mapping, push
+from fylgja_core import blueprint, capacity, deployment, gnmi, mapping, platform_package, push
 from fylgja_core.bundle import Manifest
 from fylgja_core.capacity import Host, Reading, Resources
 from fylgja_core.credentials import Credential
@@ -611,8 +611,8 @@ def with_image(package: PlatformPackage, **members: Any) -> PlatformPackage:
     """`package` with its image's members replaced (`ref`, `pull_secret`): a package whose image
     moved, or whose pull secret did, while a twin ran the one it had."""
     containerlab = package.runtime.containerlab
-    image = dataclasses.replace(containerlab.image, **members)
-    runtime = dataclasses.replace(package.runtime, containerlab=dataclasses.replace(containerlab, image=image))
+    images = {package.versions[0].name: dataclasses.replace(platform_package.image(package), **members)}
+    runtime = dataclasses.replace(package.runtime, containerlab=dataclasses.replace(containerlab, images=images))
     return dataclasses.replace(package, runtime=runtime)
 
 

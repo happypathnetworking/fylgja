@@ -14,21 +14,21 @@ package, and each property's description for its consumer.
 
 | File | Platform | containerlab kind | Image |
 |---|---|---|---|
-| `nokia_srlinux.yaml` | Nokia SR Linux 24.7 | `nokia_srlinux` | `ghcr.io/nokia/srlinux:24.7.1`, public |
-| `arista_eos.yaml` | Arista EOS 4.32 on cEOS | `ceos` | `ceos:4.32.0.2F`, account-gated: imported by hand, never pulled locally ([CONTRIBUTING.md](../CONTRIBUTING.md#local-environment)) |
+| `nokia_srlinux.yaml` | Nokia SR Linux 24.7.1 | `nokia_srlinux` | `ghcr.io/nokia/srlinux:24.7.1`, public |
+| `arista_eos.yaml` | Arista EOS 4.32.0.2F on cEOS | `ceos` | `ceos:4.32.0.2F`, account-gated: imported by hand, never pulled locally ([CONTRIBUTING.md](../CONTRIBUTING.md#local-environment)) |
 
 ## What a package holds
 
 | Section | What it says |
 |---|---|
-| `id`, `versions` | The platform's identity, which a blueprint device's `platform` names, and the software versions its values were measured on |
+| `id`, `versions` | The platform's identity, which a blueprint device's `platform` names, and the versions of its software the package runs, one in this build, each with an image under `runtime.containerlab.images`. A version's `name` is the release's own text, and is quoted wherever it is written (`"4.32.0.2F"`): YAML reads a bare `4.32` as a number, which is no version's name |
 | `credentials` | The name the credential provider resolves to the node login; never a value |
 | `interfaces.rules` | Which production interface names the platform has, in order: each data rule's `match` and `ranges`, and one management rule. A `node_name` only where the node's name differs from the production name |
 | `push` | How the configuration reaches a booted node: `json_rpc` or `eapi`, always a replace with one atomic commit ([D-027](../design/decisions.md#d-027)) |
 | `readiness` | How long the push transport may take to answer once the nodes are up |
 | `gnmi`, `conformance` | How verify and the conformance suite read a booted node |
 | `fidelity.approximations` | How a twin of this platform differs from production |
-| `runtime.containerlab` | The kind, the image (with a `pull_secret` when gated), per-node `resources`, the deploy and destroy bounds, `link_apply_mode`, `alias` (with a `rename` per data rule when false) and `hot_add_ports` |
+| `runtime.containerlab` | The kind, `images`, the image of each listed version under its quoted name (with a `pull_secret` when gated), per-node `resources`, the deploy and destroy bounds, `link_apply_mode`, `alias` (with a `rename` per data rule when false) and `hot_add_ports` |
 
 Every timeout and resource figure is a measurement with a margin, and the comment beside
 it says what was measured. The orchestrator holds what only a source-of-truth reader

@@ -68,7 +68,7 @@ PROBES = {p.format: p for p in [probe_package.load(ROOT / "probes/ping.yaml")]}
 # the packages the driver is given, and the node, kind and image of the first node, in the file's order, that none
 # of them runs, the image as the deployment's own file writes it.
 SRL, PING = PLATFORMS["nokia_srlinux"], PROBES["ping"]
-SRL_MOVED = {**PLATFORMS, "nokia_srlinux": with_image(SRL, ref=SRL.runtime.containerlab.image.ref + "-moved")}
+SRL_MOVED = {**PLATFORMS, "nokia_srlinux": with_image(SRL, ref=platform_package.image(SRL).ref + "-moved")}
 PING_MOVED = {"ping": dataclasses.replace(PING, runtime=dataclasses.replace(
     PING.runtime, containerlab=dataclasses.replace(PING.runtime.containerlab, image=dataclasses.replace(
         PING.runtime.containerlab.image, ref=PING.runtime.containerlab.image.ref + "-moved"))))}

@@ -4,7 +4,8 @@
 # says what the loader must report.
 platform_package_version: "1"
 id: testos
-versions: ["0"]
+versions:
+  - name: "0"
 credentials: testos
 
 interfaces:
@@ -50,8 +51,9 @@ fidelity:
 runtime:
   containerlab:
     kind: testos
-    image:
-      ref: example.invalid/testos:0
+    images:
+      "0":
+        ref: example.invalid/testos:0
     resources:
       cpu: 0.5
       memory_mb: 1024

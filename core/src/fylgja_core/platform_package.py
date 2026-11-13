@@ -31,8 +31,18 @@ RULE_MANAGEMENT_RULE = "package.management.rule"
 RULE_PLACEHOLDERS = "package.patterns.placeholders"
 RULE_RANGES = "package.ranges.placeholder"
 RULE_RENAME_COVERAGE = "package.rename.coverage"
+RULE_VERSIONS_NAME = "package.versions.name"
+RULE_IMAGES_COVERAGE = "package.images.coverage"
+RULE_VERSIONS_SEVERAL = "package.versions.several"
 
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+@dataclass(frozen=True, kw_only=True)
+class Version:
+    """One version of the platform's software the package runs, by the release's own text."""
+
+    name: str
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -146,10 +156,11 @@ class Rename:
 
 @dataclass(frozen=True, kw_only=True)
 class Containerlab:
-    """The section both containerlab drivers read."""
+    """The section both containerlab drivers read; `images` holds each listed version's image,
+    by the version's name."""
 
     kind: str
-    image: Image
+    images: Mapping[str, Image]
     resources: Resources
     deploy_timeout_s: int
     destroy_timeout_s: int
@@ -172,7 +183,7 @@ class PlatformPackage:
 
     platform_package_version: str = VERSION
     id: str
-    versions: tuple[str, ...]
+    versions: tuple[Version, ...]
     credentials: str
     interfaces: Interfaces
     push: Push
@@ -189,10 +200,11 @@ def placeholders(pattern: str) -> list[str]:
 
 
 def image(package: PlatformPackage) -> Image:
-    """The image the core runs `package` on, the one its containerlab section names. Each
-    reader of a platform package's image asks here: both plans, the lookup of a running node's
-    package and the local check that a gated image is present."""
-    return package.runtime.containerlab.image
+    """The image the core runs `package` on: its one version's, in its containerlab section,
+    which the loader's rules make the one there is (D-102). Each reader of a platform package's
+    image asks here: both plans, the lookup of a running node's package and the local check that
+    a gated image is present."""
+    return package.runtime.containerlab.images[package.versions[0].name]
 
 
 def validate(doc: Any) -> list[Problem]:
@@ -208,6 +220,7 @@ def validate(doc: Any) -> list[Problem]:
     problems += _management(rules)
     problems += _placeholders(rules)
     problems += _rename(rules, doc["runtime"]["containerlab"])
+    problems += _versions(doc["versions"], doc["runtime"]["containerlab"]["images"])
     return sorted(set(problems))
 
 
@@ -290,4 +303,28 @@ def _rename(rules: list[dict[str, Any]], containerlab: dict[str, Any]) -> list[P
             if name not in renamed:
                 detail = f"data rule {name!r} has no rename, and the kind has no aliases"
                 found.append(Problem("/runtime/containerlab/rename", RULE_RENAME_COVERAGE, detail))
+    return found
+
+
+def _versions(versions: list[dict[str, Any]], images: dict[Any, Any]) -> list[Problem]:
+    """The versions' own rules, and the images held to the versions' names. A key of `images`
+    is compared as it was read: YAML reads a bare 0 as a number, which is no version's name."""
+    found: list[Problem] = []
+    seen: dict[str, int] = {}
+    for i, version in enumerate(versions):
+        if version["name"] in seen:
+            detail = f"{version['name']!r} is version {seen[version['name']]}'s name too"
+            found.append(Problem(f"/versions/{i}/name", RULE_VERSIONS_NAME, detail))
+        seen.setdefault(version["name"], i)
+    pointer = "/runtime/containerlab/images"
+    for name in seen:
+        if name not in images:
+            found.append(Problem(pointer, RULE_IMAGES_COVERAGE, f"version {name!r} has no image"))
+    for key in images:
+        if key not in seen:
+            detail = f"{key!r} is no version the package lists"
+            found.append(Problem(pointer + documents.pointer([key]), RULE_IMAGES_COVERAGE, detail))
+    if len(versions) > 1:
+        detail = f"{len(versions)} versions; this build runs one version a package"
+        found.append(Problem("/versions/1", RULE_VERSIONS_SEVERAL, detail))
     return found

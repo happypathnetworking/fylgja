@@ -162,7 +162,7 @@ and steps, verifies, shows and destroys it. It knows no source of truth.
 
 **Credential provider** — The one source of node logins and *pull credentials*: the
 environment locally, Secrets on a cluster. A platform package names its login by a
-`credentials` name, and a gated image's pull credential by its `image.pull_secret`, never a
+`credentials` name, and a gated image's pull credential by the image's `pull_secret`, never a
 value.
 
 **CTM (Canonical Topology Model)** — The archived repository's network body, version 2,
@@ -394,10 +394,12 @@ share (`interface.port.shared`, [D-045](../design/decisions.md#d-045)).
 plans, its rule for live runs, the names the plans share, and each place the build has bent
 a decision's text. Plans live under `local/plans/`, outside the tree ([D-080](../design/decisions.md#d-080)).
 
-**Platform package** — The data that makes one network operating system supported:
-interface rules, push, readiness, gNMI paths, conformance, fidelity, and a section per
-runtime ([`platform-package-1.schema.json`](../formats/platform-package-1.schema.json),
-[Constitution II](../design/constitution.md#ii-platforms-are-data-never-code)). Adding a platform is
+**Platform package** — The data that makes one network operating system supported: the
+versions of it the package runs, interface rules, push, readiness, gNMI paths, conformance,
+fidelity, and a section per runtime, which names an image for each version
+([`platform-package-1.schema.json`](../formats/platform-package-1.schema.json),
+[Constitution II](../design/constitution.md#ii-platforms-are-data-never-code)). A package lists
+one version in this build ([D-102](../design/decisions.md#d-102)). Adding a platform is
 writing one. It replaces the *PSP*.
 
 **Principal** — Who a request acts for, named by its bearer token. Every run records its
@@ -426,8 +428,8 @@ id, and several faults ride in `findings`.
 **PSP (Platform Support Package)** — The archived repository's platform package format,
 `0.7`. Platform package 1 replaces it.
 
-**Pull credential** — What a gated image is pulled with on clabernetes, named by its
-package's `image.pull_secret`: the image prefix in `FYLGJA_CREDENTIAL_<NAME>_REGISTRY` (a
+**Pull credential** — What a gated image is pulled with on clabernetes, named by the image's
+`pull_secret` in its package: the image prefix in `FYLGJA_CREDENTIAL_<NAME>_REGISTRY` (a
 host, an optional port and an optional path, with no scheme), with the registry's login in
 `_USERNAME` and `_PASSWORD`. A twin's allocation records every prefix the provider holds at
 admission, and `apply` makes each one a Secret in the twin's namespace; none is ever a file

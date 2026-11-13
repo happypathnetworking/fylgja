@@ -11,7 +11,8 @@
 # schema accepts: nothing here is measured, and nothing dials a node of it.
 platform_package_version: "1"
 id: chassisos
-versions: ["0"]                            # placeholder: no image of it exists
+versions:
+  - name: "0"                              # placeholder: no image of it exists
 credentials: chassisos                     # placeholder: never resolved
 
 interfaces:
@@ -65,8 +66,9 @@ fidelity:
 runtime:
   containerlab:
     kind: chassisos                        # synthetic: containerlab has no such kind
-    image:
-      ref: example.invalid/chassisos:0     # synthetic: a placeholder reference no registry serves
+    images:
+      "0":
+        ref: example.invalid/chassisos:0   # synthetic: a placeholder reference no registry serves
     resources:
       cpu: 1
       memory_mb: 2048                      # placeholder

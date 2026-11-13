@@ -272,7 +272,7 @@ def test_a_gated_image_the_allocation_has_no_registry_for_is_refused() -> None:
         "Node e1 runs ceos:4.32.0.2F, which is pulled with the secret arista-ceos, and the twin's allocation "
         "holds no registry for it: FYLGJA_CREDENTIAL_ARISTA_CEOS_REGISTRY was not set when the twin was admitted.")
     with pytest.raises(KeyError):
-        clabernetes_plan.image(PLATFORMS["arista_eos"].runtime.containerlab.image, {})
+        clabernetes_plan.image(platform_package.image(PLATFORMS["arista_eos"]), {})
     # A probe host's image is held to the same rule.
     probes = {"ping": gated_probe(PROBES["ping"], "probe")}
     c = compiled("three-node-probed", PLATFORMS, probes)

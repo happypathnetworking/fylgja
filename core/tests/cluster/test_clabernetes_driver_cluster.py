@@ -263,7 +263,9 @@ def test_1_admit_answers_the_sites_values_and_refuses_a_namespace_that_is_not_th
         pytest.fail(f"admit {TWIN} refused: {allocation.rule}")
     site_values = {"namespace": NS, "controller_namespace": site.controller_namespace, "pod_cidr": site.pod_cidr,
                    "registries": provider.registries()}
-    differing = sorted(k for k in {*allocation, *site_values} if allocation.get(k) != site_values.get(k))
+    # The allocation carries the demand it reserved beside the site's values (D-073): the twin's, not the site's.
+    assert allocation.get("demand") == {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}, "the demand is not the twin's"
+    differing = sorted(k for k in {*allocation, *site_values} - {"demand"} if allocation.get(k) != site_values.get(k))
     assert not differing, f"the allocation differs from the site's in {differing}"
     say(f"allocation: {sorted(allocation)}, registries {sorted(allocation['registries'])}")
     twin.planned = driver.plan(c.manifest, c.id, PLATFORMS, PROBES, TWIN, allocation)

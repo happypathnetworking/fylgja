@@ -8138,6 +8138,17 @@ interpolates `${A:-unset}`, `${B:-unset}` and `${C:-unset}`; no container starte
 
 ---
 
+## PyPI and TestPyPI
+
+- **The three names are held by no project, on either index.** For each of `fylgja-core`,
+  `fylgja-infrahub` and `fylgja-netbox`, `GET /pypi/<name>/json` and `GET /simple/<name>/`
+  answered 404 on `pypi.org` and on `test.pypi.org`, asked with no account, on the
+  maintainer's word. That a name is free reserves nothing, and whether either index would
+  take it when a publisher is registered, its rule against names like another's among the
+  reasons it may not, was not read. *(2026-11-13)*
+
+---
+
 ## GitHub Actions, `ubuntu-26.04`
 
 - **The hosted runner for a public repository** has 4 vCPUs, 15,983 MiB and 3 GiB of

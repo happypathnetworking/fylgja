@@ -3440,9 +3440,9 @@ source's Compose project and then a twin beside it ([D-104](#d-104)).
   such network is refused at start.
 - **A create refused because no /24 of the pool is free names each Docker network that
   holds part of it**, and the setting.
-- **The demonstrations' script reads the same** once its source is up, since the source's
-  own network may be the one that holds the pool, and stops there, the source left up, with
-  that refusal's words.
+- **The demonstrations' script reads the same** once its source is up, since a source's own
+  network may be the one that holds the pool, Infrahub's being of Docker's choosing, and
+  stops there, the source left up, with that refusal's words.
 
 #### Consequences
 
@@ -7326,8 +7326,8 @@ Decisions during the build:
 ### D-104 — The demonstration targets: one command a source, over the change the seeds make
 
 **Status:** Accepted 2026-11-13 (phase 10). Builds on [D-085](#d-085), [D-091](#d-091),
-[D-096](#d-096) and [D-097](#d-097), and changes none of them: no seed, fixture, template or
-installed code changes.
+[D-096](#d-096) and [D-097](#d-097) as built ([D-099](#d-099), [D-100](#d-100)), and changes
+none of them: no seed, fixture, template or installed code changes.
 
 #### Context
 
@@ -7335,9 +7335,13 @@ A rehearsal can be watched only by following a runbook: about ten steps a source
 targets in order with `local/.env` loaded between them, the core started by hand in a shell
 of its own, and then the change opened ([CONTRIBUTING.md](../CONTRIBUTING.md), "Running the
 example orchestrator"). Every step already has a target or a script: each source's `up` and
-seed, the example's environment, the edge's Prefect, the runner, and the change itself,
-which the Infrahub seed opens as a proposed change (`PROPOSED_CHANGE=1`) and the NetBox seed
-by its tag (`NETBOX_TAG=1`). What is missing is their order, the core, and the wait.
+seed, the example's environment, the edge's Prefect, the runner, and the change itself. The
+Infrahub seed opens it as a proposed change (`PROPOSED_CHANGE=1`). For NetBox the seed is
+two targets and the trigger a third ([D-099](#d-099)): `make netbox-seed`, then
+`make netbox-hook` once a runner serves, then `make netbox-change`, which needs the core
+running and sets the tag last (`NETBOX_TAG=1`). What is missing is their order, the core,
+and the wait. Each runbook also runs alone: the other source is stopped, since its task
+workers or its webhook start the same two deployments by name.
 
 #### Options considered
 
@@ -7363,13 +7367,13 @@ by its tag (`NETBOX_TAG=1`). What is missing is their order, the core, and the w
   writes to it, with the core, the edge's Prefect and the runner in the background, and
   ends by opening the change: the seeded branch's proposed change in Infrahub, the tag on
   the seeded branch in NetBox.
-- **It reads the verdict from the edge's Prefect**: the flow run the change started, waited
-  for, and the rehearsal's document filed with it, read as Infrahub's check reads it
+- **It reads the verdict from the edge's Prefect**: the `twin-rehearse` flow run the change
+  started, waited for, and the rehearsal's document filed with it, read as Infrahub's check reads it
   ([D-085](#d-085)), with the edge's own credential from `local/.env`. It prints the
   verdict and where the report is read, and exits 0 for `passed` and 1 otherwise.
 - **It runs the core on the local driver**, from the checkout. What the core needs and can
   be generated, the script writes under `local/` where it is missing, never printed: the
-  store's directory, the token file and a client's token.
+  store's directory, the token file, and a client's token and address.
 - **It checks what only the host's owner can give, and stops naming what is missing**:
   Docker and containerlab with their groups; the AppArmor widening SR Linux needs on
   Ubuntu; memory and free ports; the node login's two lines in `local/.env`, which the
@@ -7378,7 +7382,9 @@ by its tag (`NETBOX_TAG=1`). What is missing is their order, the core, and the w
   ([D-103](#d-103)). A public image that is absent it pulls. These are the host's
   preconditions, stated where the demonstrations are documented ([D-107](#d-107)).
 - **It is not installed.** No wheel carries it.
-- **The two never run together**, and each refuses while the other's runner is up.
+- **Each runs alone.** A demonstration first stops the other source where it is up, by that
+  source's own `down`, its volumes kept, saying so in one line; and it refuses while the
+  other's runner is up.
 - **`make demo-down`** destroys a twin the demonstration left, ends what the script
   started, the core, the runner and Prefect, by their recorded processes and no other, and
   stops the source. The source's containers, network and volumes stay, as its own `down`
@@ -7476,8 +7482,8 @@ building the tree. Of the core's fourteen commands, five appear in no document a
 reads, and none is described with its options, its output and its exit statuses; the API
 has no description beside its OpenAPI file and one table in the architecture; the client
 library has a paragraph. The two readers' READMEs are the exception, each with its command
-and its tables, held to the code by tests. Nothing compares the server's routes with the
-OpenAPI's paths as sets.
+and its tables; tests hold the tables to the code, and nothing holds the commands. Nothing
+compares the server's routes with the OpenAPI's paths as sets.
 
 #### Options considered
 
@@ -7495,7 +7501,7 @@ OpenAPI's paths as sets.
   OpenAPI (watches, `ETag` and `If-Match`, the dry run, problems); the client library's
   calls and errors; the two demonstrations and the host's preconditions ([D-104](#d-104));
   and what 1.0 holds ([D-105](#d-105)). The readers' commands stay in their READMEs, which
-  the pages link to.
+  the pages link to, and each README's command gains the test the pages' commands have.
 - **A test for each page that names what the code has** compares the two as sets: a
   command's subcommands and options with its parser's, the settings with the
   configuration's, the exit statuses with each command's, the API page's routes with the

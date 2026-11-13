@@ -1600,20 +1600,23 @@ tree's own behaviour and is recorded here.
   `make netbox-demo` and `make demo-down`. One script runs that source's runbook in the
   runbook's own order, with the core, the edge's Prefect and the runner in the background,
   and ends by opening the change the seeds make today as its source opens one: a proposed
-  change in Infrahub, a tag on the branch in NetBox. It then waits for the flow run the
-  change started on the edge's Prefect, reads the rehearsal's document from it as Infrahub's
-  check does, and prints the verdict and where the report is read. It exits 0 for `passed`
-  and 1 otherwise. The two never run at once: one Prefect serves one source's runner
-  ("Phase 9"). No seed, fixture or template changes.
+  change in Infrahub, a tag on the branch in NetBox. It then waits for the `twin-rehearse`
+  flow run the change started on the edge's Prefect, reads the rehearsal's document from it
+  as Infrahub's check does, and prints the verdict and where the report is read. It exits 0
+  for `passed` and 1 otherwise. Each runs alone, as its runbook has it: one Prefect serves
+  one source's runner, and either source, up, starts the same two deployments by name
+  ("Phase 9"; [D-099](decisions.md#d-099)). So a demonstration first stops the other source
+  where it is up, by that source's own `down`, its volumes kept, and refuses while the
+  other's runner is up. No seed, fixture or template changes.
 - **What a demonstration does for the host, and what it only checks**
   ([D-104](decisions.md#d-104)). It writes under `local/` what is missing and can be
-  generated, never printed: the core's store, its token file and a client's token, as the
-  development scripts write theirs. It pulls a public image that is absent. It checks, and
+  generated, never printed: the core's store, its token file, and a client's token and
+  address, as the development scripts write theirs. It pulls a public image that is absent. It checks, and
   stops naming what is missing, what only the host's owner can give: Docker and
   containerlab with their groups, the AppArmor widening SR Linux needs on Ubuntu, memory,
   free ports, the node login's two lines in `local/.env`, a branch checked out where the
   source registers the repository at one, and, once the source is up, a pool no Docker
-  network holds whole ([D-103](decisions.md#d-103)). Those are the host's preconditions,
+  network holds whole, which Infrahub's own may ([D-103](decisions.md#d-103)). Those are the host's preconditions,
   stated in the user documentation; nothing else is done by hand.
 - **What 1.0 promises** ([D-105](decisions.md#d-105)). The three published distributions
   share one version and follow semantic versioning. Within major version 1, what a user
@@ -1641,8 +1644,9 @@ tree's own behaviour and is recorded here.
 - **User documentation is reference, in `docs/`, held to the code by tests**
   ([D-107](decisions.md#d-107)): installing; running the server and its settings; the
   core's two commands; the API; the client library; the two demonstrations with the host's
-  preconditions; and what 1.0 holds. The readers' commands stay in their READMEs, which
-  tests already hold. Plain Markdown, no generator. A test compares each page's commands,
+  preconditions; and what 1.0 holds. The readers' commands stay in their READMEs, whose
+  tables tests hold today and whose commands gain the same test. Plain Markdown, no
+  generator. A test compares each page's commands,
   options, routes, settings, exit statuses and client calls with the code's, as sets. `README.md` is rewritten for a user, and
   `CONTRIBUTING.md` keeps what a contributor needs.
 
@@ -1702,10 +1706,11 @@ is read when its publisher is registered.
    setting's default and the image's own copy removed, with `make wheelcheck` holding that
    a server installed from the wheel loads them and answers `GET /v1/version` with no
    `FYLGJA_PACKAGES`, and `make imagecheck` that the image's are the wheel's; each
-   distribution's metadata; the publish workflow; `CHANGELOG.md`; the API document's
+   distribution's metadata, and the two readers' READMEs, which say nothing is published; the publish workflow; `CHANGELOG.md`; the API document's
    corrections.
-4. **The user documentation** ([D-107](decisions.md#d-107)): the pages, their tests,
-   `README.md`, and what moves out of `CONTRIBUTING.md`.
+4. **The user documentation** ([D-107](decisions.md#d-107)): the pages, their tests, the
+   test that holds each reader's README to its command, `README.md`, and what moves out of
+   `CONTRIBUTING.md`.
 5. **The promise and the release candidate** ([D-105](decisions.md#d-105)): the client's
    and the example's reading of an answer made to ignore a member they do not know, with a
    test that adds one to each answer they read; the page that says what 1.0 holds; the
@@ -1910,17 +1915,6 @@ formats and the API are still settling.
      a tag that asks for the rehearsal, and the report as a journal entry
      ([D-097](decisions.md#d-097)).
    - Rehearse a seeded change of several steps from its tag, on both drivers.
-10. **The first release**, after NetBox. *Settled on 2026-11-13*; see "Phase 10":
-    - List a platform package's versions with their images, before the format is held
-      ([D-102](decisions.md#d-102)); refuse once what raised without end, and make the
-      local driver's pool a setting ([D-103](decisions.md#d-103)).
-    - Demonstrate a rehearsal with one command a source ([D-104](decisions.md#d-104)).
-    - Say what 1.0 promises ([D-105](decisions.md#d-105)); give every distribution one
-      version, ship the packages in the core's wheel, and publish three wheels
-      ([D-106](decisions.md#d-106)).
-    - Document the commands, the API and the client for a user
-      ([D-107](decisions.md#d-107)).
-
    Built, in the four plans of "Phase 9": the development NetBox behind make targets, on a
    Compose network of its own, with its seed, its two accounts and NetBox's pin
    ([D-096](decisions.md#d-096), [D-099](decisions.md#d-099)); the NetBox reader,
@@ -1949,6 +1943,16 @@ formats and the API are still settling.
    read through another core; what the reader's bracket and its account's grants do not yet
    rest on a reading of; and the small gaps of the last plan
    ([open questions](decisions.md#open-questions)).
+10. **The first release**, after NetBox. *Settled on 2026-11-13*; see "Phase 10":
+    - List a platform package's versions with their images, before the format is held
+      ([D-102](decisions.md#d-102)); refuse once what raised without end, and make the
+      local driver's pool a setting ([D-103](decisions.md#d-103)).
+    - Demonstrate a rehearsal with one command a source ([D-104](decisions.md#d-104)).
+    - Say what 1.0 promises ([D-105](decisions.md#d-105)); give every distribution one
+      version, ship the packages in the core's wheel, and publish three wheels
+      ([D-106](decisions.md#d-106)).
+    - Document the commands, the API and the client for a user
+      ([D-107](decisions.md#d-107)).
 
 ## Verification
 

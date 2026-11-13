@@ -165,8 +165,9 @@ writes them.
 They are left to later phases.
 
 **Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): a
-platform package that lists its versions with their images, one a package
-([D-102](decisions.md#d-102)), where section 4.10 describes the one image there is today;
+platform package that lists its versions with their images, one a package, and a deletion
+the loaded packages cannot account for refused once ([D-102](decisions.md#d-102)), where
+section 4.10 describes the one image there is today;
 the local driver's pool as a setting ([D-103](decisions.md#d-103)); one make target a
 source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version for
 every distribution, three wheels published and the packages inside the core's

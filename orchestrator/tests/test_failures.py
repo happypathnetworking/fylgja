@@ -822,3 +822,71 @@ def test_any_base_exception_asks_the_deletion_and_is_raised_again(served: Served
     assert (destroy["operation"], create["operation"]) == ("destroy", "create")
     assert create["verdict"]["status"] == "failed"
     assert [f["rule"] for f in create["verdict"]["findings"]] == ["run.cancelled"]
+
+
+# The source's words.
+
+AGAIN = "Ask once more."
+
+
+def _cancelled(served: Served, source: FakeSource) -> dict[str, Any]:
+    served.driver.block = "apply"
+
+    def at(line: str) -> None:
+        if line == f"{T}: planned":
+            (create,) = served.other.list_runs(twin=T)
+            served.other.cancel_run(create["id"])
+
+    return rehearsed(served, Clock(), [], at=at, source=source)[0]
+
+
+def _no_room(served: Served, source: FakeSource) -> dict[str, Any]:
+    served.driver.refuse = Refusal("admission.capacity", NO_ROOM)
+    return rehearsed(served, Clock(), [], source=source)[0]
+
+
+def _source_fails(served: Served, source: FakeSource) -> dict[str, Any]:
+    return rehearsed(served, Clock(), [], source=source)[0]
+
+
+def _core_away(served: Served, source: FakeSource) -> dict[str, Any]:
+    host = served.address.rpartition(":")[0]
+    with socket.socket() as closed:  # a loopback port bound, then closed: nothing listens there
+        closed.bind((host, 0))
+        port = closed.getsockname()[1]
+    with Client(f"{host}:{port}", ALICE) as away:
+        return rehearsed(served, Clock(), [], core=away, source=source)[0]
+
+
+def _limit(served: Served, source: FakeSource) -> dict[str, Any]:
+    c = Clock()
+
+    def at(line: str) -> None:
+        if line == "step: stage 3, third-node":
+            c.t += 4000
+
+    return rehearsed(served, c, [], at=at, source=source)[0]
+
+
+FAILING: list[tuple[Stage, Read | Exception]] = [*FIVE[:2], (FIVE[2][0], RuntimeError("away")), *FIVE[3:]]
+
+
+@pytest.mark.parametrize(("arranged", "stages", "rule", "ending"), [
+    (_cancelled, FIVE, "rehearsal.run.cancelled", " Ask once more."),
+    (_no_room, FIVE, "rehearsal.capacity", ": ask once more when the runtime has room."),
+    (_source_fails, FAILING, "rehearsal.source.failed", ", then ask once more."),
+    (_core_away, FIVE, "rehearsal.core.unreachable", ", then ask once more."),
+    (_limit, FIVE, "rehearsal.limit.passed", ": ask once more, or raise the limit."),
+], ids=["run cancelled", "no room", "source fails", "core away", "limit"])
+def test_each_remedy_is_said_in_the_sources_words(
+    served: Served,
+    arranged: Callable[[Served, FakeSource], dict[str, Any]],
+    stages: Sequence[tuple[Stage, Read | Exception]],
+    rule: str,
+    ending: str,
+) -> None:
+    doc = arranged(served, FakeSource(CHANGE, stages, again=AGAIN))
+    cause = doc["findings"][0]
+    assert cause["rule"] == rule
+    assert cause["message"].endswith(ending)
+    assert "checks" not in cause["message"]

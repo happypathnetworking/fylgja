@@ -1,12 +1,15 @@
 """The development Prefect, its runner and what the task workers are given: `scripts/edge_dev.py`, loaded by its path
-as `make` runs it, and `infrahub/dev/compose.override.yml` read as YAML. Nothing here starts a process or opens a
-socket: the listeners are `ss` lines written here, and the tokens are the tests' own."""
+as `make` runs it, the targets that run it as `make -n` prints them, and `infrahub/dev/compose.override.yml` read as
+YAML. Nothing here opens a socket or starts a process but `make -n`, which prints a recipe and runs none of it: the
+listeners are `ss` lines written here, `os.execve` is replaced, and the tokens are the tests' own."""
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -74,6 +77,8 @@ def test_env_lines_add_only_what_is_absent() -> None:
         "FYLGJA_ORCHESTRATOR_SCOPE",
         "FYLGJA_ORCHESTRATOR_READER",
         "FYLGJA_ORCHESTRATOR_ROOT",
+        "FYLGJA_ORCHESTRATOR_NETBOX_READER",
+        "FYLGJA_ORCHESTRATOR_NETBOX_SCOPE",
     ]
     assert first["FYLGJA_ORCHESTRATOR_SCOPE"] == "tag:fylgja"
     assert first["FYLGJA_ORCHESTRATOR_READER"] == str(MAIN / "infrahub" / "seed" / "reader.yaml")
@@ -154,6 +159,349 @@ def test_the_runner_is_given_its_own_tokens_and_none_of_composes() -> None:
         with pytest.raises(edge_dev.Missing) as raised:
             edge_dev.runner_env(short, BIND, home=home)
         assert str(raised.value) == f"{missing} is not set: run make orchestrator-env and load local/.env"
+
+
+ORCHESTRATOR_NETBOX_TOKEN = "orchestrators-own-netbox-token"
+NETBOX_READERS_TOKEN = "the-netbox-readers-token"
+NETBOX_WRITE_TOKEN = "the-netbox-superusers-token"
+NETBOX_PASSWORD = "the-netbox-superusers-password"
+
+BOTH = {
+    "PATH": "/usr/bin",
+    "HOME": "/srv/example/home",
+    "PREFECT_API_URL": "http://192.0.2.9:4200/api",
+    "FYLGJA_API_ADDRESS": "127.0.0.1:7650",
+    "FYLGJA_API_TOKEN": DEVELOPER_API_TOKEN,
+    "FYLGJA_INFRAHUB_ADDRESS": "http://127.0.0.1:8000",
+    "FYLGJA_INFRAHUB_TOKEN": ADMIN_TOKEN,
+    "FYLGJA_INFRAHUB_WRITE_TOKEN": ADMIN_TOKEN,
+    "FYLGJA_NETBOX_ADDRESS": "http://127.0.0.1:8800",
+    "FYLGJA_NETBOX_CA": "/srv/example/netbox-ca.pem",
+    "FYLGJA_NETBOX_TOKEN": NETBOX_READERS_TOKEN,
+    "FYLGJA_NETBOX_WRITE_TOKEN": NETBOX_WRITE_TOKEN,
+    "FYLGJA_NETBOX_SUPERUSER_PASSWORD": NETBOX_PASSWORD,
+    "FYLGJA_NETBOX_SECRET_KEY": "the-netbox-secret-key",
+    "FYLGJA_NETBOX_API_TOKEN_PEPPER": "the-netbox-pepper",
+    "FYLGJA_ORCHESTRATOR_API_TOKEN": ORCHESTRATOR_API_TOKEN,
+    "FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN": ORCHESTRATOR_INFRAHUB_TOKEN,
+    "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN": ORCHESTRATOR_NETBOX_TOKEN,
+    "FYLGJA_ORCHESTRATOR_AUTH": AUTH,
+    "FYLGJA_ORCHESTRATOR_SCOPE": "tag:infrahubs",
+    "FYLGJA_ORCHESTRATOR_READER": "/srv/example/infrahub/reader.yaml",
+    "FYLGJA_ORCHESTRATOR_NETBOX_SCOPE": "tag:netboxs",
+    "FYLGJA_ORCHESTRATOR_NETBOX_READER": "/srv/example/netbox/reader.yaml",
+    "FYLGJA_ORCHESTRATOR_ROOT": "/srv/example/orchestrator",
+    "FYLGJA_ORCHESTRATOR_SOURCE": "infrahub",
+    "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD": "a-node-password",
+    "INFRAHUB_INITIAL_ADMIN_TOKEN": ADMIN_TOKEN,
+}
+"""`local/.env` loaded with both sources' lines, both write tokens and NetBox's Compose secrets, and the caller's own
+Prefect and source."""
+
+
+def test_env_lines_add_netboxs_reader_and_scope_where_absent() -> None:
+    held = {name: "held" for name in edge_dev.ENV_NAMES if not name.startswith("FYLGJA_ORCHESTRATOR_NETBOX_")}
+    assert edge_dev.ENV_NAMES[-2:] == ("FYLGJA_ORCHESTRATOR_NETBOX_READER", "FYLGJA_ORCHESTRATOR_NETBOX_SCOPE")
+    assert edge_dev.env_lines(held, MAIN, "tag:fylgja") == [
+        ("FYLGJA_ORCHESTRATOR_NETBOX_READER", str(MAIN / "netbox" / "seed" / "reader.yaml")),
+        ("FYLGJA_ORCHESTRATOR_NETBOX_SCOPE", "tag:fylgja"),
+    ]
+    reader_held = held | {"FYLGJA_ORCHESTRATOR_NETBOX_READER": "/srv/example/mine.yaml"}
+    assert edge_dev.env_lines(reader_held, MAIN, "tag:other") == [("FYLGJA_ORCHESTRATOR_NETBOX_SCOPE", "tag:fylgja")]
+
+
+def _by_path(name: str, path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """The module at `path`, loaded by its path under `name` for this test alone, as `make netbox-seed` runs it beside
+    its `box`, and never imported as a package."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_netbox_scope_is_the_netbox_seeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    seed = ROOT / "netbox" / "seed"
+    _by_path("box", seed / "box.py", monkeypatch)
+    assert edge_dev.NETBOX_SEED_SCOPE == _by_path("netbox_seed_under_test", seed / "seed.py", monkeypatch).SCOPE
+
+
+def test_the_netbox_runner_is_given_netboxs_own_and_nothing_of_infrahubs() -> None:
+    home = Path("/srv/example/local/prefect")
+    given = edge_dev.runner_env(BOTH, BIND, home=home, source="netbox")
+
+    netbox_token_is_the_orchestrators = same(given["FYLGJA_NETBOX_TOKEN"], ORCHESTRATOR_NETBOX_TOKEN)
+    core_token_is_the_orchestrators = same(given["FYLGJA_API_TOKEN"], ORCHESTRATOR_API_TOKEN)
+    assert netbox_token_is_the_orchestrators
+    assert core_token_is_the_orchestrators
+    assert given["FYLGJA_ORCHESTRATOR_SOURCE"] == "netbox"
+    assert given["FYLGJA_ORCHESTRATOR_READER"] == "/srv/example/netbox/reader.yaml"
+    assert given["FYLGJA_ORCHESTRATOR_SCOPE"] == "tag:netboxs"
+    assert given["FYLGJA_NETBOX_ADDRESS"] == "http://127.0.0.1:8800"
+    assert given["FYLGJA_NETBOX_CA"] == "/srv/example/netbox-ca.pem"
+    assert given["PREFECT_API_URL"] == "http://192.0.2.1:4200/api"
+    assert [name for name in given if name.startswith("FYLGJA_INFRAHUB_")] == []
+    assert [name for name in given if name.startswith("FYLGJA_ORCHESTRATOR_NETBOX_")] == []
+    assert sorted(given) == [
+        "DO_NOT_TRACK",
+        "FYLGJA_API_ADDRESS",
+        "FYLGJA_API_TOKEN",
+        "FYLGJA_NETBOX_ADDRESS",
+        "FYLGJA_NETBOX_CA",
+        "FYLGJA_NETBOX_TOKEN",
+        "FYLGJA_ORCHESTRATOR_READER",
+        "FYLGJA_ORCHESTRATOR_ROOT",
+        "FYLGJA_ORCHESTRATOR_SCOPE",
+        "FYLGJA_ORCHESTRATOR_SOURCE",
+        "HOME",
+        "PATH",
+        "PREFECT_API_AUTH_STRING",
+        "PREFECT_API_URL",
+        "PREFECT_HOME",
+        "PREFECT_SERVER_ANALYTICS_ENABLED",
+    ]
+    values = list(given.values())
+    for secret in (NETBOX_WRITE_TOKEN, NETBOX_PASSWORD, NETBOX_READERS_TOKEN, ADMIN_TOKEN, DEVELOPER_API_TOKEN,
+                   ORCHESTRATOR_INFRAHUB_TOKEN):
+        held = any(same(value, secret) for value in values)
+        assert not held
+
+
+def test_the_infrahub_runner_is_given_no_netbox_name_and_its_source_said() -> None:
+    environ = BOTH | {"FYLGJA_ORCHESTRATOR_SOURCE": "netbox"}
+    given = edge_dev.runner_env(environ, BIND, home=Path("/srv/example/local/prefect"))
+
+    infrahub_token_is_the_orchestrators = same(given["FYLGJA_INFRAHUB_TOKEN"], ORCHESTRATOR_INFRAHUB_TOKEN)
+    assert infrahub_token_is_the_orchestrators
+    assert given["FYLGJA_ORCHESTRATOR_SOURCE"] == "infrahub"
+    assert given["FYLGJA_ORCHESTRATOR_READER"] == "/srv/example/infrahub/reader.yaml"
+    assert given["FYLGJA_ORCHESTRATOR_SCOPE"] == "tag:infrahubs"
+    assert [name for name in given if "NETBOX" in name] == []
+    values = list(given.values())
+    for secret in (NETBOX_WRITE_TOKEN, NETBOX_PASSWORD, NETBOX_READERS_TOKEN, ORCHESTRATOR_NETBOX_TOKEN):
+        held = any(same(value, secret) for value in values)
+        assert not held
+    assert edge_dev.source_env(environ, "infrahub")["FYLGJA_ORCHESTRATOR_SOURCE"] == "infrahub"
+
+
+@pytest.mark.parametrize(
+    ("source", "missing", "remedy"),
+    [
+        ("netbox", "FYLGJA_NETBOX_ADDRESS", "run make netbox-up"),
+        ("netbox", "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN", "run make netbox-seed"),
+        ("netbox", "FYLGJA_ORCHESTRATOR_NETBOX_READER", "run make orchestrator-env SOURCE=netbox"),
+        ("netbox", "FYLGJA_ORCHESTRATOR_NETBOX_SCOPE", "run make orchestrator-env SOURCE=netbox"),
+        ("netbox", "FYLGJA_ORCHESTRATOR_API_TOKEN", "run make orchestrator-env SOURCE=netbox"),
+        ("infrahub", "FYLGJA_ORCHESTRATOR_API_TOKEN", "run make orchestrator-env"),
+        ("infrahub", "FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN", "run make orchestrator-env"),
+    ],
+)
+def test_a_missing_name_names_the_target_that_writes_it(source: str, missing: str, remedy: str) -> None:
+    short = {name: value for name, value in BOTH.items() if name != missing}
+    with pytest.raises(edge_dev.Missing) as raised:
+        edge_dev.source_env(short, source)
+    assert str(raised.value) == f"{missing} is not set: {remedy} and load local/.env"
+
+
+def test_netboxs_ca_may_be_unset_and_the_runners_auth_may_not() -> None:
+    without_ca = {name: value for name, value in BOTH.items() if name != "FYLGJA_NETBOX_CA"}
+    assert "FYLGJA_NETBOX_CA" not in edge_dev.source_env(without_ca, "netbox")
+    without_auth = {name: value for name, value in BOTH.items() if name != "FYLGJA_ORCHESTRATOR_AUTH"}
+    assert "FYLGJA_NETBOX_TOKEN" in edge_dev.source_env(without_auth, "netbox")
+    with pytest.raises(edge_dev.Missing) as raised:
+        edge_dev.runner_env(without_auth, BIND, home=Path("/srv/example/local/prefect"), source="netbox")
+    assert str(raised.value) == (
+        "FYLGJA_ORCHESTRATOR_AUTH is not set: run make orchestrator-env SOURCE=netbox and load local/.env"
+    )
+
+
+class Execed(Exception):
+    """`os.execve` replaced: what it was given, and never a return."""
+
+    def __init__(self, path: object, argv: list[str], environ: dict[str, str]) -> None:
+        super().__init__("execve")
+        self.path, self.argv, self.environ = path, argv, environ
+
+
+def _execve(path: object, argv: list[str], environ: dict[str, str]) -> None:
+    raise Execed(path, argv, environ)
+
+
+VERB = ["--local", "/srv/example/local", "--main", str(MAIN)]
+
+
+def test_a_netbox_name_missing_is_named_and_exit_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(edge_dev.os, "execve", _execve)
+    environ = {name: value for name, value in BOTH.items() if name != "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN"}
+    environ["PREFECT_BIND"] = BIND
+    assert edge_dev.main(["serve", "--source", "netbox", *VERB], environ=environ) == 2
+    said = capsys.readouterr()
+    assert said.out == ""
+    assert said.err.splitlines() == [
+        "edge_dev: FYLGJA_ORCHESTRATOR_NETBOX_TOKEN is not set: run make netbox-seed and load local/.env"
+    ]
+
+
+def test_serve_becomes_the_runner_under_the_sources_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(edge_dev.os, "execve", _execve)
+    environ = BOTH | {"PREFECT_BIND": BIND}
+    with pytest.raises(Execed) as execed:
+        edge_dev.main(["serve", "--source", "netbox", *VERB], environ=environ)
+    assert execed.value.path == edge_dev.RUNNER
+    assert execed.value.argv == [str(edge_dev.RUNNER), "serve"]
+    expected = edge_dev.runner_env(environ, BIND, home=Path("/srv/example/local/prefect"), source="netbox")
+    given_the_runners = same(execed.value.environ, expected)
+    assert given_the_runners
+    with pytest.raises(Execed) as execed:
+        edge_dev.main(["serve", *VERB], environ=environ)
+    assert execed.value.environ["FYLGJA_ORCHESTRATOR_SOURCE"] == "infrahub"
+
+
+def test_run_becomes_the_command_under_the_sources_environment_and_no_prefect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(edge_dev.os, "execve", _execve)
+    argv = ["run", "--source", "netbox", *VERB, "--", "stage", "mark", "--branch", "b", "--label", "l"]
+    with pytest.raises(Execed) as execed:
+        edge_dev.main(argv, environ=BOTH)
+    assert execed.value.path == edge_dev.RUNNER
+    assert execed.value.argv == [str(edge_dev.RUNNER), "stage", "mark", "--branch", "b", "--label", "l"]
+    given = execed.value.environ
+    given_the_sources = same(given, edge_dev.source_env(BOTH, "netbox"))
+    assert given_the_sources
+    assert [name for name in given if name.startswith("PREFECT_")] == []
+    assert "FYLGJA_ORCHESTRATOR_AUTH" not in given
+    assert given["FYLGJA_ORCHESTRATOR_SOURCE"] == "netbox"
+    netbox_token_is_the_orchestrators = same(given["FYLGJA_NETBOX_TOKEN"], ORCHESTRATOR_NETBOX_TOKEN)
+    assert netbox_token_is_the_orchestrators
+
+
+def test_run_needs_a_command_and_no_auth(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(edge_dev.os, "execve", _execve)
+    assert edge_dev.main(["run", "--source", "netbox", *VERB, "--"], environ=BOTH) == 2
+    capsys.readouterr()
+    without_auth = {name: value for name, value in BOTH.items() if name != "FYLGJA_ORCHESTRATOR_AUTH"}
+    with pytest.raises(Execed):
+        edge_dev.main(["run", "--source", "netbox", *VERB, "--", "stage", "list"], environ=without_auth)
+
+
+def test_api_prints_the_address_alone(capsys: pytest.CaptureFixture[str]) -> None:
+    assert edge_dev.main(["api", *VERB], environ={"PREFECT_BIND": BIND}) == 0
+    said = capsys.readouterr()
+    assert said.out == "http://192.0.2.1:4200/api\n"
+    assert said.err == ""
+
+
+@pytest.mark.parametrize("verb", ["env", "prefect-up", "prefect-down", "serve", "run", "api"])
+def test_every_verb_needs_local_and_main(verb: str, capsys: pytest.CaptureFixture[str]) -> None:
+    command = ["--", "stage", "list"] if verb == "run" else []
+    assert edge_dev.main([verb, "--main", str(MAIN), *command], environ={}) == 2
+    assert edge_dev.main([verb, "--local", "/srv/example/local", *command], environ={}) == 2
+    capsys.readouterr()
+
+
+@pytest.mark.parametrize("verb", ["run", "api"])
+def test_a_verb_that_needs_neither_local_nor_main_says_so(verb: str, capsys: pytest.CaptureFixture[str]) -> None:
+    assert edge_dev.main([verb, "--help"], environ={}) == 0
+    helped = " ".join(capsys.readouterr().out.split())
+    assert f"required of every verb, and not read by {verb}" in helped
+
+
+def test_env_without_local_env_names_both_targets_that_make_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local = tmp_path / "local"
+    local.mkdir()
+    assert edge_dev.main(["env", "--local", str(local), "--main", str(tmp_path)], environ={}) == 2
+    assert capsys.readouterr().err.splitlines() == [
+        f"edge_dev: {local / '.env'} is not there: run make infrahub-up or make netbox-up first"
+    ]
+    assert list(local.iterdir()) == []
+
+
+def _make_n(tmp_path: Path, *words: str) -> list[str]:
+    """The lines `make -n` prints of a target's recipe, run in this checkout over a `LOCAL` of the test's: printed, and
+    none of it run."""
+    argv = ["make", "-n", "--no-print-directory", "-C", str(ROOT), *words, f"MAIN={MAIN}", f"LOCAL={tmp_path}"]
+    made = subprocess.run(argv, capture_output=True, text=True, check=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
+    return made.stdout.splitlines()
+
+
+def test_orchestrator_env_under_netbox_runs_nothing_of_infrahubs(tmp_path: Path) -> None:
+    env_line = f"python3 -I scripts/edge_dev.py env --local {tmp_path} --main {MAIN}"
+    assert _make_n(tmp_path, "orchestrator-env", "SOURCE=netbox") == [env_line]
+    infrahubs = _make_n(tmp_path, "orchestrator-env")
+    assert env_line in infrahubs
+    assert any("infrahub/seed/account.py" in line for line in infrahubs)
+    assert any("infrahub-sdk[ctl]" in line for line in infrahubs)
+
+
+def test_orchestrator_serve_passes_the_source(tmp_path: Path) -> None:
+    serve = f"python3 -I scripts/edge_dev.py serve --source {{}} --local {tmp_path} --main {MAIN}"
+    assert _make_n(tmp_path, "orchestrator-serve", "SOURCE=netbox") == [serve.format("netbox")]
+    assert _make_n(tmp_path, "orchestrator-serve") == [serve.format("infrahub")]
+
+
+def test_orchestrator_env_refuses_a_source_it_does_not_know(tmp_path: Path) -> None:
+    """As `orchestrator-serve` refuses it, and never by taking Infrahub's path: `make -n` prints nothing of the
+    recipe."""
+    for source in ("netbx", "", "infrahub netbox"):
+        argv = ["make", "-n", "--no-print-directory", "-C", str(ROOT), "orchestrator-env", f"SOURCE={source}"]
+        argv += [f"MAIN={MAIN}", f"LOCAL={tmp_path}"]
+        env = {"PATH": "/usr/bin:/bin"}
+        made = subprocess.run(argv, capture_output=True, text=True, check=False, timeout=60, env=env)
+        assert made.returncode != 0, source
+        assert made.stdout == "", source
+        assert "SOURCE is infrahub or netbox" in made.stderr, source
+
+
+def test_netbox_hook_reads_prefects_api_then_installs_the_trigger(tmp_path: Path) -> None:
+    api = f"python3 -I scripts/edge_dev.py api --local {tmp_path} --main {MAIN}"
+    assert _make_n(tmp_path, "netbox-hook") == [
+        f'prefect=$({api}) && core/.venv/bin/python netbox/seed/hook.py --prefect "$prefect"'
+    ]
+
+
+def test_netbox_change_marks_through_the_examples_command_and_tags_only_by_1(tmp_path: Path) -> None:
+    mark = f"python3 -I scripts/edge_dev.py run --source netbox --local {tmp_path} --main {MAIN} -- stage mark"
+    change = "core/.venv/bin/python netbox/seed/change.py --branch {} {}-- " + mark
+    assert _make_n(tmp_path, "netbox-change") == [change.format("third-link", "")]
+    assert _make_n(tmp_path, "netbox-change", "NETBOX_BRANCH=other") == [change.format("other", "")]
+    assert _make_n(tmp_path, "netbox-change", "NETBOX_TAG=1") == [change.format("third-link", "--tag ")]
+    assert _make_n(tmp_path, "netbox-change", "NETBOX_TAG=yes") == [change.format("third-link", "")]
+
+
+def _assigned(path: Path) -> dict[str, Any]:
+    """The constants `path` assigns at its top, read by `ast` and never run: `netbox/seed/`'s scripts run beside their
+    `box` alone, and import nothing of the example's."""
+    held: dict[str, Any] = {}
+    for statement in ast.parse(path.read_text(), str(path)).body:
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            target = statement.targets[0]
+            if isinstance(target, ast.Name):
+                try:
+                    held[target.id] = ast.literal_eval(statement.value)
+                except ValueError:
+                    continue
+    return held
+
+
+def test_the_hooks_and_the_changes_values_are_the_examples() -> None:
+    """What `netbox/seed/hook.py` and `change.py` hold by value of the example's: the tag, the flow and the deployment
+    a tag starts, and the labels of the steps they mark, each a label `stage mark` takes."""
+    from fylgja_orchestrator.edge import flows
+    from fylgja_orchestrator.netbox import HEAD, LABEL, MAIN, TAG
+
+    hook = _assigned(ROOT / "netbox" / "seed" / "hook.py")
+    change = _assigned(ROOT / "netbox" / "seed" / "change.py")
+    assert hook["TAG"] == change["TAG"] == TAG
+    assert (hook["FLOW"], hook["DEPLOYMENT"]) == (flows.TWIN_REHEARSE, flows.DEPLOYMENT)
+    labels = [label for label, _, _ in change["STEPS"]]
+    assert labels == ["third-link", "n1-address"]
+    assert all(LABEL.fullmatch(label) and label not in (MAIN, HEAD) for label in labels)
 
 
 def test_the_override_gives_the_workers_the_address_and_the_auth_alone() -> None:

@@ -22,7 +22,9 @@ SRC = REHEARSAL.parents[1]
 NEVER = (
     "prefect",
     "fylgja_infrahub",
+    "fylgja_netbox",
     "fylgja_orchestrator.infrahub",
+    "fylgja_orchestrator.netbox",
     "fylgja_orchestrator.edge",
     "fylgja_core.server",
     "starlette",
@@ -142,6 +144,24 @@ def test_the_scan_sees_an_import_inside_a_function_and_resolves_a_relative_one()
     ] * 4
 
 
+# What no file of the library says, whatever the case: a source, the workflow engine, or a remedy only one source's
+# reader can take, which the source gives the library as its own sentence (D-097).
+UNSAID = ("infrahub", "netbox", "prefect", "proposed change", "the checks", "the check's", "fylgja-rehearse")
+
+
+def said(text: str) -> list[str]:
+    """Each of `UNSAID` that `text` holds, whatever the case."""
+    lowered = text.lower()
+    return [word for word in UNSAID if word in lowered]
+
+
+def test_the_rehearsal_names_no_source_no_engine_and_no_remedy_of_ones() -> None:
+    assert said("Nothing is wrong with the change: run The Checks again.") == ["the checks"], "the scan is blind"
+    files = _files()
+    assert REHEARSAL / "rehearsing.py" in files, "the scan is blind"
+    assert [f"{path.name}: {word}" for path in files for word in said(path.read_text())] == []
+
+
 INFRAHUB = SRC / "fylgja_orchestrator" / "infrahub"
 # What the change source may import beyond the standard library and itself: the reader, the core, httpx, and of the
 # library the seam and the report alone, never the example's edge (D-081, D-085).
@@ -162,3 +182,40 @@ def test_the_change_sources_source_names_the_reader_the_core_httpx_and_the_seam_
             if not any(name == m or name.startswith(f"{m}.") for m in (*SOURCE_MAY, own)):
                 outside.append(f"{path.name}: {name}")
     assert outside == []
+    # Nor anything of the NetBox reader or the NetBox source, whatever SOURCE_MAY comes to hold.
+    named = {name for path in files for name in imported(path.read_text(), own)}
+    assert {name for name in named if _of(name, "fylgja_netbox", "fylgja_orchestrator.netbox")} == set()
+
+
+def _of(name: str, *roots: str) -> bool:
+    """Whether `name` is one of `roots` or something in one."""
+    return any(name == root or name.startswith(f"{root}.") for root in roots)
+
+
+NETBOX = SRC / "fylgja_orchestrator" / "netbox"
+# What the NetBox change source may import beyond the standard library and itself: its reader, the core, and of the
+# library the seam and the report alone; httpx is its transport's alone (D-081, D-085, D-097).
+NETBOX_MAY = ("fylgja_netbox", "fylgja_core", f"{OWN}.source", f"{OWN}.report")
+
+
+def test_the_netbox_sources_source_names_its_reader_the_core_and_the_seam_and_httpx_in_its_transport_alone() -> None:
+    files = sorted(p for p in NETBOX.rglob("*.py") if "__pycache__" not in p.parts)
+    assert {NETBOX / "__init__.py", NETBOX / "source.py", NETBOX / "transport.py"} <= set(files), "the scan is blind"
+    own = "fylgja_orchestrator.netbox"
+    outside: list[str] = []
+    httpx: list[str] = []
+    for path in files:
+        module = _module(path)
+        package = module if path.name == "__init__.py" else module.rpartition(".")[0]
+        for name in sorted(imported(path.read_text(), package)):
+            if name.partition(".")[0] in sys.stdlib_module_names:
+                continue
+            if _of(name, "httpx"):
+                httpx.append(path.name)
+            elif not _of(name, *NETBOX_MAY, own):
+                outside.append(f"{path.name}: {name}")
+    assert outside == []
+    assert sorted(set(httpx)) == ["transport.py"]
+    named = {name for path in files for name in imported(path.read_text(), own)}
+    assert {name for name in named
+            if _of(name, "fylgja_infrahub", "fylgja_orchestrator.infrahub", "fylgja_orchestrator.edge")} == set()

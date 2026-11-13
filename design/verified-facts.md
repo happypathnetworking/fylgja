@@ -2,14 +2,15 @@
 
 A **verified fact** is something about a dependency that was checked against the running
 system, not taken from its documentation or from memory: how containerlab, clabernetes,
-kind, a network operating system, Docker, GitHub's runner, Infrahub, Prefect or the host
+kind, a network operating system, Docker, GitHub's runner, Infrahub, NetBox, Prefect or the host
 actually behaves.
 
 This file holds the facts the core relies on: its runtimes, the nodes it boots, the probes
 it runs on a twin and the hosts it runs on. It also holds the facts the Infrahub reader and
-the example orchestrator rely on, each read again here on the version named. The archived
-repository's facts about Infrahub 1.11.2, Prefect 3.8.8 and NetBox stay there, and nothing
-here relies on them.
+the example orchestrator rely on, each read again here on the version named, and those the
+NetBox reader and the example's NetBox change source rely on. The archived repository's
+facts about Infrahub 1.11.2, Prefect 3.8.8 and NetBox 4.7.4 stay there, and nothing here
+relies on them.
 
 - Each fact names the version it was verified against and the date.
 - **Re-verify a fact on any upgrade** of the system it names.
@@ -5572,6 +5573,119 @@ cluster's hosts are not named here. Each timing is one run. *(2026-11-12)*
   rendered, beyond the maintainer's sentence above; a check on a worker lacking its branch's commit, both checks again
   running on one that held it; a check concluding `failure` from a rehearsal.
 
+Read on 2026-11-13 on the development host and instance, for phase 9's plan 4's Task 5, phase 8's rehearsal through
+Infrahub's own check made once more on the local driver: `CONTRIBUTING.md`'s "Through Infrahub's check" followed in its
+order with the main checkout as the working directory, detached at `6abcef3`, `ref=phase-9-integration` given to the
+block; the core `fylgja-core-server` at that commit with `FYLGJA_DRIVER=containerlab`, `FYLGJA_STORE=local/store` and
+`FYLGJA_PACKAGES=psp:probes`, as the runbook's command gives them; the development Prefect as it ran, `make prefect-up`
+answering that it was up already; the runner by `make orchestrator-serve` with no `SOURCE`; the development NetBox up
+beside them and untouched. Read then: containerlab 0.81.0, Docker 29.8.1, the venv's Prefect 3.9.2 and httpx 0.28.1. The
+proposed change was the seed's (`PROPOSED_CHANGE=1`), and nothing was done to it after its creation. Requests sent by
+httpx from scripts of the reading's own, to Infrahub as the admin (`FYLGJA_INFRAHUB_WRITE_TOKEN`) and to Prefect with
+the basic auth, but where a make target, the block or a CLI is named. The validators were polled every 2 s, and the
+core's `twin list` and the host's `docker ps` every 5 s, by a poller of the reading's own started with the seed, its
+first record 0.4 s after the seed's start; every other reading of the run but the host's load at 15:35:50 was taken
+after `fylgja-twin` had concluded. Every output was saved but the database's `Started.` time below, the controller's
+reading of its container's log; times are UTC, Infrahub's, Prefect's, the task workers' logs' and the host's clock, read
+by Python, before and after each make target. Each timing is one run.
+*(2026-11-13)*
+
+- **The start, as the controller read it.** `make infrahub-up` on the volumes kept since phase 8, started at 15:02:25
+  and again at 15:03:12, ended each time on `dependency failed to start: container fylgja-core-infrahub-database-1 is
+  unhealthy` after the target's own second ask of Compose; the third, started at 15:03:31, said `Infrahub 1.11.11
+  answered at … 77 s after Compose's start returned`. The database's container started at 15:02:26; its log said
+  `Started.` at 15:03:17.918, 51.6 s on (a derivation). *(the controller, 2026-11-13)* The
+  server's container started at 15:03:33.854, 29 min 34.5 s before the proposed change's creation (a derivation).
+  *(2026-11-13)*
+- **The registration and the seeds.** `make infrahub-register REF=phase-9-integration` printed `moved fylgja from
+  phase-8-integration to phase-9-integration`, `… at ea4cbde, in-sync and online, 75 s on` and `each of the 2 task
+  workers holds the tree of fylgja at ea4cbde, 25 s on`, exiting 0 in 111.1 s by the host's clock (a derivation);
+  phase 8's printed `33 s on` and `8 s on`. The core and the runner ran `6abcef3`; `git diff --name-only` of
+  `phase-9-integration` and `6abcef3` over `infrahub` and `.infrahub.yml` printed no name. The task workers, started
+  at 15:03:34, each mounted the main checkout's `.git` read-only, and their Compose label named phase 8's worktree's
+  override file, which no longer exists. `make infrahub-seed`, no flag, exited 0 in 257.1 s, the branch deleted in
+  23 s and made in 33 s; with `PROPOSED_CHANGE=1`, in 215.8 s, deleted in 23 s and made in 38 s, last `made the
+  proposed change <its id>, Rehearse third-link, of third-link into main`, `is_draft` false; without the flag after
+  the run, in 216.4 s, `removed the open proposed change <its id> of third-link, an earlier seed's`, deleted in 35 s
+  and made in 31 s, `seed.json`'s `proposed_change` null, the branch's other proposed changes two, `closed`. Each time
+  is the host's clock's, a derivation; phase 8's local seeds took 107.9 s and 127.8 s. *(2026-11-13)*
+- **The runner and the block.** The runner's environment, read from `/proc`, held `FYLGJA_ORCHESTRATOR_SOURCE`
+  `infrahub`, the runner's own two tokens as `FYLGJA_API_TOKEN` and `FYLGJA_INFRAHUB_TOKEN`, and no `FYLGJA_NETBOX_*`
+  name. The block printed its six `ok` lines and exited 0 in 290.4 s by the host's clock (a derivation), R1 the
+  registration at `ea4cbde…` in-sync and online with its tree on each of the 2 task workers, R4 the last stage read
+  twice to `43f6e3f8b63f…`, R6 `driver containerlab, 1 host, free less pending 10 CPU and 18271 MiB, twins 0`. Phase
+  8's cluster dry run's two timed runs of the block, by the times its run directory saved, took 121.2 s and 130.9 s.
+  *(2026-11-13)*
+- **The seeded proposed change rehearsed through its own check once more, the edge opening the source its setting
+  names** *(Infrahub 1.11.11, Prefect 3.9.2, containerlab 0.81.0, the core at `6abcef3`, 2026-11-13)*. From the
+  proposed change's `created_at`, its edge's `node_metadata`, at `15:33:08.374310`, beside phase 8's of 2026-11-12
+  ("A seeded proposed change rehearsed through its own check, on the local driver"):
+  - The validators, by Infrahub's times (derivations): `Artifact Validator: device-config` made 101.1 s on, started
+    104.9 s on, `completed` `success` 143.9 s on (phase 8: 39.1, 42.1 and 65.5 s). `Check: fylgja-step` made 131.4 s
+    on and `Check: fylgja-twin` 131.7 s on, both started 132.1 s on (phase 8: made 44.3 s and started 44.8 s on).
+    The plan's bound, both checks' validators within 120 s of the creation, was passed by 11.4 s and 11.7 s; at
+    121.6 s by the host's clock the poller had read the artifact validator alone. The run was left alone and read
+    after. `fylgja-step` `completed` `success` 679.3 s on, 547.2 s after its start, of its `timeout` of 900 s (phase
+    8: 258.6 s on, 213.7 s); `fylgja-twin` `completed` `success` 777.8 s on, 645.7 s after its start, of its 4260 s
+    (phase 8: 352.0 s on, 307.2 s). Both checks ran on `task-worker-1`, whose log began `Execute user defined Check
+    'fylgja-twin'` at `15:35:44.121` and `… 'fylgja-step'` at `15:35:44.276`, and said `The check passed` at
+    `15:44:24.169` and `15:46:00.932`; `task-worker-2`'s log over the run held neither, and neither log a
+    `NodeNotFoundError`. `CoreCheck` by the validators answered five checks, each `success`: three of `device-config`,
+    of n1, n2 and n3, `Artifact rendered successfully`; `fylgja-step`'s message `Plan: 4 of 4 stages build` and `The
+    baseline is stage 1, branch-point; 3 stages follow it.`; and `fylgja-twin`'s `Rehearsal passed: 4 stages`, `Every
+    stage was built on the twin and verified.` and `The report is in this proposed change's thread.`, each of the two
+    then `Check succesfully completed`.
+  - The flows: one run of `twin-rehearse/main` begun after the creation, `Completed`, from `15:35:53.954`, 165.6 s
+    after the creation (a derivation; phase 8: 69.0 s), to `15:45:57.283`; one of `stage-plan/main`, `Completed`,
+    from `15:36:04.279` to `15:44:19.609`, 495.3 s (derivations; phase 8: 183.3 s), its document `planned`. The
+    rehearsal's log: the first stage's plan built at `15:40:02.588`, 248.6 s after the run's start (derivations; phase
+    8: 98.6 s), the second at `15:41:55.190`, the third at `15:43:57.389` and the fourth at `15:44:04.999`; each of the
+    three to build `fits`; the twin's create asked at `15:44:05.779`, `ready` at `15:45:14.610`, 68.8 s on
+    (derivations; phase 8: 62.0 s); stages 2 and 3
+    stepped and verified, `19 hold, 0 fail` each; stage 4 skipped, `head: unchanged`; the twin's destroy asked at
+    `15:45:50.608` and `gone` at `15:45:54.813`; `report: posted` at `15:45:57.202`.
+  - The document, `fylgja-twin-rehearse-<the run's id>`, of type `fylgja-document`: `status` `passed`, `took_s`
+    600.53 (phase 8: 277.18), `twin` `rh-cea01233-3607d7fc`, the four stages' `result`s `created`, `passed`, `passed`
+    and `skipped`, their `took_s` 79.5, 14.7, 10.5 and none (phase 8: 73.3, 14.7, 10.9 and none); no finding, so no
+    `stage.validation.absent`.
+  - Mid-run, at `15:44:07.728`, `fylgja-core twin list` printed one twin, `rh-cea01233-3607d7fc: generation 1,
+    observed 0, Ready False (twin.creating), phase planned`, and from `15:44:13.107` `docker ps` its three SR Linux
+    24.7.1 containers and its two hosts'. After the run `twin list` printed `no twins`, `twin show
+    rh-cea01233-3607d7fc` answered `404 twin.not_found`, and `docker ps` listed no container whose name or image holds
+    `srlinux`.
+  - The thread: one `CoreChangeThread`, labelled `Fylgja rehearsal`, made by `Fylgja-Orchestrator`, of two
+    `CoreThreadComment`s by that account, the summary at `15:45:56.098` and then the detail at `15:45:57.100`. The
+    summary, 812 bytes, is phase 8's of 720 bytes byte for byte, by `diff` of the two saved texts, but for its line of
+    when the stages were read, which plan 3 restated, and that line's run values:
+
+    ```text
+    proposed change "Rehearse third-link", branch third-link into main, scope `tag:fylgja`. The rehearsal read its stages at 2026-11-13T15:35:54Z; one taken earlier is as it was then, at the time its line in the detail gives; later edits are not rehearsed. Took 10m 1s.
+    ```
+
+    where phase 8's read `Stages were read at 2026-11-12T01:03:45Z; later edits are not rehearsed. Took 4m 37s.`. The
+    detail, 1,404 bytes as phase 8's, differs from it in the twin's, the run's and the proposed change's ids, each
+    stage's read time, and the core's run ids and two of their times, `1m 20s` and `10s` where phase 8's read `1m 13s`
+    and `11s`; every blueprint's and bundle's first 12 digits, the counts and the seven approximations are phase 8's.
+  - From the creation to `fylgja-twin`'s conclusion, 777.8 s by Infrahub's clock (a derivation; phase 8: 352.0 s).
+- **The host's containers by `docker stats`.** At 15:35:50, a moment after the 120 s, the host's load average read
+  6.14 on 10 CPUs; of Infrahub's containers `message-queue` read 176% of a CPU, `task-manager` 99%, `task-manager-db`
+  70% and the database 12%, and NetBox's five containers, up and idle beside them, 0% to 8%. At 15:48:14, after the
+  run, while the seed without the flag ran (15:47:31 to 15:51:08), `task-manager` read 101%, `task-manager-db` 107%
+  and `message-queue` 0.24%. `task-manager-db`'s database then held 801 MB, and its flow runs by state 9806
+  `COMPLETED`, 263 `CANCELLED`, 192 `SCHEDULED`, 23 `FAILED`, 19 `PENDING`, 10 `CRASHED` and 5 `RUNNING`.
+  `task-manager`'s log since the creation held no line naming `WARNING` or `ERROR`. *(2026-11-13)*
+- **Which steps were slower than phase 8's.** The steps that read Infrahub were, the validators, the registration,
+  the seeds, the block and the plans, and the twin's were not: its create to `ready`, its stages' `took_s` and its
+  destroy, 4.2 s from asked to `gone` against phase 8's 4.1 s (a derivation). The checks' validators were made at
+  `15:35:19.823` and `15:35:20.117`, before `task-worker-1` began either check at `15:35:44.121` and before the
+  rehearsal's flow run was created at `15:35:48.574`. *(2026-11-13)*
+- **Not read:** whether the containers' load made the run slow, or what else did; whether phase 9's code adds to it.
+  The task manager with none of the example's work in Infrahub; the task workers' Prefect; phase 8's block's time on
+  the local driver, beside the cluster dry run's two above; the run with NetBox stopped, and what a tag set on a
+  NetBox branch while this runner served would have done, since NetBox's trigger stood installed and its runner was
+  stopped; the override file the task workers were created with, which their label names and which no longer exists;
+  the proposed change and its thread in a browser; a check concluding `failure` from a rehearsal.
+
 ---
 
 ## Prefect 3.9.2
@@ -5713,8 +5827,9 @@ timing is one run. *(2026-11-11)*
 - **Its end.** `make prefect-down` ended the server, after which `ss -Hltn` showed no listener on port 4200 and `ps`
   no process of its session; run again, it said there was no pid file.
 - **Not read:** ~~a flow run started on this server, from a task worker or the host~~ (from a task worker, read on
-  2026-11-12 under "Infrahub 1.11.11"; from the host, not yet); the server's start on a new
-  home.
+  2026-11-12 under "Infrahub 1.11.11"; from the host, on a server of a reading's own and not this target's, read on
+  2026-11-12 below); the server's start on a new home (on a server of a reading's own, read on 2026-11-12 below;
+  `make prefect-up`'s, not yet).
 
 Read on 2026-11-11 on the development host, for phase 8's plan 5's Task 9: the module
 `orchestrator/tests/contract/test_prefect_contract.py`, run alone twice. Each run started `prefect server start --host
@@ -5781,7 +5896,2159 @@ clock. Each timing is one run. *(2026-11-12)*
   +3.222 s. The core listed the twin `rh-541de2eb-dca798e1` no more 1.97 s after `CANCELLED`.
 - **Not read:** why the reads took longer.
 
+Read on 2026-11-12 on the development host, for phase 9's plan 3: a venv outside the tree holding
+`prefect==3.9.2` by pip (with httpx 0.28.1, starlette 1.10.0, uvicorn 0.54.0, fastapi 0.150.0, pydantic 2.14.3
+and whenever 0.11.0) and a package `p3probe` of the reading's own installed editable, its one flow
+`twin-rehearse` `(branch: str)` logging its parameter and, where its runner's environment said so, taking a
+tag off the branch by NetBox's API at its start; a server started as
+`prefect server start --host <the bridge's gateway> --port <a free port> --no-ui` under a `PREFECT_HOME` of
+its own, with `DO_NOT_TRACK=1` and `PREFECT_SERVER_ANALYTICS_ENABLED=false`, its basic auth `local/.env`'s
+`FYLGJA_ORCHESTRATOR_AUTH` given by `PREFECT_SERVER_API_AUTH_STRING`, and the runner's by
+`PREFECT_API_AUTH_STRING` with `PREFECT_API_URL`; the flow served by `serve()` of its
+`to_deployment(name="main", entrypoint_type=EntrypointType.MODULE_PATH)`, with `pause_on_shutdown=False` and
+`print_starting_message=False`, as `python -m p3probe.serve`, from a directory holding no source; each process
+in a session of its own. Runs were started by NetBox's webhook (under "NetBox 4.7.5 with netbox-branching
+1.2.3" below) and once by a caller that used httpx alone. All of it was stopped by its pid and removed
+afterwards, the home with it, after which `ss -Hltn` listed the listeners of before and no process of the
+venv's was left. Each timing is one run unless a range is given. *(2026-11-12)*
+
+- **Its start, on the bridge's gateway.** The server answered `/api/health` 30.7 s after its start, under a
+  new home, in each of its two starts. `GET /api/deployments/name/twin-rehearse/main` answered `status` `READY`,
+  `entrypoint` `p3probe.flows.twin_rehearse` and `paused` false 4.1 s and 3.7 s after the runner's start;
+  `/api/version` answered 200 `"0.8.4"` with the basic auth and 401 with none. What NetBox's worker was
+  answered there is under "NetBox 4.7.5 with netbox-branching 1.2.3" below.
+- **NetBox's request makes a run.** `POST /api/deployments/<id>/create_flow_run` with
+  `Content-Type: application/json`, `Authorization: Basic <base64 of the auth>` and the body
+  `{"parameters": {"branch": "p9-read-c"}}`, as NetBox's worker sends it, was answered 201 (as NetBox's
+  background task kept it), and the run held `parameters` `{"branch": "p9-read-c"}`; its states were
+  Scheduled, Pending, Submitting, Running and Completed, and the flow logged the branch's name. From the host,
+  the same body answered 201 with the run `SCHEDULED`.
+- **A runner restarted keeps the deployment's id, and a new home gives another.** The runner given SIGTERM and
+  started again under the same home, the server left running, answered the same id, under each of the two
+  homes. The runner and the server stopped, the home removed and both started again answered another id.
+  `create_flow_run` of the first id, sent by NetBox's worker, was answered 404
+  `{"detail":"Deployment not found"}`, and neither deployment had a run more.
+- **Not read:** ~~the server restarted under the same home~~ (read on 2026-11-13 below); two creates from NetBox
+  arriving together; a create while the server starts; a home removed while the server runs.
+
+Read on 2026-11-13 on the development host, for phase 9's plan 4's Task 2, the dry run of the acceptance run on the
+local driver: `make prefect-up`, `make prefect-down` and `make orchestrator-serve` as the runbook gives them, run in
+the main checkout at `11f7397` under the `local/prefect/` the earlier runs had used, with `local/.env` loaded, and
+the readiness block's own reads; and a throwaway script over httpx 0.28.1 with the basic auth read from the
+environment in its process and never printed. Times are the scripts' UTC clock and Prefect's state timestamps; each
+timing is one run. Afterwards the runner and the server were stopped, by its pid and by `make prefect-down`, and
+nothing listened on port 4200. *(2026-11-13)*
+
+- **The server restarted under the same home keeps the deployments' ids.** Started by `make prefect-up` after an
+  earlier stop, in 15.5 s, it answered `twin-rehearse/main` by name with the id the installed webhook named, and
+  `stage-plan/main` with a `created` of 11:30 that day, before that start, each `NOT_READY` with no runner; the
+  task's report gave `twin-rehearse/main` `READY` 4.8 s after the runner's start, polled about once a second, which
+  no saved file holds. Stopped by `make prefect-down` in 0.9 s and started again in 13.6 s, the runner left
+  running, it answered the same ids again, each `READY` when first asked, 10 s after the start returned.
+  *(2026-11-13)*
+- **The runner outlives a stop of its server.** The runner serving when the server was stopped kept running: it
+  logged `The FlowRunCancellingObserver websocket failed with an exception. Switching to polling mode until it
+  reconnects.` and a
+  traceback ending `received 1012 (service restart)`, then, 107 s after the server's next start returned,
+  `FlowRunCancellingObserver reconnected to the events stream`; it took up the next run made, which completed.
+  *(2026-11-13)*
+- **A run is deleted by `DELETE /api/flow_runs/<id>`.** A run of `twin-rehearse/main` made by `create_flow_run` with
+  the state `SCHEDULED` a day ahead was listed by `POST /api/flow_runs/filter` of the body `{"flow_runs": {"state":
+  {"type": {"any_": ["SCHEDULED", "PENDING", "RUNNING", "PAUSED", "CANCELLING"]}}}}`, alone. Its `DELETE` answered
+  204 in 0.065 s; then its `GET` answered 404 `{"detail":"Flow run not found"}`, a second `DELETE` 404, and the same
+  filter listed no run. A run in another state was not deleted. *(2026-11-13)*
+- **A run stayed `SCHEDULED` some seconds.** The two runs NetBox's tag made read `Pending` 12.25 s and 2.92 s after
+  their `Scheduled` state, and `Running` 2.32 s and 3.09 s after `Pending`, each a derivation from Prefect's state
+  timestamps; why the first waited longer was not read. *(2026-11-13)*
+- **A runner of the other source serves the same names.** `make orchestrator-serve` with no `SOURCE`, Infrahub
+  stopped, ran `scripts/edge_dev.py serve --source infrahub`, as its log saved the command, and printed the same
+  `serving stage-plan/main, twin-rehearse/main` line, under the same `PREFECT_HOME`; the task's report gave its
+  process's environment `FYLGJA_ORCHESTRATOR_SOURCE=infrahub`, which no saved file holds. The readiness block's N2
+  refused it, `the runner, pid <pid>, serves
+  the source infrahub, not netbox: stop it, make orchestrator-serve SOURCE=netbox`, exit 1, a refusal that would
+  name `infrahub` for a runner with no such name set too. No run was made while it served. *(2026-11-13)*
+- **Not read:** the delete of a run `PENDING`, `RUNNING` or `CANCELLING`; a runner that started after a run was
+  made `SCHEDULED` taking it up.
+
 ---
+
+## NetBox 4.7.5 with netbox-branching 1.2.3
+
+Read on the development host on 2026-11-12, before phase 9 was settled, by two throwaway
+scripts over httpx 0.28.1: netbox-docker 5.1.1 (`docker.io/netboxcommunity/netbox:v4.7.5-5.1.1`,
+`postgres:18-alpine`, `valkey/valkey:9.1-alpine` twice) as the Compose project `fylgja-netbox`
+under `local/netbox/`, on loopback port 8800, with a one-layer image adding
+`netboxlabs-netbox-branching==1.2.3` by `uv pip install`, and `configuration/plugins.py`
+carrying `PLUGINS`, `DATABASES` in the plugin's `DynamicSchemaDict`, `DATABASE_ROUTERS` and an
+`EVENTS_PIPELINE` of `netbox_branching.events.add_branch_context` then
+`extras.events.process_event_queue`. The volumes were the archived repository's spike's of
+2026-10-29, made by NetBox 4.7.4 with the plugin at 1.2.2 and holding its fixture: three
+devices `n1` to `n3` tagged `fylgja`, sixteen interfaces, their cables, and one configuration
+template assigned to their platform. The archived repository's facts about 4.7.4 bind nothing
+here; what phase 9 leans on of them is below, read again. The install files were not in this
+repository when this run was read; the runs below read them, written under
+`local/netbox/reading/` first, then tracked under `netbox/dev/` and run by `make netbox-up`.
+
+**Running it**
+
+- **Started on 4.7.4's volumes, the stack was healthy within four minutes.** Compose marked
+  `netbox` unhealthy after its start period and did not start `netbox-worker`, whose
+  dependency had failed; a second `up -d` once `netbox` was healthy started it. The archived
+  repository read a first start on empty volumes at about eleven minutes on 4.7.4, which this
+  run did not read again; the runs below read one on 4.7.5 ("A first start on new volumes"
+  and "Through the make targets"). *(2026-11-12)*
+- **`/api/status/`** names `netbox-version 4.7.5`, `django-version 6.1.3`,
+  `python-version 3.14.4` and `plugins {netbox_branching: 1.2.3}`, beside `hostname`,
+  `installed_apps`, `netbox-full-version` and `rq-workers-running`. It names no page-size
+  limit. *(2026-11-12)*
+- **The token the spike provisioned on 4.7.4 was still taken**, presented as
+  `Authorization: Bearer nbt_<key>.<token>`. This run did not read provisioning one; the run
+  below read it ("Tokens"). *(2026-11-12)*
+
+**A branch**
+
+- **`POST /api/plugins/branching/branches/ {name}`** answers 201 with `status {value: new}`,
+  and the branch read `ready` 11.1 s after the request. Its representation's members are
+  `comments`, `created`, `custom_fields`, `description`, `display`, `id`, `last_sync`,
+  `last_updated`, `merged_by`, `merged_time`, `name`, `owner`, `schema_id`, `status`, `tags`
+  and `url`; `schema_id` is eight characters, and `X-NetBox-Branch: <schema_id>` selects the
+  branch on a request. `PATCH` wrote its `description`, its `comments` and its `tags`.
+  It has no `is_stale` member. `DELETE` of a `ready` branch answered 204. *(2026-11-12)*
+- **A branch carries NetBox's own features**: `/api/core/object-types/?app_label=netbox_branching`
+  lists for `branch` the features `bookmarks`, `change_logging`, `cloning`, `custom_fields`,
+  `custom_links`, `custom_validation`, `event_rules`, `export_templates`, `jobs`,
+  `journaling`, `notifications` and `tags`. *(2026-11-12)*
+- **Its states and its permissions, read in the installed source and not run**: the statuses
+  `new`, `provisioning`, `ready`, `syncing`, `migrating`, `merging`, `reverting`, `merged`,
+  `archived`, `pending-migrations` and `failed`; the permissions `sync`, `merge`, `migrate`,
+  `revert` and `archive`; and the plugin settings `sync_validators`, `merge_validators`,
+  `migrate_validators`, `revert_validators` and `archive_validators`, each a list of dotted
+  paths, empty by default, whose functions run before the action and may refuse it.
+  *(2026-11-12)*
+- **A branch has a changelog of its own.**
+  `GET /api/core/object-changes/?limit=1` answered `main`'s count and its latest id (90 rows,
+  id 99), and under the header a new branch's, none. An edit made under the header added row
+  100 to the branch's and none to `main`'s. A journal entry written with no header on the
+  branch object then added row 101 to `main`'s and none to the branch's. **A render added no
+  row**: in the first script the branch's changelog held the rows of its six edits alone, ids
+  67 to 72 with none between, and eleven requests to render under the header and four with
+  none were made among those edits. `/api/plugins/branching/changes/?branch_id=`
+  listed one row an object changed on the branch, however many times it was edited (four rows
+  beside six in the changelog). *(2026-11-12)*
+- **A branch behind `main` was not read** in this run, nor how the API would tell one; a later
+  run read what one reads ("What a branch reads of an edit of `main`"). A branch's page,
+  signed in, links the tabs `changelog`,
+  `changes-ahead`, `changes-behind`, `diff`, `edit`, `jobs`, `journal`, `merge` and `sync`.
+  *(2026-11-12)*
+
+**A device's configuration, rendered**
+
+- **`POST /api/dcim/devices/<id>/render-config/` renders the branch the header names.** A branch
+  with no change rendered each of the three devices to the bytes `main` rendered. An interface's
+  description edited on the branch moved no device's bytes, the template reading none of it;
+  `n2 ethernet-1/1` set `enabled: false` on the branch moved `n2`'s bytes alone, and `main`'s
+  stayed as they were. Each device was rendered several times with nothing changed between,
+  and every render of one state gave the same bytes. *(2026-11-12)*
+- **Three devices render in 1.4 to 2.1 s**, a request each, one device in about 0.5 s; each
+  configuration here is about 1,350 bytes. `Accept: text/plain` answers the text;
+  `Accept: application/json` answers `{configtemplate, content}`, `configtemplate` naming the
+  template by `id`, `name` and `url`. *(2026-11-12)*
+- **A device with no template is 400**, `{'error': 'No config template found for this device.'}`
+  with the content type `text/plain`; a device made on a branch, rendered with no header, is
+  404. **A template that fails is 500** with the error as text: a syntax error
+  `TemplateSyntaxError: Expected an expression, got 'end of statement block'` with its line,
+  and an attribute the device has none of
+  `UndefinedError: 'dcim.models.devices.Device object' has no attribute 'nosuch'`. A template
+  edited under the header is the branch's alone, and restored there the branch rendered its
+  earlier bytes. *(2026-11-12)*
+
+**Lists and their totals**
+
+- **A REST list answers `count`, `next`, `previous` and `results`**: three devices asked two a
+  page answered `count 3`, two results and a `next` with `offset=2`; the
+  sixteen interfaces of the three devices came on one page with `count 16` and no `next`.
+  **No total was found in GraphQL**: `device_list` takes `filters` and `pagination`, and no
+  field of `Query` has a name holding `count` or `total` but the circuits' `provider_account`.
+  An answer's shape was not read. *(2026-11-12)*
+- **What the mapping would read is on REST.** An interface's representation holds `name`,
+  `type {value}`, `enabled`, `mgmt_only`, `cable {id, label}`, `cable_end`, `link_peers` (each
+  with its `device {name}` and its `name`), `link_peers_type`, `connected_endpoints` and
+  `connected_endpoints_type`. A device's holds `platform {id, name, slug}`, with no
+  manufacturer; the platform's own representation holds `manufacturer {name}`. A device whose
+  template is its platform's reads `config_template: null`. *(2026-11-12)*
+- **A configuration context made on a branch is the branch's alone**, 1 by its name under the
+  header and 0 on `main`. One with no assignment and `is_active: true` is in every device's
+  `config_context`; set `is_active: false` it is in none, and is still listed by its name with
+  its `data`. *(2026-11-12)*
+
+**Journal entries**
+
+- **A journal entry attaches to a branch**: `POST /api/extras/journal-entries/` with
+  `assigned_object_type: netbox_branching.branch` answers 201 with `id`, `kind`, `created`,
+  `created_by` and `display_url`. Its kinds are `info`, `success`, `warning` and `danger`.
+  `PATCH` changed its `kind` and its `comments`. Comments of 4,092, of 65,536 and of
+  1,048,576 bytes were each kept whole. *(2026-11-12)*
+- **Written with no header, it is read with none**: by its id, 200 with no header and 404
+  under the branch's. A
+  branch's entries are listed by `assigned_object_type` and `assigned_object_id`, and with
+  `ordering=created` four came in the order written, their ids rising with it; `kind=` filters
+  them. The branch's `journal` tab, signed in, showed an entry's text. *(2026-11-12)*
+
+**Event rules and webhooks**
+
+- **An event rule may name the plugin's events.** `OPTIONS /api/extras/event-rules/` lists
+  among `event_types` the choices `object_created`, `object_updated`, `object_deleted`,
+  `job_started`, `job_completed`, `job_failed`, `job_errored`, `branch_provisioned`,
+  `branch_deprovisioned`, `branch_synced` and `branch_merged`, and a rule naming
+  `branch_reverted` too was taken; `action_type` is `webhook`, `script` or `notification`. The
+  archived repository read no `branch_*` choice on 4.7.4. *(2026-11-12)*
+- **What a rule on `dcim.interface`, `dcim.device`, `netbox_branching.branch` and
+  `extras.journalentry` sent**, to a listener on the Compose network's gateway, each within
+  the script's waits of 6 to 15 s. A branch made: `created`, then `branch_provisioned`. An
+  edit under the header: the object's own event, its `context` holding
+  `active_branch {id, name, schema_id}`. A journal entry written, changed or deleted: its own
+  event, with `active_branch` null, and no event of the branch's. A branch's `PATCH`:
+  `updated`. A sync: `branch_synced` and no `updated`. An object event's members are
+  `context`, `data`, `event`, `object_change_ids`, `object_type`, `request`, `snapshots` and
+  `timestamp`; a `branch_*` event's are `data`, `event`, `object_type` and `timestamp`.
+  *(2026-11-12)*
+- **A rule's conditions hold it to a tag.** A rule on `netbox_branching.branch` for
+  `object_updated` with `{"and": [{"attr": "tags.slug", "value": <slug>, "op": "contains"}]}`
+  sent nothing when the branch was made, provisioned or edited untagged; one request when the
+  tag was set; one for an edit while tagged; none for a journal entry on the tagged branch;
+  none when the tag was removed; one when it was set again; and none for a sync while tagged.
+  A tag may be limited to branches by `object_types`. *(2026-11-12)*
+- **A webhook sends the body and the headers it is given.** With
+  `http_content_type: application/json`, a `body_template` of
+  `{"parameters": {"branch": "{{ data.name }}"}}` and `additional_headers` of two lines, the
+  listener received that JSON with the branch's name, both headers, the second rendered from
+  the same template context, and `X-Hook-Signature` where a `secret` was set; the path of
+  `payload_url` was kept. **The webhook read back over the API shows its headers' text**, to
+  the superuser's token that wrote it; its `secret` member read back not empty, and whether
+  that is the value was not looked at. *(2026-11-12)*
+- **A webhook its receiver refuses is not sent again**, as far as was watched: answered 503,
+  one request arrived in 45 s. *(2026-11-12)*
+- **A webhook and an event rule written with no header fired for edits made under a
+  branch's header**, as the rows above show. One written under a header was not read here. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, before phase 9's install files were tracked:
+netbox-docker 5.1.1's release, with the three files phase 9's first plan names for
+`netbox/dev/` written under `local/netbox/reading/`, as the Compose project
+`fylgja-core-netbox` (`-p fylgja-core-netbox --project-directory <release> --env-file
+<reading>/.env -f <release>/docker-compose.yml -f <reading>/dev/compose.override.yml`) on
+loopback port 8800, under Docker 29.8.1 and Docker Compose v5.6.0, started on new volumes and
+run by hand. Every request to NetBox was curl's; the three secrets were
+`secrets.token_urlsafe(48)`, 64 characters each, never printed. Scratch objects were named
+`p9-read-*`, and the instance and its volumes were removed after. Each timing is one run.
+*(2026-11-12)*
+
+**The release and its file**
+
+- **The archive answers Python's own User-Agent.** `urllib`, sending `Python-urllib/3.14`,
+  fetched GitHub's archive of netbox-docker's tag `5.1.1` (`archive/refs/tags/5.1.1.tar.gz`)
+  with 200, by a redirect to `codeload.github.com`: `application/x-gzip`, 39,636 bytes, its 64
+  entries under the one directory `netbox-docker-5.1.1/`. *(2026-11-12)*
+- **Its `docker-compose.yml` interpolates `VERSION` alone**, in `netbox`'s image
+  (`${VERSION-v4.7-5.1.1}`), which the worker takes by a YAML anchor; every other `$` is `$$`,
+  left to the containers' shells. `config --variables` lists `VERSION` for the file alone, and
+  for the file with the override the override's seven names, each required, and not `VERSION`.
+  `netbox`'s health check is `/opt/netbox/health.sh`, a `curl -sf` of `/login/` on 8080, with
+  `start_period: 90s`, `interval: 15s`, `timeout: 3s` and no `retries`; it mounts
+  `./configuration:/etc/netbox/config:z,ro` and three named volumes. The worker `depends_on`
+  `netbox` `service_healthy` and has a health check of its own, `rqworker` among the
+  processes. Postgres and the two Valkeys publish no port. *(2026-11-12)*
+- **The names its `env/` files set**, their values not read: `netbox.env` 33, among them
+  `SECRET_KEY`, `API_TOKEN_PEPPER_1`, `DB_PASSWORD`, `REDIS_PASSWORD`,
+  `REDIS_CACHE_PASSWORD` and `SKIP_SUPERUSER`, and no `SUPERUSER_*`; `postgres.env`
+  `POSTGRES_DB`, `POSTGRES_PASSWORD` and `POSTGRES_USER`; `redis.env` and `redis-cache.env`
+  `REDIS_PASSWORD` each. *(2026-11-12)*
+- **How the configuration is loaded, read in `docker/` and not run apart.**
+  `configuration.docker.py` loads `/etc/netbox/config/configuration.py` first, then every other
+  `*.py` there in name order, each put first in the list a setting is looked up in, so the last
+  loaded answers first. The release's `configuration/` holds `configuration.py`, `extra.py`,
+  `logging.py` and a `plugins.py` of comments alone. `super_user.py` makes the superuser from
+  `SUPERUSER_NAME`, `SUPERUSER_EMAIL` and `SUPERUSER_PASSWORD`, each read first from
+  `/run/secrets/`, only where no user of that name exists and a password is given, and a token
+  only where a pepper is set and both `SUPERUSER_API_KEY` and `SUPERUSER_API_TOKEN` are.
+  `docker-entrypoint.sh` runs it unless `SKIP_SUPERUSER` is `true`, after migrating where
+  `migrate --check` fails. *(2026-11-12)*
+- **`docker compose config --format json` with the override** names the image
+  `fylgja-core-netbox:4.7.5-1.2.3` and `pull_policy: never` for `netbox` and `netbox-worker`, a
+  build for `netbox` alone with its context the override's directory and its three arguments;
+  both mount the release's `configuration` and, over it, the override's `plugins.py`, each
+  read-only; `netbox` alone publishes `127.0.0.1:8800` to 8080; both hold
+  `host.docker.internal=host-gateway`. The rendered file folds `env_file` into `environment`,
+  and there `SECRET_KEY` and `API_TOKEN_PEPPER_1` of both services, and `SKIP_SUPERUSER`,
+  `SUPERUSER_NAME`, `SUPERUSER_EMAIL` and `SUPERUSER_PASSWORD` of `netbox`, each equal the
+  override's value. The worker holds no `SUPERUSER_*`, and its `SKIP_SUPERUSER` is the env
+  file's `true`. The volumes are the file's six, named `fylgja-core-netbox_<name>`.
+  *(2026-11-12)*
+
+**A first start on new volumes**
+
+- **The build took 4.7 s and added one layer**, 795 kB, `uv pip install` of
+  `netboxlabs-netbox-branching==1.2.3` into `/opt/netbox/venv`. The base image
+  `netboxcommunity/netbox:v4.7.5-5.1.1` resolved by its digest and came from the build cache,
+  its layers on the host from the earlier spike: no pull was read. *(2026-11-12)*
+- **The first `up -d` exited 1 after 137.6 s**, its last lines
+  `Container fylgja-core-netbox-netbox-1 Error dependency netbox failed to start` and
+  `dependency failed to start: container fylgja-core-netbox-netbox-1 is unhealthy`, the worker
+  left `created`. Sampled every 15 s by `ps --format json`, whose rows' `Service`, `State`,
+  `Health`, `ExitCode` and `Status` were read among 21 members, `netbox` read `running` and
+  `starting`, then `unhealthy` from 122 s; Postgres and the two Valkeys read `healthy` from
+  the sample at 15 s, the first to list a container. *(2026-11-12)*
+- **`/login/` first answered 200 748.7 s after `up -d`, in the sample that first read `netbox`
+  `healthy`**; the sample before, at 733.5 s, had its connection reset and read `unhealthy`,
+  as every sample had since the first, whose request failed with `URLError`. In NetBox's log,
+  each line's timestamp less the container's `StartedAt`, derivations: `Applying database
+  migrations` at 34 s, 349 lines holding `Applying` that one among them; the step after the
+  migrations, `Running trace_paths`, at 652 s; at 720 s the superuser's lines, `No API token was
+  created for the superuser as SUPERUSER_API_TOKEN and SUPERUSER_API_KEY are not set` and
+  `Superuser Username: admin, E-Mail: admin@fylgja.example`; and at 721 s
+  `Initialisation is done.` and granian's `Listening at: http://:::8080`. *(2026-11-12)*
+- **The override's `plugins.py` was the one loaded.** Its SHA-256 in the container was the
+  host file's. NetBox logged `loaded config '/etc/netbox/config/plugins.py'` ten times, once a
+  Python process (each `manage.py` the entrypoint runs, then granian's), each after
+  `configuration.py`, `extra.py` and `logging.py`, and the migrations listed `netbox_branching`
+  among the apps. Each process also logged `FutureWarning: LOGIN_REQUIRED is deprecated and will
+  be removed in NetBox v5.0`, the release's `configuration.py` setting `LOGIN_REQUIRED`.
+  *(2026-11-12)*
+- **The second `up -d` exited 0 in 1.5 s**, `netbox` `Healthy` and the worker `Started`, its
+  health `healthy` a minute later. **`GET /api/status/` with no token is 403**,
+  `{"detail": "Authentication credentials were not provided."}`. *(2026-11-12)*
+- **Its memory**, by `docker stats --no-stream` a minute after the worker's start, idle:
+  `netbox` 1.036 GiB, the worker 261.1 MiB, Postgres 59.87 MiB, the two Valkeys 5.355 and
+  5.18 MiB; 1.36 GiB in all, a derivation, their sum. *(2026-11-12)*
+
+**Tokens**
+
+- **Provisioning answers the token once.** `POST /api/users/tokens/provision/` with
+  `{username: admin, password}` and no token answered 201 in 1.68 s with `allowed_ips`,
+  `created`, `description`, `display`, `display_url`, `enabled`, `expires`, `id`, `key`,
+  `last_used`, `token`, `url`, `user`, `version` and `write_enabled`: `key` 12 letters and
+  digits, `token` 40, `version 2`, `write_enabled true`, `enabled true`, `expires null` and
+  `allowed_ips []`. Presented as `Authorization: Bearer nbt_<key>.<token>` it was taken, with
+  the 64-character secret key and pepper. *(2026-11-12)*
+- **`/api/status/` with the token** names `netbox-version 4.7.5`, `netbox-full-version
+  4.7.5-Docker-5.1.1`, `plugins {netbox_branching: 1.2.3}` and `rq-workers-running 1`. After
+  `stop netbox-worker`, 6 s and exit 0, it read 0 twice, 30 s apart; after `start
+  netbox-worker`, 0 three times about 5.5 s apart, then 1. *(2026-11-12)*
+- **The refusals.** Provisioning with a wrong password, and with a user that does not exist,
+  is 403 `{"detail": "Invalid username/password"}`. A token of the v2 shape that NetBox never
+  made is 403 `{"detail": "Invalid v2 token"}`, on `/api/status/` and on `/api/dcim/devices/`.
+  *(2026-11-12)*
+- **An account that is no superuser.** `POST /api/users/users/` with `{username}` alone is 400
+  `{"password": ["This field is required."]}`; with a password it is 201, and its
+  representation's members are `date_joined`, `display`, `display_url`, `email`, `first_name`,
+  `groups`, `id`, `is_active`, `last_login`, `last_name`, `permissions`, `url` and `username`,
+  no password and no `is_superuser` or `is_staff`. The superuser's `POST /api/users/tokens/`
+  with `{user: <id>}` answered 201 with the token, `key` 12 and `token` 40, `version 2`,
+  `write_enabled true`, its members provisioning's and `pepper_id`. Read again by its id, its
+  `token` is `null`, and `GET /api/users/tokens/?key=<key>` lists one row naming the account,
+  `token` `null`. The account's own provisioning with its password answered 201 with a token
+  too. With no permission granted, each of its tokens read `/api/status/`, 200, and listed the
+  account's own tokens, `count 2`. *(2026-11-12)*
+
+**Permissions**
+
+On scratch objects the superuser made, each answered 201: a manufacturer, a platform with a
+one-line configuration template reading the device's platform, interfaces, cables and their
+peers, a device type, a site, a role, a tag, a device tagged with two interfaces cabled to
+each other, an inactive configuration context, a branch, `ready` 7.2 s after its request, and
+a journal entry on it. Permissions were granted by `POST /api/users/permissions/` with `name`,
+`object_types`, `actions` and `users`, one at a time, each answered 201, every request below
+sent after each. *(2026-11-12)*
+
+- **A list the account may not view is 403**,
+  `{"detail": "You do not have permission to perform this action."}`, and not an empty page.
+  Each of these passed at the grant of `view` on its one type, and not before:
+  `dcim/devices/?tag=` on `dcim.device`, `dcim/interfaces/?device_id=` on `dcim.interface`,
+  `dcim/cables/?device_id=` on `dcim.cable`, `dcim/platforms/` on `dcim.platform`,
+  `dcim/manufacturers/` on `dcim.manufacturer`, `extras/tags/` on `extras.tag`,
+  `extras/config-contexts/?name=` on `extras.configcontext`, `core/object-changes/?limit=1` on
+  `core.objectchange`, and `plugins/branching/branches/?name=` on `netbox_branching.branch`.
+  *(2026-11-12)*
+- **`X-NetBox-Branch` asks no grant of its own.** Each list above answered the same status
+  under the header as with none at every grant, `view` on `netbox_branching.branch` given
+  last; before it, `core/object-changes/?limit=1` answered under the header the branch's
+  `count 0` beside `main`'s 19. *(2026-11-12)*
+- **A render needs `view` and `render_config` on `dcim.device`, and a token that may write.**
+  `POST dcim/devices/<id>/render-config/`, under the header and with none, is 404
+  `{"detail": "No Device matches the given query."}` with neither action, and with
+  `render_config` alone; with both, given as two permissions or as one, it is 200. An account
+  holding those two and nothing else rendered the superuser's bytes: the template's reads
+  asked nothing. A token with `write_enabled false` is 403
+  `You do not have permission to perform this action.` on a render, and 200 on the device
+  list. *(2026-11-12)*
+- **The example's writes**, by an account of their own. A journal entry on the branch,
+  `POST extras/journal-entries/` with no header, needs `add` on `extras.journalentry` alone,
+  answered 201 with its representation. The branch's entries, listed by
+  `?assigned_object_type=netbox_branching.branch&assigned_object_id=<id>&ordering=created`,
+  need `view` on `extras.journalentry`. A `PATCH` of the branch by its id needs `change` on
+  `netbox_branching.branch`: with that alone a `PATCH` of `description`, of `tags []`, and of
+  `tags` naming a tag by its id (`[1]` or `[{id: 1}]`) is 200, and one naming it by `slug` or
+  `name` is 400 until `view` on `extras.tag` is granted, its `tags` saying
+  `Related object not found using the provided attributes: {'slug': 'p9-read-tag'}`. With
+  `change` alone, the branch's `GET` by id and its list by `?name=` are 403. Each request
+  refused before its grant was 403 `You do not have permission to perform this action.`, as
+  was the `PATCH` with a token of `write_enabled false`; the account holding the reader's
+  grants was refused the `PATCH` and the journal entry, 403 each. *(2026-11-12)*
+
+**Stopped, started, removed**
+
+- **`docker compose stop`**, under Compose's own timeout, took 10.6 s and exited 0; every
+  container exited 0, the worker first, `netbox` 4.5 s after it, then the two Valkeys and
+  Postgres within 0.9 s. *(2026-11-12)*
+- **On the kept volumes `up -d` exited 0 in 59.2 s**; sampled every 5 s, `netbox` read
+  `healthy` and `/login/` answered 200 in the same sample, at 52.5 s. No migration ran, and
+  NetBox logged `User with name "admin" already exists.`. The tokens of the first start were
+  taken, and `rq-workers-running` read 1. *(2026-11-12)*
+- **`docker compose down -v`** took 10 s, exit 0, and left no container, network or volume
+  labelled `com.docker.compose.project=fylgja-core-netbox`, and no volume of the day's
+  unlabelled; of the three images only Postgres's declares a volume, `/var/lib/postgresql`,
+  which is its named one. The image `fylgja-core-netbox:4.7.5-1.2.3` stayed. *(2026-11-12)*
+- **Not read:** a pull of the base image, its layers being cached; a first start whose
+  `up -d` exits 0; the seconds between Docker's `healthy` and the first 200 of `/login/` at
+  finer than a sample; a permission with constraints. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, through `make netbox-up` and `make netbox-down` as
+this repository's `netbox/dev/` and `scripts/netbox_dev.py` run them, from a worktree against the
+main checkout's `local/`, under Docker 29.8.1 and Docker Compose v5.6.0, Infrahub stopped. No
+container, network or volume of the project was there, nor `local/netbox/`; the image
+`fylgja-core-netbox:4.7.5-1.2.3` and the base's layers were on the host from the run before. Each
+time is a target's whole, from before `make` to after it, by Python's clock, one run; the lines
+quoted are the script's own. Names in `local/.env` were read by `cut -d= -f1`, and a script
+counting the file's values of 16 characters or more but those beginning `http`, which left
+`FYLGJA_NETBOX_ADDRESS` out, found none of them in any target's output. *(2026-11-12)*
+
+**Through the make targets**
+
+- **`make netbox-up` on no volumes exited 0 in 748.9 s.** It fetched the release into
+  `local/netbox/netbox-docker-5.1.1/`, 63 entries below it, and the build's one layer was
+  `CACHED`. The first start exited 1; the script said `netbox healthy 732 s after its start`, asked
+  Compose once more, provisioned the superuser's token and read `/api/status/` naming NetBox 4.7.5,
+  `netbox_branching 1.2.3` and one worker. `local/.env`, 46 lines before, gained
+  `FYLGJA_NETBOX_SUPERUSER_PASSWORD`, `FYLGJA_NETBOX_SECRET_KEY`, `FYLGJA_NETBOX_API_TOKEN_PEPPER`,
+  `FYLGJA_NETBOX_ADDRESS` and `FYLGJA_NETBOX_WRITE_TOKEN`, in that order after them, at mode 0600.
+  *(2026-11-12)*
+- **`make netbox-down` exited 0 in 8.9 s.** Every container exited 0, none 137, as
+  `docker inspect` read them: the worker first, `netbox` 3.9 s after it, then the two Valkeys and
+  Postgres within 0.5 s, derivations from each `FinishedAt`. Nothing listened on 8800, and the six volumes
+  `fylgja-core-netbox_<name>` and the network `fylgja-core-netbox_default` were listed.
+  *(2026-11-12)*
+- **`make netbox-up` on the kept volumes exited 0 in 73.7 s.** The script printed no line of a
+  failed first start or of a second start, and said `netbox healthy 55 s after its start`; it
+  printed no line of a refused token or of a token written, and its last line counted one worker.
+  `local/.env` was byte for byte a copy of mode 0600 taken before the stop (`cmp`). *(2026-11-12)*
+- **`make netbox-down PURGE=1` exited 0 in 10.1 s** and left no container, network or volume
+  labelled `com.docker.compose.project=fylgja-core-netbox`; the image, the release and `local/.env`
+  stayed. *(2026-11-12)*
+- **`make netbox-up` after the purge exited 0 in 764.4 s**, on new volumes with the kept
+  `local/.env`. The first start exited 1 and the script said `netbox healthy 744 s after its
+  start`; it then said `NetBox refuses the token` the file held as `FYLGJA_NETBOX_WRITE_TOKEN`,
+  and provisioned the superuser's again. Against the copy, `local/.env` held 51 lines and differed
+  in one, line 51, `FYLGJA_NETBOX_WRITE_TOKEN`. The instance was left up. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, through `netbox/seed/box.py` over httpx 0.28.1
+with the superuser's token: in `make contract-netbox`'s two runs, and in two scripts beside them,
+NetBox up as `make netbox-up` left it, its `main` holding no site and no device. Each time is one
+request's or one wait's, by Python's monotonic clock, one run. *(2026-11-12)*
+
+**Through the seed's transport**
+
+- **`core/object-types/` counts 168.** Asked 50 a page by `limit` and `offset`, four pages gave
+  168 rows, with 168 distinct ids. *(2026-11-12)*
+- **A branch read `ready` 6.2 s after its create**, and two made one after the other in a later
+  script 5.8 s and 6.8 s; each `schema_id` was eight characters. In the tier's two runs each
+  test's branch read `ready` within the fixture's 60 s. *(2026-11-12)*
+- **A site made under a branch's header** was listed by its name under the header, one row with
+  the id its create answered, and with no header none. *(2026-11-12)*
+- **`DELETE plugins/branching/branches/<id>/` of a `ready` branch answered in 2.83 s**, and in
+  3.41 s and 3.31 s in the later script; after each, the next read of the branches by that name
+  listed none, and once both were deleted the list held no branch. *(2026-11-12)*
+- **`plugins/branching/branches/?name=` answered the branch of that name alone.** With
+  `p9-read-a` and `p9-read-b` standing and no other branch, `?name=p9-read-a` answered `count 1`
+  and its row, `?name=p9-read-b` `count 1` and its own; `?name=p9-read-none`, `?name=p9-read`,
+  a prefix of both, and `?name=P9-READ-A` each answered `count 0`. The unfiltered list counted
+  2. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, through `netbox/seed/box.py` over httpx 0.28.1
+with the superuser's token, by two scripts each under a scratch branch `p9-read-seed`'s header,
+`main` holding no device and no manufacturer; the first script was run twice, and the figures
+below are its second run's where they differ. The three branches, in the order made, read
+`ready` 7.0 s, 6.0 s and 5.8 s after their creates; each was deleted after, the second run's
+`DELETE` answering in 3.11 s, and `main` then still counted no device and no manufacturer.
+Each time is one request's or one wait's, by Python's monotonic clock. *(2026-11-12)*
+
+**The seed's requests, under a branch**
+
+- **Each create answered 201** with these bodies, each related object named by its id, in this
+  order: `dcim/manufacturers/` `{name, slug}`; `extras/config-templates/`
+  `{name, template_code}`; `dcim/platforms/` `{name, slug, manufacturer, config_template}`;
+  `dcim/device-types/` `{manufacturer, model, slug}`; `dcim/sites/` `{name, slug, status:
+  active}`; `dcim/device-roles/` `{name, slug}`; `extras/tags/` `{name, slug}`; two
+  `dcim/devices/` `{name, device_type, role, site, platform, status: active, tags: [<id>],
+  description}`; four `dcim/interfaces/` `{device, name, type, mgmt_only, enabled}`;
+  `ipam/ip-addresses/` `{address, status: active, assigned_object_type: dcim.interface,
+  assigned_object_id}`; `dcim/cables/` `{a_terminations, b_terminations, status: connected}`,
+  each end `[{object_type: dcim.interface, object_id}]`; and `extras/config-contexts/`
+  `{name, data, is_active: false}`, with no assignment. The slowest took 0.94 s, the cable's.
+  *(2026-11-12)*
+- **What a create answers** names a related object by a row: the platform's `config_template`
+  as `{id, url, display, name, description}`, a device's `tags` as rows with `id`, `name` and
+  `slug`, `status` as `{value, label}`, an interface's `type` as `{value, label}`. A cable's
+  `a_terminations` and `b_terminations` are each `[{object_type, object_id, object}]`, the
+  `object` the interface with its `name` and `device {id, name}`. *(2026-11-12)*
+- **Each lookup answered one row**: `?name=` of the manufacturer, the platform, the site, the
+  role, the tag, the template, a device and the context; a device type by `?model=`; an
+  interface by `?device_id=` and `?name=`; an address by `?address=10.1.10.1/24` and
+  `?interface_id=`. `dcim/devices/?tag=fylgja` answered the two devices. *(2026-11-12)*
+- **The lists beside them**: `dcim/interfaces/?device_id=` answered the device's three ports;
+  `ipam/ip-addresses/?device_id=` the one address on the device's ports, and none for the
+  device with no address, the row naming `assigned_object_type`, `assigned_object_id` and
+  `assigned_object` with its `name` and `device {name}`; `dcim/cables/?interface_id=` the
+  cable on that port, and none for a port with no cable; `dcim/cables/?device_id=` the one
+  cable, for either of its devices. A cabled interface's row holds `cable {id}`, `link_peers`
+  and `connected_endpoints`, each naming the far port and its device. A device's row holds
+  `config_template: null`, its template being its platform's, and `config_context {}`.
+  *(2026-11-12)*
+- **NetBox keeps a template's code with its surrounding whitespace stripped.** Sent `a\n`,
+  `a\n\n` and `  a  \n`, each template's `template_code` read `a` in the create's answer, in
+  the list by `?name=` and by its id; `a\r\nb\n` read `a\r\nb`, and `a\nb` and `a` read as
+  sent. Each template's `environment_params` read `{}`. *(2026-11-12)*
+- **`PATCH`** of a template's `template_code`, of a platform's `config_template` and of a
+  context's `data` and `is_active` each answered 200 with the value sent. *(2026-11-12)*
+
+**A port's far end, rendered**
+
+- **At once after the cable's create, `link_peers` and `connected_endpoints` each named the far
+  port.** A one-line template looping `device.interfaces.all() | sort(attribute='name')`,
+  writing each port's `name` and, for each of `link_peers` and of `connected_endpoints`, the
+  peer's `device.name` and `name`, rendered `n1` as
+  `ethernet-1/1 lp=[n2 ethernet-1/1] ce=[n2 ethernet-1/1];ethernet-1/10 lp=[] ce=[];mgmt0 lp=[] ce=[];`
+  and `n2` as `ethernet-1/1 lp=[n1 ethernet-1/1] ce=[n1 ethernet-1/1];`, each request
+  answering 200 in under 0.5 s with `configtemplate.name` the template's. *(2026-11-12)*
+- **A render's last byte is the template's.** That template, sent with a newline at its end,
+  rendered text ending `;`, its code read back with no newline. A template of
+  `{% for i in [1] %}{{ device.name }} inside\n{% endfor %}` rendered `n1 inside\n`, ending
+  in the newline written inside the loop. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, through `make netbox-seed` and `make contract-netbox`
+as this repository's `netbox/seed/` runs them, from a worktree against the main checkout's `local/`,
+and a script over `netbox/seed/seed.py` and `box.py` beside them, with the superuser's token; `main`
+held no device before the first seed. Each target's time is its whole, from
+before `make` to after it, and each request's is one request's, by Python's clock, one run; a
+script counting `local/.env`'s values of 16 characters or more in each seed's output found none.
+*(2026-11-12)*
+
+**The fixture seeded on `main`**
+
+- **`make netbox-seed` on that `main` exited 0 in 25.4 s**, printing 34 lines, each `made` and an
+  object's path: the manufacturer, the template, the platform, the device type, the site, the
+  role, the tag, three devices, fifteen interfaces, six addresses, two cables and the context, in
+  that order. **Run again it exited 0 in 16.4 s**, its 34 lines each `found`, nothing on stderr.
+  *(2026-11-12)*
+- **A third seed, by the script,** sent 34 requests, each a `GET` answered 200, the slowest
+  1.18 s, an interface's lookup; `core/object-changes/?limit=1` on `main` counted 70 before it and
+  70 after. Reading `main` back sent 10 `GET`s, the slowest 0.91 s, and found no difference.
+  *(2026-11-12)*
+- **Each device rendered on `main` in 0.47 s to 0.48 s**, `n1` and `n3` to 1,261 bytes and `n2` to
+  1,323. Each configuration was `testdata/blueprint/three-node.json`'s for its device line for
+  line after the first, `# <name>: production configuration rendered by NetBox (fylgja-srlinux)`,
+  but `n1`'s and `n3`'s line naming the far end of the link `main` lacks, and each ended in a
+  newline; `configtemplate.name` was `fylgja-srlinux`. *(2026-11-12)*
+- **The change's two steps, under a branch's header**: with the cable `n1 ethernet-1/2` to
+  `n3 ethernet-1/2` made, `n1` and `n3` rendered the blueprint's lines exactly after the first and
+  `n2` its bytes before; with `192.0.2.1/24` then on `n1 ethernet-1/2`, `n1` gained
+  `subinterface 0 ipv4 admin-state enable` and `subinterface 0 ipv4 address 192.0.2.1/24` for that
+  port after its `subinterface 0 admin-state enable`, and `n2` and `n3` did not move. After each
+  step `main` rendered each device to the bytes it rendered before the first. *(2026-11-12)*
+- **The context `fylgja-probes`**, listed by its name, read `is_active false` with the data
+  the seed sent, and no device's `config_context` held `probes`. *(2026-11-12)*
+- **`make contract-netbox` exited 0 in 80.4 s, 10 tests passed**, and in 79.8 s by the same
+  `pytest` run directly with `--durations=0`, whose slowest were the second seed's test, 19.9 s,
+  the change's, 17.1 s, and the module's seed of a seeded `main`, 11.9 s. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, through `make netbox-seed` with
+`netbox/seed/account.py` as its second line, `make contract-netbox`, `make netbox-down PURGE=1` and
+`make netbox-up`, from a worktree against the main checkout's `local/`, and a script over
+`netbox/seed/box.py` with the superuser's token beside them, on scratch objects named `p9-read-*`,
+each deleted after. Each target's time is its whole, from before `make` to after it, by Python's
+clock, one run, and each request's one request's. A script counting the values of 16 characters or
+more of the environment's `FYLGJA_*` names in each target's output found none in any but `make
+netbox-up`'s, which held one, the script then naming none; which it was is read in the run after
+this one. `local/.env`'s lines were compared by a Python child holding the file's bytes in memory
+around each target, and around the purge by one over a copy of mode 0600 under `local/netbox/`,
+removed after, each printing a line's name with `same`, `changed` or `added` and never a value.
+*(2026-11-12)*
+
+**Users, permissions and tokens, by the superuser's token**
+
+- **`users/users/?username=` matches the name exactly**: `admin` 1, `adm` 0 and `ADMIN` 0. A
+  user's representation holds no `is_superuser`, and `is_superuser` is a filter of the list:
+  `?username=admin&is_superuser=true` 1 and `false` 0, and the scratch user's the other way about.
+  `POST users/users/` with `{username, password, is_active: true}` answered 201 in 1.48 s, its
+  members `date_joined`, `display`, `display_url`, `email`, `first_name`, `groups`, `id`,
+  `is_active`, `last_login`, `last_name`, `permissions`, `url` and `username`; a second create of
+  that name was 400, its error holding neither the name nor the password. `PATCH` of `is_active`
+  false and then true answered each value. *(2026-11-12)*
+- **A permission answers `object_types` in an order of its own**: sent `[dcim.device,
+  dcim.interface]`, its create answered `[dcim.interface, dcim.device]`. Its members are `actions`,
+  `constraints` (`null`), `description`, `display`, `display_url`, `enabled` (`true`), `groups`
+  (`[]`), `id`, `name`, `object_types` and `users`, each user a row of `display`, `display_url`,
+  `id`, `url` and `username`. `users/permissions/?name=` matched the name exactly, a prefix 0.
+  `PATCH` of `object_types`, `actions` and `users` answered 200 with the values sent, and one of
+  `users` naming a second user, then the first alone, answered each; the user's own `permissions`
+  then named the permission. Deleting the user left the permission standing. *(2026-11-12)*
+- **A token made for a user names it as a row.** `POST users/tokens/ {user}` answered 201 in
+  0.05 s, `user` as `display`, `id`, `url` and `username`, and `pepper_id` among its members.
+  `?key=<key>` answered its one row, `token` `null`; a key of twelve characters NetBox never made,
+  and the first six of the key, each answered `count 0`. `?user_id=` and `?user=<username>` each
+  counted the user's one token. *(2026-11-12)*
+
+**The two accounts, through `make netbox-seed`**
+
+- **The first, on a seeded `main` and a NetBox holding no account, exited 0 in 21.4 s**: the
+  seed's 34 lines each `found`, then `made` the user `fylgja-reader`, its permissions
+  `fylgja-reader` and `fylgja-reader-render` and a token of it, the user `fylgja-orchestrator`, its
+  four permissions and a token of it, and `appended` each of `FYLGJA_NETBOX_TOKEN` and
+  `FYLGJA_ORCHESTRATOR_NETBOX_TOKEN`. `local/.env` went from 51 lines to 53, those two the lines
+  added, every other line the same, mode 0600. **The second exited 0 in 18.2 s**, its last line
+  `every account, grant and token line is as it should be; nothing written`, and the file's lines
+  the same. *(2026-11-12)*
+- **A grant narrowed by hand was brought back.** With `dcim.cable` taken out of `fylgja-reader`'s
+  `object_types` by the superuser, the reader's token was refused `GET dcim/cables/` 403 `You do
+  not have permission to perform this action.`, and the contract test that reads it failed there;
+  `make netbox-seed` then exited 0 in 18.4 s printing `brought the permission fylgja-reader to its
+  row` alone, the file's lines the same, and the test passed. *(2026-11-12)*
+
+**Each token's reach, through `make contract-netbox`**
+
+- **`make contract-netbox` exited 0 in 151.6 s, 14 tests passed** (pytest's 150.46 s), the four
+  of `test_account_contract.py` among them. *(2026-11-12)*
+- **The reader's token** listed the three devices by `?tag=fylgja`, their fifteen ports and two
+  cables by `?device_id=`, the platform with its manufacturer `Nokia`, the manufacturer, the tag
+  and the context `fylgja-probes` by `?name=`, and `core/object-changes/?limit=1` at the
+  superuser's `count`; rendered `n1` to the superuser's bytes; and found the test's branch by
+  `?name=`, and read the same under its header, `core/object-changes/` at the branch's `count`.
+  It was refused 403 each of `POST dcim/sites/`, `POST extras/journal-entries/` on the branch, a
+  `PATCH` of the branch's `tags` and a `DELETE` of `n1`, and `main`'s changelog `count` did not
+  move. *(2026-11-12)*
+- **The example's token** read the same, on `main` and under the branch; made a journal entry of
+  kind `info` on the branch, 201, its `kind` answered as `{value: info, …}`, the one row of the
+  branch's entries by `?assigned_object_type=netbox_branching.branch&assigned_object_id=`; set the
+  branch's `tags` to the tag `fylgja` by its id, answered as a row with its `slug`, and to `[]`,
+  each 200, and read the branch by its name with no tag. It was refused 403 each of
+  `POST dcim/sites/`, a `PATCH` of `n1`'s `description` and a `DELETE` of `n1`, and `n1` kept its
+  description. The superuser deleted the entry after. *(2026-11-12)*
+- **`account.ensure` over a file holding the two lines the environment gave** made nothing, the
+  file's bytes unmoved, and each account's count of tokens by `?user_id=` was what it was before.
+  *(2026-11-12)*
+
+**After a purge**
+
+- **`make netbox-down PURGE=1` exited 0 in 12.3 s** and left no container or volume labelled
+  `com.docker.compose.project=fylgja-core-netbox`. **`make netbox-up` then exited 0 in 749.6 s**,
+  and `local/.env` differed in one line, line 51, `FYLGJA_NETBOX_WRITE_TOKEN`. *(2026-11-12)*
+- **`make netbox-seed` on that NetBox exited 0 in 29.3 s**: the seed's 34 lines each `made`, then
+  each account, its permissions and a token `made` again, and `replaced` each of
+  `FYLGJA_NETBOX_TOKEN` and `FYLGJA_ORCHESTRATOR_NETBOX_TOKEN`, the file at 53 lines, its lines 52
+  and 53 changed and every other the same, mode 0600. Against the copy made before the purge,
+  lines 51 to 53 differed, `FYLGJA_NETBOX_WRITE_TOKEN`, `FYLGJA_NETBOX_TOKEN` and
+  `FYLGJA_ORCHESTRATOR_NETBOX_TOKEN`, and every other line was the same, lines 47 to 50 among
+  them. **`make contract-netbox` then exited 0 in 152.8 s, 14 tests
+  passed** (pytest's 151.37 s). The instance was left up and seeded, holding no branch, the users
+  `admin`, `fylgja-reader` and `fylgja-orchestrator` and the six permissions. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, up and seeded with the two accounts, after the run
+above: `make netbox-up` once more, with `local/.env` not loaded; the contract tests of the two
+tokens through `pytest` and `make contract-netbox`, with it loaded; a script over
+`netbox/seed/box.py` with the superuser's token on a scratch group `p9-read-group`, deleted after;
+and the plugin's installed `netbox_branching/api/views.py`, read and not run. Each time is one
+run's, by Python's clock. *(2026-11-12)*
+
+**What `make netbox-up` prints of `local/.env`**
+
+- **`make netbox-up` on the running instance exited 0 in 3.7 s**, its output, 48 lines, kept in a
+  file of mode 0600 under `local/netbox/` and removed after. A Python child naming each of
+  `local/.env`'s 35 variables whose value appeared in that output, with the value's length, named
+  one: `FYLGJA_NETBOX_ADDRESS`, 21. *(2026-11-12)*
+
+**A user's groups and permissions**
+
+- **A user's row answers its `groups` and its `permissions` as rows**: a group's with
+  `description`, `display`, `id`, `name` and `url`, a permission's with `actions`, `description`,
+  `display`, `enabled`, `id`, `name`, `object_types` and `url`. `fylgja-reader`'s named
+  `fylgja-reader` and `fylgja-reader-render`, and `fylgja-orchestrator`'s its four, each with
+  `groups []`. The group made and set by `PATCH` as the reader's `groups` was answered in its row
+  by its name; set `[]` again and deleted, the row's `groups` read `[]` and `?name=` of the group
+  `count 0`. *(2026-11-12)*
+
+**A branch's actions, and writes refused under a branch's header**
+
+- **In the plugin's source**, `sync`, `merge`, `revert` and `archive` are each a `POST` to
+  `plugins/branching/branches/<id>/<action>/`, taking `{commit}`, that refuses first where the
+  user lacks `netbox_branching.sync_branch`, `merge_branch`, `revert_branch` or
+  `archive_branch`, with `This user does not have permission to sync branches.` and its like;
+  `recover`, of a branch stuck in a transitional status, asks `change_branch` alone. *(2026-11-12)*
+- **The example's token was refused a branch's `sync`**: `POST .../sync/` with `{commit: false}`
+  on the test's own `ready` branch answered 403 `You do not have permission to perform this
+  action.`, NetBox's own words, not the plugin's sentence. *(2026-11-12)*
+- **Under the test's own branch's header**, the reader's token was refused 403 each of
+  `POST dcim/sites/`, `POST extras/journal-entries/` on the branch and a `DELETE` of `n1`, and the
+  example's `POST dcim/sites/` and a `PATCH` and a `DELETE` of `n1`, the tests asserting the
+  status alone, so that NetBox's words for these six were not read; `main`'s and the branch's
+  changelogs counted after what they counted before, and no site of that name was listed under
+  the header. *(2026-11-12)*
+- **The four contract tests of the accounts passed** (pytest's 70.46 s); each test's own time
+  was not read. A run of `make contract-netbox` before the sync's words were asserted as read
+  exited 2 in 148.0 s, its output not kept; the module then run alone failed that one test, on
+  those words. **`make contract-netbox` then exited 0 in 149.5 s, 14
+  tests passed** (pytest's 148.21 s), no value of 16 characters or more of the environment's in
+  its output. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, up and seeded with the two accounts, by a
+throwaway script over `netbox/seed/box.py` and httpx 0.28.1: every write by the superuser's token
+under the header of a branch `fylgja-contract-<8 hex>` the script made, which read `ready` 5.7 s
+after its request, a wait over its create and its polls, and deleted after, its `DELETE` answering
+in 3.10 s; every read by the reader's token, under that header but the reads of the tag, the
+platform, the seeded devices and `main`'s changelog, made on `main` with no header; and the lookups
+of the seed's site, device type and role, which the reader's account may not list, by the
+superuser's token (a first run, refused 403 on `dcim/sites/` before it wrote anything, made and
+deleted its branch the same way). Each time but the wait for `ready` is one request's, by Python's
+monotonic clock, one run.
+`main`'s changelog counted 122 rows before the second run and 124 after, its latest id 154 before
+and 313 after; the branch's own changelog was not read. `seed.differences` then answered `[]`, and
+no branch stood. *(2026-11-12)*
+
+**Pages, filters and the shapes of rows**
+
+- **A page of 100 is answered whole.** A device made under the header was given 120 interfaces by
+  one `POST dcim/interfaces/` of a list of 120 bodies, answered with 120 rows in 19.15 s.
+  `?device_id=<id>&limit=100` answered `count 120`, 100 results and a `next` of
+  `/api/dcim/interfaces/?device_id=<id>&limit=100&offset=100` after NetBox's own address; with
+  `&offset=100`, `count 120`, the 20 results `p100` to `p119`, no `next` and a `previous`.
+  `limit=0` and `limit=5000` each answered the 120 on one page with no `next`, and no `limit` 50
+  results and a `next` of `limit=50&offset=50`. Every interface under the header, by `limit=5000`
+  and by `limit=0`, answered `count 135` and 135 results. `offset=120` and `offset=500` each
+  answered `count 120`, no result and no `next`. *(2026-11-12)*
+- **`?name=` on tags and on configuration contexts is exact and case-sensitive**: `fylgja`
+  answered 1 tag, `Fylgja` and `FYLGJA` 0; `fylgja-probes` 1 context, `Fylgja-Probes` and
+  `FYLGJA-PROBES` 0. *(2026-11-12)*
+- **`?tag_id=` on devices is honoured**: the tag `fylgja`'s id answered `count 3`, `n1` to `n3`,
+  each holding that id among its `tags`, where the unfiltered list under the header counted 6;
+  `?tag=fylgja` answered the same three. An id no tag has is 400,
+  `{"tag_id": ["Select a valid choice. 999999 is not one of the available choices."]}`.
+  *(2026-11-12)*
+- **`?id=` given twice answers the two objects**, on platforms and on cables; given with an id no
+  object has beside one that exists, the one, `count 1`; that id alone, `count 0`.
+  *(2026-11-12)*
+- **`?device_id=` given twice on interfaces answers both devices' ports**: `count 10` for `n1` and
+  `n2`, each row's `device` one of the two. An id no device has is 400,
+  `{"device_id": ["Select a valid choice. 999999 is not one of the available choices."]}`, and so
+  is the id of the device made under the header, asked with no header. *(2026-11-12)*
+- **A parameter NetBox does not know is ignored**: `?nosuch=1` answered the whole list, the
+  devices `count 6` and the interfaces `count 146`, as each counted unfiltered, and the
+  interfaces' `next` carried `nosuch=1`. *(2026-11-12)*
+- **A cable's representation**, read by its id (`GET dcim/cables/<id>/`), holds
+  `a_terminations`, `b_terminations`, `bundle`, `color`, `comments`, `created`, `custom_fields`,
+  `description`, `display`, `display_url`, `id`, `label`, `last_updated`, `length`, `length_unit`,
+  `owner`, `profile`, `status`, `tags`, `tenant`, `type` and `url`. Made between two interfaces
+  with no label, its `label` is `""`. Each side is a list of
+  `{object, object_id, object_type}`, `object_type` `dcim.interface`, the `object` holding
+  `_occupied`, `cable`, `description`, `device {id, url, display, name, description}`, `display`,
+  which is the port's name, `id`, `name` and `url`. *(2026-11-12)*
+- **A cable from an interface to a front port was taken**, the front port made with `rear_port`
+  and `rear_port_position 1` of a rear port of one position: read by their ids, its B end's
+  `object_type` is `dcim.frontport`, its `object` of the same members; the interface's
+  `link_peers_type` read
+  `dcim.frontport` and its `link_peers` the front port. **Two interfaces on one side were taken**:
+  `a_terminations` two rows, and the B interface's `link_peers_type` `dcim.interface` and its
+  `link_peers` both. **A cable with no B side is refused**: `b_terminations []`, and no
+  `b_terminations` at all, are each 400
+  `{"__all__": ["Must define A and B terminations when creating a new cable."]}`. *(2026-11-12)*
+- **A device made with no name**, read by its id, reads `name: null` and `display`
+  `Nokia 7220 IXR-D2L (<its id>)`. *(2026-11-12)*
+- **A platform made with no manufacturer**, read by its id, reads `manufacturer: null`. Its
+  members and the seeded platform's, read by its id, are `_depth`, `comments`, `config_template`,
+  `created`, `custom_fields`,
+  `description`, `device_count`, `display`, `display_url`, `id`, `last_updated`, `manufacturer`,
+  `name`, `owner`, `parent`, `slug`, `tags`, `url` and `virtualmachine_count`: **no member names a
+  version**, nor does any of a device's, `n1` read by its id, whose `platform` row holds `id`,
+  `url`, `display`, `name`, `slug`, `description`, `device_count`, `virtualmachine_count` and
+  `_depth`. *(2026-11-12)*
+- **An interface's `type`**, each interface read by its id, reads
+  `{value: virtual, label: Virtual}`,
+  `{value: lag, label: Link Aggregation Group (LAG)}` and `{value: bridge, label: Bridge}` for
+  those three types. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, up and seeded with the two accounts, by a
+throwaway script run twice over `netbox/seed/box.py` and httpx 0.28.1, every request through a
+transport that timed it with its body read: every read by the reader's token, on `main` with no
+header but where a branch's header is named; every write by the superuser's token, under the header
+of a branch `fylgja-contract-<8 hex>` the script made, which read `ready` 6.77 s and 5.8 s after
+its request, waits over its create and its polls, and deleted after, its `DELETE` answering in
+2.98 s and 2.89 s. Each time but the waits for `ready` is one request's, by Python's monotonic
+clock. `main`'s changelog counted 124 rows before the first run and 128 after the second, its
+latest id 313 before and 561 after; `seed.differences` then answered `[]`, and no branch stood.
+Then through the reader's own transport, `readers/netbox/src/fylgja_netbox/transport.py`, in its
+contract tier, whose branches and writes are the same `Box`'s with the superuser's token.
+*(2026-11-12)*
+
+**The reader's lists, by its token**
+
+- **Each list the reader sends answered by the reader's token, none refused**, each with
+  `limit=100&offset=0`: `extras/tags/?name=fylgja` `count 1`; `dcim/devices/?tag_id=<its id>`
+  `count 3`, `n1` to `n3`; `dcim/platforms/?id=<theirs>` `count 1`, `SR Linux`; the interfaces by
+  `?device_id=` given three times, `count 15` on one page with no `next`; `dcim/cables/?id=` given
+  twice, `count 2`; and `plugins/branching/branches/?name=fylgja-contract-none` `count 0`.
+  *(2026-11-12)*
+- **The rows of those lists.** A tag's members are `color`, `created`, `description`, `display`,
+  `display_url`, `id`, `last_updated`, `name`, `object_types`, `slug`, `tagged_items`, `url` and
+  `weight`. A device's `tags` are rows of `color`, `display`, `display_url`, `id`, `name`, `slug`
+  and `url`, each of the three holding the tag's id, and its `platform` a row of `_depth`,
+  `description`, `device_count`, `display`, `id`, `name`, `slug`, `url` and
+  `virtualmachine_count`. A platform's members are the nineteen its row read by its id holds,
+  above, its `manufacturer` a row of `description`, `display`, `id`, `name`, `slug` and `url`,
+  named `Nokia`. An interface's `device` is a row of `description`, `display`, `id`, `name` and
+  `url`, its `type` of `label` and `value`, and its `cable` of `description`, `display`, `id`,
+  `label` and `url` on the four ports cabled and `null` on the rest; `mgmt_only` was true on each
+  device's `mgmt0` alone. A cable's members are the twenty-two its row read by its id holds,
+  above, `label` `""`, each side one row of `object`, `object_id` and `object_type`, that
+  `dcim.interface`, the `object` of `_occupied`, `cable`, `description`, `device`, `display`, `id`,
+  `name` and `url`, its `display` its `name`. *(2026-11-12)*
+- **A branch listed by its name** to the reader's token is one row of `comments`, `created`,
+  `custom_fields`, `description`, `display`, `id`, `last_sync`, `last_updated`, `merged_by`,
+  `merged_time`, `name`, `owner`, `schema_id`, `status`, `tags` and `url`, its `status`
+  `{value: ready, label: Ready}`. *(2026-11-12)*
+- **A header naming a `schema_id` no branch has is 400**: `X-NetBox-Branch: zzzzzzzz` on
+  `dcim/devices/`, sent through `netbox/seed/box.py`'s `Box`, answered 400, and `Box` gave
+  NetBox's words as `Invalid branch identifier`. `Box` takes the words from a JSON body's `detail`
+  and from a body that is no JSON alike, so that run did not read the body's form or its content
+  type. *(2026-11-12)*
+- **An id no device has, asked by `?device_id=`, is 400 to the reader's token**, its `device_id`
+  saying `Select a valid choice`, as the bullet "`?device_id=` given twice on interfaces" above
+  records. *(2026-11-12)*
+- **A page of 100 under a branch's header.** A device made under the header was given 120
+  interfaces by one `POST dcim/interfaces/` of 120 bodies, answered in 18.20 s and 18.77 s;
+  `?device_id=` with `limit=100` answered `count 120` and 100 results, and with `offset=100`
+  `count 120`, 20 results and no `next`. `n2 ethernet-1/1` set `enabled: false` by a `PATCH` under
+  the header read `false` under the header and `true` with none. *(2026-11-12)*
+- **The reader's requests took** 0.07 s for `/api/status/`, 0.12 s the tag, 0.81 s the devices,
+  0.18 s the platform, 0.70 s the fifteen interfaces, 1.11 s the two cables and 0.09 s and 0.24 s
+  a branch by its name, in the second run; the page of 100 under the header 1.21 s and the page of
+  20 after it 0.53 s. The slowest of the reader's was 1.04 s in the first run, the devices by their
+  tag, and 1.21 s in the second, that page of 100. *(2026-11-12)*
+
+**Through the reader's transport**
+
+- **The reader's contract tier passed, 5 tests**: run alone by its path in 51.87 s and 51.50 s
+  (pytest's), and in `make contract-netbox`, after `netbox/`'s 14 tests (154.84 s), in 50.82 s,
+  the target exiting 0 in 209 s by the shell's clock. `/api/status/` named NetBox 4.7.5 and
+  netbox-branching 1.2.3 to the reader's token; a token of the v2 shape NetBox never made was 403
+  at `connect`; each of the fixture's lists was whole, its `count` that of the rows read; a branch
+  of the test's own was listed by its name, `ready`, and read under its header; and 120 interfaces
+  made on it were read whole in two requests of 100. No request of the reader's token was refused
+  in these runs. `main`'s changelog counted 156 rows and latest id 1084 after `make
+  contract-netbox`, and 160 and 1210 after the run alone; `seed.differences` answered `[]` after
+  each, and no branch stood. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, up and seeded with the two accounts, by eight
+throwaway scripts over `netbox/seed/box.py` and httpx 0.28.1: every write by the superuser's
+token, the `sync` and the `merge` among them; every read the reader will send, the changelog's
+and the renders' among them, by the reader's token, and where a row says so by the superuser's
+too. `main` was written by hand in three ways alone: `n3 ethernet-1/10` set `enabled: false` and
+back, once; a tag `fylgja-contract-<8 hex>` made and deleted; and the merge of the branch
+`p9-read-merge`, of one tag `p9-read-merged`, deleted on `main` after. Every other write was a
+branch's own, with no header (its create, `PATCH`, `sync`, `merge` and `DELETE`, and a journal
+entry on it), or under the header of a branch `p9-read-sync`, `p9-read-merge` or
+`fylgja-contract-<8 hex>` the script made, each read `ready` 5.6 s to 8.4 s after its script
+started, and deleted after. Each time is
+the script's, by Python's monotonic clock, one run. `main`'s changelog counted 160 rows and latest
+id 1210 before the first script, 179 and 1230 in the fifth, and 186 and 1424 after the last;
+`seed.differences` answered `[]` after each script, and no branch stood after the last.
+*(2026-11-12)*
+
+**What a branch reads of an edit of `main`**
+
+- **A branch reads `main` as it stood when the branch was made.** With `p9-read-sync` `ready` and
+  its changelog holding no row, `n3 ethernet-1/10` set `enabled: false` with no header added row
+  1212, `dcim.interface` `update`, to `main`'s changelog and none to the branch's. Under the
+  branch's header the interface read `enabled: true`, in `dcim/interfaces/?device_id=` and by its
+  id, by each token; with no header `false`. `n3` rendered under the header, by the reader's token,
+  the bytes it rendered there before the edit, 1,261, and with no header other bytes than before.
+  The branch's `status` stayed `ready` and its `last_sync` as it was. *(2026-11-12)*
+
+**A sync**
+
+- **A sync adds no row to either changelog, and changes what the branch reads.** With a tag
+  `fylgja-contract-<8 hex>` made on `main` (row 1216, `extras.tag` `create`, on `main`'s), the tag
+  was listed by `?name=` on `main` and not under the branch's header. `POST
+  plugins/branching/branches/<id>/sync/` with `{"commit": true}` answered a job, `status pending`,
+  `name` `Sync branch`, `object_type` `netbox_branching.branch`, its members `completed`,
+  `created`, `data`, `display`, `display_url`, `error`, `execution_time`, `id`, `interval`,
+  `job_id`, `log_entries`, `name`, `notifications`, `object`, `object_id`, `object_type`,
+  `queue_name`, `scheduled`, `started`, `status`, `url` and `user`. Read every 0.05 s by
+  `core/jobs/<id>/`, the job was `pending`, `running`, then `completed` 0.73 s after the answer,
+  with no error and no log entry. Read every 0.03 s, the branch's `status` went `ready`, `syncing`,
+  then `ready` again, and its `last_sync`, which had read the time the branch was provisioned,
+  then read the sync's. The reader's `extras/tags/?name=` under the header, read every 0.03 s,
+  answered `count 0`, then 400 `Selected branch is not ready.` while the branch was `syncing`,
+  then `count 1`. After it, neither the branch's changelog nor `main`'s held a row above the latest
+  id each held before the sync, each token reading the branch's at `count 0`. *(2026-11-12)*
+- **The edit of `main` above, synced**, in `p9-read-sync`: the sync's job answered `pending`, and
+  1.54 s after the answer the reader's `dcim/interfaces/?device_id=` under the header read
+  `n3 ethernet-1/10` `enabled: false`, the branch's `status` read `ready` at each poll, and its
+  `last_sync` had moved. That script failed before it read the changelogs after the sync, on a
+  query parameter of its own, and its clean-up then set the interface `enabled: true` on `main`
+  (row 1213) and deleted the branch (row 1214, `netbox_branching.branch` `delete`). *(2026-11-12)*
+
+**A merge**
+
+- **A merge adds to `main`'s changelog a row of the object merged.** On `p9-read-merge`, the tag
+  `p9-read-merged` made under the header added row 1220, `extras.tag` `create`, to the branch's
+  changelog and none to `main`'s. `POST plugins/branching/branches/<id>/merge/` with
+  `{"commit": true}` answered a job `pending` named `Merge branch`, `running`, then `completed`
+  1.56 s after the answer, with no error. The branch's `status` went `ready`, `merging`, then
+  `merged`, its `merged_time` and `merged_by` set at `merged` and its `last_sync` as it was. The
+  reader's `extras/tags/?name=p9-read-merged` on `main`, read every 0.03 s, answered `count 0`,
+  then `count 1`, nothing else. `main`'s changelog gained one row, 1221, `extras.tag` `create`, the
+  branch's status changes none; the tag on `main` had the id it had under the header, 3.
+  *(2026-11-12)*
+- **A merged branch's header is refused, and the branch can be deleted.** Under the header of the
+  `merged` branch `core/object-changes/` answered 400 `Selected branch is not ready.`, to each
+  token. The tag deleted on `main` added row 1222, `extras.tag` `delete`; `DELETE` of the merged
+  branch answered 2xx, `?name=p9-read-merge` then listed none, and `main`'s changelog gained row
+  1223, `netbox_branching.branch` `delete`. *(2026-11-12)*
+
+**The kinds of a changelog's rows**
+
+- **What each write added**, each row's `changed_object_type` and `action`, read by
+  `?id__gt=<the id before>&ordering=id` under each changelog after each write: a branch made and
+  read `ready`, one row on `main`'s, `netbox_branching.branch` `create`; a journal entry on the
+  branch object with no header, written, changed (`kind` and `comments`) and deleted, one row on
+  `main`'s each, `extras.journalentry` `create`, `update` and `delete`, and none on the branch's;
+  the branch's `PATCH` of `tags` to `[1]`, of `tags` to `[]` and of `description`, one row on
+  `main`'s each, `netbox_branching.branch` `update`, and none on the branch's; a branch deleted,
+  one on `main`'s, `netbox_branching.branch` `delete`, four times; a tag made under the header, one
+  on the branch's, `extras.tag` `create`, and none on `main`'s; a tag made on `main`, one on
+  `main`'s, `extras.tag` `create`; three interfaces made under the header, three on the branch's,
+  `dcim.interface` `create`. No write added a row of another kind. *(2026-11-12)*
+- **The ids of the two changelogs interleave, and no id was in both.** In one script `main`'s rows
+  were 1224 to 1230, the branch's 1231 to 1236, and `main`'s next 1237. *(2026-11-12)*
+- **A row's members** are `action` (`{value, label}`, `update` `Updated`), `changed_object`,
+  `changed_object_id`, `changed_object_type`, a string of the form `<app>.<model>`
+  (`netbox_branching.branch`), `display`, `display_url`, `id`, `message`, `object_repr`,
+  `postchange_data`, `prechange_data`, `request_id`, `time`, `url`, `user` and `user_name`.
+  *(2026-11-12)*
+
+**The changelog's two requests**
+
+- **`?limit=1&ordering=-id` answers the row of the highest id**, and so did `?limit=1` alone, under
+  `main`'s changelog (`count 179`, id 1230) and a branch's (`count 6`, id 1236), by each token;
+  the changelog listed whole by `ordering=id` held that id as its highest, its ids rising and
+  distinct, and `?limit=5` alone answered the five highest, falling. *(2026-11-12)*
+- **`?id__gt=<n>&ordering=id` is honoured**: it answered exactly the rows above `n` of the list
+  read whole, rising, by each token, under `main`'s (`n` 106, 89 of 179) and the branch's (`n` 1234,
+  2 of 6); with `n` the highest id, `count 0` and no result. *(2026-11-12)*
+
+**An edit under a render**
+
+- **In three runs no two loops that opened and closed on one id rendered different bytes.** On a branch, threads set
+  `n1 ethernet-1/10`'s `enabled` back and forth under the header by the superuser's token while the
+  script looped, by the reader's token, the branch changelog's latest id, a render of `n1` under
+  the header with `Accept: text/plain`, and the latest id again, for 60 s. Every `PATCH` answered
+  2xx and every render 200 `text/plain; charset=utf-8`. One thread: 50 `PATCH`es, the branch's
+  changelog counting 50 rows, 44 loops, 7 closing on the id they opened on, no id two of those 7
+  shared, and the 44 renders two distinct byte strings. Four
+  threads: 88 `PATCH`es in 61.8 s, the branch's changelog counting 65 rows more, 48 loops, 7
+  closing on their id, none shared. Ten threads: 102 in 65.1 s, the changelog counting 62 more,
+  55 loops, 14 closing on their id, one id shared by two of them, which rendered the same bytes.
+  In the last two runs every render was one of the two `n1` rendered, before the threads began,
+  with the interface held `enabled: true` and `false`, which differed; and each loop that closed
+  on its id rendered the bytes of the state the changelog's last `dcim.interface` row at or below
+  that id records in its `postchange_data.enabled`, 7 of 7 and 14 of 14. *(2026-11-12)*
+
+**An interface's type, in a list**
+
+- **`dcim/interfaces/?device_id=` answers each type's value**: interfaces made on `n1` under a
+  branch's header of the types `virtual`, `bridge` and `lag` were listed by the reader's token
+  under the header with `type` `{value: virtual, label: Virtual}`, `{value: bridge, label:
+  Bridge}` and `{value: lag, label: Link Aggregation Group (LAG)}`. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, by one more throwaway script over
+`netbox/seed/box.py`: every read by the reader's token, on `main` and under the header of a branch
+`fylgja-contract-<8 hex>` the script made, on which the superuser's token made four tags, and
+deleted after; `seed.differences` then answered `[]`, and no branch stood. *(2026-11-12)*
+
+**An upper bound on the id**
+
+- **`?id__lte=<n>` on `core/object-changes/` is honoured, and an unknown parameter is not.** On
+  `main`, whose changelog counted 233 rows, latest id 1477, `?id__lte=141` answered `count 117`
+  and 117 rows, ids 1 to 141, the rows at or below 141 of the list read whole; `?id__lt=141` 116,
+  to 140; and `?id__nosuch=141` `count 233`, the whole list. Under the branch's header, whose
+  changelog counted 4, ids 1478 to 1481, `?id__lte=1480` answered `count 3`, `?id__lt=1480` 2 and
+  `?id__nosuch=1480` 4. Under each, `?id__lte=<n>&limit=1` answered the same `count`,
+  `?id__lte=0` `count 0`, and `?id__gt=<n>&id__lte=<the highest>` the count of the rows between,
+  116 and 1. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, by one more throwaway script over
+`netbox/seed/box.py` and httpx 0.28.1: every write by the superuser's token, under the header of a
+branch `fylgja-contract-<8 hex>` the script made, which read `ready` 6.91 s after its request, a
+wait over its create and its polls, and deleted after, its `DELETE` answering in 2.83 s; every
+render by the reader's token under that header with `Accept: text/plain`, and one by the
+superuser's where the bullet says so. Each render's time is one request's, by Python's monotonic
+clock, one run. `main`'s changelog counted 256 rows, latest id 1506, before the script, and 258,
+latest id 1517, after it; the branch's counted 0 before the script's writes and 9, latest id
+1516, after them. `seed.differences` then answered `[]`, and no branch stood. *(2026-11-12)*
+
+**A render of a template that reads the configuration context**
+
+- **A key of an active context renders, and no key of the inactive `fylgja-probes` is
+  defined.** With a context `p9-read-active` made under the header, `is_active: true`, no
+  assignment and the data `{"p9_key": "p9-value"}`, and the template `fylgja-srlinux` set under
+  the header to
+  `key={{ p9_key }} probes={{ probes is defined }} probes_version={{ probes_version is defined }}{{ "\n" }}`,
+  `n1` rendered 200 `text/plain; charset=utf-8`, `key=p9-value probes=False probes_version=False`
+  and a newline, to the reader's token, and the same bytes to the superuser's. `fylgja-probes`,
+  read by its name under the header, was `is_active false` with the keys `probes` and
+  `probes_version`, and `n1`'s `config_context`, read by its id under the header, held the key
+  `p9_key` alone. *(2026-11-12)*
+
+**A template that renders nothing, and one that fails for one device**
+
+- **A template that renders nothing answers 200 with no byte.** The template set under the header
+  to `{# nothing #}`, read back as sent, rendered `n1` 200 `text/plain; charset=utf-8` with an
+  empty body; set to `{{ "\n" }}`, read back as sent, 200 with the one byte of a newline; and set
+  to `{{ "  \n\t" }}`, 200 with those four bytes. Each render answered in 0.40 s to 0.44 s.
+  *(2026-11-12)*
+- **A template that fails for one device refuses that device alone.** The template set under the
+  header to `{% if device.name == "n2" %}{{ device.nosuch.x }}{% endif %}` before its own code,
+  `n2` rendered 500 `text/plain; charset=utf-8`, 77 bytes,
+  `UndefinedError: 'dcim.models.devices.Device object' has no attribute 'nosuch'`, and `n1` and
+  `n3` 200, each the bytes it rendered before the template was set, 1,261. *(2026-11-12)*
+- **A device whose platform has no template is 400.** A platform `p9-read-bare` of `Nokia` made
+  under the header with no `config_template`, and a device on it of the seed's device type, role
+  `fylgja` and site, rendered 400 `text/plain; charset=utf-8`, 54 bytes,
+  `{'error': 'No config template found for this device.'}`. With the template's own code set
+  again, `n1`, `n2` and `n3` rendered the bytes each rendered before the script's writes, 1,261,
+  1,323 and 1,261, each ending in a newline; those three renders, before the writes, answered in
+  0.94 s, 0.51 s and 0.48 s. *(2026-11-12)*
+
+**A name NetBox holds unique**
+
+- **In the installed source, read and not run**, a tag's `name` is `unique=True` in taggit's
+  `TagBase`, which NetBox's `Tag` extends, and a branch's `name` is `unique=True` in the
+  plugin's `Branch` (`netbox_branching/models/branches.py`). The reader does not rely on either.
+  *(2026-11-12)*
+
+**Through the reader's read**
+
+- **The read's contract tests passed, 5**, `readers/netbox/tests/contract/test_read_contract.py`
+  run alone by its path with `local/.env` loaded, in 68.95 s (pytest's), its slowest the cable
+  made on a branch, 17.26 s. `main` read twice gave one document but for `observed_at`, of `n1`,
+  `n2` and `n3` on `nokia_srlinux`, five interfaces each and two links, each `config` the
+  `content` the superuser's `render-config` answered with `Accept: application/json`, and
+  `source.changelog` `main`'s latest id; a branch with no change gave `main`'s id; a cable made
+  under a branch's header gave three links there and two on `main`, `n1`'s and `n3`'s
+  configurations moved and `n2`'s not; and the template of the active context, above, rendered
+  each device's name, the key's value and `False`. With the renders sent under no header, the
+  cable's test and the context's failed, 2 of 2, in 40.07 s. `main`'s changelog counted 268
+  rows, latest id 1543, after the two runs; no branch stood. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, by one more throwaway script over
+`netbox/seed/box.py` and httpx 0.28.1. The superuser's token made a branch `fylgja-contract-<8 hex>`
+and read it by its name until it was `ready`, 5.85 s after its request; looked up `n1` under the
+branch's header; deleted the branch, its `DELETE` answering in 3.62 s; and then read
+`seed.differences` and the list of branches. The reader's token rendered `n1` and listed the devices
+under the branch's header, and read `main`'s changelog before and after. The branch's create, its
+reads by name, its `DELETE`, `seed.differences`, the list of branches and both reads of `main`'s
+changelog were sent with no header. Each time is one request's, by Python's monotonic clock, one
+run. `main`'s changelog counted 268 rows, latest id 1543, before the script, and 270, latest id
+1545, after it; `seed.differences` then answered `[]`, and no branch stood. *(2026-11-12)*
+
+**A render under the header of a branch that is gone**
+
+- **A render under the header of a deleted branch is 400 in `text/html`.** `n1`, rendered under
+  the branch's header with `Accept: text/plain`, answered 200, 1,261 bytes, in 0.90 s; the branch
+  deleted, the same request answered 400 `text/html; charset=utf-8` in 0.03 s, its body the 25
+  bytes `Invalid branch identifier`. `dcim/devices/?tag_id=` under that header, with
+  `Accept: application/json`, answered the same status, content type and body. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, by one more throwaway script over
+`netbox/seed/box.py` and httpx 0.28.1. The superuser's token made a branch `fylgja-contract-<8 hex>`
+and read it by its name until it was `ready`, 5.87 s after its request; wrote the context's data and
+looked up `n1` under the branch's header; deleted the branch, its `DELETE` answering in 3.16 s; and
+then read `seed.differences` and the list of branches. The reader's token listed the context on
+`main` and under the branch's header, read the branch's changelog and `n1` by its id under that
+header, and read `main`'s changelog before and after. The branch's create, its reads by name, its
+`DELETE`, `seed.differences`, the list of branches, the context's lists on `main` and both reads of
+`main`'s changelog were sent with no header. Each time is one request's, by Python's monotonic
+clock, one run. `main`'s changelog counted 294 rows, latest id 1579, before the script, and 296,
+latest id 1582, after it; `seed.differences` then answered `[]`, and no branch stood.
+*(2026-11-12)*
+
+**The probes' context, read**
+
+- **The seeded context, listed by its name, is the declaration the seed sent.**
+  `extras/config-contexts/?name=fylgja-probes` with `limit=100&offset=0` answered the reader's token
+  200 `application/json` in 0.43 s, `count 1` and no `next`, its row's members `cluster_groups`,
+  `cluster_types`, `clusters`, `created`, `data`, `data_file`, `data_path`, `data_source`,
+  `data_synced`, `description`, `device_types`, `display`, `display_url`, `id`, `is_active`,
+  `last_updated`, `locations`, `name`, `owner`, `platforms`, `profile`, `regions`, `roles`,
+  `site_groups`, `sites`, `tags`, `tenant_groups`, `tenants`, `url` and `weight`: `id 1`,
+  `is_active false`, and `data` `netbox/seed/main.yaml`'s, `probes_version "1"` and the one probe
+  `n1-loop`, each end naming `n1`. `?name=fylgja-contract-none` answered `count 0` and no result, in
+  0.16 s. *(2026-11-12)*
+- **Under a branch's header the context is `main`'s until the branch edits it, and its edit is the
+  branch's alone.** Under the new branch's header the context listed `count 1`, of the same id and
+  data, in 0.56 s. Its `data` sent by `PATCH` under the header with a second probe, answered in
+  0.97 s, it listed both probes under the header, still `is_active false`, and the one on `main`; the
+  branch's changelog went from `count 0` to one row, `extras.configcontext` `update`. `n1`, read by its
+  id under the header, held no key in its `config_context`. *(2026-11-12)*
+- **A context's name is unique, read in the installed source and not run**: `ConfigContext`'s `name`
+  is `unique=True` in `extras/models/configs.py`. The reader does not rely on it. *(2026-11-12)*
+- **Through the reader's read**: `readers/netbox/tests/contract/test_probes_contract.py` run alone by
+  its path with `local/.env` loaded passed, 3, in 35.39 s (pytest's), its slowest the context edited
+  on a branch, 12.04 s. `main` read twice with `netbox/seed/reader.yaml` gave `n1-loop` as
+  `testdata/blueprint/three-node-probed.json` holds it, no fidelity row of source
+  `extras.configcontext`, and one id both times; the context's data given a second probe under a
+  branch's header read two probes there and one on `main`; and a document naming
+  `fylgja-contract-none` was refused by `probe.context.absent`. With the read still refusing a
+  document that names a context, the three failed, 3 of 3, in 10.08 s. **`make contract-netbox` then
+  exited 0 in 378.2 s**, by Python's monotonic clock read in the same command before `make` and
+  after it: `netbox/`'s tier 14 passed (pytest's 154.58 s) and the reader's 19 (pytest's 221.06 s).
+  After it `seed.differences` answered `[]` and no branch stood. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, by one more throwaway script over
+`netbox/seed/box.py` and httpx 0.28.1, every request by the superuser's token, the `DELETE`s by a
+plain httpx client so that their answers were read whole. Two branches `p9-read-delete` and
+`p9-read-delete-2`, then a branch `fylgja-contract-<8 hex>`, were made, and each deleted once it
+read `ready`. Each time is one request's, by Python's monotonic clock, one run. `main`'s changelog
+counted 344 rows, latest id 1773, before the script, and 350, latest id 1784, after it;
+`seed.differences` answered `[]` before it and after it, and no branch stood.
+*(2026-11-12)*
+
+**A branch deleted before it is `ready`**
+
+- **A `DELETE` of a branch still provisioning is 500, and the branch stays.** `p9-read-delete`'s
+  create answered in 0.16 s with `status new`, and its `GET` by id read `new` 0.25 s after the
+  create's request; its `DELETE`, sent at once after, answered 500 `application/json` in 0.20 s,
+  `{"error": "A branch in the provisioning status may not be deleted.", "exception":
+  "AbortRequest", …}`, with NetBox's version and Python's: words that name provisioning, though
+  the branch had been read `new` just before, so which status NetBox held at the `DELETE` was not
+  read. `p9-read-delete-2`, read until it left `new`, read `provisioning` 0.31 s after its
+  create's request, and its `DELETE` answered the same 500 and words in 0.29 s. After each, the
+  branch was listed by its name and answered 200 by its id: `provisioning` at each of the first
+  three reads, 0.4 s to 1.9 s after the `DELETE`, and `ready` at each of the last three, 26.7 s to
+  28.2 s after it, the reads every 0.5 s with a request's time between; the reads between were not
+  printed, so when it first read `ready` is not known closer than that. Once `ready`, each was
+  deleted, and then listed none. *(2026-11-12)*
+
+**A device's name, per site**
+
+- **Two devices of one name, letter case aside, are refused on one site and taken on two.**
+  Under the branch's header `n1` was renamed `N1` by a `PATCH`, answered with the name `N1`. A
+  device `n1` made on `N1`'s site, `lab`, of the seed's device type, role and platform, was 400
+  `{"__all__": ["Device name must be unique per site and tenant."]}`; made on a second site,
+  `fc-second`, made under the header, it was taken, and the devices under the header held `N1` on
+  `lab` and `n1` on `fc-second`. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, through `make contract-netbox` at
+the commit `50dc852` and `make netbox-seed`, from a worktree against the main checkout's `local/`,
+with it loaded. Each target's time is its whole, by Python's monotonic clock read in the same command
+before `make` and after it, one run each. A Python child naming each `FYLGJA_*` variable whose value,
+of 16 characters or more, was in a run's output named none, in either run. *(2026-11-12)*
+
+**The reader's whole contract tier**
+
+- **`make contract-netbox` exited 0 in 667.9 s, and again in 655.1 s**: `netbox/`'s tier 14 passed
+  (pytest's 147.87 s, then 133.12 s) and the reader's 42 (pytest's 517.19 s, then 519.22 s), the
+  test of every connection's requests last. After each run no branch stood, no tag but `fylgja` and
+  no journal entry was listed, and `seed.differences` answered `[]`; `main`'s changelog counted 480
+  rows, latest id 2241, after the first, and 552, latest id 2520, after the second. *(2026-11-12)*
+- **`make netbox-seed` after the second run exited 0**, its 34 lines of the seed each `found` and
+  the accounts' line `nothing written`, and `main`'s changelog counted 552 rows, latest id 2520, as
+  before it. The reader read `main` with `netbox/seed/reader.yaml` to the blueprint id it read to
+  before the second run, `02af0a2973c6ac5d…`, the first sixteen of its 64 hex digits. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, through `make contract-netbox` at
+the commit `115e43a`, the tier's sweep waiting for a branch still provisioning, the same way: one
+run, its time by Python's monotonic clock read in the same command before `make` and after it.
+*(2026-11-12)*
+
+- **`make contract-netbox` exited 0 in 705.3 s**: `netbox/`'s tier 14 passed (pytest's
+  150.83 s) and the reader's 43 (pytest's 551.82 s), `-rA`'s summary listing
+  `test_the_reader_wrote_nothing` last. No value of a `FYLGJA_*` variable of 16 characters or more
+  was in its output. After it no branch stood, no tag but `fylgja` and no journal entry was listed,
+  `seed.differences` answered `[]`, and `main`'s changelog counted 632 rows, latest id 2833; the
+  reader read `main` with `netbox/seed/reader.yaml` to `02af0a2973c6ac5d…` before the run and
+  after it. *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, by one more throwaway script over
+`netbox/seed/box.py` and httpx 0.28.1, one run. The superuser's token made a branch
+`fylgja-contract-<8 hex>`, read `ready` 5.62 s after its request, wrote under its header, and
+deleted it, its `DELETE` answering in 2.58 s; the reader's token read under its header, and once on
+`main`. `main`'s changelog counted 632 rows, latest id 2833, before the script, and 634, latest id
+2839, after it; `seed.differences` answered `[]` before it and after it, and no branch stood.
+*(2026-11-12)*
+
+**A device in a virtual chassis**
+
+- **`dcim/interfaces/?device_id=` of a device in a virtual chassis, its master or another
+  member, answered that device's interfaces alone.** Under the branch's header a virtual chassis
+  was made by `POST dcim/virtual-chassis/`, `n1` and `n2` were given it by a `PATCH` each, at
+  positions 1 and 2, and `n1` was made its master by a `PATCH` of the chassis, which then read
+  `member_count 2` and its master `n1`. To the reader's token, with `limit=100`, `n1`'s
+  `?device_id=` answered `count 5` and five interfaces, each `n1`'s, before the chassis and after
+  it; `n2`'s the same of `n2`'s, before and after; `n3`'s, in no chassis, `count 5`, each `n3`'s;
+  and `?device_id=` given both members answered `count 10`. On `main` `n1`'s answered `count 5`.
+  *(2026-11-12)*
+
+Read on 2026-11-12 on the same instance, after the runs above, through `make contract-netbox` at
+the commit `e97be39`, the same way: one run, its time by Python's monotonic clock read in the same
+command before `make` and after it. *(2026-11-12)*
+
+- **`make contract-netbox` exited 0 in 744.0 s**: `netbox/`'s tier 14 passed (pytest's
+  153.31 s) and the reader's 45 (pytest's 587.75 s), none skipped, `-rA`'s summary listing
+  `test_the_reader_wrote_nothing` last. No value of a `FYLGJA_*` variable of 16 characters or more
+  was in its output. After it no branch stood, no tag but `fylgja` and no journal entry was listed,
+  `seed.differences` answered `[]`, and `main`'s changelog counted 726 rows, latest id 3144.
+  *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, for phase 9's plan 3, up and seeded with the two
+accounts, by eight throwaway scripts over `netbox/seed/box.py` and httpx 0.28.1, every request
+through a transport that recorded its status, and by a session of a script's own signed in to
+NetBox's pages as the superuser. The superuser's token made the branches `p9-read-a`, `p9-read-b`,
+`p9-read-m` and `p9-read-m0`, the tags `p9-read-main`, `p9-read-x` and `p9-read-y` on `main` and
+`p9-read-m` under `p9-read-m`'s header, a webhook and a disabled event rule, and sent the sync and
+the merges; the example's token, `FYLGJA_ORCHESTRATOR_NETBOX_TOKEN`, wrote every journal entry and
+every `PATCH` of a branch's `tags`; each bullet names the token of each request. No seeded object
+of `main` was written: `main` was moved by the tag `p9-read-main`. Each branch was deleted once it
+was `ready` or merged, and the tags, the webhook and the rule after; each time is one run's, by
+Python's monotonic clock. `main`'s changelog counted 726 rows, latest id 3144, before the first
+script, and 782, latest id 3201, after the clean-up. No branch then stood, no tag but `fylgja` and
+no journal entry, webhook or event rule was listed, `seed.differences` answered `[]`, and `make
+netbox-seed` exited 0, its 34 lines of the seed each `found` and the accounts' line `nothing
+written`. *(2026-11-12)*
+
+**A branch behind `main`**
+
+- **No member of a branch, and no route of the plugin's API, says that it is behind `main`.**
+  `p9-read-a` read `ready` 6.4 s after its request, its `last_sync` 6.1 s after its `created`, a
+  derivation. The tag `p9-read-main` made on `main` by the superuser's token (201; row 3146,
+  `extras.tag` `create`) moved none of the branch's sixteen members, read by its id.
+  `GET plugins/branching/` answered four routes, `branches`, `branch-events`, `branchable-models`
+  and `changes`, to each token. To the superuser's token, `changes/?branch_id=<id>` and
+  `changes/?branch=<schema_id>` answered `count 0` before `main` moved, after it and after a sync;
+  `branch-events/?branch_id=<id>` one row, `type provisioned`, its `time` 12 ms after `last_sync`, a
+  derivation, before `main` moved and after it, and a second, `type synced`, after the sync. The
+  example's token was refused 403 `You do not have permission to perform this action.` on
+  `changes/` by either filter and on `branch-events/`. *(2026-11-12)*
+- **`plugins/branching/branchable-models/`** answered 200 to the superuser's token and to the
+  example's, a list of 120 rows of `app_label`, `model`, `verbose_name` and
+  `verbose_name_plural`, `extras.journalentry` and `extras.tag` among them and
+  `netbox_branching.branch` not. In the plugin's installed source, read and not run,
+  `Branch.get_unsynced_changes`, what a sync takes, is `main`'s changelog rows of a branchable kind
+  whose `time` is later than the branch's `last_sync`, or its `created` where that is null.
+  *(2026-11-12)*
+- **`?time__gt=` on `core/object-changes/` is not honoured, and `?time_after=` is, counting the
+  row of that very time.** To each of the superuser's token and the example's,
+  `?time__gt=<last_sync>&limit=1` answered the whole changelog's `count`, 727, as did
+  `?time__nosuch=`; `?time_after=<last_sync>` answered `count 0` before `main` moved and `count 1`,
+  row 3146, after it, the rows of a later `time` in the list read by `id__gt` and compared in code.
+  Given row 3146's own `time`, `time_after` counted that row and the five after it, and one
+  microsecond later the five; `time_before` of that time counted 728, and the two together the one
+  row. `?time=` and `?time__gte=` were each ignored, the whole list; `+00:00` in place of `Z`
+  answered as `Z`; and `time_after=not-a-time` was 400 `{"time": ["Enter a valid date/time."]}`. In
+  NetBox's installed source, read and not run, the changelog's `time` filter is a
+  `DateTimeFromToRangeFilter`. *(2026-11-12)*
+- **`?changed_object_type_id__n=` leaves a kind out, and `?changed_object_type__n=` keeps it.**
+  `core/object-types/?app_label=extras&model=journalentry` and
+  `?app_label=netbox_branching&model=branch` answered 200, `count 1`, ids 128 and 168, to the
+  superuser's token and to the example's, whose account holds no grant on `core.objecttype`.
+  `?changed_object_type_id=128` listed `extras.journalentry` rows alone and `=168`
+  `netbox_branching.branch` rows alone. With the changelog at 727 rows,
+  `?changed_object_type_id__n=128&changed_object_type_id__n=168` answered `count 94`;
+  `?changed_object_type=extras.journalentry&changed_object_type=netbox_branching.branch` 633, and
+  `?changed_object_type__n=` of the same two 633 too, the rows of those two kinds. `OPTIONS
+  core/object-changes/` answered `name`, `description`, `renders` and `parses`, and no filter.
+  The example's token was answered each as the superuser's. *(2026-11-12)*
+- **What each write did to the count.** With `T` the branch's `last_sync`,
+  `?time_after=T&changed_object_type_id__n=128&changed_object_type_id__n=168&limit=1`, by the
+  example's token, read 0 before `main` moved; 1 after the tag on `main`; 1 after the example's
+  journal entry on the branch, a mark in form (row 3147, `extras.journalentry` `create`), where
+  `time_after` alone read 2; 3 after the two tags more made on `main`; and 3 after the example's
+  `PATCH` of the branch's `tags` to one tag and then to `[]` (rows 3150 and 3151,
+  `netbox_branching.branch` `update`), where `time_after` alone read 6. Each count was that of the
+  rows of a later `time` in the list read whole and compared in code, less those two kinds.
+  *(2026-11-12)*
+- **After a sync the count is 0 from the new `last_sync`.** The superuser's `POST .../sync/` with
+  `{"commit": true}` answered 200, a job `pending` named `Sync branch`; read every 0.05 s, the
+  branch went `ready`, `syncing` at 0.21 s and `ready` at 1.47 s, and the job read `completed`,
+  as the earlier run's "A sync" read and in agreement with it. Across it `last_sync` and
+  `last_updated` moved, and no other member. With `T` the new `last_sync`, the count and
+  `time_after` alone each read 0, and the list read whole held no row of a later `time`; `main`'s
+  changelog counted 733 rows, latest id 3151, before the sync and after it; and `p9-read-main`
+  was listed under the branch's header. *(2026-11-12)*
+
+**A branch not yet `ready`, and a merged one**
+
+- **A branch is listed by its name at once, and the example's writes to it are taken while it is
+  provisioned.** The superuser's `POST branches/ {name}` answered 201, `status new`, in 0.18 s. By
+  the example's token, from the request: `?name=p9-read-b` at 0.33 s answered `count 1`, `new`; a
+  `PATCH` of its `tags` to one tag at 0.54 s 200, with that tag and `status provisioning`; and a
+  journal entry on it at 0.80 s 201. Read every 0.1 s by `?name=`, the branch read `provisioning`
+  until `ready` at 6.13 s, and then held the tag and the entry, which the example's token listed,
+  `count 1`. *(2026-11-12)*
+- **A merged branch is listed, and the example's writes to it are taken.** `p9-read-m`, holding a
+  tag made under its header and an entry the example's token wrote, was merged by the superuser's
+  `POST .../merge/ {"commit": true}`: 200, a job `pending` named `Merge branch`; the branch read
+  `merging` at 0.34 s and `merged` at 1.44 s, `merged_time` and `merged_by` (`admin`) set, the job
+  `completed`, and the tag was listed on `main`, in agreement with the earlier run's "A merge".
+  Merged, to the example's token: `?name=p9-read-m`
+  200, `count 1`, `status {value: merged, label: Merged}`; its entries listed, 200, the one; an
+  entry written on it, 201; and its `tags` set to one tag and then to `[]`, 200 each, the answer's
+  `status` `merged` each time. The tag deleted on `main` by the superuser's token answered 204, and
+  the merged branch's `DELETE` 204, in agreement with the earlier run's "A merged branch's header
+  is refused, and the branch can be deleted", whose refusal of a merged branch's header was not
+  read again here. *(2026-11-12)*
+- **Deleting a branch deletes its journal entries.** After `p9-read-m`'s `DELETE` its entries
+  listed by `assigned_object_id` counted 0, and its two answered 404 by their ids; once the four
+  branches were deleted, each of the eleven entries made on them answered 404 by its id, and the
+  list of every journal entry counted 0. *(2026-11-12)*
+- **A branch with no change does not merge.** `p9-read-m0`, `ready` with nothing made under its
+  header, was given the same `merge`: 200, a job `pending`, then `running` and `completed` 0.69 s
+  after the answer, with no error and no log entry; the branch read `ready` at each poll and its
+  `merged_time` null, and its `DELETE` answered 204. *(2026-11-12)*
+
+**The example's account at a branch's tags and journal**
+
+- **A branch's `tags` are taken by slug, by name and by id.** By the example's token, on
+  `p9-read-a` holding `p9-read-x`: a `PATCH` of `tags` to `[{"slug": "p9-read-x"}, {"slug":
+  "p9-read-y"}]` answered 200 with both, each a row of `color`, `display`, `display_url`, `id`,
+  `name`, `slug` and `url`; then to `[{"slug": "p9-read-x"}]` 200 with `p9-read-x` alone, and the
+  branch read by its id held `p9-read-x`. Rows of `{"name"}`, and the tags' ids, were answered the
+  same. *(2026-11-12)*
+- **A branch's entries, two a page.** Six entries on the branch, the example's own, written one
+  after the other, listed by its token with
+  `?assigned_object_type=netbox_branching.branch&assigned_object_id=<id>&ordering=created&limit=2`,
+  answered `count 6` at offsets 0, 2 and 4, two rows each, the six in the order written and their
+  ids rising; offset 6 answered `count 6` and no row. The answer's `next` at offset 0 was
+  `/api/extras/journal-entries/` after NetBox's own address, its query the list's own four
+  parameters with `limit=2` and `offset=2`; at offset 2 the same with `offset=4`; and at offsets 4
+  and 6 none. A page of 100 answered the six in the same order. An entry's members are
+  `assigned_object`, `assigned_object_id`, `assigned_object_type`, `comments`, `created`,
+  `created_by`, `custom_fields`, `display`, `display_url`, `id`, `kind`, `last_updated`, `tags` and
+  `url`; **`created_by` is the writer's user id**, an integer, that of
+  `fylgja-orchestrator`, and not a row. *(2026-11-12)*
+- **The example's account may not change or delete an entry**: its `PATCH` of an entry's
+  `comments` and its `DELETE` of the entry were each 403 `You do not have permission to perform
+  this action.`, and the entry read as written. *(2026-11-12)*
+
+**A webhook, to each account**
+
+- **Neither lesser account reads a webhook or an event rule by its list or by its id**; both read
+  a webhook's rows of `main`'s changelog, its headers in them (read on 2026-11-13 below). The
+  superuser's token made a
+  webhook with `additional_headers` `X-P3: not-a-secret` and a `secret`, and an event rule naming
+  it, `enabled: false`, 201 each. To the example's token and to the reader's, `GET
+  extras/webhooks/`, the webhook by its id, `extras/event-rules/` and the rule by its id were each
+  403 `You do not have permission to perform this action.`, no body holding `X-P3`,
+  `additional_headers` or `secret`. To the superuser's, each was 200: the webhook's list and its
+  row held the header line and **the `secret` member with the value written**, compared in code and
+  not printed, and the rule's held neither. *(2026-11-12)*
+
+**A report as a journal entry**
+
+- **A report is kept byte for byte.** `render(drafts.failed_at_four(), limit=None)`'s summary, an
+  empty line and its detail, 2,062 bytes in 39 lines, posted by the example's token as an entry of
+  kind `danger` on the branch, answered 201; the create's answer, the entry read by its id and its
+  row in the branch's list each held `comments` equal to the text sent. *(2026-11-12)*
+- **NetBox renders it as Markdown, but its lists.** Signed in as the superuser, the entry's page
+  (`/extras/journal-entries/<id>/`) and the branch's `journal` tab
+  (`/plugins/branching/branches/<id>/journal/`) each answered 200 and held the whole report, its
+  last line's ids among it, in a `rendered-markdown` element: the heading as `<h2>`, the table as a
+  `<table>` of a header row and five rows of five cells, `**failed**` and each bold line as
+  `<strong>`, and each id in backticks as `<code>`. **The lists are shown as text**: under each of
+  `What failed`, `Every finding`, `Approximations` and `Stages`, whose list follows its bold line
+  with no empty line between, the bold line and the items rendered as one paragraph, the items'
+  `- ` and `1. ` as text, and neither page held an `<li>`. An entry of the same form with an empty
+  line before each list rendered a `<ul>` and an `<ol>`, an `<li>` an item. Neither page cut the
+  report. *(2026-11-12)*
+
+Read on 2026-11-12 on the development instance, for phase 9's plan 3, up and seeded with the two
+accounts, under Docker 29.8.1: a Prefect 3.9.2 server on the Docker bridge's gateway at a free port
+and a runner serving one probe flow as `twin-rehearse/main` (under "Prefect 3.9.2" above); a
+listener of the reading's own on the bridge's gateway, which answered 200 and kept each request's
+method, path, header names and body; and throwaway scripts over `netbox/seed/box.py` and httpx
+0.28.1. The superuser's token made the tag `p3-rehearse`, limited by `object_types` to
+`netbox_branching.branch`; the branch `p9-read-c`, `ready` 5.7 s after its request; a webhook,
+`POST`, `http_content_type: application/json`, the `body_template`
+`{"parameters": {"branch": "{{ data.name }}"}}` and `additional_headers` the one line
+`Authorization: Basic <base64 of Prefect's basic auth>`, built from `local/.env` in the script and
+never printed; and an event rule on `netbox_branching.branch` for `object_updated`, its `conditions`
+`{"and": [{"attr": "tags.slug", "value": "p3-rehearse", "op": "contains"}]}`, its action that
+webhook. The superuser's token set the tag on the branch and took it off, by a `PATCH` of its
+`tags`, and pointed the webhook at each address by a `PATCH` of its `payload_url`; the probe's flow
+took the tag off by the example's token. Times are the scripts' UTC clock, the listener's, Prefect's
+state timestamps and NetBox's background tasks'; each timing is one run unless a range is given.
+Afterwards the rule, the webhook and the tag were deleted, each answering 404 by its id after, the
+branch, listed no more by its name, and the four failed background tasks below; no branch then
+stood, no tag but `fylgja` and no journal entry, webhook or event rule was listed, the queues
+counted no failed job, as before the first failure, and `seed.differences` answered `[]`.
+*(2026-11-12)*
+
+**The worker reaching the host**
+
+- **`host.docker.internal` is the bridge's gateway in the worker, and Prefect answers it there.** In
+  `netbox-worker` as it ran, `getent hosts host.docker.internal` answered the bridge's gateway, exit
+  0. By the worker's own Python (`/opt/netbox/venv/bin/python`, `urllib.request`), `/api/health` at
+  `host.docker.internal:<the port>` answered 200 `true` in 0.119 s, and `/api/version` with no
+  credential 401 `{"exception_message":"Unauthorized"}`. *(2026-11-12)*
+
+**What the worker sends, and where NetBox keeps the answer**
+
+- **The request as sent.** With the webhook's `payload_url` the listener's, `host.docker.internal`
+  at its port with the path `/api/deployments/<id>/create_flow_run`, each setting of the tag sent
+  one request, twice: `POST` of that path, `HTTP/1.1`, the headers `Host`, `Accept-Encoding`,
+  `User-Agent` (`python-urllib3/2.8.0`), `Content-Type` (`application/json`), `Authorization` and
+  `Content-Length`, in that order and no other, `Authorization` equal to the line given (compared in
+  code); the body the 39 bytes `{"parameters": {"branch": "p9-read-c"}}`. It arrived 1.251 s and
+  0.935 s after the `PATCH` was sent. *(2026-11-12)*
+- **Each sending is a background task of the worker's**, `extras.webhooks.send_webhook` on the queue
+  `default`, the worker's log naming its event (`event_rule=<EventRule: p3-read-rule>`,
+  `event_type='object_updated'`) at its start and, where the receiver answered 2xx,
+  `Successfully completed … job in 0:00:00.7…s`, 0.71 to 0.80 s over six. Where it succeeded the log
+  held no URL. Where Prefect answered 404 it held Prefect's words and the status, and no URL; where
+  the connection was refused or timed out, the URL. No log line held the basic auth, its base64 or
+  its password, by a scan in code. In NetBox's installed source, read and not run, the line
+  `Sending <method> request to <url>` is `logger.info`, and the request's parameters, its headers
+  among them, `logger.debug`. *(2026-11-12)*
+- **What the receiver answered is the task's, and not a job's.**
+  `GET core/background-tasks/<task id>/` by the superuser's token answered `status` `finished`,
+  `result` `Status 201 returned, webhook successfully processed.`, `timeout 300`, and `created_at`,
+  `enqueued_at`, `started_at` and `ended_at`; the worker logged `result is kept for 500 seconds`. A
+  failed one read `status failed` and `result` null, its words in the worker's log alone, and
+  `core/background-queues/` counted it under `failed_jobs`. `core/jobs/` held no row of a webhook,
+  its rows of those minutes `Provision branch` and `Search cache update`, and
+  `core/background-tasks/` listed none, with `?queue=default`, `?status=failed` or neither. No
+  task's representation held the basic auth, its base64 or the word `additional_headers`, compared
+  in code. `POST core/background-tasks/<task id>/delete/` answered 2xx with no body; the task by its
+  id then answered 500. `core/background-workers/` counted one worker, of the queues `high`,
+  `default` and `low`. *(2026-11-12)*
+
+**The tag starting Prefect's deployment**
+
+- **One setting of the tag is one flow run, the branch its parameter.** With the webhook at
+  Prefect's `create_flow_run` for `twin-rehearse/main`, each setting's task read
+  `Status 201 returned`, and Prefect made one run, `parameters` `{"branch": "p9-read-c"}`, its
+  `created` 0.967 s to 1.027 s after the `PATCH`'s send, over four settings. Its states, from that
+  send: `Scheduled` within a millisecond of the `created`, `Pending` at 2.67 s to 8.01 s,
+  `Submitting` 0.05 s to 0.06 s after it (derivations), `Running` at 5.31 s to 10.71 s and
+  `Completed` at 5.68 s to 11.23 s. *(2026-11-12)*
+- **The flow's own untagging starts nothing, in the 60 s watched with the webhook at Prefect and the
+  30 s after the run's end with it at the listener.** The probe's flow, given the example's token,
+  set the branch's `tags` to the rest of its tags by slug, here `[]`, at its start, answered 200 in
+  0.13 s to 0.18 s, four times. Set once, the tag started one run, and 60 s on Prefect listed that
+  one run more for the deployment; the worker logged one task of the webhook. With the webhook back
+  at the listener, the tag set (one request received), a run created from the host by the same body
+  untagged the branch, and the listener received nothing from that create to 30 s after the run's
+  end. The branch's `description` then edited untagged sent nothing in 20 s, and the tag set again
+  made one run more, which untagged it. *(2026-11-12)*
+- **A deployment the server no longer holds.** With the webhook naming the id of a deployment whose
+  home had been removed, the setting's task failed 0.71 s after its start (a derivation), the worker
+  logging `Request failed; response status 404: b'{"detail":"Deployment not found"}'` and
+  `requests.exceptions.RequestException: Status 404 returned with content '…'`,
+  `webhook FAILED to process.`; no run was made, and the branch kept its tag and gained no journal
+  entry. *(2026-11-12)*
+
+**A receiver that does not answer**
+
+- **A port nothing listens on**, of the bridge's gateway: the setting's task failed 0.729 s after
+  its start (a derivation, from its `started_at` and `ended_at`), the worker logging the traceback
+  to `requests.exceptions.ConnectionError`,
+  `Failed to establish a new connection: [Errno 111] Connection refused`. **`192.0.2.1`**: the task
+  failed 60.552 s after its start (a derivation), the worker logging
+  `Request to http://192.0.2.1:<port>/api/deployments/<id>/create_flow_run`
+  `timed out after 60 seconds` and `requests.exceptions.ConnectTimeout: … (connect timeout=60)`. For
+  each, in the 120 s watched the worker logged that one task of the webhook and nothing was sent
+  again; the task read `status failed`; and the branch kept its tag and gained no journal entry. The
+  webhook's `timeout` member read `null`; in NetBox's installed source, read and not run, the
+  request's timeout is that member where it is set and `WEBHOOK_DEFAULT_TIMEOUT`, 60 by default,
+  where not, and `RQ_RETRY_MAX` is 0 by default. *(2026-11-12)*
+- **A setting after a lost one is sent at once where the first has ended, and behind it where it has
+  not.** The address restored after the 120 s, the tag taken off and set again: its run's `created`
+  0.978 s after the `PATCH`. With the webhook at `192.0.2.1`, the tag set; 10.22 s on, the tag taken
+  off; the address restored; and 10.53 s after the first setting the tag set again: the second
+  setting's run's `created` was 51.873 s after it and 62.403 s after the first setting, the worker
+  logging the second task's start in the second it logged the first's timeout. *(2026-11-12)*
+
+Read on 2026-11-13 on the development instance, for phase 9's plan 3's Task 7, up and seeded with
+the two accounts, under Docker 29.8.1, through the make targets of that task at `f43b8d6`, on a tree
+that differed from it in one line of a test, run from its worktree with `local/.env` loaded:
+`make orchestrator-env SOURCE=netbox`, a core on the local
+driver with a new store and no twin, `make prefect-up` on port 4200 of the bridge's gateway under
+the `local/prefect/` an earlier run had used, `make orchestrator-serve SOURCE=netbox`, `make
+netbox-hook` and `make netbox-change`; then, with the core stopped by its pid so that no twin could
+be made, the tag set by a throwaway script over `netbox/seed/box.py` with the superuser's token, as
+`change.py --tag` sets it. Times are the scripts' clock and Prefect's state timestamps; each timing
+is one run. Afterwards the runner, Prefect and the core were stopped by their pids, the flow run was
+deleted from Prefect (404 by its id after), and the branch was deleted (404 by its id after); the
+tag `fylgja-rehearse`, its event rule and its webhook were left, as `make netbox-hook` installs them;
+no branch and no journal entry was listed, the queues counted no failed job, and
+`seed.differences` answered `[]`. *(2026-11-13)*
+
+- **Port 4200 itself, from the worker.** In `netbox-worker` as it ran, `getent hosts
+  host.docker.internal` answered the bridge's gateway, and by the worker's own Python
+  (`urllib.request`), `/api/health` at `host.docker.internal:4200` answered 200 `true` in 0.045 s
+  and `/api/version` with no credential 401 `{"exception_message":"Unauthorized"}`. *(2026-11-13)*
+- **The trigger as `make netbox-hook` writes it, read back.** Its first run made the tag, the
+  webhook and the rule; the superuser's read of the webhook answered `payload_url` naming the id
+  `GET /api/deployments/name/twin-rehearse/main` answered, `http_method` `POST`,
+  `http_content_type` `application/json`, the `body_template` as written, and `additional_headers`
+  equal to the line written (compared in code). The rule read `event_types` `["object_updated"]`,
+  `object_types` `["netbox_branching.branch"]`, `enabled` true, its `conditions` equal to those
+  written, `action_object_type` `extras.webhook` and `action_object_id` the webhook's id, and
+  `action_type` as the row `{"value": "webhook", "label": "Webhook"}`; the tag read `object_types`
+  `["netbox_branching.branch"]`. The second run found all three and wrote the webhook's address and
+  header again, and what it read back before was the same, so it said nothing made or changed.
+  *(2026-11-13)*
+- **The change built and marked, twice.** `make netbox-change` exited 0 in 24.2 s, the branch made,
+  its two steps written under its header and each marked by `stage mark` through `edge_dev.py run`;
+  `stage list --branch third-link` then answered `main`, `third-link`, `n1-address` and `head`, and
+  `stage plan --branch third-link` exited 0 in 12.2 s, `Plan: 4 of 4 stages build`. Run again, it
+  deleted the branch, `ready`, which a read by its name straight after the `DELETE` listed no more,
+  and built it again in 26.2 s; the branch then held two journal entries, the new build's two marks,
+  and the earlier build's were gone with the earlier branch. Each mark of the second build named
+  the same blueprint id as the first build's of its label. *(2026-11-13)*
+- **The installed trigger starts the rehearsal's own flow run.** The tag set on `third-link` by a
+  `PATCH` of its `tags`, answered in 0.214 s: Prefect made one run of `twin-rehearse/main`,
+  `parameters` `{"branch": "third-link"}`, its `created` 0.982 s after the `PATCH`'s send (a
+  derivation); its states, from that send, `Scheduled` at +0.981 s, `Pending` at +1.265 s and
+  +1.313 s, `Running` at +4.210 s and `Completed` at +5.130 s. The worker logged one task of the
+  webhook, `event_rule=<EventRule: fylgja-rehearse>`, completed. The flow took the tag off the
+  branch, which then held no tag, and filed one journal entry more, of kind `warning`, beginning
+  `## Not rehearsed: the core could not be used`, the runner logging `report: posted`. 30 s after the
+  run's end, Prefect listed that one run since the `PATCH`. No output of the run, the runner's log,
+  Prefect's log or the worker's held the basic auth, its base64, its password or a token, by a scan
+  in code of 50 files, 122,391 characters. *(2026-11-13)*
+
+Read on 2026-11-13 on the same instance, for phase 9's plan 3's Task 7's first round of fixes,
+by throwaway scripts over httpx 0.28.1 and `netbox/seed/box.py`, each of the three tokens and the
+basic auth loaded from `local/.env` in the script's own process and every value compared there and
+never printed; and `make netbox-hook` at `f43b8d6` and with this round's fix of
+`netbox/seed/hook.py`, `make prefect-up` running for the deployment's id, while the branch
+`p9-read-45dba99b`, made and read `ready`, stood. A count is the example source's own
+(`NetBoxSource._gained` with the example's token, the filter `stage.main.gained` counts with, from
+the branch's `last_sync`). Afterwards the branch was deleted, listed by its name no more, and
+Prefect stopped; the rule read as `make netbox-hook` installs it, and `seed.differences` answered
+`[]`. *(2026-11-13)*
+
+- **A webhook's rows of `main`'s changelog hold its headers, to either lesser account.**
+  `GET core/object-changes/?changed_object_type_id=<extras.webhook's id>` answered 200 to the
+  reader's token, to the example's and to the superuser's, the same 13 rows to each, by id, action,
+  object and members: the creates, updates and deletes of the three webhooks made on 2026-11-12
+  and 2026-11-13. Each row's `prechange_data` and `postchange_data`, but a create's before and a
+  delete's after, which were empty, held the members `additional_headers`, `body_template`,
+  `ca_file_path`, `custom_fields`, `description`, `http_content_type`, `http_method`, `name`,
+  `owner`, `payload_url`, `secret`, `ssl_verification`, `tags` and `timeout`. `additional_headers`
+  was there in each and not masked, 73 characters where it was the basic auth's line; `secret` was
+  there and not masked, 28 characters where one had been set and empty elsewhere. 11 of the 13
+  rows held `FYLGJA_ORCHESTRATOR_AUTH`'s value, its base64 or its password, compared in code, to
+  each of the three tokens: those of the webhook Task 2's reading made with it, and the create of
+  `fylgja-rehearse`; the two of the webhook whose header was `X-P3: not-a-secret` held none. The
+  event rules' 5 rows answered alike to each token, with no `additional_headers`, and held none of
+  it. *(2026-11-13)*
+- **A `PATCH` that changes nothing added no row.** `make netbox-hook` at `f43b8d6`, which sends
+  the webhook's `payload_url` and `additional_headers` again as they stand, added no row to
+  `main`'s changelog, and the count for the branch read 0. The webhook `fylgja-rehearse` held one
+  row, its create, after the second run of that target in the readings above had sent the same.
+  With the fix, which sends nothing where everything stands as it should, the target added no row.
+  *(2026-11-13)*
+- **A rule's change is counted as a change of `main`.** The rule's `enabled` set to false by the
+  superuser's `PATCH` added one row, `extras.eventrule` `update` by `admin`, and the count for the
+  branch read 1. `make netbox-hook` with the fix then said `wrote the event rule
+  fylgja-rehearse's enabled anew`, one row more of the same kind, and the count read 2; run once
+  more, it said nothing made or changed, added no row, and the count stayed 2. *(2026-11-13)*
+
+Read on 2026-11-13 on the development instance, for phase 9's plan 3's Task 8, up and seeded with
+the two accounts and the trigger `make netbox-hook` installed, under Docker 29.8.1, through the
+example's NetBox contract tier, `orchestrator/tests/contract_netbox/`, run from its worktree with
+`local/.env` loaded: the source with the example's token over a core of the module's own on the
+fake runtime on loopback, every set-up write `netbox/seed/box.py`'s with the superuser's token,
+each branch `fylgja-contract-<8 hex>` deleted at its test's end; and, for the trigger, a Prefect
+3.9.2 server of the module's own on the Docker bridge's gateway at a free port under a new home, a
+runner of the source `netbox` given that core, and `netbox/seed/hook.py` run as a child with that
+server's API and `host.docker.internal:<its port>`. Times are the tests' clock, NetBox's `created`
+and Prefect's timestamps. Where three values are given they are, in order, a run of that test's
+module alone and two whole runs of the tier, the second through `make contract-netbox`; the
+others are one run's. Afterwards no branch
+stood and no journal entry, scratch tag, webhook or event rule was listed; the installed webhook
+read its `payload_url` and `additional_headers` as before the module, written back by the
+superuser's `PATCH`, its header equal to the line of `FYLGJA_ORCHESTRATOR_AUTH` (compared in code)
+and its id that of `local/prefect/`'s deployment; the queues counted no failed job; nothing listened
+on 4200 or on the module's port; and `seed.differences` answered `[]`. *(2026-11-13)*
+
+- **A branch asked at once after its `POST` is `new` to the source**: `change` refused it
+  `branch <name> is new, and only a ready branch is rehearsed`, in each of three runs. A branch
+  holding a tag made under its header, merged by the superuser, read `merged`, and `change` refused
+  it by that status; the tag the merge took to `main` was deleted there. *(2026-11-13)*
+- **Each step marked is read back to its own state.** The change's two steps written under the
+  branch's header and each marked by the source: each entry read kind `info`, `created_by` the
+  example's user id, its `comments` `mark_text` of the label, the id the core gave and the
+  `observed_at` the core's copy of the blueprint holds; the stages read `main`, `third-link`,
+  `n1-address` and `head`, each to a blueprint with no error, `main`'s id another than the first
+  mark's, each mark's the id the core gave, and the head's the second mark's, nothing having been
+  written since. A second mark `third-link` was refused before anything was written. *(2026-11-13)*
+- **A mark the rehearsal cannot use, on the instance.** The first mark read under `tag:none` was
+  `mark.scope`; read through a second core of the test's own, `mark.unheld` (`The core holds no
+  blueprint …`); an entry written by the superuser beginning `Fylgja stage: by-hand` with a
+  blueprint line that is no id, `mark.malformed` naming its entry; and `mark` refused the labels
+  `main` and `head` with nothing written. *(2026-11-13)*
+- **What the count of `stage.main.gained` counts, by the example's token.** On a branch with two
+  marks, the tag `fylgja-rehearse` set by the superuser and taken off by `claim`, and a webhook and
+  a disabled event rule made on `main` by the superuser, `main`'s read carried no
+  `stage.main.gained`, and the rows of `main`'s changelog of the branch's `last_sync` or later,
+  listed by `time_after` and judged in code by their time and their `changed_object_type`, counted
+  0 of any kind but `extras.journalentry`, `netbox_branching.branch`, `extras.webhook` and
+  `extras.eventrule`. A tag made on `main` then: the warning, `main has gained 1 change`, and the
+  rows judged in code 1. After the superuser's sync the warning was gone and the rows of the new
+  `last_sync` or later judged 0. The object types' ids read 128, 168, 1 and 122 for the four kinds,
+  and 114 for `extras.tag`. *(2026-11-13)*
+- **`claim` takes the tag off and leaves the others**: the branch holding `fylgja-rehearse` and a
+  scratch tag, one `claim` left the scratch tag alone, and a second left `last_updated` where it
+  was. *(2026-11-13)*
+- **NetBox keeps an entry with the whitespace at its end stripped.** A report whose detail ended
+  in a space was read back without it, 100,019 characters the same before it; ended by a full stop,
+  a detail of 100,000 bytes was read back whole. The library's report of each status, posted by the
+  source with an empty line before each list, was read back equal to that text, of kinds
+  `success`, `danger`, `warning` and `warning`, by the example's account, and the stages unmoved.
+  *(2026-11-13)*
+- **The reports' lists are rendered as lists.** Signed in as the superuser, the branch's `journal`
+  page held each of the 39 items of the four reports' lists as the text of an `<li>`, and 5 tables.
+  The page holds `<li>` of its own, its menus and each entry's actions: 16 more than the one
+  report's 8 items in a reading by a throwaway script. *(2026-11-13)*
+- **The example's account writes nothing else**: its `POST dcim/sites/` and its `DELETE` of its own
+  mark's entry were each 403, and the entry stood. *(2026-11-13)*
+- **A failed sending of a webhook is listed on NetBox's pages and deleted through the API.** Signed
+  in as the superuser, `/core/background-queues/<n>/failed/`, `n` 0, 1 and 2 for `default`, `high`
+  and `low`, listed each failed task by a link `/core/background-tasks/<id>/`; the task by its id
+  read `func_name` `extras.webhooks.send_webhook`, and `POST core/background-tasks/<id>/delete/`
+  removed it, the queues counting no failed job after. A run of the tier made 3: the tag set twice
+  with the installed webhook at port 4200, where nothing listened, and once at a port that refused.
+  *(2026-11-13)*
+- **The installed trigger starting a whole rehearsal.** With the webhook at the module's server,
+  the tag set by the superuser on a branch of two marks: Prefect made one run of
+  `twin-rehearse/main`, `parameters` `{"branch": <its name>}`, `created` 1.004 s, 1.000 s and 1.030 s
+  after the setting; the run read `COMPLETED` 25.654 s, 23.351 s and 21.756 s after it, its document
+  valid and `passed`; the branch gained one entry, kind `success`, beginning `## Rehearsal passed`,
+  by the example's account, `created` 25.482 s, 23.154 s and 21.569 s after the setting, and held
+  no tag; 30 s after the run's end Prefect listed that one run since the setting; the webhook
+  named the id `GET /api/deployments/name/twin-rehearse/main` answered under that home; and the
+  core listed no twin of the change. *(2026-11-13)*
+- **A setting lost at a receiver that refuses.** With the webhook at a free port of the gateway,
+  the tag set: 45 s on no run, the tag on the branch and no entry. The webhook written back to the
+  server, the tag taken off and set again: a run `created` 0.952 s, 1.016 s and 1.074 s after it, which
+  answered `REJECT` to `set_state` `CANCELLING` and read `CANCELLED` at the first read. *(2026-11-13)*
+- **The server and the runner.** The server answered `/api/health` 30.1 s, 29.6 s and 29.1 s after
+  its start, and both deployments 3.5 s, 3.4 s and 3.5 s after the runner's. No output of the
+  server, the runner or the hook, and no entry of the module's branches, held the tests' basic auth, its
+  password or its base64, a token of NetBox's or the core's, compared in code. *(2026-11-13)*
+- **The tier**: 10 tests passed in 339.18 s (pytest's), 341 s by the shell, run alone; and in
+  335.37 s in `make contract-netbox`, which exited 0 in 1,074 s by the shell, `netbox/`'s 14 passing
+  in 151.35 s and the reader's 45 in 582.43 s before it. *(2026-11-13)*
+
+Read on 2026-11-13 on the same instance, for phase 9's plan 3's Task 8's first round of fixes,
+through the same tier at its fixes and by a throwaway script over `netbox/seed/box.py` with the
+superuser's token, which counted `main`'s changelog rows of `extras.webhook` by
+`changed_object_type_id` before and after a run, and judged each row's `additional_headers`
+against the line of `FYLGJA_ORCHESTRATOR_AUTH` in memory, printing counts alone: a run of the hook
+module alone; that module killed by `SIGKILL` 45 s after its start and run again; and the tier
+whole. Afterwards no branch stood, no process of the runs was listed, the installed webhook named
+the installed receiver and deployment with the installed auth's line (compared in code), the
+queues counted no failed job, and `seed.differences` answered `[]`. *(2026-11-13)*
+
+- **What a run of the hook module adds to `main`'s changelog.** One run of the module alone added 4
+  rows of `extras.webhook`, each an `update` by `admin`: `hook.py`'s three runs and the module's
+  write-back. 2 of them held the installed auth's line, the first in its `prechange_data` and the
+  last in its `postchange_data`, and 4 held a header that is neither that line nor empty, the
+  module's own auth. The whole tier added 6, those 4 and a `create` and a `delete` of the source
+  module's scratch webhook, whose header was empty; 2 held the installed auth's line and 4 another
+  header. Before the first of these runs the changelog held 35 rows of `extras.webhook`, 19 of them
+  holding the installed auth's line. *(2026-11-13)*
+- **A run killed before its end.** The hook module killed by `SIGKILL` 45 s after its start, as the
+  first test began: the Prefect server and the runner were still running, each listed by `pgrep -x
+  prefect` and `pgrep -x fylgja-orchestr`, its `/proc/<pid>/environ` naming a `PREFECT_HOME` under
+  `/tmp/pytest-of-<user>/`; the installed webhook named the module's port with another header than
+  the installed auth's; and the first test's branch stood, `ready`. Run again, the module's fixture
+  refused at its start, `the installed webhook fylgja-rehearse does not send to
+  host.docker.internal:4200, as make netbox-hook installs it, so nothing was started`, each of its
+  three tests an error and nothing started, and the session's start deleted the branch. The two
+  processes were ended by SIGTERM to their sessions, no other process holding such a
+  `PREFECT_HOME` was listed after, and the webhook was written back by the superuser's `PATCH` of its
+  `payload_url` and `additional_headers` to what they were before the kill, the development Prefect
+  being down. *(2026-11-13)*
+- **The module's end.** The runner ended 0.8 s after its SIGTERM and the server 0.2 s after its, in
+  each of two runs; `hook.py` ran in 1.4 s, 1.4 s and 1.2 s, and in 1.3 s, 1.4 s and 1.2 s.
+  *(2026-11-13)*
+- **`stage mark`, the example's command, under the runner's environment for `netbox`**: on a branch
+  of the test's own with the step `third-link` written, exit 0 and the one line `<branch>
+  third-link: blueprint <64 hex>`, the stage `third-link` read back by the source to that id and the
+  branch's one entry naming it; the same label again exit 2, nothing on stdout, the source's
+  sentence `branch <name> already has a mark labelled third-link: a label is unique within its
+  branch` on stderr, and the entries one. *(2026-11-13)*
+- **The tier at its fixes**: 11 tests passed in 351.67 s (pytest's), 354 s by the shell. The tag's
+  run was `created` 0.950 s after the setting, its report 22.056 s and `COMPLETED` 22.227 s after
+  it; the next setting's run 0.976 s; the server answered `/api/health` 29.1 s after its start.
+  *(2026-11-13)*
+
+Read on 2026-11-13 on the same instance, for phase 9's plan 3's review, up and seeded with the two
+accounts and the trigger `make netbox-hook` installs, under Docker 29.8.1, by a throwaway script
+over `netbox/seed/box.py` and httpx with the superuser's token: a scratch tag `p9-read-json`,
+limited to branches; two scratch webhooks, each a `POST` of `application/json` with no header and
+no `secret`, to a listener of the script's own on a free port of the Docker bridge's gateway,
+reached as `host.docker.internal`, which answered 200 `{}` to each request; and two event rules,
+each sending one of the two on a branch's update while the branch carries the tag. Every object
+made was deleted after, each branch once read `ready`; the trigger was not written, and
+`seed.differences` answered `[]`. In NetBox's installed source, read and not run, a webhook's body
+template is rendered by `render_jinja2`, in a Jinja2 `SandboxedEnvironment`.
+
+**A branch's name in a webhook's body**
+
+- **The plugin takes a name holding `"` or `\`.** `POST plugins/branching/branches/` of the names
+  `p9-read-q"x`, `p9-read-b\x`, `p9-read-plain` and `p9-read-s'<&>` answered 201 each, the name
+  answered equal to the one sent; each read `ready` 5.6 s or 5.7 s after its first read, and
+  `?name=` of each answered that branch alone. *(2026-11-13)*
+- **A body template's `tojson` writes the name as a JSON string.** The webhook of the body template
+  `{"parameters": {"branch": {{ data.name | tojson }}}}` was answered 201, the template read back as
+  sent. The tag set on each branch, the listener received one `POST` of it, `application/json`:
+  `{"parameters": {"branch": "p9-read-q\"x"}}`, `{"parameters": {"branch": "p9-read-b\\x"}}`,
+  `{"parameters": {"branch": "p9-read-plain"}}` and
+  `{"parameters": {"branch": "p9-read-s\u0027\u003c\u0026\u003e"}}`, each parsing as JSON, in
+  code, to `{"parameters": {"branch": <the name as made>}}`. *(2026-11-13)*
+- **The template without it writes the name as it is.** The other webhook, of the body template
+  `{"parameters": {"branch": "{{ data.name }}"}}`, sent `{"parameters": {"branch": "p9-read-q"x"}}`
+  and `{"parameters": {"branch": "p9-read-b\x"}}`, neither parsing as JSON (`Expecting ','
+  delimiter` and `Invalid \escape`), and for the other two names the body the first sent for
+  `p9-read-plain`, byte for byte, and `{"parameters": {"branch": "p9-read-s'<&>"}}`, each parsing to
+  the name. Each of the eight sendings reached the listener 0.682 s to 1.822 s after its tag's
+  `PATCH` was sent; the worker logged eight webhook tasks completed and none failed; with each tag
+  taken off, the listener received nothing more in the 5 s after the last. *(2026-11-13)*
+- **The installed trigger holds the `tojson` body**, read after the readings above and outside
+  their method, which wrote no trigger: at the end of that review's fix wave, after
+  `netbox/seed/hook.py`'s body became that template, the example's NetBox contract tier run whole
+  and then `make netbox-hook`, the webhook `fylgja-rehearse` stood as `make netbox-hook` writes
+  it, its body the `tojson` template. *(2026-11-13)*
+
+Read on 2026-11-13 on the development host, for phase 9's plan 4's Task 0b, under Docker 29.8.1 and
+Docker Compose v5.6.0, Infrahub stopped and no twin on the host: the development NetBox as plan 3
+left it, up, seeded with the two accounts and the trigger `make netbox-hook` installs; then
+`make netbox-up` run whole once from the task's worktree, at `510c366` with the override's
+`networks` member and `scripts/netbox_dev.py`'s recreate uncommitted beside it, against the main
+checkout's `local/`. The local driver's pool was judged by the core's own functions from the
+worktree's venv, `ContainerlabDriver._docker_subnets`, its read of every Docker network's subnets,
+then `pool.choose` over `DEFAULT_POOL` with no twin reserved; no lab was made and no image booted.
+The volumes' names and creation times are `docker volume inspect`'s. The target's time is from
+before `make` to after it, by Python's clock, one run; the lines quoted are the script's own.
+Prefect was started by `make prefect-up` for the one reading of reach and stopped by
+`make prefect-down`, and no runner ran. Afterwards no branch stood, no journal entry was listed,
+the tags were `fylgja` and `fylgja-rehearse`, the webhook and the rule stood as `make netbox-hook`
+leaves them, nothing listened on port 4200, and `seed.differences` answered `[]`. *(2026-11-13)*
+
+**The project's network and the local driver's lab pool**
+
+- **Docker had given the project the pool whole.** Before the change,
+  `docker network inspect fylgja-core-netbox_default` answered the one subnet 172.20.0.0/16, and
+  a creation time of 2026-11-12, to the second the six volumes'. The driver read four Docker
+  networks' subnets, one overlapping the pool, that one, and `pool.choose` answered None: no /24
+  of the pool was free while NetBox was up. *(2026-11-13)*
+- **`make netbox-up` recreated it on the kept volumes, and exited 0 in 138.8 s.** The script
+  said `fylgja-core-netbox_default stands with 172.20.0.0/16, not the override's
+  198.51.100.0/24: removing fylgja-core-netbox's containers and network, its volumes kept, so
+  that the start makes the network again`; Compose stopped and removed the five containers,
+  the worker first, and removed the network. The build then fetched the base image's layers,
+  its `FROM` step done at 51.2 s, and ran the plugin's layer anew in 1.2 s, neither `CACHED`.
+  Compose created the network and the five containers and started them; the script printed no
+  line of a failed first start, a refused token or a token written, said `netbox healthy 55 s
+  after its start`, and its last line named NetBox 4.7.5, netbox_branching 1.2.3 and one
+  worker. *(2026-11-13)*
+- **After it**, the network answered the one subnet 198.51.100.0/24, its gateway
+  198.51.100.1, created that day; the five containers read `healthy`; and the six volumes
+  `fylgja-core-netbox_<name>` were listed with the names and the creation time they had before.
+  The driver read four Docker networks' subnets, none overlapping the pool, and `pool.choose`
+  answered 172.20.0.0/24. *(2026-11-13)*
+- **What the volumes kept.** With `local/.env` loaded, `make netbox-seed` exited 0 in 20.9 s:
+  34 objects found, none made, and `account: every account, grant and token line is as it
+  should be; nothing written`. *(2026-11-13)*
+- **The worker still reaches Prefect.** `make netbox-hook` said `the tag, the webhook and the
+  event rule fylgja-rehearse stand; nothing made or changed`. In `netbox-worker` on the new
+  network, `getent hosts host.docker.internal` answered the default bridge's gateway, as
+  `docker network inspect bridge` names it (compared in the shell), and by the worker's own
+  Python (`urllib.request`), `/api/health` at `host.docker.internal:4200` answered 200 `true`
+  in 0.041 s, and `/api/version` with no credential 401 `{"exception_message":"Unauthorized"}`.
+  *(2026-11-13)*
+- **Not read:** what Compose's `up` alone does to a standing network whose subnet the override
+  changes, the script having removed it first; a recreate with the base image's layers held in
+  the build cache; a first start on new volumes with the override's network; the override's
+  subnet already held by another network on the host. *(2026-11-13)*
+
+Read on 2026-11-13, after the plan's last fixes changed `scripts/netbox_dev.py`'s start, under
+Docker 29.8.1, client and server. *(2026-11-13)*
+
+- **Docker's words for a network that does not stand.** `docker network inspect` of a name no
+  network has exits 1 and says on standard error `Error response from daemon: network <name>
+  not found`; `scripts/netbox_dev.py` takes "not found" in that text as absent. *(Docker
+  29.8.1, client and server, 2026-11-13)*
+- **`make netbox-up` on the merged code exited 0 in 77.9 s**, at `937c235`, on kept volumes,
+  the network standing at the override's range: the script said neither that it recreated the
+  network nor that it could not inspect it. `make netbox-down` then exited 0. *(2026-11-13)*
+- **Not read:** the script's line for a network that cannot be inspected, and its failure
+  after a recreate, on a real Docker: pure tests alone hold them. *(2026-11-13)*
+
+Read on 2026-11-13 on the development host, for phase 9's plan 4's Task 2, the dry run of the acceptance run on the
+local driver, the runbook's commands run as `CONTRIBUTING.md`'s "Through NetBox's tag" gives them, in its order, in
+the main checkout at `11f7397`, detached, `make venv` run there: NetBox 4.7.5, netbox-branching 1.2.3 and
+netbox-docker 5.1.1 under Docker 29.8.1 and Docker Compose v5.6.0, up and seeded with the two accounts and the trigger
+`make netbox-hook` installs; a core on the local driver, containerlab 0.81.0, at that commit over the store
+`local/store`; Prefect 3.9.2 by `make prefect-up` under the `local/prefect/` the earlier runs had used; and the runner
+by `make orchestrator-serve SOURCE=netbox`; Infrahub stopped. The readiness block was run as the runbook writes it,
+and **Read the run** by a throwaway script over httpx 0.28.1, the tokens, the auth and the superuser's password read
+from the environment in its process and never printed; nothing of a webhook's row was read. Times are NetBox's
+changelog and entries, Prefect's state timestamps and the scripts' UTC clock; each timing is one run. Afterwards the
+runner and the core were stopped by their pids and Prefect by `make prefect-down`; no twin, lab or SR Linux
+container was left, nothing listened on port 4200 or the core's, the one failed background task was deleted, the
+branch `third-link-local` stood untagged with its four entries, the trigger stood as `make netbox-hook` leaves it,
+and `seed.differences` answered `[]`. *(2026-11-13)*
+
+**What the run met before the change**
+
+- **`make netbox-up` on an instance already up** built the image again, its build step `CACHED`, and recreated `netbox`
+  and `netbox-worker`, `postgres` and the two `redis` left `Running`; it said `netbox healthy 65 s after its start`
+  and exited 0 in 83.2 s, its last line naming one worker. *(2026-11-13)*
+- **The block before `make netbox-hook`.** Before `make prefect-up` it refused at N2, `0 runners of this checkout`,
+  and read nothing of N3. With the server and the runner started it passed N0 to N4: N3 found the installed webhook
+  naming the id the server answered for `twin-rehearse/main`, and `GET` of that deployment by its id from inside
+  `netbox-worker`, by the worker's own Python with the basic auth, answered 200. `make netbox-hook` then said
+  `nothing made or changed`. *(2026-11-13)*
+- **The block's refusals seen.** Beside N2's before `make prefect-up`, the block refused three ways more at N2 and
+  once at N5, each exit 1 with its refusal and nothing read after it: with the runner
+  stopped, `0 runners of this checkout, … serve, run, not one: make orchestrator-serve SOURCE=netbox`; with a runner
+  of the source `infrahub` serving, `the runner, pid <pid>, serves the source infrahub, not netbox: …`; with a
+  scratch run left `SCHEDULED`, `flow runs not ended, <id> SCHEDULED: When no report comes says what is done with
+  each`; and, `branch` set, on a branch whose journal held the two marks and two reports, N5's `the journal of
+  third-link-local holds …, not the two marks alone: make netbox-change NETBOX_BRANCH=third-link-local builds it
+  again, marked anew`, on two lines. N3 was not seen to refuse. *(2026-11-13)*
+
+**A branch's rows of `main`'s changelog, by whom and with which members**
+
+- **The build.** `make netbox-change NETBOX_BRANCH=third-link-local`, untagged, exited 0 in 23.5 s. `main`'s
+  changelog gained, of the branch object, its `create` by `admin` alone, `postchange_data` `status` `new`: the
+  status's change to `ready` added no row. It gained besides two `extras.journalentry` `create` rows by
+  `fylgja-orchestrator`, the two marks. *(2026-11-13)*
+- **An edit of the branch object is one `update` by its writer, its data whole after and nothing of it before.** A
+  `PATCH` of the branch's `description` by the superuser's token, and one undoing it, each answered 200 and added one
+  row, `update` by `admin`, its `prechange_data` empty and its `postchange_data` every member of the branch, the
+  `description` as written; the branch untagged, no flow run was made. The tag set by `admin` and taken off by
+  `fylgja-orchestrator` read alike: each an `update` row by its writer, `prechange_data` empty, and in each, the row
+  that took the tag off among them, `postchange_data` `tags` `["fylgja-rehearse"]`; the tag taken off by `admin`
+  read the same. The script printed a member looked up in `prechange_data`, `tags` None, which cannot tell null from
+  `{}`; a setting by a `PATCH` and the run's removal, on the cluster's dry run later that day, each held `{}` as
+  listed and as read by its id (below), and no row of a `PATCH` of `description` was read so. *(2026-11-13)*
+- **The rebuild.** `make netbox-change NETBOX_BRANCH=third-link-local NETBOX_TAG=1` said `the branch third-link-local
+  stands: deleting it, and every journal entry on it, its marks among them, to build it anew from main` and `deleted
+  the branch third-link-local`, then built and marked it and set the tag, exit 0 in 26.6 s. `main`'s changelog gained
+  two `extras.journalentry` `delete` rows by `admin` and one row of the branch object's type of another id than the
+  new branch's, its id and its action not printed; the earlier branch and its two entries each answered 404 by
+  their ids. *(2026-11-13)*
+- **The worker's log names the row that sent it**: each sending of the webhook was logged with `object_change_ids`
+  the one id of the tag's setting row, and `Successfully completed` in the next second. *(2026-11-13)*
+
+**A branch built, marked and tagged by the seed's script, rehearsed from its tag, on the local driver**
+*(NetBox 4.7.5, netbox-branching 1.2.3, netbox-docker 5.1.1, Prefect 3.9.2, containerlab 0.81.0, the core at
+`11f7397`, 2026-11-13)*
+
+- **From the tag.** Against the time of the tag's row, 14:12:19.350: Prefect made one run of `twin-rehearse/main`,
+  `parameters` `{"branch": "third-link-local"}`, `created` +0.905 s, `Pending` +13.158 s, `Running` +15.478 s; the
+  tag's removal row by `fylgja-orchestrator` +15.917 s; one `rh-` twin listed by the core and three SR Linux
+  containers in `docker ps` while it ran, the twin's lab given 172.20.0.0/24 of the driver's pool with NetBox up on
+  its own network; the report's entry `created` +130.991 s and the run `Completed` +131.258 s, each offset a
+  derivation from two timestamps. In the 132 s watched
+  Prefect listed that one run since the tag, and the branch no tag after the removal. *(2026-11-13)*
+- **The rehearsal.** Its document, `fylgja-twin-rehearse-<run id>`, read `status` `passed`, `took_s` 114.8, the twin
+  `rh-d074d745-40a62d58` and no finding; its stages' `result`s `created`, `passed`, `passed` and `skipped`, the
+  baseline in 75.1 s, the marks in 14.2 s and 9.8 s, and the head, its blueprint and bundle the second mark's, not
+  run again; no `stage.main.gained`. Afterwards the core listed no twin. *(2026-11-13)*
+- **What NetBox's render pushed, by the core's log.** The baseline pushed each node its configuration by JSON-RPC,
+  26, 27 and 26 commands to `n1`, `n2` and `n3`. The step `third-link` pushed `n1` and `n3`, 27 commands each, and
+  logged `n2's configuration is the one it runs: nothing pushed`; the step `n1-address` pushed `n1` alone, 29
+  commands, and logged nothing pushed for `n2` and `n3`. Each push was logged `pushed … by json_rpc` in 2.5 s to
+  3.6 s, and the log held no line of level `WARNING` or `ERROR`. The one kind of check the log lines is the probe's
+  two bursts, at every stage the same pings from `n1`'s two hosts to `10.1.11.2` and `10.1.10.2`. What the
+  document's counts were made of is a derivation from verify's rules (`core/src/fylgja_core/verify.py`), not a
+  reading: each stage read every node over gNMI, which the log does not line, for its host name (reported, so
+  skipped, for a configured node), each cabled port's admin state and each link end's neighbour; with each node's
+  claim, held against the record, and the two bursts, the baseline's 15 held and 5 skipped are those, and
+  `third-link`'s 4 more the new link's two ports' admin state and its two ends' neighbours, read from `n1` and `n3`.
+  No rule reads an address; of the configuration pushed, only each port's admin state and the host name are read
+  back, so `n1-address`'s 19 held are `third-link`'s checks again, none of them of the address it added.
+  *(2026-11-13)*
+- **The entry.** The branch's third entry, by `created_by` 3, which `users/users/3/` by the superuser's token named
+  `fylgja-orchestrator`, kind `success`, 2,231 bytes in 36 lines, its `comments` as posted:
+
+  ```text
+  ## Rehearsal passed: 4 stages
+
+  Every stage was built on the twin and verified.
+
+  | # | stage | what changed | result | checks |
+  |---|---|---|---|---|
+  | 1 | main | baseline: 3 nodes, 2 links, 1 probe | created | 15 hold |
+  | 2 | third-link | 1 link added (n1 to n3); configuration of n1, n3 | passed | 19 hold |
+  | 3 | n1-address | configuration of n1 | passed | 19 hold |
+  | 4 | head | nothing | unchanged | not run again |
+
+  **Not modelled on the twin:** none
+
+  **Already failing before this change:** none
+
+  branch third-link-local, scope `tag:fylgja`. The rehearsal read its stages at 2026-11-13T14:12:35Z; one taken earlier is as it was then, at the time its line in the detail gives; later edits are not rehearsed. Took 1m 55s.
+  Fidelity is asserted, not measured.
+
+  **Rehearsal detail**: twin `rh-d074d745-40a62d58`, run `87008605-2352-4a3c-ac92-fd8632f24e52`, change `8f7mrqfg`.
+
+  **Approximations**
+
+  - `nokia_srlinux`: No linecard model
+  - `nokia_srlinux`: No hardware QoS, TCAM or buffer behaviour
+  - `nokia_srlinux`: Convergence timing differs from hardware
+  - `ping`: The hosts forward in their container's kernel and the twin's devices in theirs: a loss figure is the container's, never a hardware forwarder's.
+  - `ping`: Timing is the container's: the interval, a reply's time and a gap are measured on the lab host's scheduler, under its load.
+  - `ping`: A host speaks no discovery protocol, so the device port's neighbour is never asserted on a synthesized link.
+  - `ping`: IPv4 only: ping and ip are run without -6.
+
+  **Stages**
+
+  1. main: main as it stands when the rehearsal reads it; blueprint `02af0a2973c6`, bundle `0bdd1800f8cb`; run `01M7AM1XKF600Y4DJ65CDW1AHQ`, 1m 15s; 15 hold, 5 skipped
+  2. third-link: the mark third-link of branch third-link-local, read at 2026-11-13T14:12:07.011308Z; blueprint `0d53ef90dbda`, bundle `d932fe009a21`; run `01M7AM46Z2KTSCJWJ50RNCGR41`, 14s; 19 hold, 5 skipped
+  3. n1-address: the mark n1-address of branch third-link-local, read at 2026-11-13T14:12:14.727295Z; blueprint `d0ad39f13fcd`, bundle `029043425060`; run `01M7AM4MSSVE6ZYYHQFWAWRHB7`, 10s; 19 hold, 5 skipped
+  4. head: branch third-link-local as it stands when the rehearsal reads it; blueprint `d0ad39f13fcd`, bundle `029043425060`
+  ```
+
+  *(2026-11-13)*
+- **The Journal tab** (`/plugins/branching/branches/<id>/journal/`), fetched signed in as the superuser by NetBox's
+  login form, answered 200 and listed the newest entry first: the report, then `Fylgja stage: n1-address`, then
+  `Fylgja stage: third-link`. Each entry's kind was a badge, `Success` on the report and `Info` on each mark. The
+  report's `rendered-markdown` held one `<h2>`, one `<table>` of a header row and four rows of five cells, one `<ul>`
+  and one `<ol>` with 11 `<li>` in all, and 22 `<code>`. *(2026-11-13)*
+
+**A request lost and asked again**
+
+- **Prefect stopped, the tag set.** On the same branch, untagged, `make prefect-down`, the runner left running;
+  then the tag set by a `PATCH` of the branch's `tags` with the superuser's token, answered 200. The worker logged the
+  sending at once and its failure the next second, `Failed to establish a new connection: [Errno 111] Connection
+  refused` at `host.docker.internal`, port 4200; the task read `extras.webhooks.send_webhook`, `failed`, 0.80 s from
+  its `created_at` to its `ended_at` (a derivation), and the queue `default` counted 1 failed job. 60 s on the branch
+  held the tag and three entries. *(2026-11-13)*
+- **Not sent again.** `make prefect-up` under the same home; the block then passed N0 to N4, N3 naming the same id.
+  No run of the deployment was made from the tag's setting to 133 s after the start returned. *(2026-11-13)*
+- **Asked again.** The tag taken off by a `PATCH` of `tags` to none, which sent nothing, and 11.0 s later set again
+  the same way: one run, `created` +0.997 s after the setting's row, `Running` +7.010 s, the tag's removal by
+  `fylgja-orchestrator` +7.491 s, the entry +109.542 s and `Completed` +109.755 s, each a derivation from two
+  timestamps. The document read `passed`,
+  `took_s` 101.8, its stages `created`, `passed`, `passed` and `skipped`; the entry, the branch's fourth, kind
+  `success`, 2,230 bytes, differed from the first report in its twin, its run, its times and its stages' runs alone.
+  The failed task was listed by `/core/background-queues/0/failed/` and deleted by `POST
+  core/background-tasks/<id>/delete/`, answered 200, the queues then counting no failed job. *(2026-11-13)*
+- **`docker compose ls -a`** listed `fylgja-core-netbox` `running(5)` and the stopped `fylgja-core-infrahub`
+  `exited(8)`. *(2026-11-13)*
+- **Not read:** ~~a tag set by hand in NetBox's pages~~ (read on 2026-11-13 below, in the branch's edit form; a
+  tag set in any other of NetBox's pages was not read); ~~the Journal tab in a browser~~ (the maintainer read the
+  report there, below; how its table and lists render in a browser was not read in this run or the next, and is the
+  maintainer's sentence of the run on the cluster's core, below); `fylgja-core-netbox` as `docker
+  compose ls -a` lists it stopped; the block's N3 refusing; a rehearsal from a tag on a real driver ending `failed`,
+  `not_rehearsed` or `stopped`, and so an entry of kind `danger` or `warning` on the tab; an edit of the tagged
+  branch before the edge takes the tag off; two branches tagged close together. *(2026-11-13)*
+
+**A branch built in steps and marked by the seed's script, tagged by hand, rehearsed from its tag on the local
+driver, built while the maintainer watched, and its report as they read it on the Journal tab** *(NetBox 4.7.5,
+netbox-branching 1.2.3, netbox-docker 5.1.1, Prefect 3.9.2, containerlab 0.81.0, the core at `6abcef3`,
+2026-11-13)*. Read on 2026-11-13 on the development host, for phase 9's plan 4's Task 3: the host Task 2 left up
+and started again by the runbook's commands, the main checkout detached at `6abcef3`; the change built by
+`make netbox-change NETBOX_BRANCH=third-link-local`, without `NETBOX_TAG=1`, by the controller while the maintainer
+watched, as they answered when asked whether they had watched the branch being built *(the maintainer,
+2026-11-13)*; the tag set by the maintainer in the branch's edit form in NetBox's pages; then read-only watching, a
+script polling every 3 s, and **Read the run** by Task 2's script after the report. Nothing was started, tagged
+again or cancelled between the tag and the report. Times are NetBox's changelog and entries and Prefect's state
+timestamps. *(2026-11-13)*
+
+- **The build.** `make netbox-change` deleted the dry run's branch and its entries, made the branch anew, id 473,
+  and wrote and marked its two steps, each mark naming the blueprint id the dry run's of its label named; it exited
+  0 in 24.3 s by the controller's shell, its last line the one that asks for the tag. The readiness block with
+  `branch=third-link-local` then exited 0, N5 reading the branch `ready`, untagged, its journal the two marks, and
+  N6 its plan `planned`, every stage `built`. *(2026-11-13)*
+- **The tag set in the edit form** added one row to `main`'s changelog, `update` by `admin`, at 14:48:38.074, and,
+  unlike the rows a `PATCH` adds, it held `prechange_data`: `tags` `[]` before and `["fylgja-rehearse"]` after,
+  `status` `ready` in both; read by its id during the cluster's dry run that day, it held 13 members. The worker
+  logged one sending, `object_change_ids` that row's id, completed in the same second. The run took the tag off in
+  a row by `fylgja-orchestrator` at 14:48:48.762, 10.687 s after the setting's (a derivation), its `prechange_data`
+  empty: the script's lookup in it read `tags` None, and its read by id then counted no member, neither of which
+  tells null from `{}`. The changelog held no other row of the branch from its `create`. *(2026-11-13)*
+- **The run.** One flow run of `twin-rehearse/main`, `parameters` `{"branch": "third-link-local"}`, `created` at
+  14:48:38.641, then `Pending` 14:48:45.124, `Running` 14:48:48.200 and `Completed` 14:50:43.906. Its document read
+  `status` `passed`, `took_s` 114.6, no finding, its stages `created` (77.3 s, 15 held, 5 skipped), `passed` (12.8 s,
+  19 held, 5 skipped), `passed` (9.6 s, 19 held, 5 skipped) and `skipped`. *(2026-11-13)*
+- **The journal.** Three entries, each by `created_by` 3, `fylgja-orchestrator`: `Fylgja stage: third-link` and
+  `Fylgja stage: n1-address`, kind `info`, 159 bytes each; and the report, kind `success`, 2,231 bytes in 36 lines,
+  headed `## Rehearsal passed: 4 stages`, its text the dry run's first report's but for its read time, its twin, its
+  run, its change and its stages' runs and times. The report's entry was `created` at 14:50:43.682, 125.608 s after
+  the tag's row (a derivation). After it the core's `twin list` answered `[]`. *(2026-11-13)*
+- **What the maintainer read**: "The journal includes the rehearsal success report" *(the maintainer, 2026-11-13)*.
+  They said nothing of the marks beside it, of its heading or kind as the tab showed them, or of whether its table
+  and lists rendered as a table and lists in their browser; none of that is recorded as read. *(2026-11-13)*
+- **Not read:** this branch's Journal tab's page, which no script fetched in this run; the marks, the heading, the
+  kind and the render as the tab showed them to the maintainer; a tag set by `NETBOX_TAG=1` while the maintainer
+  watched. *(2026-11-13)*
+
+**A branch built in steps and marked by the seed's script through the cluster's core, tagged by one `PATCH`,
+rehearsed from its tag on the cluster's core** *(NetBox 4.7.5, netbox-branching 1.2.3, netbox-docker 5.1.1, Prefect
+3.9.2, clabernetes 0.10.1, k3s v1.37.1+k3s1, the core's image `fylgja-core:ea4cbde1d213`, 2026-11-13)*. Read on
+2026-11-13 on the development host, for phase 9's plan 4's Task 4, the dry run on the cluster: NetBox up and seeded
+with the trigger installed, Prefect up under the `local/prefect/` the earlier runs had used, Infrahub stopped, no core
+on the host and no SR Linux container; the main checkout detached at `6abcef3`; the deployed core one replica of
+`fylgja-core:ea4cbde1d213`, its pod started at 15:49:44Z, reached as "Reach" says, and the cluster read by `kubectl
+get` alone. The runner was started by **On the cluster**'s command, Reach's three set after `local/.env` was loaded;
+the readiness block run as the runbook writes it, `kubectl` the site's; the change built by `make netbox-change
+NETBOX_BRANCH=third-link-cluster`, untagged, after the same lines; the tag set by one `PATCH` of the branch's `tags`
+with the superuser's token; then read-only watching, a script reading each source in turn, a pass about every 2 s,
+and **Read the run** by a throwaway script after the report. Nothing was started, tagged again or cancelled between
+the tag and the report. Times are NetBox's changelog and entries, Prefect's state timestamps, the runner's log and the
+watching script's UTC clock; each timing is one run. *(2026-11-13)*
+
+- **Before the change.** The block with `branch` unset exited 0, N4 reading `the deployed core,
+  fylgja-core:ea4cbde1d213, one replica`, taking the runner's token, `driver clabernetes, 3 hosts`, free less pending
+  23.31 CPU and 71106 MiB, `twins 0`. Then N6's command alone, in the block's environment, on the branch marked
+  through the local core: `stage plan --branch third-link-local --json` through `scripts/edge_dev.py run --source
+  netbox` exited 1, its document `status` `refused`, headed `Plan refused at stage 2 of 4: third-link`, its stages
+  `main` `built`, `third-link` `refused`, `n1-address` and `head` `not_read`, its one finding `stage.refused` on
+  `third-link`, and its stderr `mark.unheld`: `The core holds no blueprint 0d53ef90dbda, which the mark third-link on
+  branch third-link-local names: a mark belongs to the core it was given to. Rehearse through that core, or seed and
+  mark the change again for this one.` The deployed core then held no blueprint of that id: the command ran at
+  15:59:26, before the build below gave it marks of the same two ids, and was not run again after. `third-link-local`
+  was read once, after it: untagged, its three entries, and its `last_updated` 14:48:48, the earlier run's, before
+  the command. *(2026-11-13)*
+- **The build.** `make netbox-change` made the branch, id 474, and wrote and marked its two steps, each mark naming
+  the blueprint id `third-link-local`'s mark of its label names, `0d53ef90dbda…` and `d0ad39f13fcd…`; it exited 0 in
+  21.4 s by the shell's clock. The block with `branch=third-link-cluster` then exited 0: N5 the branch `ready`,
+  untagged, its journal the two marks, and N6 its plan `planned`, every stage `built`. *(2026-11-13)*
+- **The tag.** The `PATCH` answered 200, 0.243 s from its sending (a derivation); `main`'s changelog gained one row,
+  `update` by `admin` at 16:01:19.720, its `postchange_data` `tags` `["fylgja-rehearse"]` and its `prechange_data`
+  `{}`, an empty object, as listed and as read by its id; the run's removal row, and the branch's `create`, read the
+  same way. The worker logged one sending,
+  `object_change_ids` that row's id, completed at 16:01:20. *(2026-11-13)*
+- **From the tag.** Against the tag's row: Prefect made one run of `twin-rehearse/main`, `parameters` `{"branch":
+  "third-link-cluster"}`, `created` +0.663 s, `Pending` +3.069 s, `Running` +6.382 s; the tag's removal row by
+  `fylgja-orchestrator` +6.884 s; the report's entry `created` +249.642 s and the run `Completed` +249.914 s (each a
+  derivation from two timestamps). Prefect listed that one run since the tag, and the changelog held no row of the
+  branch but its `create`, the setting and the removal. *(2026-11-13)*
+- **The twin on the cluster.** By the watching script's clock, against the tag's row, each offset a derivation: one
+  twin, `rh-6e6a4505-c8b4e76b`, in the deployed core's `twin list`, first listed at +19.9 s and first found absent at
+  +248.3 s, and the namespace `fylgja-twin-rh-6e6a4505-c8b4e76b` among the cluster's namespaces, 8 where there had
+  been 7, first listed at +20.0 s and first found absent at +248.5 s; `docker ps` on the host listed no SR Linux
+  container at any read. Read once at 16:02:05, the namespace held five pods, on three of the cluster's hosts, counted
+  and not named. *(2026-11-13)*
+- **The rehearsal.** Its document read `status` `passed`, `took_s` 242.5, the twin `rh-6e6a4505-c8b4e76b` and no
+  finding; its stages `created` (102.3 s, 15 held, 5 skipped), `passed` (68.9 s, 19 held, 5 skipped), `passed`
+  (11.8 s, 19 held, 5 skipped) and `skipped`. The runner's log: the baseline `planned` at 16:01:37.956, `applied` at
+  16:02:55.930 and `ready` at 16:03:08.739; `third-link` `pushed` at 16:03:33.362 and `verified` at 16:04:26.138;
+  `destroy: … asked` at 16:04:40.380 and `gone` at 16:05:29.153; `report: posted` at 16:05:29.548. After the report
+  the deployed core's `twin list` answered `[]`, and the namespace was gone. *(2026-11-13)*
+- **The journal.** Three entries, each by `created_by` 3, `fylgja-orchestrator`: the two marks, kind `info`, 159
+  bytes each; and the report, kind `success`, 2,240 bytes in 36 lines, headed `## Rehearsal passed: 4 stages`, its
+  table the local dry run's first report's row for row. Its text differed from that report's in the branch's name,
+  the read time, `Took 4m 2s.`, the twin, the run and the change, and in the stages' runs, times and the marks' read
+  times; each stage's blueprint and bundle ids were the same. *(2026-11-13)*
+- **Not read:** this branch's Journal tab; the core's own log on the cluster and the twin's pods' names and
+  containers; the cause of the stages' times beside the local driver's, `third-link`'s 52.8 s from `pushed` to
+  `verified` (a derivation) among them; when the cluster removed the namespace, beyond the script's reads; and a tag
+  set by `NETBOX_TAG=1` through the cluster's core. *(2026-11-13)*
+
+**A branch built in steps and marked by the seed's script through the cluster's core, its build's output shown to the
+maintainer, tagged by them by hand, rehearsed from its tag on the cluster's core, and its report as they read it on
+the Journal tab** *(NetBox 4.7.5, netbox-branching 1.2.3, netbox-docker 5.1.1, Prefect 3.9.2, clabernetes 0.10.1,
+k3s v1.37.1+k3s1, the core's image `fylgja-core:ea4cbde1d213`, 2026-11-13)*. Read on 2026-11-13 on the development
+host, for phase 9's plan 4's Task 4: the host the dry run on the cluster left up, its runner serving under Reach's
+three, the main checkout detached at `6abcef3`; on the maintainer's word the controller ran `make netbox-change
+NETBOX_BRANCH=third-link-cluster`, without `NETBOX_TAG=1`, after `local/.env` and Reach's three were loaded, and
+showed its whole output to the maintainer before the tag was asked for; the tag set by the maintainer in the branch's
+edit form in NetBox's pages; then read-only watching, one script polling the branch's tag and journal every 3 s and
+one the cluster's namespaces by `kubectl` and the host's containers every 5 s, each logging a change at the time a
+poll saw it, and **Read the run** by the dry run's script after the report. Nothing was started, tagged again or
+cancelled between the tag and the report, and no script fetched the Journal tab's page. Times are NetBox's changelog
+and entries, Prefect's state timestamps, the flow run's log lines and the watching scripts' clocks. *(2026-11-13)*
+
+- **The build.** `make netbox-change` deleted the dry run's branch of that name and its entries, made the branch
+  anew, id 475, and wrote and marked its two steps, each mark naming the blueprint id the dry run's of its label
+  named; it exited 0 in 24.2 s by the controller's shell, its last line the one that asks for the tag. The readiness
+  block with `branch=third-link-cluster`, after the same lines, then exited 0 by the controller's shell, its saved
+  log holding no exit line: N4 `the deployed core,
+  fylgja-core:ea4cbde1d213, one replica`, `driver clabernetes, 3 hosts`, `twins 0`; N5 the branch `ready`, untagged,
+  its journal the two marks; N6 its plan `planned`, every stage `built`. *(2026-11-13)*
+- **The tag set in the edit form** added one row to `main`'s changelog, `update` by `admin`, at 16:18:58.921, its
+  `prechange_data` 13 members, `tags` `[]` before and `["fylgja-rehearse"]` after. The worker logged one sending,
+  `object_change_ids` that row's id, completed in the same second. The run took the tag off in a row by
+  `fylgja-orchestrator` at 16:19:12.071, 13.150 s after the setting's (a derivation), its `prechange_data` `{}`, not
+  null and of no member, as the branch's `create` row; the members were read by the rows' ids at about 16:43 that
+  day, after the run. The changelog held no other row of the branch from its `create`. *(2026-11-13)*
+- **The run.** One flow run of `twin-rehearse/main`, `parameters` `{"branch": "third-link-cluster"}`, `created` at
+  16:18:59.852, then `Pending` 16:19:08.868, `Running` 16:19:11.714 and `Completed` 16:22:50.286. Its document read
+  `status` `passed`, `took_s` 217.7, the twin `rh-846c7803-4f1dd8b3` and no finding, its stages `created` (108.2 s, 15
+  held, 5 skipped), `passed` (40.6 s, 19 held, 5 skipped), `passed` (11.4 s, 19 held, 5 skipped) and `skipped`. Its
+  log lines: `destroy: … asked` at 16:22:01.194, `gone` at 16:22:49.891, `report: posted` at 16:22:50.209.
+  *(2026-11-13)*
+- **The twin on the cluster.** The cluster's watcher first saw the namespace `fylgja-twin-rh-846c7803-4f1dd8b3` at
+  16:19:26 and first found no twin's namespace at 16:22:47, each a poll's time; at every read it found no SR Linux
+  container and no `clab-` or `rh-` container on the host. After the report the deployed core's `twin list` answered
+  `[]`. *(2026-11-13)*
+- **The journal.** Three entries, each by `created_by` 3, `fylgja-orchestrator`: `Fylgja stage: third-link` and
+  `Fylgja stage: n1-address`, kind `info`, 159 bytes each; and the report, kind `success`, 2,239 bytes in 36 lines,
+  headed `## Rehearsal passed: 4 stages`, its text the dry run's on the cluster but for its read time, `Took 3m 38s.`,
+  its twin, its run, its change, and its stages' runs and times and the marks' read times. The report's entry was
+  `created` at 16:22:50.085, 231.164 s after the tag's row (a derivation). *(2026-11-13)*
+- **What the maintainer read**: "The tables and lists render correctly" *(the maintainer, 2026-11-13)*. They said
+  nothing of the report standing above the two marks, or of its heading or kind as the tab showed them; none of that
+  is recorded as read. *(2026-11-13)*
+- **The build's output as the maintainer's watching.** Asked whether the build's whole output shown to them before
+  the tag counts as their watching the branch being built, the maintainer answered: "it counts" *(the maintainer,
+  2026-11-13)*.
+- **Not read:** the marks, the heading and the kind as the Journal tab shows them; the core's own log on the
+  cluster. *(2026-11-13)*
+
+**Not read**: what a rule meets after a merge; a sync or a merge that fails; the time a read takes
+of a scope beyond a handful of devices; a render under the
+header of a branch that is `syncing` or `merged`; a rule's conditions on anything but a tag's slug;
+~~port 4200 itself reached from the worker~~ (read on 2026-11-13 above); a receiver that takes a
+webhook's connection and answers late; how long
+NetBox keeps a failed background task; webhooks sent by more than one worker; the
+change-request layer, which the community edition does not install; a merge validator run; a
+tag set while Prefect answers and no runner serves `twin-rehearse/main`, and what becomes of the
+run made then; a tag set while a runner of the source `infrahub` serves the two deployments; a
+tag set on a branch still provisioning, whose write is taken (above), and whether it sends the
+webhook; a `DELETE` of a branch NetBox still holds `new`, or one
+that is `syncing`, `merging` or `failed`; and `merge`, `revert`, `archive` and `recover` asked with
+the example's token, for each of which the plugin's source names a permission, where the one action
+run, `sync`, was refused first in NetBox's own words; whether changelog rows commit in the order of
+their ids; and what a branch's bracket meets of what lives on `main` alone and is not branched, the
+reader account's permissions among them, since a branch's read reads its own changelog and not
+`main`'s; and NetBox's retention of its changelog, whether a row can be pruned while a read is
+made; a NetBox with no branching plugin; what NetBox answers a platform's row to an account without
+`view` on `dcim.manufacturer`; the largest page NetBox gives, `limit=5000` answering 135 rows whole;
+a `view` grant with constraints, what a list and its `count` answer under one; on a read of `main`,
+a write that adds no row to `main`'s changelog, a change of an account's permissions or of a
+group's among those not read; a write NetBox makes outside a request (in part read on 2026-11-13 above: the
+worker's provisioning moved a branch `new` to `ready` and added no row to `main`'s changelog), a data source's sync, a
+management command or the shell; and a revert of a merged branch, what it writes to `main`'s
+changelog, and one made during a read of `main`.
 
 ## The base install at its floors
 

@@ -1,14 +1,14 @@
 """The report a rehearsal posts to its change source (D-087), rendered from its rehearsal 1 document and nothing else.
 
-Its headline, the verdict as a heading and the cause as a first sentence, in two lines of plain text, is the check's
-message and the summary's first lines. The summary is what a reviewer reads first: the headline, a table of a row a
-stage saying what changed in words, each failure with its message, the room when the runtime had none, what the twin
-does not model and what was already failing before the change in plain words, a wait only where it expired, when the
-stages were read, and that fidelity is asserted, not measured (Constitution X). The detail holds the rest: the twin and
-the run, then what the summary's lists point to, every finding whole and every interface left out, and last the
-stages with their ids and the core's runs. Each part is within the bytes a source's comment takes, losing first what
-matters least, cut at a line and never inside a character; the detail is cut first, so a list the summary cuts says
-that the detail holds what it left out only where the detail does.
+Its headline, the verdict as a heading and the cause as a first sentence, in two lines of plain text, is what the
+library's caller says of the rehearsal and the summary's first lines. The summary is what a reviewer reads first: the
+headline, a table of a row a stage saying what changed in words, each failure with its message, the room when the
+runtime had none, what the twin does not model and what was already failing before the change in plain words, a wait
+only where it expired, when the stages were read, and that fidelity is asserted, not measured (Constitution X). The
+detail holds the rest: the twin and the run, then what the summary's lists point to, every finding whole and every
+interface left out, and last the stages with their ids and the core's runs. Each part is within the bytes a source's
+comment takes, losing first what matters least, cut at a line and never inside a character; the detail is cut first,
+so a list the summary cuts says that the detail holds what it left out only where the detail does.
 """
 
 from __future__ import annotations
@@ -76,8 +76,9 @@ type _Stage = tuple[Mapping[str, Any], Mapping[str, Any]]
 
 
 def headline(document: Mapping[str, Any]) -> str:
-    """The verdict and its cause, two lines of plain text: the heading, and the first sentence. It is the check's
-    message and the report's first lines, and the rehearsal stores it as its document's `headline`."""
+    """The verdict and its cause, two lines of plain text: the heading, and the first sentence. It is what the
+    library's caller says of the rehearsal and the report's first lines, and the rehearsal stores it as its
+    document's `headline`."""
     return f"{_heading(document)}\n{_sentence(document)}"
 
 
@@ -379,12 +380,14 @@ def _said_at(said: dict[str, tuple[list[int], list[str]]], line: str, k: int, he
 
 
 def _where(document: Mapping[str, Any]) -> str:
-    """The change, its scope, when its stages were read, and how long the rehearsal took."""
+    """The change, its scope, when the rehearsal read its stages, and how long it took. A stage a source took earlier
+    is as it was then, its time in its pin's words, which the detail's line of it gives."""
     took = _took(document["took_s"])
     planned = document["plan"]
     if planned is None:
         return f"The stages were not read. Took {took}."
-    return (f"{planned['change']['where']}, scope `{planned['scope']}`. Stages were read at {planned['read_at']}; "
+    return (f"{planned['change']['where']}, scope `{planned['scope']}`. The rehearsal read its stages at "
+            f"{planned['read_at']}; one taken earlier is as it was then, at the time its line in the detail gives; "
             f"later edits are not rehearsed. Took {took}.")
 
 

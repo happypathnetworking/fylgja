@@ -85,3 +85,40 @@ def test_a_fixture_failing_while_it_holds_a_token_shows_no_value(tmp_path: Path)
     assert "RuntimeError: a fixture that fails" in output
     assert "<FYLGJA_INFRAHUB_WRITE_TOKEN>" in output and "<the test's own>" in output
     assert found == []
+
+
+NETBOX_CONFTEST = """
+from contract_netbox.conftest import pytest_runtest_makereport  # noqa: F401, the NetBox tier's hook
+"""
+
+NETBOX_FAILING = (FAILING.replace("FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN", "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN")
+                  .replace("FYLGJA_INFRAHUB_WRITE_TOKEN", "FYLGJA_NETBOX_WRITE_TOKEN")) + """
+
+def test_addressed():
+    held = {"url": os.environ["FYLGJA_NETBOX_ADDRESS"] + "/api/plugins/branching/branches/1/"}
+    assert held == {}
+"""
+NETBOX = "http://netbox.example:8800"
+"""NetBox's address, a test value: a branch's row NetBox answers holds it in its `url`."""
+
+
+def test_a_fixture_of_the_netbox_tier_failing_while_it_holds_a_token_shows_no_value(tmp_path: Path) -> None:
+    """The same fixture under the NetBox tier's conftest, which takes the guard of `contract/conftest.py`, reading the
+    superuser's NetBox token from its variable; and NetBox's address, which a branch's row holds, replaced by its
+    variable's name too."""
+    (tmp_path / "conftest.py").write_text(NETBOX_CONFTEST)
+    (tmp_path / "test_failing.py").write_text(NETBOX_FAILING)
+    environ = {"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{TESTS}:{TESTS.parents[1] / 'core' / 'tests'}",
+               "FYLGJA_NETBOX_WRITE_TOKEN": READ, "FYLGJA_NETBOX_ADDRESS": NETBOX}
+    ran = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-rA", "--tb=long", "-p", "no:cacheprovider", "-p", "no:randomly",
+         str(tmp_path)],
+        cwd=tmp_path, env=environ, capture_output=True, text=True, timeout=120,
+    )
+    output = ran.stdout + ran.stderr
+    found = [name for name, value in (("held", HELD), ("read", READ), ("made", MADE)) if value in output]
+    assert "2 failed, 1 error" in output, output[-2000:]
+    assert "RuntimeError: a fixture that fails" in output
+    assert "<FYLGJA_NETBOX_WRITE_TOKEN>" in output and "<the test's own>" in output
+    assert "<FYLGJA_NETBOX_ADDRESS>/api/plugins" in output and "netbox.example" not in output
+    assert found == []

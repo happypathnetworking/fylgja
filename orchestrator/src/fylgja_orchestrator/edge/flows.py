@@ -1,9 +1,12 @@
-"""The two Prefect flows a check starts (D-085), `stage-plan` and `twin-rehearse`, each `(branch: str)` and each a thin
-wrap of `run`: it adds the run's id, the run's logger for the library's progress, and the document's artifact.
+"""The two Prefect flows a check or a tag starts (D-085), `stage-plan` and `twin-rehearse`, each `(branch: str)` and
+each a thin wrap of `run`: it adds the run's id, the run's logger for the library's progress, and the document's
+artifact. NetBox's webhook starts `twin-rehearse` alone, with the same one parameter (D-097).
 
-A flow reads its settings from the process's environment, opens the source and the core, and calls `run` once; the
-document it is handed is filed as one artifact of type `ARTIFACT_TYPE`, keyed `fylgja-<flow>-<flow run id>`, which a
-check reads back by the run's id, and returned, whatever its status: nothing is retried (D-086).
+A flow reads its settings from the process's environment, opens the source they name and the core, and calls `run`
+once; `run.rehearse` has the source take the request before the library starts, so a tag that asked for the rehearsal
+is taken off then and asks for no other. The document the flow is handed is filed as one artifact of type
+`ARTIFACT_TYPE`, keyed `fylgja-<flow>-<flow run id>`, which a check reads back by the run's id, and returned, whatever
+its status: nothing is retried (D-086).
 
 A cancel, or the flow's time limit, gives the body a `BaseException`: Prefect 3.9.2's `TerminationSignal` or its
 `CancelledError` (verified-facts.md, "Prefect 3.9.2"). Inside `rehearse` it reaches the library, whose own handler asks
@@ -79,7 +82,7 @@ def _ended(flow: str, run_id: str, document: Mapping[str, Any] | None, source: r
 
 @flow(name=STAGE_PLAN, timeout_seconds=PLAN_TIMEOUT_S)
 def stage_plan(branch: str) -> dict[str, Any]:
-    """The plan of the proposed change whose source branch is `branch`: its plan 1 document, filed and returned."""
+    """The plan of the change `branch` names: its plan 1 document, filed and returned."""
     config = settings.from_env(os.environ)
     run_id, progress = _in_run()
     source, core = run.opened(config)
@@ -93,8 +96,8 @@ def stage_plan(branch: str) -> dict[str, Any]:
 
 @flow(name=TWIN_REHEARSE, timeout_seconds=REHEARSE_TIMEOUT_S)
 def twin_rehearse(branch: str) -> dict[str, Any]:
-    """The rehearsal of the proposed change whose source branch is `branch`, on the twin the run's id names: its
-    rehearsal 1 document, filed and returned. A draft is refused (`run.DraftRefused`), and nothing filed."""
+    """The rehearsal of the change `branch` names, on the twin the run's id names: its rehearsal 1 document, filed and
+    returned. A draft is refused (`run.DraftRefused`), and nothing filed."""
     config = settings.from_env(os.environ)
     run_id, progress = _in_run()
     source, core = run.opened(config)

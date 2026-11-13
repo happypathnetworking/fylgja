@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/netbox-reader-1.schema.json",
+  "title": "Fylgja NetBox reader document 1",
+  "description": "What a read of NetBox is given beside its branch, that NetBox cannot hold: which manufacturer and platform pair is which platform package, and the name of the configuration context that declares the probes (D-095). The NetBox reader, fylgja-netbox, reads it with document.py, as YAML or JSON, and its wheel carries this file alone (D-084). It names no artifact, NetBox rendering each device's configuration itself, and holds no address and no credential: those are FYLGJA_NETBOX_ADDRESS and FYLGJA_NETBOX_TOKEN (D-042).",
+  "$comment": "Rule the reader holds across rows: a pair of manufacturer and platform is in one row (reader.platform.duplicate). Pairs are compared exactly, letter case and spacing included. The document refers to no other file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reader_version", "platforms", "probes"],
+  "properties": {
+    "reader_version": {
+      "const": "1",
+      "description": "The format's version; document.py refuses any other (reader.version.unsupported)."
+    },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["manufacturer", "platform", "package"],
+        "properties": {
+          "manufacturer": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The name of the platform's manufacturer in NetBox (dcim.manufacturer); mapping.py matches a device's to it exactly."
+          },
+          "platform": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The name of the device's platform in NetBox (dcim.platform); mapping.py matches a device's to it exactly."
+          },
+          "package": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "The platform package's id, as its platform package 1 document's id; mapping.py writes it as the blueprint device's platform, which the core's compiler loads."
+          }
+        },
+        "description": "One pair of manufacturer and platform and the platform package a device of that pair is; mapping.py refuses a device whose pair is in no row (platform.unmatched)."
+      },
+      "description": "The pairs the read maps, in any order; mapping.py resolves each scoped device's platform package by them."
+    },
+    "probes": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "description": "The name of the configuration context that holds the probes, which is inactive, so that NetBox renders it into no device's configuration; probes.py reads it into the blueprint's probes. Null where the read reads none."
+    }
+  }
+}

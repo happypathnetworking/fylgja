@@ -2,7 +2,11 @@
 alone at are the lower bounds of the base's ranges in `core/pyproject.toml`, read from there and
 stated by no test, and an entry that is no range is refused; and the base modules it imports
 there are the sixteen `test_boundary_base.py` holds, read from the script by `ast`, so the two
-lists cannot drift. The check itself builds and installs, and runs as `make wheelcheck`."""
+lists cannot drift. What it holds each reader's command never to load beside the base is that
+reader's import test's `FORBIDDEN`, the script's tuple read from the loaded module and the test's
+by `ast`, so those cannot drift either; nor can what it holds each change source never to load
+beside its own reader, which is the example's import scan's `CROSSED`. The check itself builds
+and installs, and runs as `make wheelcheck`."""
 
 from __future__ import annotations
 
@@ -60,3 +64,38 @@ def test_the_base_modules_the_check_imports_are_the_boundarys() -> None:
     ]
     assert len(assigned) == 1, "scripts/wheelcheck.py assigns BASE_MODULES once"
     assert ast.literal_eval(assigned[0]) == BASE
+
+
+def _assigned(path: Path, name: str) -> tuple[object, ...]:
+    """The tuple the file at `path` assigns to `name`, read by `ast`."""
+    assigned = [
+        statement.value
+        for statement in ast.parse(path.read_text(), str(path)).body
+        if isinstance(statement, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == name for target in statement.targets)
+    ]
+    assert len(assigned) == 1, f"{path} assigns {name} once"
+    held = ast.literal_eval(assigned[0])
+    assert isinstance(held, tuple)
+    return held
+
+
+def _forbidden(path: Path) -> tuple[str, ...]:
+    """The `FORBIDDEN` a reader's import test at `path` assigns, read by `ast`."""
+    return tuple(str(name) for name in _assigned(path, "FORBIDDEN"))
+
+
+@pytest.mark.parametrize(
+    ("name", "reader"),
+    [("NOT_BESIDE_READER", "infrahub"), ("NOT_BESIDE_NETBOX_READER", "netbox")],
+)
+def test_what_a_readers_command_never_loads_is_its_import_tests(name: str, reader: str) -> None:
+    held = getattr(_script(), name)
+    assert sorted(held) == sorted(_forbidden(ROOT / "readers" / reader / "tests" / "test_boundary.py"))
+
+
+def test_what_each_change_source_never_loads_is_the_example_scans() -> None:
+    """Importing the Infrahub change source loads nothing of the NetBox one or its reader, and the reverse."""
+    held = _assigned(SCRIPT, "CROSSED")
+    assert held == _assigned(ROOT / "orchestrator" / "tests" / "test_boundary_edge.py", "CROSSED")
+    assert sorted(str(pair[0]) for pair in held if isinstance(pair, tuple)) == ["infrahub", "netbox"]

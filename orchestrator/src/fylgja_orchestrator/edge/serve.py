@@ -1,10 +1,12 @@
-"""The runner, `fylgja-orchestrator serve` (D-085): the two flows a check starts, `stage-plan` and `twin-rehearse`,
-served to Prefect as `<flow>/main`, each by its module path (verified-facts.md, "Prefect 3.9.2").
+"""The runner, `fylgja-orchestrator serve` (D-085): the two flows a check or a tag starts, `stage-plan` and
+`twin-rehearse`, served to Prefect as `<flow>/main`, each by its module path (verified-facts.md, "Prefect 3.9.2").
 
 It refuses to start, exit 2 in one line, where `PREFECT_API_URL` is unset, or a setting the flows read is unset or
-refused by the clients' rules (`settings.refused`), so a runner never serves flows that can only fail. Then it says
-which deployments it serves and where, never `PREFECT_API_AUTH_STRING`, and serves them until it is stopped, unpaused
-when it stops. With `flows`, the one module that imports Prefect.
+refused by the clients' rules, or the source named is neither (`settings.refused`), so a runner never serves flows that
+can only fail. A runner serves the one source its settings name, under the same two names whichever it is, so one
+Prefect serves one source's runner (D-097). Then it says which deployments it serves and where, never
+`PREFECT_API_AUTH_STRING`, and serves them until it is stopped, unpaused when it stops. With `flows`, the one module
+that imports Prefect.
 """
 
 from __future__ import annotations

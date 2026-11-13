@@ -14,8 +14,15 @@ In a sentence, `{k}` is the stage's number among the change's stages and `{label
 `{first}` is the first failure quoted: `<object>: <message> (<rule>)`, the message's final full
 stop dropped and the message cut to 300 characters, the last of them `…`, the object and its
 colon left out where the failure names none. A sentence with no stage in progress drops its
-`at stage {k}, {label}` or `of stage {k}, {label}` clause. `{twin}` is the twin's name. A row
-names its other placeholders.
+`at stage {k}, {label}` or `of stage {k}, {label}` clause. `{twin}` is the twin's name. Three
+are the change source's own words, which the library takes from it and never says itself
+([D-097](../design/decisions.md#d-097)): `{Again}` is the source's `again`, the sentence that
+says how the rehearsal is asked for again, whole; `{again}` is that sentence as the end of
+another, its first letter lowered and its final full stop dropped; and `{scope_remedy}` is the
+source's `scope_remedy`, the sentence that says where the scope is checked, whole. The Infrahub
+source's are `Run the checks again.` and `Check the scope the checks run with.`, and the NetBox
+source's ``Set the tag `fylgja-rehearse` on the branch again.`` and `Check the scope the runner is
+given.` A row names its other placeholders.
 
 ## The rehearsal's errors
 
@@ -32,19 +39,19 @@ finding as its cause.
 
 | Rule | Severity | Status | Sentence |
 |---|---|---|---|
-| `rehearsal.stages.none` | error | `not_rehearsed` | No stage of the change selects a device in scope {scope}, so there is nothing to build. Check the scope the checks run with. ({scope} is the scope the stages are read under.) |
+| `rehearsal.stages.none` | error | `not_rehearsed` | No stage of the change selects a device in scope {scope}, so there is nothing to build. {scope_remedy} ({scope} is the scope the stages are read under.) |
 | `stage.refused` | error | `failed` | Stage {k}, {label}, could not be built: {first}. Nothing was rehearsed. |
 | `rehearsal.baseline.failed` | error | `failed` | The baseline, stage {k}, {label}, could not be created: {first}. Nothing is said about the stages after it. |
 | `rehearsal.stage.failed` | error | `failed` | *By a dry run:* The runtime cannot build stage {k}, {label}: {first}. *By a step `failed`, or `rejected` for anything but the runtime's room, an image or its set-up:* The core refused the step to stage {k}, {label}: {first}. *By one `diverged` with an error beside `step.diverged`:* The step to stage {k}, {label}, failed and left the twin diverged: {first}. *By verify:* Verify found {m} failure(s) at stage {k}, {label}, that the baseline did not have, the first {first}. ({m} failure(s) is `1 failure`, `2 failures`.) |
-| `rehearsal.capacity` | error | `not_rehearsed` | The runtime has no room for the twin of stage {k}, {label}: {message} Nothing is wrong with the change: run the checks again when the runtime has room. ({message} is the core's, whole.) |
-| `rehearsal.image.absent` | error | `not_rehearsed` | An image the twin needs is not on the runtime: {message} Import it there, then run the checks again. ({message} is the core's, whole.) |
-| `rehearsal.admission.refused` | error | `not_rehearsed` | The runtime refused the twin of stage {k}, {label}: {first}. That is the runtime's set-up, not the change: correct it, then run the checks again. |
-| `rehearsal.core.unreachable` | error | `not_rehearsed` | *No answer (the client's `TransportError`):* The core did not answer: {error}. Check that it runs and that FYLGJA_API_ADDRESS names it, then run the checks again. *An answer of another API version, or a run that cannot be followed to its verdict (`UnsupportedVersion`, `FollowError`):* The core answered, but not as this library expects: {error}. Check the core's version against this library's, then run the checks again. ({error} is the client's text, a final full stop dropped.) |
-| `rehearsal.core.refused` | error | `not_rehearsed` | *On 401 or 403:* The core refused the token ({rule}). Put a token whose hash the core's token file holds in FYLGJA_API_TOKEN, then run the checks again. *Else:* The core refused a request the rehearsal needs: {status} {rule}: {detail} Read the core's log, then run the checks again. ({status} is the answer's HTTP status, {rule} and {detail} its problem's.) |
-| `rehearsal.source.failed` | error | `not_rehearsed` | The change's stages could not be read from its source ({type}). Check that the source answers, then run the checks again. ({type} is the exception's type, and nothing of its text.) |
-| `rehearsal.twin.held` | error | `not_rehearsed` | An earlier rehearsal's twin, {twin}, was not removed within 120 s, so this rehearsal did not start. Remove it with fylgja-core twin destroy {twin}, then run the checks again. |
-| `rehearsal.limit.passed` | error | `stopped` | The rehearsal passed its time limit of {limit_s:g} s at stage {k}, {label}, and was stopped. Nothing is said about the change: run the checks again, or raise the limit. ({limit_s:g} is the rehearsal's time limit in seconds, as its caller's `Limits` gives it: the edge's is 3600.) |
-| `rehearsal.run.cancelled` | error | `stopped` | *A create's, or a step's before its apply began:* The {operation} run of the twin was cancelled by another client, so the rehearsal stopped at stage {k}, {label}. Run the checks again. *A step's after its apply began (`diverged`, `step.diverged` its only error):* The step run of the twin was cancelled by another client after its apply began, which left the twin diverged, so the rehearsal stopped at stage {k}, {label}. Run the checks again. ({operation} is the run's operation, create or step.) |
+| `rehearsal.capacity` | error | `not_rehearsed` | The runtime has no room for the twin of stage {k}, {label}: {message} Nothing is wrong with the change: {again} when the runtime has room. ({message} is the core's, whole.) |
+| `rehearsal.image.absent` | error | `not_rehearsed` | An image the twin needs is not on the runtime: {message} Import it there, then {again}. ({message} is the core's, whole.) |
+| `rehearsal.admission.refused` | error | `not_rehearsed` | The runtime refused the twin of stage {k}, {label}: {first}. That is the runtime's set-up, not the change: correct it, then {again}. |
+| `rehearsal.core.unreachable` | error | `not_rehearsed` | *No answer (the client's `TransportError`):* The core did not answer: {error}. Check that it runs and that FYLGJA_API_ADDRESS names it, then {again}. *An answer of another API version, or a run that cannot be followed to its verdict (`UnsupportedVersion`, `FollowError`):* The core answered, but not as this library expects: {error}. Check the core's version against this library's, then {again}. ({error} is the client's text, a final full stop dropped.) |
+| `rehearsal.core.refused` | error | `not_rehearsed` | *On 401 or 403:* The core refused the token ({rule}). Put a token whose hash the core's token file holds in FYLGJA_API_TOKEN, then {again}. *Else:* The core refused a request the rehearsal needs: {status} {rule}: {detail} Read the core's log, then {again}. ({status} is the answer's HTTP status, {rule} and {detail} its problem's.) |
+| `rehearsal.source.failed` | error | `not_rehearsed` | The change's stages could not be read from its source ({type}). Check that the source answers, then {again}. ({type} is the exception's type, and nothing of its text.) |
+| `rehearsal.twin.held` | error | `not_rehearsed` | An earlier rehearsal's twin, {twin}, was not removed within 120 s, so this rehearsal did not start. Remove it with fylgja-core twin destroy {twin}, then {again}. |
+| `rehearsal.limit.passed` | error | `stopped` | The rehearsal passed its time limit of {limit_s:g} s at stage {k}, {label}, and was stopped. Nothing is said about the change: {again}, or raise the limit. ({limit_s:g} is the rehearsal's time limit in seconds, as its caller's `Limits` gives it: the edge's is 3600.) |
+| `rehearsal.run.cancelled` | error | `stopped` | *A create's, or a step's before its apply began:* The {operation} run of the twin was cancelled by another client, so the rehearsal stopped at stage {k}, {label}. {Again} *A step's after its apply began (`diverged`, `step.diverged` its only error):* The step run of the twin was cancelled by another client after its apply began, which left the twin diverged, so the rehearsal stopped at stage {k}, {label}. {Again} ({operation} is the run's operation, create or step.) |
 | `rehearsal.twin.deleted` | error | `stopped` | The twin {twin} was deleted while the rehearsal ran, by a newer rehearsal of this change or by hand, so it stopped at stage {k}, {label}. The newer rehearsal's report stands. |
 
 ## The rehearsal's warnings
@@ -94,3 +101,30 @@ change's id.
 | `stage.main.moved` | warning | none | {destination} has moved since {branch} was cut at {cut}: the branch point reads {destination} as it was then. (The branch point is decided by {destination} read at {cut}; where that gives a blueprint, {destination}'s head is asked as a comparison alone, and this is filed where {destination} read at its head gives another blueprint, or where its head is refused with `scope.empty`, the devices in scope gone since {cut}; a head refused otherwise, or a read there that gives no blueprint, files nothing. Its object is {destination}.) |
 | `stage.validation.unfinished` | warning | none | The artifact validation of proposed change {change} had not completed 240 s after it was first asked for, so the head of {branch} is read on its artifacts' stamps alone, with no generated_since. (Its object is {branch}.) |
 | `stage.validation.absent` | info | none | No artifact validation of proposed change {change} appeared 120 s after it was first asked for, so the head of {branch} is read on its artifacts' stamps alone, with no generated_since. (Its object is {branch}. A proposed change whose branch changes no device has no artifact validator, so this is expected there; one was also read to appear 70.5 s after its create where its checks queued behind another proposed change's, design/verified-facts.md, "Infrahub 1.11.11".) |
+
+## Findings: the NetBox change source
+
+The example's NetBox change source, [`fylgja_orchestrator.netbox`](src/fylgja_orchestrator/netbox/source.py),
+files these in a stage's read, beside the reader's own
+([`readers/netbox/rules.md`](../readers/netbox/rules.md)), and names each by a `RULE_*`
+constant of its own: the rehearsal library names no source's rules
+([D-085](../design/decisions.md#d-085), [D-097](../design/decisions.md#d-097)). An error
+refuses the stage, which the library files as `stage.refused`, so it is `failed`; a warning
+changes no status. `{label}` is the mark's label, `{branch}` the branch's name, `{entry}` the id
+of the mark's journal entry, `{scope}` the scope the rehearsal reads under, and `{time}` the
+branch's `last_sync`, or its `created` where that is null. A mark's errors are filed from its
+entry alone, the core unasked, but `mark.unheld`, which the core's answer decides. A label is
+unique within its branch and is never taken twice, and NetBox reads no branch as it stood
+earlier ([D-097](../design/decisions.md#d-097)), so a step is marked again only once its entry is
+deleted and only while the branch still stands at that step: `{Redo}` is the sentence `Have someone
+who may delete journal entries delete entry {entry} in NetBox and mark the step again, which can be
+done only while the branch still stands at that step; otherwise seed the change again.`, and
+`{redo}` the same with its first letter lowered.
+
+| Rule | Severity | Status | Sentence |
+|---|---|---|---|
+| `mark.duplicate` | error | `failed` | Branch {branch} has {n} marks labelled {label}, journal entries {entries}: a label is unique within its branch. Delete all but one. (Its object is the label; `{entries}` are the ids of its entries in the order written. The stage stands at the first's place.) |
+| `mark.malformed` | error | `failed` | The mark {label} on branch {branch}, journal entry {entry}, is not read: {fault}. {Redo} (Its object is the stage's label: the mark's label, but `journal entry {entry}` for a mark with no label, whose sentence begins `The mark on branch`, or one labelled `main` or `head`, so that no mark stands as a second stage of either. `{fault}` is the first of: it has no label; the label is `main` or `head`, or is no label, 1 to 40 lowercase letters, digits and hyphens beginning and ending with a letter or a digit; a line of `- blueprint:`, `- scope:` and `- read:` is missing or there more than once; the blueprint's id is not 64 lowercase hexadecimal characters; the scope or the time read is empty.) |
+| `mark.scope` | error | `failed` | The mark {label} on branch {branch}, journal entry {entry}, was read under scope {marked}, and this rehearsal reads under {scope}. Rehearse under {marked}, or {redo} (Its object is the label; `{marked}` is the scope its entry names, and `{redo}` here marks the step again under {scope}.) |
+| `mark.unheld` | error | `failed` | The core holds no blueprint {id}, which the mark {label} on branch {branch} names: a mark belongs to the core it was given to. Rehearse through that core, or seed and mark the change again for this one. *The core answering a document that is not the blueprint of that id:* The core answered another document than the blueprint {id}, which the mark {label} on branch {branch} names: a mark belongs to the core it was given to. Rehearse through that core, or seed and mark the change again for this one. (Its object is the label; `{id}` is the first 12 characters of the blueprint's id. The first is filed where the core answers 404 `blueprint.not_found`, the second where the id the core's own rule gives the document it answered is not the mark's; any other refusal of the core's is raised.) |
+| `stage.main.gained` | warning | none | main has gained {n} changes since branch {branch} was made or last synchronised, at {time}, counted of every kind but a journal entry's, a branch's own, a webhook's and an event rule's, and the marks were taken against main as it stood then: the first stage is main as it stands, so the first step may undo those changes on the twin. To rehearse against main as it stands, synchronise the branch and seed its steps again. (`{n} changes` reads `1 change` where {n} is 1. Its object is {branch}. Filed with `main`'s read where that gives a blueprint and `main`'s changelog holds rows of {time} or later, `time_after` counting inclusively, of any kind but a journal entry's, a branch's own, a webhook's and an event rule's, which no read reads, the last two the trigger's that `make netbox-hook` writes on `main`; a tag is counted, since a tag can be a scope; design/verified-facts.md, "A branch behind `main`" and "A rule's change is counted as a change of `main`".) |

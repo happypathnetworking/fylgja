@@ -1,5 +1,7 @@
-"""The seam to a change source is four calls and one attribute (D-085), over three frozen values a source makes and
-the report the library posts to it; a rehearsal's twin is named from the change and the run (D-086)."""
+"""The seam to a change source is four calls and three attributes (D-085, D-097): the bytes a part of the report may
+take there, and the source's two sentences, how one asks again and where one checks the scope; over three frozen
+values a source makes and the report the library posts to it; a rehearsal's twin is named from the change and the
+run (D-086)."""
 
 from __future__ import annotations
 
@@ -52,9 +54,13 @@ FIELDS: list[tuple[type, dict[str, Any]]] = [
 ]
 
 
-def test_the_seam_is_four_calls_and_the_comment_limit() -> None:
-    assert typing.get_protocol_members(ChangeSource) == {"change", "stages", "read", "post", "comment_limit"}
-    assert typing.get_type_hints(ChangeSource)["comment_limit"] == int | None
+def test_the_seam_is_four_calls_the_comment_limit_and_the_sources_two_sentences() -> None:
+    assert typing.get_protocol_members(ChangeSource) == {
+        "change", "stages", "read", "post", "comment_limit", "again", "scope_remedy"
+    }
+    hints = typing.get_type_hints(ChangeSource)
+    assert hints["comment_limit"] == int | None
+    assert (hints["again"], hints["scope_remedy"]) == (str, str)
 
     for cls, expected in FIELDS:
         names = [f.name for f in dataclasses.fields(cls)]

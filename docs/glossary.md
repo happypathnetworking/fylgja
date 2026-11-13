@@ -1,17 +1,23 @@
 # Glossary
 
-The terms Fylgja uses, alphabetically. A term marked *(orchestrator)* belongs to the Infrahub
-reader under `readers/infrahub/` or the example orchestrator under `orchestrator/`, beside the
-core in this repository, and to the source of truth they join: the core never uses it, but it
-is met in a blueprint's `source` or in these documents. See also
+The terms Fylgja uses, alphabetically. A term marked *(orchestrator)* belongs to a reader under
+`readers/` or to the example orchestrator under `orchestrator/`, beside the core in this
+repository, and to the source of truth they join: the core never uses it, but it is met in a
+blueprint's `source` or in these documents. See also
 [architecture.md](../design/architecture.md) and the formats in [`formats/`](../formats/README.md).
 
-**Acceptance run** — Phase 8's own gate: the seeded branch's proposed change, created by the
-maintainer in the development Infrahub, rehearsed through Infrahub's own check `fylgja-twin` once
-with the core on the local driver and once with the core deployed on the cluster, the maintainer
-reading each report in its thread. Its every command, and the block that says the maintainer can
-act, are in [CONTRIBUTING.md](../CONTRIBUTING.md#the-acceptance-run)
+**Acceptance run** — A phase's own gate, made once with the core on the local driver and once
+with the core deployed on the cluster. Through Infrahub's check, phase 8's: the seeded branch's
+proposed change, created by the maintainer in the development Infrahub, rehearsed through
+Infrahub's own check `fylgja-twin`, the maintainer reading each report in its thread
 ([core.md](../design/core.md#phase-8-the-infrahub-reader-and-the-example-orchestrator-settled-2026-11-09)).
+Through NetBox's tag, phase 9's: a branch built in the development NetBox in steps, each marked,
+then given the tag `fylgja-rehearse`, by the script's last act or by hand, which starts the
+rehearsal through NetBox's webhook and Prefect, the maintainer reading each report on the branch's
+journal
+([core.md](../design/core.md#phase-9-the-netbox-reader-and-the-examples-netbox-change-source-settled-2026-11-12)).
+Each run's every command, and the blocks that say the maintainer can act, are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#the-acceptance-run).
 
 **Admission** — The check that a twin fits before anything is applied. `admit` reserves its
 allocation, and the deployment's *demand* (runtime nodes, and the sums of the packages'
@@ -71,9 +77,21 @@ and returns it unchanged. It was earlier called a *snapshot*.
 list must arrive sorted and unique; the core rejects one that is not
 (`blueprint.unsorted`, `blueprint.duplicate`) and never sorts it.
 
+**Bracket** — What keeps the NetBox reader's read to one state, NetBox reading no earlier time:
+the latest id of the changelog read from, `main`'s or the branch's, and the count of its rows at
+or below that id, taken at the read's open and again at its close, and for a branch the branch's
+own row, read again at the close, whose `last_sync` a sync moves without a row in either
+changelog. A row between the two ids of a kind a read reads, every kind but a journal entry's and
+the branch object's own; a count that moved, a row of any kind written below the open's id; or a
+branch gone, synced or no longer `ready`, refuses the read, `read.moved`, with the remedy: read
+again ([D-095](../design/decisions.md#d-095),
+[`readers/netbox/mapping.md`](../readers/netbox/mapping.md)).
+
 **Branch point** *(orchestrator)* — The first *stage* of a proposed change: the default branch
 as it stood when the change's branch was cut, read at the time Infrahub gives that cut
-([D-088](../design/decisions.md#d-088)).
+([D-088](../design/decisions.md#d-088)). A NetBox change has none, since NetBox reads no
+earlier time: its first stage is `main` as it stands when the rehearsal reads it
+([D-097](../design/decisions.md#d-097)).
 
 **Build phase** — One item of the "Sequence" in [core.md](../design/core.md#sequence), such as
 "phase 7", built in four stages: settle, plan, execute, land
@@ -100,10 +118,18 @@ cut short by applying again (`reapply`, [D-068](../design/decisions.md#d-068)). 
 
 **Change source** *(orchestrator)* — The example orchestrator's side of one source of
 truth, behind a seam of four calls: the change a trigger names, its stages in order, a stage
-read into a blueprint or the findings that refused it, and the report posted. The first is
-Infrahub's, `fylgja_orchestrator.infrahub`, which finds the open proposed change of a branch and
-posts the report as a thread of two comments ([D-085](../design/decisions.md#d-085),
-[integrating.md](integrating.md#the-seams)).
+read into a blueprint or the findings that refused it, and the report posted; with three
+attributes, the bytes one part of a report may take there and the source's own sentences for
+asking again and for checking the scope; and three more the *edge* alone asks: whether a change
+is a draft, `claim`, the request that started the rehearsal taken so that it is used once, and
+its connections closed ([integrating.md](integrating.md#the-seams)). Infrahub's,
+`fylgja_orchestrator.infrahub`, finds the open proposed change of a branch, posts the report as
+a thread of two comments, and claims nothing, since a proposed change's checks ask again only
+when they run again ([D-085](../design/decisions.md#d-085)). NetBox's,
+`fylgja_orchestrator.netbox`, finds a branch by its name, reads its *marks* from the branch's
+journal and their blueprints from the core, takes the tag off the branch as its claim, and
+files the report as one journal entry on the branch, its kind the verdict
+([D-097](../design/decisions.md#d-097)).
 
 **clabernetes** — containerlab on Kubernetes, one pod per node. The production *driver*,
 with a namespace and a NetworkPolicy per twin and a LoadBalancer per node
@@ -182,9 +208,10 @@ idempotent.
 
 **Edge** *(orchestrator)* — The example orchestrator's outer layer, above its rehearsal library
 and its *change source*: the two Prefect flows Infrahub's checks start, `stage-plan` and
-`twin-rehearse`, each a thin wrap of the library that files its document as the run's
-artifact; the command line; and the two checks. Only its flows and its *runner* import Prefect
-([D-085](../design/decisions.md#d-085)).
+`twin-rehearse`, the second of which NetBox's webhook starts too, each a thin wrap of the
+library that files its document as the run's artifact; the command line; and the two checks.
+Only its flows and its *runner* import Prefect ([D-085](../design/decisions.md#d-085),
+[D-097](../design/decisions.md#d-097)).
 
 **`endpoints`** — The driver call that returns each node's management address. The push,
 readiness, verify and flows dial it, whatever the runtime.
@@ -240,7 +267,8 @@ and of `main` up to then, nothing discounted. A read pinned there meets every
 write before it, where a read pinned at a write's own stamp meets only part of it
 ([D-082](../design/decisions.md#d-082)). *(orchestrator)* The last *stage* of a proposed change
 is its branch read at its head, after the *branch point* and the *marks*
-([D-088](../design/decisions.md#d-088)).
+([D-088](../design/decisions.md#d-088)). A NetBox change's head is its branch as the rehearsal
+reads it, at no instant, after `main` and the marks ([D-097](../design/decisions.md#d-097)).
 
 **`hot_add_ports`** — A platform package's statement of whether a port added after boot
 appears in the network operating system when a link to it is added live. cEOS: `false`.
@@ -306,13 +334,27 @@ Infrahub, branch-agnostic, naming its branch as text, with a label unique within
 optional `as_of`, the time it stands at, and an optional description. It has no relationship to
 a proposed change, so it is written before one exists, and it outlives its branch. A change's
 marks stand between its *branch point* and its *head*, in order of their time
-([D-088](../design/decisions.md#d-088)).
+([D-088](../design/decisions.md#d-088)). In NetBox, which reads no earlier time, a mark is a
+journal entry on the branch naming a blueprint the core keeps: `stage mark` reads the branch as
+it stands once a step exists, gives the blueprint to the core and writes the entry, naming the
+label, the blueprint's id, the scope and the time read. A label is unique within its branch and
+is never taken twice; the marks stand between `main` and the head in the order written, and a
+mark's blueprint is read from the core the rehearsal runs through, which holds it where it was
+given it ([D-097](../design/decisions.md#d-097), [D-100](../design/decisions.md#d-100)).
+
+**NetBox** *(orchestrator)* — The source of truth from which the NetBox *reader* reads devices,
+interfaces, cables and each device's configuration as NetBox renders it at the read from its
+template, on a branch of the branching plugin or on `main`, as it stands
+([D-095](../design/decisions.md#d-095)). A change in it is a branch, each step *marked* as it is
+built, and rehearsed once the tag `fylgja-rehearse` is set on it
+([D-097](../design/decisions.md#d-097)).
 
 **Not rehearsed** *(orchestrator)* — The status of a *rehearsal* that could not be carried
 through for a reason that is not the change's: no stage to build, no room on the runtime, an
 image absent, the runtime's set-up, the core not answering or refusing, the source not
 answering, or an earlier twin still there. Nothing is retried: a refusal for room is asked
-again by running the checks again ([D-086](../design/decisions.md#d-086)).
+again by running the checks again, or in NetBox by setting the tag again
+([D-086](../design/decisions.md#d-086)).
 
 **Observed state** — The part of a twin record only the reconcile loop writes: the
 generation it acted on, the phase, run, blueprint, bundle, deployment, nodes and last step,
@@ -320,11 +362,12 @@ and the *conditions* `Ready`, `Stepping` and `Diverged`, each with a stable reas
 
 **Orchestrator** *(orchestrator)* — The example orchestrator: a worked example of joining
 the core and a *reader* to a system that already exists. It resolves stages, rehearses
-proposed changes and reports on them, and is not hardened ([D-081](../design/decisions.md#d-081),
-[D-085](../design/decisions.md#d-085)). It is `fylgja-orchestrator`, under `orchestrator/`, in
-three layers, a rehearsal library, a *change source* and an *edge*, written to be read once and
-replaced ([integrating.md](integrating.md)); its prototype, the orchestrator in the archived
-repository, was the reference it was written against.
+changes, an Infrahub proposed change or a NetBox branch, and reports on them, and is not
+hardened ([D-081](../design/decisions.md#d-081), [D-085](../design/decisions.md#d-085)). It is
+`fylgja-orchestrator`, under `orchestrator/`, in three layers, a rehearsal library, a *change
+source* and an *edge*, written to be read once and replaced ([integrating.md](integrating.md));
+its prototype, the orchestrator in the archived repository, was the reference it was written
+against.
 
 **Phase** — (For an item of the build's "Sequence", see *build phase*.) One ordered stage of the
 reconcile loop: `compiled`, `admitted`, `planned`,
@@ -337,7 +380,10 @@ recorded before the next begins, so a restarted core resumes
 change's id. The *head*'s has no time until its read resolves one, once the proposed change's
 artifact validation is waited for: the later of the reader's `head` and the validation's
 completion, or the `head` alone where none completes ([D-085](../design/decisions.md#d-085),
-[D-088](../design/decisions.md#d-088)).
+[D-088](../design/decisions.md#d-088)). For NetBox it is the stage's kind, `main`, a mark or the
+head, the branch, for a mark the mark as its journal entries give it, and the change's id, the
+branch's `schema_id`, which the branch read again by its name is held to; it holds no time, since
+NetBox reads no earlier time ([D-097](../design/decisions.md#d-097)).
 
 **`plan`** — The pure driver call that binds a bundle to a twin and a runtime, given its
 allocation, and returns a *deployment*. It is the only binding step
@@ -394,14 +440,21 @@ transport answers). Every push is a *replace*; Fylgja renders no configuration
 
 **Reader** — A library that turns one source of truth into blueprints, by one documented
 mapping, reporting every fault in one pass and writing no blueprint on failure
-([Constitution III](../design/constitution.md#iii-the-blueprint-is-the-contract)). The first
-is the Infrahub reader, `fylgja-infrahub` ([D-082](../design/decisions.md#d-082)), under
-[`readers/infrahub/`](../readers/infrahub/README.md): the library and a command of that name.
+([Constitution III](../design/constitution.md#iii-the-blueprint-is-the-contract)). Each source
+of truth Fylgja reads has its own, and no reader imports another: the Infrahub reader,
+`fylgja-infrahub` ([D-082](../design/decisions.md#d-082)), under
+[`readers/infrahub/`](../readers/infrahub/README.md), and the NetBox reader, `fylgja-netbox`
+([D-095](../design/decisions.md#d-095)), under [`readers/netbox/`](../readers/netbox/README.md),
+each the library and a command of that name.
 
-**Reader document** — The input a read of Infrahub takes beside its branch, time and scope:
-which manufacturer and platform pair is which platform package, the name of the artifact
-that holds a device's configuration, and whether probes are read. It holds no address and
-no credential ([D-082](../design/decisions.md#d-082)).
+**Reader document** — The input a read takes beside its branch and scope, in each reader's
+own format, holding what the source cannot. For the Infrahub reader, `infrahub-reader-1`, whose
+read is given a time as well: which manufacturer and platform pair is which platform package,
+the name of the artifact that holds a device's configuration, and whether probes are read
+([D-082](../design/decisions.md#d-082)). For the NetBox reader, `netbox-reader-1`: which pair
+is which platform package, and the name of the configuration context that declares the probes,
+or none; NetBox renders each device's configuration itself
+([D-095](../design/decisions.md#d-095)). Neither holds an address or a credential.
 
 **Reconcile loop** — The core's own loop that drives each twin's observed state toward its
 desired state through its driver, phase by phase ([D-023](../design/decisions.md#d-023)).
@@ -461,8 +514,10 @@ read after a cursor (`GET /v1/runs/{id}/events?after=N`). Timings are events.
 **Runner** *(orchestrator)* — The process that serves the *edge*'s two flows to a Prefect
 server, as the deployments `stage-plan/main` and `twin-rehearse/main`, each run a process of
 its own beneath it. It holds the two tokens a rehearsal needs, the core's for the principal
-`orchestrator` and one of the Infrahub account `fylgja-orchestrator`; a check holds neither
-([D-085](../design/decisions.md#d-085)).
+`orchestrator` and one of the Infrahub account `fylgja-orchestrator`, or under NetBox one of the
+NetBox account `fylgja-orchestrator`; a check holds neither
+([D-085](../design/decisions.md#d-085), [D-097](../design/decisions.md#d-097)). A runner serves
+one source, and a Prefect server one source's runner.
 
 **Settle** *(orchestrator)* — Verify asked again after a *rehearsal*'s create, every 5 s,
 until it holds or the settle budget passes, 180 s by default: verify does not wait outside a
@@ -483,13 +538,16 @@ mapping, when it was read), carried as the opaque `source` object. The core stor
 returns it, and never reads or hashes it
 ([Constitution VI](../design/constitution.md#vi-intent-is-addressed)).
 
-**Source of truth** *(orchestrator)* — The system that holds a network's intent, today
-Infrahub. A *reader* reads its intent; a *change source* reads its changes and posts the
-report to it.
+**Source of truth** *(orchestrator)* — The system that holds a network's intent, such as
+*Infrahub* or *NetBox*. A *reader* reads its intent; a *change source* reads its changes and
+posts the report to it.
 
-**Stage** *(orchestrator)* — A moment of a proposed change: its *branch point*, a *mark* the
-operator records on the branch, or its *head* ([D-088](../design/decisions.md#d-088)). The orchestrator resolves
-a stage to a blueprint through the *reader*.
+**Stage** *(orchestrator)* — A moment of a change. Of a proposed change in Infrahub: its *branch
+point*, a *mark* the operator records on the branch, or its *head*
+([D-088](../design/decisions.md#d-088)). Of a branch in NetBox: `main` as it stands, a *mark*
+taken as the branch is built, or its *head*, the branch as it stands
+([D-097](../design/decisions.md#d-097)). The orchestrator resolves a stage to a blueprint
+through the *reader*, and a NetBox mark from the core, which keeps its blueprint.
 
 **Stage record** *(orchestrator)* — The example's file a twin, saying which change and *stage*
 a twin made by `twin create` or `twin step` stands at, and the blueprint id that stage read as.

@@ -119,6 +119,13 @@ already have been weighed.
 | [D-092](#d-092) | The example's rehearsal, its clean-up and its report as built: a fourth status, a deletion read until the twin is gone, and no document after a cancel | The API and its clients |
 | [D-093](#d-093) | The Infrahub change source, the two checks and the edge as built: four permissions, the head read once the validation has completed, and a draft planned but not rehearsed | The API and its clients |
 | [D-094](#d-094) | The cut-over as made: a proposed change rehearsed through Infrahub's own check on both drivers, and what is left to the maintainer's word | The project and its shape |
+| [D-095](#d-095) | The NetBox reader: a branch as it stands, complete or refused, its configuration rendered by NetBox at the read | Intent and the blueprint |
+| [D-096](#d-096) | The NetBox reader speaks REST through httpx, states the versions it passed on, and is tested against a real NetBox | The API and its clients |
+| [D-097](#d-097) | The example's NetBox change source: marks taken as the branch is built, a tag that asks for the rehearsal, and the report a journal entry | The API and its clients |
+| [D-098](#d-098) | The NetBox reader as built: the bracket also counts the rows below its open and reads the branch again, a render has five refusals, and an active probes context is an error | Intent and the blueprint |
+| [D-099](#d-099) | The NetBox reader's versions and tests and the development NetBox as built: NetBox 4.7.5 pinned two days old, a Compose network off the lab pool, and a contract tier with a marker of its own | The API and its clients |
+| [D-100](#d-100) | The example's NetBox change source as built: a branch refused before its tag is taken, a mark held by its blueprint's id, a warning for a branch behind `main`, and Prefect's credential readable in NetBox's changelog | The API and its clients |
+| [D-101](#d-101) | The NetBox acceptance as made: a seeded branch rehearsed from its tag on both drivers, the build's output shown to the maintainer counted as their watching, and phase 8's rehearsal made once more | The project and its shape |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -251,6 +258,8 @@ code for every new source.
 **Status:** Accepted at the baseline (2026-10-31).
 Detailed by [D-081](#d-081) and [D-082](#d-082) on 2026-11-09 (phase 8): the
 Infrahub reader is a library of its own, not the orchestrator's adapter.
+Detailed by [D-095](#d-095) on 2026-11-12 (phase 9): NetBox with its branching plugin is
+read by a reader of its own, on what was read of NetBox 4.7.5 that day.
 
 #### Context
 
@@ -357,6 +366,9 @@ orchestrator is and in who reads a source; its boundary, the API alone, stands. 
 reader is a library of its own, not the orchestrator's adapter.
 Detailed by [D-091](#d-091) and [D-094](#d-094) on 2026-11-12: what Infrahub fetches lives in
 `infrahub/` at the root, not under `orchestrator/`; and the cut-over as made.
+Added to by [D-097](#d-097) on 2026-11-12 (phase 9): for NetBox the rehearsal's steps do
+not change, and its seam and its sentences gain what that entry names.
+Detailed by [D-101](#d-101) on 2026-11-13 (phase 9's landing): the NetBox acceptance as made.
 
 #### Context
 
@@ -426,6 +438,8 @@ D-005 as cutting over the orchestrator's capability and not its code.
 
 **Status:** Accepted 2026-11-12 (phase 8's landing). Details [D-005](#d-005) and
 [D-081](#d-081): what of the cut-over was made, and what was not. Supersedes nothing.
+Added to by [D-101](#d-101) on 2026-11-13 (phase 9's landing): the seeded proposed change was
+rehearsed through Infrahub's own check once more, on the local driver, and passed.
 
 #### Context
 
@@ -482,6 +496,106 @@ The cluster run's criterion, of which the maintainer said "The rehearsal passed 
 - The contract tier last passed whole at the commit that widened that deadline. The one
   change to code after it was a docstring, and the tier was not run again (ruling P6-47).
 - [core.md](core.md)'s "Sequence" marks item 8 done.
+
+
+<a id="d-101"></a>
+### D-101 — The NetBox acceptance as made: a seeded branch rehearsed from its tag on both drivers, the build's output shown to the maintainer counted as their watching, and phase 8's rehearsal made once more
+
+**Status:** Accepted 2026-11-13 (phase 9's landing). Details [D-081](#d-081), which said NetBox
+was to follow, and [D-097](#d-097): how the phase's criterion was met. Adds to
+[D-094](#d-094): the seeded proposed change rehearsed through Infrahub's own check once more,
+under the edge as phase 9 left it. Supersedes nothing.
+
+#### Context
+
+The phase was done when the maintainer had watched a script build a branch in NetBox in steps
+and mark each, the branch given its tag, the rehearsal started by that with nothing else done by
+hand, and had read its report on the branch's journal, once with the core on the local driver
+and once on the cluster; and, beside it, when the reader's contract tier passed, the wheels
+installed, phase 8's rehearsal through Infrahub still passed, and every behaviour of NetBox the
+code relies on was recorded
+([core.md](core.md#phase-9-the-netbox-reader-and-the-examples-netbox-change-source-settled-2026-11-12)).
+Phase 9's plan 4 made those runs on 2026-11-13, each of NetBox's after a dry run of its own
+([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3" and the end
+of "Infrahub 1.11.11"; plan 4's rulings R7, R9 to R14 and R16 of the phase's ledgers).
+
+#### Options considered
+
+What the maintainer's watching of the build is. On the local driver the controller ran the
+build while the maintainer watched; on the cluster the controller ran it on the maintainer's
+word and showed them its whole output before the tag was asked for:
+
+- **The shown output taken as the watching, on the controller's ruling.** Not taken alone: the
+  criterion is the maintainer's own act, and theirs to call.
+- **Ask.** Chosen. Asked whether they had watched the local driver's branch being built, the
+  maintainer answered "yes"; asked whether the build's whole output shown to them before the
+  tag counts as their watching the cluster's branch being built, "it counts" (both 2026-11-13).
+
+Phase 8's rehearsal made once more, whose two checks' validators were made 11.4 s and 11.7 s
+past the 120 s the runbook expects them in:
+
+- **Not the run**, as phase 8's runbook had it of a run with no `fylgja-twin` validator 120 s
+  after the creation. Not taken: that bound was written to tell a check that never starts,
+  and here both validators came, both checks concluded `success`, and the validators were made
+  before either check's code began. The runbook now says so.
+- **The run counts, recorded as read with the bound passed.** Chosen.
+
+The Infrahub contract tier at the phase's closing gates:
+
+- **Run again at the last plan's head.** Not taken, on the maintainer's word of 2026-11-13.
+- **Cited from the commit it last ran at.** Chosen.
+
+#### Decision
+
+- **The acceptance was met on both drivers on 2026-11-13.** Each time the seed's script built a
+  branch in the development NetBox in two steps and marked each through that run's core; the
+  maintainer set the tag by hand, in the branch's edit form; and that started one run of
+  `twin-rehearse` with nothing else done by hand. Each rehearsal ended `passed`: a twin created
+  at `main`, stepped and verified through the two marks, the head unchanged, the twin destroyed,
+  and the report filed as one journal entry of kind `success` on the branch.
+- **On the local driver** the branch was built while the maintainer watched, and they read:
+  "The journal includes the rehearsal success report" ("A branch built in steps and marked by
+  the seed's script, tagged by hand, rehearsed from its tag on the local driver, built while the
+  maintainer watched, and its report as they read it on the Journal tab").
+- **On the cluster** the build's whole output was shown to the maintainer before they set the
+  tag, which they ruled is such watching, and they read: "The tables and lists render
+  correctly" ("A branch built in steps and marked by the seed's script through the cluster's
+  core, its build's output shown to the maintainer, tagged by them by hand, rehearsed from its
+  tag on the cluster's core, and its report as they read it on the Journal tab"). The deployed
+  core ran the image `fylgja-core:ea4cbde1d213`, built at the commit that merged the phase's
+  third plan, and pushed and deployed on the maintainer's word; nothing the image holds changed
+  after that commit.
+- **NetBox, Prefect and the runner ran on the development host both times**, NetBox and the
+  local driver's twin together ([D-099](#d-099)), and each run was made from the main checkout
+  checked out at the code under test.
+- **Phase 8's rehearsal through Infrahub's own check was made once more**, on the local driver,
+  the proposed change the seed's and not one made in Infrahub's UI. Both checks concluded
+  `success` and the rehearsal `passed`, its summary and detail phase 8's but for the sentence on
+  when the stages were read ([D-100](#d-100)) and the run's own values ("The seeded proposed
+  change rehearsed through its own check once more, the edge opening the source its setting
+  names"). It was made with NetBox up beside it, NetBox's runner stopped, its trigger installed
+  and no branch tagged.
+- **The contract tiers.** NetBox's passed whole at the last plan's closing gate, 14, 45 and 12
+  tests; what followed that commit changed documents, comments, pure tests and
+  `scripts/netbox_dev.py`.
+  Infrahub's was not run again there: it passed on 2026-11-13 at a commit of the phase's third
+  plan, 7, 30 and 11 tests, and since that commit nothing under `infrahub/` or
+  `readers/infrahub/` changed, nor anything of the rehearsal library or the Infrahub source,
+  and of the edge docstrings and comments alone.
+- **One start of NetBox on the merged code.** The last plan's fix wave changed
+  `scripts/netbox_dev.py`'s start after the last live start of NetBox, so `make netbox-up` and
+  `make netbox-down` were run once more on the merged code, each exiting 0, the network standing
+  at the override's range.
+
+#### Consequences
+
+- The Infrahub rehearsal took 600.5 s where phase 8's took 277.2 s, the steps that read
+  Infrahub slower and the twin's own not. Why is not established, and is an
+  [open question](#open-questions), with the cluster's rehearsal against the local driver's and
+  the address no rule of verify reads.
+- Of the maintainer's readings, the render of the report's table and lists in a browser is said
+  of the cluster's run alone.
+- [core.md](core.md)'s "Sequence" marks item 9 done.
 
 
 ## Intent and the blueprint
@@ -858,6 +972,9 @@ the rehearsal has several stages. Restates the archived repository's D-045 for t
 one change: the mark's key.
 Superseded in part by [D-093](#d-093) on 2026-11-12: of the two checks only `fylgja-twin`
 concludes over a draft without starting anything; `fylgja-step` plans it.
+Added to by [D-097](#d-097) on 2026-11-12 (phase 9): in NetBox, which reads no earlier
+time, a mark is taken by a command of the example's when the step exists, and names a
+blueprint the core keeps. This entry's marks, Infrahub's, stand as they are.
 
 #### Context
 
@@ -1034,6 +1151,274 @@ How the schema's library is told:
   Infrahub logs a write's events up to seconds after it; the caller waits that out, as the
   seed and the example's change source do.
 - [core.md](core.md) says the rule and the schema check as built.
+
+
+<a id="d-095"></a>
+### D-095 — The NetBox reader: a branch as it stands, complete or refused, its configuration rendered by NetBox at the read
+
+**Status:** Accepted 2026-11-12 (phase 9). Details [D-004](#d-004): NetBox with its branching
+plugin is read by a reader of its own. Builds on [D-081](#d-081), and holds this reader to
+what [D-082](#d-082) holds the Infrahub reader to, restated for what NetBox is.
+Superseded in part by [D-098](#d-098) on 2026-11-13: the bracket is the changelog's latest id,
+the count of the rows at or below the open's id and the branch's own row read again, a sync
+moving neither changelog; two kinds of row do not count, above the open's id alone; a render
+has five refusals; a cable a refused device ends is neither a link nor an omission; a sync is
+guarded; and the envelope's id is not the whole point in time of a branch.
+
+#### Context
+
+[D-081](#d-081) said NetBox was to follow, with a reader of its own. On 2026-11-12 the
+maintainer asked for feature parity with the Infrahub integration, then set its bound:
+"complete parity isn't a reasonable requirement. Let's get it as close as we can."
+
+NetBox 4.7.5 with netbox-branching 1.2.3 was read on that day
+([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3"). A
+branch is read by a header on any request, as it stands; nothing reads it as it stood
+earlier. A device's configuration is not stored: NetBox renders it on request from a
+template, for the branch the header names, and the same state rendered the same bytes each
+time. A device with no template answers 400 and a template that fails 500, each with its
+reason. A REST list answers a `count`; no total was found in GraphQL. An interface carries
+`enabled` and `mgmt_only` as its own members, where the DCIM library the Infrahub reader maps
+has neither. A platform carries its manufacturer. A configuration context that is inactive
+is in no device's rendered context and is still read by its name.
+
+[D-082](#d-082)'s worst case, a twin that is quietly not the network, has another cause
+here. There is no artifact to fall behind its intent. But a read is tens of requests with no
+instant in common, and an edit made between two of them gives a blueprint of a network that
+never was.
+
+#### Options considered
+
+How NetBox is read:
+
+- **GraphQL**, as the archived repository's spike read it. Not taken: no total was found in it, so
+  no list could be counted against one, and the renders are REST's whatever reads the lists.
+- **REST alone.** Chosen.
+
+Keeping a read to one state:
+
+- **Nothing.** Rejected: it is the quietly wrong twin.
+- **Reading everything twice and comparing.** Not taken: twice the requests, and two reads
+  that agree may both straddle an edit.
+- **The changelog's latest id, taken before and after.** Chosen. An edit made under a branch's
+  header added a row to that branch's changelog, and one on `main` to `main`'s (the same
+  reading). What a sync does to a branch's changelog is not read, and is plan 2's first
+  reading.
+
+Where a device's configuration comes from:
+
+- **NetBox's own render.** Chosen: it is what NetBox itself would hand a deployment tool, and
+  it follows the branch.
+- **A render made elsewhere** from NetBox's data, by a tool the reader calls. Not taken: the
+  reader would run another system, or Fylgja would render
+  ([Constitution IV](constitution.md#iv-fylgja-never-renders-configuration)).
+
+Where probes are declared:
+
+- **A probe declaration file beside the reader document.** Not taken as the first answer: the
+  probes would live outside the source the reader reads.
+- **A further plugin for objects of one's own.** Not taken: a second plugin on every
+  installation, for one list.
+- **A configuration context the reader document names, inactive.** Chosen.
+
+What the two readers share:
+
+- **A package common to both.** Not taken: two readers show too little of what a third would
+  need, and the Infrahub reader would be changed to make it.
+- **Nothing but the core's model.** Chosen.
+
+#### Decision
+
+- **The reader is a typed library with a command of its own**, `fylgja-netbox`, the package
+  `fylgja_netbox` under `readers/netbox/`. It takes a connection, a branch or none for
+  `main`, a scope and a reader document, and answers a blueprint with its source envelope, or
+  the findings that refused it. It takes no time.
+- **It writes nothing to NetBox.** Its one request that is not a `GET` is `render-config`,
+  which added no row to a changelog in the renders read. Its token never reaches a blueprint, a finding, a log line or an
+  error.
+- **Complete or refused.** Every list is read over REST and counted against the `count`
+  NetBox answers for it. Every scoped device is rendered. A gap is an error and no blueprint,
+  or a fidelity row. Nothing is defaulted in silence.
+- **A device's configuration is NetBox's render of it at the read**, one request a device
+  under the branch's header, the text verbatim. No template, a template that fails, and an
+  empty render are each an error naming the device.
+- **A read is of one state.** The reader takes the latest id of the changelog it reads from
+  before its first list and after its last render. Where they differ the read is refused,
+  with the remedy: read again, unless every row between them is of a kind no read reads, a
+  journal entry's first among them. The reader does not read again by itself.
+- **The source envelope carries that id**, beside `observed_at`, and no `at`: it is the
+  point in time [Constitution VI](constitution.md#vi-intent-is-addressed) asks for, as near
+  as NetBox gives one.
+- **There is no stale rule**, nothing being stored between an edit and a render.
+- **The same state gives the same blueprint id.**
+- **NetBox's version is read first.** The reader warns outside the versions it passed on
+  ([D-096](#d-096)), and refuses a branch asked of a NetBox that does not name the plugin.
+- **One mapping, `netbox-dcim`**, documented in the reader's `mapping.md`: the scope a tag on
+  devices; a device's platform and that platform's manufacturer matched to a platform package
+  by the reader document; its physical interfaces, with `enabled` and `mgmt_only` as NetBox
+  holds them; a cable of two interface ends, both in the scope, as a link, and any other
+  cable omitted with its reason.
+- **Every finding names its object in NetBox**, in findings 1's finding shape, under rule ids
+  of the reader's own, the Infrahub reader's kept where the meaning is the same.
+- **The reader document** is a new format, `netbox-reader-1`: the pairs of manufacturer and
+  platform with the package id of each, and the name of the configuration context that
+  declares the probes, or that none are read. It holds no address and no credential: those
+  are `FYLGJA_NETBOX_ADDRESS` and `FYLGJA_NETBOX_TOKEN` ([D-042](#d-042)).
+- **Probes are an inactive configuration context's data**, a probe declaration held to the
+  core's own loader. A NetBox without that context is no fault unless the document names one.
+- **The reader imports the core's base install and httpx**, and nothing of the Infrahub
+  reader or of the example. A test over imports holds it.
+
+#### Consequences
+
+- A read of a `main` that many hands are editing may be refused more than once. A bounded
+  number of further reads inside the reader is a later entry, once a site shows the need.
+- The reader's guard sees an edit that the changelog records. What it does not record, if
+  anything, is not guarded, and plan 2 reads what a sync and a merge on `main` write there.
+- A configuration that a site renders outside NetBox is not read. Such a site needs a reader
+  of its own, or a later entry.
+- Two readers hold two transports, two sets of findings' sentences and two reader documents.
+  What they have in common is seen when a third is written.
+- NetBox needs nothing of Fylgja's installed in it for a read: no schema, no plugin, no
+  custom field.
+
+
+<a id="d-098"></a>
+### D-098 — The NetBox reader as built: the bracket also counts the rows below its open and reads the branch again, a render has five refusals, and an active probes context is an error
+
+**Status:** Accepted 2026-11-13 (phase 9's landing). Supersedes [D-095](#d-095) in six parts:
+what brackets a read, which rows of the changelog do not count, what a render is refused for,
+which cables are neither a link nor an omission, what the reader's guard does not see, and what
+the envelope's id says of a branch. Details it in an active probes context, in which
+interfaces are ports, in what a finding names, in a name NetBox answers twice or not at all, and
+in what the reader's token must be. The rest stands.
+
+#### Context
+
+D-095 chose the changelog's latest id as a read's bracket and left to plan 2 "What a sync does
+to a branch's changelog", "what a sync and a merge on `main` write there", and which kinds' rows
+no read reads. Phase 9's plan 2 read NetBox 4.7.5 with netbox-branching 1.2.3
+([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3") and built
+the reader on the readings (plan 0's bends and its reconciled item 4; plan 2's rulings C5, R1
+to R3, R5 to R11, R15 and R16 of the phase's ledgers). The readings differed from what D-095
+supposes, or said what it left open, in these places.
+
+- **A sync adds no row to either changelog, and changes what the branch reads** ("A sync"). The
+  branch's `status` went `ready`, `syncing`, `ready`, and its `last_sync` moved. So the latest id
+  of a changelog cannot see a sync.
+- **A journal entry's row and the branch object's own land on `main`'s changelog alone** ("The
+  kinds of a changelog's rows"): a mark, a report and the example's write of a branch's tags each
+  add a row to `main`'s during a read of `main`.
+- **Under the header of a branch deleted, syncing or merged a list is answered 400**, and under
+  a deleted branch's a render too ("A sync", "A merge", "A render under the header of a branch
+  that is gone"); so is a list asked by an id NetBox does not hold. A render under a branch
+  that is syncing or merged was not read.
+- **A render has more answers than D-095 lists.** A device with no template is 400 in NetBox's
+  own words, a template that fails 500, and a template that renders nothing 200 with no byte; an
+  account without `render_config` is answered 404, though it has just listed the device; and
+  NetBox refuses a render to a token that may not write ("Permissions").
+- **A key of an active configuration context renders** ("A render of a template that reads the
+  configuration context"), so a probes context left active reaches every device it applies to.
+- **`?id__lte=` on the changelog is honoured** ("An upper bound on the id"). Whether rows commit
+  in the order of their ids was not read.
+- **NetBox takes two devices of one name on two sites** ("A device's name, per site").
+
+#### Options considered
+
+What brackets a read through a sync:
+
+- **The changelog's latest id alone**, as D-095. Rejected by the reading: a sync moves neither
+  changelog.
+- **The branch's `last_sync` carried in the source envelope**, beside the changelog's id. Not
+  built: the envelope's members were fixed before the reading was made, and the limit is said in
+  the reader's `mapping.md` instead.
+- **The branch's own row read again at the close.** Chosen.
+
+A row of a lower id that commits after the open:
+
+- **Nothing more.** Not taken: such a row moves no latest id, and whether NetBox commits rows in
+  the order of their ids was not read.
+- **The count of the rows at or below the open's id, taken at the open and at the close.**
+  Chosen: two requests of one row each.
+
+A 400 answered after the open:
+
+- **Raised as the transport's error.** Not taken: a branch deleted or synced during a read would
+  show as a failed request, and a caller that reads again does so on `read.moved` alone.
+- **Weighed at the close.** Chosen.
+
+#### Decision
+
+1. **The bracket is three guards, and it closes on every path past its opening.** The latest id
+   of the changelog read from, `main`'s or the branch's, is taken before the first list and
+   after the last render, and the rows between are listed, held to their `count` and to the
+   close's own row. The rows at or below the open's id are counted at the open and at the
+   close. And a branch's own row is read before the open and again at the close. A read is
+   refused, `read.moved`, where a row between the two ids is of a kind a read reads, where the
+   count moved, or where the branch is gone, is no longer `ready`, or was synced, its `last_sync`
+   moved. Since the close is always taken, `read.moved` may stand beside another refusal,
+   `scope.empty` and `read.incomplete` among them.
+2. **Two kinds of row do not count above the open's id**: `extras.journalentry` and
+   `netbox_branching.branch` (`bracket.UNREAD`). One committed below the open's id refuses the
+   read whatever its kind, the count telling no kinds.
+3. **A 400 answered to a request past the open is weighed at the close.** Where the bracket
+   moved it is `read.moved`; where it did not, the 400 is raised as it came, or, for a render,
+   filed as `render.unavailable`. A 400 to the close's own requests under a branch's header is
+   `read.moved`; on `main` it is raised.
+4. **A render has five refusals**, each an error naming the device: `render.template.missing`,
+   a 400 in the words NetBox answers a device with no template, and in no other;
+   `render.failed`, a 500; `render.empty`, a 200 of nothing but whitespace; `render.invalid`, a
+   200 that NetBox does not call `text/plain` or that is no UTF-8 text; and
+   `render.unavailable`, any other status, among them 404, where its sentence names the
+   `render_config` grant. A refused token, 401 or 403, is the transport's error.
+5. **An active probes context is an error**, `probe.context.active`, and a context the reader
+   document names and NetBox does not list `probe.context.absent`. A declaration stating another
+   `probes_version` than 1 goes to the core's loader as it is, which files
+   `probes.version.unsupported` and checks nothing else of it.
+6. **The mapping.** A port is every interface whose type is not `virtual`, `bridge` or `lag`, a
+   wireless type among the ports. A cable is judged for omission first, for the first of four
+   reasons: a side of other than one termination, an end that is no interface, an end outside
+   the scope or on an interface that is no port, and an end `mgmt_only`, which blueprint 1
+   refuses a link on, though both ends be interfaces in the scope. A cable that would be a link
+   and ends on a device the mapping refused is neither a link nor an omission: the device's
+   refusal is the read's already. Two scoped devices that make one blueprint name are each
+   refused, and two of one exact name are told apart by their ids.
+7. **A name asked that NetBox answers twice is the transport's error**, the scope's tag, the
+   branch and the probes' context alike, before anything is built on the first row. A branch
+   name that is empty or whitespace alone is refused before any request: a `ValueError` in the
+   library and a usage error at the command.
+8. **What a finding names.** Each names its object in NetBox, but these: `read.incomplete` names
+   the list by its object type, `scope.invalid` and `scope.empty` the scope,
+   `netbox.version.unverified` the pair of versions, and a problem of the blueprint built its
+   pointer.
+9. **The envelope's `changelog` is the id taken at the close**, null where the changelog holds no
+   row. Of `main` it is the point in time
+   [Constitution VI](constitution.md#vi-intent-is-addressed) asks for, as near as NetBox gives
+   one. Of a branch it is not the whole of it: the envelope does not carry `last_sync`.
+10. **The reader's token must be one that may write**, NetBox refusing a render otherwise. What
+    keeps the reader from writing is its account's grants: `view` of what a read lists and
+    `render_config` on devices, each `view` grant carrying no constraints. Its contract tier
+    ends on a test that the reader's connections sent no request but a `GET` and the render.
+
+#### Consequences
+
+- The guard against a sync rests on one reading, that a sync moves `last_sync`. Two reads of one
+  branch either side of a sync can carry one `changelog` id for two states.
+- What the bracket does not see is listed in the reader's `mapping.md`, "The bracket", and in
+  the facts' "Not read": a row pruned at or below the open's id while another commits late; a
+  template that renders a device's own journal entries; what lives on `main` alone under a
+  branch's read, the reader account's permissions among it; a `view` grant with constraints,
+  under which a list and its `count` would be short alike; and a write NetBox makes outside a
+  request. None was read.
+- A journal entry or a branch's `PATCH` that commits below the open's id refuses a read of
+  `main`, and the remedy is the same: read again.
+- A NetBox that allowed two of a name would refuse every read until one is renamed, and one
+  behind a proxy that relabels a render's content type every read until the rule is widened.
+  Each errs toward refusing.
+- The count costs two requests a read. Whether a row can commit below a higher one, which it
+  guards, is an [open question](#open-questions).
+- [core.md](core.md) says the bracket, the renders and the probes' context as built, and the
+  reader's `rules.md` and `mapping.md` every rule.
 
 
 ## The compiler and the bundle
@@ -4088,6 +4473,8 @@ Added to by [D-083](#d-083) and [D-084](#d-084) on 2026-11-09 (phase 8): httpx i
 the reader's one library, and the server's libraries become the `server` extra.
 Superseded in part by [D-093](#d-093) on 2026-11-12: Prefect 3.9.2 was pinned three days old,
 on the maintainer's word.
+Superseded in part by [D-099](#d-099) on 2026-11-13: NetBox 4.7.5 was pinned two days old, on
+the maintainer's word.
 
 #### Context
 
@@ -4465,6 +4852,11 @@ Superseded in part on 2026-11-12 by [D-091](#d-091): the task workers are given 
 checkout's `.git` directory, not a clone; by [D-092](#d-092): the clean-up after a cancel is the
 library's, one request, and no document is filed; and by [D-093](#d-093): the example's
 account holds four permissions.
+Added to by [D-097](#d-097) on 2026-11-12 (phase 9): a second change source, NetBox's,
+behind the seam; the edge's source is a setting; and how one asks again is the source's to
+say. The NetBox lines of this entry's context were read on a running NetBox that day.
+Detailed by [D-100](#d-100) on 2026-11-13 (phase 9's landing): the NetBox change source, the
+seam's two sentences and the edge's settings as built.
 
 #### Context
 
@@ -4652,6 +5044,11 @@ D-053) for this repository, in a new form. Lets findings 1's `loss` stand withou
 until the flow is built.
 Superseded in part by [D-092](#d-092) on 2026-11-12: the heading gives a fourth verdict,
 stopped; and the summary keeps one duration, and names the twin where the cause is the twin.
+Added to by [D-097](#d-097) on 2026-11-12 (phase 9): in NetBox the report is one journal
+entry on the branch, its kind the verdict, with no bound on its size.
+Detailed by [D-100](#d-100) on 2026-11-13 (phase 9's landing): the sentence on when the stages
+were read as built, for either source, the lines a summary always keeps grown with it; and in
+NetBox an empty line put before each list of the entry.
 
 #### Context
 
@@ -4832,6 +5229,11 @@ the clean-up after a cancel or a time limit; [D-086](#d-086) in four, the reclai
 deletion is waited for, what a time limit is and the fourth status; and [D-087](#d-087) in
 two, the verdicts a heading can give and what the summary holds. Details the seam's types, the
 twin's record and the report's two comments. The rest of each stands.
+Added to by [D-097](#d-097) on 2026-11-12 (phase 9): the seam gains the two sentences a
+source gives, and the report's sentence on when its stages were read is made true of a
+stage read earlier.
+Detailed by [D-100](#d-100) on 2026-11-13 (phase 9's landing): the two members' names, and the
+sentence as built.
 
 #### Context
 
@@ -4946,6 +5348,10 @@ do with a draft; and [D-039](#d-039) in one, for one pin, Prefect's. Details D-0
 head is read, in the times of the checks and the flows and in the two calls the edge asks of
 a source beyond the seam's four; and D-088 in how the branch point is decided and when a mark
 is refused. The rest of each stands.
+Added to by [D-097](#d-097) on 2026-11-12 (phase 9): the edge asks a third call of a source,
+the one that takes a request, which Infrahub's source answers by doing nothing.
+Detailed by [D-100](#d-100) on 2026-11-13 (phase 9's landing): that call's name, and the
+settings' fields that name no source.
 
 #### Context
 
@@ -5039,6 +5445,563 @@ Whether `main` moved:
 - The checks first ran on a task worker, and the workers first reached Prefect on the host,
   in the acceptance runs of 2026-11-12, the dry runs first ([D-094](#d-094)).
 - [core.md](core.md) and [docs/integrating.md](../docs/integrating.md) say each as built.
+
+
+<a id="d-096"></a>
+### D-096 — The NetBox reader speaks REST through httpx, states the versions it passed on, and is tested against a real NetBox
+
+**Status:** Accepted 2026-11-12 (phase 9). Applies [D-083](#d-083) to the NetBox reader.
+[D-034](#d-034) stands and binds its tests. The constitution's line on contract tests names
+NetBox beside Infrahub citing this entry (version 1.1.1, wording).
+Superseded in part by [D-099](#d-099) on 2026-11-13: the warning is filed where the pair of
+versions is not among the pairs passed on; the contract tier provokes each rule of the
+reader's, some by an answer altered in flight, and the pure tier holds more than this entry
+lists; the development NetBox has a Compose network of its own, off the local driver's lab
+pool; NetBox is up beside the twin of the acceptance run; and the reader exports `redact`,
+which the example's transport imports.
+
+#### Context
+
+[D-083](#d-083) gave the Infrahub reader plain HTTP, stated versions and a contract tier on a
+real instance, because the maintainer's first worry was maintaining the reader across the
+source's upgrades. The worry is the same here, and NetBox moves as fast: 4.7.5 was released
+two days before this entry and the plugin's 1.2.3 two weeks before. The readings behind
+[D-095](#d-095) were made with httpx alone. NetBox on the development host is netbox-docker's
+Compose project with one image layer adding the plugin; it idled at about 1.3 GiB in the
+archived repository's reading, and its first start is minutes of migrations.
+
+#### Options considered
+
+- **pynetbox.** Not taken, for D-083's reasons: the reader sends a few fixed requests, and a
+  client library's pins would reach whatever platform the reader is installed into.
+- **httpx, which the core's client and the Infrahub reader already use.** Chosen.
+- **Recorded answers for the pure tier.** Rejected by [D-034](#d-034).
+
+#### Decision
+
+- **The reader depends on `fylgja-core` and httpx**, and on no client library of NetBox's.
+- **All of its contact with NetBox is in one transport module.** Nothing else in the reader
+  builds a request.
+- **The versions it passed on are stated** in its README, NetBox's and the branching
+  plugin's. At connect it reads both, and files a warning when either is not among them.
+- **Its contract tier runs against a real NetBox**, seeded, at versions one make target
+  takes: every read rule of [D-095](#d-095), and the same state read twice giving one id. Its
+  pure tier holds the mapping, the ordering, the counting and the bracket over rows built in
+  the tests, and the import boundary.
+- **An upgrade is a procedure**, D-083's: start the new versions, seed them, run the contract
+  tier, read again the recorded facts the code leans on, and extend the list.
+- **NetBox on the development host is netbox-docker at a stated version**, with an image that
+  adds the plugin at a stated version, under `local/`, behind make targets. What the tree
+  holds for it is under `netbox/`, as `infrahub/` holds Infrahub's.
+- **It is seeded by a script over REST**, with the fixture network the Infrahub seed holds, a
+  configuration template that renders it, and the probes' configuration context.
+
+#### Consequences
+
+- The reader holds its own paging and its own error sentences.
+- The contract tier needs a running NetBox. Its memory is plan 1's reading; it and Infrahub
+  are both stopped while a live tier runs on the development host.
+- The example's change source meets NetBox through a transport of its own
+  ([D-097](#d-097)), as its Infrahub source does; the reader's transport is the reader's
+  alone.
+
+
+<a id="d-097"></a>
+### D-097 — The example's NetBox change source: marks taken as the branch is built, a tag that asks for the rehearsal, and the report a journal entry
+
+**Status:** Accepted 2026-11-12 (phase 9). Adds a second change source behind
+[D-085](#d-085)'s seam. Adds to [D-087](#d-087) where the report is filed, and to
+[D-088](#d-088) what a mark is in a source that cannot be read at an earlier time. Adds to
+[D-092](#d-092), which says the seam and the report as built, the two sentences a source
+gives and the report's sentence on when its stages were read; and to [D-093](#d-093), which
+says the edge asks two calls of a source beyond the seam's, a third. The
+maintainer said on 2026-11-12 that the steps are seeded by a script, that a webhook is enough
+to start the orchestration, and that a report on the branch is enough, with no gate on the
+merge.
+Superseded in part by [D-100](#d-100) on 2026-11-13: the source reads the tag and takes it off,
+by hand too; a branch that keeps its tag and gains no report may have started and been refused
+before the tag was taken; a mark is held by its blueprint's id, through any core given that
+blueprint; a branch behind `main` is warned of by a count of `main`'s changelog, and nothing is
+refused; both lesser accounts read the webhook's credential in `main`'s changelog; the
+report's entry has an empty line put before each list; the seam gains two members; and the
+source's transport also counts `main`'s changelog. Detailed by [D-101](#d-101): the acceptance
+as made.
+
+#### Context
+
+[D-085](#d-085) kept its seam from ruling NetBox out, on NetBox's documentation alone. On
+2026-11-12 NetBox 4.7.5 with netbox-branching 1.2.3 was read
+([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3"). On the
+community edition a change is a branch. It has no object of review, and the layer that adds
+one is the paid editions'. Nothing read of it reads a branch as it stood earlier; the archived
+repository read a merged branch refused on 4.7.4, which was not read again. A branch takes tags and journal entries; a journal entry on it lives on
+`main`, is listed in the order written, showed on the branch's page, and was kept whole at a
+megabyte. An event rule on the branch, conditioned on a tag, sent its webhook when the tag
+was set and for an edit while it stayed set, and sent none for a journal entry, a sync or
+the tag's removal. A webhook sends a body NetBox renders from a template, with headers it is
+given. One answered 503 was not sent again in the 45 s watched. The plugin's merge validators could refuse a
+merge, by code installed in NetBox.
+
+The maintainer's picture, the same day: "we can build the branch in steps, generating a
+series of blueprints as we go"; "use a script to seed the change so that we don't need to
+worry about a user interface for this. Emphasis is on the demo; we can develop a change
+authoring process once the concept is proven."
+
+The core keeps a blueprint by its id and returns it
+([Constitution IX](constitution.md#ix-state-lives-behind-one-store-no-database)), and Prefect
+starts a deployment for any caller of `create_flow_run`
+([verified-facts.md](verified-facts.md), "Prefect 3.9.2").
+
+#### Options considered
+
+Where a step's blueprint is kept until the rehearsal:
+
+- **A directory of the example's**, as its record of a twin is. Not taken: the command that
+  takes a mark and the runner that rehearses would have to share a disk, and the marks would
+  be invisible in NetBox.
+- **The blueprint's text in a journal entry.** Not taken: every device's configuration, in
+  the branch's journal.
+- **The blueprint in the core, and a journal entry naming its id.** Chosen: the core already
+  keeps blueprints by id, and the mark is where the change is.
+
+What makes a mark:
+
+- **Every edit on the branch**, by a webhook. Not taken: an edit is not a step, and a change
+  of ten edits would be ten stages.
+- **A command, run when a step is complete.** Chosen. The seed's script runs it; what an
+  engineer does in its place is the later phase's.
+
+What asks for the rehearsal:
+
+- **A lifecycle event of the branch.** Not taken: provisioning comes before any edit, a sync
+  is not a request, and a merge is too late.
+- **A custom script or a custom link in NetBox.** Not taken: code or a page inside NetBox,
+  which the maintainer set aside for now.
+- **A tag on the branch, and an event rule conditioned on it.** Chosen.
+
+What receives the webhook:
+
+- **A small HTTP service of the example's.** Not taken, as [D-085](#d-085) did not take one.
+- **Prefect's own API**, the webhook's body being the request `create_flow_run` takes.
+  Chosen.
+
+What holds the verdict:
+
+- **A merge validator.** Not taken: "report is good enough" (the maintainer, 2026-11-12).
+- **A tag or a custom field on the branch beside the report.** Not taken: a write to the
+  branch is an event of the branch's, and one more thing to keep true.
+- **A journal entry, its kind the verdict.** Chosen.
+
+#### Decision
+
+- **A change is a branch**, named by its name. One that is not `ready` is refused.
+- **Its stages, in order**: `main` as it stands when the rehearsal reads it; each mark of the
+  branch in the order written; and the branch as it stands then.
+- **A mark is taken by the example's command `stage mark`**, given a branch and a label. It
+  reads the branch through the reader ([D-095](#d-095)), gives the blueprint to the core, and
+  writes a journal entry on the branch that names the label, the blueprint's id, the scope
+  read under and when, in a form a person reads and the source parses. A read that is refused
+  writes no mark. A label is unique within its branch.
+- **A mark's blueprint is read back from the core by its id, and the rest of it from its
+  entry.** The core keeps the envelope of whoever first gave it that intent, so nothing of a
+  mark is taken from the envelope. One the core does not hold, or one whose entry names
+  another scope than the rehearsal's, refuses that stage with a finding.
+- **A mark belongs to the core it was given to.** A change is rehearsed through the core it
+  was marked through.
+- **The example keeps no store for this.** The marks are NetBox's and the blueprints the
+  core's.
+- **`main` and the head are read at the rehearsal**, and read again, a fixed small number of
+  times, where the reader refuses one for having moved ([D-095](#d-095)).
+- **A tag on the branch asks for the rehearsal.** An event rule on the branch for
+  `object_updated`, conditioned on the tag, sends a webhook that posts to Prefect's
+  `create_flow_run` for `twin-rehearse`, its body the branch's name as the flow's one
+  parameter. The edge takes the tag off before it calls the library, by a call it alone asks
+  of a source, as it alone asks whether a change is a draft; Infrahub's source answers it by
+  doing nothing. One setting of the tag is so one rehearsal; set again, it asks again. The
+  tag is held by NetBox's rule and nothing else: `twin rehearse` run by hand rehearses a
+  branch tagged or not, and no NetBox change is a draft.
+- **The report is one journal entry on the branch**, the summary and the detail together,
+  its kind `success` for the status `passed`, `danger` for `failed`, and `warning` for
+  `not_rehearsed` and `stopped`. The source sets no bound on its size. It
+  gates nothing.
+- **The edge takes its source from a setting**, `FYLGJA_ORCHESTRATOR_SOURCE`, `infrahub` or
+  `netbox`, `infrahub` where it is unset. NetBox is reached at `FYLGJA_NETBOX_ADDRESS` with
+  `FYLGJA_NETBOX_TOKEN`, verified against `FYLGJA_NETBOX_CA` where one is named
+  ([D-042](#d-042)), and the chosen source's variables alone are required. A runner serves
+  one source, and a Prefect server one source's runner, since both sources' flows are served
+  under the same two names. The two flows keep their one parameter. `stage mark` under
+  `infrahub` is refused.
+- **NetBox starts `twin-rehearse` alone.** `stage-plan` stays a deployment, which Infrahub's
+  check starts, and a command.
+- **The seam gains the source's own words, and the report's read time is made true of a
+  mark.** The library's sentences that tell a reader to run the checks again, and to check
+  the scope the checks run with, take those words from the source by a member the seam
+  gains, and the library names neither Infrahub's checks nor NetBox's tag. The report's
+  sentence that the stages were read at one time, and that later edits are not rehearsed, is
+  restated so that it is true where a mark was read earlier, the mark's time coming from
+  its stage. The rehearsal's steps, its statuses and its two documents do not change.
+- **The source has a transport of its own** for its few requests: the branch, its journal
+  entries, its tags. The reader beneath it still writes nothing.
+- **The tag, the event rule and the webhook are made by a make target** on the development
+  NetBox, the webhook's address and its credential for Prefect taken from `local/.env`.
+
+#### Consequences
+
+- The webhook holds a credential for Prefect in its headers, which NetBox answered to the
+  superuser that read the webhook back; what a lesser account reads is plan 3's reading. It
+  is Prefect's one basic-auth string, as phase 8 set it, which opens all of that Prefect's
+  API. An integrator who will not keep it in NetBox puts a receiver of their own platform's
+  there.
+- A request can be lost. NetBox did not send again a webhook answered 503, and Prefect
+  answered 503 to creates sent at once in phase 8's reading. A branch that keeps its tag and gains no report was
+  never started; one that lost its tag and gained no report was started and stopped, and
+  Prefect says why. Setting the tag again asks again. The example sends nothing a second
+  time.
+- An edit to the branch object while it still carries the tag sends the webhook again. The
+  edge takes the tag off first, so the time this can happen in is short; it is not closed,
+  and a second rehearsal so started deletes the first's twin ([D-086](#d-086)).
+- Taking a mark needs the core running, and the seed's script with it. A change is seeded
+  once for each core it is rehearsed through.
+- What a mark's read found beside its blueprint, an omission among it, is said when the mark
+  is taken and is not carried to the rehearsal's report.
+- The first stage is `main` as it stands, not as it stood when the branch was made or last
+  synchronised. Where `main` has moved since, the first step holds `main`'s later changes
+  undone. Plan 3 reads how the API tells such a branch, and the report says so, or the
+  rehearsal is refused, as the reading allows.
+- Whoever may write a journal entry on a branch may write a mark. The example trusts the
+  marks it reads.
+- A mark names a blueprint the core holds. A core whose store is emptied loses every mark's
+  blueprint, and the stage is refused by name.
+- What an engineer does in NetBox to mark a step, in place of the seed's script, is a later
+  phase's question.
+
+
+<a id="d-099"></a>
+### D-099 — The NetBox reader's versions and tests and the development NetBox as built: NetBox 4.7.5 pinned two days old, a Compose network off the lab pool, and a contract tier with a marker of its own
+
+**Status:** Accepted 2026-11-13 (phase 9's landing). Supersedes [D-039](#d-039) in one part,
+for one pin, NetBox's; and [D-096](#d-096) in five: what the version warning compares, what
+each tier holds, where the development NetBox's network lies, when NetBox is stopped, and whose
+the reader's `redact` is. Details D-096 in the seed's targets, the accounts and the wait for a
+branch. The rest of each stands.
+
+#### Context
+
+D-039 asks that every pin be a release at least two weeks old. D-096's context says NetBox
+4.7.5 "was released two days before this entry", and every fact the phase leans on was read on
+it ([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3"). The
+phase's plans 1, 2 and 4 built and read the rest (plan 0's bends; plan 1's rulings R3 and R10,
+plan 2's R12 and R13, and plan 4's R2, R3, R8, R15 and R16, of the phase's ledgers).
+
+- **Docker had given the Compose project the local driver's whole lab pool.** The project's
+  default network answered the one subnet the pool is ([D-043](#d-043)), and while NetBox was up
+  the driver's own choice of a lab's subnet answered none, no /24 of the pool being free ("The
+  project's network and the local driver's lab pool"). The acceptance run on the local driver
+  needs NetBox and a twin at once, which D-096's "both stopped while a live tier runs" did not
+  foresee.
+- **A first start on new volumes took about twelve and a half minutes**, most of it NetBox's
+  migrations, Compose's first `up` giving up on an unhealthy container meanwhile; idle, the
+  stack held 1.36 GiB, a derivation, the sum of its containers' memory read once ("A first start
+  on new volumes").
+- **A `DELETE` of a branch still provisioning is 500, and the branch stays**; it was read
+  `provisioning` up to 1.9 s after one and `ready` from 26.7 s to 28.2 s after, the reads
+  between not kept ("A branch deleted before it is `ready`").
+- **The example's transport needed the reader's rule for hiding a token** in NetBox's words,
+  and imported it from the reader's transport by a name the reader did not export.
+
+#### Options considered
+
+NetBox's pin:
+
+- **An older release, two weeks out.** Not taken: every fact would be read again on it.
+- **4.7.5, on the maintainer's word.** Chosen: "stay with netbox 4.7.5" (the maintainer,
+  2026-11-13).
+
+NetBox beside a twin on the local driver:
+
+- **NetBox stopped whenever a twin runs there**, as D-096's consequence reads. Rejected: the
+  acceptance run needs both.
+- **The local driver's pool made a setting.** Not taken: a change of the core's, which the
+  phase leaves as built.
+- **A network of the project's own, named in the Compose override, in a documentation range.**
+  Chosen.
+
+The reader's `redact` and the example:
+
+- **The import left on a name the reader does not export.** Rejected: a change inside the
+  reader's transport would break the example.
+- **A `redact` of the example's own.** Not built.
+- **The name exported by the reader.** Chosen.
+
+#### Decision
+
+1. **NetBox is pinned at 4.7.5**, two days old when D-096 chose it, against the two weeks D-039
+   asks of every pin, on the maintainer's word of 2026-11-13, as Prefect's pin was
+   ([D-093](#d-093)). netbox-docker is at 5.1.1 and the branching plugin at 1.2.3.
+   [CONTRIBUTING.md](../CONTRIBUTING.md) says so where the pins are listed.
+2. **The versions the reader passed on are pairs**, NetBox's version and the plugin's
+   (`SUPPORTED`). At connect it reads both and files the warning `netbox.version.unverified`
+   where the pair is not among them, on every result of that connection. A NetBox that names no
+   plugin is warned of too, and a branch asked of it refused.
+3. **What each tier holds.** The contract tier provokes each rule of the reader's `rules.md` on
+   the development NetBox, under the headers of branches it makes and deletes. What cannot be
+   written into NetBox is provoked by an answer altered on its way to the reader: a NetBox
+   naming no plugin, a list short of its `count`, a render answered 502 or in another content
+   type. An edit, a journal entry, a branch's delete and its sync are made as a read's first
+   render passes. The same state is read twice to one id, on `main` and on a branch. The pure
+   tier holds, beside the mapping, the ordering, the counting, the bracket and the import
+   boundary, the transport over a fake of HTTP, the renders, the probes, the command and the
+   documents; and alone, the reader document's problems, a cable with no B side, and the forms
+   of a rule the contract tier does not provoke, which the reader's README lists.
+4. **The NetBox contract tier has a marker and a make target of its own**, `contract_netbox`
+   and `make contract-netbox`: `netbox/`'s tests, the reader's and the example's NetBox change
+   source's, in that order. `make contract` stays Infrahub's, so that either source's tier runs
+   with the other source stopped.
+5. **The development NetBox's network is a documentation range of its own**, named in
+   `netbox/dev/compose.override.yml`, off the local driver's lab pool. `make netbox-up`
+   recreates a project network that stands with another subnet: the project's containers and
+   network are removed, the volumes kept, and the start makes the network again. A network the
+   script cannot inspect is said in one line and the start goes on; a start that fails after a
+   recreate names the range.
+6. **NetBox is stopped for the live tier, the cluster tier and the conformance suite, and up
+   beside the twin of the acceptance run through its tag**, which needs both. Infrahub is
+   stopped for that run ([CONTRIBUTING.md](../CONTRIBUTING.md#through-netboxs-tag), "Alone").
+7. **The seed is two targets and the trigger a third.** `make netbox-seed` writes the fixture on
+   `main` and the two accounts, and needs nothing of Fylgja's but the superuser's token. `make
+   netbox-change` builds the change's branch in steps and marks each, and needs the reader, the
+   example and a running core. `make netbox-hook` installs the trigger ([D-100](#d-100)).
+8. **Two accounts that are no superuser**, `fylgja-reader` and `fylgja-orchestrator`, each at
+   the least grants read to serve its requests. `make netbox-seed` refuses an account that holds
+   a group or a permission outside those grants, and removes nothing.
+9. **The seed's transport waits 120 s for a branch to read `ready`**, about 4.3 times the
+   slowest `ready` read, 28.2 s after a refused `DELETE`, a derivation. A tier's sweep
+   waits, under that bound, for a branch of its prefix that is `new` or `provisioning`
+   before it deletes it.
+10. **The reader exports `redact`**, and the example's NetBox transport imports it. Every
+    request of the reader's is still built in the reader's one transport module, and the
+    example's in its own.
+
+#### Consequences
+
+- NetBox's pin is held to no waiting period. What stands in its place is that every behaviour
+  the code leans on was read on 4.7.5 itself, and D-096's procedure for the next release. Had
+  the word been refused, the facts would have been read again on an older release.
+- What `make netbox-up` meets on a host where another network already holds the override's
+  range was not read. The script's failure after a recreate, which names the range, and its
+  line for a network it cannot inspect are held by pure tests alone; neither was read on a
+  real Docker. Nor was what Compose's own `up` does to a standing network whose subnet the
+  override changes.
+- The whole contract tier took 986 s to 1,087 s in three runs on 2026-11-13, of 14, 45 and 12
+  tests.
+- An account's grant is by type: the example's `change` on branches reaches any member of a
+  branch ([D-100](#d-100)).
+- [core.md](core.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) say the development NetBox as
+  built.
+
+
+<a id="d-100"></a>
+### D-100 — The example's NetBox change source as built: a branch refused before its tag is taken, a mark held by its blueprint's id, a warning for a branch behind `main`, and Prefect's credential readable in NetBox's changelog
+
+**Status:** Accepted 2026-11-13 (phase 9's landing). Supersedes [D-097](#d-097) in eight parts:
+what holds the tag, what a branch's tag and journal say of a rehearsal, whose a mark is, what is
+said of a branch behind `main`, what a lesser account reads of the webhook's credential, what
+the report's entry holds, how many members the seam gains, and what the source's transport
+asks. Details [D-085](#d-085), [D-087](#d-087), [D-092](#d-092) and [D-093](#d-093) in the
+names the seam, the edge and its settings gained and in the report's sentence as built. The
+rest of each stands.
+
+#### Context
+
+D-097 left two of its consequences to plan 3's readings, "what a lesser account reads" of the
+webhook's headers and "how the API tells" a branch behind `main`, and the names of what the
+seam gains to the builder. Phase 9's plan 3 read NetBox 4.7.5 with netbox-branching 1.2.3 and
+Prefect 3.9.2 and built the source and the edge on the readings, and plan 4's acceptance runs
+read more ([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3"
+and "Prefect 3.9.2"; plan 0's bends, its rulings made before execution and its section on the
+webhook's auth; plan 3's rulings R1 to R9). The readings differed from what D-097 supposes, or
+said what it left open, in these places.
+
+- **Nothing of a branch says it is behind `main`**: no member of it and no route of the
+  plugin's API ("A branch behind `main`"). `main`'s changelog takes `?time_after=`, counting
+  inclusively, and leaves a kind out by its object type's id.
+- **Both lesser accounts read the webhook's credential.** Each is refused the webhook by its
+  list and by its id. But both hold `view` on NetBox's changelog, which the reader's bracket
+  and the source's count need, and the webhook's rows of `main`'s changelog hold its
+  `additional_headers` and its `secret` unmasked, in `prechange_data` and `postchange_data`.
+  The rows outlive the webhook: those of webhooks deleted the day before still held the value
+  ("A webhook's rows of `main`'s changelog hold its headers, to either lesser account").
+- **NetBox renders a Markdown list only where an empty line stands before it** ("A report as a
+  journal entry"); the report's lists showed as one paragraph otherwise.
+- **The flow's own untagging started nothing**, in the 60 s watched ("The tag starting
+  Prefect's deployment"), so the fallback the maintainer approved before execution, a flow that
+  ends at once for a branch with no tag, was not needed.
+- **The plugin takes a branch's name holding `"` or `\`**, and the webhook's body template
+  honours `tojson` ("A branch's name in a webhook's body").
+- **A sending refused its connection failed within a second and was not sent again**, no run
+  made 133 s after Prefect's next start ("A request lost and asked again"), beside the 503 of
+  D-097's context.
+- **A new Prefect home changes the deployment's id**; a server started again under the same
+  home kept it.
+
+#### Options considered
+
+Prefect's credential in NetBox's changelog, which the maintainer handed to the controller on
+2026-11-13 ("Settle decision"):
+
+- **A constraint on the two accounts' changelog grant**, hiding the webhook's rows. Not taken:
+  whether NetBox honours such a constraint was not read, it would narrow the changelog the
+  reader's bracket counts, and it would cover the seed's two accounts alone.
+- **A receiver of the example's between NetBox and Prefect**, so that Prefect's credential
+  never enters NetBox. Not taken: D-097 took no service of the example's, as D-085 took none,
+  and the maintainer's ruling of 2026-11-12 kept one a stop; and whatever such a receiver is
+  sent, a header or a `secret`, the same rows hold.
+- **Another trigger than a webhook that carries the credential.** Not taken: it supersedes
+  D-097's trigger, and is a design of its own.
+- **Accepted as the example's known limit, said in the documents and pinned by a test.**
+  Chosen.
+
+A branch behind `main`:
+
+- **`main`'s blueprint when the branch last took it, compared with `main`'s as it stands**, as
+  the Infrahub source compares ([D-093](#d-093)). Not possible: NetBox reads no earlier time.
+- **The rehearsal refused.** Not taken: what can be counted is rows of `main`'s changelog of
+  every kind but four, a site's or a user's among them, which cannot say that anything a read
+  reads moved.
+- **A warning with the count.** Chosen.
+
+A label marked a second time:
+
+- **`stage mark` takes it, the newer entry standing.** Not taken: NetBox reads no earlier time,
+  so a past step cannot be read again whatever the command allowed, and a label would name two
+  states.
+- **A label is taken once, and each remedy says what can truly be done.** Chosen.
+
+The report's lists in NetBox:
+
+- **The library's text as it is.** Not taken: its lists showed as one paragraph.
+- **The library's Markdown changed.** Not taken: Infrahub's report would change with it.
+- **An empty line put before each list by the NetBox source, where it files the entry.**
+  Chosen.
+
+#### Decision
+
+1. **A change is the branch whose name is exactly the reference a trigger names**, and its id
+   is the branch's `schema_id`: a branch read again by its name is held to that id, so one made
+   anew under the name is another change. A branch that is not `ready` is refused before its
+   tag is taken: the flow fails, the tag stays, and nothing is posted.
+2. **The source takes the tag off**, by its call `claim`: one `PATCH` of the branch's other
+   tags, and nothing sent where the tag is not on it. `twin rehearse` run by hand goes through
+   the same call, rehearses a branch tagged or not, and takes a tag off too. The fallback for a
+   flow that finds no tag is not built.
+3. **What a branch's tag and journal say.** A branch that keeps its tag and gains no report was
+   not rehearsed: its request was lost, or its run started and was refused before the tag was
+   taken off, by its settings or its reader document, or by the branch, none of the name, one
+   made anew under it, one not `ready`, or its read or the tag's removal refused or unanswered;
+   Prefect shows such a run failed. One that lost its tag and gained no report was started: by a
+   flow, whose run in Prefect says what came of it, a rehearsal that ended and whose post NetBox
+   refused among them; or by hand, of which Prefect knows nothing.
+4. **A mark.** `stage mark --branch B --label L` reads the branch through the reader, gives the
+   blueprint to the core and only then writes the entry, of kind `info`: a first line `Fylgja
+   stage: <label>`, then the blueprint's id, the scope and the time read, each on a line the
+   source parses. A label is 1 to 40 lowercase letters, digits and hyphens, beginning and ending
+   with a letter or a digit, and neither `main` nor `head`; it is taken once in its branch. An
+   entry that begins with the mark's prefix is a mark or a malformed one, never passed over. A
+   mark refuses its stage where it is malformed (`mark.malformed`), where two entries share its
+   label (`mark.duplicate`), where it was read under another scope than the rehearsal's
+   (`mark.scope`), and where the core does not hold its blueprint, or answers another document
+   under its id (`mark.unheld`). The command exits 0 for a mark written, 1 for a read refused
+   and 2 for a fault of its own, the source being `infrahub` among them.
+5. **A mark is held by its blueprint's id.** Its blueprint is read from the core the rehearsal
+   runs through, by that id, and a core keeps a blueprint by its id whoever gave it
+   ([D-006](#d-006)): so a mark is read through the core it was given to, and equally through
+   any core given a blueprint of that id. A change is seeded once for each core it is rehearsed
+   through, on a branch of its own, since `make netbox-change` deletes a branch of its name
+   with its marks and its report.
+6. **What a mark's remedies are.** NetBox reads no branch as it stood earlier, and the
+   example's account may not delete a journal entry. So a mark the rehearsal cannot use is
+   deleted in NetBox by a person who may, and its step marked again only while the branch still
+   stands at it; otherwise the change is seeded again. A mark read under another scope is
+   rehearsed under its own, and one whose blueprint another core holds through that core.
+7. **`main` and the head are read through the reader as they stand**, and read again where the
+   reader refuses one with `read.moved` and gives no blueprint, three reads in all, none waited
+   between.
+8. **A branch behind `main` is warned of, and nothing is refused**: `stage.main.gained`, on the
+   first stage, with the count of the rows `main`'s changelog holds from the branch's
+   `last_sync`, or its `created`, of every kind but a journal entry's, a branch's own, a
+   webhook's and an event rule's. The last two are the trigger's own, which `make netbox-hook`
+   writes on `main`.
+9. **The trigger.** The tag `fylgja-rehearse`, limited to branches; an event rule on the branch
+   for `object_updated`, conditioned on the tag's slug; and a webhook to Prefect's
+   `create_flow_run`, which names the deployment by its id, asked of Prefect by its name when
+   the trigger is installed. Its body writes the branch's name as a JSON string by the
+   template's `tojson`. Its credential is `FYLGJA_ORCHESTRATOR_AUTH`'s, from `local/.env`; its
+   address is the name NetBox's worker reaches the host by and Prefect's port, or what the
+   script is given. `make netbox-hook` is idempotent by name and writes only what differs, and
+   is run again after a new Prefect home.
+10. **The report is one journal entry**, its kind the status's, the summary and the detail with
+    an empty line put before each list. It is so not the library's text byte for byte, and
+    NetBox keeps it with the whitespace at its end stripped. The source sets no bound on it.
+11. **The seam gains two sentences, and the edge's source one call.** `ChangeSource.again` says
+    how one asks for the rehearsal again, used whole and as the end of a sentence of the
+    library's, and `ChangeSource.scope_remedy` where the scope is checked. `EdgeSource.claim`
+    takes the request, and Infrahub's does nothing. A stage read before the rehearsal says its
+    time in its `where`.
+12. **The report's sentence on when its stages were read is one sentence, true of either
+    source**: "The rehearsal read its stages at …; one taken earlier is as it was then, at the
+    time its line in the detail gives; later edits are not rehearsed." It is the one place
+    phase 8's path through Infrahub reads otherwise than it did, and the lines a summary
+    always keeps grew with it, from at most 987 bytes to at most 1,079 of Infrahub's 4,092.
+    The phase's anti-goal, that path behaving otherwise, is held to behaviour.
+13. **The edge.** Its settings name the source and hold that source's address, token and CA in
+    three fields that name no source, so the source not chosen is never read and its token never
+    held. Its `opened` answers the source the setting names with the core's client.
+14. **The source's own requests** are the branch, its journal entries and its tags, and beside
+    them the count of `main`'s changelog and the object types whose ids that count leaves out.
+15. **The example's wheel requires each reader**, and each change source loads its own reader
+    alone, held by a scan of the imports and by the wheel check.
+16. **The runner's environment is `scripts/edge_dev.py`'s alone to make**, for either source,
+    and a command of the example's by hand runs through it. `local/.env` holds Infrahub's
+    values and NetBox's at once: NetBox's reader document, scope and token under names of
+    their own, handed to the runner under the names the edge reads.
+17. **Prefect's credential in NetBox's changelog is the example's known limit.** An account
+    that may view NetBox's changelog, as the reader's and the example's must, reads the
+    webhook's headers there, and so Prefect's one basic-auth string, which opens all of that
+    Prefect's API. No grant is constrained and the trigger is not changed. The documents say
+    the limit, and a contract test holds the reading
+    (`test_a_lesser_account_reads_the_webhooks_headers_in_the_changelog`), so that a NetBox that
+    masks the header is noticed. Replacing the value removes no row of the changelog: the old
+    value stays readable there and only stops opening Prefect. A deployment that shares its
+    NetBox puts a receiver of its own before Prefect, or gives grants that hide the webhook's
+    rows, which was not read.
+
+#### Consequences
+
+- A holder of either lesser NetBox token on a shared instance can drive the example's Prefect,
+  and Infrahub's task workers hold the same string. The value in the development NetBox's
+  changelog stays readable there until that changelog's own pruning, which was not read, or a
+  purge; replacing it, or purging the instance, is the maintainer's to ask for.
+- The example's account holds `change` on branches for the tag alone, and a grant is by type.
+  In the plugin's source, read and not run, a branch's `recover` asks only `change`; the
+  account's `sync` was refused. NetBox offers no narrower grant for a branch's tags.
+- That a mark is read through another core given the same intent is how the source is built,
+  and was not read on a running core. In the acceptance runs the two branches' marks named the
+  same two ids; `mark.unheld` was read through the cluster's core before that core was given
+  them, and the local driver's branch was not planned there after
+  ([open questions](#open-questions)). The finding's sentence still says a mark belongs to the
+  core it was given to.
+- An edit of the branch object while it carries the tag asks again. As read, the tag's removal
+  came 6.9 s to 15.9 s after its setting, each a derivation from two rows' times.
+- `stage.main.gained` counts rows of kinds no read reads, a site's among them, so it can warn
+  where nothing a read reads moved; and the source's count and the reader's bracket differ on a
+  webhook's row, which the bracket still refuses a read for.
+- A run goes to whichever source's runner serves `twin-rehearse/main`, each source's flows
+  being served under the same names. A tag set while Infrahub's runner serves was not read.
+- A rehearsal from a tag on a real driver was read to end `passed` alone, so an entry of kind
+  `danger` or `warning` filed by one was not read.
+- How an engineer marks a step in NetBox, in place of the seed's script, is still a later
+  phase's ([open questions](#open-questions)).
+- [core.md](core.md), [docs/integrating.md](../docs/integrating.md) and `orchestrator/rules.md`
+  say each as built.
 
 
 ## Pushing, stepping and verifying
@@ -6235,3 +7198,81 @@ becomes an entry then.
 - **A registration read from GitHub** ([D-085](#d-085), [D-094](#d-094)). The development
   Infrahub reads the registration from the main checkout's `.git`. What Infrahub does with this
   repository registered from GitHub was not read, and waits on the maintainer's word.
+- **Infrahub on volumes kept for days: its start, and why what reads it is slow**
+  ([D-101](#d-101), and the question above on what a read of Infrahub costs). On 2026-11-13
+  `make infrahub-up` on the volumes kept since phase 8 failed twice of three, each time on a
+  database container read unhealthy; the database's log said `Started.` 51.6 s after its
+  container's start. Phase 8's rehearsal made once more then took 600.5 s where it had taken
+  277.2 s: the checks' validators were made 131.4 s and 131.7 s after the proposed change's
+  creation, where phase 8 read 44.3 s; the first stage's plan was built 248.6 s after the
+  run's start, against 98.6 s; and `fylgja-step` concluded 547.2 s after its start, of its
+  `timeout` of 900 s, against 213.7 s. The twin's own steps were not slower. Read once during the run, Infrahub's message queue was at 176% of a CPU and
+  its task manager at 99%; read after it, the task manager's database held about 10,300 flow
+  runs, a derivation, the sum of its counts by state
+  ([verified-facts.md](verified-facts.md), the end of "Infrahub 1.11.11"). The cause was not
+  read: whether it is the instance's history, the task manager's, the host's load, or code phase
+  9 changed in the planning. The test the question above names, a read timed before a purge and
+  after a seed, is still not run. What is asked: what makes it slow; whether the database's
+  health check needs a longer allowance on kept volumes; and whether `fylgja-step`'s 900 s
+  stands on such an instance.
+- **The cluster's rehearsal against the local driver's** ([D-101](#d-101)). In the dry runs the
+  report came 249.6 s after the tag with the core on the cluster and 131.0 s with it on the
+  local driver, 1.9 times, a derivation; in the maintainer's runs 231.2 s and 125.6 s. The
+  baseline took 102.3 s and 108.2 s on the cluster against 75.1 s and 77.3 s, and the step
+  `third-link` 68.9 s and 40.6 s against 14.2 s and 12.8 s, 52.8 s of the first from `pushed`
+  to `verified` ([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching
+  1.2.3"). The cause was not read, nor the core's own log on the cluster. Where a rehearsal's
+  time goes on clabernetes is a later phase's to read.
+- **No rule of verify reads an address** ([D-031](#d-031), [D-101](#d-101)). The seeded
+  change's second step gives a port of `n1` an address. Of a pushed configuration verify reads
+  back each cabled port's admin state and the host name, so the step's 19 checks were the step
+  before it's again, and nothing checked the address the second step pushed: the demonstration
+  showed a push accepted, not an address in force (a derivation from verify's rules,
+  [verified-facts.md](verified-facts.md), "What NetBox's render pushed, by the core's log").
+  Whether verify gains a fact for an address ([D-030](#d-030)), or the seeded change a step
+  verify can read, is open.
+- **A mark through another core** ([D-100](#d-100)). The source reads a mark's blueprint from
+  the core it runs through by its id, so a core given the same intent holds it. On 2026-11-13
+  the two acceptance branches' marks named the same two ids, `mark.unheld` was read through the
+  cluster's core before that core was given them, and the local driver's branch was not planned
+  through it after. Whether that plan then builds, and whether the finding's sentence, "a mark
+  belongs to the core it was given to", should say so, is open.
+- **A row of the changelog that commits below a higher one** ([D-098](#d-098)). The reader's
+  bracket counts the rows at or below its open's id to catch one. Whether NetBox ever commits a
+  row of a lower id after a higher one was not read, nor its retention of the changelog, under
+  which a row pruned as another commits late would cancel in that count.
+- **A `view` grant with constraints, under the reader** ([D-098](#d-098)). By NetBox's design
+  of its permissions, as documented and not as read, a constrained grant shortens a list and
+  its `count` alike, so every check of a read would hold on a blueprint of less than NetBox
+  holds. The reader's README asks that each grant carry none. What a list and its `count`
+  answer under one was not read, and nothing in a read can tell.
+- **Prefect's credential in NetBox's changelog, and what a deployment does instead**
+  ([D-100](#d-100)). The webhook's rows of `main`'s changelog hold its headers unmasked to any
+  account that may view the changelog, and outlive the webhook. Not read: whether grants with
+  constraints can hide a webhook's rows from the reader's and the example's accounts and still
+  leave the bracket and the count what they need; how long NetBox keeps a changelog row; and a
+  receiver of a deployment's own before Prefect, which is not built. Of clearing the value
+  from the development NetBox, by replacing `FYLGJA_ORCHESTRATOR_AUTH` or by a purge, the
+  maintainer said "leave it" (2026-11-13). What stays open is what a deployment would do
+  instead.
+- **Authoring a change of several steps in NetBox** ([D-097](#d-097), [D-100](#d-100)). The
+  seed's script builds the branch and runs `stage mark` at each step. What an engineer does in
+  its place, and whether a mark is then taken by a command, a script or a page inside NetBox,
+  the design left to a later phase, "once the concept is proven" (the maintainer, 2026-11-12).
+  With it: a tag set while Prefect answers and no runner serves, two branches tagged close
+  together, and a rehearsal from a tag ending other than `passed` on a real driver, none of
+  which was read.
+- **Three small gaps the last plan left.** In `netbox/seed/box.py` a list whose `count` moves
+  between two pages is an error with no status, for which the seed prints the remedy of a
+  NetBox that did not answer, `make netbox-up`, though NetBox answered. The readiness block of
+  the acceptance run through NetBox's tag holds the runner's `FYLGJA_API_ADDRESS` to its own
+  and not the runner's `FYLGJA_API_CA`. A fix of either is followed by a live run, the
+  contract tier's or the block's, which is why neither was made in the last plan's fixes. And
+  the probe of `scripts/wheelcheck.py` that judges that each change source loads its own
+  reader alone drops the other source's modules but not the package's attribute for them, so
+  one import form inside a source would pass it; the pure tier's scan of the imports sees
+  every form.
+- **`make netbox-up` where the network cannot be inspected, or the range is taken**
+  ([D-099](#d-099)). The script's line for a network Docker cannot inspect, and its failure
+  after a recreate, are held by pure tests and were not read on a real Docker; nor was what
+  Compose's own `up` does to a standing network whose subnet the override changes.

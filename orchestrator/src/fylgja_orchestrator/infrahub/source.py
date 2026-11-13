@@ -218,11 +218,15 @@ class _Proposal:
 
 
 class InfrahubSource:
-    """The change source over one Infrahub, read with one token, and a reader document: the four calls of the seam
-    and `is_draft`. Made with no request; `transport`, `sleep` and `clock` replace the network, the wait and its
+    """The change source over one Infrahub, read with one token, and a reader document: the four calls of the seam,
+    `is_draft` and `claim`. Made with no request; `transport`, `sleep` and `clock` replace the network, the wait and its
     clock, for tests."""
 
     comment_limit: int | None = COMMENT_LIMIT
+    again: str = "Run the checks again."
+    """How the rehearsal is asked for again: the proposed change's checks, which start it, run again."""
+    scope_remedy: str = "Check the scope the checks run with."
+    """Where the scope is set: the checks are given it."""
 
     def __init__(
         self,
@@ -292,6 +296,9 @@ class InfrahubSource:
     def is_draft(self, change: Change) -> bool:
         """Whether the proposed change is a draft, as it was read."""
         return self._proposal(change).draft
+
+    def claim(self, change: Change) -> None:
+        """Nothing: a proposed change's checks ask for the rehearsal, and ask again only when they run again (D-097)."""
 
     def stages(self, change: Change) -> Sequence[Stage]:
         """The change's stages in order (`stages_of`), its marks read as they stand."""

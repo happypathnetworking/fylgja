@@ -1,27 +1,33 @@
-"""The command `fylgja-orchestrator` (D-085): the prototype's six capabilities, of which only the two a check starts
-need a server.
+"""The command `fylgja-orchestrator` (D-085): the prototype's six capabilities, of which only the two a check or a tag
+starts need a server, and the mark of a NetBox branch's step (D-097).
 
-`stage list`, `stage plan`, `twin create`, `twin step` and `twin rehearse` each read the settings (`settings`), open
-the change source and the core (`run.opened`) and call the rehearsal library in this process, with no Prefect and no
-server, closing both whatever the call raised. Each takes `--branch`, the proposed change's source branch, and each
-but `stage list`, which reads no stage, `--scope`, which stands in for `FYLGJA_ORCHESTRATOR_SCOPE` where it is given
-(P5-49); `twin create` and `twin step` keep their records under
-`FYLGJA_ORCHESTRATOR_ROOT`, and `twin rehearse` rehearses on the twin its run id names, `cli-` and a ULID. `serve` runs
-the two flows a check starts (`serve`), and is the one command that loads Prefect.
+`stage list`, `stage plan`, `stage mark`, `twin create`, `twin step` and `twin rehearse` each read the settings
+(`settings`), open the change source they name and the core (`run.opened`) and call the rehearsal library, or the
+source, in this process, with no Prefect and no server, closing both whatever the call raised. Each takes `--branch`,
+the change's branch, a proposed change's source branch in Infrahub or a branch in NetBox, and each but `stage list`,
+which reads no stage, `--scope`, which stands in for `FYLGJA_ORCHESTRATOR_SCOPE` where it is given; `twin
+create` and `twin step` keep their records under `FYLGJA_ORCHESTRATOR_ROOT`, and `twin rehearse` rehearses on the twin
+its run id names, `cli-` and a ULID, having the source take the request first (`run.rehearse`). `stage mark` is the
+NetBox source's alone: it reads the branch as it stands, gives the blueprint to the core and writes the mark on the
+branch (`NetBoxSource.mark`), keeping no record; under `infrahub`, where the operator writes the marks (D-088), it is
+refused before any variable is judged. `serve` runs the two flows a check or a tag starts (`serve`), and is the one
+command that loads Prefect.
 
-`--json` prints on stdout the document alone (`stage plan`, `twin rehearse`), or the `Listed` or the `Made` as one JSON
-object of its fields, a stage by its label, description and where and never its pin. Otherwise a command prints its
-text, as each command's function says. Progress lines and findings go to stderr, a finding as `<severity> <rule>
-<object>: <message>`.
+`--json` prints on stdout the document alone (`stage plan`, `twin rehearse`), or the `Listed`, the `Made` or the
+`Marked` as one JSON object of its fields, a stage by its label, description and where and never its pin. Otherwise a
+command prints its text, as each command's function says. Progress lines and findings go to stderr, a finding as
+`<severity> <rule> <object>: <message>`.
 
 Exit codes: 0, a plan `planned`, a rehearsal `passed`, a twin made or stepped with no error finding and its run, where
-one started, ended `ok`, and `stage list`. 1, any other document or twin, a draft refused among them. 2, a fault of the
-command's own: its arguments refused, a variable unset or one the clients' rules refuse (the variable named, never its
-value), the reader document refused or not read, or a `SourceError`, an `InfrahubError`, or the core's client's
-refusal or failure, each one line and never a traceback; a token, or Prefect's auth string, that any line holds
-is replaced.
-Where Infrahub refuses the change source's token, by the refusal's status, the line names the variable it was read
-from (P5-41, P5-48). `serve` exits as `serve.main` says, and a fault as it begins is one line and exit 2.
+one started, ended `ok`, a mark taken, and `stage list`. 1, any other document or twin, a draft refused among them, and
+a mark whose read was refused. 2, a fault of the command's own: its arguments refused, `stage mark` under `infrahub`,
+a variable unset or one the clients' rules refuse (the variable named, never its value), the reader document refused
+or not read, or a source's `SourceError` (a label `stage mark` refuses among them), an `InfrahubError`, a
+`NetBoxError`, or the core's client's refusal or failure, each one line and never a traceback; a token, or Prefect's
+auth string, that any line holds is replaced.
+Where the change source's system refuses its token, by the refusal's status, the line names the variable the chosen
+source's token was read from. `serve` exits as `serve.main` says, and a fault as it begins is one line
+and exit 2.
 """
 
 from __future__ import annotations
@@ -39,11 +45,15 @@ from fylgja_core import documents, ulid
 from fylgja_core.client import Client, FollowError, ProblemError, TransportError, UnsupportedVersion
 from fylgja_core.documents import Rejected
 from fylgja_infrahub import InfrahubError
+from fylgja_netbox import NetBoxError
 
 from fylgja_orchestrator import rehearsal
 from fylgja_orchestrator.edge import run, settings
-from fylgja_orchestrator.infrahub import SourceError
-from fylgja_orchestrator.infrahub.transport import REFUSED
+from fylgja_orchestrator.infrahub import SourceError as InfrahubSourceError
+from fylgja_orchestrator.infrahub.transport import REFUSED as INFRAHUB_REFUSED
+from fylgja_orchestrator.netbox import REFUSED as NETBOX_REFUSED
+from fylgja_orchestrator.netbox import NetBoxSource
+from fylgja_orchestrator.netbox import SourceError as NetBoxSourceError
 from fylgja_orchestrator.rehearsal import Listed, Made, Stage
 
 EXIT_OK = 0
@@ -56,8 +66,15 @@ RUN_PREFIX = "cli-"
 REDACTED = "<token>"
 """What stands for a token in a line the command prints, as `fylgja_core.cli` writes it."""
 
-SECRETS = (settings.API_TOKEN, settings.INFRAHUB_TOKEN, "PREFECT_API_AUTH_STRING")
-"""The variables whose values no line holds: the two tokens, and the runner's credential of Prefect's API."""
+SECRETS = (settings.API_TOKEN, settings.INFRAHUB_TOKEN, settings.NETBOX_TOKEN, "PREFECT_API_AUTH_STRING")
+"""The variables whose values no line holds: the core's token and each source's, and the runner's credential of
+Prefect's API."""
+
+MARK_ELSEWHERE = (
+    f"stage mark is the NetBox change source's: under {settings.SOURCE}=infrahub the operator writes the marks in "
+    "Infrahub"
+)
+"""What `stage mark` says under the Infrahub source, where the operator writes the marks (D-088)."""
 
 BUNDLE_ID = 12
 """The characters of a bundle's id `stage plan` prints."""
@@ -99,6 +116,9 @@ def main(argv: Sequence[str] | None = None, *, environ: Mapping[str, str] | None
 
 
 def _run(args: argparse.Namespace, env: Mapping[str, str]) -> int:
+    if args.command is _stage_mark and settings.chosen(env) == "infrahub":
+        _error(MARK_ELSEWHERE, env)  # before any variable is judged: none of them could make it the command's
+        return EXIT_FAILURE
     scope: str | None = getattr(args, "scope", None)
     if scope:
         env = {**env, settings.SCOPE: scope}  # the flag stands in for the variable, before either is judged
@@ -125,12 +145,13 @@ def _run(args: argparse.Namespace, env: Mapping[str, str]) -> int:
     except run.DraftRefused as e:
         _error(str(e), env)
         return EXIT_REFUSED
-    except SourceError as e:
+    except (InfrahubSourceError, NetBoxSourceError) as e:
         line = str(e)
-        if e.status in REFUSED:
-            line += f"; the change source's token is the one in {settings.INFRAHUB_TOKEN}"
+        refusing = INFRAHUB_REFUSED if isinstance(e, InfrahubSourceError) else NETBOX_REFUSED
+        if e.status in refusing:
+            line += f"; the change source's token is the one in {settings.OF[config.source].token}"
         _error(line, env)
-    except (InfrahubError, ProblemError, TransportError, UnsupportedVersion, FollowError) as e:
+    except (InfrahubError, NetBoxError, ProblemError, TransportError, UnsupportedVersion, FollowError) as e:
         _error(str(e), env)
     finally:
         try:
@@ -144,10 +165,12 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fylgja-orchestrator",
         description=(
-            "Fylgja's example orchestrator: a proposed change of Infrahub planned, and rehearsed on a twin through the "
-            "core's API, in this process; or the two flows a check starts, served. The core is "
-            f"${settings.API_ADDRESS} with the token in ${settings.API_TOKEN}, Infrahub ${settings.INFRAHUB_ADDRESS} "
-            f"with the token in ${settings.INFRAHUB_TOKEN}."
+            "Fylgja's example orchestrator: a change, a proposed change of Infrahub or a branch of NetBox, planned, "
+            "and rehearsed on a twin through the core's API, in this process; a step of a NetBox branch marked; or the "
+            f"two flows a check or a tag starts, served. The change source is ${settings.SOURCE}, infrahub where it "
+            f"is unset, or netbox. The core is ${settings.API_ADDRESS} with the token in ${settings.API_TOKEN}, "
+            f"Infrahub ${settings.INFRAHUB_ADDRESS} with the token in ${settings.INFRAHUB_TOKEN}, and NetBox "
+            f"${settings.NETBOX_ADDRESS} with the token in ${settings.NETBOX_TOKEN}."
         ),
     )
     nouns = parser.add_subparsers(dest="name", required=True, metavar="COMMAND")
@@ -159,7 +182,8 @@ def _parser() -> argparse.ArgumentParser:
     def verb(verbs: Any, name: str, about: str, call: Command, *, scoped: bool = True) -> argparse.ArgumentParser:
         p: argparse.ArgumentParser = verbs.add_parser(name, help=about, description=about)
         p.set_defaults(command=call)
-        p.add_argument("--branch", required=True, metavar="B", help="the proposed change's source branch")
+        p.add_argument("--branch", required=True, metavar="B",
+                       help="the change's branch: a proposed change's source branch in Infrahub, a branch in NetBox")
         if scoped:
             p.add_argument("--scope", metavar="S", help=f"the devices to read; ${settings.SCOPE} where it is not given")
         p.add_argument("--json", action="store_true", help="print the document, or the result, as JSON")
@@ -170,10 +194,14 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--stage", metavar="LABEL", help="the stage to take it to")
         return p
 
-    stage = noun("stage", "The change's stages: listed, or planned.")
+    stage = noun("stage", "The change's stages: listed, planned, or a step of a NetBox branch marked.")
     verb(stage, "list", "List the change's stages, none of them read, and the twins that stand at each.", _stage_list,
          scoped=False)
     verb(stage, "plan", "Plan the change: each stage read, filed and built; exit 1 unless it is planned.", _stage_plan)
+    mark = verb(stage, "mark", "Mark a NetBox branch as it stands as a stage: its blueprint given to the core and a "
+                "journal entry naming it written on the branch; exit 1 where the read is refused. NetBox's alone.",
+                _stage_mark)
+    mark.add_argument("--label", required=True, metavar="L", help="the mark's label, unique within its branch")
     twins = noun("twin", "A twin of the change: made at a stage, stepped to another, or the change rehearsed on one.")
     twin(verb(twins, "create", "Create the twin at a stage, by default the first that selects a device.",
               _twin_create))
@@ -223,6 +251,28 @@ def _stage_plan(ctx: Context, args: argparse.Namespace) -> int:
             line += f", bundle {stage['bundle_id'][:BUNDLE_ID]}" if "bundle_id" in stage else ""
             print(line)
     return EXIT_OK if doc["status"] == "planned" else EXIT_REFUSED
+
+
+def _stage_mark(ctx: Context, args: argparse.Namespace) -> int:
+    """The branch, the label and the blueprint's id the core gave, in one line, `<branch> <label>: blueprint <id>`, or
+    `no blueprint` where the read was refused and nothing written; the read's findings on stderr. The source refuses a
+    label that is none, or one the branch has, as a `SourceError`."""
+    source = ctx.source
+    if not isinstance(source, NetBoxSource):
+        raise TypeError(f"stage mark marks through the NetBox change source, and was opened {type(source).__name__}")
+    marked = source.mark(source.change(args.branch), args.label, ctx.config.scope)
+    _said(documents.encode(finding) for finding in marked.findings)
+    if ctx.json:
+        _json({
+            "branch": args.branch,
+            "label": marked.label,
+            "blueprint_id": marked.blueprint_id,
+            "findings": [documents.encode(finding) for finding in marked.findings],
+        })
+    else:
+        taken = f"blueprint {marked.blueprint_id}" if marked.blueprint_id is not None else "no blueprint"
+        print(f"{args.branch} {marked.label}: {taken}")
+    return EXIT_OK if marked.blueprint_id is not None else EXIT_REFUSED
 
 
 def _twin_create(ctx: Context, args: argparse.Namespace) -> int:

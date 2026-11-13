@@ -1,5 +1,5 @@
 """The example's rules, whose catalogue is `orchestrator/rules.md`: one constant a rule, the severity each is filed at,
-the status each error gives, and a finding quoted in a sentence.
+the status each error gives, a finding quoted in a sentence, and a source's sentence made the end of another.
 
 A rehearsal's status is given by its document's first error finding, the cause, and by nothing else (D-086): a
 document with none has passed. The rules are the example's own, never the core's (formats/README.md, note 11), and
@@ -102,3 +102,10 @@ def quote(f: Mapping[str, Any]) -> str:
         message = message[: QUOTED - 1] + "…"
     about = f.get("object")
     return f"{about}: {message} ({f['rule']})" if about else f"{message} ({f['rule']})"
+
+
+def clause(sentence: str) -> str:
+    """`sentence` as the end of another: its first letter lowered and its final full stop dropped, so that a source's
+    `again`, say `Ask again.`, ends a sentence as `…, then ask again.`"""
+    sentence = sentence.removesuffix(".")
+    return sentence[:1].lower() + sentence[1:]

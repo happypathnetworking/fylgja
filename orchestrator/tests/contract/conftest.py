@@ -103,8 +103,18 @@ class Secret:
 HIDDEN: dict[str, str] = {}
 """Each credential a test made itself, by its name, whose value a report of the tier's has replaced (`hide`)."""
 
-CREDENTIALS = (TOKEN, WRITE_TOKEN, EXAMPLE_TOKEN)
-"""The variables whose values a report of the tier's has replaced, read when a report is made."""
+CREDENTIALS = (
+    TOKEN,
+    WRITE_TOKEN,
+    EXAMPLE_TOKEN,
+    "FYLGJA_NETBOX_TOKEN",
+    "FYLGJA_NETBOX_WRITE_TOKEN",
+    "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN",
+    "FYLGJA_NETBOX_SUPERUSER_PASSWORD",
+)
+"""The variables whose values a report of the tier's has replaced, read when a report is made: Infrahub's three, and
+every NetBox credential `tests/contract_netbox/` reads, whose conftest takes this guard, the superuser's password among
+them."""
 
 
 def hide(secret: Secret) -> Secret:

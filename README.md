@@ -25,8 +25,9 @@ data, not code: Nokia SR Linux and Arista EOS today, alone or mixed in one twin.
 ## This repository
 
 This is **fylgja-core**, and three pieces live here ([D-081](design/decisions.md#d-081)): the
-core, the part that turns a blueprint into a twin; the Infrahub reader; and an example
-orchestrator. The core knows no source of truth ([D-003](design/decisions.md#d-003)). Anything
+core, the part that turns a blueprint into a twin; a reader for each source of truth, the
+Infrahub reader and the NetBox reader; and an example orchestrator. The core knows no source of
+truth ([D-003](design/decisions.md#d-003)). Anything
 that writes a blueprint can drive it, through its API or its CLI.
 
 The core is being built ([design/core.md](design/core.md)):
@@ -45,13 +46,21 @@ The core is being built ([design/core.md](design/core.md)):
   rules are catalogued in [docs/rules.md](docs/rules.md).
 
 The **Infrahub reader**, [`readers/infrahub/`](readers/infrahub/README.md), reads
-[Infrahub](https://github.com/opsmill/infrahub) into blueprints: a library, and a command of its
-own. The example **orchestrator**, `orchestrator/`, rehearses proposed changes on a twin through
-Infrahub's own check, and [docs/integrating.md](docs/integrating.md) walks through it to join
-Fylgja to a system of your own ([D-005](design/decisions.md#d-005),
-[D-081](design/decisions.md#d-081)). Both were built in phase 8, which ended on 2026-11-12 with a
-proposed change created in Infrahub and rehearsed through its check on the local driver and on
-a cluster ([D-094](design/decisions.md#d-094)).
+[Infrahub](https://github.com/opsmill/infrahub) into blueprints, and the **NetBox reader**,
+[`readers/netbox/`](readers/netbox/README.md), reads a branch of NetBox's branching plugin, or
+`main`, into blueprints: each a library, and a command of its own. The example **orchestrator**,
+`orchestrator/`, rehearses a change on a twin, a proposed change in Infrahub through Infrahub's
+own check, or a branch in NetBox from the tag set on it, and
+[docs/integrating.md](docs/integrating.md) walks through it to join Fylgja to a system of your
+own ([D-005](design/decisions.md#d-005), [D-081](design/decisions.md#d-081),
+[D-097](design/decisions.md#d-097)). The Infrahub reader and the example were built in phase 8,
+which ended on 2026-11-12 with a proposed change created in Infrahub and rehearsed through its
+check on the local driver and on a cluster ([D-094](design/decisions.md#d-094)). The NetBox
+reader and the example's NetBox change source were built in phase 9
+([D-095](design/decisions.md#d-095)), which ended on 2026-11-13 with a branch built in NetBox in
+steps, each marked, and rehearsed from the tag the maintainer set on it, on the local driver and
+on a cluster, the maintainer reading each report on the branch's journal
+([D-101](design/decisions.md#d-101)).
 
 ## Read in this order
 
@@ -62,8 +71,8 @@ a cluster ([D-094](design/decisions.md#d-094)).
 4. [CONTRIBUTING.md](CONTRIBUTING.md): how to build, test and change things.
 5. [docs/glossary.md](docs/glossary.md), when a term is new.
 6. [design/verified-facts.md](design/verified-facts.md): what has been verified against
-   containerlab, clabernetes, Infrahub, Prefect and the network operating systems, with
-   versions and dates.
+   containerlab, clabernetes, Infrahub, NetBox, Prefect and the network operating systems,
+   with versions and dates.
 7. [docs/integrating.md](docs/integrating.md): how to join Fylgja to a source of truth and a
    platform of your own, walked through the example orchestrator.
 

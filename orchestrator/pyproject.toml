@@ -5,13 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fylgja-orchestrator"
 version = "0.0.0"
-description = "Fylgja's example orchestrator: a proposed change rehearsed on a twin through the core's API."
+description = "Fylgja's example orchestrator: a change rehearsed on a twin through the core's API."
 license = "Apache-2.0"
 requires-python = ">=3.14"
 # The core's base install, the model package and the client library, with no range of its own: the core states its
-# libraries' ranges (D-084). The reader, which the Infrahub change source reads through (D-082), and httpx, the
-# source's own transport, at the core's range (D-083). Prefect, pinned as read, for the edge's two flows alone (D-085).
-dependencies = ["fylgja-core", "fylgja-infrahub", "httpx>=0.27.0,<1", "prefect==3.9.2"]
+# libraries' ranges (D-084). The two readers, which the Infrahub change source (D-082) and the NetBox change source
+# (D-095, D-097) each read through, and httpx, each source's own transport, at the core's range (D-083). Prefect,
+# pinned as read, for the edge's two flows alone (D-085).
+dependencies = ["fylgja-core", "fylgja-infrahub", "fylgja-netbox", "httpx>=0.27.0,<1", "prefect==3.9.2"]
 
 [project.scripts]
 fylgja-orchestrator = "fylgja_orchestrator.edge.cli:main"
@@ -35,8 +36,9 @@ testpaths = ["tests"]
 pythonpath = ["tests", "../core/tests"]
 markers = [
     "contract: runs against the development Infrahub; make contract",
+    "contract_netbox: runs against the development NetBox; make contract-netbox",
 ]
-addopts = "-p no:cacheprovider -m 'not contract'"
+addopts = "-p no:cacheprovider -m 'not contract and not contract_netbox'"
 
 [tool.ruff]
 line-length = 120

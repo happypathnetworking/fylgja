@@ -11,7 +11,8 @@ orchestrator's rules are its own, never the core's, and its catalogue is
 [`orchestrator/rules.md`](../orchestrator/rules.md).
 
 The Infrahub reader's rules are its own too, and its catalogue is
-[`readers/infrahub/rules.md`](../readers/infrahub/rules.md).
+[`readers/infrahub/rules.md`](../readers/infrahub/rules.md). The NetBox reader's are its own as
+well, and its catalogue is [`readers/netbox/rules.md`](../readers/netbox/rules.md).
 
 ## Problems: a document refused by its loader
 

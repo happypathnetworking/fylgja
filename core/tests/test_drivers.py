@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from ipaddress import IPv4Network
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ import yaml
 from fylgja_core import clabernetes, containerlab, drivers, kubeapi
 from fylgja_core.clabernetes import kube
 from fylgja_core.clabernetes.driver import ClabernetesDriver
+from fylgja_core.containerlab import pool
 from fylgja_core.containerlab.driver import ContainerlabDriver
 from fylgja_core.credentials import Provider
 from fylgja_core.driver import Driver
@@ -63,6 +65,15 @@ def test_the_registry_makes_the_local_driver_rooted_where_it_is_told(tmp_path: P
     driver = drivers.make("containerlab", root=tmp_path, credentials=Provider({}))
     assert driver.name == "containerlab"
     assert isinstance(driver, ContainerlabDriver) and driver.root == tmp_path
+
+
+def test_the_registry_gives_the_local_driver_the_pool_it_is_told_and_its_default_otherwise(tmp_path: Path) -> None:
+    told = drivers.make("containerlab", root=tmp_path, credentials=Provider({}),
+                        lab_pool=IPv4Network("198.51.100.0/24"))
+    assert isinstance(told, ContainerlabDriver) and told.pool == IPv4Network("198.51.100.0/24")
+    left = drivers.make("containerlab", root=tmp_path, credentials=Provider({}))
+    assert isinstance(left, ContainerlabDriver)
+    assert left.pool == pool.DEFAULT_POOL == IPv4Network("172.20.0.0/16")
 
 
 def test_the_local_driver_without_a_root_is_a_value_error() -> None:

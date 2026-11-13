@@ -193,6 +193,19 @@ the local driver and the step; a fact re-verified there gets a *(0.81.0, date)* 
   network: a list of `{"Subnet", "Gateway"}` objects, or `null` for `host` and `none`.
   `docker image inspect` of an absent image (`No such image`) and `docker network inspect`
   of an absent network each exit 1.
+- **`docker network inspect --format '{{json .Name}} {{json .IPAM.Config}}' <ids…>`**, which
+  the local driver's `admit` asks so that a refusal can name a network
+  ([D-103](decisions.md#d-103)), prints one line per network: its name as a JSON string, one
+  space, then the list of `{"Subnet", "Gateway"}` objects, or `null`. *(Docker 29.8.1,
+  2026-11-13)* Read by hand on the development host at 20:43 UTC, over the ids
+  `docker network ls` gave, with no container running and nothing changed: six networks and
+  six lines, in the ids' order; `"host" null` and `"none" null`; the bridge's and the three
+  Compose projects' each a list of one object, the development NetBox's
+  `"fylgja-core-netbox_default" [{"Subnet":"198.51.100.0/24","Gateway":"198.51.100.1"}]`.
+  No network of two subnets stood, and none was read in this form. The live tier's
+  `test_8_a_pool_a_docker_network_holds_is_refused_naming_it_and_the_setting` holds the
+  form for `host` and for a network it makes with `--subnet` alone, which read
+  `"fylgja-live-pool" [{"Subnet":"192.0.2.0/24","Gateway":"192.0.2.1"}]`.
 - **`docker events`, the driver's account of a container started, dead or removed**
   ([D-058](decisions.md#d-058)). *(Docker 29.8.1, 2026-11-06)* Read by hand under `env -i`
   with `PATH` alone, as `cli.environment` gives a command on this host, with nothing else live
@@ -8271,9 +8284,18 @@ and each says whether it was re-verified on 26.04.
   is the local driver's default pool of lab subnets, and while a network holds
   it, a stopped project's kept one too, a create is refused before anything is deployed:
   `admission.capacity`, "The pool 172.20.0.0/16 has no /24 that neither a Docker network nor
-  another twin holds." The server has no setting for the pool. *(26.04, 2026-11-12)* The
+  another twin holds." The server then had no setting for the pool. *(26.04, 2026-11-12)* The
   development NetBox's network was pinned off the pool the day after ("NetBox 4.7.5 with
   netbox-branching 1.2.3", "The project's network and the local driver's lab pool").
+  The pool is since the server's setting `FYLGJA_LAB_POOL`, and the refusal says what holds
+  it ([D-103](decisions.md#d-103)). In the live tier, a driver made on a pool of one /24,
+  192.0.2.0/24, with a Docker network `fylgja-live-pool` made over that subnet, refused a
+  three-node twin at `admit`, nothing deployed: `admission.capacity`, "The pool 192.0.2.0/24
+  has no /24 that neither a Docker network nor another twin holds. Docker networks holding
+  part of it: fylgja-live-pool (192.0.2.0/24). Set FYLGJA_LAB_POOL to an IPv4 network with a
+  free /24, and start the core again." The network, removed by the test, was gone after it.
+  *(26.04, Docker 29.8.1, containerlab 0.81.0, 2026-11-13: one run of
+  `core/tests/live/test_containerlab_driver_live.py` alone, 9 passed in 260.71 s, ending 20:56 UTC)*
 - **Booting a twin beside another heavy workload starves a host with little memory to
   spare**: deploys are cut short, and the other workload's requests time out. Read
   `free -m` before booting a twin. *(2026-09-15)*

@@ -3,7 +3,9 @@ compiled with the shipped packages and planned for the twin `drv-live` on an all
 a real `admit`, then `drv-live-2` beside it. The tests run in order and share the labs; each
 prints what it took and what it saw (`-s`). The module destroys both twins at its end,
 whatever happened. Among them a `destroy` under packages that do not list a node's image, which
-is refused and removes nothing (D-102).
+is refused and removes nothing (D-102). The last test deploys nothing: over a pool of its own,
+one /24, it makes a Docker network, and `admit` is refused naming the network and the setting
+(D-103); the network is the test's to remove.
 
 (The module is not named `test_containerlab_driver.py`: the pure tier's module has that name,
 and pytest and mypy each take a test module by its basename.)
@@ -251,3 +253,32 @@ def test_7_two_labs_at_once(lab: Lab) -> None:
     assert_running(lab, inspect(lab, TWIN_2), TWIN_2)
     destroy(lab, TWIN_2)
     assert leftovers(TWIN_2) == CLEAN
+
+
+def test_8_a_pool_a_docker_network_holds_is_refused_naming_it_and_the_setting(tmp_path: Path) -> None:
+    # D-103, on Docker itself: a network made over the one /24 of a pool of the test's own, and a driver of its own
+    # on that pool, which reads every network of the host as the driver's format prints them (verified-facts.md):
+    # a line a network, its name as a JSON string, one space, and its IPAM config, a list, or `null` as for `host`.
+    # Nothing is deployed, and no time is held to.
+    network, held = "fylgja-live-pool", ipaddress.IPv4Network("192.0.2.0/24")
+    form = "{{json .Name}} {{json .IPAM.Config}}"
+    c = compiler.compile(blueprint.load(ROOT / "testdata/blueprint/three-node.json"), PLATFORMS, PROBES)
+    driver = ContainerlabDriver(tmp_path, pool=held)
+    docker("network", "create", "--subnet", str(held), network)
+    try:
+        made = docker("network", "inspect", "--format", form, network).stdout
+        host = docker("network", "inspect", "--format", form, "host").stdout
+        print(f"\n[live] docker's lines: {made.strip()} | {host.strip()}")
+        refused = run(driver.admit(c.manifest, PLATFORMS, PROBES, "pool-live", []), "admit pool-live on a held pool")
+    finally:
+        removed = docker("network", "rm", network, check=False)
+    print(f"[live] the refusal: {refused}")
+    assert removed.returncode == 0, removed.stderr
+    assert docker("network", "inspect", network, check=False).returncode != 0, "the test's network still stands"
+    name, space, config = made.rstrip("\n").partition(" ")
+    assert (json.loads(name), space) == (network, " ")
+    assert [entry["Subnet"] for entry in json.loads(config)] == [str(held)]
+    assert host == '"host" null\n'
+    assert isinstance(refused, Refusal) and refused.rule == "admission.capacity"
+    assert f"{network} ({held})" in refused.message and "FYLGJA_LAB_POOL" in refused.message
+    assert not (tmp_path / "containerlab").exists()  # nothing written, nothing deployed

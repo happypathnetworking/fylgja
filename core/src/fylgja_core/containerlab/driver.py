@@ -7,7 +7,10 @@ pure tier stands a fake in for both. The driver's working files live under
 `<root>/containerlab/<twin>/`, `root` being the directory the server gives it.
 
 `admit` reserves what `plan` binds: a /24 of the pool that no Docker network and no other
-twin's allocation holds, and writes the twin's demand into the allocation. It refuses a twin the
+twin's allocation holds, and writes the twin's demand into the allocation. The pool is the one
+the driver is made with, the server's setting `FYLGJA_LAB_POOL` where it is set (D-103), and a
+pool with no /24 free is refused naming each Docker network that holds part of it and that
+setting (`pool.refusal`). It refuses a twin the
 host cannot fit (`admission.capacity`: the pool exhausted, the demand above the host's free room less
 the demand of twins admitted whose nodes are not yet up, or a node above the host's room, D-073), and one
 whose account-gated image is not on the host (`admission.image.absent`), since locally a
@@ -356,7 +359,9 @@ class ContainerlabDriver:
     ) -> Allocation | Refusal:
         """The first free /24 of the pool as the twin's allocation, with the demand it reserves of the
         host's room, or a refusal naming every shortfall (`admission.capacity`) or every absent gated
-        image (`admission.image.absent`).
+        image (`admission.image.absent`). A pool with no /24 free is the first shortfall, in
+        `pool.refusal`'s words: the Docker networks that hold part of it, by name and subnet, and
+        the setting that moves it (D-103).
 
         A create must fit the reading (`capacity`) in its sum, and each node must fit the host. With
         `held`, the deployment a stepping twin has applied, the answer is `held.allocation` with the
@@ -374,11 +379,11 @@ class ContainerlabDriver:
         shortfalls = []
         subnet = None
         if held is None:
-            taken = await self._docker_subnets() + [IPv4Network(a["mgmt_subnet"]) for a in reserved]
+            networks = await self._docker_networks()
+            taken = [held_by for _, held_by in networks] + [IPv4Network(a["mgmt_subnet"]) for a in reserved]
             subnet = pool.choose(self.pool, taken)
             if subnet is None:
-                shortfalls.append(
-                    f"The pool {self.pool} has no /24 that neither a Docker network nor another twin holds.")
+                shortfalls.append(pool.refusal(self.pool, pool.holders(self.pool, networks)))
         demand = clab_plan.demand(manifest, platforms, probe_packages)
         reading = await self.capacity(reserved)
         if held is None:
@@ -751,20 +756,25 @@ class ContainerlabDriver:
             return False
         return True
 
-    async def _docker_subnets(self) -> list[IPv4Network]:
-        """Every IPv4 subnet a Docker network on the host holds."""
+    async def _docker_networks(self) -> list[tuple[str, IPv4Network]]:
+        """Every Docker network on the host with an IPv4 subnet: its name with each such subnet it
+        holds, a pair a subnet. A network with none, as `host` and `none`, is not among them."""
         ids = (await self._run(["docker", "network", "ls", "--format", "{{.ID}}"], timeout_s=DOCKER_TIMEOUT_S)).split()
         if not ids:
             return []
-        configs = await self._run(["docker", "network", "inspect", "--format", "{{json .IPAM.Config}}", *ids],
-                                  timeout_s=DOCKER_TIMEOUT_S)
-        subnets = []
-        for line in configs.splitlines():  # one network's config per line: a list, or null for none
-            for config in (json.loads(line) if line.strip() else None) or []:
+        answered = await self._run(
+            ["docker", "network", "inspect", "--format", "{{json .Name}} {{json .IPAM.Config}}", *ids],
+            timeout_s=DOCKER_TIMEOUT_S)
+        networks = []
+        for line in answered.splitlines():  # a network a line: its name, a space, and its config, a list or null
+            if not line.strip():
+                continue
+            name, end = json.JSONDecoder().raw_decode(line)
+            for config in json.loads(line[end:]) or []:
                 network = ipaddress.ip_network(config["Subnet"], strict=False) if config.get("Subnet") else None
                 if isinstance(network, IPv4Network):
-                    subnets.append(network)
-        return subnets
+                    networks.append((str(name), network))
+        return networks
 
     async def _image_present(self, ref: str) -> bool:
         """Whether Docker holds the image `ref`; a hung `docker` is a driver error, not an absence."""

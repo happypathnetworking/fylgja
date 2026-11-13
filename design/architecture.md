@@ -164,10 +164,9 @@ writes them.
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
 They are left to later phases.
 
-**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"):
-the local driver's pool as a setting ([D-103](decisions.md#d-103)); one make target a
-source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version for
-every distribution, three wheels published and the packages inside the core's
+**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): one make
+target a source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version
+for every distribution, three wheels published and the packages inside the core's
 ([D-106](decisions.md#d-106)); the user's reference under `docs/`
 ([D-107](decisions.md#d-107)); and what 1.0 holds ([D-105](decisions.md#d-105)).
 

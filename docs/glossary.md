@@ -298,6 +298,14 @@ with its own management network, a namespace, or a device reservation
 package states only what the kind does not ([D-015](../design/decisions.md#d-015)); for a kind with
 no aliases (cEOS), that includes a *rename rule* from production names to the kind's ports.
 
+**Lab pool** — The IPv4 network the local driver takes each lab's management subnet from: the
+first /24 of it that no Docker network and no other twin's *allocation* holds
+([D-043](../design/decisions.md#d-043)). It is the server's setting `FYLGJA_LAB_POOL`, and
+`172.20.0.0/16` where that is not set. A create that finds no /24 free is refused,
+`admission.capacity`, naming the Docker networks that hold part of the pool and the setting; a
+twin keeps the subnet its record holds when the setting changes
+([D-103](../design/decisions.md#d-103)).
+
 **Landing** — The end of a *build phase*, on the maintainer's word: the phase written as built,
 the *integration branch* squashed onto `main` as one commit and its history tagged, and the
 build's records copied to `local/sdd/phase-N/` ([D-080](../design/decisions.md#d-080)).

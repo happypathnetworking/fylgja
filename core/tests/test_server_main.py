@@ -23,6 +23,7 @@ import time
 import tomllib
 import types
 from collections.abc import Callable, Iterator, Sequence
+from ipaddress import IPv4Network
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +180,26 @@ def test_an_empty_environment_exits_2_naming_the_variable(
     (line,) = logged(capsys.readouterr().err)
     assert (line["level"], line["variable"], line["rule"]) == ("ERROR", "FYLGJA_STORE", "settings.missing")
     assert "FYLGJA_STORE" in line["message"]
+
+
+def test_a_lab_pool_that_is_no_network_exits_2_naming_the_variable(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("FYLGJA_LAB_POOL", "198.51.100.7/24")  # a host bit set
+    assert server.main([]) == 2
+    err = capsys.readouterr().err
+    (line,) = logged(err)
+    assert (line["level"], line["variable"], line["rule"]) == ("ERROR", "FYLGJA_LAB_POOL", "settings.missing")
+    assert "FYLGJA_LAB_POOL" in line["message"]
+    assert "198.51.100.7" not in err  # the value is in no log record
+    assert not Path(environ["FYLGJA_STORE"]).exists()
+
+
+def test_the_help_names_the_lab_pool(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--help"])
+    assert stopped.value.code == 0
+    assert "FYLGJA_LAB_POOL" in capsys.readouterr().out
 
 
 def test_python_run_optimised_exits_2_before_the_settings_are_read(
@@ -859,6 +880,23 @@ def test_the_application_answers_the_version_and_its_driver(environ: dict[str, s
     finally:
         store.close()
     assert [(d["name"], d["default"]) for d in drivers] == [("containerlab", True)]
+
+
+@pytest.mark.parametrize(("value", "given"), [("198.51.100.0/24", IPv4Network("198.51.100.0/24")), (None, None)],
+                         ids=["set", "unset"])
+def test_the_lab_pool_reaches_the_driver(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch, value: str | None, given: IPv4Network | None
+) -> None:
+    made: list[dict[str, Any]] = []
+
+    def make(name: str, **kw: Any) -> Driver:
+        made.append(kw)
+        return FakeDriver(name)
+
+    monkeypatch.setattr(registry, "make", make)
+    _, store = server.build_app(settings(environ if value is None else {**environ, "FYLGJA_LAB_POOL": value}))
+    store.close()
+    assert [kw["lab_pool"] for kw in made] == [given]
 
 
 def test_the_loop_follows_docker_events_through_the_stub_alone(environ: dict[str, str], tmp_path: Path) -> None:

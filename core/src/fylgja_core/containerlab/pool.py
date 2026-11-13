@@ -1,12 +1,17 @@
-"""The local driver's management subnet pool (D-043). Pure: reading Docker's networks is the live half's."""
+"""The local driver's management subnet pool (D-043), which the server's settings may move
+(D-103). Pure: reading Docker's networks is the live half's."""
 
 from __future__ import annotations
 
 import ipaddress
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from ipaddress import IPv4Network
 
 DEFAULT_POOL = ipaddress.IPv4Network("172.20.0.0/16")
+"""The pool where the settings give none. This module alone names it."""
+
+VARIABLE = "FYLGJA_LAB_POOL"
+"""The server's setting that gives the pool (`config.lab_pool`), which a refusal names."""
 
 
 def choose(pool: IPv4Network, taken: Iterable[IPv4Network]) -> IPv4Network | None:
@@ -16,6 +21,23 @@ def choose(pool: IPv4Network, taken: Iterable[IPv4Network]) -> IPv4Network | Non
         if not any(subnet.overlaps(other) for other in held):
             return subnet
     return None
+
+
+def holders(pool: IPv4Network, networks: Iterable[tuple[str, IPv4Network]]) -> list[tuple[str, IPv4Network]]:
+    """The Docker networks that hold part of `pool`: each `(name, subnet)` of `networks` whose
+    subnet overlaps it, one wider than the pool among them, sorted by name, then subnet."""
+    return sorted((name, subnet) for name, subnet in networks if subnet.overlaps(pool))
+
+
+def refusal(pool: IPv4Network, holding: Sequence[tuple[str, IPv4Network]]) -> str:
+    """What `admit` says of a pool with no free /24 (D-103): that it has none, each Docker network
+    of `holding` (`holders`) by its name and subnet, and the setting that moves the pool. With
+    no network holding any of it, other twins hold it whole, and the setting is named alone."""
+    held = ""
+    if holding:
+        held = f" Docker networks holding part of it: {', '.join(f'{name} ({subnet})' for name, subnet in holding)}."
+    return (f"The pool {pool} has no /24 that neither a Docker network nor another twin holds.{held} "
+            f"Set {VARIABLE} to an IPv4 network with a free /24, and start the core again.")
 
 
 def allocation(twin: str, subnet: IPv4Network) -> dict[str, str]:

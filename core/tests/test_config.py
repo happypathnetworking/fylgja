@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from ipaddress import IPv4Network
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ FULL = {
     "FYLGJA_WORKERS": "2",
     "FYLGJA_STEP_WAIT_S": "90",
     "FYLGJA_RESYNC_S": "600",
+    "FYLGJA_LAB_POOL": "198.51.100.0/24",
 }
 REQUIRED = ("FYLGJA_STORE", "FYLGJA_TOKENS", "FYLGJA_PACKAGES")
 S3 = {**FULL, "FYLGJA_STORE": "s3://fylgja/dev/core", "FYLGJA_S3_ENDPOINT": "http://s3.example.internal:7070",
@@ -51,6 +53,7 @@ def test_settings_from_a_full_environment() -> None:
         resync_s=600,
         packages=(Path("/opt/psp"), Path("/opt/probes")),
         tokens=Path("/etc/fylgja/tokens"),
+        lab_pool=IPv4Network("198.51.100.0/24"),
     )
 
 
@@ -243,6 +246,42 @@ def test_a_namespace_of_63_characters_is_one_and_a_pod_cidr_is_kept_in_its_canon
     s = config.from_environ({**CLABERNETES, "FYLGJA_CLABERNETES_NAMESPACE": "c" * 63,
                              "FYLGJA_POD_CIDR": "10.244.0.0/255.255.0.0"})
     assert (s.clabernetes_namespace, s.pod_cidr) == ("c" * 63, "10.244.0.0/16")
+
+
+@pytest.mark.parametrize("unset", [None, ""], ids=["absent", "empty"])
+def test_the_lab_pool_is_none_unless_it_is_set(unset: str | None) -> None:
+    env = {k: v for k, v in FULL.items() if k != "FYLGJA_LAB_POOL"}
+    if unset is not None:
+        env["FYLGJA_LAB_POOL"] = unset
+    assert config.lab_pool(env) is None
+    assert config.from_environ(env).lab_pool is None
+
+
+@pytest.mark.parametrize(("text", "network"), [
+    ("198.51.100.0/24", "198.51.100.0/24"),
+    ("198.51.100.0/255.255.255.0", "198.51.100.0/24"),
+    ("172.20.0.0/16", "172.20.0.0/16"),
+], ids=["a-slash24", "a-netmask", "the-default"])
+def test_a_lab_pool_set_is_an_ipv4_network_that_holds_a_slash24(text: str, network: str) -> None:
+    assert config.lab_pool({"FYLGJA_LAB_POOL": text}) == IPv4Network(network)
+    assert config.from_environ({**FULL, "FYLGJA_LAB_POOL": text}).lab_pool == IPv4Network(network)
+    # Read whichever the driver, as the pod CIDR is, though the local driver alone is given it (D-103).
+    s = config.from_environ({**FULL, "FYLGJA_DRIVER": "clabernetes", **SITE, "FYLGJA_LAB_POOL": text})
+    assert (s.driver, s.lab_pool) == ("clabernetes", IPv4Network(network))
+
+
+@pytest.mark.parametrize("driver", ["containerlab", "clabernetes"])
+@pytest.mark.parametrize("value", ["198.51.100.0", "198.51.100.0/25", "198.51.100.1/24", "2001:db8::/32",
+                                   "198.51.100.0/33", "pool"],
+                         ids=["a-bare-address", "a-slash25", "a-host-bit", "ipv6", "a-prefix-of-33", "no-network"])
+def test_a_lab_pool_that_is_no_such_network_is_refused_under_either_driver(driver: str, value: str) -> None:
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ({**CLABERNETES, "FYLGJA_DRIVER": driver, "FYLGJA_LAB_POOL": value})
+    assert e.value.variable == "FYLGJA_LAB_POOL" and e.value.rule == "settings.missing"
+    # The whole message is the rule, so it holds no value.
+    assert str(e.value) == "FYLGJA_LAB_POOL: is not an IPv4 network in CIDR form that holds a /24"
+    with pytest.raises(config.Misconfigured):
+        config.lab_pool({"FYLGJA_LAB_POOL": value})
 
 
 TLS = {"FYLGJA_TLS_CERT": "/etc/fylgja/tls/tls.crt", "FYLGJA_TLS_KEY": "/etc/fylgja/tls/tls.key"}

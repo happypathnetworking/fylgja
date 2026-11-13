@@ -114,7 +114,7 @@ def package_of(
     its own `ref` unless told otherwise, as the local driver writes it."""
     sections: list[Section] = [
         p.runtime.containerlab for p in platforms.values()
-        if p.runtime.containerlab.kind == kind and image in written(p.runtime.containerlab.image)]
+        if p.runtime.containerlab.kind == kind and image in written(platform_package.image(p))]
     if kind == "linux":
         sections += [q.runtime.containerlab for q in probe_packages.values()
                      if image in written(q.runtime.containerlab.image)]

@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 import yaml
+from fakes import with_image
 
 from fylgja_core import (
     blueprint,
@@ -104,10 +105,7 @@ def wrapped(p: Planned) -> dict[str, Any]:
 
 
 def gated_platform(package: PlatformPackage, secret: str) -> PlatformPackage:
-    containerlab = package.runtime.containerlab
-    image = dataclasses.replace(containerlab.image, pull_secret=secret)
-    runtime = dataclasses.replace(package.runtime, containerlab=dataclasses.replace(containerlab, image=image))
-    return dataclasses.replace(package, runtime=runtime)
+    return with_image(package, pull_secret=secret)
 
 
 def gated_probe(package: ProbePackage, secret: str) -> ProbePackage:

@@ -188,6 +188,13 @@ def placeholders(pattern: str) -> list[str]:
     return _PLACEHOLDER.findall(pattern)
 
 
+def image(package: PlatformPackage) -> Image:
+    """The image the core runs `package` on, the one its containerlab section names. Each
+    reader of a platform package's image asks here: both plans, the lookup of a running node's
+    package and the local check that a gated image is present."""
+    return package.runtime.containerlab.image
+
+
 def validate(doc: Any) -> list[Problem]:
     """Every problem with `doc` as a platform package, sorted; an empty list means it is valid."""
     problems = documents.unsupported_version(doc, "platform_package_version", VERSION, RULE_VERSION)

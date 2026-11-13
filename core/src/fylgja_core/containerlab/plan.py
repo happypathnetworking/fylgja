@@ -34,7 +34,7 @@ from typing import Any, Literal
 
 import yaml
 
-from fylgja_core import blueprint, bundle, deployment, mapping, probe_package
+from fylgja_core import blueprint, bundle, deployment, mapping, platform_package, probe_package
 from fylgja_core.capacity import Resources
 from fylgja_core.containerlab import CAPABILITIES, NAME
 from fylgja_core.driver import Allocation, Planned, Unplannable
@@ -225,7 +225,7 @@ def definition(
         containerlab = package_of[node.name].runtime.containerlab
         nodes[node.name] = {
             "kind": containerlab.kind,
-            "image": containerlab.image.ref,
+            "image": platform_package.image(package_of[node.name]).ref,
             "link-apply-mode": containerlab.link_apply_mode,
         }
     links = [

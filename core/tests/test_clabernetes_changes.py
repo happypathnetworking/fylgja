@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 import yaml
+from fakes import with_image
 from test_clabernetes_plan import ALLOCATION, LOCAL_ALLOCATION, PLATFORMS, PROBES, ROOT, SRC, imports
 from test_diff import PAIRS as STEP_PAIRS
 
@@ -205,10 +206,7 @@ def test_a_node_no_package_runs_is_refused() -> None:
     mixed = planned("mixed")
     eos = PLATFORMS["arista_eos"]
     for secret in (None, "other"):
-        containerlab = eos.runtime.containerlab
-        image = dataclasses.replace(containerlab.image, pull_secret=secret)
-        runtime = dataclasses.replace(eos.runtime, containerlab=dataclasses.replace(containerlab, image=image))
-        platforms = {**PLATFORMS, "arista_eos": dataclasses.replace(eos, runtime=runtime)}
+        platforms = {**PLATFORMS, "arista_eos": with_image(eos, pull_secret=secret)}
         with pytest.raises(ValueError, match="no package given runs the node e1"):
             clabernetes_changes.changes(mixed, mixed, platforms, PROBES)
 

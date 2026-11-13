@@ -887,7 +887,7 @@ def _images(
     order, then the probe formats."""
     used = sorted({node.platform for node in manifest.nodes})
     formats = sorted({probe.format for probe in manifest.probes})
-    return [(p, platforms[p].runtime.containerlab.image) for p in used] + [
+    return [(p, platform_package.image(platforms[p])) for p in used] + [
         (f, probe_packages[f].runtime.containerlab.image) for f in formats]
 
 

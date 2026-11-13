@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from fakes import with_image
 
 from fylgja_core import documents, platform_package
 from fylgja_core.documents import Rejected
@@ -18,6 +19,7 @@ from fylgja_core.platform_package import (
     RULE_RENAME_COVERAGE,
     RULE_RULE_NAME,
     RULE_VERSION,
+    Image,
     Resources,
     Rule,
 )
@@ -84,6 +86,14 @@ def test_the_eos_package_renames_every_data_rule() -> None:
     assert [r.rule for r in containerlab.rename] == ["ethernet", "modular", "breakout"]
     assert containerlab.image.pull_secret == "arista-ceos" and containerlab.hot_add_ports is False
     assert package.conformance.port.discovering.absent == "true"
+
+
+def test_the_image_of_a_package_is_its_one_versions() -> None:
+    srl = platform_package.load(PSP / "nokia_srlinux.yaml")
+    assert platform_package.image(srl) == Image(ref="ghcr.io/nokia/srlinux:24.7.1")
+    eos = platform_package.load(PSP / "arista_eos.yaml")
+    assert platform_package.image(eos) == Image(ref="ceos:4.32.0.2F", pull_secret="arista-ceos")
+    assert platform_package.image(with_image(srl, ref="x")) == Image(ref="x")
 
 
 def test_placeholders_are_the_braced_names_of_a_pattern_in_order() -> None:

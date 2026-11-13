@@ -72,11 +72,17 @@ statement for people, and is the one that is right where the two disagree.
    - Live runs are one at a time.
    - The maintainer's word on an acceptance run says what they read, the report in its
      thread, not only that it passed.
+   - Where a phase is done when the maintainer has watched a thing, the plan says how they
+     watch it: they run the command, or its whole output is shown to them before the next
+     act, and their word on whether that was their watching is recorded as they gave it.
+   - A live run made from the main checkout, the one that holds `local/`, runs that
+     checkout's code: it is checked out at the code under test for the run, and put back.
 4. **Land.** On the maintainer's word:
    - the phase is written as built on the integration branch: a decision entry for each
      place the build departed from a decision, the sentences it made untrue corrected, and
      the item in "Sequence" marked done, with what it left to later phases;
-   - that commit is reviewed afresh, and its findings fixed, before the history is tagged;
+   - that commit is reviewed afresh, its findings fixed by amending it and the fix read
+     again, before the history is tagged;
    - the integration branch is squashed onto `main` as one commit;
    - its history is kept under the local tag `archive/phase-N-integration`;
    - the build's records (ledgers, briefs, reviews, rulings, run logs) go to

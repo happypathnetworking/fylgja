@@ -7450,7 +7450,8 @@ which `pip` resolves on PyPI whoever holds the name there.
 #### Consequences
 
 - The PyPI names and their publishers are the maintainer's to register, before the
-  candidate; nobody has read whether the names are free.
+  candidate. The names are held by no project on PyPI or TestPyPI
+  ([verified-facts.md](verified-facts.md), "PyPI and TestPyPI", 2026-11-13).
 - `make wheelcheck` holds that a server installed from the core's wheel, given a store and
   a token file and no `FYLGJA_PACKAGES`, loads the shipped packages and answers
   `GET /v1/version`; `make imagecheck` that the image's packages are the wheel's.

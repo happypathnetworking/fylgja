@@ -1673,9 +1673,11 @@ running, and with the source's volumes kept; what the script meets where an earl
 left the change open. For plan 3: how one version is read by three distributions' builds
 under setuptools 80, and how a wheel learns its commit; trusted publishing from a GitHub
 environment to TestPyPI and to PyPI, which needs the maintainer's accounts and is read by
-the release candidate itself; what `pip` resolves for a reader installed from TestPyPI
-while the core's name is, or is not, held on PyPI; and whether the three names are free on
-PyPI, read on the maintainer's word, since the reading sends them to PyPI.
+the release candidate itself; and what `pip` resolves for a reader installed from TestPyPI
+while the core's name is, or is not, held on PyPI. The three names were read on 2026-11-13,
+on the maintainer's word, and are held by no project on either index
+([verified-facts.md](verified-facts.md), "PyPI and TestPyPI"); whether an index takes each
+is read when its publisher is registered.
 
 **Five plans, each a branch and a pull request useful on its own, in this order:**
 
@@ -1704,8 +1706,9 @@ PyPI, read on the maintainer's word, since the reading sends them to PyPI.
 5. **The promise and the release candidate** ([D-105](decisions.md#d-105)): the client's
    and the example's reading of an answer made to ignore a member they do not know, with a
    test that adds one to each answer they read; the page that says what 1.0 holds; the
-   lines that say the formats and the API are still settling, in `CONTRIBUTING.md` and the
-   pull request template, and that the core is being built, in `SECURITY.md`, whose scope
+   reason `CONTRIBUTING.md` and the pull request template give for taking no contributions
+   yet, that the formats and the API are still settling, corrected, the lines themselves
+   kept; the lines that say the core is being built, in `SECURITY.md`, whose scope
    takes in the readers and the example; each open question answered or written into the
    release's notes as a known limit; the candidate tagged, published to TestPyPI and
    installed from it; both demonstrations run from a fresh clone. It closes the phase.
@@ -1734,9 +1737,10 @@ and where its pid files and logs live under `local/`; where the one version is w
 how each build reads it; where the packages sit inside the wheel, and how a site names them
 beside its own in `FYLGJA_PACKAGES`; the pages' names and order under `docs/`; the form of
 `CHANGELOG.md`; how a driver's `destroy` says which node no package runs; and which open
-questions are answered and which are noted. **Left to the maintainer**, asked at plan 5:
-whether 1.0 takes contributions, which `CONTRIBUTING.md` and the pull request template say
-today it does not.
+questions are answered and which are noted. **Settled by the maintainer** on 2026-11-13,
+with the section's approval: 1.0 does not yet take contributions. `CONTRIBUTING.md` and the
+pull request template go on saying so, and plan 5 corrects only their reason, that the
+formats and the API are still settling.
 
 ## Sequence
 

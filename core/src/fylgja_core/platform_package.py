@@ -89,7 +89,8 @@ class Gnmi:
 
 @dataclass(frozen=True, kw_only=True)
 class ValueAt:
-    """A leaf and the value verify asserts there; `absent` is what an unreported leaf means."""
+    """A leaf and the value that holds there, which verify asserts for a port's `enabled` alone;
+    `absent` is what an unreported leaf means."""
 
     path: str
     value: str
@@ -116,7 +117,8 @@ class Port:
 
 @dataclass(frozen=True, kw_only=True)
 class Conformance:
-    """The gNMI paths verify and the conformance suite read on a booted node."""
+    """The gNMI paths of a booted node. Verify reads `host_name` and each cabled port's
+    `enabled` and `neighbor`; `version` and `port.discovering` have no reader yet."""
 
     host_name: str
     version: str

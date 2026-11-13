@@ -158,7 +158,7 @@
             },
             "discovering": {
               "$ref": "#/$defs/value_at",
-              "description": "The leaf and value saying LLDP runs on a port; verify asserts it before reading neighbours."
+              "description": "The leaf and value saying LLDP runs on a port. No code reads it yet: verify reads a port's neighbours without it."
             },
             "neighbor": {
               "type": "object",
@@ -190,7 +190,7 @@
           "description": "Per-port reads; {node_name} renders the port's node name."
         }
       },
-      "description": "The gNMI paths verify reads on a booted node; version alone has no reader yet."
+      "description": "The gNMI paths of a booted node. verify reads host_name and, for each cabled port intent enables, port.enabled and port.neighbor; version and port.discovering have no reader yet."
     },
     "fidelity": {
       "type": "object",
@@ -261,15 +261,15 @@
       "properties": {
         "path": {
           "$ref": "#/$defs/path",
-          "description": "The leaf verify reads."
+          "description": "The leaf the fact is read at; verify reads it for port.enabled, and port.discovering has no reader yet."
         },
         "value": {
           "type": "string",
-          "description": "What the leaf must read for verify's assertion to hold."
+          "description": "What the leaf must read for the fact to hold; verify asserts it for port.enabled."
         },
         "absent": {
           "type": "string",
-          "description": "The value verify takes an unreported leaf to mean (cEOS reports nothing while LLDP runs); without it nothing read fails."
+          "description": "The value an unreported leaf is taken to mean (cEOS reports nothing at port.discovering while LLDP runs); without it nothing read fails. verify applies it where it reads the leaf, for port.enabled."
         }
       }
     },

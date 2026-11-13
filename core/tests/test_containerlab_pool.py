@@ -57,8 +57,10 @@ def test_the_format_asks_each_networks_name_and_its_ipam_config() -> None:
 
 
 def test_the_networks_are_each_name_with_each_ipv4_subnet_it_holds() -> None:
-    # Lines as Docker 29.8.1 printed them for `FORMAT` (verified-facts.md): a name as a JSON string, one space, and
-    # the IPAM config, a list or `null`. A network with no IPv4 subnet gives nothing, and an IPv6 subnet is passed over.
+    # Lines in the form Docker 29.8.1 printed for `FORMAT` (verified-facts.md): a name as a JSON string, one space, and
+    # the IPAM config, a list or `null`. The `bridge` and `host` lines are as read; the `[]`, IPv6-only, dual-stack and
+    # two-subnet lines are composed in that form, none of them read. A network with no IPv4 subnet gives nothing, and
+    # an IPv6 subnet is passed over.
     answered = (
         '"bridge" [{"Subnet":"172.17.0.0/16","Gateway":"172.17.0.1"}]\n'
         '"host" null\n'

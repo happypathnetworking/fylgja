@@ -1206,7 +1206,8 @@ says so; every other reading fell inside.
   read absent in both runs.
 
 **fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(0.81.0,
-Docker 29.8.1, SR Linux 24.7.1, 2026-11-13)*
+Docker 29.8.1, SR Linux 24.7.1, 2026-11-13; the first two were read by hand at 19:05Z, before the
+run, and their output not saved)*
 
 `core/tests/live/test_containerlab_driver_live.py` ran alone (`cd core && .venv/bin/pytest -q -rA
 -m live tests/live/test_containerlab_driver_live.py`), ending at 19:11Z, the log's last write:

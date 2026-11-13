@@ -13,9 +13,9 @@ it.
   many twins at once, admitted by the runtime's room (2026-11-09); phase 8: the Infrahub
   reader, the example orchestrator and the cut-over (2026-11-12); and phase 9: the NetBox
   reader and the example's NetBox change source (2026-11-13).
-- **Next:** no item of "Sequence" is settled after phase 9. What each phase left is under its
-  item there and among the [open questions](decisions.md#open-questions). The `hardware`
-  driver is a later release's.
+- **Next:** the first release, settled on 2026-11-13 ("Phase 10"; "Sequence", item 10). What
+  each phase left is under its item there and among the
+  [open questions](decisions.md#open-questions). The `hardware` driver is a later release's.
 - **Beside the core:** a reader for each source of truth, the Infrahub reader
   (`readers/infrahub/`) and the NetBox reader (`readers/netbox/`), and the example
   orchestrator (`orchestrator/`), which rehearses a change of either source, are in this
@@ -1565,8 +1565,11 @@ tree's own behaviour and is recorded here.
   "no package given runs the node n1 (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)" from
   the local driver's lookup of a node's package by its kind and image, on every pass, eleven
   times in five minutes, the command waiting, until the package was put back. A defect.
-- The development NetBox's Compose network holds the whole of the local driver's default
-  pool, and while it does no twin is admitted locally. The server has no setting for it.
+- The development NetBox's Compose network held the whole of the local driver's default
+  pool, and while it did no twin was admitted locally. Phase 9 met the same and pinned that
+  one project's network off the pool ([D-099](decisions.md#d-099)). The server still has no
+  setting for the pool, and any other Compose project, Infrahub's or a user's own, can take
+  it the same way.
 - The core's wheel, built from the tree, holds the formats and no file of `psp/` or
   `probes/`.
 
@@ -1715,9 +1718,10 @@ is read when its publisher is registered.
 
 Plan 2 follows 1, for the pool's setting; 3 may be written beside 1 and 2; 4 follows 2 and
 3; 5 follows all. Live and demonstration runs are one at a time on the development host,
-each source stopped for the live tier and the suite as now. Building starts once phase 9 has
-landed and the environment is `uv`'s, a change of its own, with an entry of its own, made
-between the two.
+each source stopped for the live tier and the suite as now. Plans 1 and 2 are built once
+phase 9 has landed (the maintainer, 2026-11-13). The environment becomes `uv`'s by a change
+of its own, with an entry of its own, before plan 3, which edits the files that change
+rewrites.
 
 **The phase is done** when the maintainer has done this, at the release candidate: from a
 fresh clone of the candidate's branch, on the development host with its preconditions met,

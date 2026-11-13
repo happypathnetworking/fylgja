@@ -8196,7 +8196,9 @@ and each says whether it was re-verified on 26.04.
   is the local driver's default pool of lab subnets, and while a network holds
   it, a stopped project's kept one too, a create is refused before anything is deployed:
   `admission.capacity`, "The pool 172.20.0.0/16 has no /24 that neither a Docker network nor
-  another twin holds." The server has no setting for the pool. *(26.04, 2026-11-12)*
+  another twin holds." The server has no setting for the pool. *(26.04, 2026-11-12)* The
+  development NetBox's network was pinned off the pool the day after ("NetBox 4.7.5 with
+  netbox-branching 1.2.3", "The project's network and the local driver's lab pool").
 - **Booting a twin beside another heavy workload starves a host with little memory to
   spare**: deploys are cut short, and the other workload's requests time out. Read
   `free -m` before booting a twin. *(2026-09-15)*

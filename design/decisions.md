@@ -3416,15 +3416,18 @@ skipping any subnet a Docker network holds ([D-043](#d-043)). Docker gives a Com
 project's default network a /16 of its own choosing. On the development host the third
 project made, the development NetBox's, was given the pool's own /16, and from then no /24
 of the pool was free: every create was refused, `admission.capacity`, though the host was
-idle ([verified-facts.md](verified-facts.md), "Ubuntu hosts"). The server has no setting for
-the pool, and the refusal names neither the network nor a remedy. A demonstration starts a
+idle ([verified-facts.md](verified-facts.md), "Ubuntu hosts"). Phase 9 met it in its
+acceptance run and pinned that project's network to a documentation range
+([D-099](#d-099)), which mends that project on every host and no other project on any. The
+server has no setting for the pool, and the refusal names neither the network nor a remedy. A demonstration starts a
 source's Compose project and then a twin beside it ([D-104](#d-104)).
 
 #### Options considered
 
-- **Pin the development Compose projects' networks elsewhere.** Rejected as the remedy: it
-  mends this host and no user's, whose own Compose projects Docker numbers the same way,
-  and it writes a private range into the tree.
+- **Pin the development Compose projects' networks elsewhere, and no more.** Done for the
+  development NetBox's ([D-099](#d-099)) and kept. Not the whole remedy: Infrahub's project
+  runs from a published file with a network of Docker's choosing, and a user's own Compose
+  projects are numbered the same way.
 - **Move the default pool outside the ranges Docker gives.** Rejected: any private range
   may be a site's LAN or a cluster's pod network, and a default that meets one fails later
   and less plainly than this.

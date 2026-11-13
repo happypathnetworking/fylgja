@@ -1,21 +1,27 @@
-"""The edge's settings and its wiring of the library, with no Prefect (D-085): the nine variables read once, every one
-missing named at once and no value said; a plan and a rehearsal of a branch handed to the library as they are, the
-rehearsal with its fixed limits and a draft refused before the core is asked. Held to the core's own server on its
-fake runtime, over the fake change source."""
+"""The edge's settings and its wiring of the library, with no Prefect (D-085, D-097): the source a setting, Infrahub's
+where it is unset, and its nine variables read once, every one missing named at once and no value said; a plan and a
+rehearsal of a branch handed to the library as they are, the rehearsal with its fixed limits, a draft refused before
+the core is asked, and the request taken by the source after the draft question and before the library. Held to the
+core's own server on its fake runtime, over the fake change source."""
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
-from fylgja_core.client import Client
+from fylgja_core.client import Client, InvalidToken
+from fylgja_infrahub import document as infrahub_document
 from harness import ROOT, Clock, Served
 from sources import CHANGE, FIVE, SCOPE, FakeSource
 
 from fylgja_orchestrator import rehearsal
 from fylgja_orchestrator.edge import run, settings
 from fylgja_orchestrator.infrahub import InfrahubSource, SourceError
+from fylgja_orchestrator.netbox import NetBoxSource, NoChange, Unready
+from fylgja_orchestrator.netbox import SourceError as NetBoxSourceError
 from fylgja_orchestrator.rehearsal import Change, Limits, documents
 
 # The seven a runner cannot do without, in plan 0's order; the two CAs may be left unset.
@@ -59,16 +65,16 @@ def test_settings_name_every_missing_variable_at_once_and_no_value() -> None:
     assert not said
 
     s = settings.from_env(ENVIRON)
-    assert (s.api_address, s.infrahub_address, s.scope, s.reader, s.root) == (
+    assert (s.api_address, s.source_address, s.scope, s.reader, s.root) == (
         "core.example:8443", "infrahub.example:8000", SCOPE, READER, Path("/var/lib/fylgja-orchestrator"))
-    assert (s.api_ca, s.infrahub_ca) == (None, None)
-    held = (s.api_token, s.infrahub_token) == (API_TOKEN, INFRAHUB_TOKEN)
+    assert (s.api_ca, s.source_ca) == (None, None)
+    held = (s.api_token, s.source_token) == (API_TOKEN, INFRAHUB_TOKEN)
     assert held
     leaked = any(token in text for token in (API_TOKEN, INFRAHUB_TOKEN) for text in (str(s), repr(s)))
     assert not leaked
 
     cas = settings.from_env(ENVIRON | {"FYLGJA_API_CA": "/etc/fylgja/core-ca.pem", "FYLGJA_INFRAHUB_CA": ""})
-    assert (cas.api_ca, cas.infrahub_ca) == (Path("/etc/fylgja/core-ca.pem"), None)
+    assert (cas.api_ca, cas.source_ca) == (Path("/etc/fylgja/core-ca.pem"), None)
 
 
 def test_opened_makes_the_source_and_the_core_and_asks_neither() -> None:
@@ -136,3 +142,178 @@ def test_a_refused_token_of_the_source_is_raised_on_before_the_core_is_asked(ser
         run.plan(CHANGE.ref, SCOPE, source=source, core=served.client)
     assert (source.reads, source.posted) == ([], [])
     assert served.driver.calls == [] and served.other.list_twins() == []
+
+
+# The seven a runner of the NetBox source cannot do without, in `settings.names`' order; the two CAs may be left unset.
+NETBOX_REQUIRED = (
+    "FYLGJA_API_ADDRESS",
+    "FYLGJA_API_TOKEN",
+    "FYLGJA_NETBOX_ADDRESS",
+    "FYLGJA_NETBOX_TOKEN",
+    "FYLGJA_ORCHESTRATOR_SCOPE",
+    "FYLGJA_ORCHESTRATOR_READER",
+    "FYLGJA_ORCHESTRATOR_ROOT",
+)
+NETBOX_TOKEN = "nbt_AbCdEf012345.0123456789abcdefABCDEF0123456789abcdefAB"
+NETBOX_READER = ROOT / "netbox" / "seed" / "reader.yaml"
+NETBOX = {
+    "FYLGJA_ORCHESTRATOR_SOURCE": "netbox",
+    "FYLGJA_API_ADDRESS": "core.example:8443",
+    "FYLGJA_API_TOKEN": API_TOKEN,
+    "FYLGJA_NETBOX_ADDRESS": "netbox.example:8800",
+    "FYLGJA_NETBOX_TOKEN": NETBOX_TOKEN,
+    "FYLGJA_ORCHESTRATOR_SCOPE": SCOPE,
+    "FYLGJA_ORCHESTRATOR_READER": str(NETBOX_READER),
+    "FYLGJA_ORCHESTRATOR_ROOT": "/var/lib/fylgja-orchestrator",
+}
+UNKNOWN = "FYLGJA_ORCHESTRATOR_SOURCE is neither infrahub nor netbox"
+
+
+def test_the_source_is_infrahub_where_the_setting_is_unset_and_netbox_where_it_says_so() -> None:
+    for given in ({}, {"FYLGJA_ORCHESTRATOR_SOURCE": ""}, {"FYLGJA_ORCHESTRATOR_SOURCE": "infrahub"}):
+        assert settings.from_env(ENVIRON | given).source == "infrahub", given
+    assert settings.names("infrahub") == settings.NAMES
+    assert settings.names("netbox") == (
+        "FYLGJA_API_ADDRESS", "FYLGJA_API_TOKEN", "FYLGJA_API_CA", "FYLGJA_NETBOX_ADDRESS", "FYLGJA_NETBOX_TOKEN",
+        "FYLGJA_NETBOX_CA", "FYLGJA_ORCHESTRATOR_SCOPE", "FYLGJA_ORCHESTRATOR_READER", "FYLGJA_ORCHESTRATOR_ROOT")
+
+    # Under netbox, NetBox's variables are required and Infrahub's are not.
+    with pytest.raises(settings.Unset) as unset:
+        settings.from_env({"FYLGJA_ORCHESTRATOR_SOURCE": "netbox"})
+    assert unset.value.names == NETBOX_REQUIRED
+    s = settings.from_env(NETBOX)
+    assert (s.source, s.source_address, s.source_ca, s.scope, s.reader) == (
+        "netbox", "netbox.example:8800", None, SCOPE, NETBOX_READER)
+    held = s.source_token == NETBOX_TOKEN
+    assert held
+    leaked = any(token in text for token in (API_TOKEN, NETBOX_TOKEN) for text in (str(s), repr(s)))
+    assert not leaked
+    assert settings.refused(NETBOX) == ()
+    ca = settings.from_env(NETBOX | {"FYLGJA_NETBOX_CA": "/etc/fylgja/netbox-ca.pem"})
+    assert ca.source_ca == Path("/etc/fylgja/netbox-ca.pem")
+    # And under infrahub, NetBox's are not read.
+    both = settings.from_env(ENVIRON | {"FYLGJA_NETBOX_ADDRESS": "netbox.example:8800"})
+    assert both.source_address == "infrahub.example:8000"
+
+    unknown = ENVIRON | {"FYLGJA_ORCHESTRATOR_SOURCE": "nautobot"}
+    with pytest.raises(settings.UnknownSource) as caught:
+        settings.from_env(unknown)
+    assert str(caught.value) == UNKNOWN
+    assert settings.refused(unknown) == (UNKNOWN,)
+    assert settings.refused({"FYLGJA_ORCHESTRATOR_SOURCE": "nautobot"}) == (UNKNOWN,)
+
+
+def test_opened_makes_the_netbox_source_and_the_core_and_asks_neither() -> None:
+    source, core = run.opened(settings.from_env(NETBOX))
+    try:
+        assert isinstance(source, NetBoxSource) and isinstance(core, Client)
+        assert repr(core) == "Client('http://core.example:8443')"
+    finally:
+        source.close()
+        core.close()
+
+
+def test_opened_closes_the_core_where_the_netbox_source_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    closed: list[None] = []
+
+    class Counted(Client):
+        def close(self) -> None:
+            closed.append(None)
+            super().close()
+
+    monkeypatch.setattr(run, "Client", Counted)
+    given = dataclasses.replace(settings.from_env(NETBOX), source_token="two words")
+    with pytest.raises(InvalidToken):
+        run.opened(given)
+    assert closed == [None]
+
+
+def test_rehearse_claims_after_the_draft_question_and_before_the_library(
+    served: Served, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered: list[list[str]] = []
+
+    def recorder(seam: FakeSource, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        entered.append(list(seam.calls))
+        return {"status": "passed"}
+
+    monkeypatch.setattr(rehearsal, "rehearse", recorder)
+    source = FakeSource(CHANGE, FIVE)
+    assert run.rehearse(CHANGE.ref, SCOPE, source=source, core=served.client, run_id="r1") == {"status": "passed"}
+    assert entered == [["change", "is_draft", "claim"]]
+    assert source.claimed == [CHANGE.ref]
+
+
+def test_a_draft_is_refused_and_never_claimed(served: Served) -> None:
+    source = FakeSource(CHANGE, FIVE, draft=True)
+    with pytest.raises(run.DraftRefused):
+        run.rehearse(CHANGE.ref, SCOPE, source=source, core=served.client, run_id="r1")
+    assert (source.calls, source.claimed) == (["change", "is_draft"], [])
+
+
+class Gone(FakeSource):
+    """A source whose `change` refuses the branch as NetBox's does: `error`."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__(CHANGE, FIVE)
+        self.error = error
+
+    def change(self, ref: str) -> Change:
+        self.calls.append("change")
+        raise self.error
+
+
+MERGED = "branch third-link is merged, and only a ready branch is rehearsed"
+
+
+@pytest.mark.parametrize("error", [NoChange("no branch is named third-link"), Unready(MERGED)])
+def test_a_change_the_source_refuses_is_raised_before_any_claim_and_the_core_is_unasked(
+    error: Exception, served: Served
+) -> None:
+    source = Gone(error)
+    with pytest.raises(type(error)):
+        run.rehearse(CHANGE.ref, SCOPE, source=source, core=served.client, run_id="r1")
+    assert (source.calls, source.claimed, source.reads, source.posted) == (["change"], [], [], [])
+    assert served.driver.calls == [] and served.other.list_twins() == []
+
+
+class Unclaimed(FakeSource):
+    """A source that refuses to take the request: its tag write refused, as NetBox's source raises it."""
+
+    def claim(self, change: Change) -> None:
+        self.calls.append("claim")
+        raise NetBoxSourceError("PATCH /api/plugins/branching/branches/271/: HTTP 500: boom", status=500)
+
+
+def test_a_claim_the_source_refuses_is_raised_before_the_library_starts(
+    served: Served, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[None] = []
+    monkeypatch.setattr(rehearsal, "rehearse", lambda *args, **kwargs: started.append(None))
+    source = Unclaimed(CHANGE, FIVE)
+    with pytest.raises(NetBoxSourceError):
+        run.rehearse(CHANGE.ref, SCOPE, source=source, core=served.client, run_id="r1")
+    assert (source.calls, started, source.reads, source.posted) == (["change", "is_draft", "claim"], [], [], [])
+    assert served.driver.calls == [] and served.other.list_twins() == []
+
+
+def test_plan_claims_nothing(served: Served) -> None:
+    source = FakeSource(CHANGE, FIVE)
+    assert run.plan(CHANGE.ref, SCOPE, source=source, core=served.client)["status"] == "planned"
+    assert source.claimed == [] and "claim" not in source.calls
+
+
+def test_the_infrahub_source_takes_a_request_by_doing_nothing() -> None:
+    asked: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request)
+        return httpx.Response(500)
+
+    reading = infrahub_document.load(READER)
+    source = InfrahubSource("infrahub.example:8000", INFRAHUB_TOKEN, reading, transport=httpx.MockTransport(handler))
+    try:
+        source.claim(CHANGE)
+    finally:
+        source.close()
+    assert asked == []

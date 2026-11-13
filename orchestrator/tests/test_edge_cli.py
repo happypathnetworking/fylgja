@@ -1,8 +1,10 @@
-"""The command `fylgja-orchestrator` (D-085): each command calls the rehearsal library in its own process, with no
-Prefect and no server, prints a document or its text and exits by it; a fault of its own, of a variable, of the source
-or of the core is one line and exit 2, holding no token. `serve` refuses to start without the settings its flows would
-fail on. Held to the core's own server on its fake runtime, over the fake change source; Prefect's `serve` is the
-test's, and no runner is started."""
+"""The command `fylgja-orchestrator` (D-085, D-097): each command calls the rehearsal library in its own process, with
+no Prefect and no server, prints a document or its text and exits by it; a fault of its own, of a variable, of the
+source or of the core is one line and exit 2, holding no token. `serve` refuses to start without the settings its flows
+would fail on. `stage mark` takes a mark of a NetBox branch, and is refused under Infrahub before anything is judged.
+Held to the core's own server on its fake runtime, over the fake change source, or the NetBox source over
+`fake_netbox.FakeNetBox` with the reader's `connect` and `read` replaced; Prefect's `serve` is the test's, and no
+runner is started."""
 
 from __future__ import annotations
 
@@ -16,16 +18,25 @@ from typing import Any
 import httpx
 import prefect
 import pytest
+from fake_netbox import ADDRESS as NETBOX_URL
+from fake_netbox import TOKEN as NETBOX_TOKEN
+from fake_netbox import FakeNetBox
+from fylgja_core import documents as core_documents
 from fylgja_core import ulid
+from fylgja_core.blueprint import blueprint_id
 from fylgja_core.client import ProblemError
 from fylgja_core.findings import Finding
 from fylgja_core.problem import ProblemDocument
 from fylgja_infrahub import InfrahubError, document
+from fylgja_netbox import NetBoxError, Result
+from fylgja_netbox import document as netbox_document
 from harness import ROOT, Clock, Served, Wrapped
 from sources import CHANGE, FIVE, SCOPE, FakeSource, empty, refused
 
+from fylgja_orchestrator import netbox
 from fylgja_orchestrator.edge import cli, run, settings
 from fylgja_orchestrator.infrahub import InfrahubSource, SourceError
+from fylgja_orchestrator.netbox import source as netbox_source
 from fylgja_orchestrator.rehearsal import Change, documents, record, render, twin_name
 from fylgja_orchestrator.rehearsal.record import Record
 
@@ -447,8 +458,8 @@ def test_serves_start_line_names_both_deployments_and_no_credential(
 
 
 def test_the_help_of_each_command_exits_0(capsys: pytest.CaptureFixture[str]) -> None:
-    commands: list[list[str]] = [[], ["stage", "list"], ["stage", "plan"], ["twin", "create"], ["twin", "step"],
-                                 ["twin", "rehearse"], ["serve"]]
+    commands: list[list[str]] = [[], ["stage", "list"], ["stage", "plan"], ["stage", "mark"], ["twin", "create"],
+                                 ["twin", "step"], ["twin", "rehearse"], ["serve"]]
     for argv in commands:
         assert cli.main([*argv, "--help"], environ={}) == 0, argv
     capsys.readouterr()
@@ -479,3 +490,317 @@ def test_a_fault_as_serving_begins_is_one_line_and_exit_2(
     assert code == 2 and out.startswith("fylgja-orchestrator: serving ")
     assert err == f"RuntimeError: no API at {PREFECT_URL} for <token> with <token>\n"
     assert len(serving.calls) == 1
+
+
+
+# The NetBox change source (D-097).
+
+NETBOX_ENVIRON = {
+    "FYLGJA_ORCHESTRATOR_SOURCE": "netbox",
+    "FYLGJA_API_ADDRESS": "core.example:8443",
+    "FYLGJA_API_TOKEN": API_TOKEN,
+    "FYLGJA_NETBOX_ADDRESS": "netbox.example:8800",
+    "FYLGJA_NETBOX_TOKEN": NETBOX_TOKEN,
+    "FYLGJA_ORCHESTRATOR_SCOPE": SCOPE,
+    "FYLGJA_ORCHESTRATOR_READER": str(ROOT / "netbox" / "seed" / "reader.yaml"),
+}
+REF = CHANGE.ref
+BLUEPRINTS = ROOT / "testdata" / "blueprint"
+READ = ("2026-11-13T09:00:00.000000Z", "2026-11-13T09:10:00.000000Z", "2026-11-13T09:30:00.000000Z")
+UNVERIFIED = Finding(rule="netbox.version.unverified", severity="warning", object="4.8.0/1.3.0",
+                     message="NetBox is version 4.8.0.")
+RENDER = Finding(rule="render.failed", severity="error", object="n1", message="NetBox could not render n1.")
+UNDER_INFRAHUB = ("stage mark is the NetBox change source's: under FYLGJA_ORCHESTRATOR_SOURCE=infrahub the operator "
+                  "writes the marks in Infrahub")
+NAMED = "; the change source's token is the one in FYLGJA_NETBOX_TOKEN"
+
+
+def netbox_environ(tmp_path: Path, **more: str) -> dict[str, str]:
+    """The command's environment under the NetBox source: `NETBOX_ENVIRON`, its records under `tmp_path`, and
+    `more`."""
+    return NETBOX_ENVIRON | {"FYLGJA_ORCHESTRATOR_ROOT": str(tmp_path / "records")} | more
+
+
+def blueprint(name: str, observed: str) -> dict[str, Any]:
+    """A blueprint of `testdata/`, its source envelope the NetBox reader's, read at `observed`."""
+    loaded: dict[str, Any] = json.loads((BLUEPRINTS / name).read_text())
+    loaded["source"] = {"source": "netbox", "branch": REF, "scope": SCOPE, "observed_at": observed}
+    return loaded
+
+
+class Reader:
+    """The NetBox reader's `connect` and `read`, replaced: `main` read as the fixture less its third link, and the
+    branch as each of `branch` in turn, the last for every read after, or an exception raised; `calls` holds each
+    read's branch, None for `main`."""
+
+    def __init__(self) -> None:
+        self.main = Result(blueprint("steps/three-node-unlinked.json", READ[2]), (), False)
+        self.branch: list[Result | Exception] = [
+            Result(blueprint("three-node.json", READ[0]), (), False),
+            Result(blueprint("steps/three-node-n1-disabled.json", READ[1]), (UNVERIFIED,), False),
+        ]
+        self.calls: list[str | None] = []
+
+    def connect(self, address: str, token: str, **_: object) -> Reader:
+        return self
+
+    def close(self) -> None:
+        pass
+
+    def read(self, conn: object, *, branch: str | None, scope: str, document: object) -> Result:
+        assert scope == SCOPE
+        self.calls.append(branch)
+        if branch is None:
+            return self.main
+        answer = self.branch.pop(0) if len(self.branch) > 1 else self.branch[0]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+@dataclass
+class NetBoxed:
+    """What `run.opened` answers each command under the NetBox source: a `NetBoxSource` made anew from the settings it
+    was given, over `netbox` and the reader `reader`, with the served core, whose `close` is the test's, each call of
+    which is counted in `core_closed`. `given` holds the settings each call of `run.opened` was handed."""
+
+    netbox: FakeNetBox
+    reader: Reader
+    core: Wrapped
+    core_closed: list[None] = field(default_factory=list)
+    given: list[settings.Settings] = field(default_factory=list)
+
+
+@pytest.fixture
+def netboxed(served: Served, monkeypatch: pytest.MonkeyPatch) -> NetBoxed:
+    made = NetBoxed(FakeNetBox(), Reader(), Wrapped(served.client))
+    made.core.close = lambda: made.core_closed.append(None)  # type: ignore[method-assign]
+    monkeypatch.setattr(netbox_source, "connect", made.reader.connect)
+    monkeypatch.setattr(netbox_source, "read", made.reader.read)
+
+    def opening(given: settings.Settings) -> tuple[netbox.NetBoxSource, Wrapped]:
+        made.given.append(given)
+        source = netbox.NetBoxSource(given.source_address, given.source_token, netbox_document.load(given.reader),
+                                     made.core, ca=given.source_ca, transport=httpx.MockTransport(made.netbox))
+        return source, made.core
+
+    monkeypatch.setattr(run, "opened", opening)
+    return made
+
+
+def test_stage_mark_writes_a_mark_and_prints_its_blueprint(
+    netboxed: NetBoxed, served: Served, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    netboxed.netbox.branch(REF)
+    env = netbox_environ(tmp_path)
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"], env)
+    first = blueprint_id(blueprint("three-node.json", READ[0]))
+    assert (code, out, err) == (0, f"{REF} third-link: blueprint {first}\n", "")
+    (entry,) = netboxed.netbox.entries
+    assert (entry["kind"]["value"], entry["comments"]) == ("info", netbox.mark_text("third-link", first, SCOPE,
+                                                                                    READ[0]))
+    assert blueprint_id(served.client.get_blueprint(first)) == first
+
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "n1-address", "--json"], env)
+    second = blueprint_id(blueprint("steps/three-node-n1-disabled.json", READ[1]))
+    assert code == 0
+    assert json.loads(out) == {"branch": REF, "label": "n1-address", "blueprint_id": second,
+                               "findings": [core_documents.encode(UNVERIFIED)]}
+    assert err == f"warning netbox.version.unverified 4.8.0/1.3.0: {UNVERIFIED.message}\n"
+    assert [mark.label for mark in netbox.marks_of(netboxed.netbox.entries)] == ["third-link", "n1-address"]
+    # A mark asks the core and NetBox alone: no record is kept, and the tag is not the command's to take.
+    root = Path(env["FYLGJA_ORCHESTRATOR_ROOT"])
+    assert not root.exists() or list(root.iterdir()) == []
+    assert netboxed.netbox.requests("PATCH") == []
+    assert netboxed.reader.calls == [REF, REF]
+    assert len(netboxed.core_closed) == 2 and [given.source for given in netboxed.given] == ["netbox"] * 2
+
+
+def test_stage_mark_refused_by_the_read_is_exit_1_with_its_findings_and_no_entry(
+    netboxed: NetBoxed, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    netboxed.netbox.branch(REF)
+    netboxed.reader.branch = [Result(None, (RENDER,), False)]
+    env = netbox_environ(tmp_path)
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"], env)
+    assert (code, out, err) == (1, f"{REF} third-link: no blueprint\n", f"error render.failed n1: {RENDER.message}\n")
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link", "--json"], env)
+    assert code == 1
+    assert json.loads(out) == {"branch": REF, "label": "third-link", "blueprint_id": None,
+                               "findings": [core_documents.encode(RENDER)]}
+    assert netboxed.netbox.entries == [] and netboxed.netbox.requests("POST") == []
+    assert len(netboxed.core_closed) == 2
+
+
+def test_twin_rehearse_by_hand_rehearses_a_branch_never_tagged(
+    netboxed: NetBoxed, served: Served, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    netboxed.netbox.branch(REF)
+    env = netbox_environ(tmp_path)
+    for label in ("third-link", "n1-address"):
+        code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", label], env)
+        assert code == 0, err
+    answered = clocked(monkeypatch)
+    netboxed.netbox.log.clear()
+    code, out, err = called(capsys, ["twin", "rehearse", "--branch", REF], env)
+    (doc,) = answered
+    whole = render(doc, limit=None)
+    assert out == f"{whole.summary}\n\n{whole.detail}\n"
+    assert (code, doc["status"]) == (0, "passed"), doc["headline"]
+    assert [stage["label"] for stage in doc["plan"]["stages"]] == ["main", "third-link", "n1-address", "head"]
+    report = netboxed.netbox.entries[-1]
+    assert len(netboxed.netbox.entries) == 3 and report["kind"]["value"] == "success"
+    assert report["comments"].startswith("## Rehearsal passed")
+    # No tag was on it, so nothing was taken off.
+    assert netboxed.netbox.requests("PATCH") == []
+    assert served.other.list_twins() == []
+
+
+def test_stage_mark_under_infrahub_is_exit_2_before_any_variable_is_judged(
+    opened: Opened, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for env in ({}, environ(tmp_path), environ(tmp_path, FYLGJA_ORCHESTRATOR_SOURCE="infrahub"),
+                {"FYLGJA_ORCHESTRATOR_SOURCE": ""}):
+        code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"], env)
+        assert (code, out, err) == (2, "", f"{UNDER_INFRAHUB}\n"), env
+    assert opened.given == []
+    # A source that is neither is the settings' refusal, as for every command.
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"],
+                            {"FYLGJA_ORCHESTRATOR_SOURCE": "nautobot"})
+    assert (code, out, err) == (2, "", "FYLGJA_ORCHESTRATOR_SOURCE is neither infrahub nor netbox\n")
+    assert opened.given == []
+
+
+@pytest.mark.parametrize(
+    "label, line",
+    [
+        ("third-link", f"branch {REF} already has a mark labelled third-link: a label is unique within its branch"),
+        *[(label, f"{label!r} is no label of a mark: it is 1 to 40 lowercase letters, digits and hyphens, beginning "
+                  "and ending with a letter or a digit, and neither main nor head") for label in
+          ("main", "head", "Third", "")],
+    ],
+)
+def test_a_label_the_branch_has_is_one_line_and_exit_2(
+    label: str, line: str, netboxed: NetBoxed, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    branch = netboxed.netbox.branch(REF)
+    netboxed.netbox.entry(branch, netbox.mark_text("third-link", "0" * 64, SCOPE, READ[0]))
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", label], netbox_environ(tmp_path))
+    assert (code, out, err) == (2, "", f"{line}\n")
+    assert netboxed.reader.calls == [] and len(netboxed.netbox.entries) == 1
+    assert len(netboxed.core_closed) == 1
+
+
+def test_a_refused_netbox_token_names_its_variable(
+    netboxed: NetBoxed, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    netboxed.netbox.branch(REF)
+    env = netbox_environ(tmp_path)
+    denied = httpx.Response(403, json={"detail": "Invalid v2 token"})
+    netboxed.netbox.scripted[("GET", "plugins/branching/branches/")] = [denied]
+    code, out, err = called(capsys, ["stage", "plan", "--branch", REF], env)
+    assert (code, out) == (2, "")
+    (line,) = err.splitlines()
+    assert line == (f"GET /api/plugins/branching/branches/: NetBox refused the change source's token, or its "
+                    f"account may not do this: HTTP 403 from NetBox at {NETBOX_URL}{NAMED}")
+    # The reader's refusal, at a mark's read: its words, which name the variable too, are not said.
+    netboxed.reader.branch = [NetBoxError("HTTP 403: NetBox refused the token FYLGJA_NETBOX_TOKEN holds", 403)]
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"], env)
+    assert (code, out) == (2, "")
+    (line,) = err.splitlines()
+    assert line.startswith(f"a read of branch {REF} through the reader: NetBox refused the change source's token")
+    assert line.endswith(NAMED) and line.count("FYLGJA_NETBOX_TOKEN") == 1
+    texts = [err]
+    # The tag's removal refused, by a rehearsal by hand of a tagged branch: raised before the library starts.
+    tagged = "tagged"
+    netboxed.netbox.branch(tagged, tags=(netbox.TAG,))
+    netboxed.netbox.scripted[("PATCH", "plugins/branching/branches/272/")] = [denied]
+    code, out, err = called(capsys, ["twin", "rehearse", "--branch", tagged], env)
+    assert (code, out) == (2, "")
+    (line,) = err.splitlines()
+    assert line == (f"PATCH /api/plugins/branching/branches/272/: NetBox refused the change source's token, or its "
+                    f"account may not do this: HTTP 403 from NetBox at {NETBOX_URL}{NAMED}")
+    texts.append(err)
+    leaked = any(NETBOX_TOKEN in text for text in texts)
+    assert not leaked
+    # The mark's read was the reader's one call: the rehearsal read nothing and wrote nothing.
+    assert netboxed.netbox.entries == [] and netboxed.reader.calls == [REF]
+
+
+def test_no_line_holds_the_netbox_token(opened: Opened, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    env = netbox_environ(tmp_path)
+    for error, line in [
+        (RuntimeError(f"a fault quoting {NETBOX_TOKEN} and {API_TOKEN}"),
+         "RuntimeError: a fault quoting <token> and <token>"),
+        (netbox.SourceError(f"a refusal quoting {NETBOX_TOKEN}"), "a refusal quoting <token>"),
+        (NetBoxError(f"an error of the reader's quoting {NETBOX_TOKEN}", None), "an error of the reader's quoting "
+                                                                                "<token>"),
+    ]:
+        opened.source = Failing(error)
+        for argv in (["stage", "list"], ["stage", "plan"], ["twin", "rehearse"]):
+            code, out, err = called(capsys, [*argv, "--branch", REF], env)
+            assert (code, out, err) == (2, "", f"{line}\n"), argv
+    assert [given.source for given in opened.given] == ["netbox"] * 9
+
+
+def test_a_netbox_variable_unset_or_refused_is_named_before_any_source_is_made(
+    opened: Opened, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, out, err = called(capsys, ["stage", "plan", "--branch", REF], {"FYLGJA_ORCHESTRATOR_SOURCE": "netbox"})
+    assert (code, out) == (2, "")
+    assert err.splitlines() == [f"{name} is not set" for name in settings.names("netbox")
+                                if name not in settings.OPTIONAL]
+    # NetBox's three judged by the clients' rules, each named and never its value; Infrahub's not read at all.
+    env = netbox_environ(tmp_path, FYLGJA_NETBOX_ADDRESS="ftp://netbox.example", FYLGJA_NETBOX_TOKEN="two words",
+                         FYLGJA_NETBOX_CA=str(tmp_path / "no-such-ca.pem"), FYLGJA_INFRAHUB_TOKEN="three more words")
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"], env)
+    assert (code, out) == (2, "")
+    assert err.splitlines() == [
+        "FYLGJA_NETBOX_ADDRESS is not an http(s):// URL or host:port",
+        "FYLGJA_NETBOX_TOKEN is not an RFC 6750 bearer token: letters, digits and -._~+/ with trailing =",
+        "FYLGJA_NETBOX_CA names no file of CA certificates that can be read",
+    ]
+    leaked = "two words" in err
+    assert not leaked
+    assert opened.given == []
+
+
+def test_a_netbox_reader_document_refused_or_unread_names_its_variable_and_exit_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    refused_reader = tmp_path / "refused.yaml"
+    refused_reader.write_text("reader_version: '9'\n")
+    code, out, err = called(capsys, ["stage", "mark", "--branch", REF, "--label", "third-link"],
+                            netbox_environ(tmp_path, FYLGJA_ORCHESTRATOR_READER=str(refused_reader)))
+    said = err.splitlines()
+    assert (code, out) == (2, "")
+    assert said[0] == f"FYLGJA_ORCHESTRATOR_READER names {refused_reader}, which is not a valid reader document:"
+    assert len(said) > 1 and all(line.startswith("  ") for line in said[1:])
+
+    missing = tmp_path / "missing.yaml"
+    code, out, err = called(capsys, ["stage", "plan", "--branch", REF],
+                            netbox_environ(tmp_path, FYLGJA_ORCHESTRATOR_READER=str(missing)))
+    assert (code, out, err) == (2, "", f"FYLGJA_ORCHESTRATOR_READER names {missing}: No such file or directory\n")
+
+    garbled = tmp_path / "garbled.yaml"
+    garbled.write_bytes(b"\xffreader_version: held-back\n")
+    code, out, err = called(capsys, ["stage", "plan", "--branch", REF],
+                            netbox_environ(tmp_path, FYLGJA_ORCHESTRATOR_READER=str(garbled)))
+    assert (code, out) == (2, "")
+    (line,) = err.splitlines()
+    assert line.startswith(f"FYLGJA_ORCHESTRATOR_READER names {garbled}: ") and "held-back" not in line
+
+
+def test_a_netbox_source_error_or_reader_error_is_one_line_and_exit_2(
+    opened: Opened, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = netbox_environ(tmp_path)
+    for error in (netbox.NoChange(f"no branch is named {REF}"),
+                  netbox.SourceError("asked, and refused", status=500),
+                  NetBoxError("reading dcim.device: NetBox at http://netbox.example:8800 was not reached", None)):
+        opened.source = Failing(error)
+        code, out, err = called(capsys, ["stage", "plan", "--branch", REF], env)
+        assert (code, out, err) == (2, "", f"{error}\n")
+        assert opened.source.closed
+    assert len(opened.core_closed) == 3

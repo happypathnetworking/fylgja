@@ -1,0 +1,59 @@
+# The development NetBox's override of the compose file of netbox-docker's release, which scripts/netbox_dev.py
+# fetches into local/netbox/ and never changes (make netbox-up).
+#
+# Both services run the image built from netbox/dev/'s Dockerfile, netbox-docker's with the branching plugin, never
+# pulled; its tag and its three build arguments are the make variables, which netbox_dev.py sets in Compose's
+# environment over whatever the shell or local/.env holds. Both mount netbox/dev/plugins.py read-only over the
+# release's own, so that NetBox loads the plugin and its database router; FYLGJA_NETBOX_DEV is that directory,
+# absolute, set by netbox_dev.py. A Compose command without these names fails.
+#
+# NetBox alone is published, on loopback at port 8800. Its superuser `admin` is made at the first start from the
+# password local/.env holds; the secret key and the token pepper are local/.env's too, for both services. Each is
+# required: netbox_dev.py writes them, generated, before Compose runs. The published file gives the worker netbox's
+# members by a YAML anchor, which no override reaches, so the worker's are written again, less the superuser's.
+# Postgres and the two Valkeys keep the release's own env files: they publish no port.
+#
+# host.docker.internal names the Docker bridge's gateway, for a webhook NetBox sends to a listener on the host.
+#
+# The project's network is given a documentation range of its own, outside the private ranges Docker takes its
+# networks' subnets from, so that it never meets the local driver's lab pool nor a network Docker gives itself;
+# netbox_dev.py's SUBNET is the same, and its `up` recreates a network that stands with another subnet, keeping the
+# volumes, so that the start makes it with this range; what Compose's `up` alone does to such a network was not read.
+services:
+  netbox:
+    image: fylgja-core-netbox:${FYLGJA_NETBOX_VERSION:?}-${FYLGJA_NETBOX_BRANCHING_VERSION:?}
+    pull_policy: never
+    build:
+      context: "${FYLGJA_NETBOX_DEV:?}"
+      args:
+        NETBOX_VERSION: "${FYLGJA_NETBOX_VERSION:?}"
+        NETBOX_DOCKER_VERSION: "${FYLGJA_NETBOX_DOCKER_VERSION:?}"
+        NETBOX_BRANCHING_VERSION: "${FYLGJA_NETBOX_BRANCHING_VERSION:?}"
+    ports:
+      - "127.0.0.1:8800:8080"
+    volumes:
+      - "${FYLGJA_NETBOX_DEV:?}/plugins.py:/etc/netbox/config/plugins.py:ro"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SKIP_SUPERUSER: "false"
+      SUPERUSER_NAME: admin
+      SUPERUSER_EMAIL: admin@fylgja.example
+      SUPERUSER_PASSWORD: "${FYLGJA_NETBOX_SUPERUSER_PASSWORD:?}"
+      SECRET_KEY: "${FYLGJA_NETBOX_SECRET_KEY:?}"
+      API_TOKEN_PEPPER_1: "${FYLGJA_NETBOX_API_TOKEN_PEPPER:?}"
+  netbox-worker:
+    image: fylgja-core-netbox:${FYLGJA_NETBOX_VERSION:?}-${FYLGJA_NETBOX_BRANCHING_VERSION:?}
+    pull_policy: never
+    volumes:
+      - "${FYLGJA_NETBOX_DEV:?}/plugins.py:/etc/netbox/config/plugins.py:ro"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SECRET_KEY: "${FYLGJA_NETBOX_SECRET_KEY:?}"
+      API_TOKEN_PEPPER_1: "${FYLGJA_NETBOX_API_TOKEN_PEPPER:?}"
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 198.51.100.0/24

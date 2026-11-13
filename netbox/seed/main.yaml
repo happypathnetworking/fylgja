@@ -1,0 +1,50 @@
+# The fixture network on the development NetBox's main, made by netbox/seed/seed.py (make netbox-seed):
+# testdata/blueprint/three-node.json's network less its link n1:ethernet-1/2 to n3:ethernet-1/2, which a change adds,
+# and the probe of testdata/blueprint/three-node-probed.json as the configuration context the reader document names
+# (reader.yaml). Each object is found by its name, a device type by its model, or made; netbox/tests/test_fixture.py
+# holds these values against the blueprints.
+manufacturer: {name: Nokia, slug: nokia}
+platform: {name: SR Linux, slug: sr-linux}
+device_type: {model: 7220 IXR-D2L, slug: 7220-ixr-d2l}
+site: {name: lab, slug: lab}
+role: {name: fylgja, slug: fylgja}
+tag: {name: fylgja, slug: fylgja}
+template: fylgja-srlinux
+devices:
+  - name: n1
+    description: FYLGJA-MARKER-fixture
+    interfaces:
+      - {name: mgmt0, type: 1000base-t, mgmt_only: true, addresses: []}
+      - {name: ethernet-1/1, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/2, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/10, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.1.10.1/24]}
+      - {name: ethernet-1/11, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.1.11.1/24]}
+  - name: n2
+    description: FYLGJA-MARKER-fixture
+    interfaces:
+      - {name: mgmt0, type: 1000base-t, mgmt_only: true, addresses: []}
+      - {name: ethernet-1/1, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/2, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/10, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.2.10.1/24]}
+      - {name: ethernet-1/11, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.2.11.1/24]}
+  - name: n3
+    description: FYLGJA-MARKER-fixture
+    interfaces:
+      - {name: mgmt0, type: 1000base-t, mgmt_only: true, addresses: []}
+      - {name: ethernet-1/1, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/2, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/10, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.3.10.1/24]}
+      - {name: ethernet-1/11, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.3.11.1/24]}
+cables:
+  - [n1:ethernet-1/1, n2:ethernet-1/1]
+  - [n2:ethernet-1/2, n3:ethernet-1/1]
+probes:
+  name: fylgja-probes
+  data:
+    probes_version: "1"
+    probes:
+      - name: n1-loop
+        format: ping
+        endpoints:
+          - {device: n1, interface: ethernet-1/10, address: 10.1.10.2/24, gateway: 10.1.10.1}
+          - {device: n1, interface: ethernet-1/11, address: 10.1.11.2/24, gateway: 10.1.11.1}

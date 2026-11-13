@@ -99,7 +99,7 @@ def read(
         ended = entry["outcome"] == "refused"
         if progress is not None:
             progress(f"plan: stage {k} of {len(stages)}, {stage.label}: {entry['outcome']}")
-    return _concluded(change, scope, read_at, entries, fault), fault
+    return _concluded(change, scope, read_at, entries, fault, source.scope_remedy), fault
 
 
 def _staged(
@@ -191,9 +191,15 @@ def _entry(stage: Stage, outcome: str, **members: Any) -> dict[str, Any]:
 
 
 def _concluded(
-    change: Change, scope: str, read_at: str, entries: Sequence[dict[str, Any]], fault: Exception | None
+    change: Change,
+    scope: str,
+    read_at: str,
+    entries: Sequence[dict[str, Any]],
+    fault: Exception | None,
+    scope_remedy: str,
 ) -> dict[str, Any]:
-    """The plan document of `entries`: its status, its headline and its findings, from its stages and the fault."""
+    """The plan document of `entries`: its status, its headline and its findings, from its stages and the fault;
+    `scope_remedy` the source's sentence that ends the cause of a plan with nothing to build."""
     n = len(entries)
     built = [k for k, entry in enumerate(entries, 1) if entry["outcome"] == "built"]
     refused = [k for k, entry in enumerate(entries, 1) if entry["outcome"] == "refused"]
@@ -214,7 +220,7 @@ def _concluded(
                     f"The baseline is stage {k}, {entries[k - 1]['label']}; {follow}.")
     else:
         cause = _cause(rules.STAGES_NONE, f"No stage of the change selects a device in scope {scope}, so there is "
-                                          "nothing to build. Check the scope the checks run with.")
+                                          f"nothing to build. {scope_remedy}")
         status, findings = "empty", [cause]
         headline = f"Nothing to plan\n{cause['message']}"
     return {

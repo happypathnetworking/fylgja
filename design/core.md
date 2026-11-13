@@ -1,7 +1,7 @@
 # fylgja-core: a new Python core
 
 This is the design of the new core: a Python rebuild of `fylgja-core` with a clean break in
-formats, many named twins, and runtimes behind a driver seam. Phases 2–8 are planned from
+formats, many named twins, and runtimes behind a driver seam. Phases 2–9 are planned from
 it.
 
 - **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
@@ -10,14 +10,19 @@ it.
   3: the compiler (2026-11-03); phase 4: one named twin on the local driver (2026-11-03);
   phase 5: step, verify and the burst on the local driver (2026-11-04); phase 6: the
   clabernetes driver, the core as a pod and the conformance suite (2026-11-08); phase 7:
-  many twins at once, admitted by the runtime's room (2026-11-09); and phase 8: the Infrahub
-  reader, the example orchestrator and the cut-over (2026-11-12).
-- **Next:** a reader and a change source for NetBox ([D-081](decisions.md#d-081);
-  "Sequence"). The `hardware` driver is a later release's.
-- **Beside the core:** the Infrahub reader (`readers/infrahub/`) and the example
-  orchestrator (`orchestrator/`) are in this repository ([D-005](decisions.md#d-005),
-  [D-081](decisions.md#d-081)). The Go core is retired: it gets no more fixes, and nothing
-  tracked here needs it or the archived repository to build, test or run.
+  many twins at once, admitted by the runtime's room (2026-11-09); phase 8: the Infrahub
+  reader, the example orchestrator and the cut-over (2026-11-12); and phase 9: the NetBox
+  reader and the example's NetBox change source (2026-11-13).
+- **Next:** no item of "Sequence" is settled after phase 9. What each phase left is under its
+  item there and among the [open questions](decisions.md#open-questions). The `hardware`
+  driver is a later release's.
+- **Beside the core:** a reader for each source of truth, the Infrahub reader
+  (`readers/infrahub/`) and the NetBox reader (`readers/netbox/`), and the example
+  orchestrator (`orchestrator/`), which rehearses a change of either source, are in this
+  repository ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081),
+  [D-095](decisions.md#d-095), [D-097](decisions.md#d-097)). The Go core is retired: it gets
+  no more fixes, and nothing tracked here needs it or the archived repository to build, test or
+  run.
 
 The constitution is [`design/constitution.md`](constitution.md). The formats are in
 [`formats/`](../formats/README.md). Terms are in the [glossary](../docs/glossary.md).
@@ -35,11 +40,11 @@ The constitution is [`design/constitution.md`](constitution.md). The formats are
 | First outside user | Not yet known. OIDC and RBAC roles wait for one |
 | Node access | Direct, over SSH, gNMI or a CLI session, from outside the cluster |
 | Core CLI | A thin API client |
-| Repository | This repository: the core first, the Infrahub reader and the example orchestrator beside it at cut-over ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081)) |
+| Repository | This repository: the core first; beside it, a reader for each source and the example orchestrator, the Infrahub reader and the example at cut-over, and the NetBox reader and the example's NetBox change source after it ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095), [D-097](decisions.md#d-097)) |
 | Process | Design document, decision entry, pull request ([D-033](decisions.md#d-033)) |
 | Constitution | One, for every piece, at `design/constitution.md` |
 | The Go core | Retired at the cut-over ([D-081](decisions.md#d-081)); the reference while this core was built |
-| Compatibility | A clean break: every format and interface starts at version 1, nothing older is read, and the reader and the example orchestrator are written to the new formats and API from the start ([D-002](decisions.md#d-002), [D-081](decisions.md#d-081)) |
+| Compatibility | A clean break: every format and interface starts at version 1, nothing older is read, and each reader and the example orchestrator are written to the new formats and API from the start ([D-002](decisions.md#d-002), [D-081](decisions.md#d-081)) |
 | Management reach between local twins | Accepted on the local driver, where it is host-routed. Closed on clabernetes by a NetworkPolicy per twin ([D-019](decisions.md#d-019)) |
 
 ## The decision: build from scratch, in Python, with the Go core as reference
@@ -1208,6 +1213,321 @@ finding and of the report within the form above; and where the development Compo
 and the seed's data live, which is `infrahub/dev/`, `infrahub/seed/` and, for what a run
 makes, `local/infrahub/` ([D-091](decisions.md#d-091)).
 
+## Phase 9: the NetBox reader and the example's NetBox change source (settled 2026-11-12)
+
+Phase 9 gives someone who runs NetBox what phase 8 gave someone who runs Infrahub: a
+library that reads their source into a blueprint, and the example orchestrator rehearsing a
+change of several steps and filing its report on the change. It is as close to phase 8 as
+NetBox allows and no closer: "complete parity isn't a reasonable requirement" (the
+maintainer, 2026-11-12). On the community edition a change is a branch of the branching
+plugin and nothing more. There is no proposed change, no check that waits for an answer, and
+no read of a branch as it stood earlier. So a step is read when it exists, a tag on the
+branch asks for the rehearsal, and the report is a journal entry on the branch. The emphasis
+is the demonstration: a script seeds the change, and how an engineer authors a change of
+several steps in NetBox is a later phase's, "once the concept is proven" (the maintainer,
+2026-11-12).
+
+**What the phase is for.** Two pieces, at the two standards of
+[D-081](decisions.md#d-081). The **NetBox reader** is held to what a production workflow
+needs, as the Infrahub reader is: it must not hand over a twin that is quietly not the
+network, it must install into a platform it does not own, and it must survive a NetBox
+upgrade without a rewrite. The **NetBox change source** is the example's, honest on its
+main path and on plain failures, and not hardened. The core stays as built. The rehearsal's
+logic, the report's form and the two Prefect deployments stay as phase 8 built them: the
+phase is the test of phase 8's seam, and each place it has to bend is named below, or is a
+finding entered at the landing. *As built (2026-11-13):* two bends were found beside those
+named below. The NetBox source puts an empty line before each list of the entry it files,
+NetBox rendering a list only so; and the report's restated sentence grew the lines an Infrahub
+summary always keeps, from at most 987 bytes to at most 1,079 of its 4,092
+([D-100](decisions.md#d-100)).
+
+**What is settled before code.**
+
+- **A second reader, beside the first and sharing nothing with it but the core's model**
+  ([D-095](decisions.md#d-095)). `fylgja-netbox` in `readers/netbox/`, the package
+  `fylgja_netbox`, a library with a command of its own. It imports the core's base install
+  and httpx; it imports nothing of the Infrahub reader or of the example, and a test over
+  imports holds that. No library common to the two readers is made.
+- **The reader gives a blueprint of a branch as it stands, or the faults, and never
+  guesses** ([D-095](decisions.md#d-095)). It takes a connection, a branch or none for
+  `main`, a scope and a reader document; a branch's name that is empty or whitespace alone is
+  refused before any request ([D-098](decisions.md#d-098)). It takes no time: NetBox reads
+  none. It writes nothing to NetBox, though its token must be one that may write, NetBox
+  refusing a render otherwise. Every list is read over REST and counted against the `count`
+  NetBox answers for it, GraphQL answering no total ([verified-facts.md](verified-facts.md),
+  "NetBox 4.7.5 with netbox-branching 1.2.3"). The same state read twice gives the same
+  blueprint id. NetBox's version is read first, and the reader warns outside the pairs of
+  NetBox's version and the plugin's its contract tier passed on, a NetBox that names no plugin
+  among them ([D-099](decisions.md#d-099)); a branch asked of a NetBox without the plugin is
+  refused.
+- **A device's configuration is what NetBox renders for it at the read**
+  ([D-095](decisions.md#d-095)): one `render-config` request a scoped device, under the
+  branch's header, its text taken verbatim
+  ([Constitution IV](constitution.md#iv-fylgja-never-renders-configuration): NetBox renders,
+  Fylgja does not). A device with no template, a template that fails, and an empty render
+  are each an error naming the device, and no blueprint; and so, as built, are a render
+  NetBox does not call `text/plain` or that is no UTF-8 text, and one answered any other
+  status, 404 among them, which NetBox answers an account without the `render_config` grant
+  ([D-098](decisions.md#d-098)). Nothing is stored between an edit
+  and a render, so there is no configuration older than its intent, and the Infrahub
+  reader's stale rule has no counterpart here.
+- **A read is of one state, or refused** ([D-095](decisions.md#d-095)). A read is many
+  requests and NetBox gives them no common instant. The reader takes the latest id of the
+  changelog it reads from, `main`'s or the branch's, before its first list and after its
+  last render, and a read the changelog moved under is refused with the remedy: read again.
+  Rows of a kind no read reads do not count, a journal entry's first among them: a mark or a
+  report written during a read of `main` adds a row to `main`'s changelog.
+  This is the reader's guard against the quietly wrong twin, in the place the stale rule
+  holds in the Infrahub reader. As built ([D-098](decisions.md#d-098)) the latest id is not
+  the whole bracket: a sync was read to change what a branch reads and to add no row to
+  either changelog. So the rows between the two ids are listed and held to their count; the
+  rows at or below the open's id are counted at the open and at the close, for a row of a
+  lower id that commits late; and a branch's own row is read again at the close, where one
+  gone, no longer `ready` or synced refuses the read. The kinds that do not count are two, a
+  journal entry's and the branch object's own, and only above the open's id. A request
+  answered 400 after the open, as under a branch deleted or syncing, is weighed at the close.
+- **The reader document** ([D-095](decisions.md#d-095)), a new format `netbox-reader-1`,
+  holds what NetBox cannot: which manufacturer and platform pair is which platform package,
+  and where probes are declared, or that none are read. It names no artifact, there being
+  none. It holds no address and no credential, which are `FYLGJA_NETBOX_ADDRESS` and
+  `FYLGJA_NETBOX_TOKEN` ([D-042](decisions.md#d-042)).
+- **Probes are a configuration context** ([D-095](decisions.md#d-095)): one the reader
+  document names, inactive, so that no device's rendered context takes it, whose data is a
+  probe declaration ([`probes-1`](../formats/probes-1.schema.json)). One left active is an
+  error, `probe.context.active` ([D-098](decisions.md#d-098)). NetBox needs no schema
+  of Fylgja's and no further plugin.
+- **Plain HTTP, stated versions, and tests against a real NetBox**
+  ([D-096](decisions.md#d-096)). httpx and no client library of NetBox's; all contact in one
+  transport module. The README states the versions of NetBox and of the branching plugin
+  the contract tier passed on. Nothing is tested over recorded answers
+  ([D-034](decisions.md#d-034)): the pure tier holds the mapping over rows built in the
+  tests, and the contract tier everything that meets NetBox, on a seeded instance at a
+  version a make target takes. That instance is netbox-docker at a stated version with an
+  image that adds the plugin, under `local/`, seeded by a script over REST with the fixture
+  network the Infrahub seed holds. As built its Compose project has a network of its own, a
+  documentation range the override names, off the local driver's lab pool, which Docker had
+  given it whole, so that the driver found no subnet of the pool free for a twin's lab while
+  NetBox was up; `make netbox-up` recreates a standing network of another subnet, the volumes
+  kept. And NetBox is pinned at 4.7.5, two
+  days old when it was chosen, on the maintainer's word ([D-099](decisions.md#d-099)).
+- **A change is a branch, and its stages are `main`, its marks and its head**
+  ([D-097](decisions.md#d-097)). The first stage is `main` as it stands when the rehearsal
+  reads it, the last is the branch as it stands then, and between them are the branch's
+  marks in the order they were written.
+- **A mark is taken when the step exists** ([D-097](decisions.md#d-097)), since the branch
+  cannot be read at that step later. A new command of the example, `stage mark`, reads the
+  branch through the reader, gives the blueprint to the core, which keeps it by its id
+  ([Constitution IX](constitution.md#ix-state-lives-behind-one-store-no-database)), and
+  writes a journal entry on the branch naming the mark's label, that id, the scope it was
+  read under and when. A read that is refused writes no mark. A mark's blueprint is read
+  back from the core by its id, and everything else of it from its entry, since the core
+  keeps the envelope of whoever first gave it that intent. The example keeps no store of its
+  own for marks: they are NetBox's, and the blueprints the core's. So a mark belongs to the
+  core it was given to, and a change is rehearsed through the core it was marked through. As
+  built a mark is held by its blueprint's id: the source reads it from whichever core the
+  rehearsal runs through, so by the code a core given a blueprint of that id serves the mark
+  too, which no run read, and one that holds none refuses the stage, `mark.unheld`. A change
+  is seeded once for each core, on a branch of its own ([D-100](decisions.md#d-100)).
+- **A tag on the branch asks for the rehearsal** ([D-097](decisions.md#d-097)). An event
+  rule on the branch, conditioned on the tag, sends a webhook whose body NetBox renders, and
+  which starts the `twin-rehearse` deployment over Prefect's own API with the branch's name.
+  No service of the example's stands between them. The edge takes the tag off before it calls
+  the library, by one call that it alone asks of a source and Infrahub's answers by doing
+  nothing. The request is so used once, and a later edit to the branch object, its
+  description or its tags, asks for nothing; setting the tag again asks again. The tag is
+  held by NetBox's rule alone: a branch never tagged is never rehearsed by NetBox, which is
+  the place a draft holds in Infrahub, and `twin rehearse` run by hand rehearses a branch
+  tagged or not. As built ([D-100](decisions.md#d-100)) the source's call reads the tag and
+  takes it off, and `twin rehearse` by hand goes through it and takes a tag off too. A branch
+  that is not `ready` is refused before its tag is taken, so the tag stays and nothing is
+  posted. In the runs read the tag came off 6.9 s to 15.9 s after it was set, and an edit of
+  the branch object in that time asks again. The webhook names the deployment by its id, so
+  the trigger is installed again after a new Prefect home.
+- **The report is one journal entry on the branch** ([D-097](decisions.md#d-097),
+  [D-087](decisions.md#d-087)), its kind the rehearsal's status: `success` for `passed`,
+  `danger` for `failed`, and `warning` for `not_rehearsed` and `stopped`. It is one entry
+  of the summary and the detail, NetBox having kept an entry of a megabyte whole. It gates
+  nothing: "report is good enough" (the maintainer, 2026-11-12). As built the source puts an
+  empty line before each list of the entry ([D-100](decisions.md#d-100)). The reports of
+  the acceptance runs and their dry runs were 2,230 to 2,240 bytes, each of kind `success`,
+  the one kind a rehearsal from a tag on a real driver was read to file; of the cluster's the
+  maintainer read "The tables and lists render correctly" ([D-101](decisions.md#d-101)).
+- **One edge, and its source a setting** ([D-097](decisions.md#d-097)).
+  `FYLGJA_ORCHESTRATOR_SOURCE` names `infrahub` or `netbox`, and unset it is `infrahub`, so
+  that phase 8's deployments run as they did. The chosen source's variables alone are
+  required, NetBox's being `FYLGJA_NETBOX_ADDRESS`, `FYLGJA_NETBOX_TOKEN` and an optional
+  `FYLGJA_NETBOX_CA`. A runner serves one source, and a Prefect server one source's runner,
+  both sources' flows being served under the same two names. The two flows keep their one
+  parameter, the branch. `stage-plan` stays a deployment and a command; NetBox starts only
+  `twin-rehearse`. `stage mark` under `infrahub` is refused: there the operator writes the
+  marks ([D-088](decisions.md#d-088)).
+- **The seam bends in four places known now** ([D-097](decisions.md#d-097), on the seam and
+  the edge as [D-092](decisions.md#d-092) and [D-093](decisions.md#d-093) built them). The
+  library's sentences tell a reader to "run the checks again" and to "check the scope the checks run
+  with", which are Infrahub's remedies: the words become the source's to give, by a member
+  the seam gains, and the library names neither source. The report says the stages "were
+  read at" one time and that later edits are not rehearsed, which is untrue of a mark read
+  earlier: the sentence is made true of both sources, a mark's own time coming from its
+  stage. The edge's source gains the call that takes a request. And the edge opens the
+  source its setting names. The rehearsal's steps, its statuses and its two documents do not
+  change. As built ([D-100](decisions.md#d-100)) the seam gains two members, not one,
+  `again` and `scope_remedy`, the first used whole and as the end of a sentence of the
+  library's; the call that takes a request is `claim`; a stage read earlier says its time in
+  its `where`; and the edge's settings hold the chosen source's address, token and CA in
+  fields that name no source.
+
+**The formats touched.** One new format, `netbox-reader-1`, carried by the reader's wheel
+([D-084](decisions.md#d-084)). Blueprint 1 does not change: the source envelope is the
+reader's to write ([D-006](decisions.md#d-006)), and this reader's has no `at` and no schema
+hash: its point in time
+([Constitution VI](constitution.md#vi-intent-is-addressed)) is the changelog's id the read
+was bracketed by, beside `observed_at`; of a branch that id is not the whole of it, a sync
+moving neither changelog and the envelope carrying no `last_sync`
+([D-098](decisions.md#d-098)). API 1, plan 1, rehearsal 1 and findings 1 do not change; if
+building shows that one
+must, the change is made in `formats/` in the same change and entered at the landing. No
+schema is loaded into NetBox: a mark and the report are journal entries, the request is a
+tag, and probes are a configuration context. `formats/README.md` gains the format, and the
+reader's `rules.md` its rule ids.
+
+**Non-goals.** How an engineer authors a change of several steps in NetBox, and any page,
+button or script inside NetBox for it; a gate on the merge, which the plugin's merge
+validators would give; the change-request layer of NetBox's paid editions, and NetBox Cloud;
+Nautobot; a configuration rendered anywhere but by NetBox's `render-config`; virtual
+machines, modules, virtual device contexts and a cable through a patch panel; a rehearsal
+for each edit; a trigger delivered again when it is lost; a library shared by the two
+readers; a client library of NetBox's; a published package. **Anti-goals**, each a failure
+even if the acceptance run passes: a blueprint of a branch that changed while it was read; a
+valid blueprint of less than NetBox holds, or with a device's configuration defaulted where
+its render failed; a reader that writes to NetBox, or knows a stage, a mark, a tag, a
+journal entry or a twin (the example's tag and its entries are meant: the reader's scope is
+a tag on devices, and its bracket names the journal entry's kind among the rows that do not
+count, by [D-095](decisions.md#d-095)'s own text); rehearsal logic that names NetBox,
+Infrahub or Prefect; the same
+state read twice giving two blueprint ids; a test that passes on a recording after NetBox
+changed; a token in a blueprint, a finding, a log line or the tree; and phase 8's path
+through Infrahub behaving otherwise than it did.
+
+**What is not yet read.** The entries assert of NetBox only what
+[verified-facts.md](verified-facts.md) records for the versions named. What the code will
+lean on beyond that is read at the start of the plan that needs it; where a reading differs
+from what an entry supposes, the entry is restated at the landing. For plan 1: a first start
+on empty volumes, and the stack's memory, which the archived repository read at about
+1.3 GiB on 4.7.4; a token provisioned for an account that is not the superuser, and the
+permissions the reader's and the example's accounts need. For plan 2: whether a branch
+reads what `main` gained after the branch's last sync; what a sync does to a branch's
+changelog, and whether the latest id is enough to bracket a read through one; a list longer
+than a page, and the largest page NetBox gives; a render of a device whose template reads
+its configuration context, and of a template that renders nothing; what a render answers
+for a device another request is editing; which kinds' rows no read reads, the journal
+entry's beside them; and a cable whose ends are not two interfaces. For plan 3: how the API tells a branch
+behind `main`; a branch that is merged or not ready, asked for its stages; Prefect's
+`create_flow_run` taking NetBox's webhook as it is sent, from NetBox's worker to Prefect on
+the host, and a deployment's id when Prefect's own store is made anew; a rule's condition
+when a tag is removed by the flow itself; a webhook to an address that does not answer;
+what an account that is no superuser reads of a webhook's headers; and how a journal entry
+shows the report's table. *As built (2026-11-13):* each reading listed for plans 1, 2 and 3
+was taken on NetBox 4.7.5 with netbox-branching 1.2.3 and on Prefect 3.9.2
+([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3" and
+"Prefect 3.9.2"), but the largest page NetBox gives, which was not found: a `limit` of 5,000
+answered all 135 rows of a list. Plan 4 began with a reading this paragraph gave it none of,
+the local driver's lab pool held by NetBox's own network; it read a webhook's sending
+refused its connection and not sent again once Prefect was back, and the report as the
+Journal tab's page holds it, of which the maintainer said on the cluster's run that the
+tables and lists render correctly. Where a reading differed from
+what an entry supposed, the entry is restated: a sync, the bracket and the renders in
+[D-098](decisions.md#d-098); the development NetBox's network and NetBox's pin in
+[D-099](decisions.md#d-099); and a branch behind `main`, which no member of a branch tells,
+and the webhook's headers, which both lesser accounts read in `main`'s changelog, in
+[D-100](decisions.md#d-100). What the phase left unread is in the facts' "Not read" and among
+the [open questions](decisions.md#open-questions).
+
+**Four plans, each a branch and a pull request useful on its own, in this order:**
+
+1. **NetBox on the development host, and its seed** ([D-096](decisions.md#d-096)):
+   netbox-docker at a stated version under `local/`, the image that adds the plugin, and the
+   plugin's configuration, behind make targets that take the versions; the accounts and
+   their tokens' lines in `local/.env`; the fixture network on `main` as data and a script,
+   the Infrahub seed's network, with a configuration template for it and the probes'
+   configuration context; the tracked files under `netbox/`, as `infrahub/` holds
+   Infrahub's. It begins with its readings, above.
+2. **The reader** ([D-095](decisions.md#d-095), [D-096](decisions.md#d-096)), beginning
+   with its readings: the transport, the version check, the read and its mapping, the
+   count of every list, the renders, the bracket, the reader document and its format, the
+   probes, the command, `mapping.md` and `rules.md`; the pure tier; the contract tier on
+   plan 1's NetBox, the same state read twice giving one id among it; the wheel check of
+   `fylgja-netbox`.
+3. **The NetBox change source and the edge** ([D-097](decisions.md#d-097)), beginning with
+   its readings: the source behind the seam, the change found by its branch's name, its
+   stages, a mark written and read back, the tag taken off, the report filed; `stage mark`;
+   the edge's setting and the source it opens; the remedy's wording moved to the source; the
+   seed's change, the Infrahub seed's two staged edits, on a branch a script builds in steps
+   and marks at each, which needs the core running; the tag, the event rule and the webhook
+   made by a make target once Prefect and the runner are up, since the webhook's address
+   holds the deployment's id, its credential from `local/.env`.
+   Pure tests over a fake of NetBox's HTTP and the core's own server; contract tests against
+   plan 1's NetBox, and one in which NetBox's own webhook starts the deployment on a real
+   Prefect; `docs/integrating.md` gains NetBox.
+4. **The acceptance run**: the change seeded and marked once through each core, a branch
+   each, and rehearsed from its tag on the local driver and on the cluster, with NetBox, Prefect and the runner on the development host both times;
+   phase 8's acceptance run made once more, on the local driver, to show the Infrahub path
+   unchanged; and the documents that say Fylgja ships one reader corrected. It closes the
+   phase. As made ([D-101](decisions.md#d-101)): what was rehearsed once more is the seed's
+   proposed change, nobody creating one in Infrahub's UI; its results and its texts were
+   phase 8's but for the sentence plan 3 restated, and its time about twice phase 8's. And
+   the plan changed code, which this line does not name: the corrections plans 1 to 3 had
+   parked for it, the development NetBox's network, and two behaviours of
+   `scripts/netbox_dev.py` in its last fixes ([D-099](decisions.md#d-099)).
+
+Each follows the one before it. Plan 3's pure tier may begin beside plan 2 once plan 0 has
+fixed the reader's signatures. Live runs are one at a time, and NetBox and
+Infrahub are both stopped whenever the live tier or the conformance suite runs on the
+development host. As made, NetBox was up beside the local driver's twin in the acceptance
+runs through its tag, its network off the lab pool ([D-099](decisions.md#d-099)), and up,
+untouched, beside phase 8's rehearsal made once more ([D-101](decisions.md#d-101)).
+
+**The phase is done** when the maintainer has watched this: a script builds a branch in
+NetBox in steps and marks each; the branch is given its tag, by the script's last act or by
+hand in NetBox; that starts the rehearsal with nothing else done by hand; and the maintainer
+reads the rehearsal's report on the branch's journal in NetBox. Beside it: the run is made
+once on the local driver and once on the cluster; the reader's contract tier passes on the
+NetBox and plugin versions built against, with the same state read twice giving one id;
+`fylgja-netbox` installs from its wheel, and the example's beside it; phase 8's rehearsal
+through Infrahub still passes; and every behaviour of NetBox the code relies on is recorded
+for the versions it runs on. *Done on 2026-11-13* ([D-101](decisions.md#d-101); "Sequence",
+item 9). How each clause was met: on the local driver the maintainer watched the branch being
+built, by their answer when asked, set its tag by hand and read "The journal includes the
+rehearsal success report"; on the cluster the build's whole output was shown to them before
+they set the tag by hand, which they ruled counts as their watching the branch being built,
+and they read "The tables and lists render correctly" (the maintainer, 2026-11-13); each
+tag started one rehearsal with nothing else done by hand, which ended `passed`. The NetBox
+contract tier passed whole on NetBox 4.7.5 with netbox-branching 1.2.3, the reader's part
+reading the same state twice to one id on `main` and on a branch. The wheels of the core,
+of the Infrahub reader, of the NetBox reader and of the example were built and checked
+outside the tree. Phase 8's seeded proposed change was rehearsed through Infrahub's own
+check once more and passed, slower than phase 8 read it, and Infrahub's contract tier was
+cited from the commit it last passed at, on the maintainer's word. The behaviours are in
+[verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3".
+
+**Left to the builder.** The module names and the exact signatures of the reader and the
+source; the reader's rule ids, the Infrahub reader's kept where the meaning is unchanged;
+the mapping's rows, which interface types are physical ports, and what is omitted with a
+fidelity row; the reader document's members, each with its consumer; the source envelope's
+members; the text of a mark's journal entry, which a person can read and the source parses,
+and how an entry that is no mark is told from one; the tag's name; how the scope a mark was
+read under is held to the rehearsal's; what a rehearsal says of a branch that is behind
+`main`, within plan 3's reading; the accounts and their permissions; the wording of each
+finding and of the report within the form of [D-087](decisions.md#d-087) and
+[D-092](decisions.md#d-092); the names of the members the seam and the edge's source gain; how many times the source reads again a stage
+refused for having moved; whether the example's wheel requires both readers or takes each
+as an extra; and the make targets of each source's contract tier. *As built:* the tracked
+files of the development NetBox are under `netbox/`; the tag is `fylgja-rehearse`; a branch
+behind `main` is warned of and never refused; the seam's members are `again` and
+`scope_remedy`, and the edge's source's `claim`; `main` and the head are read three times at
+most; the example's wheel requires each reader ([D-100](decisions.md#d-100)); and
+`make contract` stays Infrahub's beside `make contract-netbox`
+([D-099](decisions.md#d-099)).
+
 ## Sequence
 
 0. **The baseline.** *Done.* The decision log ([decisions.md](decisions.md)), the
@@ -1365,6 +1685,42 @@ makes, `local/infrahub/` ([D-091](decisions.md#d-091)).
    on a reading of ([open questions](decisions.md#open-questions)); a NetBox reader and change
    source; a schema other than the DCIM library; and what the example leaves out by design
    ([D-086](decisions.md#d-086)).
+9. **NetBox**, after the cut-over. *Settled on 2026-11-12*; see "Phase 9":
+   - Write the NetBox reader, `fylgja-netbox`, beside the Infrahub reader
+     ([D-095](decisions.md#d-095), [D-096](decisions.md#d-096)).
+   - Give the example orchestrator a NetBox change source: marks taken as a branch is built,
+     a tag that asks for the rehearsal, and the report as a journal entry
+     ([D-097](decisions.md#d-097)).
+   - Rehearse a seeded change of several steps from its tag, on both drivers.
+
+   Built, in the four plans of "Phase 9": the development NetBox behind make targets, on a
+   Compose network of its own, with its seed, its two accounts and NetBox's pin
+   ([D-096](decisions.md#d-096), [D-099](decisions.md#d-099)); the NetBox reader,
+   `fylgja-netbox`, with its bracket, its renders, its reader document and its contract tier
+   ([D-095](decisions.md#d-095), [D-098](decisions.md#d-098)); the example's NetBox change
+   source, with `stage mark`, the trigger of a tag, an event rule and a webhook, the report as
+   a journal entry, and the edge's source a setting ([D-097](decisions.md#d-097),
+   [D-100](decisions.md#d-100)); and the acceptance run with its runbook and the documents.
+   *Done on 2026-11-13* ([D-101](decisions.md#d-101)): a branch the seed's script built in the
+   development NetBox in two steps, each marked, was rehearsed from the tag the maintainer set
+   on it by hand, once with the core on the local driver and once with the core deployed on
+   the cluster. Each rehearsal ended `passed`, its report read by the maintainer on the
+   branch's journal ([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with
+   netbox-branching 1.2.3", "A branch built in steps and marked by the seed's script, tagged
+   by hand, rehearsed from its tag on the local driver, built while the maintainer watched,
+   and its report as they read it on the Journal tab" and "A branch built in steps and marked
+   by the seed's script through the cluster's core, its build's output shown to the
+   maintainer, tagged by them by hand, rehearsed from its tag on the cluster's core, and its
+   report as they read it on the Journal tab"). Phase 8's rehearsal through Infrahub's own
+   check was made once more and passed. It left to later phases, or to the maintainer's word:
+   how an engineer authors and marks a change of several steps in NetBox; Prefect's credential
+   readable in NetBox's changelog, and what a deployment does instead; why Infrahub on the
+   volumes kept since phase 8 failed to start twice of three and ran its own steps at about
+   twice phase 8's times; why the cluster's rehearsal took 1.9 times the local driver's; a
+   rule of verify that reads an address; a mark
+   read through another core; what the reader's bracket and its account's grants do not yet
+   rest on a reading of; and the small gaps of the last plan
+   ([open questions](decisions.md#open-questions)).
 
 ## Verification
 
@@ -1404,10 +1760,12 @@ makes, `local/infrahub/` ([D-091](decisions.md#d-091)).
   or is cleaned up. The suite's kill scenarios do so on both drivers, where the kill found the
   run unfinished ([D-072](decisions.md#d-072) names the two boundaries it did not on the
   cluster).
-- **The reader and the example orchestrator**: the reader's pure tier, and its contract tier
-  against a real Infrahub with the same read twice giving one id; the example's rehearsal
-  library over a fake source and a fake core; and a proposed change rehearsed through
-  Infrahub's own check on each driver ("Phase 8").
+- **The readers and the example orchestrator**: each reader's pure tier, and its contract
+  tier against a real instance of its source, Infrahub or NetBox, with the same read twice
+  giving one id; the example's rehearsal library over a fake source and the core's own server
+  on its fake runtime, and each change source's contract tier against its source; a proposed
+  change rehearsed through Infrahub's own check on each driver ("Phase 8"); and a branch
+  rehearsed from its tag in NetBox on each driver ("Phase 9").
 
 ## The multi-host stage (2026-11-02)
 

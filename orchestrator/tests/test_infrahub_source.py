@@ -671,6 +671,15 @@ def test_the_change_is_the_open_proposed_change_of_its_branch(world: Callable[..
     ]
 
 
+def test_the_infrahub_source_gives_phase_8s_two_sentences(world: Callable[..., World]) -> None:
+    # The words the library said for every source before the seam gave them: Infrahub's check is asked again by
+    # running the checks.
+    sentences = ("Run the checks again.", "Check the scope the checks run with.")
+    assert (InfrahubSource.again, InfrahubSource.scope_remedy) == sentences
+    w = world()
+    assert (w.source.again, w.source.scope_remedy) == sentences
+
+
 def test_no_open_proposed_change_of_the_branch_is_no_change(world: Callable[..., World]) -> None:
     w = world(ProposedChange=always(proposed()))
     with pytest.raises(NoChange) as caught:

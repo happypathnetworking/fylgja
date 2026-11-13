@@ -2,8 +2,8 @@
 the severity each is filed at and, for an error, the status it gives a rehearsal whose cause it is (D-086); and the
 catalogue, `orchestrator/rules.md`, says the same rules with the same severities and statuses. A sentence quotes a
 finding as `<object>: <message> (<rule>)`, short enough to read in a report's first sentence (D-087). The catalogue's
-last section is the Infrahub change source's, held to that source's own constants: the library names no source's
-rules (D-085)."""
+last two sections are the change sources', the Infrahub source's and then the NetBox source's, each held to that
+source's own constants: the library names no source's rules (D-085, D-097)."""
 
 from __future__ import annotations
 
@@ -11,15 +11,17 @@ import json
 import re
 from pathlib import Path
 
-from fylgja_orchestrator import infrahub
+from fylgja_orchestrator import infrahub, netbox
 from fylgja_orchestrator.rehearsal import rules
-from fylgja_orchestrator.rehearsal.rules import quote
+from fylgja_orchestrator.rehearsal.rules import clause, quote
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOGUE = ROOT / "orchestrator" / "rules.md"
-SOURCE = "## Findings: the Infrahub change source"
-"""The heading of the catalogue's last section, the change source's rules; every section before it is the
+INFRAHUB = "## Findings: the Infrahub change source"
+"""The heading of the Infrahub change source's section of the catalogue; every section before it is the
 rehearsal's."""
+NETBOX = "## Findings: the NetBox change source"
+"""The heading of the NetBox change source's section, the catalogue's last."""
 
 # The rehearsal's errors and the status each gives the rehearsal it is the cause of (D-086).
 GIVEN = {
@@ -40,13 +42,20 @@ GIVEN = {
 }
 
 
-def _rows(*, source: bool = False) -> list[list[str]]:
+def _rows(heading: str | None = None) -> list[list[str]]:
     """The cells of every row of the catalogue's tables that names a rule, its backticks taken off each cell: of the
-    rehearsal's sections, or of the change source's where `source` is true."""
-    rehearsal, heading, rest = CATALOGUE.read_text().partition(SOURCE)
-    assert heading, f"the catalogue has no section {SOURCE!r}"
+    rehearsal's sections, those before the Infrahub change source's, or where `heading` is given, of that section
+    alone, to the next heading of its level."""
+    text = CATALOGUE.read_text()
+    for source in (INFRAHUB, NETBOX):
+        assert f"\n{source}\n" in text, f"the catalogue has no section {source!r}"
+    assert text.index(INFRAHUB) < text.index(NETBOX), "the NetBox source's section is not after the Infrahub one's"
+    if heading is None:
+        section = text.partition(INFRAHUB)[0]
+    else:
+        section = text.partition(f"\n{heading}\n")[2].partition("\n## ")[0]
     rows = []
-    for line in (rest if source else rehearsal).splitlines():
+    for line in section.splitlines():
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         if line.startswith("|") and cells[0].startswith("`"):
             rows.append([cell.strip("`") for cell in cells])
@@ -79,7 +88,7 @@ def test_the_catalogue_holds_exactly_the_rules_with_their_severity_and_status() 
 
 
 def test_the_change_sources_section_holds_exactly_its_rules_with_their_severity() -> None:
-    rows = _rows(source=True)
+    rows = _rows(INFRAHUB)
     listed = [row[0] for row in rows]
     assert "stage.main.moved" in listed, "the parse is blind"
     assert len(listed) == len(set(listed)), "a rule has two rows"
@@ -96,10 +105,32 @@ def test_the_change_sources_section_holds_exactly_its_rules_with_their_severity(
         assert sentence, rule
 
 
+def test_the_netbox_sources_section_holds_exactly_its_rules_with_their_severity() -> None:
+    rows = _rows(NETBOX)
+    listed = [row[0] for row in rows]
+    assert "mark.unheld" in listed, "the parse is blind"
+    assert len(listed) == len(set(listed)), "a rule has two rows"
+    constants = {name: value for name, value in vars(netbox.source).items() if name.startswith("RULE")}
+    exported = {name: value for name, value in vars(netbox).items() if name.startswith("RULE")}
+    assert exported == constants, "the package does not re-export each of the source's rules"
+    assert len(set(constants.values())) == len(constants) == 5, "two constants name one rule"
+    assert set(listed) == set(constants.values()) == set(netbox.SEVERITY)
+    assert set(listed).isdisjoint(rules.SEVERITY), "a rule is the library's and the source's"
+    assert set(listed).isdisjoint(infrahub.SEVERITY), "a rule is both sources'"
+    assert set(rules.SEVERITY).isdisjoint(infrahub.SEVERITY)
+    # A stage refused by an error of the source's is the library's `stage.refused`, which fails the change.
+    for rule, severity, status, sentence in rows:
+        assert severity == netbox.SEVERITY[rule], rule
+        assert status == (rules.STATUS[rules.STAGE_REFUSED] if severity == "error" else "none"), rule
+        assert sentence, rule
+
+
 def test_every_rule_is_a_rule_id_as_findings_1_has_it() -> None:
     schema = json.loads((ROOT / "formats" / "findings-1.schema.json").read_text())
     pattern = re.compile(schema["$defs"]["rule"]["pattern"])
-    assert [rule for rule in [*rules.SEVERITY, *infrahub.SEVERITY] if not pattern.search(rule)] == []
+    every = [*rules.SEVERITY, *infrahub.SEVERITY, *netbox.SEVERITY]
+    assert "mark.unheld" in every, "the list is blind"
+    assert [rule for rule in every if not pattern.search(rule)] == []
 
 
 PUSH = {
@@ -132,3 +163,10 @@ def test_a_finding_with_no_object_begins_with_its_message() -> None:
     empty = {"rule": "scope.empty", "severity": "error", "message": "The scope selects no device."}
     assert quote(empty) == "The scope selects no device (scope.empty)"
     assert quote(empty | {"object": None}) == "The scope selects no device (scope.empty)"
+
+
+def test_a_clause_is_the_sentence_with_its_first_letter_lowered_and_no_full_stop() -> None:
+    assert clause("Run the checks again.") == "run the checks again"
+    assert clause("Set the tag `fylgja-rehearse` on the branch again.") == (
+        "set the tag `fylgja-rehearse` on the branch again"
+    )

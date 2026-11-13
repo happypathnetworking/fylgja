@@ -21,8 +21,10 @@ CHANGE = Change("third-link", "pc-1", "third link", 'Change "third link"')
 class FakeSource:
     """A source of one change, `change`, whose stages are `stages` in order, each with what its read answers, or the
     exception its read raises. `reads` holds the label of each stage read, in order, `posted` each report posted;
-    `post` raises `fail_post` when it is set, posting nothing. `is_draft` answers `draft`, and `close` sets `closed`,
-    for the edge's tests."""
+    `post` raises `fail_post` when it is set, posting nothing. `again` and `scope_remedy` are its two sentences, the
+    Infrahub source's by default, so that a test of the library holds the words it said before a source gave them.
+    `is_draft` answers `draft`, `claim` appends the change's `ref` to `claimed`, and `close` sets `closed`, for the
+    edge's tests; `calls` holds the names of `change`, `is_draft` and `claim` in the order they were called."""
 
     def __init__(
         self,
@@ -30,9 +32,13 @@ class FakeSource:
         stages: Sequence[tuple[Stage, Read | Exception]],
         *,
         comment_limit: int | None = 4092,
+        again: str = "Run the checks again.",
+        scope_remedy: str = "Check the scope the checks run with.",
         draft: bool = False,
     ) -> None:
         self.comment_limit = comment_limit
+        self.again = again
+        self.scope_remedy = scope_remedy
         self.draft = draft
         self._change = change
         self._stages = list(stages)
@@ -40,14 +46,22 @@ class FakeSource:
         self.posted: list[Report] = []
         self.fail_post: Exception | None = None
         self.closed = False
+        self.claimed: list[str] = []
+        self.calls: list[str] = []
 
     def change(self, ref: str) -> Change:
+        self.calls.append("change")
         if ref != self._change.ref:
             raise LookupError(f"no change is named {ref}")
         return self._change
 
     def is_draft(self, change: Change) -> bool:
+        self.calls.append("is_draft")
         return self.draft
+
+    def claim(self, change: Change) -> None:
+        self.calls.append("claim")
+        self.claimed.append(change.ref)
 
     def close(self) -> None:
         self.closed = True

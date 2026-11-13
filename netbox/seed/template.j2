@@ -1,0 +1,33 @@
+{#- One device's SR Linux configuration, rendered by NetBox from its device (netbox/seed/seed.py makes it the config
+    template fylgja-srlinux, assigned to the platform). It renders every port in the order of its name as a string:
+    the management port as a comment, left to the platform; every other port with its far end where it is cabled, its
+    admin state, its one subinterface, its addresses in the order of their values as strings, and its place in the
+    default network-instance. A port's far end is its `link_peers`, which named the far port at once after the
+    cable's create (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3"). Every line follows from the
+    device, its platform and manufacturer, its ports, their cables and their addresses, and nothing is added. -#}
+{% set platform = device.platform -%}
+{% set manufacturer = platform.manufacturer if platform else none -%}
+{% set about = ((manufacturer.name if manufacturer else '') ~ ' ' ~ (platform.name if platform else '')) | trim -%}
+# {{ device.name }}: production configuration rendered by NetBox (fylgja-srlinux)
+# platform {{ about }}{{ ('; ' ~ device.description) if device.description else '' }}
+set / system name host-name {{ device.name }}
+set / network-instance default type default
+{% for port in device.interfaces.all() | sort(attribute='name', case_sensitive=true) -%}
+{% if port.mgmt_only -%}
+# {{ port.name }}: out-of-band management, left to the platform
+{% else -%}
+{% for far in port.link_peers -%}
+set / interface {{ port.name }} description "to {{ far.device.name }} {{ far.name }}"
+{% endfor -%}
+set / interface {{ port.name }} admin-state {{ 'enable' if port.enabled else 'disable' }}
+set / interface {{ port.name }} subinterface 0 admin-state enable
+{% set addresses = port.ip_addresses.all() | map(attribute='address') | map('string') | sort(case_sensitive=true) | list -%}
+{% if addresses -%}
+set / interface {{ port.name }} subinterface 0 ipv4 admin-state enable
+{% for address in addresses -%}
+set / interface {{ port.name }} subinterface 0 ipv4 address {{ address }}
+{% endfor -%}
+{% endif -%}
+set / network-instance default interface {{ port.name }}.0
+{% endif -%}
+{% endfor -%}

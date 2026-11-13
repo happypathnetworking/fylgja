@@ -110,8 +110,8 @@ def rehearse(
       the deletion D-085 names are the one call, which answers at once.
 
     And what the example leaves out (D-086): any reclaim beyond the twin's name; a deadline computed from the
-    packages; a retry on a busy runtime, a refusal for room ending the rehearsal not rehearsed, to be asked again by
-    running the checks again; a bound on how many rehearsals run at once; and loss across a step."""
+    packages; a retry on a busy runtime, a refusal for room ending the rehearsal not rehearsed, its remedy asking
+    again; a bound on how many rehearsals run at once; and loss across a step."""
     started = clock()
     change = source.change(ref)
     rehearsal = _Rehearsal(source, core, change, scope, run_id, limits, progress or _unsaid, clock, sleep, now, started)
@@ -175,6 +175,9 @@ class _Rehearsal:
         self.asked = False
         # The stage in progress, by its number and its label, for a cause's sentence.
         self.at: tuple[int, str] | None = None
+        # How one asks for the rehearsal again, in the source's words, lowered as the end of a cause's sentence; the
+        # whole sentence is `source.again`.
+        self.again_clause = rules.clause(source.again)
 
     # The path.
 
@@ -191,18 +194,18 @@ class _Rehearsal:
         except _Limit:
             at = f" at stage {self.at[0]}, {self.at[1]}," if self.at else ""
             self.cause = _said(rules.LIMIT_PASSED, f"The rehearsal passed its time limit of {self.limits.limit_s:g} s"
-                                                   f"{at} and was stopped. Nothing is said about the change: run the "
-                                                   "checks again, or raise the limit.")
+                                                   f"{at} and was stopped. Nothing is said about the change: "
+                                                   f"{self.again_clause}, or raise the limit.")
         except ProblemError as e:
             self.cause = self._refused(e, own=True)
         except TransportError as e:
             self.cause = _said(rules.CORE_UNREACHABLE, f"The core did not answer: {str(e).removesuffix('.')}. Check "
-                                                       "that it runs and that FYLGJA_API_ADDRESS names it, then run "
-                                                       "the checks again.")
+                                                       "that it runs and that FYLGJA_API_ADDRESS names it, then "
+                                                       f"{self.again_clause}.")
         except (FollowError, UnsupportedVersion) as e:
             self.cause = _said(rules.CORE_UNREACHABLE, "The core answered, but not as this library expects: "
                                                        f"{str(e).removesuffix('.')}. Check the core's version against "
-                                                       "this library's, then run the checks again.")
+                                                       f"this library's, then {self.again_clause}.")
 
     def _reclaim(self) -> None:
         """Every twin of the change's asked deleted, then read until it is gone: the newest rehearsal of a change is
@@ -217,7 +220,7 @@ class _Rehearsal:
             if not self._gone(name, limited=True):
                 raise _Ended(_said(rules.TWIN_HELD, f"An earlier rehearsal's twin, {name}, was not removed within "
                                                     f"{GONE_S:g} s, so this rehearsal did not start. Remove it with "
-                                                    f"fylgja-core twin destroy {name}, then run the checks again."))
+                                                    f"fylgja-core twin destroy {name}, then {self.again_clause}."))
             self.reclaimed.append(name)
             self.warnings.append(_said(rules.TWIN_RECLAIMED, f"The twin {name}, left by an earlier rehearsal of this "
                                                              "change, was removed before this one started."))
@@ -247,7 +250,7 @@ class _Rehearsal:
                 raise fault
             raise _Ended(_said(rules.SOURCE_FAILED, f"The change's stages could not be read from its source "
                                                     f"({type(fault).__name__}). Check that the source answers, then "
-                                                    "run the checks again."))
+                                                    f"{self.again_clause}."))
         if self.plan["status"] in ("refused", "empty"):
             for k, entry in enumerate(entries, 1):
                 if entry["outcome"] == "refused":
@@ -286,7 +289,7 @@ class _Rehearsal:
         if rule == NO_ROOM:
             return self._no_room(found[0]["message"] if found else e.problem.detail or e.problem.title, at=(k, label))
         if rule == NO_IMAGE:
-            return _absent(found[0]["message"] if found else e.problem.detail or e.problem.title)
+            return self._absent(found[0]["message"] if found else e.problem.detail or e.problem.title)
         if rule in REFUSED_BUILDS:
             failures = [f for f in found if f["severity"] == "error"] or found
             self.stages[k - 1] = {"result": "failed", "failures": failures}
@@ -454,7 +457,7 @@ class _Rehearsal:
             if f.rule == NO_ROOM:
                 return self._no_room(f.message)
             if f.rule == NO_IMAGE:
-                return _absent(f.message)
+                return self._absent(f.message)
             if f.rule.startswith(SET_UP):
                 return self._set_up([_found(f)])
         return None
@@ -469,20 +472,25 @@ class _Rehearsal:
         else:
             self.room = _room(reading)
         return _said(rules.CAPACITY, f"The runtime has no room for the twin{self._of(at=at)}: {message} Nothing is "
-                                     "wrong with the change: run the checks again when the runtime has room.")
+                                     f"wrong with the change: {self.again_clause} when the runtime has room.")
+
+    def _absent(self, message: str) -> dict[str, Any]:
+        """`rehearsal.image.absent`, with the core's own message."""
+        return _said(rules.IMAGE_ABSENT, f"An image the twin needs is not on the runtime: {message} Import it there, "
+                                         f"then {self.again_clause}.")
 
     def _set_up(self, failures: Sequence[Mapping[str, Any]], *, at: tuple[int, str] | None = None) -> dict[str, Any]:
         """`rehearsal.admission.refused`, of the stage `at` or else the one in progress."""
         return _said(rules.ADMISSION_REFUSED, f"The runtime refused the twin{self._of(at=at)}{_first(failures)}. That "
-                                              "is the runtime's set-up, not the change: correct it, then run the "
-                                              "checks again.")
+                                              "is the runtime's set-up, not the change: correct it, then "
+                                              f"{self.again_clause}.")
 
     def _cancelled(self, operation: str, *, diverged: bool = False) -> dict[str, Any]:
         """`rehearsal.run.cancelled`; `diverged`, of a step cancelled after its apply began, which left the twin
         diverged."""
         after = " after its apply began, which left the twin diverged," if diverged else ","
         return _said(rules.RUN_CANCELLED, f"The {operation} run of the twin was cancelled by another client{after} so "
-                                          f"the rehearsal stopped{self._of('at')}. Run the checks again.")
+                                          f"the rehearsal stopped{self._of('at')}. {self.source.again}")
 
     def _deleted(self) -> dict[str, Any]:
         return _said(rules.TWIN_DELETED, f"The twin {self.twin} was deleted while the rehearsal ran, by a newer "
@@ -497,11 +505,11 @@ class _Rehearsal:
             return self._deleted()
         if e.status in TOKEN:
             return _said(rules.CORE_REFUSED, f"The core refused the token ({rule}). Put a token whose hash the core's "
-                                             "token file holds in FYLGJA_API_TOKEN, then run the checks again.")
+                                             f"token file holds in FYLGJA_API_TOKEN, then {self.again_clause}.")
         detail = e.problem.detail or e.problem.title
         detail = detail if detail.endswith(".") else f"{detail}."
         return _said(rules.CORE_REFUSED, f"The core refused a request the rehearsal needs: {e.status} {rule}: {detail} "
-                                         "Read the core's log, then run the checks again.")
+                                         f"Read the core's log, then {self.again_clause}.")
 
     def _of(self, word: str = "of", *, at: tuple[int, str] | None = None) -> str:
         """The stage `at`, or else the one in progress, as a sentence names it, `of stage <k>, <label>`; nothing where
@@ -618,11 +626,6 @@ class _Rehearsal:
 def _said(rule: str, message: str) -> dict[str, Any]:
     """One of the rehearsal's own findings, at its rule's severity."""
     return finding(rule, rules.SEVERITY[rule], message)
-
-
-def _absent(message: str) -> dict[str, Any]:
-    return _said(rules.IMAGE_ABSENT, f"An image the twin needs is not on the runtime: {message} Import it there, then "
-                                     "run the checks again.")
 
 
 def _first(failures: Sequence[Mapping[str, Any]]) -> str:

@@ -41,9 +41,9 @@ from fylgja_orchestrator.rehearsal.report import headline, render
 # Infrahub's comment, the bound the report is written for.
 LIMIT = 4092
 # The tightest bound the report is held to, measured: the summary's parts kept whatever else goes fit it for each
-# document at the limit (987 bytes for the labels of 40 é, the most), and the detail of none of them does (1,783
+# document at the limit (1,079 bytes for the labels of 40 é, the most), and the detail of none of them does (1,783
 # bytes for those labels, the least).
-TIGHT = 1000
+TIGHT = 1100
 FAILED = (
     "The step to stage 4, third-link, failed and left the twin diverged: n2: At line 1: n2 refused the configuration "
     "(push.refused). Stages 2 and 3 passed. Stage 5 was not reached."
@@ -156,8 +156,9 @@ def test_the_summary_is_the_form_the_maintainer_was_shown() -> None:
         "- `push.refused` n2: At line 1: n2 refused the configuration",
         "**Not modelled on the twin:** none",
         "**Already failing before this change:** none",
-        'Change "third link", scope `tag:fylgja`. Stages were read at 2026-11-09T10:15:11Z; later edits are not '
-        "rehearsed. Took 1m 15s.",
+        'Change "third link", scope `tag:fylgja`. The rehearsal read its stages at 2026-11-09T10:15:11Z; one taken '
+        "earlier is as it was then, at the time its line in the detail gives; later edits are not rehearsed. Took "
+        "1m 15s.",
         FIDELITY,
     ])
     assert lines(summary)[-1] == FIDELITY
@@ -173,6 +174,17 @@ def test_the_summary_is_the_form_the_maintainer_was_shown() -> None:
         "| 5 | head | nothing | unchanged | not run again |",
     ])
     assert "**What failed**" not in others
+
+
+def test_a_stage_taken_earlier_gives_its_time_in_the_detail() -> None:
+    taken = "2026-11-12T09:00:00.000000Z"
+    d = passed()
+    d["plan"]["stages"][1]["where"] = f"the mark third-link of branch change-1, read at {taken}"
+    r = render(headed(d), limit=LIMIT)
+    numbered = [line for line in lines(r.detail) if re.match(r"\d+\. ", line)]
+    assert numbered[1].startswith("2. ") and taken in numbered[1]
+    where = lines(r.summary)[-2]
+    assert "one taken earlier is as it was then" in where and "later edits are not rehearsed" in where
 
 
 def test_what_failed_is_listed_only_where_the_change_failed() -> None:

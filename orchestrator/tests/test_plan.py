@@ -114,6 +114,16 @@ def test_a_change_whose_stages_are_all_empty_or_none_plans_nothing(served: Serve
     assert served.driver.calls == []
 
 
+def test_nothing_to_build_ends_in_the_sources_scope_remedy(served: Served) -> None:
+    source = FakeSource(CHANGE, [empty("branch-point"), empty("head")], scope_remedy="Look at the scope.")
+    doc = plan(source, served.client, CHANGE.ref, SCOPE, now=now)
+    assert documents.validate("plan-1", doc) == []
+    (cause,) = doc["findings"]
+    assert cause["rule"] == "rehearsal.stages.none"
+    assert cause["message"].endswith("so there is nothing to build. Look at the scope.")
+    assert doc["headline"].endswith("so there is nothing to build. Look at the scope.")
+
+
 def test_a_fault_that_is_no_stages_leaves_plan_and_stops_read(served: Served) -> None:
     fault = RuntimeError("the source is away")
     stages: list[tuple[Stage, Read | Exception]] = [*FIVE[:2], (FIVE[2][0], fault), *FIVE[3:]]

@@ -1,5 +1,5 @@
 """The example's two documents (D-086): a plan 1 document, what each stage of a change built, and a rehearsal 1
-document, what each came to on the twin. Each is a plain JSON value, as the library writes it and a check reads it;
+document, what each came to on the twin. Each is a plain JSON value, as the library writes it and its caller reads it;
 this module validates one against its format and makes the findings both hold.
 
 The two formats are the example's, carried by its wheel beside its package and not by the core's (D-084,

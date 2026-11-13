@@ -1,7 +1,7 @@
 # Architecture
 
-This document describes Fylgja as this repository holds it: the core, at length, and the two
-pieces beside it, the Infrahub reader and the example orchestrator (section 5;
+This document describes Fylgja as this repository holds it: the core, at length, and the
+pieces beside it, a reader for each source of truth and the example orchestrator (section 5;
 [D-081](decisions.md#d-081)). It says what each is, what is built at this commit, and the
 architecture the core is being built to. The non-negotiables are in the
 [constitution](constitution.md), the reasons in the [decision log](decisions.md), and the
@@ -32,13 +32,17 @@ Four rules shape the rest:
 
 This repository builds three pieces ([D-081](decisions.md#d-081)), and the **core** is the
 first. It takes blueprints and knows no source of truth.
-Whatever writes a blueprint is a **producer**. The one Fylgja ships is the **Infrahub
-reader**, a library that reads a branch of Infrahub into a blueprint; an **example
-orchestrator** resolves a stage of a proposed change through it and rehearses the change
-([D-081](decisions.md#d-081)). Both are in this repository, under `readers/infrahub/` and
-`orchestrator/` (section 5), written new; their prototype in the archived repository was the
-reference they were written against. A blueprint may equally come from a file: the fixtures under
-`testdata/blueprint/`, or any file written to `formats/blueprint-1.schema.json`.
+Whatever writes a blueprint is a **producer**. Fylgja ships a **reader** for each source of
+truth it reads, a library that reads a branch of that source into a blueprint: the **Infrahub
+reader**, under `readers/infrahub/`, and the **NetBox reader**, under `readers/netbox/`
+([D-095](decisions.md#d-095)), neither importing the other. An **example orchestrator**, under
+`orchestrator/`, resolves each stage of a change, a proposed change in Infrahub or a branch in
+NetBox, to a blueprint through that source's reader, or, for a mark in NetBox, from the core
+that keeps the mark's blueprint, and rehearses the change ([D-081](decisions.md#d-081),
+[D-097](decisions.md#d-097)). Each is in this repository (section 5), written new; the
+prototype of the Infrahub reader and of the example, in the archived repository, was the
+reference they were written against. A blueprint may equally come from a file: the fixtures
+under `testdata/blueprint/`, or any file written to `formats/blueprint-1.schema.json`.
 
 Every client reaches the core through **API 1** alone
 ([Constitution XI](constitution.md#xi-the-api-is-the-boundary),
@@ -135,6 +139,27 @@ writes them.
   the maintainer in the UI, rehearsed through its own check, on the local driver" and "A
   proposed change created by the maintainer in the UI, rehearsed through its own check, on the
   cluster's core").
+- **The NetBox reader and the example's NetBox change source** (section 5,
+  [D-095](decisions.md#d-095), [D-096](decisions.md#d-096), [D-097](decisions.md#d-097), and as
+  built [D-098](decisions.md#d-098) to [D-101](decisions.md#d-101)): the
+  reader under `readers/netbox/`, which reads a branch of NetBox's branching plugin, or `main`,
+  as it stands into a blueprint, and the change source under `orchestrator/`, which marks each
+  step of a branch as it is built, rehearses the branch once the tag `fylgja-rehearse` is set on
+  it, through NetBox's own event rule and webhook to the edge's Prefect, and files its report as
+  one journal entry on the branch, with what the development NetBox is given under `netbox/`. On
+  2026-11-13 a branch built in the development NetBox by the seed's script, in two steps each
+  marked, then given its tag, was rehearsed from that tag with the core on the local driver, and
+  ended `passed`, a twin created at `main`, stepped and verified through the two marks and
+  destroyed, the head skipped as unchanged, and the report filed on the branch's journal
+  ([verified-facts.md](verified-facts.md), "NetBox 4.7.5 with netbox-branching 1.2.3", "A
+  branch built, marked and tagged by the seed's script, rehearsed from its tag, on the local
+  driver"). The same day the acceptance run was made once with each core, each ending `passed`
+  with its report on the branch's journal, as the maintainer read it there (the same section,
+  "A branch built in steps and marked by the seed's script, tagged by hand, rehearsed from its
+  tag on the local driver, built while the maintainer watched, and its report as they read it
+  on the Journal tab", and "A branch built in steps and marked by the seed's script through the
+  cluster's core, its build's output shown to the maintainer, tagged by them by hand, rehearsed
+  from its tag on the cluster's core, and its report as they read it on the Journal tab").
 
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
 They are left to later phases.
@@ -155,7 +180,7 @@ core reads nothing older.
 ```mermaid
 flowchart LR
   subgraph producers[Producers]
-    ORCH[Infrahub reader and<br/>example orchestrator]
+    ORCH[Readers and<br/>example orchestrator]
     FILE[Blueprint file]
   end
   CLI[fylgja-core<br/>thin CLI]
@@ -503,11 +528,12 @@ package ([Constitution II](constitution.md#ii-platforms-are-data-never-code),
 The shipped packages, in platform package 1 and probe package 1, are
 `psp/nokia_srlinux.yaml`, `psp/arista_eos.yaml` and `probes/ping.yaml`.
 
-## 5. The reader and the example orchestrator
+## 5. The readers and the example orchestrator
 
-Beside the core Fylgja ships two more pieces ([D-081](decisions.md#d-081)), designed in
-[core.md](core.md), "Phase 8", and built in phase 8, in this repository: the reader under
-`readers/infrahub/` and the example under `orchestrator/`.
+Beside the core Fylgja ships a reader for each source of truth and the example orchestrator
+([D-081](decisions.md#d-081)), in this repository: the readers under `readers/infrahub/` and
+`readers/netbox/`, and the example under `orchestrator/`. The Infrahub reader and the example
+were designed in [core.md](core.md), "Phase 8", and built in phase 8.
 
 **The Infrahub reader** is a library with a command of its own
 ([D-082](decisions.md#d-082), [D-083](decisions.md#d-083)). It reads a branch of Infrahub at
@@ -518,21 +544,42 @@ configuration older than the intent it is read with. It sends no mutation and kn
 stage, proposed change or twin. It is held to what a production workflow needs.
 
 **The example orchestrator** shows how to join the core and a reader to a system that
-already exists ([D-085](decisions.md#d-085)). It resolves a **stage** of a proposed change
-(its branch point, a mark the operator records on the branch, or its head;
-[D-088](decisions.md#d-088)) to what the reader reads. It **rehearses** a proposed change:
-a twin created at its first stage, stepped and verified through every later stage, destroyed
-whatever happened, and a report posted on the proposed change, whose check fails when a
-stage fails ([D-086](decisions.md#d-086), [D-087](decisions.md#d-087)). Its rehearsal is a
-library that names neither Infrahub nor a workflow engine; Infrahub's side is behind a seam,
-and Prefect serves only the two deployments Infrahub's checks start. It is an example, and
-is not hardened.
+already exists ([D-085](decisions.md#d-085)). It resolves a **stage** of a change to a
+blueprint: in Infrahub, a proposed change's branch point, a mark the operator records on the
+branch, or its head ([D-088](decisions.md#d-088)), each to what the reader reads; in NetBox,
+`main` as it stands, a mark taken as the branch is built, or the branch as it stands
+([D-097](decisions.md#d-097)). It **rehearses** a change: a twin created at its first stage,
+stepped and verified through every later stage, destroyed whatever happened, and a report
+posted on the change, whose check, in Infrahub, fails when a stage fails
+([D-086](decisions.md#d-086), [D-087](decisions.md#d-087)). Its rehearsal is a library that
+names no source and no workflow engine; each source's side is behind a seam, and Prefect
+serves only the two deployments that Infrahub's checks start, `twin-rehearse` of which NetBox's
+webhook starts too. It is an example, and is not hardened.
 
-Both reach the core through the API alone, never the store or the runtime, and the example
-renders every report itself from the core's documents. Their prototype, the orchestrator in
-the archived repository, did both jobs against the frozen Go core's API, writing snapshot 2; it
-was the reference for their behaviour, and none of its code or formats is here. This repository
-holds no bridge between the two formats ([D-006](decisions.md#d-006)).
+**A NetBox reader and a NetBox change source** are designed in [core.md](core.md),
+"Phase 9", and built. The reader, `fylgja-netbox`, under `readers/netbox/`, reads a branch of
+NetBox's branching plugin as it stands, its lists over REST and each device's configuration as
+NetBox renders it, and refuses a read its bracket finds moved: the changelog read from, or the
+branch itself, synced or no longer ready ([D-095](decisions.md#d-095),
+[D-096](decisions.md#d-096), [D-098](decisions.md#d-098)). The change
+source, `fylgja_orchestrator.netbox`, is the example's for NetBox
+([D-097](decisions.md#d-097), [D-100](decisions.md#d-100)): a change is a branch, found by its
+name; a mark is taken by the example's command `stage mark` when its step exists, its blueprint
+given to the core and named by a journal entry on the branch, so a mark is read through a core
+that holds a blueprint of its id, the core it was given to or one given the same intent; a tag
+on the
+branch asks for the rehearsal, through NetBox's own event rule and a webhook to Prefect's API,
+and the edge takes it off before it rehearses; and the report is one journal entry on the
+branch, its kind the verdict, which gates nothing. The webhook carries Prefect's credential,
+which an account that may view NetBox's changelog reads there: the example's known limit
+([D-100](decisions.md#d-100)).
+
+The example reaches the core through the API alone, never the store or the runtime, and
+renders every report itself from the core's documents. The prototype of the Infrahub reader and
+of the example, the orchestrator in the archived repository, did both jobs against the frozen Go
+core's API, writing snapshot 2; it was the reference for their behaviour, and none of its code
+or formats is here. This repository holds no bridge between the two formats
+([D-006](decisions.md#d-006)).
 
 ## 6. Where things live
 
@@ -540,8 +587,9 @@ holds no bridge between the two formats ([D-006](decisions.md#d-006)).
 |---|---|
 | `core/` | The core, the Python package `fylgja_core`: the model package (a module per format, the blueprint id and rules, the package and declaration loaders), the interface mapping and the compiler; the state store, its local directory and its object store with the S3 signer; the driver seam, its registry, the containerlab driver (`containerlab/`) and the clabernetes driver (`clabernetes/`: its plan and changes, its reach into Kubernetes, and the driver class); the credential provider, readiness and the push; the reconcile loop; the server (`server/`, the console script `fylgja-core-server`); and the client library with the thin CLI (`fylgja-core`). Installed alone it is the model package, the client library and the thin CLI, and the server's libraries are the extra `server` ([D-084](decisions.md#d-084)). Its tests are under `core/tests/`, the live tier's under `core/tests/live/`, the cluster tier's under `core/tests/cluster/`, and the driver conformance suite's under `core/tests/conformance/`: its scenarios, written once, and a harness for each driver |
 | `readers/infrahub/` | The Infrahub reader, the Python package `fylgja_infrahub` ([D-082](decisions.md#d-082), [D-083](decisions.md#d-083)), a library and the command `fylgja-infrahub` (`cli.py`): its rows, Infrahub's answers as typed values, with the rule that every list is whole (`rows.py`); the reader document each read is given and its loader (`document.py`); Infrahub's times (`times.py`); the transport, the one module that speaks to Infrahub, over httpx (`transport.py`), with every GraphQL document a file under `queries/`; the schema check's table (`schema.py`); the mapping (`mapping.py`); each device's configuration from its artifact (`artifacts.py`); the stale rule and `head`'s arithmetic (`stale.py`); the probes (`probes.py`); and the read, `head` and the schema check (`read.py`). Its wheel carries its format, `infrahub-reader-1`, by the list in `setup.py`, and its queries. Beside the package: the kind `FylgjaProbe` (`schema/fylgja-probe.yml`), the mapping (`mapping.md`), the rule catalogue (`rules.md`), and a README with the Infrahub versions it passed on and the upgrade procedure. It imports the core's base install and httpx alone, which a test over its imports holds. Its tests, under `readers/infrahub/tests/`, build the rows they read, and its contract tier's, under `tests/contract/`, read the development Infrahub (`make contract`) |
-| `orchestrator/` | The example orchestrator, the Python package `fylgja_orchestrator` ([D-085](decisions.md#d-085)), in three layers: its rehearsal library (`rehearsal/`), which imports the core's client and model alone; its Infrahub change source (`infrahub/`), which finds the open proposed change of a branch, orders its stages, the branch point, the marks of the stage kind `FylgjaStage` and the head, reads each through the reader, waiting for the proposed change's artifact validation before the head, and posts the report as a thread of two comments, over a transport of its own with its GraphQL documents under `infrahub/queries/` ([D-088](decisions.md#d-088)); and its edge (`edge/`): its settings, the library and the source wired to them with no Prefect (`run.py`), the two Prefect flows `stage-plan` and `twin-rehearse` (`flows.py`) and the runner that serves them (`serve.py`), the only modules that import Prefect, and the command `fylgja-orchestrator` (`cli.py`); and its rule catalogue (`rules.md`). Its wheel carries `plan-1` and `rehearsal-1` and the change source's queries. Its tests, under `orchestrator/tests/`, run the core's own server on its fake runtime, the change source over a fake of Infrahub's HTTP, the flows' bodies with Prefect's run context replaced, the checks' glue over a fake of Prefect's API, the stage kind's file read as YAML, and `scripts/edge_dev.py` over fakes of its processes and listeners; its contract tier's, under `tests/contract/`, the change source against the development Infrahub, and the two deployments served on a real Prefect and started, cancelled and read as a check does (`make contract`) |
-| `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README; the core's wheel carries the core's schemas and the OpenAPI document as the package's data, by the list in `core/setup.py`, and a format another distribution reads is carried by that distribution's wheel, `infrahub-reader-1` by the reader's and `plan-1` and `rehearsal-1` by the example orchestrator's ([D-066](decisions.md#d-066), [D-084](decisions.md#d-084)) |
+| `readers/netbox/` | The NetBox reader, the Python package `fylgja_netbox` ([D-095](decisions.md#d-095), [D-096](decisions.md#d-096)), a library and the command `fylgja-netbox` (`cli.py`): its rows, NetBox's answers as typed values, with the rule that every list is whole, and the calls a read makes of NetBox (`rows.py`); the reader document each read is given and its loader (`document.py`); the transport, the one module that speaks to NetBox, over httpx, every row held to what was asked (`transport.py`); the mapping (`mapping.py`); the bracket, the changelog read from marked at the read's open and its close and a branch read again at the close (`bracket.py`); each device's configuration as NetBox renders it (`renders.py`); the probes, from the configuration context the reader document names (`probes.py`); and the read and the check (`read.py`). Its wheel carries its format, `netbox-reader-1`, by the list in `setup.py`. Beside the package: the mapping (`mapping.md`), the rule catalogue (`rules.md`), and a README with the versions of NetBox and of the branching plugin it passed on and the upgrade procedure. It imports the core's base install and httpx alone, httpx in `transport.py` alone, which a test over its imports holds. Its tests, under `readers/netbox/tests/`, build the rows they read, and its contract tier's, under `tests/contract/`, read the development NetBox (`make contract-netbox`) |
+| `orchestrator/` | The example orchestrator, the Python package `fylgja_orchestrator` ([D-085](decisions.md#d-085)), in three layers: its rehearsal library (`rehearsal/`), which imports the core's client and model alone; its change sources, Infrahub's (`infrahub/`), which finds the open proposed change of a branch, orders its stages, the branch point, the marks of the stage kind `FylgjaStage` and the head, reads each through the reader, waiting for the proposed change's artifact validation before the head, and posts the report as a thread of two comments, over a transport of its own with its GraphQL documents under `infrahub/queries/` ([D-088](decisions.md#d-088)), and NetBox's (`netbox/`), which finds a branch by its name, orders its stages, `main` as it stands, the marks of the branch's journal and the head, reads `main` and the head through the NetBox reader and a mark's blueprint from the core by its id, takes a mark, takes the tag off the branch, and files the report as one journal entry, over a transport of its own ([D-097](decisions.md#d-097)); and its edge (`edge/`): its settings (`settings.py`), which name the source, the library and that source wired to them with no Prefect (`run.py`), the two Prefect flows `stage-plan` and `twin-rehearse` (`flows.py`) and the runner that serves them (`serve.py`), the only modules that import Prefect, and the command `fylgja-orchestrator` (`cli.py`), `stage mark` among its commands; and its rule catalogue (`rules.md`). Its wheel carries `plan-1` and `rehearsal-1` and the Infrahub change source's queries. Its tests, under `orchestrator/tests/`, run the core's own server on its fake runtime, the Infrahub change source over a fake of Infrahub's HTTP, the NetBox change source over a fake of NetBox's HTTP (`fake_netbox.py`) with the NetBox reader's calls replaced, the flows' bodies with Prefect's run context replaced, the checks' glue over a fake of Prefect's API, the stage kind's file read as YAML, and `scripts/edge_dev.py` over fakes of its processes and listeners; its contract tier's, under `tests/contract/`, the Infrahub change source against the development Infrahub, and the two deployments served on a real Prefect and started, cancelled and read as a check does (`make contract`); and under `tests/contract_netbox/`, the NetBox change source against the development NetBox, and NetBox's own webhook starting the rehearsal on a real Prefect (`make contract-netbox`) |
+| `formats/` | The version-1 formats: the schemas, the API's OpenAPI document, and a README; the core's wheel carries the core's schemas and the OpenAPI document as the package's data, by the list in `core/setup.py`, and a format another distribution reads is carried by that distribution's wheel, `infrahub-reader-1` by the Infrahub reader's, `netbox-reader-1` by the NetBox reader's, and `plan-1` and `rehearsal-1` by the example orchestrator's ([D-066](decisions.md#d-066), [D-084](decisions.md#d-084)) |
 | `psp/` | The platform packages, SR Linux and EOS |
 | `probes/` | The probe package `ping` |
 | `testdata/blueprint/` | The four blueprint fixtures, converted once from the earlier format at the repository's start |
@@ -549,11 +597,12 @@ holds no bridge between the two formats ([D-006](decisions.md#d-006)).
 | `testdata/compiler/` | The facts the frozen Go core's compiler produced for each fixture, which the new compiler must match, and the compiler's rejection fixtures |
 | `testdata/probes/` | Probe declaration files, valid and invalid |
 | `testdata/deployment/` | The golden deployments, per driver and fixture: the rendered runtime files and the deployment document each plan must reproduce (`scripts/render-goldens.py` writes them); and under `rejected/`, the blueprints a driver's plan must refuse |
-| `scripts/` | The link checker (`linkcheck.py`), the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`), the check of the core's wheel outside the tree, installed with the `server` extra and alone at the floors of the base's ranges, the reader's wheel beside the base alone, and the example orchestrator's beside the base and the reader's, where nothing of the server's libraries is installed but the two Prefect brings (`wheelcheck.py`), the check of the core's image as it runs (`imagecheck.py`), the development Infrahub's Compose project, its secrets generated into `local/.env` and the project started, stopped and purged (`infrahub_dev.py`, `make infrahub-up` and `make infrahub-down`), and the example orchestrator's edge on the development host, its lines generated into `local/.env`, its Prefect server started and stopped, and its runner given its own tokens (`edge_dev.py`, `make orchestrator-env`, `make prefect-up`, `make prefect-down` and `make orchestrator-serve`) |
+| `scripts/` | The link checker (`linkcheck.py`), the renderer of the golden deployments under `testdata/deployment/` (`render-goldens.py`), the check of the core's wheel outside the tree, installed with the `server` extra and alone at the floors of the base's ranges, the Infrahub reader's wheel beside the base alone, the NetBox reader's beside the base alone, and the example orchestrator's beside the base and the readers', where nothing of the server's libraries is installed but the two Prefect brings (`wheelcheck.py`), the check of the core's image as it runs (`imagecheck.py`), the development Infrahub's Compose project, its secrets generated into `local/.env` and the project started, stopped and purged (`infrahub_dev.py`, `make infrahub-up` and `make infrahub-down`), the development NetBox's Compose project, its secrets generated into `local/.env`, a project network of another subnet than the override's recreated with the volumes kept, its image built with the branching plugin, the project started, stopped and purged, and the superuser's token provisioned into `local/.env` (`netbox_dev.py`, `make netbox-up` and `make netbox-down`), and the example orchestrator's edge on the development host, its lines generated into `local/.env`, its Prefect server started and stopped, its runner of either change source given its own tokens (`--source`), a command of its own run under the same environment (`run`), and Prefect's API printed as the host reaches it (`api`) (`edge_dev.py`, `make orchestrator-env`, `make prefect-up`, `make prefect-down` and `make orchestrator-serve`, and `make netbox-hook` and `make netbox-change`, which use `api` and `run`) |
 | `Dockerfile` | The core's image ([D-062](decisions.md#d-062)): two stages on `python:3.14.9-slim` pinned by digest, the newest Python 3.14 release at least two weeks old when it was chosen, the wheel built from `core/` and `formats/` and installed with its `server` extra, the packages under `psp/` and `probes/`, `fylgja-core-server` its entry point, run as a user that is not root. Its build context is `.dockerignore`'s allow-list, so nothing under `local/` reaches a layer |
 | `deploy/` | The core's kustomize base ([D-062](decisions.md#d-062)): the namespace `fylgja`; the core's service account, its one ClusterRole and the Lease's Role ([D-071](decisions.md#d-071)); the core's Deployment, one replica under `Recreate`, and its LoadBalancer Service; and its store, Versity S3 Gateway over a `local-path` volume, shut to every pod but the core's. It holds no address and no value: a site's overlay under `local/deploy/` sets the image, the Secrets and the addresses, as the README there shows |
 | `infrahub/` | What the development Infrahub is given from this repository, and what writes to it ([D-083](decisions.md#d-083)): the OpsMill schema library's DCIM at one commit, six of its files and its licence as the library holds them, never edited, and the commit in `COMMIT` (`schema/dcim/`, [D-082](decisions.md#d-082)); the example's stage kind `FylgjaStage` (`schema/fylgja-stage.yml`); the queries and the Jinja2 template `.infrahub.yml` registers (`queries/`, `templates/`), and the example's two checks, `fylgja-step` and `fylgja-twin`, glue on the task worker of the standard library and httpx that starts a deployment of the edge's Prefect, waits, cancels at its own deadline and concludes from the document's `status` (`checks/`); the Compose override `make infrahub-up` starts Infrahub with, two read-only mounts, the edge's Prefect's address and basic auth for the task workers, and a cap on Neo4j's memory (`dev/`); every write to Infrahub, run by `core/.venv`'s Python (`seed/`), the seed importing one Fylgja package, the reader, for its `head`: one transport and the bounded wait, with `infrahubctl` as a child (`hub.py`), the library, the group and the registration, its commit's tree on each task worker (`register.py`, `make infrahub-register`), the fixture network on `main` and the seeded branch with its two staged edits, each regenerated, timed by the reader's `head` into `local/infrahub/seed.json` and marked, and with `PROPOSED_CHANGE=1` its proposed change (`seed.py`, `make infrahub-seed`), from the object files under `main/` and `stages/`, and the example's account `fylgja-orchestrator`, its role of four permissions and its token's line in `local/.env` (`account.py`, `make orchestrator-env`); the reader document for the fixture (`seed/reader.yaml`); and the pure tier's tests of these files, of `seed/`, of `scripts/infrahub_dev.py` and of the names and addresses the tracked tree holds (`tests/`), the contract tier's against the running instance (`tests/contract/`, `make contract`), with pytest's settings for them (`pyproject.toml`) |
 | `.infrahub.yml` | The repository's registration in Infrahub ([D-081](decisions.md#d-081)): the query `device_config`, the Jinja2 transform of that name, which renders one device's SR Linux configuration, and the artifact definition `device-config`, which generates it for each member of the group `fylgja-devices`; and the example's two checks of a proposed change, `fylgja-step` and `fylgja-twin`, each binding the query `fylgja_branch` ([D-085](decisions.md#d-085)). An import loads these and nothing else, no schema and no object. A proposed change runs the checks as its source branch was made with them |
+| `netbox/` | What the development NetBox is given from this repository, and what writes to it ([D-096](decisions.md#d-096)): the image's one layer adding the branching plugin at the version it is given, the Compose override `make netbox-up` starts netbox-docker's release with, which builds that image for both of NetBox's services, publishes NetBox on loopback and gives the project's network a documentation range of its own, off the local driver's lab pool, and the plugin's configuration it mounts over the release's (`dev/`); every other write to NetBox than the superuser's token `scripts/netbox_dev.py` provisions, run by `core/.venv`'s Python over httpx alone (`seed/`): the one transport, its lists held to the `count` NetBox answers, and the wait for a branch (`box.py`), the fixture network on `main` from one data file, `main.yaml`, with the configuration template that renders it (`template.j2`) and the probes' inactive configuration context, `main` read back and refused where it is not the fixture (`seed.py`, `make netbox-seed`), the reader's and the example's accounts `fylgja-reader` and `fylgja-orchestrator` at their least permissions, with their tokens' lines in `local/.env` (`account.py`, `make netbox-seed`), the trigger that asks the edge's Prefect for a rehearsal, the tag `fylgja-rehearse` with its event rule and its webhook to Prefect's API (`hook.py`, `make netbox-hook`, [D-097](decisions.md#d-097)), and the seeded change, a branch made anew from `main` with two steps, each marked by the example's `stage mark` as it is written (`change.py`, `make netbox-change`); the reader document for the fixture (`seed/reader.yaml`); and the pure tier's tests of these files, of `seed/` over a fake of NetBox's REST API and, for the trigger, of Prefect's, of `scripts/netbox_dev.py`, of the contract tier's own branches and of the names and addresses `netbox/` holds (`tests/`), the contract tier's against the running instance (`tests/contract/`, `make contract-netbox`), with pytest's settings for them (`pyproject.toml`) |
 | `design/` | How the project is governed and designed: the constitution, the decisions, this architecture, the verified facts, and design documents ([core.md](core.md) is the core's) |
 | `docs/` | Documentation for people using Fylgja: the glossary, the rule catalogue, and how to integrate Fylgja with a source of truth and a platform of one's own ([integrating.md](../docs/integrating.md)) |
 | `CONTRIBUTING.md` | How to set up, build, test and change Fylgja |

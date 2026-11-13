@@ -1,7 +1,8 @@
-"""Imports run one way (D-081, D-085): Prefect is the edge's alone, and within the edge its flows' and its runner's
-alone, so a command calls the library in its own process and never loads Prefect; the change source imports nothing of
-the edge, and the rehearsal library nothing of the source or the edge. Held by a fresh interpreter for what a command
-loads, and by `ast` over every file of `orchestrator/src` for what each names, a function-local import included."""
+"""Imports run one way (D-081, D-085, D-097): Prefect is the edge's alone, and within the edge its flows' and its
+runner's alone, so a command calls the library in its own process and never loads Prefect; each change source imports
+nothing of the edge or of the other source, and the rehearsal library nothing of either source or the edge. Held by a
+fresh interpreter for what a command loads, and by `ast` over every file of `orchestrator/src` for what each names, a
+function-local import included."""
 
 from __future__ import annotations
 
@@ -16,6 +17,13 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 PACKAGE = SRC / "fylgja_orchestrator"
 EDGE = PACKAGE / "edge"
 OWN = "fylgja_orchestrator"
+
+CROSSED = (
+    ("infrahub", ("fylgja_netbox", "fylgja_orchestrator.netbox")),
+    ("netbox", ("fylgja_infrahub", "fylgja_orchestrator.infrahub")),
+)
+"""What each change source never imports: the other source and its reader. `scripts/wheelcheck.py` judges the same of
+the installed wheel, and `core/tests/test_wheelcheck.py` holds its tuple to this one."""
 
 # Run in a fresh interpreter, isolated (`-I`): a command's module imported and its help asked, then the modules of
 # Prefect loaded, one a line, after a line of its own.
@@ -105,15 +113,33 @@ def test_the_source_imports_nothing_of_the_edge_and_the_library_nothing_of_eithe
     for path in _files():
         layer = path.relative_to(PACKAGE).parts[0]
         of.setdefault(layer, set()).update(_names(path))
-    assert {"edge", "infrahub", "rehearsal"} <= set(of), "the scan is blind"
-    outside = {name for name in of["infrahub"] if name.partition(".")[0] not in sys.stdlib_module_names}
-    may = ("fylgja_infrahub", "fylgja_core", "httpx", f"{OWN}.rehearsal.source", f"{OWN}.rehearsal.report",
-           f"{OWN}.infrahub")
-    # The change source imports the reader, the core, httpx and of the library the seam and the report alone ...
-    assert {name for name in outside if not any(_under(name, m) for m in may)} == set()
-    # ... and nothing of the edge.
-    assert not any(_under(name, f"{OWN}.edge") for name in of["infrahub"])
-    # The rehearsal library imports nothing of the change source or the edge.
-    assert not any(_under(name, f"{OWN}.{layer}") for name in of["rehearsal"] for layer in ("infrahub", "edge"))
-    # Nor of the reader or Prefect.
-    assert not any(_under(name, root) for name in of["rehearsal"] for root in ("fylgja_infrahub", "prefect"))
+    assert {"edge", "infrahub", "netbox", "rehearsal"} <= set(of), "the scan is blind"
+    for source, reader in (("infrahub", "fylgja_infrahub"), ("netbox", "fylgja_netbox")):
+        outside = {name for name in of[source] if name.partition(".")[0] not in sys.stdlib_module_names}
+        may = (reader, "fylgja_core", "httpx", f"{OWN}.rehearsal.source", f"{OWN}.rehearsal.report", f"{OWN}.{source}")
+        # Each change source imports its reader, the core, httpx and of the library the seam and the report alone ...
+        assert {name for name in outside if not any(_under(name, m) for m in may)} == set(), source
+        # ... and nothing of the edge, or of the other source or its reader.
+        assert not any(_under(name, f"{OWN}.edge") for name in of[source]), source
+    assert not any(_under(name, root) for source, roots in CROSSED for name in of[source] for root in roots)
+    # The rehearsal library imports nothing of either change source or the edge.
+    layers = ("infrahub", "netbox", "edge")
+    assert not any(_under(name, f"{OWN}.{layer}") for name in of["rehearsal"] for layer in layers)
+    # Nor of either reader or Prefect.
+    roots = ("fylgja_infrahub", "fylgja_netbox", "prefect")
+    assert not any(_under(name, root) for name in of["rehearsal"] for root in roots)
+
+
+def _claims(tree: ast.Module) -> int:
+    """How many calls of an attribute `claim` `tree` makes."""
+    return sum(1 for node in ast.walk(tree)
+               if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "claim")
+
+
+def test_only_the_edges_run_calls_claim() -> None:
+    # A request is taken once, by the edge, after the draft question and before the library (D-097): nothing else
+    # of the example takes it, the library and `stage mark` among them.
+    calling = {path.relative_to(PACKAGE).as_posix() for path in _files() if _claims(ast.parse(path.read_text()))}
+    assert calling == {"edge/run.py"}
+    assert not any(name.startswith("rehearsal/") for name in calling)
+    assert _claims(ast.parse("source.claim(change)\n")) == 1, "the scan is blind"

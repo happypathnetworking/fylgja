@@ -1,0 +1,11 @@
+# The reader document for the seeded fixture network: the reader of NetBox maps each device whose manufacturer and
+# platform are a pair below to the platform package named beside them (psp/nokia_srlinux.yaml's id). The member
+# `probes` names the configuration context that holds the probes, here `fylgja-probes` (main.yaml); that context is
+# inactive, so NetBox renders it into no device's configuration. Its format is the NetBox reader's, netbox-reader-1
+# (formats/netbox-reader-1.schema.json); netbox/tests/test_fixture.py holds its values.
+reader_version: "1"
+platforms:
+  - manufacturer: Nokia
+    platform: SR Linux
+    package: nokia_srlinux
+probes: fylgja-probes

@@ -1,24 +1,33 @@
 #!/usr/bin/env python3
-"""The example orchestrator's edge on the development host: its lines in `local/.env`, its Prefect server, its runner.
+"""The example orchestrator's edge on the development host: its lines in `local/.env`, its Prefect server, its runner,
+and a command of its own run as the runner is.
 
-Run from the repository root as `python3 -I scripts/edge_dev.py env|prefect-up|prefect-down|serve --local <local>
---main <main checkout>`, by `make orchestrator-env`, `make prefect-up`, `make prefect-down` and `make
-orchestrator-serve`, with `local/.env` loaded by the caller (CONTRIBUTING.md, "Running the example orchestrator";
-D-085). The standard library alone.
+Run from the repository root as `python3 -I scripts/edge_dev.py env|prefect-up|prefect-down|serve|run|api --local
+<local> --main <main checkout>`, by `make orchestrator-env`, `make prefect-up`, `make prefect-down` and `make
+orchestrator-serve`, `api` by `make netbox-hook`, which gives `netbox/seed/hook.py` what it prints, and `run` by
+`netbox/seed/change.py`, which `make netbox-change` gives it as the mark's command, with `local/.env` loaded by the
+caller (CONTRIBUTING.md, "Running the example orchestrator"; D-085, D-097). The standard library alone.
 
 - `env` adds to `<local>/.env` each of `ENV_NAMES` it does not hold, generated where it is a secret, and prints each
-  name it added and never a value: the basic auth the server and the task workers share, the runner's token of the
-  core's, whose hash it appends with the principal `orchestrator` to the token file `FYLGJA_TOKENS` names, a file
-  the core reads and this never makes, the scope (`seed.json`'s, else `seed.py`'s), the reader document and the
-  commands' records. A line already there is kept byte for byte. The example's Infrahub token is
-  `infrahub/seed/account.py`'s, which `make orchestrator-env` runs next.
+  name it added and never a value: the basic auth the server, the task workers and NetBox's webhook share, the
+  runner's token of the core's, whose hash it appends with the principal `orchestrator` to the token file
+  `FYLGJA_TOKENS` names, a file the core reads and this never makes, the scope (`seed.json`'s, else `seed.py`'s),
+  the reader document and the commands' records, and NetBox's reader document and scope, which the runner is given
+  in place of the two before it under the source `netbox`, so that the file holds both sources' at once. A line
+  already there is kept byte for byte. The example's Infrahub token is `infrahub/seed/account.py`'s, which `make
+  orchestrator-env` runs next but with `SOURCE=netbox`; its NetBox token is `netbox/seed/account.py`'s, which `make
+  netbox-seed` runs.
 - `prefect-up` starts `prefect server start` on port `PORT` of the bind address, `PREFECT_BIND` or else the Docker
   bridge's gateway, in a session of its own under `<local>/prefect`, its basic auth from the environment and never an
   argument, and waits for `/api/health`. A listener already on the port that this target did not start is refused,
   and nothing is started or stopped: it is another project's.
 - `prefect-down` ends the process `<local>/prefect/server.pid` names, only where it is this project's Prefect server
   (its command line `prefect` and `server`, its `PREFECT_HOME` `<local>/prefect`), and touches no other process.
-- `serve` becomes `fylgja-orchestrator serve`, given the runner's own environment (`runner_env`) and no other.
+- `serve --source S` becomes `fylgja-orchestrator serve`, given the runner's own environment for the change source `S`
+  (`runner_env`), `infrahub` where it is not given, and no other.
+- `run --source S -- ARGS…` becomes `fylgja-orchestrator ARGS…`, given that source's environment (`source_env`) and
+  nothing of Prefect's: a command by hand needs the runner's own tokens, which only this reads from `local/.env`.
+- `api` prints Prefect's API as the host reaches it, `http://<the bind>:4200/api`, and nothing else.
 
 Exit 0; 1 for a failure or a refusal said on stderr; 2 for a command line not understood or a name not set.
 """
@@ -73,24 +82,43 @@ PRINCIPAL = "orchestrator"
 AUTH = "FYLGJA_ORCHESTRATOR_AUTH"
 API_TOKEN = "FYLGJA_ORCHESTRATOR_API_TOKEN"
 INFRAHUB_TOKEN = "FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN"
+NETBOX_TOKEN = "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN"
 SCOPE = "FYLGJA_ORCHESTRATOR_SCOPE"
 READER = "FYLGJA_ORCHESTRATOR_READER"
+NETBOX_SCOPE = "FYLGJA_ORCHESTRATOR_NETBOX_SCOPE"
+NETBOX_READER = "FYLGJA_ORCHESTRATOR_NETBOX_READER"
 RECORDS = "FYLGJA_ORCHESTRATOR_ROOT"
+SOURCE = "FYLGJA_ORCHESTRATOR_SOURCE"
 TOKENS = "FYLGJA_TOKENS"
 BIND = "PREFECT_BIND"
 
-ENV_NAMES = (AUTH, API_TOKEN, SCOPE, READER, RECORDS)
+NETBOX_ADDRESS = "FYLGJA_NETBOX_ADDRESS"
+NETBOX_CA = "FYLGJA_NETBOX_CA"
+"""NetBox's two the runner is given as loaded under `netbox`, each by its name: the other `FYLGJA_NETBOX_*` are the
+superuser's, Compose's and the reader's."""
+
+SOURCES = ("infrahub", "netbox")
+"""The change sources the edge opens (`fylgja_orchestrator.edge.settings`); the first where none is given."""
+
+ENV_NAMES = (AUTH, API_TOKEN, SCOPE, READER, RECORDS, NETBOX_READER, NETBOX_SCOPE)
 """What `env` writes into `local/.env`, in order."""
+
+NETBOX_SEED_SCOPE = "tag:fylgja"
+"""The scope `make netbox-seed` seeds, `netbox/seed/seed.py`'s `SCOPE`, held equal by a test."""
 
 WRITE_TOKEN = "FYLGJA_INFRAHUB_WRITE_TOKEN"
 """The admin's token, the seed's and the tests' writer's, which the runner is never given."""
 
-PASSED_ON = ("FYLGJA_API_", "FYLGJA_INFRAHUB_", "FYLGJA_ORCHESTRATOR_")
-"""The prefixes of the names the runner is given as loaded, less `KEPT_BACK`."""
+PASSED_ON = ("FYLGJA_API_", "FYLGJA_ORCHESTRATOR_")
+"""The prefixes of the names the runner is given as loaded under either source, less `KEPT_BACK`."""
 
-KEPT_BACK = (WRITE_TOKEN, AUTH, API_TOKEN, INFRAHUB_TOKEN)
-"""Names of those prefixes the runner is not given: the admin's token, and the three it is given under the names
-`fylgja_orchestrator.edge.settings` and Prefect read (P5-23)."""
+INFRAHUB_PASSED_ON = "FYLGJA_INFRAHUB_"
+"""The prefix of the names it is given as loaded under `infrahub` alone, less `KEPT_BACK`."""
+
+KEPT_BACK = (WRITE_TOKEN, AUTH, API_TOKEN, INFRAHUB_TOKEN, NETBOX_TOKEN, NETBOX_READER, NETBOX_SCOPE, SOURCE)
+"""Names of those prefixes the runner is not given as loaded: the admin's token, the source, set to the one it
+serves, and the six it is given under the names `fylgja_orchestrator.edge.settings` and Prefect read, or not
+at all under the other source."""
 
 ANALYTICS_OFF = {"DO_NOT_TRACK": "1", "PREFECT_SERVER_ANALYTICS_ENABLED": "false"}
 
@@ -106,11 +134,18 @@ def fail(line: str, status: int = 1) -> int:
     return status
 
 
-class Missing(Exception):
-    """A name the runner needs is not set, named and never its value."""
+WRITTEN_BY = {NETBOX_ADDRESS: "make netbox-up", NETBOX_TOKEN: "make netbox-seed"}
+"""The target that writes a name the runner needs into `local/.env`, where it is not `make orchestrator-env`'s."""
 
-    def __init__(self, name: str) -> None:
-        super().__init__(f"{name} is not set: run make orchestrator-env and load local/.env")
+
+class Missing(Exception):
+    """A name the runner needs under `source` is not set, named with the target that writes it, and never its
+    value."""
+
+    def __init__(self, name: str, source: str = SOURCES[0]) -> None:
+        written_by = "make orchestrator-env" + ("" if source == SOURCES[0] else f" SOURCE={source}")
+        target = WRITTEN_BY.get(name, written_by)
+        super().__init__(f"{name} is not set: run {target} and load local/.env")
 
 
 def listeners(ss_output: str, port: int) -> list[str]:
@@ -141,33 +176,68 @@ def env_lines(have: Mapping[str, str], main: Path, scope: str) -> list[tuple[str
         SCOPE: scope,
         READER: str(main / "infrahub" / "seed" / "reader.yaml"),
         RECORDS: str(main / "local" / "orchestrator"),
+        NETBOX_READER: str(main / "netbox" / "seed" / "reader.yaml"),
+        NETBOX_SCOPE: NETBOX_SEED_SCOPE,
     }
     return [(name, values[name]) for name in ENV_NAMES if not have.get(name)]
 
 
-def runner_env(environ: Mapping[str, str], bind: str, *, home: Path) -> dict[str, str]:
-    """The runner's whole environment: Prefect's API at `bind`, its basic auth, its home and its analytics off; the
-    runner's own tokens under the names the edge's settings read; every other name of `PASSED_ON` as `environ` holds
-    it, less `KEPT_BACK`; and `PATH` and `HOME`. No `INFRAHUB_*` name of Compose's, and no node credential. A name of
-    the three the runner's own are taken from that is not set raises `Missing`."""
-    for name in (API_TOKEN, INFRAHUB_TOKEN, AUTH):
+NEEDS = {
+    "infrahub": (API_TOKEN, INFRAHUB_TOKEN),
+    "netbox": (API_TOKEN, NETBOX_ADDRESS, NETBOX_TOKEN, NETBOX_READER, NETBOX_SCOPE),
+}
+"""The names each source's environment is made from that `environ` must hold, in the order they are judged."""
+
+
+def source_env(environ: Mapping[str, str], source: str) -> dict[str, str]:
+    """The whole environment of a runner or a command of the change source `source`: `PATH` and `HOME`;
+    `FYLGJA_ORCHESTRATOR_SOURCE` set to `source`, whatever `environ` holds; the runner's token of the core's as
+    `FYLGJA_API_TOKEN`; every other name of `PASSED_ON` as `environ` holds it, less `KEPT_BACK`. Under `infrahub`: the
+    example's Infrahub token as `FYLGJA_INFRAHUB_TOKEN`, the other `FYLGJA_INFRAHUB_*` as held but the admin's, and no
+    `FYLGJA_NETBOX_*`. Under `netbox`: `NETBOX_ADDRESS` and `NETBOX_CA` as held, by name and never by prefix, since
+    the superuser's lines begin as they do; the example's NetBox token as `FYLGJA_NETBOX_TOKEN`; NetBox's reader
+    document and scope as `FYLGJA_ORCHESTRATOR_READER` and `FYLGJA_ORCHESTRATOR_SCOPE`; and no `FYLGJA_INFRAHUB_*`. No
+    `INFRAHUB_*` name of Compose's, nothing of Prefect's and no node credential. A name of `NEEDS` not set raises
+    `Missing`; a source not of `SOURCES`, `ValueError`."""
+    if source not in NEEDS:
+        raise ValueError(f"the source is neither {' nor '.join(SOURCES)}")
+    for name in NEEDS[source]:
         if not environ.get(name):
-            raise Missing(name)
+            raise Missing(name, source)
+    prefixes = PASSED_ON + ((INFRAHUB_PASSED_ON,) if source == "infrahub" else ())
     given = {name: environ[name] for name in ("PATH", "HOME") if name in environ}
+    given |= {name: value for name, value in environ.items() if name.startswith(prefixes) and name not in KEPT_BACK}
+    given |= {SOURCE: source, "FYLGJA_API_TOKEN": environ[API_TOKEN]}
+    if source == "infrahub":
+        given["FYLGJA_INFRAHUB_TOKEN"] = environ[INFRAHUB_TOKEN]
+    else:
+        given |= {name: environ[name] for name in (NETBOX_ADDRESS, NETBOX_CA) if environ.get(name)}
+        given |= {
+            "FYLGJA_NETBOX_TOKEN": environ[NETBOX_TOKEN],
+            READER: environ[NETBOX_READER],
+            SCOPE: environ[NETBOX_SCOPE],
+        }
+    return given
+
+
+def runner_env(environ: Mapping[str, str], bind: str, *, home: Path, source: str = SOURCES[0]) -> dict[str, str]:
+    """The runner's whole environment: `source_env`'s, and Prefect's five, its API at `bind`, its basic auth, its home
+    and its analytics off. A name `source_env` needs, or the basic auth, not set raises `Missing`."""
+    given = source_env(environ, source)
+    if not environ.get(AUTH):
+        raise Missing(AUTH, source)
     given |= {
-        name: value
-        for name, value in environ.items()
-        if name.startswith(PASSED_ON) and name not in KEPT_BACK
-    }
-    given |= {
-        "FYLGJA_API_TOKEN": environ[API_TOKEN],
-        "FYLGJA_INFRAHUB_TOKEN": environ[INFRAHUB_TOKEN],
-        "PREFECT_API_URL": f"http://{bind}:{PORT}/api",
+        "PREFECT_API_URL": api_of(bind),
         "PREFECT_API_AUTH_STRING": environ[AUTH],
         "PREFECT_HOME": str(home),
         **ANALYTICS_OFF,
     }
     return given
+
+
+def api_of(bind: str) -> str:
+    """Prefect's API at the bind address `bind`, as the host and the runner reach it."""
+    return f"http://{bind}:{PORT}/api"
 
 
 def hashed(token: str) -> str:
@@ -222,7 +292,7 @@ def env(local: Path, main: Path, environ: Mapping[str, str]) -> int:
     none, so a file made here would be one no core reads."""
     path = local / ".env"
     if not path.is_file():
-        return fail(f"{path} is not there: run make infrahub-up first", 2)
+        return fail(f"{path} is not there: run make infrahub-up or make netbox-up first", 2)
     lines = env_lines(held_names(path), main, scope_of(local, main))
     if not lines:
         say(f"{path} holds every name already; nothing written")
@@ -435,22 +505,49 @@ def down(local: Path, *, read: Read = read_process, end: Callable[[int], None] =
     return 0
 
 
-def serve(local: Path, environ: Mapping[str, str]) -> int:
-    """Become the runner, as the module says; 2 where a name it needs is not set."""
+def serve(local: Path, environ: Mapping[str, str], source: str = SOURCES[0]) -> int:
+    """Become the runner of `source`, as the module says; 2 where a name it needs is not set."""
     try:
-        given = runner_env(environ, bind_address(environ), home=home_of(local))
+        given = runner_env(environ, bind_address(environ), home=home_of(local), source=source)
     except Missing as e:
         return fail(str(e), 2)
     os.execve(RUNNER, [str(RUNNER), "serve"], given)
 
 
+def run(environ: Mapping[str, str], source: str, command: Sequence[str]) -> int:
+    """Become `fylgja-orchestrator` with `command`'s words, under `source`'s environment, as the module says; 2 where a
+    name it needs is not set."""
+    try:
+        given = source_env(environ, source)
+    except Missing as e:
+        return fail(str(e), 2)
+    os.execve(RUNNER, [str(RUNNER), *command], given)
+
+
+def api(environ: Mapping[str, str]) -> int:
+    """Print Prefect's API as the host reaches it, the bind as `prefect-up` finds it, and nothing else."""
+    print(api_of(bind_address(environ)), flush=True)
+    return 0
+
+
+NEEDS_NEITHER = ("run", "api")
+"""The verbs that read neither `--local` nor `--main`, which every verb is given all the same."""
+
+
 def parser() -> argparse.ArgumentParser:
     made = argparse.ArgumentParser(prog="edge_dev.py", description=(__doc__ or "").splitlines()[0])
     verbs = made.add_subparsers(dest="verb", required=True)
-    for verb in ("env", "prefect-up", "prefect-down", "serve"):
+    for verb in ("env", "prefect-up", "prefect-down", "serve", *NEEDS_NEITHER):
         each = verbs.add_parser(verb)
-        each.add_argument("--local", type=Path, required=True, help="the main checkout's local/")
-        each.add_argument("--main", type=Path, required=True, help="the main checkout")
+        unread = f"; required of every verb, and not read by {verb}" if verb in NEEDS_NEITHER else ""
+        each.add_argument("--local", type=Path, required=True, help=f"the main checkout's local/{unread}")
+        each.add_argument("--main", type=Path, required=True, help=f"the main checkout{unread}")
+        if verb in ("serve", "run"):
+            each.add_argument(
+                "--source", choices=SOURCES, default=SOURCES[0], help=f"the change source, {SOURCES[0]} where not given"
+            )
+        if verb == "run":
+            each.add_argument("command", nargs="+", help="the words of fylgja-orchestrator's command, after --")
     return made
 
 
@@ -467,7 +564,11 @@ def main(argv: Sequence[str], *, environ: Mapping[str, str] = os.environ) -> int
             return up(local, environ)
         if args.verb == "prefect-down":
             return down(local)
-        return serve(local, environ)
+        if args.verb == "run":
+            return run(environ, args.source, args.command)
+        if args.verb == "api":
+            return api(environ)
+        return serve(local, environ, args.source)
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         return fail(f"{args.verb}: {e}")
 

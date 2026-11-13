@@ -24,8 +24,9 @@ DOCUMENTATION = tuple(
 )
 LOOPBACK = (ip_network("127.0.0.0/8"), ip_network("::1/128"))
 
-FIXTURES = ("testdata/", "infrahub/seed/main/")
-"""The fixtures, whose addresses are the design's fixture's own, 10.x (testdata/blueprint/three-node.json)."""
+FIXTURES = ("testdata/", "infrahub/seed/main/", "netbox/seed/main.yaml")
+"""The fixtures, whose addresses are the design's fixture's own, 10.x (testdata/blueprint/three-node.json): the
+blueprints, and the network each development source of truth's seed puts on its `main`."""
 
 QUOTING = ("formats/",)
 """Where the fixtures' addresses may be quoted besides the documents (`*.md`): the formats' examples. Every other held
@@ -47,6 +48,7 @@ REFERENCES = {
 CITED = {
     "opsmill/infrahub": "Infrahub's repository, cited by README.md",
     "clabernetes/clabernetes": "clabernetes' repository, cited by README.md",
+    "netbox-community/netbox-docker": "netbox-docker's release, fetched by scripts/netbox_dev.py",
 }
 """Repositories on github.com the tree cites outside the organisation the formats' ids name."""
 
@@ -54,6 +56,10 @@ NOT_HOSTS = {
     ("s3", "fylgja"): "the S3 bucket an `s3` URL names in the place of a host, its endpoint given apart",
     ("http", "versity"): "the deploy base's own Service, named in its namespace",
     ("scheme", "host"): "the placeholder of the form of an address a docstring of the core's configuration gives",
+    ("http", "host.docker.internal"): (
+        "the name Compose's `host-gateway` gives the development host inside a container, where `make prefect-up` "
+        "serves the edge's Prefect"
+    ),
 }
 """Names in a URL's place of a host that name no host of a site's, each under the one scheme it is written with."""
 
@@ -189,7 +195,8 @@ def test_the_tree_names_no_address() -> None:
     """The tree holds no host name, address or value of a site (CONTRIBUTING.md): outside its test directories, a URL
     names loopback, a `*.example` name, a documentation range or a public reference, and a bare address is in loopback
     or a documentation range; the fixtures alone hold their own, and the documents (`*.md`) and the formats may quote
-    them, source code never. A URL on github.com names the organisation the formats' ids name, or a repository cited.
+    them, source code never; the fixtures are `testdata/` and the Infrahub and NetBox seeds' networks on `main`. A URL
+    on github.com names the organisation the formats' ids name, or a repository cited.
     `infrahub/` holds no URL with a host at all, and no address but the documentation range's and, in the fixture's
     object files, the fixture's six and its probe's two hosts. `scripts/infrahub_dev.py` holds the tree's two addresses
     for the development Infrahub."""

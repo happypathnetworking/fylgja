@@ -164,6 +164,15 @@ writes them.
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
 They are left to later phases.
 
+**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): a
+platform package that lists its versions with their images, one a package
+([D-102](decisions.md#d-102)), where section 4.10 describes the one image there is today;
+the local driver's pool as a setting ([D-103](decisions.md#d-103)); one make target a
+source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version for
+every distribution, three wheels published and the packages inside the core's
+([D-106](decisions.md#d-106)); the user's reference under `docs/`
+([D-107](decisions.md#d-107)); and what 1.0 holds ([D-105](decisions.md#d-105)).
+
 **The Go core is retired** ([D-081](decisions.md#d-081)): the frozen Go core in the archived
 repository ([D-001](decisions.md#d-001)), one twin at a time under a fixed lab name on one lab
 host, on Temporal, in the earlier formats, gets no more fixes, and nothing tracked here needs

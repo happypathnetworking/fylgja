@@ -6803,8 +6803,8 @@ Supersedes [D-050](#d-050) in part: the dispatch, the record before `applied`, t
 run works toward, the cancel's and the ending's readings, and a refused step's verdict. Details
 [D-029](#d-029) (the record a diverged twin keeps) and [D-051](#d-051) (the bundle verify judges
 a stepping twin against); adds to [D-052](#d-052) (the threads the wait's reads run on).
-Added to by [D-102](#d-102) on 2026-11-13 (phase 10): a running node whose image no loaded package lists is
-refused as item 4's are, at the step and at the deletion, before the driver is called.
+Added to by [D-102](#d-102) on 2026-11-13 (phase 10): a deletion that meets a node no loaded package runs is
+refused once, as item 4 refuses a step; the driver's `destroy` says which node, before it touches the runtime.
 
 #### Context
 

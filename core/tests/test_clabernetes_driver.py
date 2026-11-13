@@ -31,8 +31,8 @@ import pytest
 import yaml
 from aio import bounded, cancelled, closed
 from fake_kube import FakeKube, undecodable
-from fakes import FakeDriver, FakeReader, fake_push, fake_ready
-from test_containerlab_driver import apply_hot_add
+from fakes import FakeDriver, FakeReader, fake_push, fake_ready, with_image
+from test_containerlab_driver import PING_MOVED, SRL_MOVED, apply_hot_add
 
 from fylgja_core import blueprint, clabernetes, compiler, credentials, logs, platform_package, probe_package
 from fylgja_core.bundle import Manifest
@@ -67,9 +67,12 @@ from fylgja_core.driver import (
     NodeState,
     Planned,
     Refusal,
+    Unpackaged,
     events_backoff,
 )
 from fylgja_core.local_store import LocalStore
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.probe_package import ProbePackage
 from fylgja_core.reconcile import RESTORE_PRINCIPAL, Reconciler
 from fylgja_core.twin_record import Spec, Status, TwinRecord
 from fylgja_core.verify import Verifier
@@ -1181,7 +1184,7 @@ def test_a_topology_on_the_cluster_the_comparison_cannot_read_fails_the_apply_na
     definition["containerlab"] = definition["containerlab"].replace("registry.example:5000/lab/", "elsewhere.example/")
     applied = len(fake.annotations)
     with pytest.raises(DriverFailed, match=re.escape(f"the Topology {NS}/t the cluster holds cannot be compared: "
-                                                     "ValueError: no package given runs the node e1 (ceos, "
+                                                     "Unpackaged: no package given runs the node e1 (ceos, "
                                                      "elsewhere.example/ceos:4.32.0.2F)")):
         apply(fake, p)
     assert fake.annotations[applied:] == []
@@ -1459,6 +1462,26 @@ def test_destroy_refuses_an_allocation_whose_namespace_is_not_the_twins_before_a
     unnamed = dataclasses.replace(p.deployment, allocation={k: v for k, v in BARE.items() if k != "namespace"})
     with pytest.raises(ValueError, match="the deployment's namespace None is not the twin t's"):
         asyncio.run(driver(fake).destroy(unnamed, p.files, PLATFORMS, PROBES))
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize(("name", "allocation", "platforms", "probes", "unrun"), [
+    ("three-node", BARE, SRL_MOVED, PROBES, ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")),
+    ("three-node-probed", BARE, PLATFORMS, PING_MOVED,
+     ("n1-loop-a", "linux", PROBES["ping"].runtime.containerlab.image.ref)),
+    # A gated node is written under its registry's prefix, which a package whose pull secret moved no longer writes.
+    ("mixed", ADMITTED, {**PLATFORMS, "arista_eos": with_image(PLATFORMS["arista_eos"], pull_secret="other")}, PROBES,
+     ("e1", "ceos", "registry.example:5000/lab/ceos:4.32.0.2F")),
+], ids=["device", "probe-host", "gated"])
+def test_destroy_meets_a_node_no_given_package_runs_before_any_call(
+    name: str, allocation: Allocation, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    fake = FakeKube()
+    p = planned(name, allocation)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(fake).destroy(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
     assert fake.calls == []
 
 

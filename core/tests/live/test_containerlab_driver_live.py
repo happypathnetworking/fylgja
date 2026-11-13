@@ -2,7 +2,8 @@
 compiled with the shipped packages and planned for the twin `drv-live` on an allocation from
 a real `admit`, then `drv-live-2` beside it. The tests run in order and share the labs; each
 prints what it took and what it saw (`-s`). The module destroys both twins at its end,
-whatever happened.
+whatever happened. Among them a `destroy` under packages that do not list a node's image, which
+is refused and removes nothing (D-102).
 
 (The module is not named `test_containerlab_driver.py`: the pure tier's module has that name,
 and pytest and mypy each take a test module by its basename.)
@@ -21,11 +22,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fakes import with_image
 
 from fylgja_core import blueprint, compiler, platform_package, probe_package
 from fylgja_core.containerlab import pool
 from fylgja_core.containerlab.driver import ContainerlabDriver
-from fylgja_core.driver import Allocation, Inspection, Planned, Refusal
+from fylgja_core.driver import Allocation, Inspection, Planned, Refusal, Unpackaged
 
 ROOT = Path(__file__).resolve().parents[3]
 PLATFORMS = {p.id: p for p in map(platform_package.load, sorted((ROOT / "psp").glob("*.yaml")))}
@@ -181,6 +183,31 @@ def test_4_apply_with_reconfigure_redeploys(lab: Lab) -> None:
     changed = sorted(name for name in now if now[name] != lab.incarnations[name])
     print(f"[live] incarnations before {lab.incarnations}, after {now}: changed {changed}")
     lab.incarnations = now
+
+
+def test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_removes_nothing(lab: Lab) -> None:
+    # D-102's premise, on the running lab: a core whose SR Linux package was edited to another image
+    # is asked to destroy the twin that runs the one it had. The driver meets `n1` in its lookup of a
+    # node's package, before any command, so the host holds what it held, each container at the
+    # incarnation it had; the true packages' destroy, the next test, then removes everything.
+    p = lab.planned[TWIN]
+    directory = lab.driver.root / "containerlab" / TWIN
+    before, nodes, files = leftovers(TWIN), inspect(lab).nodes, sorted(f.name for f in directory.iterdir())
+    assert {n.name: n.incarnation for n in nodes} == lab.incarnations
+    srl = PLATFORMS["nokia_srlinux"]
+    listed = srl.runtime.containerlab.image.ref
+    moved = {**PLATFORMS, "nokia_srlinux": with_image(srl, ref=listed + "-moved")}
+    start = time.monotonic()
+    with pytest.raises(Unpackaged) as refused:
+        asyncio.run(lab.driver.destroy(p.deployment, p.files, moved, PROBES))
+    print(f"\n[live] destroy {TWIN} under a package whose image moved: refused in {time.monotonic() - start:.2f} s: "
+          f"{refused.value}")
+    assert (refused.value.node, refused.value.kind, refused.value.image) == ("n1", "nokia_srlinux", listed)
+    after = inspect(lab).nodes
+    print(f"[live] the host after the refusal: {leftovers(TWIN)}; incarnations "
+          f"{ {n.name: n.incarnation for n in after} }")
+    assert leftovers(TWIN) == before and after == nodes  # each node's incarnation among them
+    assert sorted(f.name for f in directory.iterdir()) == files
 
 
 def test_5_destroy_leaves_nothing(lab: Lab) -> None:

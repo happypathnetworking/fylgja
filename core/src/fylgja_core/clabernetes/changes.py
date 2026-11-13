@@ -67,7 +67,8 @@ def changes(
     probe_packages: Mapping[str, ProbePackage],
 ) -> Changes:
     """What the cluster does to each node's pod to go from `before` to `after`. `ValueError` for
-    deployments of two twins, or for a node no given package runs."""
+    deployments of two twins; `Unpackaged`, which is one, for the first node by name that no
+    given package runs."""
     if before.deployment.twin != after.deployment.twin:
         raise ValueError(f"the deployments are of two twins, {before.deployment.twin} and {after.deployment.twin}")
     registries = tuple(planned.deployment.allocation["registries"] for planned in (before, after))
@@ -88,7 +89,7 @@ def sections_of(
     """The containerlab section of each package that runs the Topology's node `name`, whose
     definition entry is `node`: the local driver's lookup, a package's image matched as the
     Topology writes it under any of `registries`, each an allocation's (`plan.image`).
-    `ValueError` for a node no given package runs."""
+    `Unpackaged` for a node no given package runs, its image as the Topology writes it."""
 
     def written(pulled: Image) -> set[str]:
         return _written(pulled, registries)

@@ -3,7 +3,8 @@
 server makes (`drivers.make`), with every pull credential the environment holds, so that its
 `apply` makes their pull secrets. `admit` against a namespace that is not the twin's; `apply`,
 its repeat and a Service drifted back to `Cluster`; `exec`; a node's container ended in place; a
-pod deleted and `reconfigure`; `destroy`, and a namespace alone as residue.
+pod deleted and `reconfigure`; a `destroy` under packages that do not list a node's image, refused
+(D-102); `destroy`, and a namespace alone as residue.
 
 A node's uid, where a test says one moves or stays, is its pod's uid, the part of `inspect`'s
 incarnation before the `/`; the restart count is the part after it (D-069).
@@ -38,6 +39,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from fakes import with_image
 
 from cluster.conftest import GATED, Site, run, say, until, watching
 from fylgja_core import blueprint, compiler, packages, push
@@ -46,7 +48,7 @@ from fylgja_core.clabernetes.driver import RULE_NAMESPACE, ClabernetesDriver
 from fylgja_core.clabernetes.kube import NODE_LABEL, LightKube, Pod
 from fylgja_core.clabernetes.plan import NAMESPACE
 from fylgja_core.credentials import Provider
-from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal
+from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, Unpackaged
 from fylgja_core.kubeapi import REQUEST_TIMEOUT_S
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -467,6 +469,36 @@ def test_6_a_deleted_pod_is_another_uid_at_the_same_address_and_reconfigure_repl
     assert all(uid(after[n]) != uid(before[n]) for n in NODES)
     elsewhere = moved(before, after)
     assert not elsewhere, f"the addresses of {elsewhere} moved"
+
+
+def test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused_before_any_request(
+    loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, twin: Twin
+) -> None:
+    # D-102's premise, on the cluster: a core whose SR Linux package was edited to another image is
+    # asked to destroy the twin that runs the one it had. The driver meets `n1` in its lookup of a
+    # node's package, before any request, so the namespace stands and every node is the pod it was,
+    # at the address it had; the true packages' destroy, the next test, then removes everything.
+    p = twin.deployed()
+    before = present(loop, driver)
+    srl = PLATFORMS["nokia_srlinux"]
+    listed = srl.runtime.containerlab.image.ref
+    unlisted = {**PLATFORMS, "nokia_srlinux": with_image(srl, ref=listed + "-moved")}
+    with pytest.raises(Unpackaged) as refused:
+        run(loop, driver.destroy(p.deployment, p.files, unlisted, PROBES),
+            f"destroy {TWIN} under a package whose image moved")
+    named = (refused.value.node, refused.value.kind, refused.value.image) == ("n1", "nokia_srlinux", listed)
+    assert named, f"the refusal names {refused.value.node} ({refused.value.kind})"
+    say(f"refused: {type(refused.value).__name__}: {refused.value}")
+    namespace = run(loop, kube.namespace(NS), "namespace")
+    standing = namespace is not None and not namespace.deleting
+    assert standing, f"the namespace {NS} is gone, or being deleted"
+    after = present(loop, driver)
+    elsewhere = moved(before, after)
+    assert not elsewhere, f"the addresses of {elsewhere} moved"
+    replaced = sorted(name for name in NODES if after[name].incarnation != before[name].incarnation)
+    assert not replaced, f"the pods of {replaced} are not the ones they were"
+    say(f"the namespace {NS} stands, not deleting; no address moved and every node is at its incarnation: "
+        f"{ {name: n.incarnation for name, n in after.items()} }")
 
 
 def test_7_destroy_leaves_nothing_and_the_namespace_alone_is_residue_destroy_clears(

@@ -420,7 +420,8 @@ class ContainerlabDriver:
     ) -> None:
         """Write the deployment's files under the twin's directory and deploy its topology, with
         `--reconfigure` when asked; `ValueError`, before any write or command, for files that are
-        not the deployment's or a node no given package runs.
+        not the deployment's, and `Unpackaged`, before any write, command or wait, for the first
+        node of the topology, in its order, that no given package runs.
 
         Under containerlab's live link mode a port added after boot to a node whose kind cannot
         add one comes up in Linux and the node never lists it, so before the deploy the container
@@ -519,7 +520,9 @@ class ContainerlabDriver:
         """Remove everything the twin holds: its containers, host entries, ssh config and
         management network, and the twin's directory. Root-owned residue with no container is
         deployed, then destroyed (rule 2); nothing found is nothing done. `ValueError`, before
-        any command, for files that are not the deployment's.
+        any command, for files that are not the deployment's, and `Unpackaged`, before any
+        command or wait, for the first node of the topology, in its order, that no given package
+        runs: the destroy's budget is its packages', so the lab is left as it is (D-102).
 
         Before anything else, a stray `containerlab deploy` of the twin's topology is waited for,
         as `apply` waits for one, within the deploy's budget: a core killed during a deploy and a
@@ -838,8 +841,8 @@ def _sections(
 ) -> list[platform_package.Containerlab | probe_package.Containerlab]:
     """The containerlab section of each package a node of the topology uses: a platform's by
     the node's kind and image, a probe package's by a linux node's image. The deployment does
-    not name its packages, and its topology, the plan's render, does. `ValueError` for a node
-    no given package runs."""
+    not name its packages, and its topology, the plan's render, does. `Unpackaged` for the
+    first node, in the topology's order, that no given package runs."""
     used: list[platform_package.Containerlab | probe_package.Containerlab] = []
     for name, node in yaml.safe_load(files[TOPOLOGY])["topology"]["nodes"].items():
         used += clab_changes.sections_of(name, node, platforms, probe_packages)

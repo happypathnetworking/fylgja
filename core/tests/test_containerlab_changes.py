@@ -13,7 +13,7 @@ import yaml
 from fylgja_core import blueprint, compiler, platform_package, probe_package
 from fylgja_core.containerlab import changes as clab_changes
 from fylgja_core.containerlab import plan as clab_plan
-from fylgja_core.driver import Changes, Planned
+from fylgja_core.driver import Changes, Planned, Unpackaged
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "core" / "src" / "fylgja_core"
@@ -167,8 +167,18 @@ def test_two_deployments_of_different_twins_are_refused() -> None:
 
 
 def test_a_node_no_package_runs_is_refused() -> None:
-    with pytest.raises(ValueError, match="no package given runs the node"):
+    with pytest.raises(ValueError, match="no package given runs the node") as refused:
         clab_changes.changes(planned("three-node"), planned("three-node"), {}, PROBES)
+    # The seam's type, naming the first such node by name, which is `compare`'s order.
+    device = refused.value
+    assert isinstance(device, Unpackaged)
+    assert (device.node, device.kind, device.image) == ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")
+    # A probe host is a `linux` node, run by the probe package whose image is its own.
+    probed = planned("three-node-probed")
+    with pytest.raises(Unpackaged) as hostless:
+        clab_changes.changes(probed, probed, PLATFORMS, {})
+    host = hostless.value
+    assert (host.node, host.kind, host.image) == ("n1-loop-a", "linux", PROBES["ping"].runtime.containerlab.image.ref)
 
 
 def test_compare_over_the_two_topologies_is_changes_of_the_two_deployments() -> None:

@@ -31,14 +31,14 @@ import yaml
 
 from fylgja_core import platform_package, probe_package
 from fylgja_core.containerlab.plan import TOPOLOGY
-from fylgja_core.driver import Action, ChangeReason, Changes, NodeChange, Planned
+from fylgja_core.driver import Action, ChangeReason, Changes, NodeChange, Planned, Unpackaged
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 
 Section = platform_package.Containerlab | probe_package.Containerlab
 
 Sections = Callable[[str, Mapping[str, Any]], list[Section]]
-"""A node's name and its definition entry to its packages' sections; `ValueError` when no
+"""A node's name and its definition entry to its packages' sections; `Unpackaged` when no
 package runs it."""
 
 Written = Callable[[platform_package.Image], Collection[str]]
@@ -57,7 +57,8 @@ def changes(
     probe_packages: Mapping[str, ProbePackage],
 ) -> Changes:
     """What the runtime does to each node to go from `before` to `after`. `ValueError` for
-    deployments of two twins, or for a node no given package runs."""
+    deployments of two twins; `Unpackaged`, which is one, for the first node by name that no
+    given package runs."""
     if before.deployment.twin != after.deployment.twin:
         raise ValueError(f"the deployments are of two twins, {before.deployment.twin} and {after.deployment.twin}")
 
@@ -71,7 +72,8 @@ def compare(old: Mapping[str, Any], new: Mapping[str, Any], sections: Sections) 
     """What the runtime does to each node to go from the containerlab definition whose
     `topology` member is `old` to the one whose `topology` member is `new`, each node's
     packages found by `sections`. Both containerlab drivers compare their definitions so.
-    `ValueError` from `sections` for a node no package runs, whichever side holds it."""
+    `Unpackaged` from `sections` for the first node by name that no package runs, whichever
+    side holds it."""
     nodes: dict[str, NodeChange] = {}
     for name in sorted(set(old["nodes"]) | set(new["nodes"])):
         for side in (old, new):  # a node no given package runs is refused, whichever side holds it
@@ -124,10 +126,12 @@ def sections_of(
     probe_packages: Mapping[str, ProbePackage], written: Written = own_ref,
 ) -> list[Section]:
     """`package_of` for the definition's node `name`, its image matched as `written` says;
-    `ValueError` for a node no given package runs."""
+    `Unpackaged` for a node no given package runs, naming it with its kind and its image as the
+    definition writes them. It is the one place that raises it: both drivers' `changes`, `apply`
+    and `destroy` find a node's package here, the last two before they touch the runtime."""
     sections = package_of(node["kind"], node["image"], platforms, probe_packages, written)
     if not sections:
-        raise ValueError(f"no package given runs the node {name} ({node['kind']}, {node['image']})")
+        raise Unpackaged(name, node["kind"], node["image"])
     return sections
 
 

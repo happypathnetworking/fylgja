@@ -42,6 +42,7 @@ from fylgja_core.driver import (
     NodeChange,
     NodeState,
     Planned,
+    Unpackaged,
     check_files,
     events_backoff,
     relinks,
@@ -159,6 +160,13 @@ def test_check_files_passes_the_deployments_own_and_refuses_a_missing_an_extra_o
     with pytest.raises(ValueError, match=rf"topology\.yaml is not the deployment's: its SHA-256 differs from the "
                                          rf"one {deployment.id} lists"):
         check_files(deployment, {**files, "topology.yaml": files["topology.yaml"] + b"\n"})
+
+
+def test_unpackaged_is_a_value_error_naming_its_node_kind_and_image() -> None:
+    e = Unpackaged("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")
+    assert isinstance(e, ValueError)
+    assert (e.node, e.kind, e.image) == ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")
+    assert str(e) == "no package given runs the node n1 (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)"
 
 
 def test_an_inspection_is_one_of_three_states_beside_the_nodes() -> None:

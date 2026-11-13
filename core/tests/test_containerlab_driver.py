@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 from aio import BOUND_S, bounded, cancelled, closed
+from fakes import with_image
 
 from fylgja_core import blueprint, bundle, compiler, containerlab, logs, platform_package, probe_package
 from fylgja_core.capacity import LOCAL_HOST, Host, Reading, Resources
@@ -40,7 +41,19 @@ from fylgja_core.containerlab.driver import (
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
 from fylgja_core.deployment import Demand, Deployment
-from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, events_backoff
+from fylgja_core.driver import (
+    Allocation,
+    DriverFailed,
+    Exec,
+    Inspection,
+    NodeState,
+    Planned,
+    Refusal,
+    Unpackaged,
+    events_backoff,
+)
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.probe_package import ProbePackage
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -49,6 +62,22 @@ PLATFORMS = {
                                          ROOT / "testdata/packages/chassisos.yaml"])
 }
 PROBES = {p.format: p for p in [probe_package.load(ROOT / "probes/ping.yaml")]}
+
+# A twin planned under the packages above, then met by a core whose packages no longer list the image one of its
+# nodes runs: a platform package whose image moved, or the probe package whose image did. Each row is the fixture,
+# the packages the driver is given, and the node, kind and image of the first node, in the file's order, that none
+# of them runs, the image as the deployment's own file writes it.
+SRL, PING = PLATFORMS["nokia_srlinux"], PROBES["ping"]
+SRL_MOVED = {**PLATFORMS, "nokia_srlinux": with_image(SRL, ref=SRL.runtime.containerlab.image.ref + "-moved")}
+PING_MOVED = {"ping": dataclasses.replace(PING, runtime=dataclasses.replace(
+    PING.runtime, containerlab=dataclasses.replace(PING.runtime.containerlab, image=dataclasses.replace(
+        PING.runtime.containerlab.image, ref=PING.runtime.containerlab.image.ref + "-moved"))))}
+Unrun = tuple[str, Mapping[str, PlatformPackage], Mapping[str, ProbePackage], tuple[str, str, str]]
+UNRUN: list[Unrun] = [
+    ("three-node", SRL_MOVED, PROBES, ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")),
+    ("three-node-probed", PLATFORMS, PING_MOVED, ("n1-loop-a", "linux", PING.runtime.containerlab.image.ref)),
+]
+UNRUN_IDS = ["device", "probe-host"]
 
 NETWORK_LS = ("docker", "network", "ls", "--format", "{{.ID}}")
 NETWORK_INSPECT = ("docker", "network", "inspect", "--format", "{{json .IPAM.Config}}")
@@ -727,6 +756,21 @@ def test_files_that_are_not_the_deployments_are_refused_before_any_command_or_wr
     assert not (tmp_path / "containerlab").exists()
 
 
+@pytest.mark.parametrize(("name", "platforms", "probes", "unrun"), UNRUN, ids=UNRUN_IDS)
+def test_apply_meets_such_a_node_before_any_write_or_command(
+    tmp_path: Path, name: str, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    p = planned(name)
+    runner = FakeRunner({})
+    strays = Strays(runner, running=None)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(tmp_path, runner, strays=strays).apply(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert runner.calls == [] and strays.asked == []  # no command, and no wait for a stray deploy
+    assert not (tmp_path / "root/containerlab").exists()
+
+
 def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:
     assert deploy_budget(planned("three-node").files, PLATFORMS, PROBES) == 180 + 60  # EOS's 300 s is not used
     assert deploy_budget(planned("mixed").files, PLATFORMS, PROBES) == 300 + 60
@@ -739,8 +783,10 @@ def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() 
 
 
 def test_a_node_no_given_package_runs_has_no_budget() -> None:
-    with pytest.raises(ValueError, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
+    with pytest.raises(Unpackaged, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
         deploy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
+    with pytest.raises(Unpackaged, match="no package given runs the node e1"):
+        destroy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
 
 
 class Inspected(ContainerlabDriver):
@@ -1053,6 +1099,21 @@ def test_destroy_refuses_files_that_are_not_the_deployments_before_any_command(t
     with pytest.raises(ValueError, match="is not the deployment's"):
         asyncio.run(driver(tmp_path, runner).destroy(p.deployment, {TOPOLOGY: b"name: t\n"}, PLATFORMS, PROBES))
     assert runner.calls == []
+
+
+@pytest.mark.parametrize(("name", "platforms", "probes", "unrun"), UNRUN, ids=UNRUN_IDS)
+def test_destroy_meets_a_node_no_given_package_runs_before_any_command(
+    tmp_path: Path, name: str, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    p = planned(name)
+    runner = FakeRunner({})
+    strays = Strays(runner, running=None)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(tmp_path, runner, strays=strays).destroy(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert runner.calls == [] and strays.asked == []  # no command, and no wait for a stray deploy
+    assert not (tmp_path / "root/containerlab").exists()
 
 
 def test_the_destroy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:

@@ -183,6 +183,24 @@ deployment, its allocation and its nodes, until a deletion or a new spec is hand
 that has the packages. Here, both are refused the same way, once, and a new spec starts no
 create: nothing is compiled, admitted or destroyed over the kept deployment.
 
+A deployment one of whose nodes runs an image no loaded package lists is kept the same way
+([D-102](../design/decisions.md#d-102)): every package its bundle names is loaded, and one of
+them was edited to another image while the twin ran the one it had. A node's package is found
+by its kind and its image, a probe host's by its image, so the core's packages no longer
+account for that node. At a step the driver's `changes` finds it, and the step is refused
+before it touches anything ([Steps](#steps)). At a deletion the driver's `destroy` finds it
+before it touches the runtime: the destroy run ends `rejected` with one `bundle.rejected`
+finding, its object the twin, naming the node, its kind, its image and the remedy (`The
+deployment of <twin> cannot be torn down: no package given runs the node <node> (<kind>,
+<image>). It waits for a core whose packages list that image.`), its `destroy` event `failed`
+under the rule, and `Ready` is False for `bundle.rejected`. It is said once: a later pass of the
+same core takes no run and calls no driver, and the lab stays, with its record, which keeps the
+deployment, its allocation and its nodes, until a core whose packages list the image handles
+the deletion; a core started again asks its driver again, under a destroy run of its own. A
+cancelled or failed create's cleanup that meets such a node keeps the lab and its allocation
+too, the run ending by its own rule, and a create resumed after `planned` whose apply meets it
+ends `rejected` with `bundle.rejected` (`cannot be applied`), nothing torn down.
+
 A restore is a run too ([D-067](../design/decisions.md#d-067)), the loop's own, by the
 principal `core`. A pass on a settled twin (no deletion asked, its generation observed, a
 deployment applied, no run in flight, not diverged) inspects it, unless this core lacks a
@@ -265,7 +283,7 @@ The `Ready` condition's reasons:
 | `twin.restoring` | `False` | a restore runs ([D-067](../design/decisions.md#d-067)): a node of a settled twin was found at another incarnation, and is readied and pushed again, then verify is run, which is advisory; or every node of a twin reported `twin.node.missing` runs again, and verify is run before it is Ready. Not set on a twin that does not run what its spec asks: a restore leaves the conditions a refused or cancelled step left |
 | `twin.node.missing` | `False` | a node of a settled twin is missing or not running past its boot window, or a restore ended for it ([D-067](../design/decisions.md#d-067)); the log names each node. It is never made: the twin stays so until the node returns, when a restore readies and pushes what holds nothing and runs verify, which is advisory, before it is Ready, or until the twin is stepped or deleted. Not set on a twin that does not run what its spec asks |
 | `twin.deleting` | `False` | the twin's deletion was asked, and the loop tears it down |
-| `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)) |
+| `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)). Or this core's packages cannot account for the twin's deployment, which is kept: its bundle names a package not loaded, or one of its nodes runs an image no loaded package lists, at a step, a deletion or a resumed create's apply ([D-102](../design/decisions.md#d-102)) |
 | `plan.rejected` | `False` | the driver's plan refused the bundle; the run's verdict holds every finding ([a plan refused](#findings-a-plan-refused)) |
 | a finding's rule | `False` | the run ended with that one finding: `blueprint.missing`, `bundle.missing`, `run.cancelled`, `twin.driver.unknown`, an `admission.*` rule, `readiness.timeout`, `readiness.unauthorized`, `credential.missing`, `push.refused` or `push.unauthorized` |
 

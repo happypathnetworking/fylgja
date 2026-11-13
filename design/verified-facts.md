@@ -1192,6 +1192,37 @@ says so; every other reading fell inside.
   after 16.93 s (+37.03–47.27 s); a `stop --node` alone took 0.65 s once (0.66–0.76 s). The marker
   read absent in both runs.
 
+**fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(0.81.0,
+Docker 29.8.1, SR Linux 24.7.1, 2026-11-13)*
+
+`core/tests/live/test_containerlab_driver_live.py` ran alone (`cd core && .venv/bin/pytest -q -rA
+-m live tests/live/test_containerlab_driver_live.py`), from 19:06 to 19:11Z: **8 passed in
+251.08 s**, exit 0. Before it the host held no container carrying the lab label and no Docker
+network inside or over 172.20.0.0/16, and no other container ran. Its
+`test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_removes_nothing` pins
+what follows ([D-102](decisions.md#d-102)).
+
+- **The call.** The twin `drv-live`, `three-node` planned under the shipped packages, ran its
+  three SR Linux containers, made anew by the `apply` with `reconfigure` of the test before. The
+  driver's `destroy` was given that deployment and its files, and the shipped packages with one
+  change: `nokia_srlinux`'s image reference with `-moved` appended, as a package edited to another
+  image while a twin runs the one it had.
+- **It was refused in 0.01 s**, by `Unpackaged`: `no package given runs the node n1
+  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`, naming `n1`, the first node of the topology
+  file, its kind and the image as that file writes it.
+- **The host held what it held before the call**: the three containers under the lab's label, the
+  lab's block of `/etc/hosts` (its two markers and a line a node), the ssh config
+  `clab-drv-live.conf` and the network `clab-drv-live`. `inspect` answered the same three nodes,
+  each at the incarnation (`State.StartedAt`) and the address it had before the call, and the
+  twin's directory under the driver's root held the entries it held. That no command runs before
+  the refusal is the pure tier's reading of the driver
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_command`); this run read the host.
+- **The destroy with the shipped packages**, the module's next test, took 1.67 s and left nothing:
+  no container, host entry, ssh config or network of the lab, `inspect` `absent`, and the twin's
+  directory gone.
+- **The module's end** left no container carrying the lab label, no `clab-` network, no line of
+  `/etc/hosts` naming `clab-drv-live` and no `containerlab` process.
+
 **The dry run**
 
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,
@@ -2494,6 +2525,38 @@ captured output until the harness kept its readings for the session's end):
   77.6 s, ready 4.3 s, push 1.8 s; `cf-eos` was created from `mixed` in 95.2 s and verified; the
   step to `mixed-e2-port` was refused without `--allow-restart` and made with it, as the dry run
   answered. No namespace was left. With this the suite has passed whole on both drivers.
+
+**fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(k3s
+v1.37.1+k3s1, clabernetes 0.10.1, SR Linux 24.7.1, lightkube 1.0.1, 2026-11-13)*
+
+`core/tests/cluster/test_clabernetes_driver_cluster.py` ran alone from the development host (`cd
+core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver_cluster.py`,
+`local/.env` loaded), from 19:26:31 to 19:30:49Z: **8 passed in 255.63 s**, exit 0, none skipped.
+The deployed core's Deployment was at no replica, with no pod, and the cluster held no namespace,
+Topology, pod, Service or Secret of a twin before the run. Its
+`test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused_before_any_request` pins what
+follows ([D-102](decisions.md#d-102)), as the local driver's block does above ("containerlab
+0.79.0").
+
+- **The call.** The twin `drv-k8s`, `three-node` planned under the shipped packages, ran its three
+  SR Linux pods, each made anew by the `apply` with `reconfigure` of the test before. The driver's
+  `destroy` was given that deployment and its files, and the shipped packages with one change:
+  `nokia_srlinux`'s image reference with `-moved` appended.
+- **It was refused in 0.02 s**, by `Unpackaged`: `no package given runs the node n1
+  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`, naming `n1`, the first node of the Topology's
+  definition, its kind and the image as the Topology writes it, which for this image, not gated,
+  is the package's own reference.
+- **The cluster held what it held before the call**: the namespace `fylgja-twin-drv-k8s` stood and
+  was not being deleted, and `inspect` answered the three nodes running, each at the incarnation
+  (its pod's uid and restart count) and the address it had before the call. That no request is
+  made before the refusal is the pure tier's reading of the driver
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_call`); this run read the cluster.
+- **The destroy with the shipped packages**, the module's next test, took 14.16 s and left
+  nothing: `inspect` `absent` and the namespace gone.
+- **The module's end** left no namespace, Topology, pod, Service or Secret carrying the twins'
+  labels.
+- **The rest of the module**, read beside it: the first apply took 69.10 s, its repeat 2.24 s, the
+  apply with `reconfigure` 65.51 s, and the residue's destroy 6.08 s.
 
 ---
 

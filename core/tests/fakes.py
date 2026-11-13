@@ -5,7 +5,8 @@ share them.
 `FakeDriver` answers the seam's calls over `labs` (twin to node to `NodeState`) and records
 each in `calls`. The readiness wait, the push and the reader are called with a node's address;
 given the driver, they name the node it belongs to, so a test says which nodes answer, refuse
-or are unreachable by name.
+or are unreachable by name. `with_image` answers a package whose image moved, for the tests of
+both drivers and of the loop.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from fylgja_core.driver import (
     NodeState,
     Planned,
     Refusal,
+    Unpackaged,
 )
 from fylgja_core.gnmi import Unreadable
 from fylgja_core.platform_package import PlatformPackage
@@ -61,7 +63,9 @@ class FakeDriver:
     the rest as they are, so the same plan changes nothing, as containerlab's plain redeploy does
     (D-023). `fail_apply` and `fail_destroy` raise
     `DriverFailed` with nothing changed, and `fail_inspect_once` the next `inspect` once, as a
-    runtime that blips. `fail_after` names a call after which, once it has
+    runtime that blips. `unpackaged` names `apply` or `destroy` with the `Unpackaged` it raises once
+    the call is recorded, nothing changed and no event emitted, as a driver that meets a node no given
+    package runs before it touches its runtime. `fail_after` names a call after which, once it has
     taken effect, a kill is raised (`RuntimeError("killed")`), once. `block` names a call that, once recorded, waits
     until it is cancelled, as a runtime that never answers. `residue` holds the twins whose lab was removed
     by hand and left leftovers: `inspect` answers `residue` for them, and `apply` and `destroy`
@@ -107,6 +111,7 @@ class FakeDriver:
         self.refuse = refuse
         self.fail_apply = fail_apply
         self.fail_destroy = False
+        self.unpackaged: dict[str, Unpackaged] = {}
         self.fail_capacity = False
         self.fail_capacity_with: Exception | None = None
         self.fail_inspect_once = False
@@ -248,6 +253,8 @@ class FakeDriver:
     ) -> None:
         twin = deployment.twin
         self.calls.append(("apply", twin, "reconfigure") if reconfigure else ("apply", twin))
+        if "apply" in self.unpackaged:
+            raise self.unpackaged["apply"]
         if self.own_events:
             self.emit(twin)
         await self._held("apply")
@@ -304,6 +311,8 @@ class FakeDriver:
     ) -> None:
         twin = deployment.twin
         self.calls.append(("destroy", twin))
+        if "destroy" in self.unpackaged:
+            raise self.unpackaged["destroy"]
         if self.own_events:
             self.emit(twin)
         await self._held("destroy")
@@ -596,6 +605,15 @@ def fake_push(
 ) -> FakePush:
     """A `PushFn` that records its calls; see `FakePush`."""
     return FakePush(refuse, unreachable, kill_after, driver)
+
+
+def with_image(package: PlatformPackage, **members: Any) -> PlatformPackage:
+    """`package` with its image's members replaced (`ref`, `pull_secret`): a package whose image
+    moved, or whose pull secret did, while a twin ran the one it had."""
+    containerlab = package.runtime.containerlab
+    image = dataclasses.replace(containerlab.image, **members)
+    runtime = dataclasses.replace(package.runtime, containerlab=dataclasses.replace(containerlab, image=image))
+    return dataclasses.replace(package, runtime=runtime)
 
 
 def _name(driver: FakeDriver | None, address: str) -> str:

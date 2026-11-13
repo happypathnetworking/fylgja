@@ -18,7 +18,7 @@ from fylgja_core.clabernetes import changes as clabernetes_changes
 from fylgja_core.clabernetes import plan as clabernetes_plan
 from fylgja_core.containerlab import changes as clab_changes
 from fylgja_core.containerlab import plan as clab_plan
-from fylgja_core.driver import Changes, Planned
+from fylgja_core.driver import Changes, Planned, Unpackaged
 from fylgja_core.platform_package import PlatformPackage
 from fylgja_core.probe_package import ProbePackage
 
@@ -188,8 +188,18 @@ def test_two_deployments_of_different_twins_are_refused() -> None:
 
 
 def test_a_node_no_package_runs_is_refused() -> None:
-    with pytest.raises(ValueError, match="no package given runs the node"):
+    with pytest.raises(ValueError, match="no package given runs the node") as refused:
         clabernetes_changes.changes(planned("three-node"), planned("three-node"), {}, PROBES)
+    # The seam's type, naming the first such node by name, which is `compare`'s order.
+    device = refused.value
+    assert isinstance(device, Unpackaged)
+    assert (device.node, device.kind, device.image) == ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")
+    # A probe host is a `linux` node, run by the probe package whose image is its own.
+    probed = planned("three-node-probed")
+    with pytest.raises(Unpackaged) as hostless:
+        clabernetes_changes.changes(probed, probed, PLATFORMS, {})
+    host = hostless.value
+    assert (host.node, host.kind, host.image) == ("n1-loop-a", "linux", PROBES["ping"].runtime.containerlab.image.ref)
     # A gated image is matched as the Topology writes it: the cEOS package with no pull secret
     # renders `ceos:4.32.0.2F`, and with one neither allocation holds renders none.
     mixed = planned("mixed")

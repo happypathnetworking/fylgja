@@ -20,7 +20,8 @@ Every process, socket, file of the host's and clock the script touches goes thro
 its one implementation.
 
 Exit 0; 1 for a failure; 2 for a command line not understood, a precondition of the host's not met, a line of
-`<local>/.env` not read or another demonstration command running. Each is said on stderr.
+`<local>/.env` that is not read as a shell would read it or another demonstration command running. Each is said on
+stderr.
 """
 
 from __future__ import annotations
@@ -30,7 +31,6 @@ import base64
 import fcntl
 import grp
 import hashlib
-import http.client
 import json
 import os
 import re
@@ -43,6 +43,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from email.message import Message
 from ipaddress import IPv4Network
 from pathlib import Path
 from typing import IO, Any, NamedTuple, Protocol
@@ -120,11 +121,23 @@ bound for an inspection."""
 TIMED_OUT = 124
 """The status `Real.run` answers for a child that outlasted its timeout and was killed, as `timeout` exits."""
 
-ASSIGNMENT = re.compile(r"(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)")
-VALUE = re.compile(r"""(?:'(?P<single>[^']*)'|"(?P<double>[^"$`\\]*)"|(?P<bare>[^\s'"$`\\~;&|<>()]*))(?:\s+#.*|\s*)""")
+NOT_FOUND = 127
+"""The status `Real.run` answers for a command the PATH it was run under does not hold, as a shell exits."""
+
+BLANK = " \t"
+"""What a shell takes for a blank between words: a space and a tab, and no other character Python calls white."""
+
+ASSIGNMENT = re.compile(r"(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)", re.DOTALL)
+VALUE = re.compile(
+    r"""(?:'(?P<single>[^'\x00]*)'|"(?P<double>[^"$`\\\x00]*)"|(?P<bare>[^\s\x00-\x1f\x7f'"$`\\~;&|<>(){}]*))"""
+    r"""(?:[ \t]+#.*|[ \t]*)""",
+    re.DOTALL,
+)
 """An assignment's value as this script reads it, a comment after it aside: one pair of single quotes, one pair of
 double quotes holding no `$`, backquote or backslash, or one word, perhaps empty, free of what a shell would expand,
-escape or end a command at."""
+escape or end a command at, and of every control character and every character Python calls white space, which to a
+shell is part of the word (a carriage return, a form feed, a no-break space, a line separator). No NUL anywhere: a
+shell drops it, and no child can be given one."""
 
 LOOPBACK = re.compile(r"127\.0\.0\.1:([1-9][0-9]{0,4})")
 
@@ -139,13 +152,14 @@ class Stop(Exception):
 
 
 class Unread(Exception):
-    """A line assigns a name a value this script does not read as a shell would: the name and the line's number,
-    and never the value."""
+    """A line this script does not read as a shell would: its number, the name it assigns, None where it assigns
+    none, and whether a carriage return is all that stands in the way. Never the value."""
 
-    def __init__(self, name: str, line: int) -> None:
-        super().__init__(f"line {line} gives {name} a value that is not read")
+    def __init__(self, name: str | None, line: int, carriage_return: bool = False) -> None:
+        super().__init__(f"line {line} is not read" if name is None else f"line {line} gives {name} what is not read")
         self.name = name
         self.line = line
+        self.carriage_return = carriage_return
 
 
 class Done(NamedTuple):
@@ -185,7 +199,8 @@ class Host(Protocol):
     ) -> Done:
         """A child run to its end, under `env` where it is given and this process's environment where not. A child
         not captured prints as it will; one captured prints nothing, and its stdout is answered. One that outlasts
-        `timeout` is killed, and its status is `TIMED_OUT`."""
+        `timeout` is killed, and its status is `TIMED_OUT`; a command that is not found, on the PATH of `env` where
+        that is given, is no exception, and its status is `NOT_FOUND`."""
         ...
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -194,7 +209,8 @@ class Host(Protocol):
         ...
 
     def process(self, pid: int) -> Process | None:
-        """Process `pid` as `/proc` shows it, or None where there is none or it cannot be read."""
+        """Process `pid` as `/proc` shows it, or None where there is none or it cannot be read. No `pid` at or under
+        1 is one: nothing is decided of init, and 0 and below name no process."""
         ...
 
     def pids(self) -> list[int]:
@@ -202,7 +218,9 @@ class Host(Protocol):
         ...
 
     def signal(self, pid: int, number: int) -> bool:
-        """Signal `number` sent to the session `pid` leads; False where there is no such process."""
+        """Signal `number` sent to the session `pid` leads; False where there is no such process or it is not this
+        user's to signal, and for a `pid` at or under 1 with nothing sent, which would name this process's own
+        group, init's, or every process."""
         ...
 
     def ask(self, method: str, url: str, *, auth: str | None = None, body: Any = None) -> Answer:
@@ -226,8 +244,9 @@ class Host(Protocol):
         ...
 
     def text(self, path: Path) -> str | None:
-        """What the file `path` holds, or None where there is no such file. One that is not this user's to read
-        raises `PermissionError`."""
+        """What the file `path` holds, or None where there is no such file: read as UTF-8, a byte that is none kept
+        as `os.fsencode` gives it back, so that a value reaches a child byte for byte. One that is not this user's
+        to read raises `PermissionError`."""
         ...
 
     def clock(self) -> float: ...
@@ -257,7 +276,7 @@ class Real:
             fp: IO[bytes],
             code: int,
             msg: str,
-            headers: http.client.HTTPMessage,
+            headers: Message,
             newurl: str,
         ) -> urllib.request.Request | None:
             return None
@@ -290,6 +309,8 @@ class Real:
             )
         except subprocess.TimeoutExpired:
             return Done(TIMED_OUT, "")
+        except FileNotFoundError:
+            return Done(NOT_FOUND, "")
         return Done(done.returncode, done.stdout or "")
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -313,7 +334,7 @@ class Real:
         return started is not None and started.poll() is not None
 
     def process(self, pid: int) -> Process | None:
-        if self._exited(pid):
+        if pid <= 1 or self._exited(pid):
             return None
         try:
             argv = Path(f"/proc/{pid}/cmdline").read_bytes()
@@ -329,15 +350,17 @@ class Real:
         return [pid for pid in found if not self._exited(pid)]
 
     def signal(self, pid: int, number: int) -> bool:
-        if self._exited(pid):
+        if pid <= 1 or self._exited(pid):
             return False
         try:
             os.killpg(pid, number)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
             return False
         return True
 
     def ask(self, method: str, url: str, *, auth: str | None = None, body: Any = None) -> Answer:
+        import http.client  # for an exception's class alone: no connection is made by it here
+
         headers = {"Accept": "application/json"}
         data = None
         if body is not None:
@@ -377,7 +400,7 @@ class Real:
 
     def text(self, path: Path) -> str | None:
         try:
-            return path.read_text(errors="replace")
+            return path.read_text(encoding="utf-8", errors="surrogateescape")
         except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
             return None
 
@@ -446,30 +469,58 @@ def records(local: Path) -> Records:
 
 
 def read_env(text: str) -> dict[str, str]:
-    """The names `text` assigns, each with its value as a shell that loads the file reads it: `NAME=value` or `export
-    NAME=value`, the last line of a name winning, a value's one pair of quotes taken off and a comment after it
-    aside; a name assigned nothing holds `""`. A commented line and a line that assigns nothing hold nothing.
+    """The names `text` assigns, each with its value as a shell that loads the file reads it (`set -a; . file`), or
+    `Unread`: the script holds no value a shell loading the file would not.
 
-    A shell does more to a value than this does, so a value it would do more to is not guessed at, and raises
-    `Unread` with the name and the line's number: one holding a `$`, a backquote or a backslash outside single
-    quotes, a quote left open, more than one word or pair of quotes, or, outside quotes, a `~` or a character that
-    ends a command (`;`, `&`, `|`, `<`, `>`, `(`, `)`)."""
+    What is read: a line is ended by a newline and by nothing else; a blank line and a comment hold nothing; any
+    other line is `NAME=value` or `export NAME=value`, blanks before and after it aside, a blank being a space or a
+    tab. The last line of a name wins. A value is one pair of single quotes, one pair of double quotes or one word,
+    its quotes taken off and a comment after it aside; a name assigned nothing holds `""`.
+
+    What is refused, with the line's number and the name where the line has one: any other line, since a shell
+    would act on it (`unset X`, `X+=2`, `. other`); and a value a shell would do more to than this does, which is
+    not guessed at: one holding a `$`, a backquote or a backslash outside single quotes, a quote left open, more
+    than one word or pair of quotes, a NUL, or, outside quotes, a `~`, a brace, a character that ends a command
+    (`;`, `&`, `|`, `<`, `>`, `(`, `)`), a control character or a character Python alone calls white space. So a
+    file saved with CRLF line ends is refused at its first line that is no comment, and `Unread` says where taking
+    the carriage returns out is all the line needs."""
     held: dict[str, str] = {}
-    for number, line in enumerate(text.splitlines(), 1):
-        assigned = ASSIGNMENT.fullmatch(line.strip())
-        if not assigned:
-            continue
-        value = VALUE.fullmatch(assigned[2])
-        if not value:
-            raise Unread(assigned[1], number)
-        held[assigned[1]] = value["single"] or value["double"] or value["bare"] or ""
+    for number, line in enumerate(text.split("\n"), 1):
+        try:
+            assigned = assignment(line)
+        except Unread as unread:
+            carriage_return = False
+            if "\r" in line:
+                try:
+                    assignment(line.replace("\r", ""))
+                    carriage_return = True
+                except Unread:
+                    pass
+            raise Unread(unread.name, number, carriage_return) from None
+        if assigned is not None:
+            held[assigned[0]] = assigned[1]
     return held
+
+
+def assignment(line: str) -> tuple[str, str] | None:
+    """The name and the value one line assigns, None for a blank line or a comment, and `Unread`, its line not yet
+    numbered, for any other line (`read_env`)."""
+    line = line.strip(BLANK)
+    if not line or line.startswith("#"):
+        return None
+    assigned = ASSIGNMENT.fullmatch(line)
+    if not assigned:
+        raise Unread(None, 0)
+    value = VALUE.fullmatch(assigned[2])
+    if not value:
+        raise Unread(assigned[1], 0)
+    return assigned[1], value["single"] or value["double"] or value["bare"] or ""
 
 
 def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str]:
     """`environ` overlaid by `<local>/.env`, as a shell that loads the file has it, and `environ` alone where there
     is no file. A file that is not this user's to read stops the run, exit 2, and so does a line `read_env` does not
-    read, naming the name and the line and never the value."""
+    read, naming the line by its number and the name where it has one, and never the value."""
     path = local / ".env"
     try:
         text = host.text(path)
@@ -480,14 +531,27 @@ def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str
     try:
         return {**environ, **read_env(text)}
     except Unread as unread:
-        raise Stop(
-            2,
-            [
-                f"{path} line {unread.line} gives {unread.name} a value this script does not read as a shell would: "
-                "it holds a $, a backquote or a backslash outside single quotes, or is neither one pair of quotes "
-                "nor one word free of ~ ; & | < > ( ); write it in single quotes"
-            ],
-        ) from None
+        raise Stop(2, [f"{path} line {unread.line} {unread_as(unread)}"]) from None
+
+
+def unread_as(unread: Unread) -> str:
+    """What is said of a line that is not read, after its file and its number: the carriage return where that is
+    all that stands in the way, as in a file saved with CRLF line ends; else what the script reads."""
+    if unread.carriage_return:
+        return (
+            "holds a carriage return, which a shell takes for part of the line: the file may be saved with CRLF line "
+            "ends; save it with LF alone"
+        )
+    if unread.name is None:
+        return (
+            "is not blank, a comment or [export ]NAME=value, and this script reads no other line, since a shell that "
+            "loads the file would act on it: take the line out"
+        )
+    return (
+        f"gives {unread.name} a value this script does not read as a shell would: it holds a $, a backquote or a "
+        "backslash outside single quotes, or is neither one pair of quotes nor one word free of blanks, control "
+        "characters and ~ ; & | < > ( ) { }; write it in single quotes"
+    )
 
 
 def listen_of(env: Mapping[str, str]) -> str:
@@ -513,8 +577,9 @@ def own_lines(env: Mapping[str, str], listen: str, host: Host) -> list[tuple[str
 
 
 def hashed(token: str) -> str:
-    """A token's line in the token file holds this, the SHA-256 of its bytes in hex (D-025)."""
-    return hashlib.sha256(token.encode()).hexdigest()
+    """A token's line in the token file holds this, the SHA-256 of its bytes in hex (D-025): the bytes the file it
+    was read from holds, which are a child's too (`Host.text`)."""
+    return hashlib.sha256(os.fsencode(token)).hexdigest()
 
 
 def token_lines(held: str, env: Mapping[str, str]) -> list[str]:

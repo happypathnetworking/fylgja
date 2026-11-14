@@ -80,9 +80,11 @@ class FakeHost:
     """`demo.Host`, answered from what a test lists and recording what it was asked.
 
     - `run` answers an argv by its leading words: the longest of `answers`' keys the argv begins with, a `Done` or a
-      function of the `Ran` that gives one. An argv no key begins is the test's mistake, and raises.
+      function of the `Ran` that gives one, its output answered only where the run was captured, as `Real` answers.
+      An argv no key begins is the test's mistake, and raises.
     - `start` answers the next pid from `next_pid` and puts the process in `processes`, the `/proc` a test writes.
-    - `signal` answers whether `processes` holds the pid, and calls `on_signal` where a test gives one.
+    - `signal` answers whether `processes` holds the pid, and calls `on_signal` where a test gives one; a pid at
+      or under 1 is no process to it or to `process`, as to `Real`, whatever `processes` holds.
     - `ask` answers the first of `replies` whose method is the request's and whose URL begins it, an `Answer` or a
       function of the `Asked`; where none does, nothing answered.
     - `text` answers `files`, raises `PermissionError` for a path of `denied`, and reads a file under `disk`, a
@@ -133,7 +135,8 @@ class FakeHost:
         for length in range(len(ran.argv), 0, -1):
             answer = self.answers.get(tuple(ran.argv[:length]))
             if answer is not None:
-                return answer(ran) if callable(answer) else answer
+                done = answer(ran) if callable(answer) else answer
+                return done if capture else demo.Done(done.status, "")
         raise AssertionError(f"the test lists no answer for {ran.argv}")
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -144,14 +147,14 @@ class FakeHost:
         return pid
 
     def process(self, pid: int) -> Any:
-        return self.processes.get(pid)
+        return self.processes.get(pid) if pid > 1 else None
 
     def pids(self) -> list[int]:
         return sorted(self.processes)
 
     def signal(self, pid: int, number: int) -> bool:
         self.signalled.append((pid, number))
-        there = pid in self.processes
+        there = pid > 1 and pid in self.processes
         if there and self.on_signal is not None:
             self.on_signal(pid, number)
         return there
@@ -184,7 +187,7 @@ class FakeHost:
         if path in self.files:
             return self.files[path]
         if self.disk is not None and path.is_relative_to(self.disk) and path.is_file():
-            return path.read_text()
+            return path.read_text(encoding="utf-8", errors="surrogateescape")
         return None
 
     def clock(self) -> float:

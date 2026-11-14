@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import ast
 import base64
+import grp
 import hashlib
+import http.client
 import importlib.util
 import inspect
 import io
@@ -133,19 +135,118 @@ def test_the_environment_is_the_shells_overlaid_by_the_file() -> None:
         ("X=nbt_k-1.t_2", "nbt_k-1.t_2"),
         ("X=/srv/example/a.b/c*", "/srv/example/a.b/c*"),
         ("X=\"p 'q' # r\" # s", "p 'q' # r"),
-        ("X='p \"q\" $r `s` \\t ~ ;'", 'p "q" $r `s` \\t ~ ;'),
-        ('X="p; q | r ~"', "p; q | r ~"),
+        ("X='p \"q\" $r `s` \\t ~ ; {a,b}'", 'p "q" $r `s` \\t ~ ; {a,b}'),
+        ('X="p; q | r ~ {a,b}"', "p; q | r ~ {a,b}"),
+        ("export X='p q'", "p q"),
+        ("X=p!q", "p!q"),
+        ("X=p,q%^+@q]", "p,q%^+@q]"),
+        ("X=p # q\r", "p"),
+        # Inside quotes a shell keeps what is there, a carriage return and a no-break space among it.
+        ("X='p\rq'", "p\rq"),
+        ('X="p\xa0q"', "p\xa0q"),
+        # A carriage return outside quotes is in the value to a shell: a file saved with CRLF line ends, and a lone one.
+        ("X=1\r", None),
+        ('X="1"\r', None),
+        ("X=p\rq", None),
+        # A form feed, a no-break space, a next-line and a line separator are no blank and no line end to a shell.
+        ("X=p\x0cq", None),
+        ("X=p\xa0", None),
+        ("X=p\xa0q", None),
+        ("X=p\x85q", None),
+        ("X=p\u2028q", None),
+        ("X=p\u3000q", None),
+        ("X=p\x1fq", None),
+        ("X=p\x7fq", None),
+        ("\xa0X=p", None),
+        ("export\xa0X=p", None),
+        ("export\x0bX=p", None),
+        # A shell drops a NUL, and no child can be given one.
+        ("X=p\x00q", None),
+        ("X='p\x00q'", None),
+        ('X="p\x00q"', None),
+        # bash expands braces on a line that begins `export`.
+        ("export X={a,b}", None),
+        ("X={a,b}", None),
+        ("X=p}", None),
     ],
 )
-def test_a_value_is_read_as_a_shell_reads_it(line: str, value: str) -> None:
-    assert demo.read_env(f"{line}\n") == {"X": value}
+def test_a_value_is_read_as_a_shell_reads_it(line: str, value: str | None) -> None:
+    """Each row was read once by `/bin/bash` and by `/bin/dash` (`set -a; . file`): a value given here is what both
+    held, and None is a line the script refuses, since it would hold another value than they did or one they
+    did not all agree on."""
+    if value is None:
+        with pytest.raises(demo.Unread):
+            demo.read_env(f"{line}\n")
+    else:
+        assert demo.read_env(f"{line}\n") == {"X": value}
 
 
-def test_a_line_that_assigns_nothing_holds_nothing() -> None:
+def test_a_blank_line_and_a_comment_hold_nothing() -> None:
     assert demo.read_env("") == {}
-    assert demo.read_env("\n# X=1\n  # X=2\nset -a\nX =3\nexport X\n1X=4\n. local/other\n") == {}
+    assert demo.read_env("\n# X=1\n  # X=2\n \t \n#\n\t#X=3") == {}
     assert demo.read_env("X=1\nX=\n") == {"X": ""}
     assert demo.read_env("X=\nX=1") == {"X": "1"}
+    # A comment's carriage return is the comment's, to a shell too.
+    assert demo.read_env("# a file saved with CRLF line ends\r\nX=1\n") == {"X": "1"}
+
+
+NOT_AN_ASSIGNMENT = (
+    "demo: {} line {} is not blank, a comment or [export ]NAME=value, and this script reads no other line, since a "
+    "shell that loads the file would act on it: take the line out"
+)
+CARRIAGE_RETURN = (
+    "demo: {} line {} holds a carriage return, which a shell takes for part of the line: the file may be saved with "
+    "CRLF line ends; save it with LF alone"
+)
+
+
+@pytest.mark.parametrize(
+    ("text", "name", "line", "carriage_return"),
+    [
+        # Lines a shell acts on that assign nothing this script could hold as the shell does.
+        ("X=1\nunset X\n", None, 2, False),
+        ("X=1\nX+=2\n", None, 2, False),
+        ("readonly X=1\n", None, 1, False),
+        ("declare -x X=1\n", None, 1, False),
+        ("X=1\n\nexport X\n", None, 3, False),
+        ("# a note\n. local/other\n", None, 2, False),
+        ("set -a\nX=1\n", None, 1, False),
+        ("X =3\n", None, 1, False),
+        ("1X=4\n", None, 1, False),
+        ("\xa0X=p\n", None, 1, False),
+        ("export\xa0X=p\n", None, 1, False),
+        ("export\x0bX=p\n", None, 1, False),
+        ("\ufeffX=p\n", None, 1, False),
+        # A file saved with CRLF line ends: the first line that is no comment is refused, and the carriage return said.
+        ("# a note\r\nX=1\r\nY=2\r\n", "X", 2, True),
+        ("# a note\r\n\r\nX=1\r\n", None, 2, True),
+        ('X="1"\r\n', "X", 1, True),
+        ("A=1\nX=p\rq\n", "X", 2, True),
+        ("export X\r\n", None, 1, False),
+        ("X=p q\r\n", "X", 1, False),
+        ("X=p\x0cq\n", "X", 1, False),
+        ("X=p\x00q\n", "X", 1, False),
+    ],
+)
+def test_a_line_a_shell_would_read_otherwise_is_refused_by_its_number(
+    text: str, name: str | None, line: int, carriage_return: bool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(demo.Unread) as unread:
+        demo.read_env(text)
+    assert (unread.value.name, unread.value.line, unread.value.carriage_return) == (name, line, carriage_return)
+
+    host = passing()
+    host.files[ENV_FILE] = text
+    assert status(host, up("netbox", "")) == 2
+    said = capsys.readouterr()
+    [sentence] = said.err.split("\n")[:-1]
+    if carriage_return:
+        assert sentence == CARRIAGE_RETURN.format(ENV_FILE, line)
+    elif name is None:
+        assert sentence == NOT_AN_ASSIGNMENT.format(ENV_FILE, line)
+    else:
+        assert sentence.startswith(f"demo: {ENV_FILE} line {line} gives {name} a value this script does not read")
+    assert (said.out, host.ran, host.started) == ("", [], [])
 
 
 def test_a_name_held_with_no_value_is_not_held() -> None:
@@ -168,9 +269,9 @@ UNREAD = ['"$HOME/y"', "`id`", "a\\ b"]
 
 ALSO_UNREAD = [
     "p q", '"p"q', "'p'q", "'p", '"p', " 'p'", "~/y", "p:~/y", "p;q", "p|q", "p&", "p>q", "(p)", "$(id)", '"p\\"q"',
-    "'p' 'q'",
+    "'p' 'q'", "{p,q}", "p}", "p\tq",
 ]
-"""More than one word or pair of quotes, a quote left open, a tilde, and what ends a command."""
+"""More than one word or pair of quotes, a quote left open, a tilde, braces, and what ends a command."""
 
 
 def test_a_value_the_script_does_not_read_is_named_by_its_name_and_line_alone(
@@ -194,7 +295,7 @@ def test_a_value_the_script_does_not_read_is_named_by_its_name_and_line_alone(
         assert said.err.splitlines() == [
             f"demo: {ENV_FILE} line 1 gives X a value this script does not read as a shell would: it holds a $, a "
             "backquote or a backslash outside single quotes, or is neither one pair of quotes nor one word free of "
-            "~ ; & | < > ( ); write it in single quotes"
+            "blanks, control characters and ~ ; & | < > ( ) { }; write it in single quotes"
         ], value
         assert host.ran == [] and host.started == []
 
@@ -489,7 +590,9 @@ def test_a_tool_not_on_path_is_named_and_dockers_checks_left_out() -> None:
     assert host.ran == []
 
 
-def test_a_daemon_that_does_not_answer_and_a_missing_compose_are_each_said() -> None:
+def test_a_daemon_that_does_not_answer_and_a_missing_compose_are_each_said(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     host = passing()
     host.answer("docker", "info", status=1)
     host.answer("docker", "compose", "version", status=125)
@@ -512,6 +615,19 @@ def test_a_daemon_that_does_not_answer_and_a_missing_compose_are_each_said() -> 
     host.answer("docker", "info", status=demo.TIMED_OUT)
     assert demo.TIMED_OUT == 124
     assert checked(host) == ["`docker info` exited 124: the Docker daemon does not answer this user"]
+
+    # A tool on this process's PATH and not on the one `local/.env` gives its children is not found by the child:
+    # a status as a shell's, and the check's own sentence at exit 2, never an exception.
+    host = passing()
+    for words in (("docker", "info"), ("docker", "compose", "version"), ("containerlab", "version")):
+        host.answer(*words, status=demo.NOT_FOUND)
+    assert checked(host, PATH="/srv/example/bin") == [
+        "`docker info` exited 127: the Docker daemon does not answer this user",
+        "`docker compose version` exited 127: Docker's Compose plugin is needed",
+        "`containerlab version` exited 127",
+    ]
+    assert status(host, up("netbox", "")) == 2
+    assert len(capsys.readouterr().err.splitlines()) == 3
 
     # A daemon that answers `info` and not `ps`: nothing is supposed of the source, and it is said.
     host = passing()
@@ -899,50 +1015,100 @@ THE_HOSTS = ("subprocess", "urllib", "time", "secrets", "fcntl", "grp")
 `Real` alone names; `os.kill` and `os.killpg` with them."""
 
 
-def test_every_process_socket_file_and_clock_is_the_hosts() -> None:
-    tree = ast.parse(DEMO.read_text(), str(DEMO))
+REALS_ALONE = ("http", "socket", "importlib")
+"""Modules that reach a socket or another module, which nothing outside `Real` imports or names."""
+
+OS_CALLS = ("kill", "killpg", "system", "popen", "fork", "forkpty")
+OS_FAMILIES = ("exec", "spawn", "posix_spawn")
+"""The calls of `os` that signal or make a process, by name and by the beginning of a name."""
+
+
+def seam_rule(source: str) -> tuple[list[tuple[int, str]], set[str]]:
+    """What `source` holds outside its class `Real` that only `Real` may, each with its line, and what `Real` names
+    of the same.
+
+    Outside `Real`: a name of `THE_HOSTS` or `REALS_ALONE`, or `__import__`; `os.kill`, `os.killpg`, `os.system`,
+    `os.popen`, `os.fork` and every `os.exec*`, `os.spawn*` and `os.posix_spawn*`; an import of one of `REALS_ALONE`;
+    an import of one of `THE_HOSTS` or of `os` that is not whole, plain and at the top (`from x import y`, `as`, or
+    inside a function), so that none is reached by another name."""
+    tree = ast.parse(source)
     [real] = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Real"]
     within = {id(node) for node in ast.walk(real)}
 
     def names(node: ast.AST) -> str | None:
-        if isinstance(node, ast.Name) and node.id in THE_HOSTS:
+        if isinstance(node, ast.Name) and node.id in (*THE_HOSTS, *REALS_ALONE, "__import__"):
             return node.id
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os":
-            return f"os.{node.attr}" if node.attr in ("kill", "killpg") else None
+            return f"os.{node.attr}" if node.attr in OS_CALLS or node.attr.startswith(OS_FAMILIES) else None
         return None
 
     outside: list[tuple[int, str]] = []
     inside: set[str] = set()
     for node in ast.walk(tree):
         named = names(node)
-        if named is None:
-            continue
-        if id(node) in within:
+        if named is not None and id(node) in within:
             inside.add(named)
-        else:
+        elif named is not None:
             outside.append((getattr(node, "lineno", 0), named))
-    assert outside == []
-    # The rule is not empty: `Real` names every one of them.
-    assert inside == {*THE_HOSTS, "os.killpg"}
+        elif isinstance(node, (ast.Import, ast.ImportFrom)) and id(node) not in within:
+            taken = [node.module or ""] if isinstance(node, ast.ImportFrom) else [alias.name for alias in node.names]
+            plain = isinstance(node, ast.Import) and node in tree.body and all(a.asname is None for a in node.names)
+            for module in taken:
+                root = module.split(".")[0]
+                if root in REALS_ALONE or (root in (*THE_HOSTS, "os") and not plain):
+                    outside.append((node.lineno, f"import {module}"))
+    return outside, inside
 
-    # And none is reached by another name: each is imported whole and plainly, at the top, and `os` likewise.
-    plain = {alias.name.split(".")[0] for node in tree.body if isinstance(node, ast.Import) for alias in node.names}
-    assert {*THE_HOSTS, "os"} <= plain
-    renamed = [
-        (node.lineno, alias.name)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Import)
-        for alias in node.names
-        if alias.asname is not None and alias.name.split(".")[0] in (*THE_HOSTS, "os")
-    ]
-    taken_from = [
-        (node.lineno, node.module)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] in (*THE_HOSTS, "os")
-    ]
-    assert (renamed, taken_from) == ([], [])
-    nested = [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Import) and node not in tree.body]
-    assert nested == []
+
+def test_every_process_socket_file_and_clock_is_the_hosts() -> None:
+    outside, inside = seam_rule(DEMO.read_text())
+    assert outside == []
+    # The rule is not empty: `Real` names every module of the constraint's, the one call of `os`, and `http`.
+    assert inside == {*THE_HOSTS, "os.killpg", "http"}
+
+
+RULED = "import os\nimport subprocess\nimport time\n\n\nclass Real:\n    def run(self):\n        {}\n\n\n{}\n"
+"""A script of the rule's shape, with a statement in `Real` and one outside it."""
+
+
+@pytest.mark.parametrize(
+    ("statement", "named"),
+    [
+        ("subprocess.run(['true'])", "subprocess"),
+        ("time.sleep(1)", "time"),
+        ("os.kill(1, 15)", "os.kill"),
+        ("os.killpg(1, 15)", "os.killpg"),
+        ("os.system('true')", "os.system"),
+        ("os.popen('true')", "os.popen"),
+        ("os.fork()", "os.fork"),
+        ("os.execve('/bin/true', ['true'], {})", "os.execve"),
+        ("os.execvp('true', ['true'])", "os.execvp"),
+        ("os.spawnv(os.P_WAIT, '/bin/true', ['true'])", "os.spawnv"),
+        ("os.posix_spawn('/bin/true', ['true'], {})", "os.posix_spawn"),
+        ("os.posix_spawnp('true', ['true'], {})", "os.posix_spawnp"),
+        ("http.client.HTTPConnection('192.0.2.1')", "http"),
+        ("socket.create_connection(('192.0.2.1', 80))", "socket"),
+        ("importlib.import_module('subprocess')", "importlib"),
+        ("__import__('subprocess').run(['true'])", "__import__"),
+        ("import http.client", "import http.client"),
+        ("import socket", "import socket"),
+        ("import importlib", "import importlib"),
+        ("from importlib import util", "import importlib"),
+        ("from http import client", "import http"),
+        ("import subprocess as other", "import subprocess"),
+        ("from subprocess import run", "import subprocess"),
+        ("from os import system", "import os"),
+        ("import os as other", "import os"),
+        ("def other():\n    import time", "import time"),
+    ],
+)
+def test_the_seams_rule_refuses_each_way_past_the_host(statement: str, named: str) -> None:
+    """The rule itself, on scripts of the test's own: each statement is refused outside `Real`, and passes in it."""
+    outside, _ = seam_rule(RULED.format("pass", statement))
+    assert named in [name for _, name in outside]
+    indented = statement.replace("\n", "\n        ")
+    assert seam_rule(RULED.format(indented, "pass"))[0] == []
+    assert seam_rule(RULED.format("pass", "os.environ.get('PATH')\nos.getpid()"))[0] == []
 
 
 def test_the_fake_host_is_called_as_the_real_one_is() -> None:
@@ -974,6 +1140,10 @@ def test_a_file_or_a_lock_that_is_not_the_users_ends_the_run_and_names_its_path(
     assert capsys.readouterr().err.splitlines() == [f"demo: up: [Errno 13] Permission denied: '{LOCK}'"]
 
 
+ANOTHERS = 4300
+"""A session of another user's, which `killpg` refuses this one."""
+
+
 class Child:
     """A `Popen` stand-in: a child started, pid 4242, running until a test says it exited."""
 
@@ -1001,6 +1171,8 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
         ran.append((argv, kwargs))
         if kwargs["timeout"] == 1:
             raise demo.subprocess.TimeoutExpired(argv, 1)
+        if argv[0] == "not-on-the-childs-path":
+            raise FileNotFoundError(2, "No such file or directory", argv[0])
         return demo.subprocess.CompletedProcess(argv, 3, stdout=None if kwargs["stdout"] is None else "printed\n")
 
     def popen(argv: list[str], **kwargs: Any) -> Child:
@@ -1009,6 +1181,8 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
 
     def killpg(pid: int, number: int) -> None:
         sent.append((pid, number))
+        if pid == ANOTHERS:
+            raise PermissionError(1, "Operation not permitted")
         if pid != Child.pid:
             raise ProcessLookupError(3, "No such process")
 
@@ -1028,6 +1202,11 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
     _, kwargs = ran[-1]
     assert (kwargs["env"], kwargs["cwd"], kwargs["stdout"], kwargs["stderr"], kwargs["timeout"]) == (None,) * 5
     assert real.run(["a"], timeout=1) == demo.Done(demo.TIMED_OUT, "")
+    # A command the child's PATH does not hold, which may be another than this process's: a status, as a shell's.
+    assert demo.NOT_FOUND == 127
+    assert real.run(["not-on-the-childs-path", "info"], env={"PATH": "/srv/example/bin"}, capture=True) == demo.Done(
+        127, ""
+    )
 
     log = tmp_path / "core.log"
     log.write_bytes(b"an earlier start's\n")
@@ -1047,6 +1226,79 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
     assert real.signal(Child.pid, 15) is False
     assert real.process(Child.pid) is None
     assert len(sent) == 2
+
+    # A session of another user's is not this one's to signal: False, and no exception.
+    assert real.signal(ANOTHERS, 15) is False
+    assert sent[2:] == [(ANOTHERS, 15)]
+    # No pid at or under 1 is ever given to `killpg`: 0 is this process's own group, 1 init's, and -1 every process.
+    assert [real.signal(pid, 15) for pid in (1, 0, -1, -Child.pid)] == [False, False, False, False]
+    assert len(sent) == 3
+
+
+def test_the_real_host_reads_processes_and_groups_from_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`Real`'s reads of `/proc` and of the host's groups, on this process itself: nothing is started or signalled."""
+    real = demo.Real()
+    me = real.process(os.getpid())
+    found = me is not None
+    assert found
+    initial = Path(f"/proc/{os.getpid()}/environ").read_bytes().split(b"\0")
+    names = sorted(entry.partition(b"=")[0].decode(errors="replace") for entry in initial if b"=" in entry)
+    argv_is_the_interpreters = same(me.argv, sys.orig_argv)
+    names_are_its_environments = same(sorted(me.environ), names) and "PATH" in me.environ
+    path_is_as_it_began = same(me.environ["PATH"], dict(e.partition(b"=")[::2] for e in initial)[b"PATH"].decode())
+    assert argv_is_the_interpreters
+    assert names_are_its_environments
+    assert path_is_as_it_began
+
+    # A pid no process has is none. Pid 0, init and a negative pid are each none with nothing of `/proc` read, so
+    # that nothing is ever decided of them, whoever runs this.
+    assert real.process(2**22 + 1) is None
+    read: list[str] = []
+    read_bytes = Path.read_bytes
+
+    def recording(path: Path) -> bytes:
+        read.append(str(path))
+        return read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", recording)
+    assert [real.process(pid) for pid in (0, 1, -1)] == [None, None, None]
+    assert read == []
+    still_read = real.process(os.getpid()) is not None
+    assert still_read
+    assert read == [f"/proc/{os.getpid()}/cmdline", f"/proc/{os.getpid()}/environ"]
+    monkeypatch.undo()
+
+    pids = real.pids()
+    assert os.getpid() in pids
+    assert pids == sorted(pids) and pids[0] >= 1
+
+    assert real.euid() == os.geteuid()
+    # The effective group with the supplementary ones: under `sg` it is the one group held that the list lacks.
+    assert real.groups() == {*os.getgroups(), os.getegid()}
+    assert real.gid(grp.getgrgid(os.getegid()).gr_name) == os.getegid()
+    assert real.gid("fylgja-no-such-group") is None
+
+
+def test_the_fake_host_answers_as_the_real_one_does() -> None:
+    """Where `Real` answers by a rule of its own, the fake keeps the rule, so that no test passes on what the host
+    would never answer."""
+    host = FakeHost()
+    host.answer("a", status=3, out="printed\n")
+    host.answers[("b",)] = lambda ran: demo.Done(0, "printed by a function\n")
+    # A child's output is answered only where it was captured.
+    assert host.run(["a"], capture=True) == demo.Done(3, "printed\n")
+    assert host.run(["a"]) == demo.Done(3, "")
+    assert host.run(["b"], capture=True) == demo.Done(0, "printed by a function\n")
+    assert host.run(["b"]) == demo.Done(0, "")
+
+    # No pid at or under 1 is a process to read or to signal, whatever a test's `/proc` holds.
+    seen: list[tuple[int, int]] = []
+    host.on_signal = lambda pid, number: seen.append((pid, number))
+    host.processes = {pid: demo.Process(["sleep", "600"], {}) for pid in (-1, 0, 1, 7)}
+    assert [host.signal(pid, 15) for pid in (-1, 0, 1, 7, 8)] == [False, False, False, True, False]
+    assert host.signalled == [(-1, 15), (0, 15), (1, 15), (7, 15), (8, 15)]
+    assert seen == [(7, 15)]
+    assert [host.process(pid) is None for pid in (-1, 0, 1, 7, 8)] == [True, True, True, False, True]
 
 
 class Reply:
@@ -1127,7 +1379,8 @@ def test_the_real_hosts_ask_sends_the_auth_in_a_header_and_raises_nothing(monkey
         demo.urllib.error.URLError("refused"),
         ConnectionRefusedError(111, "Connection refused"),
         TimeoutError("timed out"),
-        demo.http.client.RemoteDisconnected("closed"),
+        http.client.RemoteDisconnected("closed"),
+        http.client.IncompleteRead(b"half"),
     ):
         opener.next = raised
         answer = real.ask("GET", url, auth=AUTH)
@@ -1147,6 +1400,19 @@ def test_the_real_hosts_text_lock_and_secret(tmp_path: Path) -> None:
     assert real.text(tmp_path / "absent") is None
     assert real.text(held / "under-a-file") is None
     assert real.text(tmp_path) is None
+
+    # A file's bytes pass through unchanged, whatever the locale: a byte that is no UTF-8 is kept, to be given to a
+    # child and hashed as the file holds it, and the fake reads a file of a test's own likewise.
+    raw = tmp_path / "raw"
+    raw.write_bytes(b"X=p\xffq\nY=\xc3\xa9\n")
+    text = real.text(raw)
+    assert text is not None
+    assert os.fsencode(text) == b"X=p\xffq\nY=\xc3\xa9\n"
+    assert FakeHost(disk=tmp_path).text(raw) == text
+    read = demo.read_env(text)
+    assert (os.fsencode(read["X"]), read["Y"]) == (b"p\xffq", "\u00e9")
+    assert demo.token_lines("", {"FYLGJA_API_TOKEN": read["X"]}) == [f"{hashlib.sha256(b'p\xffq').hexdigest()} demo"]
+
     if os.geteuid() != 0:
         held.chmod(0)
         with pytest.raises(PermissionError):

@@ -16,7 +16,7 @@
 # host.docker.internal names the Docker bridge's gateway, for a webhook NetBox sends to a listener on the host.
 #
 # The project's network is given a documentation range of its own, outside the private ranges Docker takes its
-# networks' subnets from, so that it never meets the local driver's lab pool nor a network Docker gives itself;
+# networks' subnets from, so that it never meets the local driver's default lab pool nor a network Docker gives itself;
 # netbox_dev.py's SUBNET is the same, and its `up` recreates a network that stands with another subnet, keeping the
 # volumes, so that the start makes it with this range; what Compose's `up` alone does to such a network was not read.
 services:

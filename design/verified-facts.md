@@ -193,6 +193,19 @@ the local driver and the step; a fact re-verified there gets a *(0.81.0, date)* 
   network: a list of `{"Subnet", "Gateway"}` objects, or `null` for `host` and `none`.
   `docker image inspect` of an absent image (`No such image`) and `docker network inspect`
   of an absent network each exit 1.
+- **`docker network inspect --format '{{json .Name}} {{json .IPAM.Config}}' <ids…>`**, which
+  the local driver's `admit` asks so that a refusal can name a network
+  ([D-103](decisions.md#d-103)), prints one line per network: its name as a JSON string, one
+  space, then the list of `{"Subnet", "Gateway"}` objects, or `null`. *(Docker 29.8.1,
+  2026-11-13)* Read by hand on the development host at 20:43 UTC, over the ids
+  `docker network ls` gave, with no container running and nothing changed: six networks and
+  six lines, in the ids' order; `"host" null` and `"none" null`; the bridge's and the three
+  Compose projects' each a list of one object, the development NetBox's
+  `"fylgja-core-netbox_default" [{"Subnet":"198.51.100.0/24","Gateway":"198.51.100.1"}]`.
+  No network of two subnets stood, and none was read in this form. The live tier's
+  `test_8_a_pool_a_docker_network_holds_is_refused_naming_it_and_the_setting` holds the
+  form for `host` and for a network it makes with `--subnet` alone, which read
+  `"fylgja-live-pool" [{"Subnet":"192.0.2.0/24","Gateway":"192.0.2.1"}]`.
 - **`docker events`, the driver's account of a container started, dead or removed**
   ([D-058](decisions.md#d-058)). *(Docker 29.8.1, 2026-11-06)* Read by hand under `env -i`
   with `PATH` alone, as `cli.environment` gives a command on this host, with nothing else live
@@ -1191,6 +1204,116 @@ says so; every other reading fell inside.
   unmanaged `n2` at +30.52 s, the wait holding at its first try, and +47.38 s, the wait holding
   after 16.93 s (+37.03–47.27 s); a `stop --node` alone took 0.65 s once (0.66–0.76 s). The marker
   read absent in both runs.
+
+**fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(0.81.0,
+Docker 29.8.1, SR Linux 24.7.1, 2026-11-13; the first two were read by hand at 19:05Z, before the
+run, and their output not saved)*
+
+`core/tests/live/test_containerlab_driver_live.py` ran alone (`cd core && .venv/bin/pytest -q -rA
+-m live tests/live/test_containerlab_driver_live.py`), ending at 19:11Z, the log's last write:
+**8 passed in 251.08 s**, exit 0. Its
+`test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_removes_nothing` pins
+what follows ([D-102](decisions.md#d-102)), but the host before the run and after the module,
+which were read by hand and are no assertion of the module's.
+
+- **The host before the run**, read by hand at 19:05Z: `docker ps -a -q --filter
+  label=containerlab` and `docker ps -q` each printed nothing, and `docker network inspect` of each network `docker
+  network ls` listed gave no subnet inside or over 172.20.0.0/16.
+- **The call.** The twin `drv-live`, `three-node` planned under the shipped packages, ran its
+  three SR Linux containers, made anew by the `apply` with `reconfigure` of the test before. The
+  driver's `destroy` was given that deployment and its files, and the shipped packages with one
+  change: `nokia_srlinux`'s image reference with `-moved` appended, as a package edited to another
+  image while a twin runs the one it had.
+- **It was refused in 0.01 s**, by `Unpackaged`: `no package given runs the node n1
+  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`. The test compared the error's node to `n1`, its
+  kind to `nokia_srlinux` and its image to the shipped package's reference. That the node named
+  is the first of the topology file, in its order, and the image the one that file writes, is
+  the pure tier's reading
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_command`), not this run's.
+- **What the test read of the lab was as before the call**: the names of the containers under
+  the lab's label, the lab's lines of `/etc/hosts` (its two markers and a line a node), that the
+  ssh config `clab-drv-live.conf` and the network `clab-drv-live` exist, `inspect`'s three nodes,
+  each at the incarnation (`State.StartedAt`) and the address it had before the call, and the
+  names of the entries of the twin's directory under the driver's root. That no command runs
+  before the refusal is the pure tier's reading of the driver
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_command`); this run read those,
+  and nothing else of the host.
+- **The destroy with the shipped packages**, the module's next test, took 1.67 s, after which the
+  test read no container under the lab's label, none of the lab's lines in `/etc/hosts`, no ssh
+  config and no network of the lab, `inspect` `absent`, and the twin's directory gone.
+- **The host after the module**, read by hand, at a time not kept: `docker ps -a -q --filter
+  label=containerlab` printed nothing, `docker network ls` listed no network named `clab-`,
+  `grep -c clab-drv-live /etc/hosts` printed 0 and `pgrep -x containerlab` found no process. The
+  module itself asserts each twin's leftovers gone at that twin's destroy, its ssh config among
+  them.
+
+**fylgja-core, phase 10: the live tier and the conformance suite on the local driver, under
+packages that list their versions** *(0.81.0, Docker 29.8.1, SR Linux 24.7.1, cEOS 4.32.0.2F,
+2026-11-13; containerlab's and Docker's versions were read on the host after the runs, at 01:07Z
+the next day, `task-5-versions.log`)*
+
+The live tier ran whole once, and one of its modules once more after a mend to that module's
+test. **The tier had no one whole passing run, and no time of a whole passing tier was
+measured**: the run below is the only whole one, and by a ruling it was not made again. Each log
+named is the run's own output, or a reading of the host taken beside it, kept outside the tree
+with the records of phase 10's plan 1, Task 5; `local/.env` was loaded in each run's command.
+
+- **The host before the whole run**, at 21:48:42Z (`task-5-before-live.log`): `docker ps -a -q
+  --filter label=containerlab` and `docker ps` each printed nothing, no network was named
+  `clab-`, and of the six networks Docker listed, `host` and `none` with no subnet and four with
+  one each, none held a subnet inside or over 172.20.0.0/16.
+- **`make live`, whole, at `ab859ef`: 7 failed, 159 passed, 1 skipped in 3528.72 s** (58:48 by
+  pytest, 21:49:01 to 22:47:53Z by the host's clock), `make`'s exit status 2
+  (`task-5-live.log`). The driver's own modules under `core/tests/live/`, 113 tests:
+  `test_object_store_live.py` 61 passed, `test_verify_live.py` 15,
+  `test_containerlab_driver_live.py` 9, `test_push.py` 9, `test_restore_live.py` 3,
+  `test_many_labs_live.py` 1, and `test_changes_live.py` 8 passed and 7 failed; then the suite,
+  54 tests, below.
+- **The seven failures were `test_changes_live.py`'s tests 05 to 11, by one cause, a comparison
+  in the module's helper `step`** (`task-5-live.log`). The helper admitted each step with the
+  deployment the twin held and asserted the answer equal to the allocation of the twin's first
+  admit. Four tests failed at that line, the answer differing in `demand` alone, `lab` and
+  `mgmt_subnet` equal each time: to `steps/two-node` it held 2 nodes, 1.0 CPU and 4096 MiB, to
+  `three-node-probed` and to `steps/three-node-probed-moved` 5 nodes, 1.7 CPU and 6208 MiB, and
+  to `steps/three-node-n3-eos` 3 nodes, 1.5 CPU and 5632 MiB, against the first admit's 3 nodes,
+  1.5 CPU and 6144 MiB. The other three failed for want of the step before them. `test_06`, the
+  step back to `three-node`: `changes` answered `kept` for all three nodes, where `n1` and `n2`
+  recabled and `n3` added were expected, the node never having been removed. `test_08`: `docker
+  exec` into the probe host `n1-loop-a` failed with status 1, the host never having been made.
+  `test_10`, the step that removes the probe: `changes` answered `kept` for `n2`, where
+  recabled was expected, and named neither probe host, where both removed were expected, the
+  probe never having been added. Tests 02 to 04, whose targets hold three SR Linux nodes as the
+  first admit did, passed, as did the module's two destroys and its cEOS tests.
+  - The driver answered as [D-073](decisions.md#d-073) has it, a step's allocation carrying the
+    target's demand. That the comparison is phase 5's and the answer phase 7's, both on `main`
+    and neither changed by phase 10, is the tree's history and no reading of this run; so is
+    that the whole tier is not recorded as run between phase 6's block above and this one.
+- **The conformance suite on the local harness passed within that run: 53 passed, 1 skipped**
+  (`task-5-live.log`): 12 tests of `test_lifecycle.py`, 20 of `test_steps.py`, 10 of
+  `test_step_kills.py`, 5 of `test_many.py`, 4 of `test_restore.py` and 2 of `test_zz_end.py`;
+  `test_isolation.py`'s one scenario skipped, `the driver keeps twins apart by names, not by the
+  network`. At the session's end the runtime held nothing and no record named a twin, and the
+  core had logged 2318 lines, each one JSON, holding no token or password. The suite was not
+  run alone on this harness, and no time of it alone was measured.
+- **The driver's module passed whole within that run**, 9 tests, the refusal of a destroy under
+  packages that do not list a node's image (the block above) and the refusal of a pool a Docker
+  network holds ("Ubuntu hosts") among them (`task-5-live.log`).
+- **The host after the whole run**, at 22:48:04Z (`task-5-after-live.log`): no container
+  labelled `containerlab`, no network named `clab-`, the same six networks, and no line of
+  `/etc/hosts` naming a lab; every container the host held was a stopped one of a Compose
+  project.
+- **`core/tests/live/test_changes_live.py` alone, at `f337d7c`: 15 passed in 264.83 s**
+  (22:59:52 to 23:04:18Z), exit 0 (`task-5-changes-live.log`), after the helper was mended to
+  hold a step's answer to the twin's allocation in every member but `demand`, and its `demand`
+  to the one the target's plan answers. Tests 05 to 11 passed. Before it, at 22:59:47Z
+  (`task-5-before-changes-live.log`), the host answered as before the whole run: no container
+  labelled `containerlab`, none running, no network named `clab-`, and the same six networks
+  with the same subnets. After it, at 23:04:24Z (`task-5-after-changes-live.log`):
+  no container labelled `containerlab` and none running, the stopped ones not listed; no
+  network named `clab-`; the same six networks by name, their subnets not read again; and no
+  line of `/etc/hosts` naming a lab.
+- **Not shown:** the tier whole and passing in one run, at either commit; the time of such a
+  run; the suite alone on this harness.
 
 **The dry run**
 
@@ -2495,6 +2618,131 @@ captured output until the harness kept its readings for the session's end):
   step to `mixed-e2-port` was refused without `--allow-restart` and made with it, as the dry run
   answered. No namespace was left. With this the suite has passed whole on both drivers.
 
+**fylgja-core, phase 10: a destroy under packages that do not list a node's image** *(SR Linux
+24.7.1, 2026-11-13; k3s v1.37.1+k3s1, clabernetes 0.10.1 and lightkube 1.0.1 are the cluster's
+and the core's pin as this file records them elsewhere, and no output of this run holds them)*
+
+`core/tests/cluster/test_clabernetes_driver_cluster.py` ran alone from the development host (`cd
+core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver_cluster.py`,
+`local/.env` loaded), from 19:26:31 to 19:30:49Z: **8 passed in 255.63 s**, exit 0, none skipped.
+Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` (the run's log,
+`task-1-cluster3.log`, names it `…_is_refused_before_any_request`: the test was renamed after the
+run, no line of its body changed) pins what follows ([D-102](decisions.md#d-102)), as the local
+driver's block does above ("containerlab 0.79.0"), but the cluster before the run and after the
+module, which were read by hand and are no assertion of the module's.
+
+- **The cluster before the run**, read by hand with `kubectl` at about 19:25Z: `get deployment
+  fylgja-core -n fylgja` gave the deployed core's replicas as 0 with none ready. Listings of the
+  namespaces named `fylgja-twin-*`, and of the pods, Services and Secrets, in every namespace, that carry the label
+  `fylgja.owner=core` or `fylgja.twin`, each counted no line; the counts were of the lines
+  printed, the listings' errors not kept. The module's first test asserts that `inspect` answers
+  `absent` for the twin before it is admitted.
+- **The call.** The twin `drv-k8s`, `three-node` planned under the shipped packages, ran its three
+  SR Linux pods, each made anew by the `apply` with `reconfigure` of the test before. The driver's
+  `destroy` was given that deployment and its files, and the shipped packages with one change:
+  `nokia_srlinux`'s image reference with `-moved` appended.
+- **It was refused in 0.02 s**, by `Unpackaged`: `no package given runs the node n1
+  (nokia_srlinux, ghcr.io/nokia/srlinux:24.7.1)`. The test compared the error's node to `n1`, its
+  kind to `nokia_srlinux` and its image to the shipped package's reference. That the node named
+  is the first of the Topology's definition, and the image the one the Topology writes, a gated
+  one under its registry's prefix, is the pure tier's reading
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_call`), not this run's.
+- **The namespace and the nodes were as before the call**: the namespace `fylgja-twin-drv-k8s`
+  stood and was not being deleted, and `inspect` answered the three nodes running, each at the
+  incarnation (its pod's uid and restart count) and the address it had before the call. That no
+  request is made before the refusal is the pure tier's reading of the driver
+  (`test_destroy_meets_a_node_no_given_package_runs_before_any_call`); this run read the
+  namespace and `inspect`, and nothing else of the cluster.
+- **The destroy with the shipped packages**, the module's next test, took 14.16 s, after which
+  `inspect` answered `absent` and the namespace was gone.
+- **The module's end** asked the deletion of the twin's namespace and of `drv-k8s-taken`'s, the
+  twin whose admission was refused, and read each gone, which its fixture asserts. Read by hand
+  after it, with `kubectl`, at a time not kept: the same listings as before the run each counted
+  no line, the counts again of the lines printed.
+- **The rest of the module**, read beside it: the first apply took 69.10 s, its repeat 2.24 s, the
+  apply with `reconfigure` 65.51 s, and the residue's destroy 6.08 s.
+
+**fylgja-core, phase 10: the cluster tier and the conformance suite on the cluster, under
+packages that list their versions** *(k3s v1.37.1+k3s1, clabernetes 0.10.1, lightkube 1.0.1, the
+node images those the shipped packages name, 2026-11-13, the suite ending at 01:06Z the next day;
+the three versions were read after the runs, at 01:07Z, from the hosts' kubelets, the manager's
+image tag and the venv, `task-5-versions.log`)*
+
+The cluster tier ran whole once, and one of its modules once more after a mend to that module's
+test; then the conformance suite ran once against the deployed core. **The tier had no one whole
+passing run, and no time of a whole passing tier was measured**: the run below is the only whole
+one, and by a ruling it was not made again. Each log named is the run's own output, or a
+read-only reading by `kubectl get` and `docker`, kept outside the tree with the records of phase
+10's plan 1, Task 5; `local/.env` was loaded in each command, and nothing was scaled, applied or
+deleted by hand.
+
+- **The cluster before the tier**, at 23:04:36Z (`task-5-before-cluster.log`): the Deployment
+  `fylgja-core` in `fylgja` at no replica, its image's tag `ea4cbde1d213`, and no pod of the
+  core's; seven namespaces, none `fylgja-twin-*`; no Topology in any namespace.
+- **`make cluster`, whole, at `f337d7c`: 35 passed, 8 errors in 1655.28 s** (27:35 by pytest,
+  23:04:48 to 23:32:25Z by the development host's clock), `make`'s exit status 2
+  (`task-5-cluster.log`): `test_clabernetes_changes_cluster.py` 14 passed,
+  `test_clabernetes_driver_cluster.py` 8, `test_kube_cluster.py` 7, `test_lease_cluster.py` 5,
+  `test_capacity_cluster.py` 1, and `test_restore_cluster.py` 8 errors.
+- **The eight errors were every test of `test_restore_cluster.py`, by one cause, at the module's
+  fixture** (`task-5-cluster.log`, and the loop's own log, `task-5-cluster-restore-loop.log`).
+  The fixture runs the loop in the test's process over a driver whose reach into the cluster is
+  a wrapper of the module's own, and waits 600 s for the loop's create of the module's twin. The
+  create's run started and reached `compiled`; the queue then logged `handling rst-cluster
+  failed (AttributeError)` 15 times and the loop `resumed after compiled` 14 times; the run
+  stayed `running` and the fixture failed after 600.80 s, `rst-cluster's create: not within
+  600 s`. No test of the module ran. That the twin's namespace was never made is an inference,
+  and no reading: the run never left `compiled`, the phase before admit, and the module's end
+  read the namespace gone 0.0 s after asking its deletion.
+  - The log names the exception's type and not the attribute. That the wrapper lacked `nodes`
+    and `all_pods`, the two reads the driver's capacity reading makes at each admit
+    ([D-073](decisions.md#d-073)), is a reading of the code; that the wrapper is phase 6's, the
+    two reads phase 7's, both on `main` and neither changed by phase 10, is the tree's history.
+- **The driver's module passed whole within that run**, 8 tests, the destroy refused under
+  packages that do not list a node's image among them, in 0.02 s again (the block above), its
+  test reading the image it compares through `platform_package.image` for the first time on the
+  cluster; and **the changes module passed whole**, 14 tests, its helper `step` mended as the
+  live tier's was ("containerlab 0.79.0", phase 10's block) before the run (`task-5-cluster.log`).
+- **The cluster after the tier**, at 23:32:33Z (`task-5-after-cluster.log`): the same seven
+  namespaces, no Topology, the Deployment still at no replica. The Leases were read at
+  23:33:07Z, in the same log: under "the Leases of fylgja" one is listed, `fylgja-core`, made on
+  2026-11-07, its holder empty; and under "leases of every namespace whose name holds fylgja",
+  that one line alone.
+- **`core/tests/cluster/test_restore_cluster.py` alone, at `1d460b4`: 8 passed in 770.61 s**
+  (23:41:48 to 23:54:40Z), exit 0 (`task-5-restore-cluster.log`), after the wrapper was given
+  the two reads, each passed on to the reach as its other reads are. The loop's create of the
+  twin took 77.39 s; four restores each ended `restore ok`, the wait settled 0.30 s, 0.25 s,
+  13.32 s and 0.25 s into its 180 s; the step to `three-node-probed` took 66.6 s and the step to
+  `steps/three-node-n3-eos` 79.8 s; the teardown's destroy took 46.30 s. No run of this module
+  is recorded in this file between phase 6's ("a node's pod deleted behind the core", above) and
+  this one. Before it, at 23:41:42Z (`task-5-before-restore-cluster.log`): the Deployment at no
+  replica and no pod of the core's, its image's tag not read again; the seven namespaces, none
+  `fylgja-twin-*`; no Topology. After it, at 23:54:50Z (`task-5-after-restore-cluster.log`):
+  the same seven namespaces, no Topology, the Deployment at no replica, and `kubectl get leases
+  -A` through `grep -i fylgja`, with the holder printed, giving `fylgja/fylgja-core` alone, its
+  holder empty.
+- **The core before the suite**, at 23:58:29Z (`task-5-before-conformance-cluster.log`): the
+  Deployment at one replica, ready, its image's tag `1d460b456e9d`, built at `1d460b4`; its pod
+  Running since 23:57:21Z with no restart, `FYLGJA_RESYNC_S` 3600; no Topology and no twin's
+  namespace. The development host held no running container and none labelled `containerlab`.
+- **`make conformance DRIVER=clabernetes`, at `1d460b4`, against that core: 53 passed, 1 skipped
+  in 4092.37 s** (1:08:12 by pytest, 23:58:37 to 01:06:51Z), exit 0
+  (`task-5-conformance-cluster.log`): 12 tests of `test_lifecycle.py`, 20 of `test_steps.py`, 10
+  of `test_step_kills.py`, 5 of `test_many.py`, 3 of `test_restore.py`, 2 of `test_zz_end.py` and
+  `test_isolation.py`'s one; `test_restore.py`'s stopped node skipped, `a stopped node is not
+  expressible on clabernetes 0.10.1`. The suite printed the tag of the image the core ran,
+  `1d460b456e9d`. It killed the core 18 times, the next pod answering 21.46 to 32.84 s after
+  each kill. At the session's end the runtime held nothing and no record named a twin, the core
+  had logged 2500 lines, each one JSON, holding no token or password, and the suite's namespace
+  `fylgja-conformance-probe` was deleted and read gone 6.1 s after.
+- **The cluster after the suite**, at 01:07:05Z (`task-5-after-conformance-cluster.log`): the
+  same seven namespaces, none `fylgja-twin-*` and no `fylgja-conformance-probe`; no Topology; the
+  Deployment at one replica, ready, the same tag; its pod, the one the last kill left, Running
+  since 00:51:01Z with no restart and no label of the suite's; the namespace's one NetworkPolicy
+  `versity`, the gateway's; the Lease held by that pod, with no annotation. The development host
+  held no running container, none labelled `containerlab` and no network named `clab-`.
+- **Not shown:** the tier whole and passing in one run, at any commit; the time of such a run.
+
 ---
 
 ## lightkube 1.0.1, against k3s v1.37.1+k3s1
@@ -3351,7 +3599,8 @@ ran beside it, and no other twin. Each line is one run, measured once.
 - **Its version leaf** `/system/information/version` reads `v26.7.2-519-g94fbd638fa8`
   (`sr_cli`, `info from state`); `show version` gives `v26.7.2` and build
   `519-g94fbd638fa8`. 24.7.1's reads `v24.7.1-330-g38f237abfe`: each begins with `v`, which
-  the packages' `versions` entries (`"24.7"`) do not.
+  the packages' `versions` entries (`"24.7"`) do not. *(Since 2026-11-13 the entry is the
+  version's name, `"24.7.1"`, [D-102](decisions.md#d-102); the reading stands as it was made.)*
 - **Verify held on it as on 24.7.1**: 19 assertions held, none failed and 5 skipped, the
   counts 24.7.1 gave on the same blueprint in the same session.
 - **One booted node held 1,774 to 1,779 MiB** (cgroup `memory.current`, three nodes, read
@@ -8196,9 +8445,19 @@ and each says whether it was re-verified on 26.04.
   is the local driver's default pool of lab subnets, and while a network holds
   it, a stopped project's kept one too, a create is refused before anything is deployed:
   `admission.capacity`, "The pool 172.20.0.0/16 has no /24 that neither a Docker network nor
-  another twin holds." The server has no setting for the pool. *(26.04, 2026-11-12)* The
+  another twin holds." The server then had no setting for the pool. *(26.04, 2026-11-12)* The
   development NetBox's network was pinned off the pool the day after ("NetBox 4.7.5 with
   netbox-branching 1.2.3", "The project's network and the local driver's lab pool").
+  Since 2026-11-13 the pool is the server's setting `FYLGJA_LAB_POOL`, and the refusal says what
+  holds it ([D-103](decisions.md#d-103)). In the live tier, a driver made on a pool of one /24,
+  192.0.2.0/24, with a Docker network `fylgja-live-pool` made over that subnet, refused a
+  three-node twin at `admit`, nothing deployed: `admission.capacity`, "The pool 192.0.2.0/24
+  has no /24 that neither a Docker network nor another twin holds. Docker networks holding
+  part of it: fylgja-live-pool (192.0.2.0/24). Set FYLGJA_LAB_POOL to an IPv4 network with a
+  free /24, and start the core again." The network, removed by the test, was gone after it.
+  *(Docker 29.8.1, 2026-11-13: one run of `core/tests/live/test_containerlab_driver_live.py`
+  alone, 9 passed in 260.71 s, ending 20:56 UTC; containerlab 0.81.0 and Ubuntu 26.04.1 were read
+  on the host after the run, at 21:15 UTC, by `containerlab version` and `/etc/os-release`)*
 - **Booting a twin beside another heavy workload starves a host with little memory to
   spare**: deploys are cut short, and the other workload's requests time out. Read
   `free -m` before booting a twin. *(2026-09-15)*

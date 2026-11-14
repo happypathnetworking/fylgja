@@ -386,7 +386,8 @@ class ClabernetesDriver:
         `ValueError`, before any call, for files that are not the deployment's (`check_files`),
         not the three a plan renders or not each one YAML mapping, an allocation whose namespace
         is not the twin's, a document not bound to it (`_bound`: the Namespace of that name, the
-        NetworkPolicy in it, and the Topology named for the twin in it), or a node no given
+        NetworkPolicy in it, and the Topology named for the twin in it); and `Unpackaged`,
+        before any call too, for the first node of the Topology, in its order, that no given
         package runs. The namespace is read before anything is applied: one of the twin's name
         that is not the twin's, or one still being deleted, is `DriverFailed` with nothing
         applied, and the loop's retry applies once it is gone. One someone else makes between
@@ -554,8 +555,10 @@ class ClabernetesDriver:
     ) -> None:
         """Delete the twin's namespace, the allocation's, with all it holds, and wait until it
         is gone. `ValueError`, before any call, as `apply` refuses: files that are not the
-        deployment's (`check_files`) or not the three a plan renders, an allocation whose
-        namespace is not the twin's, or a node no given package runs.
+        deployment's (`check_files`) or not the three a plan renders, or an allocation whose
+        namespace is not the twin's; and `Unpackaged`, before any call too, for the first node of
+        the Topology, in its order, that no given package runs: the destroy's budget is its
+        packages', so the namespace is left as it is (D-102).
 
         A namespace absent is nothing done. One that is not the twin's is logged at WARNING and
         left: the driver never deletes it. One already being deleted is not asked again. The
@@ -893,7 +896,8 @@ def deploy_budget(
     """The budget of a deploy of `files`: the largest `deploy_timeout_s` of the packages the
     Topology's nodes use, since nodes deploy in parallel, plus `MARGIN_S`. `registries` is the
     deployment's `allocation["registries"]`, the prefixes a gated node's image is written
-    under, which the files do not carry. `ValueError` for a node no given package runs."""
+    under, which the files do not carry. `Unpackaged` for the first node, in the Topology's
+    order, that no given package runs."""
     sections = _sections(files, platforms, probe_packages, registries)
     return max(section.deploy_timeout_s for section in sections) + MARGIN_S
 

@@ -7,12 +7,14 @@ pure tier stands a fake in for both. The driver's working files live under
 `<root>/containerlab/<twin>/`, `root` being the directory the server gives it.
 
 `admit` reserves what `plan` binds: a /24 of the pool that no Docker network and no other
-twin's allocation holds, and writes the twin's demand into the allocation. It refuses a twin the
-host cannot fit (`admission.capacity`: the pool exhausted, the demand above the host's free room less
-the demand of twins admitted whose nodes are not yet up, or a node above the host's room, D-073), and one
-whose account-gated image is not on the host (`admission.image.absent`), since locally a
-`pull_secret` is a presence check and the image is never pulled (D-015). An ungated image is
-containerlab's to pull at deploy.
+twin's allocation holds, and writes the twin's demand into the allocation. The pool is the one
+the driver is made with, the server's setting `FYLGJA_LAB_POOL` where it is set (D-103), and a
+pool with no /24 free is refused naming each Docker network that holds part of it and that
+setting (`pool.refusal`). It refuses a twin the host cannot fit (`admission.capacity`: the pool
+exhausted, the demand above the host's free room less the demand of twins admitted whose nodes are
+not yet up, or a node above the host's room, D-073), and one whose account-gated image is not on
+the host (`admission.image.absent`), since locally a `pull_secret` is a presence check and the
+image is never pulled (D-015). An ungated image is containerlab's to pull at deploy.
 
 `apply` writes the deployment's files, each checked against its hash, into the twin's
 directory and deploys the topology: on a running lab that is containerlab's own reconcile,
@@ -78,7 +80,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import ipaddress
 import json
 import logging
 import os
@@ -356,7 +357,9 @@ class ContainerlabDriver:
     ) -> Allocation | Refusal:
         """The first free /24 of the pool as the twin's allocation, with the demand it reserves of the
         host's room, or a refusal naming every shortfall (`admission.capacity`) or every absent gated
-        image (`admission.image.absent`).
+        image (`admission.image.absent`). A pool with no /24 free is the first shortfall, in
+        `pool.refusal`'s words: the Docker networks that hold part of it, by name and subnet, and
+        the setting that moves it (D-103).
 
         A create must fit the reading (`capacity`) in its sum, and each node must fit the host. With
         `held`, the deployment a stepping twin has applied, the answer is `held.allocation` with the
@@ -374,11 +377,12 @@ class ContainerlabDriver:
         shortfalls = []
         subnet = None
         if held is None:
-            taken = await self._docker_subnets() + [IPv4Network(a["mgmt_subnet"]) for a in reserved]
+            networks = await self._docker_networks()
+            taken = [docker_subnet for _, docker_subnet in networks]
+            taken += [IPv4Network(a["mgmt_subnet"]) for a in reserved]
             subnet = pool.choose(self.pool, taken)
             if subnet is None:
-                shortfalls.append(
-                    f"The pool {self.pool} has no /24 that neither a Docker network nor another twin holds.")
+                shortfalls.append(pool.refusal(self.pool, pool.holders(self.pool, networks)))
         demand = clab_plan.demand(manifest, platforms, probe_packages)
         reading = await self.capacity(reserved)
         if held is None:
@@ -420,7 +424,8 @@ class ContainerlabDriver:
     ) -> None:
         """Write the deployment's files under the twin's directory and deploy its topology, with
         `--reconfigure` when asked; `ValueError`, before any write or command, for files that are
-        not the deployment's or a node no given package runs.
+        not the deployment's, and `Unpackaged`, before any write, command or wait, for the first
+        node of the topology, in its order, that no given package runs.
 
         Under containerlab's live link mode a port added after boot to a node whose kind cannot
         add one comes up in Linux and the node never lists it, so before the deploy the container
@@ -519,7 +524,9 @@ class ContainerlabDriver:
         """Remove everything the twin holds: its containers, host entries, ssh config and
         management network, and the twin's directory. Root-owned residue with no container is
         deployed, then destroyed (rule 2); nothing found is nothing done. `ValueError`, before
-        any command, for files that are not the deployment's.
+        any command, for files that are not the deployment's, and `Unpackaged`, before any
+        command or wait, for the first node of the topology, in its order, that no given package
+        runs: the destroy's budget is its packages', so the lab is left as it is (D-102).
 
         Before anything else, a stray `containerlab deploy` of the twin's topology is waited for,
         as `apply` waits for one, within the deploy's budget: a core killed during a deploy and a
@@ -748,20 +755,15 @@ class ContainerlabDriver:
             return False
         return True
 
-    async def _docker_subnets(self) -> list[IPv4Network]:
-        """Every IPv4 subnet a Docker network on the host holds."""
+    async def _docker_networks(self) -> list[tuple[str, IPv4Network]]:
+        """Every Docker network on the host with an IPv4 subnet: its name with each such subnet it
+        holds, a pair a subnet, as `pool.networks` reads Docker's answer to `pool.FORMAT`. A
+        network with none, as `host` and `none`, is not among them."""
         ids = (await self._run(["docker", "network", "ls", "--format", "{{.ID}}"], timeout_s=DOCKER_TIMEOUT_S)).split()
         if not ids:
             return []
-        configs = await self._run(["docker", "network", "inspect", "--format", "{{json .IPAM.Config}}", *ids],
-                                  timeout_s=DOCKER_TIMEOUT_S)
-        subnets = []
-        for line in configs.splitlines():  # one network's config per line: a list, or null for none
-            for config in (json.loads(line) if line.strip() else None) or []:
-                network = ipaddress.ip_network(config["Subnet"], strict=False) if config.get("Subnet") else None
-                if isinstance(network, IPv4Network):
-                    subnets.append(network)
-        return subnets
+        return pool.networks(await self._run(["docker", "network", "inspect", "--format", pool.FORMAT, *ids],
+                                             timeout_s=DOCKER_TIMEOUT_S))
 
     async def _image_present(self, ref: str) -> bool:
         """Whether Docker holds the image `ref`; a hung `docker` is a driver error, not an absence."""
@@ -838,8 +840,8 @@ def _sections(
 ) -> list[platform_package.Containerlab | probe_package.Containerlab]:
     """The containerlab section of each package a node of the topology uses: a platform's by
     the node's kind and image, a probe package's by a linux node's image. The deployment does
-    not name its packages, and its topology, the plan's render, does. `ValueError` for a node
-    no given package runs."""
+    not name its packages, and its topology, the plan's render, does. `Unpackaged` for the
+    first node, in the topology's order, that no given package runs."""
     used: list[platform_package.Containerlab | probe_package.Containerlab] = []
     for name, node in yaml.safe_load(files[TOPOLOGY])["topology"]["nodes"].items():
         used += clab_changes.sections_of(name, node, platforms, probe_packages)
@@ -884,7 +886,7 @@ def _images(
     order, then the probe formats."""
     used = sorted({node.platform for node in manifest.nodes})
     formats = sorted({probe.format for probe in manifest.probes})
-    return [(p, platforms[p].runtime.containerlab.image) for p in used] + [
+    return [(p, platform_package.image(platforms[p])) for p in used] + [
         (f, probe_packages[f].runtime.containerlab.image) for f in formats]
 
 

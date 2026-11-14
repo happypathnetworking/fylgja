@@ -22,7 +22,7 @@ relative to them.
 | File | Introduced by |
 |---|---|
 | [`blueprint-1.schema.json`](blueprint-1.schema.json) | [D-006](../design/decisions.md#d-006) |
-| [`platform-package-1.schema.json`](platform-package-1.schema.json) | [D-015](../design/decisions.md#d-015) |
+| [`platform-package-1.schema.json`](platform-package-1.schema.json) | [D-015](../design/decisions.md#d-015), [D-102](../design/decisions.md#d-102) |
 | [`probe-package-1.schema.json`](probe-package-1.schema.json) | [D-015](../design/decisions.md#d-015) |
 | [`probes-1.schema.json`](probes-1.schema.json) | [D-002](../design/decisions.md#d-002) |
 | [`bundle-1.schema.json`](bundle-1.schema.json) | [D-011](../design/decisions.md#d-011) |
@@ -126,6 +126,17 @@ relative to them.
 23. **The plan and the rehearsal are the example orchestrator's documents** since phase 8,
     carried by its wheel and not the core's ([D-084](../design/decisions.md#d-084)). Each
     `$ref`s nothing outside the two files, so that wheel resolves them alone.
+24. **A platform package lists its versions, each with its image**
+    ([D-102](../design/decisions.md#d-102)). `versions` is a list of versions, each an object
+    with a `name`, the release's own text, and `runtime.containerlab.images` names an image
+    for each by that name, where a package named one image. A package lists one version in
+    this build, and the core runs it: a second is refused when the package is loaded, until a
+    device can name the version it runs. What comes later only adds, and breaks no package
+    written to this shape: a device's optional `version`, a second listed version, a version's
+    further members, the reader of `conformance.version`, which nothing reads yet, and that
+    refusal lifted. Nothing reads `conformance.port.discovering` either, the path that says
+    LLDP runs on a port, and it is optional: a package may leave it out, where every package
+    gives `conformance.version`.
 
 ## Settled by measurement (2026-10-30)
 

@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 from aio import BOUND_S, bounded, cancelled, closed
+from fakes import with_image
 
 from fylgja_core import blueprint, bundle, compiler, containerlab, logs, platform_package, probe_package
 from fylgja_core.capacity import LOCAL_HOST, Host, Reading, Resources
@@ -40,7 +41,19 @@ from fylgja_core.containerlab.driver import (
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
 from fylgja_core.deployment import Demand, Deployment
-from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, events_backoff
+from fylgja_core.driver import (
+    Allocation,
+    DriverFailed,
+    Exec,
+    Inspection,
+    NodeState,
+    Planned,
+    Refusal,
+    Unpackaged,
+    events_backoff,
+)
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.probe_package import ProbePackage
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -50,8 +63,24 @@ PLATFORMS = {
 }
 PROBES = {p.format: p for p in [probe_package.load(ROOT / "probes/ping.yaml")]}
 
+# A twin planned under the packages above, then met by a core whose packages no longer list the image one of its
+# nodes runs: a platform package whose image moved, or the probe package whose image did. Each row is the fixture,
+# the packages the driver is given, and the node, kind and image of the first node, in the file's order, that none
+# of them runs, the image as the deployment's own file writes it.
+SRL, PING = PLATFORMS["nokia_srlinux"], PROBES["ping"]
+SRL_MOVED = {**PLATFORMS, "nokia_srlinux": with_image(SRL, ref=platform_package.image(SRL).ref + "-moved")}
+PING_MOVED = {"ping": dataclasses.replace(PING, runtime=dataclasses.replace(
+    PING.runtime, containerlab=dataclasses.replace(PING.runtime.containerlab, image=dataclasses.replace(
+        PING.runtime.containerlab.image, ref=PING.runtime.containerlab.image.ref + "-moved"))))}
+Unrun = tuple[str, Mapping[str, PlatformPackage], Mapping[str, ProbePackage], tuple[str, str, str]]
+UNRUN: list[Unrun] = [
+    ("three-node", SRL_MOVED, PROBES, ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")),
+    ("three-node-probed", PLATFORMS, PING_MOVED, ("n1-loop-a", "linux", PING.runtime.containerlab.image.ref)),
+]
+UNRUN_IDS = ["device", "probe-host"]
+
 NETWORK_LS = ("docker", "network", "ls", "--format", "{{.ID}}")
-NETWORK_INSPECT = ("docker", "network", "inspect", "--format", "{{json .IPAM.Config}}")
+NETWORK_INSPECT = ("docker", "network", "inspect", "--format", "{{json .Name}} {{json .IPAM.Config}}")
 IMAGE_INSPECT = ("docker", "image", "inspect", "--format", "{{.Id}}")
 
 
@@ -90,10 +119,14 @@ class FakeRunner:
         return self.answers[max(matches, key=len)]
 
 
-def docker(*configs: str) -> dict[tuple[str, ...], str]:
-    """Docker answering one network per IPAM config, each `{{json .IPAM.Config}}` line as given."""
+def docker(*configs: str, names: Sequence[str] = ()) -> dict[tuple[str, ...], str]:
+    """Docker answering one network per IPAM config, each a line as Docker 29.8.1 printed one for the driver's
+    format (verified-facts.md): the network's name as a JSON string, one space, and its `{{json .IPAM.Config}}` as
+    given. The networks are named by `names`, in order, and each past them by its id, `net<i>`."""
     ids = [f"net{i}" for i in range(len(configs))]
-    return {NETWORK_LS: "".join(f"{i}\n" for i in ids), (*NETWORK_INSPECT, *ids): "".join(f"{c}\n" for c in configs)}
+    named = [*names, *ids[len(names):]]
+    lines = "".join(f"{json.dumps(name)} {config}\n" for name, config in zip(named, configs, strict=True))
+    return {NETWORK_LS: "".join(f"{i}\n" for i in ids), (*NETWORK_INSPECT, *ids): lines}
 
 
 # A default bridge, the host and none networks (no IPv4 config), and a lab's dual-stack network.
@@ -102,7 +135,10 @@ HOLDING_172_20_0 = docker(
     "[]",
     "null",
     '[{"Subnet":"172.20.0.0/24","Gateway":"172.20.0.1"},{"Subnet":"3fff:172:20::/64"}]',
+    names=("bridge", "host", "none", "clab-u"),
 )
+NO_SLASH24 = "has no /24 that neither a Docker network nor another twin holds."
+SET_THE_POOL = "Set FYLGJA_LAB_POOL to an IPv4 network with a free /24, and start the core again."
 
 
 def manifest(name: str) -> bundle.Manifest:
@@ -172,11 +208,38 @@ def test_admit_logs_the_twin_the_subnet_and_the_demand(tmp_path: Path, caplog: p
 
 def test_an_exhausted_pool_is_refused_for_capacity(tmp_path: Path) -> None:
     refused = admit(tmp_path, FakeRunner(HOLDING_172_20_0), pool=IPv4Network("172.20.0.0/24"))
-    assert refused == Refusal(RULE_CAPACITY, "The pool 172.20.0.0/24 has no /24 that neither a Docker network "
-                                             "nor another twin holds.")
+    assert refused == Refusal(RULE_CAPACITY, f"The pool 172.20.0.0/24 {NO_SLASH24} Docker networks holding part of "
+                                             f"it: clab-u (172.20.0.0/24). {SET_THE_POOL}")
+    # D-103's case: a Compose project's network, wider than the default pool, holds it whole on an idle host.
+    compose = docker('[{"Subnet":"172.17.0.0/16","Gateway":"172.17.0.1"}]',
+                     '[{"Subnet":"172.16.0.0/12","Gateway":"172.16.0.1"}]', names=("bridge", "source_default"))
+    assert admit(tmp_path, FakeRunner(compose)) == Refusal(
+        RULE_CAPACITY, f"The pool 172.20.0.0/16 {NO_SLASH24} Docker networks holding part of it: "
+                       f"source_default (172.16.0.0/12). {SET_THE_POOL}")
     reserved = admit(tmp_path, FakeRunner(docker("[]")), reserved=[{"lab": "u", "mgmt_subnet": "172.20.0.0/24"}],
                      pool=IPv4Network("172.20.0.0/24"))
     assert isinstance(reserved, Refusal) and reserved.rule == "admission.capacity"
+
+
+def test_a_pool_other_twins_hold_whole_names_no_network(tmp_path: Path) -> None:
+    refused = admit(tmp_path, FakeRunner(HOLDING_172_20_0), reserved=[{"lab": "u", "mgmt_subnet": "198.51.100.0/24"}],
+                    pool=IPv4Network("198.51.100.0/24"))
+    assert refused == Refusal(RULE_CAPACITY, f"The pool 198.51.100.0/24 {NO_SLASH24} {SET_THE_POOL}")
+
+
+def test_a_network_with_no_ipv4_subnet_is_never_named(tmp_path: Path) -> None:
+    # `null` (host and none), an empty list and an IPv6 subnet alone hold no /24; a dual-stack network is named
+    # once, by its IPv4 subnet.
+    networks = docker(
+        "null",
+        "[]",
+        '[{"Subnet":"2001:db8::/64","Gateway":"2001:db8::1"}]',
+        '[{"Subnet":"198.51.100.0/24","Gateway":"198.51.100.1"},{"Subnet":"2001:db8:1::/64"}]',
+        names=("host", "empty", "six", "dual"),
+    )
+    refused = admit(tmp_path, FakeRunner(networks), pool=IPv4Network("198.51.100.0/24"))
+    assert refused == Refusal(RULE_CAPACITY, f"The pool 198.51.100.0/24 {NO_SLASH24} Docker networks holding part of "
+                                             f"it: dual (198.51.100.0/24). {SET_THE_POOL}")
 
 
 def test_a_twin_larger_than_the_hosts_available_memory_is_refused_naming_the_shortfall(tmp_path: Path) -> None:
@@ -197,7 +260,8 @@ def test_every_shortfall_is_named_in_one_refusal(tmp_path: Path) -> None:
                     cpus=1)
     assert isinstance(refused, Refusal) and refused.rule == RULE_CAPACITY
     assert refused.message == (
-        "The pool 172.20.0.0/24 has no /24 that neither a Docker network nor another twin holds. "
+        f"The pool 172.20.0.0/24 {NO_SLASH24} Docker networks holding part of it: clab-u (172.20.0.0/24). "
+        f"{SET_THE_POOL} "
         "The twin needs 1.5 CPUs, and the host has 1 free with 0 pending. "
         "The twin needs 6144 MiB of memory, and the host has 1024 MiB free with 0 MiB pending. "
         + " ".join(
@@ -375,6 +439,18 @@ def test_a_step_keeps_the_held_allocation_when_the_host_has_room_for_the_added_n
     assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24",
                       "demand": {"nodes": 4, "cpu": 2.0, "memory_mb": 8192}}
     assert runner.calls == []  # no `docker network` command: the twin's own network is not read
+
+
+def test_a_step_reads_no_network(tmp_path: Path) -> None:
+    # A stepping twin keeps the subnet its record holds, under a pool that has since moved, and with a Docker
+    # network over that subnet and the default pool it came from, though not over the moved pool (D-043, D-103):
+    # neither the pool nor a network is consulted.
+    runner = FakeRunner(docker('[{"Subnet":"172.16.0.0/12","Gateway":"172.16.0.1"}]', names=("source_default",)))
+    driver = ContainerlabDriver(tmp_path, pool=IPv4Network("198.51.100.0/24"), runner=runner,
+                                meminfo=meminfo(tmp_path, ROOMY_KB), cpus=64)
+    answer = asyncio.run(driver.admit(with_a_fourth_node(), PLATFORMS, PROBES, "t", [], held()))
+    assert isinstance(answer, dict) and answer["mgmt_subnet"] == "172.20.7.0/24"
+    assert not any(c[:2] == ("docker", "network") for c in runner.calls)
 
 
 def test_a_step_the_host_has_no_room_for_is_refused_naming_the_added_demand(tmp_path: Path) -> None:
@@ -727,6 +803,21 @@ def test_files_that_are_not_the_deployments_are_refused_before_any_command_or_wr
     assert not (tmp_path / "containerlab").exists()
 
 
+@pytest.mark.parametrize(("name", "platforms", "probes", "unrun"), UNRUN, ids=UNRUN_IDS)
+def test_apply_meets_such_a_node_before_any_write_or_command(
+    tmp_path: Path, name: str, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    p = planned(name)
+    runner = FakeRunner({})
+    strays = Strays(runner, running=None)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(tmp_path, runner, strays=strays).apply(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert runner.calls == [] and strays.asked == []  # no command, and no wait for a stray deploy
+    assert not (tmp_path / "root/containerlab").exists()
+
+
 def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:
     assert deploy_budget(planned("three-node").files, PLATFORMS, PROBES) == 180 + 60  # EOS's 300 s is not used
     assert deploy_budget(planned("mixed").files, PLATFORMS, PROBES) == 300 + 60
@@ -739,8 +830,10 @@ def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() 
 
 
 def test_a_node_no_given_package_runs_has_no_budget() -> None:
-    with pytest.raises(ValueError, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
+    with pytest.raises(Unpackaged, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
         deploy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
+    with pytest.raises(Unpackaged, match="no package given runs the node e1"):
+        destroy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
 
 
 class Inspected(ContainerlabDriver):
@@ -1053,6 +1146,21 @@ def test_destroy_refuses_files_that_are_not_the_deployments_before_any_command(t
     with pytest.raises(ValueError, match="is not the deployment's"):
         asyncio.run(driver(tmp_path, runner).destroy(p.deployment, {TOPOLOGY: b"name: t\n"}, PLATFORMS, PROBES))
     assert runner.calls == []
+
+
+@pytest.mark.parametrize(("name", "platforms", "probes", "unrun"), UNRUN, ids=UNRUN_IDS)
+def test_destroy_meets_a_node_no_given_package_runs_before_any_command(
+    tmp_path: Path, name: str, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    p = planned(name)
+    runner = FakeRunner({})
+    strays = Strays(runner, running=None)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(tmp_path, runner, strays=strays).destroy(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert runner.calls == [] and strays.asked == []  # no command, and no wait for a stray deploy
+    assert not (tmp_path / "root/containerlab").exists()
 
 
 def test_the_destroy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:

@@ -269,7 +269,10 @@ def step(lab: Lab, name: str) -> Stepped:
     after = planned(lab, c)
     held = run(lab.driver.admit(c.manifest, PLATFORMS, PROBES, TWIN, [], held=lab.current.deployment),
                f"admit {name} with the held deployment")
-    assert held == lab.allocation, held
+    # A step keeps the lab's allocation in every member but the demand, which becomes the target's (D-073).
+    target = after.deployment.demand
+    demand = {"nodes": target.nodes, "cpu": target.cpu, "memory_mb": target.memory_mb}
+    assert held == {**lab.allocation, "demand": demand}, held
     answer = lab.driver.changes(lab.current, after, PLATFORMS, PROBES)
     print(f"[live] changes to {name}: {actions(answer)}; links added {answer.links_added}, "
           f"removed {answer.links_removed}")

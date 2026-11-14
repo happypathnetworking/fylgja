@@ -2,7 +2,10 @@
 compiled with the shipped packages and planned for the twin `drv-live` on an allocation from
 a real `admit`, then `drv-live-2` beside it. The tests run in order and share the labs; each
 prints what it took and what it saw (`-s`). The module destroys both twins at its end,
-whatever happened.
+whatever happened. Among them a `destroy` under packages that do not list a node's image, which
+is refused and removes nothing (D-102). The last test deploys nothing: over a pool of its own,
+one /24, it makes a Docker network, and `admit` is refused naming the network and the setting
+(D-103); the network is the test's to remove.
 
 (The module is not named `test_containerlab_driver.py`: the pure tier's module has that name,
 and pytest and mypy each take a test module by its basename.)
@@ -21,11 +24,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fakes import with_image
 
 from fylgja_core import blueprint, compiler, platform_package, probe_package
 from fylgja_core.containerlab import pool
 from fylgja_core.containerlab.driver import ContainerlabDriver
-from fylgja_core.driver import Allocation, Inspection, Planned, Refusal
+from fylgja_core.driver import Allocation, Inspection, Planned, Refusal, Unpackaged
 
 ROOT = Path(__file__).resolve().parents[3]
 PLATFORMS = {p.id: p for p in map(platform_package.load, sorted((ROOT / "psp").glob("*.yaml")))}
@@ -183,6 +187,31 @@ def test_4_apply_with_reconfigure_redeploys(lab: Lab) -> None:
     lab.incarnations = now
 
 
+def test_4b_destroy_under_packages_that_do_not_list_the_image_is_refused_and_removes_nothing(lab: Lab) -> None:
+    # D-102's premise, on the running lab: a core whose SR Linux package was edited to another image
+    # is asked to destroy the twin that runs the one it had. The driver meets `n1` in its lookup of a
+    # node's package, before any command, so the host holds what it held, each container at the
+    # incarnation it had; the true packages' destroy, the next test, then removes everything.
+    p = lab.planned[TWIN]
+    directory = lab.driver.root / "containerlab" / TWIN
+    before, nodes, files = leftovers(TWIN), inspect(lab).nodes, sorted(f.name for f in directory.iterdir())
+    assert {n.name: n.incarnation for n in nodes} == lab.incarnations
+    srl = PLATFORMS["nokia_srlinux"]
+    listed = platform_package.image(srl).ref
+    moved = {**PLATFORMS, "nokia_srlinux": with_image(srl, ref=listed + "-moved")}
+    start = time.monotonic()
+    with pytest.raises(Unpackaged) as refused:
+        asyncio.run(lab.driver.destroy(p.deployment, p.files, moved, PROBES))
+    print(f"\n[live] destroy {TWIN} under a package whose image moved: refused in {time.monotonic() - start:.2f} s: "
+          f"{refused.value}")
+    assert (refused.value.node, refused.value.kind, refused.value.image) == ("n1", "nokia_srlinux", listed)
+    after = inspect(lab).nodes
+    print(f"[live] the host after the refusal: {leftovers(TWIN)}; incarnations "
+          f"{ {n.name: n.incarnation for n in after} }")
+    assert leftovers(TWIN) == before and after == nodes  # each node's incarnation among them
+    assert sorted(f.name for f in directory.iterdir()) == files
+
+
 def test_5_destroy_leaves_nothing(lab: Lab) -> None:
     destroy(lab)
     assert leftovers(TWIN) == CLEAN
@@ -224,3 +253,36 @@ def test_7_two_labs_at_once(lab: Lab) -> None:
     assert_running(lab, inspect(lab, TWIN_2), TWIN_2)
     destroy(lab, TWIN_2)
     assert leftovers(TWIN_2) == CLEAN
+
+
+def test_8_a_pool_a_docker_network_holds_is_refused_naming_it_and_the_setting(tmp_path: Path) -> None:
+    # D-103, on Docker itself: a network made over the one /24 of a pool of the test's own, and a driver of its own
+    # on that pool, which reads every network of the host as the driver's format prints them (verified-facts.md):
+    # a line a network, its name as a JSON string, one space, and its IPAM config, a list, or `null` as for `host`.
+    # Nothing is deployed, and no time is held to.
+    #
+    # It needs 192.0.2.0/24 held by no Docker network of the host, and the name `fylgja-live-pool` free. It leaves
+    # nothing: the network is removed whatever the `admit` did. A run killed between the create and the `finally`
+    # leaves `fylgja-live-pool`, which is removed by hand (`docker network rm fylgja-live-pool`) before the next run.
+    network, held = "fylgja-live-pool", ipaddress.IPv4Network("192.0.2.0/24")
+    form = "{{json .Name}} {{json .IPAM.Config}}"
+    c = compiler.compile(blueprint.load(ROOT / "testdata/blueprint/three-node.json"), PLATFORMS, PROBES)
+    driver = ContainerlabDriver(tmp_path, pool=held)
+    docker("network", "create", "--subnet", str(held), network)
+    try:
+        made = docker("network", "inspect", "--format", form, network).stdout
+        host = docker("network", "inspect", "--format", form, "host").stdout
+        print(f"\n[live] docker's lines: {made.strip()} | {host.strip()}")
+        refused = run(driver.admit(c.manifest, PLATFORMS, PROBES, "pool-live", []), "admit pool-live on a held pool")
+    finally:
+        removed = docker("network", "rm", network, check=False)
+    print(f"[live] the refusal: {refused}")
+    assert removed.returncode == 0, removed.stderr
+    assert docker("network", "inspect", network, check=False).returncode != 0, "the test's network still stands"
+    name, space, config = made.rstrip("\n").partition(" ")
+    assert (json.loads(name), space) == (network, " ")
+    assert [entry["Subnet"] for entry in json.loads(config)] == [str(held)]
+    assert host == '"host" null\n'
+    assert isinstance(refused, Refusal) and refused.rule == "admission.capacity"
+    assert f"{network} ({held})" in refused.message and "FYLGJA_LAB_POOL" in refused.message
+    assert not (tmp_path / "containerlab").exists()  # nothing written, nothing deployed

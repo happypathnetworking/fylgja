@@ -63,6 +63,7 @@ from fylgja_core import logs, packages
 from fylgja_core.clabernetes import OWNER, OWNER_LABEL, TWIN_LABEL, namespace_of
 from fylgja_core.clabernetes.driver import ClabernetesDriver
 from fylgja_core.clabernetes.kube import NODE_LABEL, Kube, LightKube, Namespace, Pod, Service
+from fylgja_core.clabernetes.kube import Node as KubeNode
 from fylgja_core.credentials import Provider
 from fylgja_core.driver import Exec
 from fylgja_core.kubeapi import client
@@ -138,6 +139,12 @@ class Observed:
 
     async def services(self, namespace: str) -> list[Service]:
         return await self.kube.services(namespace)
+
+    async def nodes(self) -> list[KubeNode]:
+        return await self.kube.nodes()
+
+    async def all_pods(self) -> list[Pod]:
+        return await self.kube.all_pods()
 
     async def patch_service(self, namespace: str, name: str, patch: Mapping[str, Any]) -> None:
         self.patched.append((time.time(), namespace, name))

@@ -164,13 +164,9 @@ writes them.
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
 They are left to later phases.
 
-**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): a
-platform package that lists its versions with their images, one a package, and a deletion
-the loaded packages cannot account for refused once ([D-102](decisions.md#d-102)), where
-section 4.10 describes the one image there is today;
-the local driver's pool as a setting ([D-103](decisions.md#d-103)); one make target a
-source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version for
-every distribution, three wheels published and the packages inside the core's
+**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): one make
+target a source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version
+for every distribution, three wheels published and the packages inside the core's
 ([D-106](decisions.md#d-106)); the user's reference under `docs/`
 ([D-107](decisions.md#d-107)); and what 1.0 holds ([D-105](decisions.md#d-105)).
 
@@ -315,7 +311,7 @@ in software and hardware in silicon, so it is computed per deployment and never 
 
 | Driver | Use | Isolation unit | Node access |
 |---|---|---|---|
-| `containerlab` (local) | development, the live tier, a single lab host | a lab named for the twin, with its own management network and subnet | the host's management network |
+| `containerlab` (local) | development, the live tier, a single lab host | a lab named for the twin, with its own management network and subnet, a /24 of the driver's pool, which is the server's setting ([D-043](decisions.md#d-043), [D-103](decisions.md#d-103)) | the host's management network |
 | `clabernetes` | production, on Kubernetes | a namespace per twin, with a NetworkPolicy | a LoadBalancer per node, `externalTrafficPolicy: Local` ([D-020](decisions.md#d-020), [D-037](decisions.md#d-037)) |
 | `hardware` | a later release | a reservation of devices from a pool | the devices' own management addresses |
 
@@ -366,6 +362,14 @@ through its driver ([Constitution VIII](constitution.md#viii-reconcile-to-desire
   reconfiguration if a node stays silent; on one that can, it is applied again, with no probe
   ([D-068](decisions.md#d-068)). A destroy that finds residue and no lab deploys, then
   destroys. Cleanup runs on every failure and deletion path.
+- **A deployment the loaded packages cannot account for is kept**
+  ([D-054](decisions.md#d-054), [D-102](decisions.md#d-102)). A driver's `destroy` takes the
+  packages, so a deployment whose bundle names a package this core has not loaded, or one of
+  whose nodes runs an image no loaded package lists, is not torn down by it: its step and its
+  deletion are each refused once, `bundle.rejected`, no pass raises, and the lab waits with its
+  record for a core whose packages account for it. The first the loop reads from the bundle;
+  the second only the driver can say, by an error of the seam's from its `changes`, `apply`
+  and `destroy`, the last two before they touch the runtime.
 
 **Runs.** Every long operation (create, step, restore, destroy) is a **run**: a ULID, the
 principal who asked (the core's own for a restore), a state, and once ended a verdict. Its
@@ -518,9 +522,12 @@ package ([Constitution II](constitution.md#ii-platforms-are-data-never-code),
   ([`platform-package-1.schema.json`](../formats/platform-package-1.schema.json)) states
   only what the runtime's kind does not already know: its interface rules, push, readiness,
   gNMI and conformance paths, fidelity, and a `credentials` name.
-- **Its `runtime.containerlab` section** serves both containerlab drivers: the kind, the
-  image, per-node resources, measured timeouts, `alias`, `rename`, `link_apply_mode` and
-  `hot_add_ports`. A `runtime.hardware` section arrives with that driver.
+- **Its `runtime.containerlab` section** serves both containerlab drivers: the kind, an
+  image for each version the package lists, by the version's name, per-node resources,
+  measured timeouts, `alias`, `rename`, `link_apply_mode` and `hot_add_ports`. A package
+  lists one version in this build, and the core runs it: a second is refused when the
+  package is loaded, until a device can name the version it runs
+  ([D-102](decisions.md#d-102)). A `runtime.hardware` section arrives with that driver.
 - **Aliases.** SR Linux's kind accepts production interface names, so its package needs no
   name templates. cEOS's kind has none, so its package keeps one rename rule per data rule.
 - **No bootstrap.** The kinds' baselines keep the host name, linked ports, LLDP and gNMI

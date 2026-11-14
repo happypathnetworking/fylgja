@@ -7,11 +7,14 @@ it; every other secret is the tests' own."""
 
 from __future__ import annotations
 
+import copy
+import functools
 import hashlib
 import importlib.util
 import json
 import sys
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -30,6 +33,7 @@ from demo_host import (
     passing,
     same,
 )
+from test_formats import full_rehearsal, minimal_rehearsal
 
 SHELL = {"PATH": "/usr/bin", "HOME": "/srv/example/home"}
 """The shell's environment, which `local/.env` is laid over."""
@@ -116,6 +120,104 @@ written and its containers running while the database is still unhealthy, and `p
 with the server it started still up and recorded."""
 
 
+DEPLOYMENT_IDS = {
+    "stage-plan/main": "0b6f3c2a-5d1e-4c8f-9a70-2e4d6b8f1a01",
+    "twin-rehearse/main": "7c2e9a14-3b5f-4d60-8e21-9f0a1c3d5e02",
+}
+"""Each deployment's id as the fake Prefect answers it: one each, the same at every ask, as the two were read to keep
+theirs at every start of the runner (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14)."""
+
+APPEARS_S = {"infrahub": 69.0, "netbox": 1.0}
+"""Seconds from the change opened to its flow run of `twin-rehearse/main` made, as each was read: 69.0 s after a
+proposed change's creation ("Infrahub 1.11.11", 2026-11-12) and 0.94 to 1.03 s after the tag's `PATCH` ("NetBox 4.7.5
+with netbox-branching 1.2.3")."""
+
+COURSE = (("PENDING", "Pending", 1.0), ("RUNNING", "Running", 3.0), ("COMPLETED", "Completed", 420.0))
+"""A run's states after it is made `SCHEDULED`, each with its seconds since it was made, in the order a rehearsal's run
+was read to go them (Scheduled, Pending, Running, then its end); the seconds are the fake's own."""
+
+EPOCH = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
+"""The wall time the fake host's clock starts at, for the timestamps Prefect writes."""
+
+
+def stamp(now: float) -> str:
+    """A timestamp as Prefect writes one, in UTC, `now` seconds of the fake clock after `EPOCH`."""
+    return (EPOCH + timedelta(seconds=now)).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def rehearsal(status: str) -> dict[str, Any]:
+    """A rehearsal 1 document of `status`, valid by `formats/rehearsal-1.schema.json` (a test holds each so): a passed
+    rehearsal of five stages, the failed one of `test_formats`, and its minimal one as not rehearsed and as stopped."""
+    if status == "failed":
+        return full_rehearsal()
+    if status == "passed":
+        failed = full_rehearsal()
+        passed = {**failed["stages"][2]}
+        held = {key: value for key, value in failed.items() if key != "room"}
+        return held | {
+            "status": "passed",
+            "headline": "Rehearsal passed: 5 stages\nEvery stage was rehearsed on the twin and passed.",
+            "took_s": 412.6,
+            "stages": [{"result": "empty"}, failed["stages"][1], passed, passed, passed],
+            "already_failing": [],
+            "reclaimed": [],
+            "findings": [],
+        }
+    headline = {"not_rehearsed": minimal_rehearsal()["headline"], "stopped": "Stopped\nThe rehearsal was stopped."}
+    return minimal_rehearsal() | {"status": status, "headline": headline[status]}
+
+
+def flow_run(ident: str, deployment_id: str, branch: str, now: float) -> dict[str, Any]:
+    """A row of `POST /api/flow_runs/filter` for a run made `now` by the fake clock, `SCHEDULED`: the members of the 36
+    a row was read to hold that the script or a reader of it might ask for (design/verified-facts.md, "Prefect 3.9.2",
+    2026-11-14), its `parameters` `{"branch": <branch>}` as a check or the webhook starts it."""
+    row: dict[str, Any] = {
+        "id": ident,
+        "created": stamp(now),
+        "updated": stamp(now),
+        "name": f"fake-run-{ident[-4:]}",
+        "flow_id": "5a8d0e3c-1f2b-4c6d-8e9f-0a1b2c3d4e05",
+        "deployment_id": deployment_id,
+        "parameters": {"branch": branch},
+        "expected_start_time": stamp(now),
+        "start_time": None,
+        "end_time": None,
+    }
+    moved(row, "SCHEDULED", "Scheduled", now)
+    return row
+
+
+def moved(row: dict[str, Any], kind: str, name: str, now: float) -> None:
+    """`row`'s run in the state `kind` named `name` from `now` by the fake clock: its `state`, with its seven members,
+    and its `state_type` and `state_name`."""
+    message = "" if kind != "CRASHED" else "Flow run infrastructure exited with non-zero status code 1."
+    row["state"] = {
+        "id": hashlib.sha256(f"{row['id']} {kind} {now}".encode()).hexdigest()[:32],
+        "type": kind,
+        "name": name,
+        "message": message,
+        "timestamp": stamp(now),
+        "data": None,
+        "state_details": {"flow_run_id": row["id"]},
+    }
+    row["state_type"], row["state_name"], row["updated"] = kind, name, stamp(now)
+    if kind == "RUNNING":
+        row["start_time"] = stamp(now)
+    if kind in ("COMPLETED", "FAILED", "CANCELLED", "CRASHED"):
+        row["end_time"] = stamp(now)
+
+
+SORTS = (
+    "ID_DESC", "START_TIME_ASC", "START_TIME_DESC", "EXPECTED_START_TIME_ASC", "EXPECTED_START_TIME_DESC", "NAME_ASC",
+    "NAME_DESC", "NEXT_SCHEDULED_START_TIME_ASC", "END_TIME_DESC",
+)  # fmt: skip
+"""The sorts Prefect 3.9.2 takes for flow runs, `prefect.server.schemas.sorting.FlowRunSort` of the package the venv
+holds; any other is refused, 422, as a body Prefect does not read is."""
+
+LIMIT = 200
+"""The largest `limit` a filter takes: 201 was answered 422 (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14)."""
+
+
 def read_by_make(argv: Sequence[str], env: Mapping[str, str]) -> tuple[dict[str, str], str]:
     """The variables and the flags a `make` run by `argv` under `env` holds, as make takes them: a variable from its
     command line, else from the words `MAKEFLAGS` and `GNUMAKEFLAGS` hand on, with or without `--` before them,
@@ -182,7 +284,18 @@ class Targets:
       listens.
     - `opened` holds, for each change opened, by `infrahub-seed` with `PROPOSED_CHANGE=1` or `netbox-change` with
       `NETBOX_TAG=1`, whether a runner served Prefect then: opened with none serving, Infrahub's check fails and
-      NetBox's request is lost.
+      NetBox's request is lost. Opened while one serves, it starts a run of `twin-rehearse/main` with the branch as
+      its parameter, made `APPEARS_S` of the source's after the step, which is after the step returned: so `sleep`,
+      the script's wait, alone brings it about. The run then goes the states of `COURSE`, or of `course` where a test
+      sets it, and at its end files `verdict`'s document where that is a status, as `filed`, its data a JSON string
+      or, with `as_object`, an object; with `verdict` None it files none. With `starts_runs` False no run is made.
+    - Prefect lists a deployment's runs, `POST /api/flow_runs/filter`, from `runs`, rows as `flow_run` makes them:
+      401 to another auth than its server's, 422 to a body it does not read (a `limit` over `LIMIT`, a sort not of
+      `SORTS`), nothing answered while no server is up, and else 200 with the rows of the deployments the body names,
+      newest first by `expected_start_time` with `EXPECTED_START_TIME_DESC`, and in an order neither so nor reversed
+      with none, at most `limit` of them. It answers a run's document, `POST /api/artifacts/filter`, as the glue asks
+      for it: a list of the one artifact of the type asked that the run filed, or an empty one. A test lists answers
+      of its own before these in `host.replies`, which the first that matches answers.
     - `by_hand` is a target as a person ran it before the demonstration, with `local/.env` loaded."""
 
     def __init__(self, host: FakeHost, local: Path) -> None:
@@ -196,6 +309,12 @@ class Targets:
         self.built: list[str] = []
         self.listed: dict[int, str] = {}
         self.twins: list[str] = []
+        self.runs: list[dict[str, Any]] = []
+        self.filed: dict[str, Any] = {}
+        self.starts_runs = True
+        self.course: tuple[tuple[str, str, float], ...] = COURSE
+        self.verdict: str | None = "passed"
+        self.as_object = False
         for target in (
             "infrahub-up",
             "infrahub-down",
@@ -216,6 +335,8 @@ class Targets:
         host.answer(*demo.api_argv(local, MAIN)[:4], out=f"{API}\n")
         host.replies.append(("GET", "http://127.0.0.1:", self.version))
         host.replies.append(("GET", f"{API}/deployments/name/", self.deployment))
+        host.replies.append(("POST", f"{API}/flow_runs/filter", self.flow_runs))
+        host.replies.append(("POST", f"{API}/artifacts/filter", self.artifacts))
         host.on_start = self.started
 
     def answered(self, ran: Ran) -> Any:
@@ -319,6 +440,7 @@ class Targets:
         self.built.append(branch)
         if proposed:
             self.opened.append(self.serving())
+            self.rehearsed("infrahub", branch)
         return True
 
     def netbox_up(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
@@ -364,6 +486,7 @@ class Targets:
         self.built.append(variables.get("NETBOX_BRANCH", "third-link"))
         if tagged:
             self.opened.append(self.serving())
+            self.rehearsed("netbox", self.built[-1])
         return True
 
     def orchestrator_env(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
@@ -485,7 +608,90 @@ class Targets:
             return demo.Answer(401, {"detail": "Unauthorized"})
         if not self.served:
             return demo.Answer(404, {"detail": "Deployment not found"})
-        return demo.Answer(200, {"id": "a-deployments-id", "name": "main", "status": "READY", "paused": False})
+        named = asked.url.removeprefix(f"{API}/deployments/name/")
+        ident = DEPLOYMENT_IDS.get(named)
+        if ident is None:
+            return demo.Answer(404, {"detail": "Deployment not found"})
+        return demo.Answer(200, {"id": ident, "name": "main", "status": "READY", "paused": False})
+
+    def refused(self, asked: Any) -> Any:
+        """Nothing answered while no server is up, and 401 to an auth that is not its server's; None where neither."""
+        server = self.prefect()
+        if server is None:
+            return demo.Answer(None, None)
+        if not same(asked.auth, self.host.processes[server].environ["PREFECT_SERVER_API_AUTH_STRING"]):
+            return demo.Answer(401, {"detail": "Unauthorized"})
+        return None
+
+    def rehearsed(self, source: str, branch: str) -> None:
+        """The change opened while a runner serves starts a run of `twin-rehearse/main` (`Targets`, `opened`)."""
+        if not (self.starts_runs and self.serving()):
+            return
+        self.host.at(self.host.now + APPEARS_S[source], lambda: self.made(branch))
+
+    def made(self, branch: str, *, course: tuple[tuple[str, str, float], ...] | None = None) -> dict[str, Any]:
+        """A run of `twin-rehearse/main` made now, `SCHEDULED`, that goes `course` from here, `self.course` where none
+        is given, and files its document at its end; its row."""
+        now = self.host.now
+        ident = f"0f1e2d3c-4b5a-4697-8a8b-{len(self.runs) + 1:012x}"
+        row = flow_run(ident, DEPLOYMENT_IDS["twin-rehearse/main"], branch, now)
+        self.runs.append(row)
+        for kind, name, after in self.course if course is None else course:
+            self.host.at(now + after, functools.partial(self.goes, row, kind, name))
+        return row
+
+    def goes(self, row: dict[str, Any], kind: str, name: str) -> None:
+        """`row`'s run moves to `kind` now; where that is `COMPLETED` it files its document first, as a flow files it
+        before it returns, where `verdict` names one."""
+        if kind == "COMPLETED" and self.verdict is not None:
+            document = rehearsal(self.verdict)
+            self.filed[row["id"]] = document if self.as_object else json.dumps(document)
+        moved(row, kind, name, self.host.now)
+
+    def flow_runs(self, asked: Any) -> Any:
+        refused = self.refused(asked)
+        if refused is not None:
+            return refused
+        body = asked.body if isinstance(asked.body, dict) else {}
+        limit, sort = body.get("limit", LIMIT), body.get("sort")
+        if not isinstance(limit, int) or not 0 <= limit <= LIMIT:
+            return demo.Answer(422, {"detail": f"Invalid limit: must be less than or equal to {LIMIT}."})
+        if sort is not None and sort not in SORTS:
+            return demo.Answer(422, {"detail": "Invalid request received."})
+        named = body.get("flow_runs", {}).get("deployment_id", {}).get("any_")
+        rows = [row for row in self.runs if named is None or row["deployment_id"] in named]
+        if sort == "EXPECTED_START_TIME_DESC":
+            rows.sort(key=lambda row: row["expected_start_time"], reverse=True)
+        elif len(rows) > 2:
+            rows = [*rows[1:], rows[0]]
+        return demo.Answer(200, copy.deepcopy(rows[:limit]))
+
+    def artifacts(self, asked: Any) -> Any:
+        refused = self.refused(asked)
+        if refused is not None:
+            return refused
+        body = asked.body if isinstance(asked.body, dict) else {}
+        runs = body.get("artifacts", {}).get("flow_run_id", {}).get("any_", [])
+        kinds = body.get("artifacts", {}).get("type", {}).get("any_", [])
+        found = []
+        for row in self.runs:
+            if row["id"] in runs and row["id"] in self.filed and "fylgja-document" in kinds:
+                when = row["end_time"]
+                found.append(
+                    {
+                        "id": hashlib.sha256(row["id"].encode()).hexdigest()[:32],
+                        "key": f"fylgja-twin-rehearse-{row['id']}",
+                        "type": "fylgja-document",
+                        "data": copy.deepcopy(self.filed[row["id"]]),
+                        "description": None,
+                        "metadata_": None,
+                        "flow_run_id": row["id"],
+                        "task_run_id": None,
+                        "created": when,
+                        "updated": when,
+                    }
+                )
+        return demo.Answer(200, found[: body.get("limit", LIMIT)])
 
 
 def first(tmp_path: Path) -> tuple[Path, Any, FakeHost, Targets]:

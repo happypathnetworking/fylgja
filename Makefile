@@ -224,7 +224,8 @@ contract-netbox:
 
 # A demonstration of one source of truth, infrahub or netbox, with no step by hand (CONTRIBUTING.md, "The
 # demonstrations"; D-104): the host's preconditions checked, then the source's runbook taken in order through the
-# targets above, the core and the runner started in the background by recorded pids, to the change opened. It reads
+# targets above, the core and the runner started in the background by recorded pids, to the change opened, then the
+# rehearsal it starts waited for on the edge's Prefect and its verdict read: exit 0 for passed alone. It reads
 # local/.env itself, before every step, and at REF it registers this repository with Infrahub. No other variable
 # given here, or held by the shell or local/.env, reaches a target: each is run at this file's own value, the script
 # saying which were not passed on.

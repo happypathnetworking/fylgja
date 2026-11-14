@@ -17,7 +17,11 @@ checkout> --ref <branch or empty>` and `python3 -I scripts/demo.py down --local 
   before it, and the core and the runner started where the runbook has them. Once the source is up it reads
   Docker's networks as the local driver does and stops, the source left up, where they leave the lab pool no /24
   (`pool_checked`). From `settle` on, every way out says last what is left up (`left_up`); a step that fails is
-  exit 1, naming the step. It ends at the change opened.
+  exit 1, naming the step. Its last step opens the change, which its source turns into a flow run of
+  `twin-rehearse/main` on the edge's Prefect, by Infrahub's check or NetBox's webhook: `up` is told nothing of it,
+  and finds the run by the ids Prefect listed before the change (`follow`), waits for its end within the flow's own
+  bound, reads the document it filed as Infrahub's check reads it, with the edge's own credential, keeps it, and
+  says the verdict and where a person reads the report in the source (`readout`).
 - A make target is given no variable but its own. make reads variables from its environment and from what a make
   above it hands on, so every make child, each step, the other source's stop and `down`'s targets, is given the
   loaded environment without make's own names and without every name the `Makefile` assigns by `?=` (`make_env`),
@@ -43,9 +47,10 @@ variable by its name and a line by its number.
 Every process, socket, file of the host's and clock the script touches goes through one seam, `Host`, and `Real` is
 its one implementation.
 
-Exit 0; 1 for a failure; 2 for a command line not understood, a precondition of the host's not met, a line of
-`<local>/.env` that is not read as a shell would read it, a value that is not UTF-8 or that a child would not be
-given as the file has it, or another demonstration command running. Each is said on stderr.
+Exit 0, for `up` a rehearsal `passed` and for `down` everything ended; 1 for a failure, a verdict other than `passed`
+or none; 2 for a command line not understood, a precondition of the host's not met, a line of `<local>/.env` that is
+not read as a shell would read it, a value that is not UTF-8 or that a child would not be given as the file has it,
+or another demonstration command running; 130 for a Ctrl-C. Each but the passed verdict is said on stderr.
 """
 
 from __future__ import annotations
@@ -68,7 +73,8 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from email.message import Message
 from ipaddress import IPv4Network, ip_network
 from pathlib import Path
@@ -194,6 +200,30 @@ DEPLOYMENT = "main"
 """The two flows the runner serves, each as the deployment `<flow>/main` (`fylgja_orchestrator.edge.flows`, held
 equal by a test)."""
 
+ARTIFACT_TYPE = "fylgja-document"
+"""The type of the artifact a flow run files its document as (`fylgja_orchestrator.edge.flows`, and the checks' glue
+that reads it, `infrahub/checks/fylgja_glue.py`; held equal by a test)."""
+
+ENDED = frozenset({"COMPLETED", "FAILED", "CANCELLED", "CRASHED"})
+"""The state types a flow run ends in, the glue's."""
+
+PASSED = "passed"
+"""The one status of a rehearsal's document that is exit 0, as the check `fylgja-twin` passes for it alone."""
+
+THREAD = "Fylgja rehearsal"
+"""The label of the thread the example posts a rehearsal's report in on Infrahub's proposed change
+(`fylgja_orchestrator.infrahub.source.THREAD_LABEL`, held equal by a test)."""
+
+RUNS_LIMIT = 50
+"""The runs one list of a deployment's asks for, newest first: Prefect takes at most 200."""
+
+WHERE_TO_LOOK = {
+    "infrahub": "read the proposed change's checks in Infrahub, and the task workers' logs",
+    "netbox": "the tag's request did not reach Prefect; read NetBox's background tasks, and run make netbox-hook",
+}
+"""Where to read why a change of each source started no run: Infrahub's check starts it from a task worker, and
+NetBox's webhook sends the request that starts it."""
+
 READY = "READY"
 """A deployment's `status` once a runner serves it."""
 
@@ -233,6 +263,18 @@ STOP_WAIT_S = 30
 """Seconds a process is given to exit after SIGTERM before it is killed, `edge_dev.py`'s `DOWN_WAIT_S`: the runner
 was read gone 0.69 to 3.93 s after its signal and the core 0.43 to 0.55 s (the same facts), of which this is 7.6
 times the slowest."""
+
+POLL_S = 5.0
+"""Seconds between two asks of Prefect while the change's flow run is waited for, the checks' glue's."""
+
+APPEAR_WAIT_S = 300
+"""Seconds from the last step's return for the change's flow run to be listed: a proposed change's run was read to be
+made 69.0 s after the change's creation ("Infrahub 1.11.11", 2026-11-12, one run) and the tag's 0.94 to 1.03 s after its
+`PATCH` ("NetBox 4.7.5 with netbox-branching 1.2.3"), of which this is 4.3 times the slower."""
+
+RUN_WAIT_S = 4200
+"""Seconds from the change's flow run listed to its end: no reading, but the flow's own bound,
+`flows.REHEARSE_TIMEOUT_S`, 3900 s, and 300 s, held equal by a test."""
 
 DESTROY_TIMEOUT_S = 300
 """Seconds one `fylgja-core twin destroy` is given: one was read to take 2.3 s (the same facts), and
@@ -1888,6 +1930,277 @@ def alone(source: str, env: Mapping[str, str], records: Records, local: Path, li
             )
 
 
+class Unanswered(Exception):
+    """A read of Prefect's that was not answered as asked: nothing answered, a status other than 200, or a body that is
+    not what was asked for. It is asked again at the next poll. Its text says which read, never a request's."""
+
+
+class NoRun(Stop):
+    """No run of the change's was listed within `APPEAR_WAIT_S`: `up` says where its source shows why."""
+
+
+class NotEnded(Stop):
+    """The change's run did not end within `RUN_WAIT_S`: `up` names the runner's log."""
+
+
+@dataclass(frozen=True)
+class Prefect:
+    """The edge's Prefect at `api`, `http://<the bind>:4200/api` as `prefect_api` reads it, asked through `host` with
+    the basic auth `auth`, the `user:password` of `FYLGJA_ORCHESTRATOR_AUTH`, which `Host.ask` sends in a header it
+    builds and which is in no URL, body or line, and is never shown (`repr`). Each address is `<api>/<path>`, one
+    slash between, exact, since no redirect is followed. A 401 to any request stops the run at once, exit 1, naming
+    the variable and never its value; any other answer is the caller's to judge."""
+
+    api: str
+    auth: str = field(repr=False)
+    host: Host = field(repr=False)
+
+    def get(self, path: str) -> Answer:
+        return self._answered(self.host.ask("GET", f"{self.api}/{path}", auth=self.auth or None))
+
+    def post(self, path: str, body: Any) -> Answer:
+        return self._answered(self.host.ask("POST", f"{self.api}/{path}", auth=self.auth or None, body=body))
+
+    def _answered(self, answer: Answer) -> Answer:
+        if answer.status == 401:
+            raise Stop(1, [f"Prefect at {self.api} refused the edge's credential ({AUTH})"])
+        return answer
+
+
+class Run(NamedTuple):
+    """A flow run as Prefect lists it: its id, its state's type (`RUNNING`, `CRASHED`, ...) and its state's name
+    (`Running`, `TimedOut` for a run past its time limit, ...), and the branch its parameters name, `""` where they
+    name none."""
+
+    id: str
+    state: str
+    name: str
+    branch: str
+
+
+def deployment(prefect: Prefect, flow: str) -> str:
+    """The id of the deployment `<flow>/main`, by its name. Stop, exit 1, where Prefect answers none."""
+    answer = prefect.get(f"deployments/name/{flow}/{DEPLOYMENT}")
+    ident = answer.body.get("id") if answer.status == 200 and isinstance(answer.body, dict) else None
+    if not isinstance(ident, str) or not ident:
+        how = "did not answer" if answer.status is None else f"answered HTTP {answer.status}"
+        raise Stop(1, [f"Prefect at {prefect.api} {how} for the deployment {flow}/{DEPLOYMENT}: no id was read"])
+    return ident
+
+
+def runs_body(deployment_id: str) -> dict[str, Any]:
+    """The body of `POST /api/flow_runs/filter` that lists the deployment's runs, newest first, `RUNS_LIMIT` of them
+    (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14)."""
+    return {
+        "flow_runs": {"deployment_id": {"any_": [deployment_id]}},
+        "sort": "EXPECTED_START_TIME_DESC",
+        "limit": RUNS_LIMIT,
+    }
+
+
+def created(row: Any) -> datetime:
+    """When a run was made, by its row's `created`; one written with no zone is UTC. `ValueError` where it names no
+    time."""
+    if not isinstance(row, dict) or not isinstance(row.get("created"), str):
+        raise ValueError("no created")
+    made = datetime.fromisoformat(row["created"])
+    return made if made.tzinfo is not None else made.replace(tzinfo=UTC)
+
+
+def run_of(row: Any) -> Run:
+    """A row of the list as a `Run`; `ValueError` where it has no id or state type."""
+    ident = row.get("id") if isinstance(row, dict) else None
+    state = row.get("state") if isinstance(row, dict) else None
+    kind = state.get("type") if isinstance(state, dict) else None
+    if not isinstance(ident, str) or not ident or not isinstance(kind, str) or not isinstance(state, dict):
+        raise ValueError("no run")
+    name = state.get("name")
+    parameters = row.get("parameters")
+    branch = parameters.get("branch") if isinstance(parameters, dict) else None
+    return Run(ident, kind, name if isinstance(name, str) else "", branch if isinstance(branch, str) else "")
+
+
+def listed(prefect: Prefect, deployment_id: str) -> list[Run]:
+    """The deployment's runs as Prefect lists them (`runs_body`), oldest first by their creation. `Unanswered` where
+    nothing answered, the status is other than 200, or the body is not a list of runs that each have an id, a state
+    type and a time of creation."""
+    answer = prefect.post("flow_runs/filter", runs_body(deployment_id))
+    if answer.status != 200 or not isinstance(answer.body, list):
+        raise Unanswered(f"the list of the runs of {FLOW}/{DEPLOYMENT}")
+    try:
+        rows = sorted(((created(row), run_of(row)) for row in answer.body), key=lambda each: each[0])
+    except ValueError:
+        raise Unanswered(f"the list of the runs of {FLOW}/{DEPLOYMENT}") from None
+    return [run for _, run in rows]
+
+
+def document_body(run_id: str) -> dict[str, Any]:
+    """The body of `POST /api/artifacts/filter` that asks for the document the run filed, as the checks' glue asks
+    for it (`fylgja_glue.Prefect.document`, held to it by a test)."""
+    return {
+        "artifacts": {"flow_run_id": {"any_": [run_id]}, "type": {"any_": [ARTIFACT_TYPE]}},
+        "sort": "CREATED_DESC",
+        "limit": 1,
+    }
+
+
+def document(prefect: Prefect, run_id: str) -> dict[str, Any] | None:
+    """The document the run filed, as the glue reads it: the newest artifact of `ARTIFACT_TYPE` of the run, its
+    `data` a JSON string, parsed, or an object, taken as it is; None where the run filed none. `Unanswered` where
+    nothing answered, the status is other than 200 or the body is no list; Stop, exit 1, where the artifact's data is
+    no JSON object, which no reading of it again would mend."""
+    answer = prefect.post("artifacts/filter", document_body(run_id))
+    if answer.status != 200 or not isinstance(answer.body, list):
+        raise Unanswered(f"the read of flow run {run_id}'s document")
+    if not answer.body:
+        return None
+    data = answer.body[0].get("data") if isinstance(answer.body[0], dict) else None
+    try:
+        held = json.loads(data) if isinstance(data, str) else data
+    except ValueError:
+        held = None
+    if not isinstance(held, dict):
+        raise Stop(
+            1,
+            [
+                f"Prefect at {prefect.api} answered flow run {run_id}'s document with an artifact whose data is no "
+                "JSON object"
+            ],
+        )
+    return held
+
+
+def follow(prefect: Prefect, deployment_id: str, known: frozenset[str], host: Host) -> Run:
+    """The change's flow run of the deployment, once it has ended: the first made of the runs whose ids are not in
+    `known`, the ids listed just before the change was opened, so that no run of an earlier change, ended or left
+    running, is ever taken for it.
+
+    Asked every `POLL_S` (`listed`) from the moment it is called, the last step's return: until `APPEAR_WAIT_S` after
+    that for a new run, saying how many where there are several, and then until `RUN_WAIT_S` after its listing for
+    its state to be one of `ENDED`, saying each state it is listed in once. By the host's clock, and no ask at or after
+    a bound. A list unanswered (`Unanswered`) is asked again at the next poll and ends nothing by itself; a 401 stops
+    the run at once (`Prefect`). No new run in time is `NoRun`, and no end in time `NotEnded`, each exit 1."""
+    begun = host.clock()
+    run: Run | None = None
+    while run is None:
+        if host.clock() - begun >= APPEAR_WAIT_S:
+            raise NoRun(1, [f"no run of {FLOW}/{DEPLOYMENT} was started within {APPEAR_WAIT_S} s of the change"])
+        try:
+            new = [each for each in listed(prefect, deployment_id) if each.id not in known]
+        except Unanswered:
+            new = []
+        if not new:
+            host.sleep(POLL_S)
+            continue
+        run, appeared = new[0], host.clock()
+        if len(new) > 1:
+            say(
+                f"{len(new)} runs of {FLOW}/{DEPLOYMENT} were started since the change: following the first made, "
+                f"flow run {run.id}"
+            )
+        say(f"flow run {run.id} of {FLOW}/{DEPLOYMENT}: {run.state}")
+    while run.state not in ENDED:
+        host.sleep(POLL_S)
+        if host.clock() - appeared >= RUN_WAIT_S:
+            raise NotEnded(
+                1,
+                [
+                    f"flow run {run.id} of {FLOW}/{DEPLOYMENT} had not ended {RUN_WAIT_S} s after it was listed, "
+                    f"{run.state}"
+                ],
+            )
+        try:
+            now = next((each for each in listed(prefect, deployment_id) if each.id == run.id), None)
+        except Unanswered:
+            now = None
+        if now is None:
+            continue
+        if now.state != run.state:
+            say(f"flow run {run.id} of {FLOW}/{DEPLOYMENT}: {now.state}")
+        run = now
+    return run
+
+
+def filed(prefect: Prefect, run: Run, until: float, log: Path, host: Host) -> dict[str, Any] | None:
+    """The document the ended run filed (`document`), None where it filed none: a read unanswered is asked again
+    every `POLL_S`, until `until` by the host's clock, with no ask at or after it. Past it, Stop, exit 1, naming the
+    runner's log `log`."""
+    while host.clock() < until:
+        try:
+            return document(prefect, run.id)
+        except Unanswered:
+            host.sleep(POLL_S)
+    raise Stop(
+        1,
+        [
+            f"flow run {run.id} of {FLOW}/{DEPLOYMENT} ended {run.name or run.state}, and Prefect did not answer the "
+            f"read of its document: read {log}"
+        ],
+    )
+
+
+def keep(path: Path, held: Mapping[str, Any]) -> None:
+    """The document read, written to `path` as JSON, at mode 0600 from its creation, as the token file is; one there
+    already is replaced, and its mode made 0600."""
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as out:
+        os.fchmod(out.fileno(), 0o600)
+        out.write(json.dumps(held, indent=2) + "\n")
+
+
+def readout(
+    source: str, run: Run, document: Mapping[str, Any] | None, env: Mapping[str, str], local: Path
+) -> tuple[int, list[str]]:
+    """The exit status and the last lines of an `up` that read its verdict: 0 for a document whose `status` is
+    `PASSED`, and 1 for any other and for none. First what the run concluded; then, where it filed a document, where
+    a person reads its report, in the source, at its address as `env`, the loaded environment, gives it, the change
+    named by the run's own branch, signing in as admin with the password named by its variable and never given; last,
+    always, where the document is kept and what is left up, which `make demo-down` ends."""
+    kept = records(local)
+    left = f"the core, the runner, Prefect and {source} are left up: make demo-down ends them"
+    if document is None:
+        return 1, [
+            f"flow run {run.id} ended {run.name or run.state} and filed no rehearsal: read {kept.runner_log}",
+            f"no document was filed; {left}",
+        ]
+    status = document.get("status")
+    if status == PASSED:
+        stages = document.get("stages")
+        first = (
+            f"the rehearsal passed: {len(stages) if isinstance(stages, list) else 0} stages, "
+            f"{document.get('took_s')} s, flow run {run.id}"
+        )
+    else:
+        first = f"the rehearsal ended {status}, not passed: flow run {run.id}"
+    if source == "infrahub":
+        change = proposed_change(local)
+        named = f' "{change}"' if change else ""
+        where = (
+            f"the report is in Infrahub at {env.get('FYLGJA_INFRAHUB_ADDRESS', '')}: the proposed change{named} of the "
+            f'branch {run.branch}, its thread "{THREAD}"; sign in as admin with the password local/.env holds as '
+            "INFRAHUB_INITIAL_ADMIN_PASSWORD"
+        )
+    else:
+        where = (
+            f"the report is in NetBox at {env.get('FYLGJA_NETBOX_ADDRESS', '')}: the branch {run.branch}, its Journal "
+            "tab, the newest entry; sign in as admin with the password local/.env holds as "
+            "FYLGJA_NETBOX_SUPERUSER_PASSWORD"
+        )
+    return 0 if status == PASSED else 1, [first, where, f"the document is {kept.rehearsal}; {left}"]
+
+
+def proposed_change(local: Path) -> str | None:
+    """The name of the proposed change `<local>/infrahub/seed.json` records, which `make infrahub-seed
+    PROPOSED_CHANGE=1` wrote; None where the file is absent, unread or names none."""
+    try:
+        seeded = json.loads((local / "infrahub" / "seed.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    change = seeded.get("proposed_change") if isinstance(seeded, dict) else None
+    name = change.get("name") if isinstance(change, dict) else None
+    return name if isinstance(name, str) and name else None
+
+
 def locked(local: Path, host: Host) -> None:
     """Hold `<local>/demo/lock` until this process ends: one demonstration command runs at a time, and a second
     stops here, exit 2."""
@@ -1897,7 +2210,8 @@ def locked(local: Path, host: Host) -> None:
 
 
 def left_up(source: str, env: Mapping[str, str], records: Records, local: Path, host: Host) -> str:
-    """The last line of an `up` that ends before a verdict: what stands, and the target that ends it.
+    """The last line of an `up` that ends before a verdict, a Ctrl-C's among them: what stands, and the target that
+    ends it. After a verdict, everything the demonstration started is up, and `readout` says so.
 
     `source`, where a container of its Compose project runs, read of Docker now (`up_argv`) and not taken from what
     the run did, since it may have been up before; where Docker does not say, that is said. The core and the
@@ -1936,7 +2250,7 @@ def left_up(source: str, env: Mapping[str, str], records: Records, local: Path, 
 
 
 def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str], host: Host) -> int:
-    """A demonstration of `source`, to the change opened. In order:
+    """A demonstration of `source`, to its rehearsal's verdict. In order:
 
     - the lock, and the environment, `<local>/.env` laid over `environ`;
     - `refuse_runners`: beside a runner it may not end, nothing is started or stopped, exit 2;
@@ -1958,17 +2272,41 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
       `prefect.pid` is written where none was and one is, whatever the step's status: only a server the step
       started is the demonstration's to end.
 
-    From `settle` on, every way out says last what is left up, with `make demo-down` (`left_up`): a step that fails,
-    exit 1, `step <i>, make <target>, exited <n>`, or the core's or the runner's own lines after its step, no later
-    step being run; the pool's refusal and a check of the room, exit 2; a line a step wrote into `<local>/.env`
-    that is not read, exit 2 at the next read; and an error of the host's, exit 1, in its own word.
+    - before the last step, the one that opens the change, Prefect's API read again under a step's environment, the
+      id of `twin-rehearse/main` and the ids of its runs listed then (`known`); after it, the change's run waited
+      for (`follow`), from the step's return, and the document it filed read (`filed`) within the wait's whole
+      bound, kept in `rehearsal.json` (`keep`), and the readout said (`readout`): its status is `up`'s, 0 for
+      `passed` alone, its lines on stdout for 0 and on stderr for 1.
 
-    Until the verdict is read, a run that opens its change says so and is exit 1. `main`, the main checkout, is what
-    the runner's words and the read of Prefect's API are given (`serve_argv`, `api_argv`); each target finds the main
-    checkout itself."""
+    From `settle` on, every way out but the readout says last what is left up, with `make demo-down` (`left_up`): a
+    step that fails, exit 1, `step <i>, make <target>, exited <n>`, or the core's or the runner's own lines after its
+    step, no later step being run; the pool's refusal and a check of the room, exit 2; a line a step wrote into
+    `<local>/.env` that is not read, exit 2 at the next read; Prefect not read before the change, its run not started
+    or not ended in time, its document not read, or the edge's credential refused, exit 1; and an error of the
+    host's, exit 1, in its own word. A Ctrl-C anywhere once the lock is held is exit 130, said, with the same last
+    line. `main`, the main checkout, is what the runner's words and the read of Prefect's API are given (`serve_argv`,
+    `api_argv`); each target finds the main checkout itself."""
     locked(local, host)
-    env = loaded(local, environ, host)
+    env: Mapping[str, str] = environ
     kept = records(local)
+    try:
+        env = loaded(local, environ, host)
+        return verdict_of(source, local, main, ref, environ, env, kept, host)
+    except KeyboardInterrupt:
+        raise Stop(130, ["up was interrupted", left_up(source, env, kept, local, host)]) from None
+
+
+def verdict_of(
+    source: str,
+    local: Path,
+    main: Path,
+    ref: str,
+    environ: Mapping[str, str],
+    env: Mapping[str, str],
+    kept: Records,
+    host: Host,
+) -> int:
+    """`up` once its lock is held and the environment loaded: everything from the runners refused to the readout."""
     listen = listen_of(env)
     refuse_runners(source, kept, local, host)
     for line in notices(host):
@@ -2011,7 +2349,18 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
         prepare(local, env, listen, host)
         kept.source.write_text(f"{source}\n")
         pull(env, host)
+        prefect: Prefect | None = None
+        rehearse, known = "", frozenset[str]()
         for number, step in enumerate(steps, 1):
+            if number == len(steps):
+                given = loaded(local, environ, host)
+                api = prefect_api(step_env(given, kept, listen), local, main, host)
+                prefect = Prefect(api, given.get(AUTH, ""), host)
+                rehearse = deployment(prefect, FLOW)
+                try:
+                    known = frozenset(run.id for run in listed(prefect, rehearse))
+                except Unanswered as unread:
+                    raise Stop(1, [f"Prefect at {api} did not answer {unread}: the change was not opened"]) from None
             say(f"step {number} of {len(steps)}: {words_of(step, ref)}")
             if step.kind == "make":
                 made(number, step)
@@ -2027,13 +2376,30 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
                     raise Stop(failed.status, [f"step {number}, {STEP_WORDS[step.kind]}: {first}", *rest]) from None
             if number == 1:
                 pool_checked(source, pool, loaded(local, environ, host), host)
-        raise Stop(1, ["the change is opened: its rehearsal's verdict is not read"])
+        assert prefect is not None  # the last step is the change's, and the list was read before it
+        returned = host.clock()
+        try:
+            run = follow(prefect, rehearse, known, host)
+        except NoRun as late:
+            raise Stop(1, [f"{late.lines[0]}: {WHERE_TO_LOOK[source]}"]) from None
+        except NotEnded as late:
+            raise Stop(1, [f"{late.lines[0]}: read {kept.runner_log}"]) from None
+        held = filed(prefect, run, returned + APPEAR_WAIT_S + RUN_WAIT_S, kept.runner_log, host)
+        if held is not None:
+            keep(kept.rehearsal, held)
+        exited, lines = readout(source, run, held, loaded(local, environ, host), local)
     except Stop as stop:
         raise Stop(stop.status, [*stop.lines, left_up(source, env, kept, local, host)]) from None
     except OSError as refused:
         where = f": {refused.filename}" if refused.filename else ""
         cut = f"up was cut short, {word_of(refused)}{where}"
         raise Stop(1, [cut, left_up(source, env, kept, local, host)]) from None
+    for line in lines:
+        if exited == 0:
+            say(line)
+        else:
+            fail(line)
+    return exited
 
 
 def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host: Host) -> int:
@@ -2051,8 +2417,21 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
     are said first, once, by their names (`say_not_passed_on`). The exit is 1 too wherever the marker `unsettled` still
     stands at the end: a `down` that could not read the store never passes for one that found it empty. `source` is
     kept, so that a later `down` with `purge` knows whose volumes to remove. `main` is taken as `up` takes it and is
-    not read: each target finds the main checkout itself."""
+    not read: each target finds the main checkout itself. A Ctrl-C once the lock is held is exit 130: the failures
+    met so far are said, then that it was interrupted, then the line that says not everything was ended."""
     locked(local, host)
+    failed: list[str] = []
+    try:
+        return ended_all(local, purge, environ, failed, host)
+    except KeyboardInterrupt:
+        for line in failed:
+            fail(line)
+        fail("down was interrupted")
+        return fail("down: not everything was ended: read the lines above, then run make demo-down again", 130)
+
+
+def ended_all(local: Path, purge: bool, environ: Mapping[str, str], failed: list[str], host: Host) -> int:
+    """`down` once its lock is held, each failure added to `failed` as it comes, so that a Ctrl-C still says them."""
     kept = records(local)
     home = kept.source.parent
     named = host.text(kept.source)
@@ -2062,7 +2441,6 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
     source = "" if named is None else named.strip()
     env = loaded(local, environ, host)
     listen = listen_of(env)
-    failed: list[str] = []
 
     def tried(what: str, act: Callable[[], None]) -> None:
         try:
@@ -2156,6 +2534,8 @@ def main(argv: Sequence[str], *, environ: Mapping[str, str] = os.environ, host: 
         return stop.status
     except OSError as e:
         return fail(f"{args.verb}: {e}")
+    except KeyboardInterrupt:
+        return fail(f"{args.verb} was interrupted", 130)
 
 
 if __name__ == "__main__":

@@ -134,7 +134,7 @@ class FakeHost:
         self.networks: list[tuple[str, list[str]]] = []
         self.images: set[str] = set()
         self.on_start: Callable[[Started], None] | None = None
-        self.later: list[tuple[float, Callable[[], None]]] = []
+        self.later: list[tuple[float, Callable[[], object]]] = []
         self.acts: list[Any] = []
         self.on_path: set[str] = set()
         self.gids: dict[str, int] = {}
@@ -305,7 +305,7 @@ class FakeHost:
         for _, happen in due:
             happen()
 
-    def at(self, when: float, happen: Callable[[], None]) -> None:
+    def at(self, when: float, happen: Callable[[], object]) -> None:
         """`happen` is called once, when a `sleep` first brings the clock to `when` or past it."""
         self.later.append((when, happen))
 

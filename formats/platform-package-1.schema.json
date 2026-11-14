@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/platform-package-1.schema.json",
   "title": "Fylgja platform package 1",
-  "description": "What Fylgja must know of one network operating system that the runtime's kind does not already know. Written as YAML (packages/<id>.yaml), read by the compiler, the drivers' plan, the push, readiness, verify and the conformance suite.",
+  "description": "What Fylgja must know of one network operating system that the runtime's kind does not already know. Written as YAML, a file a platform (psp/<id>.yaml in this repository), read by the compiler, the drivers' plan, the push, readiness, verify and the conformance suite.",
   "$comment": "PLATFORM-LEVEL sections (id, versions, interfaces, push, readiness, gnmi, conformance, fidelity) are shared by every driver; what differs by runtime lives under runtime.<runtime>, and only runtime.containerlab exists now (both containerlab drivers read it; runtime.hardware arrives with that driver). A package states nothing a kind already provides: interface aliases, default logins and default configuration are the kind's. CROSS-FIELD RULES the core holds when it loads a package (POST /v1/packages:validate reports all of them in one pass): interface rule names unique (package.rule.name); exactly one management rule (package.management.rule); a template uses only placeholders its match captures (package.patterns.placeholders); every runtime.containerlab.rename entry names a data rule, and every data rule has one when alias is false (package.rename.coverage); a ranges key is a placeholder of match (package.ranges.placeholder); version names unique (package.versions.name); every listed version has an image in runtime.containerlab.images, and every key there is a listed version's name (package.images.coverage); one version a package in this build, which runs the one listed, until a device can name the version it runs (package.versions.several). FIXED, not fields: the push is a replace with an explicit commit, the startup format is cli, the scheme is https, the gNMI encoding is json_ietf, and readiness is an authenticated request to the push transport. LOSSINESS is never declared: the driver's plan computes it from the rename rules.",
   "type": "object",
   "additionalProperties": false,
@@ -80,7 +80,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "description": "The HTTPS port the push and readiness dial at the node's management address."
+          "description": "The HTTPS port the push and readiness dial at the node's management address; the clabernetes driver's plan declares it among each node's ports, so that the node's LoadBalancer serves it."
         },
         "timeout_s": {
           "type": "integer",
@@ -435,16 +435,16 @@
         "deploy_timeout_s": {
           "type": "integer",
           "minimum": 1,
-          "description": "Measured bound on bringing this kind's nodes up, an image pull included; the apply phase fails with apply.timeout after it."
+          "description": "Measured bound on bringing this kind's nodes up, an image pull included. A driver bounds its apply by the largest of the bounds of the packages the twin's nodes use, and a minute; an apply that outlasts it is the driver's runtime failure, which the reconcile loop takes as transient: the phase's failed event, no finding, the run still in flight, and the apply made again after a backoff."
         },
         "destroy_timeout_s": {
           "type": "integer",
           "minimum": 1,
-          "description": "Measured bound on removing this kind's nodes; the destroy phase records destroy.timeout and leaves the twin unclean after it."
+          "description": "Measured bound on removing this kind's nodes. A driver bounds its destroy by the largest of the bounds of the packages the twin's nodes use, and a minute; a destroy that outlasts it is the driver's runtime failure, which the reconcile loop takes as transient: the phase's failed event, no finding, the twin's record kept, and the destroy made again after a backoff, finding what the one before left."
         },
         "alias": {
           "type": "boolean",
-          "description": "true when the kind accepts production interface names as endpoint aliases, so the plan emits them unchanged; false when it needs rename. Verified 2026-10-30: nokia_srlinux true (ethernet-L/P[/C] accepted, out-of-range names refused in post-deploy); ceos false in containerlab 0.79-0.82, whose pattern eth[1-9][\\w.]*$|et[1-9][\\w.]*$ is unanchored at the start, so a wrong name ending in et<digit> (\"Ethernet1\") is accepted and wires a port EOS never sees: the plan emits only rename output for such a kind, and conformance checks every link's port appears in the NOS."
+          "description": "true when the kind accepts production interface names as endpoint aliases, so the plan emits them unchanged; false when it needs rename. Verified 2026-10-30: nokia_srlinux true (ethernet-L/P[/C] accepted, out-of-range names refused in post-deploy); ceos false in containerlab 0.79-0.82, whose pattern eth[1-9][\\w.]*$|et[1-9][\\w.]*$ is unanchored at the start, so a wrong name ending in et<digit> (\"Ethernet1\") is accepted and wires a port EOS never sees: the plan emits only rename output for such a kind, and verify, which reads each enabled cabled port's admin state and neighbours on the node, fails a port the NOS does not have."
         },
         "rename": {
           "type": "array",

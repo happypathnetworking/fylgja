@@ -10,12 +10,11 @@ pure tier stands a fake in for both. The driver's working files live under
 twin's allocation holds, and writes the twin's demand into the allocation. The pool is the one
 the driver is made with, the server's setting `FYLGJA_LAB_POOL` where it is set (D-103), and a
 pool with no /24 free is refused naming each Docker network that holds part of it and that
-setting (`pool.refusal`). It refuses a twin the
-host cannot fit (`admission.capacity`: the pool exhausted, the demand above the host's free room less
-the demand of twins admitted whose nodes are not yet up, or a node above the host's room, D-073), and one
-whose account-gated image is not on the host (`admission.image.absent`), since locally a
-`pull_secret` is a presence check and the image is never pulled (D-015). An ungated image is
-containerlab's to pull at deploy.
+setting (`pool.refusal`). It refuses a twin the host cannot fit (`admission.capacity`: the pool
+exhausted, the demand above the host's free room less the demand of twins admitted whose nodes are
+not yet up, or a node above the host's room, D-073), and one whose account-gated image is not on
+the host (`admission.image.absent`), since locally a `pull_secret` is a presence check and the
+image is never pulled (D-015). An ungated image is containerlab's to pull at deploy.
 
 `apply` writes the deployment's files, each checked against its hash, into the twin's
 directory and deploys the topology: on a running lab that is containerlab's own reconcile,

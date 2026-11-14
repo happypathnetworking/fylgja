@@ -133,8 +133,8 @@ relative to them.
     this build, and the core runs it: a second is refused when the package is loaded, until a
     device can name the version it runs. What comes later only adds, and breaks no package
     written to this shape: a device's optional `version`, a second listed version, a version's
-    further members, the reader of `conformance.version`, which nothing reads yet, and that
-    refusal lifted.
+    further members, the reader of `conformance.version`, which nothing reads yet, as nothing
+    reads `conformance.port.discovering`, and that refusal lifted.
 
 ## Settled by measurement (2026-10-30)
 

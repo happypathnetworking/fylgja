@@ -2625,10 +2625,11 @@ and the core's pin as this file records them elsewhere, and no output of this ru
 `core/tests/cluster/test_clabernetes_driver_cluster.py` ran alone from the development host (`cd
 core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver_cluster.py`,
 `local/.env` loaded), from 19:26:31 to 19:30:49Z: **8 passed in 255.63 s**, exit 0, none skipped.
-Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` pins what follows
-([D-102](decisions.md#d-102)), as the local driver's block does above ("containerlab 0.79.0"),
-but the cluster before the run and after the module, which were read by hand and are no
-assertion of the module's.
+Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` (the run's log,
+`task-1-cluster3.log`, names it `…_is_refused_before_any_request`: the test was renamed after the
+run, no line of its body changed) pins what follows ([D-102](decisions.md#d-102)), as the local
+driver's block does above ("containerlab 0.79.0"), but the cluster before the run and after the
+module, which were read by hand and are no assertion of the module's.
 
 - **The cluster before the run**, read by hand with `kubectl` at about 19:25Z: `get deployment
   fylgja-core -n fylgja` gave the deployed core's replicas as 0 with none ready. Listings of the
@@ -2704,11 +2705,9 @@ deleted by hand.
   live tier's was ("containerlab 0.79.0", phase 10's block) before the run (`task-5-cluster.log`).
 - **The cluster after the tier**, at 23:32:33Z (`task-5-after-cluster.log`): the same seven
   namespaces, no Topology, the Deployment still at no replica. The Leases were read at
-  23:33:07Z, in the same log: `kubectl -n fylgja get leases` listed one, `fylgja-core`, made on
-  2026-11-07, its holder empty; and `kubectl get leases -A`, printed as namespace, name and
-  creation time and passed through `grep -i fylgja`, gave that one line alone. The log's label
-  for the second, "leases of every namespace whose name holds fylgja", says less than the
-  command did, which matched the name too.
+  23:33:07Z, in the same log: under "the Leases of fylgja" one is listed, `fylgja-core`, made on
+  2026-11-07, its holder empty; and under "leases of every namespace whose name holds fylgja",
+  that one line alone.
 - **`core/tests/cluster/test_restore_cluster.py` alone, at `1d460b4`: 8 passed in 770.61 s**
   (23:41:48 to 23:54:40Z), exit 0 (`task-5-restore-cluster.log`), after the wrapper was given
   the two reads, each passed on to the reach as its other reads are. The loop's create of the

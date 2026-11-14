@@ -87,40 +87,39 @@ diverged: the lab is the running twin's, or what the step made of it.
 
 A pass that begins with no run to do on a settled twin (`settled`: no deletion asked, the
 generation observed, a deployment applied, no run in flight, not diverged), whose packages this
-core has loaded and whose teardown its driver has not refused (`_lacking`),
-inspects it (D-067); a pass that settles an ended run, or ends one, takes no
-settled pass after it. A recorded node, device node or probe host, is absent when the inspection
-lacks it or says it is not running, and moved when its incarnation is not the one the record
-holds; incarnations are compared as the driver writes them, never read. An absent node is waited
-for, then reported, never made: while any absent node is inside its boot window (its package's
-readiness window, from the first pass that saw that node absent) the pass writes nothing and
-queues the twin again within `MISSING_POLL_S`, since a runtime that replaces a node brings it back
-by itself. Once none is, a warning names each node, the twin is not queued again, and Ready is
-False for `twin.node.missing`, written once and only where the twin runs what its spec asks; a
-restore in flight ends `failed` instead, one finding per node. Nothing is applied: a node gone
-for good leaves its twin so until the twin is stepped or deleted. With every node running at its
-recorded incarnation the pass writes nothing either, and its `inspect` is its only call on the
-runtime, unless the twin was reported missing, which a restore verifies first. A moved node
-is restored under a run of operation `restore`, the core's own (`RESTORE_PRINCIPAL`): the record
-names it with Ready False for `twin.restoring`, or, where the twin does not run what the spec
-asks (`spec_met`, false after a refused or cancelled step), with its conditions as they are; then
-the nodes as inspected, a moved one holding nothing; then `RESTORE`, a step's `ready`, `pushed`
-and `verified`, for the nodes holding nothing, every probe host and the twin's own bundle. A
-restore records no phase: its progress is the nodes' `holds`, and the record's `phase`,
-`last_step`, observed generation, bundle, deployment and allocation stay as they are. Nothing is
-compiled, admitted, planned or applied, and nothing is torn down. It ends `ok` with verify's
-counts and the wait, Ready True for `twin.ready` where it set `twin.restoring`; a failure only a
-new spec can clear ends it with its own status, and a cancel `failed` with `run.cancelled`, Ready
-False for its rule there. Either way the moved node keeps its new incarnation, holding nothing
-when it was not pushed again, so no later pass repeats the restore, and the twin is not
-diverged; a new spec is the remedy, since a step, even one to the bundle the twin runs, readies
-and pushes what holds nothing. A transient failure leaves the run in flight, and the next pass
-resumes it by the same code: it reads its cancel, inspects again (a node replaced once more
-holds nothing at its newest incarnation) and passes over what is already held. A restore in
-flight is resumed before a new spec is acted on, so no step is taken beside it; a deletion
-cancels it first (below). A pass in which a restore ends goes on: a spec written meanwhile is
-stepped to, and a deletion asked meanwhile torn down, by that pass, since the kick of the
-client's write may have been spent on the restore (a kick during its backoff, say, or a core's
+core has loaded and whose teardown its driver has not refused (`_lacking`), inspects it (D-067); a
+pass that settles an ended run, or ends one, takes no settled pass after it. A recorded node,
+device node or probe host, is absent when the inspection lacks it or says it is not running, and
+moved when its incarnation is not the one the record holds; incarnations are compared as the
+driver writes them, never read. An absent node is waited for, then reported, never made: while any
+absent node is inside its boot window (its package's readiness window, from the first pass that
+saw that node absent) the pass writes nothing and queues the twin again within `MISSING_POLL_S`,
+since a runtime that replaces a node brings it back by itself. Once none is, a warning names each
+node, the twin is not queued again, and Ready is False for `twin.node.missing`, written once and
+only where the twin runs what its spec asks; a restore in flight ends `failed` instead, one
+finding per node. Nothing is applied: a node gone for good leaves its twin so until the twin is
+stepped or deleted. With every node running at its recorded incarnation the pass writes nothing
+either, and its `inspect` is its only call on the runtime, unless the twin was reported missing,
+which a restore verifies first. A moved node is restored under a run of operation `restore`, the
+core's own (`RESTORE_PRINCIPAL`): the record names it with Ready False for `twin.restoring`, or,
+where the twin does not run what the spec asks (`spec_met`, false after a refused or cancelled
+step), with its conditions as they are; then the nodes as inspected, a moved one holding nothing;
+then `RESTORE`, a step's `ready`, `pushed` and `verified`, for the nodes holding nothing, every
+probe host and the twin's own bundle. A restore records no phase: its progress is the nodes'
+`holds`, and the record's `phase`, `last_step`, observed generation, bundle, deployment and
+allocation stay as they are. Nothing is compiled, admitted, planned or applied, and nothing is
+torn down. It ends `ok` with verify's counts and the wait, Ready True for `twin.ready` where it
+set `twin.restoring`; a failure only a new spec can clear ends it with its own status, and a
+cancel `failed` with `run.cancelled`, Ready False for its rule there. Either way the moved node
+keeps its new incarnation, holding nothing when it was not pushed again, so no later pass repeats
+the restore, and the twin is not diverged; a new spec is the remedy, since a step, even one to the
+bundle the twin runs, readies and pushes what holds nothing. A transient failure leaves the run in
+flight, and the next pass resumes it by the same code: it reads its cancel, inspects again (a node
+replaced once more holds nothing at its newest incarnation) and passes over what is already held.
+A restore in flight is resumed before a new spec is acted on, so no step is taken beside it; a
+deletion cancels it first (below). A pass in which a restore ends goes on: a spec written
+meanwhile is stepped to, and a deletion asked meanwhile torn down, by that pass, since the kick of
+the client's write may have been spent on the restore (a kick during its backoff, say, or a core's
 start after it stopped mid-restore).
 
 A twin whose deletion was asked is torn down by a destroy run instead (D-025): a create, a step
@@ -759,28 +758,26 @@ class Reconciler:
         (D-067); or `named`, a restore run in flight, resumed by the same code. It answers whether a
         restore run ended in this pass, so the pass goes on to a spec or a deletion written
         meanwhile. A twin whose deployment names a package this core lacks is not inspected:
-        nothing could be readied or pushed. Nor is one whose deployment was kept because a
-        cancelled or failed create's cleanup met a node of it that no loaded package runs
-        (`_teardown`), for this core's life (`_lacking`).
-        One `inspect`, the pass's only call on the runtime
-        unless a restore follows. A resume reads its cancel before that `inspect` and during it
-        (`_runtime`), so a cancelled restore never waits out a node's boot window, nor on an
-        `inspect` that keeps failing: it ends cancelled at once (`_cancel_restore`). A recorded
-        node, device node or probe host, is absent when the inspection lacks it or says it is not
-        running, and moved when its incarnation is not the one the record holds. An absent node is
-        waited for, then reported, never made (`_missing`). With none absent, the twin's sightings
-        are dropped; with none moved either, a settled twin whose Ready reason is not
-        `twin.node.missing` is left as it is, nothing written. Otherwise the restore run, the core's
-        own, is taken, so a twin reported missing whose nodes all run again is verified before it
-        is Ready again: the record names the run with Ready False for `twin.restoring`, or, where
-        the twin does not run what the spec asks (`spec_met`), with its conditions as a refused or
-        cancelled step left them. The nodes are recorded as inspected, a moved one holding nothing
-        and every other what it held (a node the inspection holds and the record does not is not
-        recorded), then `RESTORE` runs: `ready` for each device node holding nothing and every probe
-        host, `push` for each node not holding the twin's bundle, and the wait for verify. A resume
-        passes over what is already held, and a node replaced once more holds nothing at its newest
-        incarnation. A transient failure leaves the run in flight, raised as `_Retry`: the next pass
-        resumes it."""
+        nothing could be readied or pushed. Nor is one whose deployment was kept because a cancelled
+        or failed create's cleanup met a node of it that no loaded package runs (`_teardown`), for
+        this core's life (`_lacking`). One `inspect`, the pass's only call on the runtime unless a
+        restore follows. A resume reads its cancel before that `inspect` and during it (`_runtime`),
+        so a cancelled restore never waits out a node's boot window, nor on an `inspect` that keeps
+        failing: it ends cancelled at once (`_cancel_restore`). A recorded node, device node or
+        probe host, is absent when the inspection lacks it or says it is not running, and moved when
+        its incarnation is not the one the record holds. An absent node is waited for, then
+        reported, never made (`_missing`). With none absent, the twin's sightings are dropped; with
+        none moved either, a settled twin whose Ready reason is not `twin.node.missing` is left as
+        it is, nothing written. Otherwise the restore run, the core's own, is taken, so a twin
+        reported missing whose nodes all run again is verified before it is Ready again: the record
+        names the run with Ready False for `twin.restoring`, or, where the twin does not run what
+        the spec asks (`spec_met`), with its conditions as a refused or cancelled step left them.
+        The nodes are recorded as inspected, a moved one holding nothing and every other what it
+        held (a node the inspection holds and the record does not is not recorded), then `RESTORE`
+        runs: `ready` for each device node holding nothing and every probe host, `push` for each
+        node not holding the twin's bundle, and the wait for verify. A resume passes over what is
+        already held, and a node replaced once more holds nothing at its newest incarnation. A
+        transient failure leaves the run in flight, raised as `_Retry`: the next pass resumes it."""
         if named is None and self._lacking(record):
             return False
         resumed = None if named is None else _Pass(record=record, run=named, driver=driver)
@@ -1063,15 +1060,15 @@ class Reconciler:
 
     async def _refuse(self, record: TwinRecord, reason: str, found: Iterable[Finding]) -> None:
         """What this core cannot do for the twin at all, whatever is asked (a driver it does not
-        serve, a teardown its packages cannot account for): every run of the twin in flight ends `rejected`
-        with `found`, and Ready is False for `reason`, once; nothing is torn down. A step's verdict
-        names its target; one whose apply had begun ends `diverged` instead, with `step.diverged`
-        beside `found` (D-029); one whose phases have all run has completed, and ends `ok`, as it
-        would have. The step the record names is recorded as its run ended (`_step_ending`, or
-        `_step_done` for `ok`): Stepping False for `reason` too, `last_step` `rejected`, or
-        `diverged` with the twin Diverged for `step.diverged`; a twin diverged already keeps the
-        `last_step` of the step that left it so. An `ok` step's verdict lists its target's flows,
-        `not_started` (D-051), as the `flows` phase it had run recorded them."""
+        serve, a teardown its packages cannot account for): every run of the twin in flight ends
+        `rejected` with `found`, and Ready is False for `reason`, once; nothing is torn down. A
+        step's verdict names its target; one whose apply had begun ends `diverged` instead, with
+        `step.diverged` beside `found` (D-029); one whose phases have all run has completed, and
+        ends `ok`, as it would have. The step the record names is recorded as its run ended
+        (`_step_ending`, or `_step_done` for `ok`): Stepping False for `reason` too, `last_step`
+        `rejected`, or `diverged` with the twin Diverged for `step.diverged`; a twin diverged
+        already keeps the `last_step` of the step that left it so. An `ok` step's verdict lists its
+        target's flows, `not_started` (D-051), as the `flows` phase it had run recorded them."""
         status = record.status
         in_flight = [r for r in self.store.list_runs(record.name) if r.state != "ended"]
         settled = (ready_reason(status.conditions) == reason and status.run_id is None
@@ -1235,12 +1232,11 @@ class Reconciler:
         """The cancel path (D-023): events `cancel started`, the cleanup (`destroy` when a
         deployment was filed, and the record's nodes, deployment and allocation cleared), and
         `cancel done` carrying `run.cancelled`; then the run ends `failed` with that finding,
-        and Ready is False for it. What this core cannot tear down is kept, and the finding says
-        so: a deployment whose packages it lacks (`_lacking`), or one a node of which none of them
-        runs, as the driver's `destroy` says (`_teardown`).
-        A step's is `_cancel_step`, told the `phase` the cancel was read
-        in, and a restore's `_cancel_restore`: neither cleans anything up. A core stopped meanwhile
-        finds the run still cancelling and runs the path again."""
+        and Ready is False for it. What this core cannot tear down is kept, and the finding says so:
+        a deployment whose packages it lacks (`_lacking`), or one a node of which none of them runs,
+        as the driver's `destroy` says (`_teardown`). A step's is `_cancel_step`, told the `phase`
+        the cancel was read in, and a restore's `_cancel_restore`: neither cleans anything up. A
+        core stopped meanwhile finds the run still cancelling and runs the path again."""
         p.run = self.store.get_run(p.run.id)
         if p.run.operation == "step":
             await self._cancel_step(p, phase)

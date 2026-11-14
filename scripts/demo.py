@@ -20,14 +20,15 @@ Every process, socket, file of the host's and clock the script touches goes thro
 its one implementation.
 
 Exit 0; 1 for a failure; 2 for a command line not understood, a precondition of the host's not met, a line of
-`<local>/.env` that is not read as a shell would read it or another demonstration command running. Each is said on
-stderr.
+`<local>/.env` that is not read as a shell would read it, a value that is not UTF-8 or that a child would not be
+given as the file has it, or another demonstration command running. Each is said on stderr.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import errno
 import fcntl
 import grp
 import hashlib
@@ -125,18 +126,20 @@ NOT_FOUND = 127
 """The status `Real.run` answers for a command the PATH it was run under does not hold, as a shell exits."""
 
 NOT_RUN = 126
-"""The status `Real.run` answers for a command that is found and is not this user's to run, as a shell exits."""
+"""The status `Real.run` answers for a command that is found and is not run, as a shell exits: one that is not this
+user's to run, or that the kernel cannot run."""
 
 BASH_KEEPS = frozenset(
     {
         "UID", "EUID", "PPID", "BASHOPTS", "SHELLOPTS", "BASH_VERSINFO", "GROUPS", "RANDOM", "SRANDOM", "SECONDS",
         "LINENO", "FUNCNAME", "DIRSTACK", "BASHPID", "EPOCHSECONDS", "EPOCHREALTIME", "HISTCMD", "BASH_COMMAND",
         "BASH_SUBSHELL", "BASH_MONOSECONDS", "PIPESTATUS", "COMP_WORDBREAKS", "BASH_LINENO", "BASH_SOURCE", "BASH_ARGC",
-        "BASH_ARGV", "BASH_ALIASES", "BASH_CMDS", "_",
+        "BASH_ARGV", "BASH_ALIASES", "BASH_CMDS", "_", "BASH_ARGV0", "SHLVL", "OPTIND",
     }
 )  # fmt: skip
-"""Names bash keeps for itself: where a file it loads assigns one, bash exports its own value or none, and dash the
-file's. The shells do not agree, so a line that assigns one is not read."""
+"""Names bash keeps for itself: where a file it loads assigns one, bash exports its own value, another than the
+file's (`SHLVL`, lowered) or none, and dash the file's, but for an `OPTIND` that is no number, where dash stops
+loading the file. The shells do not agree, so a line that assigns one is not read."""
 
 BLANK = " \t"
 """What a shell takes for a blank between words: a space and a tab, and no other character Python calls white."""
@@ -218,8 +221,10 @@ class Host(Protocol):
         """A child run to its end, under `env` where it is given and this process's environment where not. A child
         not captured prints as it will; one captured prints nothing, and its stdout is answered. One that outlasts
         `timeout` is killed, and its status is `TIMED_OUT`; a command that is not found, on the PATH of `env` where
-        that is given, is no exception, and its status is `NOT_FOUND`, nor is one found that may not be run, whose
-        status is `NOT_RUN`."""
+        that is given, is no exception, and its status is `NOT_FOUND`, nor is one found that may not be run or that
+        the kernel cannot run, whose status is `NOT_RUN`. A captured child that could not be started for any other
+        reason is `NOT_RUN` too, so that no read of the host ends in an exception; one not captured raises its
+        `OSError`."""
         ...
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -265,8 +270,8 @@ class Host(Protocol):
     def text(self, path: Path) -> str | None:
         """What the file `path` holds, or None where there is no such file: its bytes decoded as UTF-8 and nothing
         else done to them, so that no line end is translated and a carriage return is still there, and a byte that
-        is no UTF-8 is kept as `os.fsencode` gives it back: a value reaches its reader and a child byte for byte.
-        One that is not this user's to read raises `PermissionError`."""
+        is no UTF-8 is kept, as the surrogate that stands for it (`surrogateescape`): the reader sees what the file
+        holds, and refuses what it does not read. One that is not this user's to read raises `PermissionError`."""
         ...
 
     def clock(self) -> float: ...
@@ -333,6 +338,10 @@ class Real:
             return Done(NOT_FOUND, "")
         except PermissionError:
             return Done(NOT_RUN, "")
+        except OSError as not_started:
+            if capture or not_started.errno == errno.ENOEXEC:  # the second: no format the kernel runs, and no `#!`
+                return Done(NOT_RUN, "")
+            raise
         return Done(done.returncode, done.stdout or "")
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -545,37 +554,57 @@ def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str
     """`environ` overlaid by `<local>/.env`, as a shell that loads the file has it, and `environ` alone where there
     is no file. A file that is not this user's to read stops the run, exit 2, and so does a line `read_env` does not
     read, naming the line by its number and the name where it has one, and never the value; and so does a value
-    the process's locale cannot encode, by its name alone, since every value here is a child's to be given."""
+    that is not carried (`unfit`), each said by its name alone: every value here is valid UTF-8, the shell's and the
+    file's alike, and one the file gives is a child's as the file has it."""
     path = local / ".env"
     try:
         text = host.text(path)
     except PermissionError:
         raise Stop(2, [f"{path} is not this user's to read"]) from None
-    if text is None:
-        return dict(environ)
     try:
-        env = {**environ, **read_env(text)}
+        held = {} if text is None else read_env(text)
     except Unread as unread:
         raise Stop(2, [f"{path} line {unread.line} {unread_as(unread)}"]) from None
-    refused: list[str] = []
-    for name, value in env.items():
-        try:
-            encoded(name, value)
-        except Stop as stop:
-            refused += stop.lines
+    env = {**environ, **held}
+    refused = [said for name, value in env.items() if (said := unfit(name, value, of_the_file=name in held))]
     if refused:
         raise Stop(2, refused)
     return env
 
 
-def encoded(name: str, value: str) -> bytes:
-    """The bytes of `value` as a child is given them and as a token is hashed: those `<local>/.env` holds for it
-    (`Host.text`). A value the process's locale cannot encode stops the run, exit 2, by its name alone: the
-    exception's own text holds a character of the value, and nothing of a value is ever said."""
+def unfit(name: str, value: str, *, of_the_file: bool = True) -> str | None:
+    """What is said of a value the script does not carry, by its name alone, and None for one it does.
+
+    No value holds a byte that is not UTF-8, which `Host.text` hands on as a surrogate, and under a locale of UTF-8
+    the process's environment too: the script writes a value into a line, sends one in a header and hashes one,
+    each as UTF-8. And a value `<local>/.env` gives is one the process's locale gives a child as the file has it,
+    since a shell that loads the file gives a child the file's own bytes: not one the locale cannot encode, nor one
+    it would write as other bytes, as ISO-8859-1 writes one byte for a character the file holds as two. A value of
+    the shell's own is not asked that: its bytes are given back to a child as they came."""
     try:
-        return os.fsencode(value)
+        held = value.encode("utf-8")
     except UnicodeEncodeError:
-        raise Stop(2, [f"{name} holds a character this locale cannot encode"]) from None
+        return f"{name} holds a byte that is not UTF-8"
+    if not of_the_file:
+        return None
+    try:
+        if os.fsencode(value) != held:
+            return f"{name} holds a character this locale would not write as the file has it"
+    except UnicodeEncodeError:
+        return f"{name} holds a character this locale cannot encode"
+    return None
+
+
+def encoded(name: str, value: str) -> bytes:
+    """The bytes of `value` as a child is given them, as a line is written and as a token is hashed: its UTF-8,
+    which is what `<local>/.env` holds for it (`Host.text`) and what a shell that loads the file gives a child. A
+    value that is not carried (`unfit`) stops the run, exit 2, by its name alone. An encoding's exception holds the
+    whole value, so the `Stop` is raised with none being handled and carries none, as its cause or as its context:
+    nothing of a value is ever said."""
+    refused = unfit(name, value)
+    if refused is not None:
+        raise Stop(2, [refused])
+    return value.encode("utf-8")
 
 
 def unread_as(unread: Unread) -> str:
@@ -627,8 +656,9 @@ def own_lines(env: Mapping[str, str], listen: str, host: Host) -> list[tuple[str
 
 
 def hashed(name: str, token: str) -> str:
-    """A token's line in the token file holds this, the SHA-256 of its bytes in hex (D-025): the bytes the file it
-    was read from holds, which are a child's too (`encoded`, under the token's name in the environment)."""
+    """A token's line in the token file holds this, the SHA-256 of its bytes in hex (D-025): its UTF-8, the bytes
+    the file it was read from holds, which are a child's too (`encoded`, under the token's name in the
+    environment)."""
     return hashlib.sha256(encoded(name, token)).hexdigest()
 
 

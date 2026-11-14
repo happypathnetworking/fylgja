@@ -1,13 +1,18 @@
 """`scripts/demo.py`, the demonstration script: the environment it reads, what it writes under `local/`, and the
 host's checks. The script is loaded by its path, as `make` runs it, and given `demo_host.FakeHost` for its host:
-nothing here starts a process, opens a socket or sleeps. Of the host, two tests of `Real` read this process's own
-entry in `/proc` and the group database, and one reads the checkout's `.env.example`; no other file of the host's is
+nothing here starts a process, opens a socket or sleeps.
+
+What is read of the host: one test of `Real` reads this process's own entry in `/proc` and the group database. What
+is read of the checkout: `.env.example`; the script itself, by `ast`; the three development scripts beside it, each
+loaded by its path, and the core's `config` and `server.auth`, imported, to hold the script's values to theirs; and
+one test walks the tree and reads each file that says what a distribution holds. No other file of the host's is
 read. What is written is written under `tmp_path`, and every secret is the tests' own, compared outside an assert."""
 
 from __future__ import annotations
 
 import ast
 import base64
+import errno
 import grp
 import hashlib
 import http.client
@@ -214,10 +219,12 @@ BASH_KEEPS = (
     "UID", "EUID", "PPID", "BASHOPTS", "SHELLOPTS", "BASH_VERSINFO", "GROUPS", "RANDOM", "SRANDOM", "SECONDS", "LINENO",
     "FUNCNAME", "DIRSTACK", "BASHPID", "EPOCHSECONDS", "EPOCHREALTIME", "HISTCMD", "BASH_COMMAND", "BASH_SUBSHELL",
     "BASH_MONOSECONDS", "PIPESTATUS", "COMP_WORDBREAKS", "BASH_LINENO", "BASH_SOURCE", "BASH_ARGC", "BASH_ARGV",
-    "BASH_ALIASES", "BASH_CMDS", "_",
+    "BASH_ALIASES", "BASH_CMDS", "_", "BASH_ARGV0", "SHLVL", "OPTIND",
 )
-"""Names bash keeps for itself: assigned by a file it loads, bash exports its own value or none, where dash exports
-the file's. Read once on both shells, as the rows of `test_a_value_is_read_as_a_shell_reads_it` were."""
+"""Names the shells do not agree on: assigned by a file it loads, bash exports its own value or none, where dash
+exports the file's; the last three were read apart: for `BASH_ARGV0` bash exports nothing; `SHLVL` it exports
+lowered by one, or as 0 where the file's is no number; and at an `OPTIND` that is no number dash stops loading the
+file, where bash holds 0. Read once on both shells, as the rows of `test_a_value_is_read_as_a_shell_reads_it` were."""
 
 
 @pytest.mark.parametrize(
@@ -332,7 +339,9 @@ def test_a_carriage_return_inside_quotes_is_read_from_the_file_as_a_shell_reads_
 
 
 def test_a_name_held_with_no_value_is_not_held() -> None:
-    read = demo.read_env((ROOT / ".env.example").read_text())
+    example = demo.Real().text(ROOT / ".env.example")
+    assert example is not None
+    read = demo.read_env(example)
     assert set(read.values()) == {""}
     assert {*demo.LOGIN, "FYLGJA_API_ADDRESS", "FYLGJA_API_TOKEN", "FYLGJA_LISTEN", "FYLGJA_LAB_POOL"} <= set(read)
 
@@ -415,6 +424,110 @@ def test_a_value_the_locale_cannot_encode_is_refused_by_its_name_alone(
     assert (stop.value.status, stop.value.lines) == (2, (refused.format("FYLGJA_API_TOKEN"),))
     in_the_stop = any(part in str(stop.value) for part in ("zzqj", "kkwv"))
     assert not in_the_stop
+    # The exception the encoding raised holds the whole value: the `Stop` carries it neither as its cause nor as
+    # its context, where a traceback or a handler would find it.
+    assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+
+
+NOT_UTF_8 = "{} holds a byte that is not UTF-8"
+NOT_AS_THE_FILE = "{} holds a character this locale would not write as the file has it"
+
+
+def test_a_value_that_is_not_utf_8_is_refused_by_its_name_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A value is a child's to be given, a line's to be written and a header's to be sent, each as UTF-8: one that
+    holds a byte that is none is refused where the environment is loaded, by its name, and nothing later meets it.
+    Through `Real.text` on a file of the test's own, so that the bytes are a file's and not a string's."""
+    local = tmp_path / "local"
+    local.mkdir()
+    env_file = local / ".env"
+    real = demo.Real()
+
+    # A comment may hold any byte, and so may a line's own comment: a shell reads neither.
+    env_file.write_bytes(b"# caf\xe9, as another editor saved it\nX=1 # \xff\nY='\xc3\xa9'\n")
+    assert demo.loaded(local, {"W": "kept"}, real) == {"W": "kept", "X": "1", "Y": "\u00e9"}
+
+    env_file.write_bytes(b"A=1\nFYLGJA_LISTEN='127.0.0.1:76\xff'\nexport X=p\xffq\nY=\xc3\xa9\nZ=\"\xed\xa0\x80\"\n")
+    with pytest.raises(demo.Stop) as stop:
+        demo.loaded(local, {"W": "kept"}, real)
+    assert (stop.value.status, stop.value.lines) == (
+        2,
+        (NOT_UTF_8.format("FYLGJA_LISTEN"), NOT_UTF_8.format("X"), NOT_UTF_8.format("Z")),
+    )
+    assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+
+    # `up` says the same and runs nothing; the fake reads the file as the real host does.
+    host = passing(local, disk=tmp_path)
+    assert host.text(env_file) == real.text(env_file)
+    assert status(host, ["up", "netbox", "--local", str(local), "--main", str(tmp_path), "--ref", ""]) == 2
+    said = capsys.readouterr()
+    assert said.err.split("\n")[:-1] == [f"demo: {NOT_UTF_8.format(name)}" for name in ("FYLGJA_LISTEN", "X", "Z")]
+    assert (said.out, host.ran, host.started) == ("", [], [])
+    assert sorted(path.name for path in local.iterdir()) == [".env"]
+
+    # And where a value is hashed or written, should one reach there unjudged: a `Stop`, and never a `ValueError`.
+    unjudged = "p\udcffq"
+    with pytest.raises(demo.Stop) as stop:
+        demo.token_lines("", {"FYLGJA_API_TOKEN": unjudged})
+    assert (stop.value.status, stop.value.lines) == (2, (NOT_UTF_8.format("FYLGJA_API_TOKEN"),))
+    assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+    with pytest.raises(demo.Stop) as stop:
+        demo.encoded("X", unjudged)
+    assert (stop.value.status, stop.value.lines) == (2, (NOT_UTF_8.format("X"),))
+    assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+
+    # A value of the shell's own is held to the same, with the file there and with none: the script holds no
+    # value that is not UTF-8, wherever it came from.
+    env_file.write_bytes(b"A=1\n")
+    for there in (True, False):
+        if not there:
+            env_file.unlink()
+        with pytest.raises(demo.Stop) as stop:
+            demo.loaded(local, {"W": "kept", "FYLGJA_ORCHESTRATOR_AUTH": unjudged}, real)
+        assert (stop.value.status, stop.value.lines) == (2, (NOT_UTF_8.format("FYLGJA_ORCHESTRATOR_AUTH"),))
+        assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+
+
+def test_a_value_the_locale_would_write_as_other_bytes_is_refused_by_its_name_alone(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The encoding step replaced by ISO-8859-1's, a locale that is not UTF-8: it gives a child one byte for a
+    character the file holds as two, where a shell that loads the file gives the file's two. Such a value is
+    refused by its name; one the locale writes as the file has it is carried."""
+
+    def latin_1(value: str) -> bytes:
+        return value.encode("iso8859-1", "surrogateescape")
+
+    monkeypatch.setattr(demo.os, "fsencode", latin_1)
+    host = passing()
+    host.files[ENV_FILE] = "A=plain\nX='zzqj\u00e9'\nexport Y=kkwv\u00e9\n"
+    with pytest.raises(demo.Stop) as stop:
+        demo.loaded(LOCAL, {"W": "kept"}, host)
+    assert (stop.value.status, stop.value.lines) == (2, (NOT_AS_THE_FILE.format("X"), NOT_AS_THE_FILE.format("Y")))
+    assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+    assert status(host, up("netbox", "")) == 2
+    said = capsys.readouterr()
+    assert said.err.split("\n")[:-1] == [f"demo: {NOT_AS_THE_FILE.format(name)}" for name in ("X", "Y")]
+    shown = any(part in said.out + said.err for part in ("zzqj", "kkwv"))
+    assert not shown
+    assert (said.out, host.ran, host.started) == ("", [], [])
+
+    # A character the locale lacks is still said as that, and a value it writes as the file has it is carried.
+    host.files[ENV_FILE] = "A=plain\nX='zzqj\u20ac'\n"
+    with pytest.raises(demo.Stop) as stop:
+        demo.loaded(LOCAL, {}, host)
+    assert stop.value.lines == ("X holds a character this locale cannot encode",)
+    assert (stop.value.__cause__, stop.value.__context__) == (None, None)
+    host.files[ENV_FILE] = "A=plain\nX='p q'\n"
+    assert demo.loaded(LOCAL, {}, host) == {"A": "plain", "X": "p q"}
+    assert demo.encoded("A", "plain") == b"plain"
+    # A value of the shell's own came as the locale's bytes and is given back to a child as them: it is not held
+    # to the file's, with the file there or with none, but where the file gives the name a value of its own.
+    shells = {"W": "kept\u00e9", "X": "the shell's \u00e9"}
+    assert demo.loaded(LOCAL, shells, host) == {"W": "kept\u00e9", "A": "plain", "X": "p q"}
+    del host.files[ENV_FILE]
+    assert demo.loaded(LOCAL, shells, host) == shells
 
 
 def test_own_lines_add_the_address_and_a_clients_token_only_where_absent() -> None:
@@ -1294,6 +1407,10 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
             raise NotADirectoryError(20, "Not a directory", argv[0])
         if argv[0] == "not-executable":
             raise PermissionError(13, "Permission denied", argv[0])
+        if argv[0] == "no-format-the-kernel-runs":
+            raise OSError(errno.ENOEXEC, "Exec format error", argv[0])
+        if argv[0] == "too-long-a-list":
+            raise OSError(errno.E2BIG, "Argument list too long", argv[0])
         return demo.subprocess.CompletedProcess(argv, 3, stdout=None if kwargs["stdout"] is None else "printed\n")
 
     def popen(argv: list[str], **kwargs: Any) -> Child:
@@ -1332,6 +1449,14 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
     assert real.run(["under-a-file-on-the-path"], env={"PATH": "/srv/example/file"}) == demo.Done(127, "")
     assert demo.NOT_RUN == 126
     assert real.run(["not-executable"], capture=True) == demo.Done(126, "")
+    # So is one the kernel cannot run, a file with no format it knows and no `#!`, captured or not, as a shell
+    # exits; and any other failure to start a captured read, so that no check ends in an exception's text.
+    assert real.run(["no-format-the-kernel-runs"], capture=True) == demo.Done(126, "")
+    assert real.run(["no-format-the-kernel-runs"]) == demo.Done(126, "")
+    assert real.run(["too-long-a-list"], capture=True, timeout=60) == demo.Done(126, "")
+    with pytest.raises(OSError) as not_started:
+        real.run(["too-long-a-list"])
+    assert not_started.value.errno == errno.E2BIG
 
     log = tmp_path / "core.log"
     log.write_bytes(b"an earlier start's\n")
@@ -1531,17 +1656,22 @@ def test_the_real_hosts_text_lock_and_secret(tmp_path: Path) -> None:
     assert real.text(held / "under-a-file") is None
     assert real.text(tmp_path) is None
 
-    # A file's bytes pass through unchanged, whatever the locale: a byte that is no UTF-8 is kept, to be given to a
-    # child and hashed as the file holds it, and the fake reads a file of a test's own likewise.
+    # A file's bytes reach the reader unchanged: a byte that is no UTF-8 is kept, as the surrogate that stands for
+    # it, so that the reader sees what the file holds and a value that holds one is refused by its name
+    # (`test_a_value_that_is_not_utf_8_is_refused_by_its_name_alone`). The decoding is UTF-8 whatever the locale;
+    # what a locale that is not UTF-8 would then give a child is `encoded`'s to judge. The fake reads a file of a
+    # test's own likewise.
     raw = tmp_path / "raw"
     raw.write_bytes(b"X=p\xffq\nY=\xc3\xa9\n")
     text = real.text(raw)
     assert text is not None
-    assert os.fsencode(text) == b"X=p\xffq\nY=\xc3\xa9\n"
+    assert text.encode("utf-8", "surrogateescape") == b"X=p\xffq\nY=\xc3\xa9\n"
     assert FakeHost(disk=tmp_path).text(raw) == text
     read = demo.read_env(text)
-    assert (os.fsencode(read["X"]), read["Y"]) == (b"p\xffq", "\u00e9")
-    assert demo.token_lines("", {"FYLGJA_API_TOKEN": read["X"]}) == [f"{hashlib.sha256(b'p\xffq').hexdigest()} demo"]
+    assert (read["X"], read["Y"]) == ("p\udcffq", "\u00e9")
+    assert demo.token_lines("", {"FYLGJA_API_TOKEN": read["Y"]}) == [
+        f"{hashlib.sha256(b'\xc3\xa9').hexdigest()} demo"
+    ]
 
     if os.geteuid() != 0:
         held.chmod(0)

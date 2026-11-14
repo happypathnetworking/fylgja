@@ -6000,13 +6000,14 @@ output was saved, and none held a credential of `local/.env`. Afterwards the run
 pids, Prefect by `make prefect-down` and Infrahub by `make infrahub-down`, its volumes kept; the registration `fylgja`
 read `phase-10/2-demonstrations`, and the second proposed change below stood open with its thread. *(2026-11-14)*
 
-- **`make infrahub-up` failed once on the kept volumes, and passed when run again.** The first exited non-zero in
-  47.1 s: each of the target's two asks of Compose ended `dependency failed to start: container
+- **`make infrahub-up` failed once on the kept volumes, and passed when run again.** The first exited non-zero in 47.1
+  s: each of the target's two asks of Compose ended `dependency failed to start: container
   fylgja-core-infrahub-database-1 is unhealthy`, then `the second start of fylgja-core-infrahub exited 1`. The
-  database's container had started 1.2 s into the target. Run again 62.3 s after that container's start, the
-  database then `healthy`, it started the server and the two task workers, recreating none, said `Infrahub 1.11.11
-  answered at … 76 s after Compose's start returned`, and exited 0 in 79.4 s. It is what the controller read on
-  2026-11-13, above, where the third run passed. *(2026-11-14)*
+  database's container had started 1.2 s into the target. `docker inspect` read the database `healthy` 62.0 s after
+  that container's start, by the stamp of that read's block; the target, run again 0.3 s after that stamp, started the
+  server and the two task workers, recreating none, said `Infrahub 1.11.11 answered at … 76 s after Compose's start
+  returned`, and exited 0 in 79.4 s. It is what the controller read on 2026-11-13, above, where the third run passed.
+  *(2026-11-14)*
 - **The other steps.** `make orchestrator-env`, 29.1 s: `holds every name already; nothing written`, and the
   example's token `is accepted by Infrahub: nothing more to do`. `make infrahub-up` again, 1.9 s, `0 s after
   Compose's start returned`, no container recreated. `make infrahub-register`, 233.3 s: `moved fylgja from
@@ -6022,12 +6023,13 @@ read `phase-10/2-demonstrations`, and the second proposed change below stood ope
   and `Check: fylgja-twin` made 108.4 s and started 108.6 s on, `fylgja-step` on `task-worker-1` and `fylgja-twin` on
   `task-worker-2`, neither log holding a `NodeNotFoundError`. Prefect's run of `twin-rehearse/main`, `parameters`
   `{"branch": "third-link"}`, had a `created` 120.8 s after the proposed change's, which is 116.4 s after the seed
-  returned, and one of `stage-plan/main` 125.9 s after; each was the first row of its listing at the watch's next
-  read, and the only run new since the seed. Both read `Running` 12.5 and 7.2 s after their `created`. The
-  rehearsal's flow built its first stage's plan 209.5 s after its `Beginning flow run` line and its second 95.8 s
-  later; `stage-plan/main` read `Completed` 411.3 s after its `created`, its document `planned`; and the twin's
-  create was logged 405.9 s after the rehearsal's `Beginning flow run` line, 430.9 s after `fylgja-twin`'s validator
-  was made. *(2026-11-14)*
+  returned, and one of `stage-plan/main` 125.9 s after; the watch listed each at its next read, the only run of its
+  deployment that its listing before the seed did not hold, and each was the first row of its listing when that was
+  asked for by hand after the cut. Both read `Running` 12.5 and 7.2 s after their `created`. The rehearsal's flow
+  built its first stage's plan 209.5 s after its `Beginning flow run` line and its second 95.8 s later;
+  `stage-plan/main` read `Completed` 411.3 s after its `created`, its document `planned`; and the twin's create was
+  logged 405.9 s after the rehearsal's `Beginning flow run` line, 430.9 s after `fylgja-twin`'s validator was made.
+  *(2026-11-14)*
 - **The runner given SIGTERM as the twin was being created: the check concludes `failure` in seconds, and nothing is
   left waiting.** The signal was sent 0.87 s after the core logged its `containerlab deploy` for the twin, listed
   `Ready False (twin.creating)`. The core's audit log held a `delete` of the twin by the principal `orchestrator`
@@ -6067,11 +6069,12 @@ read `phase-10/2-demonstrations`, and the second proposed change below stood ope
   `The report is in this proposed change's thread.`; the proposed change held one thread, labelled `Fylgja
   rehearsal`, of two comments, 811 and 1,404 bytes. Afterwards the core listed no twin. *(2026-11-14)*
 - **Not read:** the first start on new volumes, which no purge was made for (above: answering 155 and 158 s after
-  Compose's start); how long after its start the database reads `healthy`, beyond the 62.3 s above and the
-  controller's 51.6 s; a runner cut while the check's flow run is `SCHEDULED` or `PENDING`, while `stage-plan/main`
-  still runs, or later in the rehearsal; a runner cut so with no runner started again before the check's deadline; a
-  check whose runner is ended by SIGKILL; a seed run again while the old check still waits, which this run did not
-  meet, the check having concluded 8.3 s after the signal; why the stages' reads took as long as they did.
+  Compose's start); how long after its start the database first reads `healthy`: it read so at the one read above,
+  62.0 s after its start, and on 2026-11-13 its log said `Started.` 51.6 s after its start, which is no reading of its
+  health; a runner cut while the check's flow run is `SCHEDULED` or `PENDING`, while `stage-plan/main` still runs, or
+  later in the rehearsal; a runner cut so with no runner started again before the check's deadline; a check whose
+  runner is ended by SIGKILL; a seed run again while the old check still waits, which this run did not meet, the check
+  having concluded 8.3 s after the signal; why the stages' reads took as long as they did.
 
 ---
 
@@ -6260,7 +6263,9 @@ the server's state timestamps and the test's own clock. *(2026-11-11)*
   reader's token was in the four checks' messages or in the server's and the runner's output, 5,574 and 6,392
   characters.
 - **Not read:** a cancel while the core is slow or away; the twin's deletion asked by the library, which the runner's
-  log did not show; ~~a run started from a task worker~~ (read on 2026-11-12 under "Infrahub 1.11.11").
+  log did not show (in part read on 2026-11-14 below and under the two sources' sections: for a runner's SIGTERM,
+  in the core's audit log, a `delete` by the principal `orchestrator`; for a cancel asked through the API, not
+  read); ~~a run started from a task worker~~ (read on 2026-11-12 under "Infrahub 1.11.11").
 
 Read on 2026-11-12 on the development host and instance, for phase 8's plan 6's Tasks 6 and 7: `make contract` run
 whole twice in the plan's worktree, at `f62388c` with the cancel test's `timeout` 420 and at `ff0e5d2` with it 660, the
@@ -6359,15 +6364,16 @@ nothing listened on port 4200. *(2026-11-13)*
 
 Read on 2026-11-14 on the development host, for phase 10's plan 2: the development Prefect by `make prefect-up`, run
 in the plan's worktree at `b2abb81` under the `local/prefect/` the earlier runs had used, with `local/.env` loaded;
-the runner started five times by the words `make orchestrator-serve` runs, as `make -n` printed them, `python3 -I
-scripts/edge_dev.py serve --source <netbox or infrahub> --local <local> --main <the main checkout>`, each time in a
+the runner started five times by the words `python3 -I scripts/edge_dev.py serve --source <netbox or infrahub> --local
+<local> --main <the main checkout>`, as each start's record holds them, which are the words `make -n
+orchestrator-serve SOURCE=<netbox or infrahub>` printed in that worktree when asked after the runs, each time in a
 session of its own with its pid recorded and its exit waited for; the core on the local driver beside it, and the two
 development sources in turn (under "NetBox 4.7.5 with netbox-branching 1.2.3" and "Infrahub 1.11.11"). Requests were
 sent by scripts of the reading's own over `urllib` with no proxy, the basic auth read from the environment in the
 script's process and sent in a header it built, never printed. Times are the host's clock, read by Python, Prefect's
-state timestamps and the runner's log; each timing is one run unless more are given. Every output was saved, and
-none held a credential of `local/.env`. Afterwards the runner was ended by its pid and the server by `make
-prefect-down`. *(2026-11-14)*
+state timestamps and the runner's log; each timing is one run unless more are given. Every output was saved, and none
+held a credential of `local/.env`. Afterwards the runner was ended by its pid and the server by `make prefect-down`.
+*(2026-11-14)*
 
 - **`make prefect-up` on a home used before** returned in 9.5 s, saying the server answered, with its pid; run again
   52 minutes on, the server still up, it said `the development Prefect is up already, pid <the same pid>` and returned
@@ -6384,9 +6390,11 @@ prefect-down`. *(2026-11-14)*
   `parameters`, `deployment_id`, `name`, `state`, `state_type` and `state_name` among them, and its `state` seven,
   `id`, `type`, `name`, `message`, `timestamp`, `data` and `state_details`; `parameters` read `{"branch": "<the
   branch>"}`. The same body with no `sort` answered 200 with the same 10 rows in an order that was neither ascending
-  nor descending by `created` or by `expected_start_time`. With `limit` 200 it answered 200, and with `limit` 201,
-  422, `{"detail": "Invalid limit: must be less than or equal to 200."}`. With no credential it answered 401. A run
-  made later was the list's first row at every read after it was made. *(2026-11-14)*
+  nor descending by `created` or by `expected_start_time`. The first body, its `sort` kept, with `limit` 200 in place
+  of 50 answered 200, and with `limit` 201, 422, `{"detail": "Invalid limit: must be less than or equal to 200."}`.
+  `POST /api/flow_runs/filter` with the body `{"limit": 1}` and no credential answered 401. At each listing the
+  reading asked for by that first body after a run was made, seven of `twin-rehearse/main` and two of
+  `stage-plan/main`, the newest run was the first row. *(2026-11-14)*
 - **A run's document, asked for as the checks' glue asks.** `POST /api/artifacts/filter` with the body `{"artifacts":
   {"flow_run_id": {"any_": ["<the run's id>"]}, "type": {"any_": ["fylgja-document"]}}, "sort": "CREATED_DESC",
   "limit": 1}`, as `infrahub/checks/fylgja_glue.py`'s `Prefect.document` sends it, answered 200 with a list of one
@@ -6395,20 +6403,20 @@ prefect-down`. *(2026-11-14)*
   `data` a JSON string, of 5,735 and of 5,736 characters for two rehearsals, each parsing to a document of `status`
   `passed`; for a run of `stage-plan/main`, a string of 4,973 characters, `status` `planned`. For a run that was
   cancelled before it filed one it answered 200 with an empty list. *(2026-11-14)*
-- **A runner given SIGTERM while a flow run of its own runs cancels that run, and exits 0.** Three times, the flow
-  run `RUNNING` and a moment into its twin's creation: the runner logged `SIGTERM received, initiating graceful
+- **A runner given SIGTERM while a flow run of its own runs cancels that run, and exits 0.** Three times, the flow run
+  `RUNNING` and a moment into its twin's creation: the runner logged `SIGTERM received, initiating graceful
   shutdown...`; the flow's process logged `Flow run was cancelled.` 0.14, 0.16 and 0.22 s after that line, then
   `Finished in state Running()` and `Execution of flow run '<id>' was terminated.`; the runner logged `Cancelled flow
   run '<name>'` 3.19, 3.17 and 3.19 s after its first line, and exited with status 0, 3.84, 3.85 and 3.93 s after the
   signal was sent. The run read `CANCELLED`, its state's `message` `Runner is shutting down.`, by a state timestamp
   3.11, 3.10 and 3.10 s after the signal (derivations), and its states were Scheduled, Pending, Submitting, Running
-  and Cancelled, with no `CANCELLING` among them. The run's row in the listing read the same 28 minutes and 39
-  minutes on, with the server left up, the runner started again and two later runs made. A runner with no run of
-  its own, given SIGTERM, exited with status 0 in 0.69 s, and another in 0.77 s. What the flow's own clean-up did in
-  those seconds is under the two sources' sections. *(2026-11-14)*
-- **Not read:** the listing where a deployment has more than 50 or more than 200 runs; `offset`; another `sort`; a
-  runner given SIGKILL, or SIGTERM while more than one run of its own runs; a run cancelled so later in a rehearsal,
-  its twin ready or a step in flight; the server stopped while a run runs.
+  and Cancelled, with no `CANCELLING` among them. The run's row in the listing read the same 28 minutes and 39 minutes
+  on, with the server left up, the runner started again and two later runs made. A runner with no run of its own,
+  given SIGTERM, exited with status 0 in 0.69 s, and another in 0.77 s. What the core's log and each source held
+  of those seconds is under the two sources' sections. *(2026-11-14)*
+- **Not read:** the listing where a deployment has more than 50 or more than 200 runs; the body with no `sort` and
+  `limit` 200; `offset`; another `sort`; a runner given SIGKILL, or SIGTERM while more than one run of its own runs; a
+  run cancelled so later in a rehearsal, its twin ready or a step in flight; the server stopped while a run runs.
 
 ---
 
@@ -8472,24 +8480,24 @@ and entries, Prefect's state timestamps, the flow run's log lines and the watchi
   cluster. *(2026-11-13)*
 
 **The runbook by hand from a stopped instance on kept volumes, a rehearsal cut short by its runner's stop, and the
-change opened again** *(NetBox 4.7.5, netbox-branching 1.2.3, netbox-docker 5.1.1, Prefect 3.9.2, containerlab
-0.81.0, Docker 29.8.1, the core at `b2abb81`, 2026-11-14)*. Read on 2026-11-14 on the development host, for phase
-10's plan 2: "With NetBox"'s commands of `CONTRIBUTING.md` in their order, run in the plan's worktree at `b2abb81`
-with the main checkout's `local/`, from both sources stopped, Infrahub stopped throughout; the core
-`fylgja-core-server` of that worktree with `FYLGJA_DRIVER=containerlab` and `FYLGJA_PACKAGES=psp:probes`, on
-`127.0.0.1:7651` as `local/.env` names it, over a store of the reading's own outside every checkout, new at its first
-start and removed afterwards; the runner by the words `make orchestrator-serve SOURCE=netbox` runs; the core and the
-runner each in a session of its own, its pid recorded and its exit waited for by the process that started it, and
-each ended by `SIGTERM` to that one pid. The change was `make netbox-change NETBOX_TAG=1`'s, the branch `third-link`.
+change opened again** *(NetBox 4.7.5, netbox-branching 1.2.3, netbox-docker 5.1.1, Prefect 3.9.2, containerlab 0.81.0,
+Docker 29.8.1, the core at `b2abb81`, 2026-11-14)*. Read on 2026-11-14 on the development host, for phase 10's plan 2:
+"With NetBox"'s commands of `CONTRIBUTING.md` in their order, run in the plan's worktree at `b2abb81` with the main
+checkout's `local/`, from both sources stopped, Infrahub stopped throughout; the core `fylgja-core-server` of that
+worktree with `FYLGJA_DRIVER=containerlab` and `FYLGJA_PACKAGES=psp:probes`, on `127.0.0.1:7651` as `local/.env` names
+it, over a store of the reading's own outside every checkout, new at its first start, and removed by hand at the end,
+which no saved output holds; the runner by the words `make orchestrator-serve SOURCE=netbox` runs; the core and the
+runner each in a session of its own, its pid recorded and its exit waited for by the process that started it, and each
+ended by `SIGTERM` to that one pid. The change was `make netbox-change NETBOX_TAG=1`'s, the branch `third-link`.
 Watching was read-only, by a script of the reading's own, a pass about every 1.2 s: Prefect's listing of each
-deployment's runs, `fylgja-core twin list --json`, `docker ps`, and the branch's tags and journal with the
-superuser's token. Times are the host's clock, read by Python before and after each command, Prefect's state
-timestamps, NetBox's and Docker's own, and the core's and the runner's logs; each timing is one run unless more are
-given, and an offset between two clocks is a derivation. Every output was saved, and none held a credential of
-`local/.env`. The rehearsal cut short was made twice: the reading's own session ended 7 s after the first signal and
-took the core and the watch with it, so what follows of the cut rests on the second, and gives the first where its
-record is whole. Afterwards the core and the runner were gone, NetBox was stopped by `make netbox-down`, its volumes
-kept, and the branch `third-link` stood untagged with its two marks and one report. *(2026-11-14)*
+deployment's runs, `fylgja-core twin list --json`, `docker ps`, and the branch's tags and journal with the superuser's
+token. Times are the host's clock, read by Python before and after each command, Prefect's state timestamps, NetBox's
+and Docker's own, and the core's and the runner's logs; each timing is one run unless more are given, and an offset
+between two clocks is a derivation. Every output was saved, and none held a credential of `local/.env`. The rehearsal
+cut short was made twice: the reading's own session ended 7 s after the first signal and took the core and the watch
+with it, so what follows of the cut rests on the second, and gives the first where its record is whole. Afterwards the
+core and the runner were gone, NetBox was stopped by `make netbox-down`, its volumes kept, and the branch `third-link`
+stood untagged with its two marks and one report. *(2026-11-14)*
 
 - **Each step, on kept volumes.** `make netbox-up` exited 0 in 81.4 s: it built the image again, its build step
   `CACHED`, recreated `netbox` and `netbox-worker`, started `postgres` and the two `redis`, and said `netbox healthy
@@ -8499,46 +8507,49 @@ kept, and the branch `third-link` stood untagged with its two marks and one repo
   naming the deployment's id Prefect answered; and 1.8 s and 1.5 s when run again after each later start of the
   runner, the same words and the same id. `make netbox-change NETBOX_TAG=1`, 29.1 s where no branch of the name
   stood, and 29.6, 31.8 and 29.3 s where one stood. `make netbox-down`, 11.3 s. *(2026-11-14)*
-- **The core's start, five times.** From its process's start to the first `GET /v1/version` answered 200, asked with
-  no token every 20 ms: 1.30, 1.31, 1.28, 1.20 and 1.24 s, the first over a store not yet made and the others over
-  the store the one before had left, with and without a twin in it; every ask before it was refused the connection.
-  `ss -Hltn` then listed `LISTEN 0 2048 127.0.0.1:7651 0.0.0.0:*`, and `ss -Hltnp` the same line with that
-  process's pid. *(2026-11-14)*
-- **From the tag to the report.** After `make netbox-change NETBOX_TAG=1` returned, by the host's clock: Prefect's
-  run of `twin-rehearse/main`, `parameters` `{"branch": "third-link"}`, had a `created` 0.70 s after the return
-  (0.72, 0.63 and 0.75 s in the three later runs; derivations), and the watch's first read after the return, 1.1 to
-  1.5 s after it, listed it, first of its rows, where the listing before the change did not hold it. In the first
-  run it read `Pending` 6.0 s and `Running` 8.8 s after `Scheduled`; the branch read untagged, its `last_updated`
-  9.2 s after `Scheduled`; the core listed one `rh-` twin, and `docker ps` its three SR Linux 24.7.1 containers and
-  its two hosts', `alpine`; and the run read `Completed` 123.2 s after the return, its document `passed`, `took_s`
-  112.8, its stages `created` (77.5 s), `passed` (12.3 s), `passed` (9.5 s) and `skipped`, the branch's third
-  journal entry of kind `success`, and the core listing no twin. *(2026-11-14)*
-- **The runner given SIGTERM as the twin was being created: the flow's own clean-up deletes the twin.** Twice, the
-  signal sent 0.36 s and 1.08 s after the core logged its `containerlab deploy` for the rehearsal's twin, the twin
-  listed `Ready False (twin.creating)`, phase `planned`. The core's audit log then held a `delete` of that twin by
-  the principal `orchestrator` 0.06 and 0.07 s after the signal; the core logged the create run `marked cancelling:
-  its call on the runtime is stopped`, ran `docker ps -a --filter label=containerlab=<the twin>`, `docker network
-  inspect` twice and `docker network rm` of the lab's network, and logged the create run `cancelled`
-  (`run.cancelled`), a destroy run `ended ok` and `torn down, and its record deleted`, 0.69 and 1.04 s after the
-  signal. `twin list`, read by the CLI, each read taking 0.6 to 1.0 s: the second time, the read answered 1.04 s
-  after the signal still listed the twin and the one answered 1.77 s after it listed none; the first time a read
-  begun 0.09 s before the signal listed none, its answer's time not recorded. The run read `CANCELLED` 3.1 s after
-  the signal and filed no document ("Prefect 3.9.2", above). The branch stood `ready` and untagged, its
-  `last_updated` 10.4 and 15.1 s after the run's `created`, before the cut, where the flow takes the tag off; and
-  its journal held the two marks and no report: at a read 28 minutes on the first time, and at every read for 6
-  minutes the second. *(2026-11-14)*
-- **The cut left a lab's containers the second time, created and never started, that no twin names.** The first
-  time `docker ps -a --filter label=containerlab` listed none, read 28 minutes on. The second time it listed five,
+- **The core's start, five times.** `GET /v1/version` was asked with no token every 20 ms from its process's start:
+  the first ask answered 200 was sent 1.30, 1.31, 1.28, 1.20 and 1.24 s after the start and answered 1.32, 1.32, 1.29,
+  1.23 and 1.26 s after it, the first over a store not yet made and the others over the store the one before had left,
+  with and without a twin in it; every ask before it was refused the connection. `ss -Hltn` then listed `LISTEN 0 2048
+  127.0.0.1:7651 0.0.0.0:*`, and `ss -Hltnp` the same line with that process's pid. *(2026-11-14)*
+- **From the tag to the report.** After `make netbox-change NETBOX_TAG=1` returned, by the host's clock: Prefect's run
+  of `twin-rehearse/main`, `parameters` `{"branch": "third-link"}`, had a `created` 0.70 s after the return (0.72,
+  0.63 and 0.75 s in the three later runs; derivations), and the watch's first read after the return, 1.1 to 1.5 s
+  after it, listed it, where its listing before the change did not hold it; at each listing asked for by hand after,
+  it was the first row. In the first run it read `Pending` 6.0 s and `Running` 8.8 s after `Scheduled`; the branch
+  read untagged, its `last_updated` 9.2 s after `Scheduled`; the core listed one `rh-` twin, and `docker ps` its three
+  SR Linux 24.7.1 containers and its two hosts', `alpine`; and the run read `Completed` 123.2 s after the return, its
+  document `passed`, `took_s` 112.8, its stages `created` (77.5 s), `passed` (12.3 s), `passed` (9.5 s) and `skipped`,
+  the branch's third journal entry of kind `success`, and the core listing no twin. *(2026-11-14)*
+- **The runner given SIGTERM as the twin was being created: the twin is deleted, by the principal `orchestrator`.**
+  That the ask is the flow's own clean-up rests on that principal in the core's audit log and on the flow's code,
+  where a cancel reaches the rehearsal library's handler, which asks the twin's deletion
+  (`orchestrator/src/fylgja_orchestrator/edge/flows.py`); the runner's log holds no line of the ask. Twice, the signal
+  sent 0.36 s and 1.08 s after the core logged its `containerlab deploy` for the rehearsal's twin, the twin listed
+  `Ready False (twin.creating)`, phase `planned`. The core's audit log then held a `delete` of that twin by the
+  principal `orchestrator` 0.06 and 0.07 s after the signal; the core logged the create run `marked cancelling: its
+  call on the runtime is stopped`, ran `docker ps -a --filter label=containerlab=<the twin>`, `docker network inspect`
+  twice and `docker network rm` of the lab's network, and logged the create run `cancelled` (`run.cancelled`), a
+  destroy run `ended ok` and `torn down, and its record deleted`, 0.69 and 1.04 s after the signal. `twin list`, read
+  by the CLI, each read taking 0.6 to 1.0 s: the second time, the read answered 1.04 s after the signal still listed
+  the twin and the one answered 1.77 s after it listed none; the first time a read begun 0.09 s before the signal
+  listed none, its answer's time not recorded. The run read `CANCELLED` 3.1 s after the signal and filed no document
+  ("Prefect 3.9.2", above). The branch stood `ready` and untagged, its `last_updated` 10.4 and 15.1 s after the run's
+  `created`, before the cut, where the flow takes the tag off; and its journal held the two marks and no report: at a
+  read 28 minutes on the first time, and at every read for 6 minutes the second. *(2026-11-14)*
+- **The cut left a lab's containers the second time, created and never started, that no twin names.** The first time
+  `docker ps -a --filter label=containerlab` listed none, read 28 minutes on. The second time it listed five,
   `clab-<the twin>-n1`, `-n2`, `-n3`, `-n1-loop-a` and `-n1-loop-b`, each `Created`, with a creation time by Docker
   0.18 to 0.23 s after the signal, which is 0.11 to 0.16 s after the delete's line in the core's audit log
-  (derivations), a start time of zero, and the lab's network, by then removed, as its network; `docker ps` listed
-  none of them at any read, no `containerlab` process ran, and the store's `containerlab/` and `twins/` directories
-  were empty. They stood, `Created`, at every later read: 5 minutes 20 s after that core's start, with its resync's
-  300 s passed and no line in its log since the tear-down; after that core's end; under the core started again on
-  the same store, which listed `no twins`, and whose `fylgja-core twin destroy <the twin>` exited 2 in 0.9 s with
-  `404 twin.not_found: No twin is named <the twin>.`; through a later rehearsal, which passed beside them, its twin
-  given the same 172.20.0.0/24; and through NetBox's stop and the runs under "Infrahub 1.11.11", until the reading
-  removed them by name. *(2026-11-14)*
+  (derivations), a start time of zero, and the lab's network, by then removed, as its network; `docker ps` listed none
+  of them at any read, no `containerlab` process ran, and the store's `containerlab/` and `twins/` directories were
+  empty. They stood, `Created`, at every later read: 5 minutes 20 s after that core's start, which is past the code's
+  default resync interval of 300 s (`core/src/fylgja_core/config.py`), that core's log holding no line since the
+  tear-down, of a resync or of anything else; after that core's end; under the core started again on the same store,
+  which listed `no twins`, and whose `fylgja-core twin destroy <the twin>` exited 2 in 0.9 s with `404 twin.not_found:
+  No twin is named <the twin>.`; through a later rehearsal, which passed beside them, its twin given the same
+  172.20.0.0/24; and through NetBox's stop and the runs under "Infrahub 1.11.11", until the reading removed them by
+  name. *(2026-11-14)*
 - **The core given SIGTERM.** By its pid, with no twin in its store: it exited with status 143, 0.45 s after the
   signal, its log ending `stopped by SIGTERM`, and nothing listened on its port; again 0.55 s, status 143. With a
   twin standing, a twin of the reading's own, since the cut had left none: `fylgja-core twin create p10t1
@@ -8712,8 +8723,8 @@ and each says whether it was re-verified on 26.04.
 
 Read on 2026-11-14 on the development host, for phase 10's plan 2: Ubuntu 26.04.1, kernel 7.0.0-38, Docker 29.8.1,
 Docker Compose 5.6.0 and containerlab 0.81.0, as the user the core runs as, a member of `docker` and `clab_admins`,
-with no `sudo`, by a script of the reading's own over Python's standard library, run once with no container running,
-both sources' Compose projects stopped and their volumes kept. Its output was saved. *(2026-11-14)*
+every command run as that user, by a script of the reading's own over Python's standard library, run once with no
+container running, both sources' Compose projects stopped and their volumes kept. Its output was saved. *(2026-11-14)*
 
 - **What a user reads of the AppArmor widening: the file, and not the loaded profile.**
   `/etc/apparmor.d/usr.sbin.rsyslogd` and `/etc/apparmor.d/local/usr.sbin.rsyslogd` were each mode `0644`, owner and
@@ -8723,21 +8734,23 @@ both sources' Compose projects stopped and their volumes kept. Its output was sa
   `PermissionError`; `aa-status` printed `apparmor module is loaded.` and exited 4 with `You do not have enough
   privilege to read the profile set.`, and `aa-status --json` exited 4 the same way with no output. What the user did
   read: `aa-enabled` printed `Yes`, exit 0; `/sys/kernel/security/apparmor/policy/profiles` listed 170 entries, one of
-  them `rsyslogd.178`, a name and nothing of its rules; and `/proc/<pid>/attr/current` of the host's own `rsyslogd`
-  read `rsyslogd (enforce)`. *(26.04, AppArmor parser 5.0.2, 2026-11-14)*
+  them `rsyslogd.178`, whose name the script listed and none of whose files it opened; and `/proc/<pid>/attr/current`
+  of the host's own `rsyslogd` read `rsyslogd (enforce)`. *(26.04, AppArmor parser 5.0.2, 2026-11-14)*
 - **The groups a process holds, read without a child.** `os.getgroups()` held the gid `getent group docker
   clab_admins` gave for each of the two, and each of the two lines listed the user. *(26.04, 2026-11-14)*
 - **Memory with both sources stopped.** `MemAvailable` read 25975804 kB of `MemTotal` 31811440 kB with no container
-  running, and 25996800 kB 51 minutes on, the development NetBox just stopped, before the development Infrahub was
-  started. *(26.04, 2026-11-14)*
-- **The host's listeners and Docker networks.** `ss -Hltn` listed 20 listeners, none on port 4200, 8000, 8800 or
-  7651, and one on `127.0.0.1:7650`, the core's default listen address, held by a process that is none of this
-  repository's; the reading's core was started on port 7651, as `local/.env` names it. `docker network ls` listed six
+  running, and 26294320 kB at 04:11:54Z, an hour and a half on, both sources stopped again and the reading's clean-up
+  done. *(26.04, 2026-11-14)*
+- **The host's listeners and Docker networks.** `ss -Hltn` listed 20 listeners, none on port 4200, 8000, 8800 or 7651,
+  and one on `127.0.0.1:7650`, the core's default listen address, whose holder `ss -Hltn` does not name: by the
+  controller's reading that day, `ss -Hltnp`, a process named `fylgja`, run from another checkout *(the controller,
+  2026-11-14)*. The reading's core was started on port 7651, as `local/.env` names it. `docker network ls` listed six
   networks: `bridge`, `host`, `none` and the default network of each of three Compose projects, every one of them
   stopped, the two development sources' among them. One `docker network inspect` of the six ids with the format
   `{{json .Name}} {{json .IPAM.Config}}` printed a line a network: `host` and `none` with `null`, the development
   NetBox's with 198.51.100.0/24, and the other three each with one /16, none of them inside or over 172.20.0.0/16.
   `docker compose ls -a` listed the two sources' projects stopped as `fylgja-core-netbox` `exited(5)` and
   `fylgja-core-infrahub` `exited(8)`. *(Docker 29.8.1, Docker Compose 5.6.0, 2026-11-14)*
-- **Not read:** the AppArmor files on a host where the widening was never made, or where the local file is not the
-  user's to read; whether the two lines alone suffice on 26.04, as above; a user outside either group.
+- **Not read:** the files under `/sys/kernel/security/apparmor/policy/profiles/rsyslogd.178/`, and whether this
+  user may read any of them; the AppArmor files on a host where the widening was never made, or where the local
+  file is not the user's to read; whether the two lines alone suffice on 26.04, as above; a user outside either group.

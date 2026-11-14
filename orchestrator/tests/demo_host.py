@@ -82,7 +82,11 @@ class FakeHost:
     - `run` answers an argv by its leading words: the longest of `answers`' keys the argv begins with, a `Done` or a
       function of the `Ran` that gives one, its output answered only where the run was captured, as `Real` answers.
       An argv no key begins is the test's mistake, and raises.
-    - `start` answers the next pid from `next_pid` and puts the process in `processes`, the `/proc` a test writes.
+    - `start` answers the next pid from `next_pid` and puts the process in `processes`, the `/proc` a test writes,
+      as `/proc` shows a child just started: its words and its environment as given, and before its words, for a
+      command of `interpreters`, a `#!` script, the interpreter the kernel runs it by. It then calls `on_start`
+      where a test gives one, which says what the child does next. A test that says a command cannot be started
+      raises from a `start` of its own what `Popen` raises.
     - `signal` answers whether `processes` holds the pid, and calls `on_signal` where a test gives one; a pid at
       or under 1 is no process to it or to `process`, as to `Real`, whatever `processes` holds; `pids` lists none
       under 1, as `/proc` has none, and a process with no command line is none to `process`, as to `Real`.
@@ -91,10 +95,12 @@ class FakeHost:
     - `text` answers `files`, raises `PermissionError` for a path of `denied`, and reads a file under `disk`, a
       directory of the test's own, where one is given, its bytes decoded as `Real` decodes them and no line end
       translated; any other path is absent.
-    - `sleep` advances `now`, which `clock` answers.
+    - `sleep` advances `now`, which `clock` answers, and then lets happen, once each and in the order of their
+      times, what a test said with `at` would happen on the host by then: a process that exits or becomes another
+      by `execve`, a line that reaches a log.
 
     Every `run`, `start`, `signal`, `ask` and `lock` is kept, in order, in `ran`, `started`, `signalled`, `asked` and
-    `locked`."""
+    `locked`, and every `run`, `start` and `signal` in `acts` too, one list in the order they were made."""
 
     def __init__(self, disk: Path | None = None) -> None:
         self.disk = disk
@@ -103,6 +109,10 @@ class FakeHost:
         self.files: dict[Path, str] = {}
         self.denied: set[Path] = set()
         self.processes: dict[int, Any] = {}
+        self.interpreters: dict[str, str] = {}
+        self.on_start: Callable[[Started], None] | None = None
+        self.later: list[tuple[float, Callable[[], None]]] = []
+        self.acts: list[Any] = []
         self.on_path: set[str] = set()
         self.gids: dict[str, int] = {}
         self.held: set[int] = set()
@@ -134,6 +144,7 @@ class FakeHost:
     ) -> Any:
         ran = Ran(list(argv), None if env is None else dict(env), cwd, capture, timeout)
         self.ran.append(ran)
+        self.acts.append(ran)
         for length in range(len(ran.argv), 0, -1):
             answer = self.answers.get(tuple(ran.argv[:length]))
             if answer is not None:
@@ -144,8 +155,13 @@ class FakeHost:
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
         pid = self.next_pid
         self.next_pid += 1
-        self.started.append(Started(list(argv), dict(env), cwd, log, pid))
-        self.processes[pid] = demo.Process(list(argv), dict(env))
+        started = Started(list(argv), dict(env), cwd, log, pid)
+        self.started.append(started)
+        self.acts.append(started)
+        by = [self.interpreters[started.argv[0]]] if started.argv[0] in self.interpreters else []
+        self.processes[pid] = demo.Process([*by, *started.argv], dict(env))
+        if self.on_start is not None:
+            self.on_start(started)
         return pid
 
     def process(self, pid: int) -> Any:
@@ -157,6 +173,7 @@ class FakeHost:
 
     def signal(self, pid: int, number: int) -> bool:
         self.signalled.append((pid, number))
+        self.acts.append((pid, number))
         there = pid > 1 and pid in self.processes
         if there and self.on_signal is not None:
             self.on_signal(pid, number)
@@ -199,6 +216,14 @@ class FakeHost:
     def sleep(self, seconds: float) -> None:
         self.slept.append(seconds)
         self.now += seconds
+        due = sorted((event for event in self.later if event[0] <= self.now), key=lambda event: event[0])
+        self.later = [event for event in self.later if event[0] > self.now]
+        for _, happen in due:
+            happen()
+
+    def at(self, when: float, happen: Callable[[], None]) -> None:
+        """`happen` is called once, when a `sleep` first brings the clock to `when` or past it."""
+        self.later.append((when, happen))
 
     def secret(self) -> str:
         self.secrets.append(f"the-fake-hosts-secret-{len(self.secrets) + 1}")
@@ -260,9 +285,13 @@ def passing(local: Path = LOCAL, disk: Path | None = None) -> FakeHost:
     """A host on which every check passes for either source, neither up: the venv's commands and the tools, Docker,
     Compose and containerlab answering, the user in both groups, the AppArmor widening made, memory for a source and
     the twin, no listener on a port the demonstration needs, `local/.env` with the node login, and a commit for any
-    ref."""
+    ref. Each of the venv's commands is a `#!` script of the venv's `python3`, as `pip` writes one."""
     host = FakeHost(disk)
     host.on_path = {*demo.TOOLS, *(str(demo.ROOT / "core" / ".venv" / "bin" / name) for name in demo.COMMANDS)}
+    host.interpreters = {
+        str(demo.ROOT / "core" / ".venv" / "bin" / name): str(demo.ROOT / "core" / ".venv" / "bin" / "python3")
+        for name in demo.COMMANDS
+    }
     host.answer("docker", "info")
     host.answer("docker", "compose", "version")
     host.answer("docker", "ps")

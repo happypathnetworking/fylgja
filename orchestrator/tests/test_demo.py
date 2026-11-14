@@ -1,12 +1,14 @@
 """`scripts/demo.py`, the demonstration script: the environment it reads, what it writes under `local/`, and the
-host's checks. The script is loaded by its path, as `make` runs it, and given `demo_host.FakeHost` for its host:
-nothing here starts a process, opens a socket or sleeps.
+host's checks; then the core and the runner it starts in the background by recorded pids, and their end. The script
+is loaded by its path, as `make` runs it, and given `demo_host.FakeHost` for its host: nothing here opens a socket
+or sleeps, or starts a process but `make -n`, which prints a recipe and runs none of it.
 
 What is read of the host: one test of `Real` reads this process's own entry in `/proc` and the group database. What
 is read of the checkout: `.env.example`; the script itself, by `ast`; the three development scripts beside it, each
-loaded by its path, and the core's `config` and `server.auth`, imported, to hold the script's values to theirs; and
-one test walks the tree and reads each file that says what a distribution holds. No other file of the host's is
-read. What is written is written under `tmp_path`, and every secret is the tests' own, compared outside an assert."""
+loaded by its path, the core's `config` and `server.auth` and the example's `edge.flows`, imported, and the text of
+its `edge/serve.py`, to hold the script's values to theirs; the `Makefile`, by `make -n`; and one test walks the tree
+and reads each file that says what a distribution holds. No other file of the host's is read. What is written is
+written under `tmp_path`, and every secret is the tests' own, compared outside an assert."""
 
 from __future__ import annotations
 
@@ -19,9 +21,13 @@ import http.client
 import importlib.util
 import inspect
 import io
+import json
 import os
+import signal
 import stat
+import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from email.message import Message
 from ipaddress import IPv4Network
 from pathlib import Path
@@ -42,12 +48,15 @@ from demo_host import (
     RUNNER_TOKEN,
     SECRETS,
     FakeHost,
+    Ran,
+    Started,
     demo,
     meminfo,
     passing,
     same,
     ss,
 )
+from demo_host import ENV_FILE as ENV_TEXT
 
 WHERE = ["--local", str(LOCAL), "--main", str(MAIN)]
 SHELL = {"PATH": "/usr/bin", "HOME": "/srv/example/home"}
@@ -1195,14 +1204,1120 @@ def test_a_second_command_at_once_is_refused(capsys: pytest.CaptureFixture[str])
         assert (host.ran, host.started, host.signalled, host.asked) == ([], [], [], [])
 
 
-def test_down_takes_the_lock_and_ends_nothing_yet(capsys: pytest.CaptureFixture[str]) -> None:
-    """What `down` ends is not built: until it is, it says so and is never exit 0, which would say all is ended."""
-    host = passing()
-    assert status(host, ["down", *WHERE, "--purge"]) == 1
+PYTHON = str(demo.VENV / "bin" / "python3")
+"""The venv's interpreter, which `/proc` shows first for each of the venv's commands, a `#!` script."""
+
+CORE, CLI = str(demo.CORE), str(demo.CLI)
+RUNNER = str(demo.VENV / "bin" / "fylgja-orchestrator")
+LISTEN = "127.0.0.1:7650"
+VERSION = f"http://{LISTEN}/v1/version"
+BIND = "192.0.2.1"
+API = f"http://{BIND}:4200/api"
+PLAN_READY, REHEARSE_READY = f"{API}/deployments/name/stage-plan/main", f"{API}/deployments/name/twin-rehearse/main"
+SERVING = f"fylgja-orchestrator: serving stage-plan/main, twin-rehearse/main at {API}\n"
+"""The line `fylgja-orchestrator serve` prints once it serves, as `edge/serve.py` prints it."""
+
+EDGE = {
+    "FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN": "the-tests-examples-infrahub-token",
+    "FYLGJA_NETBOX_ADDRESS": "http://127.0.0.1:8800",
+    "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN": "the-tests-examples-netbox-token",
+    "FYLGJA_ORCHESTRATOR_NETBOX_READER": "/srv/example/fylgja-core/netbox/seed/reader.yaml",
+    "FYLGJA_ORCHESTRATOR_NETBOX_SCOPE": "tag:fylgja",
+}
+"""What `local/.env` holds beside `ENV` once both sources' steps have run, of which the runner's environment is
+made: every secret the tests' own."""
+
+EVERY_SECRET = (*SECRETS, EDGE["FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN"], EDGE["FYLGJA_ORCHESTRATOR_NETBOX_TOKEN"])
+
+TERM, KILL = signal.SIGTERM, signal.SIGKILL
+
+EDGE_DEV = by_path("edge_dev")
+"""`scripts/edge_dev.py`, loaded by its path: what makes the runner's environment and names Prefect's home."""
+
+
+def place(tmp_path: Path) -> tuple[Path, Any, FakeHost]:
+    """A `local/` of the test's own as `prepare` and both sources' steps leave it, `demo/` made and `.env` holding
+    `ENV` and `EDGE`; its records; and a host on which every check passes, which reads it as the real one would."""
+    local = tmp_path / "local"
+    (local / "demo").mkdir(parents=True)
+    (local / ".env").write_text(ENV_TEXT + "".join(f"{name}={value}\n" for name, value in EDGE.items()))
+    return local, demo.records(local), passing(local, disk=tmp_path)
+
+
+def loaded_env(local: Path, host: FakeHost) -> dict[str, str]:
+    """The loaded environment of `local`, read here so that an assert that fails shows none of it."""
+    env: dict[str, str] = demo.loaded(local, SHELL, host)
+    return env
+
+
+def core_process(kept: Any, listen: str = LISTEN) -> Any:
+    """The demonstration's core as `/proc` shows it: the venv's `python3`, then the command's path, under the
+    environment it was started with (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3")."""
+    return demo.Process([PYTHON, CORE], demo.core_env(ENV | EDGE, kept, listen))
+
+
+def runner_process(local: Path, source: str = "netbox", python: str = PYTHON, command: str = RUNNER) -> Any:
+    """A runner as `/proc` shows it once `edge_dev.py serve` has become it: the venv's `python3`, the command's
+    path and `serve`, under the environment `edge_dev.py` itself makes for that source and that `local/`."""
+    environ = EDGE_DEV.runner_env(ENV | EDGE, BIND, home=EDGE_DEV.home_of(local), source=source)
+    return demo.Process([python, command, "serve"], environ)
+
+
+def becomes(host: FakeHost, pid: int, process: Any, log: Path | None = None) -> None:
+    """Process `pid` is `process` from now on, as after its `execve`, and where `log` is given the runner's line is
+    in it, as `serve` prints it."""
+    host.processes[pid] = process
+    if log is not None:
+        log.write_text(SERVING)
+
+
+def exits_at_its_signal(host: FakeHost) -> None:
+    """Every process of `host` exits at the first signal it is sent, as the core and the runner were read to."""
+
+    def exit_(pid: int, number: int) -> None:
+        del host.processes[pid]
+
+    host.on_signal = exit_
+
+
+def lists(host: FakeHost, *listings: list[str]) -> None:
+    """The core's CLI's `twin list --json` prints `listings` in turn, each a list of records as the CLI prints the
+    API's document, and its `twin destroy` exits 0."""
+    turn = iter(listings)
+
+    def listed(ran: Any) -> Any:
+        records = [
+            {"name": name, "generation": 1, "status": {"observed_generation": 1, "phase": "pushed"}}
+            for name in next(turn)
+        ]
+        return demo.Done(0, json.dumps(records, indent=2) + "\n")
+
+    host.answers[(CLI, "twin", "list", "--json")] = listed
+    host.answer(CLI, "twin", "destroy")
+
+
+def answers_its_version(host: FakeHost, after: int = 0, listen: str = LISTEN) -> None:
+    """The core at `listen` answers its version 200, once `after` asks have met nothing, a connection refused."""
+    asks: list[Any] = []
+
+    def reply(asked: Any) -> Any:
+        asks.append(asked)
+        return demo.Answer(None, None) if len(asks) <= after else demo.Answer(200, {"api": "1", "build": "0.0.0"})
+
+    host.replies.append(("GET", f"http://{listen}/v1/version", reply))
+
+
+def serves_prefect(host: FakeHost, local: Path, ready_from: float = 0.0) -> None:
+    """`edge_dev.py api` prints `API`, and Prefect there answers each deployment by its name, `READY` once the
+    clock reads `ready_from` and `NOT_READY` before."""
+    host.answer(*demo.api_argv(local, MAIN)[:4], out=f"{API}\n")
+
+    def reply(asked: Any) -> Any:
+        status = "READY" if host.now >= ready_from else "NOT_READY"
+        return demo.Answer(200, {"id": "a-deployments-id", "name": "main", "status": status, "paused": False})
+
+    host.replies.append(("GET", f"{API}/deployments/name/", reply))
+
+
+def acts(host: FakeHost) -> list[Any]:
+    """What `host` was asked to run, start and signal, in order: a run by its words, a start as `("start", words)`
+    and a signal as `(pid, number)`."""
+    return [
+        act.argv if isinstance(act, Ran) else ("start", act.argv) if isinstance(act, Started) else act
+        for act in host.acts
+    ]
+
+
+def shows_a_secret(*texts: str) -> bool:
+    return any(secret in text for text in texts for secret in EVERY_SECRET)
+
+
+def make_n(tmp_path: Path, *words: str) -> list[str]:
+    """The lines `make -n` prints of a target's recipe over a `LOCAL` of the test's: printed, and none of it run (as
+    `test_dev_plumbing.py`'s)."""
+    argv = ["make", "-n", "--no-print-directory", "-C", str(ROOT), *words, f"MAIN={MAIN}", f"LOCAL={tmp_path}"]
+    made = subprocess.run(argv, capture_output=True, text=True, check=True, timeout=60, env={"PATH": "/usr/bin:/bin"})
+    return made.stdout.splitlines()
+
+
+def test_the_runners_words_are_make_orchestrator_serves(tmp_path: Path) -> None:
+    for source in demo.SOURCES:
+        words = demo.serve_argv(source, tmp_path, MAIN)
+        assert " ".join(words) == make_n(tmp_path, "orchestrator-serve", f"SOURCE={source}")[-1]
+        assert words[:4] == ["python3", "-I", "scripts/edge_dev.py", "serve"]
+    [hook] = make_n(tmp_path, "netbox-hook")
+    assert f"$({' '.join(demo.api_argv(tmp_path, MAIN))})" in hook
+    assert demo.api_argv(tmp_path, MAIN)[:4] == ["python3", "-I", "scripts/edge_dev.py", "api"]
+
+
+def test_the_names_and_the_waits_are_the_examples_and_the_plans() -> None:
+    venv = ROOT / "core" / ".venv" / "bin"
+    assert (venv / "fylgja-core-server", venv / "fylgja-core") == (demo.CORE, demo.CLI)
+    assert {demo.CORE.name, demo.CLI.name, demo.RUNNER_COMMAND} <= set(demo.COMMANDS)
+    assert EDGE_DEV.RUNNER.name == demo.RUNNER_COMMAND
+    assert demo.AUTH == EDGE_DEV.AUTH
+    assert demo.RUNNER_SOURCE == EDGE_DEV.SOURCE
+    assert demo.prefect_home(LOCAL) == EDGE_DEV.home_of(LOCAL)
+    assert demo.prefect_home(LOCAL) / "server.pid" == EDGE_DEV.pid_file(LOCAL)
+
+    from fylgja_orchestrator.edge import flows
+
+    assert (demo.PLAN_FLOW, demo.FLOW, demo.DEPLOYMENT) == (flows.STAGE_PLAN, flows.TWIN_REHEARSE, flows.DEPLOYMENT)
+    # The line the runner's log is read for is the one `serve` prints, and begins `SERVING`'s own.
+    serve = (ROOT / "orchestrator" / "src" / "fylgja_orchestrator" / "edge" / "serve.py").read_text()
+    assert f'print(f"{demo.SERVING} ' in serve
+    assert SERVING.startswith(f"{demo.SERVING} ")
+
+    assert (demo.CORE_WAIT_S, demo.SERVE_WAIT_S, demo.STOP_WAIT_S, demo.DESTROY_TIMEOUT_S) == (60, 60, 30, 300)
+    assert 0 < demo.ASK_S <= 1 and 0 < demo.STOP_POLL_S <= 1
+
+
+def test_a_process_reads_as_the_core_or_the_runner_by_its_words_and_its_environment() -> None:
+    kept = demo.records(LOCAL)
+    core = core_process(kept)
+    elsewhere = "/srv/another/core/.venv/bin/"
+    assert demo.is_core(core, kept)
+    assert demo.is_core(core_process(kept, "127.0.0.1:7700"), kept)
+    for other in (
+        None,
+        # Another checkout's server over the same store, the CLI under the core's environment, and a shell.
+        demo.Process([f"{elsewhere}python3", f"{elsewhere}fylgja-core-server"], core.environ),
+        demo.Process([PYTHON, CLI, "twin", "list"], core.environ),
+        demo.Process(["/bin/bash", "-l"], core.environ),
+        # This checkout's server over another store, or over none it names.
+        core_process(demo.records(Path("/srv/another/local"))),
+        demo.Process(core.argv, {name: value for name, value in core.environ.items() if name != "FYLGJA_STORE"}),
+    ):
+        assert not demo.is_core(other, kept)
+
+    for source in demo.SOURCES:
+        runner = runner_process(LOCAL, source)
+        assert demo.is_runner(runner, LOCAL)
+        assert runner.environ["PREFECT_HOME"] == str(demo.prefect_home(LOCAL))
+        assert runner.environ[demo.RUNNER_SOURCE] == source
+    # Whatever checkout it runs from: one Prefect home is served by one source's runner.
+    anothers = runner_process(LOCAL, "netbox", f"{elsewhere}python3", f"{elsewhere}fylgja-orchestrator")
+    assert demo.is_runner(anothers, LOCAL)
+    runner = runner_process(LOCAL)
+    for other in (
+        None,
+        # Under another home; another command of the example's; Prefect's server under this home; and `edge_dev.py
+        # serve` itself, before it has become the runner, under a step's environment.
+        runner_process(Path("/srv/another/local")),
+        demo.Process([PYTHON, RUNNER, "stage", "mark"], runner.environ),
+        demo.Process([PYTHON, str(EDGE_DEV.PREFECT), "server", "start"], runner.environ),
+        demo.Process(demo.serve_argv("netbox", LOCAL, MAIN), demo.step_env(ENV | EDGE, kept, LISTEN)),
+        demo.Process(["/bin/bash", "-c", "echo serve fylgja-orchestrator"], runner.environ),
+    ):
+        assert not demo.is_runner(other, LOCAL)
+
+    host = FakeHost()
+    host.processes = {
+        1: demo.Process(["/sbin/init"], {}),
+        4403: runner_process(LOCAL, "infrahub"),
+        4401: runner_process(LOCAL, "netbox"),
+        4402: runner_process(Path("/srv/another/local"), "netbox"),
+        4404: core,
+        4405: demo.Process([], runner.environ),
+    }
+    assert demo.runners(LOCAL, host) == [(4401, "netbox"), (4403, "infrahub")]
+    assert demo.runners(Path("/srv/another/local"), host) == [(4402, "netbox")]
+    assert (host.ran, host.started, host.signalled, host.asked) == ([], [], [], [])
+
+
+def test_the_core_is_started_in_its_own_session_and_waited_for_by_its_version(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host = place(tmp_path)
+    kept.core_log.write_text("an earlier start's\n")
+    recorded_at_each_ask: list[str | None] = []
+
+    def reply(asked: Any) -> Any:
+        recorded_at_each_ask.append(kept.core_pid.read_text() if kept.core_pid.exists() else None)
+        return demo.Answer(None, None) if len(recorded_at_each_ask) <= 2 else demo.Answer(200, {"api": "1"})
+
+    host.replies.append(("GET", VERSION, reply))
+    env = loaded_env(local, host)
+    pid = demo.start_core(env, kept, LISTEN, host)
+
+    [started] = host.started
+    assert (started.argv, started.cwd, started.log, started.pid) == ([CORE], ROOT, kept.core_log, pid)
+    given_the_cores_environment = same(started.env, demo.core_env(env, kept, LISTEN))
+    assert given_the_cores_environment
+    assert demo.is_core(host.process(pid), kept)
+    # The pid is written at once, before the first ask; the version is asked with no token, a second apart.
+    assert recorded_at_each_ask == [f"{pid}\n"] * 3
+    assert [(asked.method, asked.url, asked.auth, asked.body) for asked in host.asked] == [
+        ("GET", VERSION, None, None)
+    ] * 3
+    assert (host.slept, host.now) == ([demo.ASK_S] * 2, 2 * demo.ASK_S)
+    assert host.now < demo.CORE_WAIT_S
+    # The log before is kept, and this start's is its own.
+    assert kept.core_log.with_name("core.log.1").read_text() == "an earlier start's\n"
+    assert (host.ran, host.signalled) == ([], [])
     said = capsys.readouterr()
-    assert (said.out, said.err.splitlines()) == ("", ["demo: down: not built yet, and nothing was ended"])
+    assert (said.out.splitlines(), said.err) == (
+        [f"demo: the core answers at {LISTEN}, pid {pid}, its log {kept.core_log}"],
+        "",
+    )
+    shown = shows_a_secret(said.out, *started.argv)
+    assert not shown
+
+    # A second start keeps the first's log in its turn, and listens where it is told.
+    kept.core_log.write_text("the first start's\n")
+    answers_its_version(host, listen="127.0.0.1:7700")
+    again = demo.start_core(env, kept, "127.0.0.1:7700", host)
+    assert kept.core_log.with_name("core.log.1").read_text() == "the first start's\n"
+    assert (kept.core_pid.read_text(), host.started[-1].env["FYLGJA_LISTEN"]) == (f"{again}\n", "127.0.0.1:7700")
+    assert host.asked[-1].url == "http://127.0.0.1:7700/v1/version"
+
+
+def test_a_core_that_exits_before_it_answers_names_its_log_and_leaves_no_pid(tmp_path: Path) -> None:
+    local, kept, host = place(tmp_path)
+    exited = (1, (f"the core exited before it answered: read {kept.core_log}",))
+
+    # Two seconds in, as a core that could not bind its port or read its token file.
+    host.on_start = lambda started: host.at(2.0, lambda: host.processes.pop(started.pid))
+    with pytest.raises(demo.Stop) as stop:
+        demo.start_core(loaded_env(local, host), kept, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == exited
+    assert not kept.core_pid.exists()
+    assert (host.now, len(host.asked), host.signalled) == (2.0, 3, [])
+
+    # At once; and where another process holds the port and answers there, its answer is not the core's.
+    host = passing(local, disk=tmp_path)
+    answers_its_version(host)
+    host.on_start = lambda started: host.processes.pop(started.pid)
+    with pytest.raises(demo.Stop) as stop:
+        demo.start_core(loaded_env(local, host), kept, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == exited
+    assert not kept.core_pid.exists()
+    assert (host.slept, host.signalled) == ([], [])
+
+    # A pid that names another process by then is not the core either.
+    host = passing(local, disk=tmp_path)
+    answers_its_version(host)
+    host.on_start = lambda started: becomes(host, started.pid, demo.Process(["/bin/bash"], {}))
+    with pytest.raises(demo.Stop) as stop:
+        demo.start_core(loaded_env(local, host), kept, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == exited
+    assert host.signalled == []
+
+
+def test_a_core_that_never_answers_is_a_failure_at_60_s_and_is_left_for_demo_down(tmp_path: Path) -> None:
+    local, kept, host = place(tmp_path)
+    asked_at: list[float] = []
+
+    def reply(asked: Any) -> Any:
+        asked_at.append(host.now)
+        return demo.Answer(None, None)
+
+    host.replies.append(("GET", VERSION, reply))
+    with pytest.raises(demo.Stop) as stop:
+        demo.start_core(loaded_env(local, host), kept, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (
+        1,
+        (f"the core did not answer at {LISTEN} within 60 s: read {kept.core_log}; make demo-down ends it",),
+    )
+    # No ask at or after the bound; the core is left as it is, recorded, for `down` to end.
+    assert asked_at == [second * demo.ASK_S for second in range(60)]
+    assert max(asked_at) < demo.CORE_WAIT_S <= host.now
+    [started] = host.started
+    assert kept.core_pid.read_text() == f"{started.pid}\n"
+    assert demo.is_core(host.process(started.pid), kept)
+    assert host.signalled == []
+
+    # An answer that is not 200 is no answer of the core's: a proxy's 502, or another service's 404.
+    for refused in (502, 404):
+        host = passing(local, disk=tmp_path)
+        host.replies.append(("GET", VERSION, demo.Answer(refused, None)))
+        with pytest.raises(demo.Stop) as stop:
+            demo.start_core(loaded_env(local, host), kept, LISTEN, host)
+        assert stop.value.lines[0].startswith(f"the core did not answer at {LISTEN} within 60 s")
+
+    # `down` then ends it: a core that does not list its twins is ended, and one started in its place lists them.
+    host = passing(local, disk=tmp_path)
+    kept.source.write_text("netbox\n")
+    hung = int(kept.core_pid.read_text())
+    host.processes[hung] = core_process(kept)
+    host.next_pid = hung + 1000
+    exits_at_its_signal(host)
+    answers_its_version(host)
+    listings = iter([demo.Done(2, ""), demo.Done(0, "[]\n")])
+    host.answers[(CLI, "twin", "list", "--json")] = lambda ran: next(listings)
+    host.answer("make")
+    assert status(host, ["down", "--local", str(local), "--main", str(MAIN)]) == 0
+    assert acts(host)[:5] == [
+        [CLI, "twin", "list", "--json"],
+        (hung, TERM),
+        ("start", [CORE]),
+        [CLI, "twin", "list", "--json"],
+        (host.started[0].pid, TERM),
+    ]
+    assert not kept.core_pid.exists()
+    assert hung not in host.processes
+
+
+def test_a_core_that_cannot_be_started_is_a_failure_in_the_errors_own_word(tmp_path: Path) -> None:
+    """What `Popen` raises of a command that is not there, or is not this user's to run, is said by its word and the
+    command's path: never by its text, and with nothing of the environment it was to be given."""
+    local, kept, _ = place(tmp_path)
+
+    class Unstartable(FakeHost):
+        raised: OSError = FileNotFoundError(2, "No such file or directory", CORE)
+
+        def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
+            raise self.raised
+
+    for raised, word in (
+        (FileNotFoundError(2, "No such file or directory", CORE), "No such file or directory"),
+        (PermissionError(13, "Permission denied", CORE), "Permission denied"),
+        (OSError(8, "Exec format error", CORE), "Exec format error"),
+    ):
+        host = Unstartable(disk=tmp_path)
+        host.raised = raised
+        kept.core_pid.write_text("4502\n")
+        with pytest.raises(demo.Stop) as stop:
+            demo.start_core(loaded_env(local, host), kept, LISTEN, host)
+        assert (stop.value.status, stop.value.lines) == (
+            1,
+            (f"the core was not started, {word}: its command is {CORE} and its log {kept.core_log}",),
+        )
+        assert not kept.core_pid.exists()
+        assert (host.asked, host.signalled, host.slept) == ([], [], [])
+        shown = shows_a_secret(*stop.value.lines, str(stop.value))
+        assert not shown
+
+    host = Unstartable(disk=tmp_path)
+    host.raised = FileNotFoundError(2, "No such file or directory", "python3")
+    host.answer(*demo.api_argv(local, MAIN)[:4], out=f"{API}\n")
+    kept.runner_pid.write_text("4501\n")
+    with pytest.raises(demo.Stop) as stop:
+        demo.start_runner("netbox", loaded_env(local, host), kept, local, MAIN, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (
+        1,
+        (
+            "the runner was not started, No such file or directory: its command is python3 and its log "
+            f"{kept.runner_log}",
+        ),
+    )
+    assert not kept.runner_pid.exists()
+    assert (host.asked, host.signalled, host.slept) == ([], [], [])
+    shown = shows_a_secret(*stop.value.lines, str(stop.value))
+    assert not shown
+
+
+def test_the_runner_serves_once_its_line_its_process_and_both_deployments_say_so(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host = place(tmp_path)
+    kept.runner_log.write_text(SERVING)
+    # Both deployments `READY` from the first ask, as a runner that has stopped leaves them, the process the runner
+    # a second in, and the log of this start empty, the line of the start before being in the log kept: not yet.
+    # The line written, three seconds in: done.
+    serves_prefect(host, local)
+    host.on_start = lambda started: host.at(1.0, lambda: becomes(host, started.pid, runner_process(local, "netbox")))
+    host.at(3.0, lambda: becomes(host, host.started[0].pid, runner_process(local, "netbox"), kept.runner_log))
+    env = loaded_env(local, host)
+    pid = demo.start_runner("netbox", env, kept, local, MAIN, LISTEN, host)
+
+    assert (host.now, host.slept) == (3.0, [demo.ASK_S] * 3)
+    [started] = host.started
+    assert (started.argv, started.cwd, started.log, started.pid) == (
+        demo.serve_argv("netbox", local, MAIN),
+        ROOT,
+        kept.runner_log,
+        pid,
+    )
+    # Its environment is a step's: the auth as `local/.env` names it, which `edge_dev.py` gives Prefect's client, and
+    # none under Prefect's own name of this script's making.
+    given_a_steps_environment = same(started.env, demo.step_env(env, kept, LISTEN))
+    assert given_a_steps_environment
+    assert "PREFECT_API_AUTH_STRING" not in started.env and "FYLGJA_ORCHESTRATOR_AUTH" in started.env
+    assert kept.runner_pid.read_text() == f"{pid}\n"
+    assert kept.runner_log.with_name("runner.log.1").read_text() == SERVING
+    # Prefect's API is read first, by the words `make netbox-hook` reads it by, under the same environment.
+    [api] = host.ran
+    assert (api.argv, api.cwd) == (demo.api_argv(local, MAIN), ROOT)
+    assert (api.capture, api.timeout) == (True, demo.DOCKER_TIMEOUT_S)
+    api_read_under_a_steps_environment = same(api.env, demo.step_env(env, kept, LISTEN))
+    assert api_read_under_a_steps_environment
+    assert acts(host) == [demo.api_argv(local, MAIN), ("start", demo.serve_argv("netbox", local, MAIN))]
+    # Each deployment is asked by its exact name, once the line is there and the process is the runner, with the
+    # auth in the seam's own argument and in no URL.
+    assert [(asked.method, asked.url, asked.body) for asked in host.asked] == [
+        ("GET", PLAN_READY, None),
+        ("GET", REHEARSE_READY, None),
+    ]
+    auth_given_to_the_seam = all(same(asked.auth, AUTH) for asked in host.asked)
+    assert auth_given_to_the_seam
+    said = capsys.readouterr()
+    assert (said.out.splitlines(), said.err) == (
+        [f"demo: the runner serves stage-plan/main and twin-rehearse/main, pid {pid}, its log {kept.runner_log}"],
+        "",
+    )
+    shown = shows_a_secret(said.out, *started.argv, *api.argv, *(asked.url for asked in host.asked))
+    assert not shown
+    assert host.signalled == []
+
+    # The line there and the process the runner from the first second, and a deployment `NOT_READY`, as each was
+    # read at a first ask, until the fifth: done then, and not before.
+    local, kept, host = place(tmp_path / "again")
+    serves_prefect(host, local, ready_from=5.0)
+    host.on_start = lambda started: host.at(
+        1.0, lambda: becomes(host, started.pid, runner_process(local, "infrahub"), kept.runner_log)
+    )
+    pid = demo.start_runner("infrahub", loaded_env(local, host), kept, local, MAIN, LISTEN, host)
+    assert host.now == 5.0
+    assert host.started[0].argv == demo.serve_argv("infrahub", local, MAIN)
+    # The second deployment is asked only where the first is `READY`.
+    assert [asked.url for asked in host.asked] == [PLAN_READY] * 4 + [PLAN_READY, REHEARSE_READY]
+
+
+def test_a_runner_that_exits_is_a_failure_naming_its_log(tmp_path: Path) -> None:
+    local, kept, host = place(tmp_path)
+    serves_prefect(host, local)
+    # As `edge_dev.py serve` exits 2 where a name the runner needs is not set, having said so in its log.
+    host.on_start = lambda started: host.at(1.0, lambda: host.processes.pop(started.pid))
+    with pytest.raises(demo.Stop) as stop:
+        demo.start_runner("netbox", loaded_env(local, host), kept, local, MAIN, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (
+        1,
+        (f"the runner exited before it served: read {kept.runner_log}",),
+    )
+    assert not kept.runner_pid.exists()
+    assert (host.now, host.asked, host.signalled) == (1.0, [], [])
+
+    # One that never serves is left, recorded, for `down` to end: no read of it at or after the bound. Each of the
+    # three is asked for: no line; a process that does not read as this home's runner, which the script's own words
+    # do not lead to and `settle` could not end, here a runner under another home; and a deployment that is not
+    # `READY`, is not there, is refused the auth or is not answered.
+    for never in ("no line", "not the runner", "not ready", "no such deployment", "auth refused", "nothing answers"):
+        local, kept, host = place(tmp_path / never.replace(" ", "-"))
+        host.answer(*demo.api_argv(local, MAIN)[:4], out=f"{API}\n")
+        asked_at: list[float] = []
+
+        def reply(asked: Any, never: str = never, host: FakeHost = host, asked_at: list[float] = asked_at) -> Any:
+            asked_at.append(host.now)
+            if never == "no such deployment":
+                return demo.Answer(404, {"detail": "Deployment not found"})
+            if never == "auth refused":
+                return demo.Answer(401, {"exception_message": "Unauthorized"})
+            if never == "nothing answers":
+                return demo.Answer(None, None)
+            return demo.Answer(200, {"id": "an-id", "status": "NOT_READY" if never == "not ready" else "READY"})
+
+        host.replies.append(("GET", f"{API}/deployments/name/", reply))
+        if never != "no line":
+
+            def written(log: Path = kept.runner_log) -> None:
+                log.write_text(SERVING)
+
+            host.at(1.0, written)
+        home = tmp_path / "another" / "local" if never == "not the runner" else local
+
+        def at_once(started: Started, host: FakeHost = host, home: Path = home) -> None:
+            becomes(host, started.pid, runner_process(home, "netbox"))
+
+        host.on_start = at_once
+        with pytest.raises(demo.Stop) as stop:
+            demo.start_runner("netbox", loaded_env(local, host), kept, local, MAIN, LISTEN, host)
+        assert (stop.value.status, stop.value.lines) == (
+            1,
+            (
+                "the runner did not serve stage-plan/main and twin-rehearse/main within 60 s: read "
+                f"{kept.runner_log}; make demo-down ends it",
+            ),
+        ), never
+        assert host.now >= demo.SERVE_WAIT_S > max(asked_at, default=0.0), never
+        assert bool(asked_at) is (never not in ("no line", "not the runner")), never
+        assert kept.runner_pid.read_text() == f"{host.started[0].pid}\n", never
+        assert host.signalled == [], never
+        shown = shows_a_secret(*stop.value.lines)
+        assert not shown
+
+
+def test_prefects_api_is_read_by_the_hooks_words_and_is_exact(tmp_path: Path) -> None:
+    local, kept, host = place(tmp_path)
+    env = demo.step_env(loaded_env(local, host), kept, LISTEN)
+    for printed in (f"{API}\n", f"{API}/\n", f"  {API}  \n"):
+        host.answer(*demo.api_argv(local, MAIN)[:4], out=printed)
+        assert demo.prefect_api(env, local, MAIN, host) == API
+    [ran] = host.ran[-1:]
+    assert (ran.argv, ran.cwd) == (demo.api_argv(local, MAIN), ROOT)
+    assert (ran.capture, ran.timeout) == (True, demo.DOCKER_TIMEOUT_S)
+
+    words = "python3 -I scripts/edge_dev.py api"
+    host.answer(*demo.api_argv(local, MAIN)[:4], status=1)
+    with pytest.raises(demo.Stop) as stop:
+        demo.prefect_api(env, local, MAIN, host)
+    assert (stop.value.status, stop.value.lines) == (1, (f"`{words}` exited 1: Prefect's API was not read",))
+    for printed in (
+        "",
+        "\n",
+        "edge_dev: api: no gateway\n",
+        f"{API}\nand a second line\n",
+        "http://\n",
+        "https://192.0.2.1:4200/api\n",
+        f"{API}?a=b\n",
+        f"http://fylgja:word@{BIND}:4200/api\n",
+    ):
+        host.answer(*demo.api_argv(local, MAIN)[:4], out=printed)
+        with pytest.raises(demo.Stop) as stop:
+            demo.prefect_api(env, local, MAIN, host)
+        assert (stop.value.status, stop.value.lines) == (
+            1,
+            (f"`{words}` printed no http address alone: Prefect's API was not read",),
+        ), printed
+
+    # Where the API is not read no runner is started.
+    host.answer(*demo.api_argv(local, MAIN)[:4], status=1)
+    with pytest.raises(demo.Stop):
+        demo.start_runner("netbox", loaded_env(local, host), kept, local, MAIN, LISTEN, host)
+    assert (host.started, host.asked) == ([], [])
+    assert not kept.runner_pid.exists()
+
+
+def test_end_terms_and_kills_only_what_stays() -> None:
+    """As `test_dev_plumbing.py`'s of `edge_dev.end_session`, through the seam."""
+    host = FakeHost()
+    host.processes[4243] = demo.Process(["sleep", "600"], {})
+    host.at(2.0, lambda: host.processes.pop(4243))
+    demo.end(4243, host)
+    assert host.signalled == [(4243, TERM)]
+    assert (host.now, set(host.slept)) == (2.0, {demo.STOP_POLL_S})
+
+    host = FakeHost()
+    host.processes[4243] = demo.Process(["sleep", "600"], {})
+    demo.end(4243, host)
+    assert host.signalled == [(4243, TERM), (4243, KILL)]
+    assert host.now >= demo.STOP_WAIT_S
+
+    # No such process: nothing is waited for, and nothing killed.
+    host = FakeHost()
+    demo.end(4243, host)
+    assert (host.signalled, host.slept) == ([(4243, TERM)], [])
+    assert (demo.STOP_WAIT_S, EDGE_DEV.DOWN_WAIT_S) == (30, 30)
+
+
+def test_a_recorded_pid_that_is_another_process_is_never_signalled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A pid reused by another process, and a record gone stale: nothing is signalled but a process read as what its
+    file says. `core.pid` being there, a core is started to read what the store holds, and that one, which the
+    script started and recorded, is the one process it ends."""
+    shell = demo.Process(["/bin/bash", "-l"], {"PATH": "/usr/bin"})
+    anothers = core_process(demo.records(tmp_path / "another" / "local"))
+    for at_core_pid, at_runner_pid in ((shell, anothers), (anothers, shell)):
+        local, kept, host = place(tmp_path / ("shell" if at_core_pid is shell else "core"))
+        host.processes[4301], host.processes[4302] = at_core_pid, at_runner_pid
+        kept.core_pid.write_text("4301\n")
+        kept.runner_pid.write_text("4302\n")
+        exits_at_its_signal(host)
+        answers_its_version(host)
+        lists(host, [])
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+
+        [started] = host.started
+        assert host.signalled == [(started.pid, TERM)]
+        assert (host.processes[4301], host.processes[4302]) == (at_core_pid, at_runner_pid)
+        assert not kept.core_pid.exists() and not kept.runner_pid.exists()
+        assert capsys.readouterr().out.splitlines()[:3] == [
+            f"demo: pid 4302 of {kept.runner_pid} is not the demonstration's runner: it is left, and the file removed",
+            f"demo: pid 4301 of {kept.core_pid} is not the demonstration's core: it is left, and the file removed",
+            f"demo: starting a core at {LISTEN}, to end what the store of an earlier one holds",
+        ]
+
+    # With no `core.pid`, nothing of the core's is done, and so nothing at all is signalled, started or run: a
+    # runner under another home, Prefect's own server, a pid that names no process, and a file that names no pid.
+    not_the_runner = "pid 4302 of {} is not the demonstration's runner: it is left, and the file removed"
+    for case, (recorded, process, said) in enumerate(
+        (
+            ("4302\n", runner_process(tmp_path / "another" / "local"), not_the_runner),
+            ("4302\n", demo.Process([PYTHON, str(EDGE_DEV.PREFECT), "server", "start"], {}), not_the_runner),
+            ("4302\n", None, "the runner recorded in {}, pid 4302, is gone: the file removed"),
+            ("not a pid\n", shell, "{} names no pid: the file removed"),
+            ("\n", shell, "{} names no pid: the file removed"),
+        )
+    ):
+        local, kept, host = place(tmp_path / f"runner-{case}")
+        if process is not None:
+            host.processes[4302] = process
+        kept.runner_pid.write_text(recorded)
+        before = dict(host.processes)
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+        assert (host.signalled, host.started, host.ran, host.asked) == ([], [], [], [])
+        assert host.processes == before
+        assert not kept.runner_pid.exists()
+        assert capsys.readouterr().out.splitlines() == [f"demo: {said.format(kept.runner_pid)}"]
+
+    # No record at all: nothing is done, and nothing said.
+    local, kept, host = place(tmp_path / "none")
+    host.processes[4301], host.processes[4302] = core_process(kept), runner_process(local)
+    demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (host.signalled, host.started, host.ran, host.asked) == ([], [], [], [])
+    assert capsys.readouterr().out == ""
+
+
+def test_the_other_sources_runner_and_a_runner_not_recorded_are_each_refused(tmp_path: Path) -> None:
+    local, kept, host = place(tmp_path)
+    home = local / "prefect"
+    not_started = "a runner this demonstration did not start serves {}, pid {}: stop it by its pid"
+    others = (
+        "the {} demonstration's runner is up, pid {}: one Prefect serves one source's runner; run make demo-down first"
+    )
+
+    def refused(source: str) -> tuple[int, tuple[str, ...]] | None:
+        try:
+            demo.refuse_runners(source, kept, local, host)
+        except demo.Stop as stop:
+            return stop.status, stop.lines
+        return None
+
+    # No runner under the home, whatever is recorded and whatever serves another home: none is refused.
+    host.processes[4400] = runner_process(tmp_path / "another" / "local", "infrahub")
+    assert refused("netbox") is None
+    kept.runner_pid.write_text("4401\n")
+    assert refused("netbox") is None
+
+    # One the demonstration did not start, by hand or by another's: whichever source it serves.
+    kept.runner_pid.unlink()
+    host.processes[4401] = runner_process(local, "netbox")
+    for source in demo.SOURCES:
+        assert refused(source) == (2, (not_started.format(home, 4401),))
+    kept.runner_pid.write_text("4301\n")
+    host.processes[4301] = demo.Process(["/bin/bash", "-l"], {})
+    assert refused("netbox") == (2, (not_started.format(home, 4401),))
+    kept.runner_pid.write_text("not a pid\n")
+    assert refused("netbox") == (2, (not_started.format(home, 4401),))
+
+    # The recorded one: of the other source it is refused, and of this source it is none, for `settle` to end.
+    kept.runner_pid.write_text("4401\n")
+    assert refused("infrahub") == (2, (others.format("netbox", 4401),))
+    assert refused("netbox") is None
+    host.processes[4401] = runner_process(local, "infrahub")
+    assert refused("netbox") == (2, (others.format("infrahub", 4401),))
+    assert refused("infrahub") is None
+
+    # Each is said, the recorded one and one beside it.
+    host.processes[4402] = runner_process(local, "netbox")
+    assert refused("netbox") == (2, (others.format("infrahub", 4401), not_started.format(home, 4402)))
+    assert refused("infrahub") == (2, (not_started.format(home, 4402),))
+
+    # Nothing is started, stopped or run by a refusal, and the record stays.
+    assert (host.started, host.signalled, host.ran, host.asked) == ([], [], [], [])
+    assert kept.runner_pid.read_text() == "4401\n"
+    assert sorted(host.processes) == [4301, 4400, 4401, 4402]
+
+
+def test_settle_ends_the_runner_then_destroys_every_twin_then_ends_the_core(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host = place(tmp_path)
+    host.processes[4501] = runner_process(local, "netbox")
+    host.processes[4502] = core_process(kept, "127.0.0.1:7700")
+    kept.runner_pid.write_text("4501\n")
+    kept.core_pid.write_text("4502\n")
+    exits_at_its_signal(host)
+    lists(host, ["rh-a", "rh-b"], [])
+    env = loaded_env(local, host)
+    demo.settle(env, kept, local, LISTEN, host)
+
+    assert acts(host) == [
+        (4501, TERM),
+        [CLI, "twin", "list", "--json"],
+        [CLI, "twin", "destroy", "rh-a"],
+        [CLI, "twin", "destroy", "rh-b"],
+        [CLI, "twin", "list", "--json"],
+        (4502, TERM),
+    ]
+    assert (host.started, host.asked) == ([], [])
+    assert not kept.runner_pid.exists() and not kept.core_pid.exists()
+    assert sorted(host.processes) == []
+    # The CLI's environment holds the client's token and the address the recorded core listens on, its own and not
+    # the one a core would be started at; its words hold neither. A list is read and bounded; a destroy prints as it
+    # will, and is given its own bound.
+    for ran in host.ran:
+        held = ran.env or {}
+        holds_the_clients_token = same(held.get("FYLGJA_API_TOKEN"), CLIENT_TOKEN)
+        assert holds_the_clients_token
+        assert (held.get("FYLGJA_API_ADDRESS"), "FYLGJA_API_CA" in held, ran.cwd) == ("127.0.0.1:7700", False, ROOT)
+        on_its_command_line = shows_a_secret(*ran.argv) or any("127.0.0.1" in word for word in ran.argv)
+        assert not on_its_command_line
+    assert [(ran.capture, ran.timeout) for ran in host.ran] == [
+        (True, demo.DOCKER_TIMEOUT_S),
+        (False, demo.DESTROY_TIMEOUT_S),
+        (False, demo.DESTROY_TIMEOUT_S),
+        (True, demo.DOCKER_TIMEOUT_S),
+    ]
+    said = capsys.readouterr()
+    assert (said.out.splitlines(), said.err) == (
+        [
+            "demo: the runner, pid 4501, ended",
+            "demo: destroying the twin rh-a, which an earlier run left",
+            "demo: destroying the twin rh-b, which an earlier run left",
+            "demo: the core, pid 4502, ended",
+        ],
+        "",
+    )
+    shown = shows_a_secret(said.out)
+    assert not shown
+
+    # A CA of `local/.env`'s own is another core's: the demonstration's serves HTTP, and its CLI is given none.
+    local, kept, host = place(tmp_path / "ca")
+    host.processes[4502] = core_process(kept)
+    kept.core_pid.write_text("4502\n")
+    exits_at_its_signal(host)
+    lists(host, [])
+    demo.settle(loaded_env(local, host) | {"FYLGJA_API_CA": "/srv/example/ca.pem"}, kept, local, LISTEN, host)
+    # Where the core lists none, as after a runner's own end, which asks its twin's deletion: one list, no destroy.
+    assert acts(host) == [[CLI, "twin", "list", "--json"], (4502, TERM)]
+    assert "FYLGJA_API_CA" not in (host.ran[0].env or {})
+
+
+def test_a_twin_left_by_a_core_that_died_is_destroyed_through_a_core_started_for_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host = place(tmp_path)
+    kept.core_pid.write_text("4502\n")
+    exits_at_its_signal(host)
+    answers_its_version(host, after=1)
+    lists(host, ["rh-a"], [])
+    env = loaded_env(local, host)
+    demo.settle(env, kept, local, LISTEN, host)
+
+    [started] = host.started
+    assert acts(host) == [
+        ("start", [CORE]),
+        [CLI, "twin", "list", "--json"],
+        [CLI, "twin", "destroy", "rh-a"],
+        [CLI, "twin", "list", "--json"],
+        (started.pid, TERM),
+    ]
+    started_as_the_demonstrations_core = same(started.env, demo.core_env(env, kept, LISTEN))
+    assert started_as_the_demonstrations_core
+    # It is waited for before it is asked, and asked where it was started.
+    assert [asked.url for asked in host.asked] == [VERSION, VERSION]
+    assert {(ran.env or {}).get("FYLGJA_API_ADDRESS") for ran in host.ran} == {LISTEN}
+    assert not kept.core_pid.exists()
+    assert sorted(host.processes) == []
+    assert capsys.readouterr().out.splitlines() == [
+        f"demo: the core recorded in {kept.core_pid}, pid 4502, is gone: the file removed",
+        f"demo: starting a core at {LISTEN}, to end what the store of an earlier one holds",
+        f"demo: the core answers at {LISTEN}, pid {started.pid}, its log {kept.core_log}",
+        "demo: destroying the twin rh-a, which an earlier run left",
+        f"demo: the core, pid {started.pid}, ended",
+    ]
+
+    # A core that cannot be started for it is a failure, and the twins are not read.
+    local, kept, host = place(tmp_path / "exits")
+    kept.core_pid.write_text("4502\n")
+    host.on_start = lambda started: host.processes.pop(started.pid)
+    with pytest.raises(demo.Stop) as stop:
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (1, (f"the core exited before it answered: read {kept.core_log}",))
+    assert (host.ran, host.signalled) == ([], [])
+
+
+def test_a_twin_that_stays_is_a_failure_that_names_it_and_the_core_is_left(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host = place(tmp_path)
+    host.processes[4501] = runner_process(local, "infrahub")
+    host.processes[4502] = core_process(kept)
+    kept.runner_pid.write_text("4501\n")
+    kept.core_pid.write_text("4502\n")
+    exits_at_its_signal(host)
+    lists(host, ["rh-a", "rh-b", "rh-c"], ["rh-b", "rh-c"])
+    # One destroy ends unclean and one outlasts its bound: each is said, and every twin is still asked.
+    host.answer(CLI, "twin", "destroy", "rh-b", status=3)
+    host.answer(CLI, "twin", "destroy", "rh-c", status=demo.TIMED_OUT)
+    with pytest.raises(demo.Stop) as stop:
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (
+        1,
+        (
+            f"still standing after its destroy: rh-b, rh-c; the core, pid 4502, is left up at {LISTEN}: read "
+            f"{kept.core_log}, then run make demo-down again",
+        ),
+    )
+    assert acts(host) == [
+        (4501, TERM),
+        [CLI, "twin", "list", "--json"],
+        [CLI, "twin", "destroy", "rh-a"],
+        [CLI, "twin", "destroy", "rh-b"],
+        [CLI, "twin", "destroy", "rh-c"],
+        [CLI, "twin", "list", "--json"],
+    ]
+    assert kept.core_pid.read_text() == "4502\n"
+    assert sorted(host.processes) == [4502]
+    assert capsys.readouterr().out.splitlines()[1:] == [
+        "demo: destroying the twin rh-a, which an earlier run left",
+        "demo: destroying the twin rh-b, which an earlier run left",
+        "demo: `fylgja-core twin destroy rh-b` exited 3",
+        "demo: destroying the twin rh-c, which an earlier run left",
+        "demo: `fylgja-core twin destroy rh-c` exited 124",
+    ]
+
+    # A destroy that exits other than 0 of a twin that is then gone, as one already being deleted, is no failure.
+    local, kept, host = place(tmp_path / "gone")
+    host.processes[4502] = core_process(kept)
+    kept.core_pid.write_text("4502\n")
+    exits_at_its_signal(host)
+    lists(host, ["rh-a"], [])
+    host.answer(CLI, "twin", "destroy", "rh-a", status=2)
+    demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert acts(host)[-1] == (4502, TERM)
+
+    # A list that is not read, of a core started for the purpose: a failure that names it, the core left up.
+    no_list = "`fylgja-core twin list --json` printed no list of twins: those of the core at {} were not read"
+    for case, (done, said) in enumerate(
+        (
+            (demo.Done(2, ""), "`fylgja-core twin list --json` exited 2: the twins of the core at {} were not read"),
+            (demo.Done(0, "no twins\n"), no_list),
+            (demo.Done(0, '{"twins": []}\n'), no_list),
+            (demo.Done(0, '[{"generation": 1}]\n'), no_list),
+            (demo.Done(0, '[{"name": 5}]\n'), no_list),
+            (demo.Done(0, ""), no_list),
+        )
+    ):
+        local, kept, host = place(tmp_path / f"unread-{case}")
+        kept.core_pid.write_text("4502\n")
+        answers_its_version(host)
+        host.answers[(CLI, "twin", "list", "--json")] = done
+        with pytest.raises(demo.Stop) as stop:
+            demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+        assert (stop.value.status, stop.value.lines) == (1, (said.format(LISTEN),))
+        assert host.signalled == []
+        assert kept.core_pid.read_text() == f"{host.started[0].pid}\n"
+
+
+def after_a_netbox_run(tmp_path: Path) -> tuple[Path, Any, FakeHost]:
+    """`local/` and the host as a NetBox demonstration leaves them: `source`, the runner and the core recorded and
+    up, the core holding no twin, and the Prefect server `make prefect-up` started for it recorded and up. Every
+    process exits at its signal, and every make target exits 0."""
+    local, kept, host = place(tmp_path)
+    kept.source.write_text("netbox\n")
+    host.processes[4501] = runner_process(local, "netbox")
+    host.processes[4502] = core_process(kept)
+    host.processes[4503] = demo.Process(
+        [PYTHON, str(EDGE_DEV.PREFECT), "server", "start", "--host", BIND, "--port", "4200", "--no-ui"],
+        {"PREFECT_HOME": str(EDGE_DEV.home_of(local))},
+    )
+    kept.runner_pid.write_text("4501\n")
+    kept.core_pid.write_text("4502\n")
+    kept.prefect_pid.write_text("4503\n")
+    EDGE_DEV.home_of(local).mkdir()
+    EDGE_DEV.pid_file(local).write_text("4503\n")
+    exits_at_its_signal(host)
+    lists(host, [])
+    host.answer("make")
+    return local, kept, host
+
+
+def made(local: Path, target: str, *variables: str) -> list[str]:
+    return ["make", "--no-print-directory", target, f"LOCAL={local}", *variables]
+
+
+def down(local: Path, *more: str) -> list[str]:
+    return ["down", "--local", str(local), "--main", str(MAIN), *more]
+
+
+def test_down_ends_what_the_demonstration_started_and_stops_its_source(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host = after_a_netbox_run(tmp_path)
+    assert status(host, down(local)) == 0
+    assert acts(host) == [
+        (4501, TERM),
+        [CLI, "twin", "list", "--json"],
+        (4502, TERM),
+        made(local, "prefect-down"),
+        made(local, "netbox-down"),
+    ]
+    assert host.locked == [kept.lock]
+    assert (host.started, host.asked) == ([], [])
+    # `source` is kept, for a later `down --purge`; the three records of what was ended are gone.
+    assert kept.source.read_text() == "netbox\n"
+    assert sorted(path.name for path in kept.source.parent.iterdir()) == ["source"]
+    # Each target is run as a step is: in the checkout, printing as it will, with no bound of the script's, under
+    # the loaded environment with the demonstration's address and token file.
+    targets = [ran for ran in host.ran if ran.argv[0] == "make"]
+    assert [(ran.cwd, ran.capture, ran.timeout) for ran in targets] == [(ROOT, False, None)] * 2
+    env = demo.step_env(loaded_env(local, host), kept, LISTEN)
+    each_given_a_steps_environment = all(same(ran.env, env) for ran in targets)
+    assert each_given_a_steps_environment
+    said = capsys.readouterr()
+    assert (said.out.splitlines(), said.err) == (
+        [
+            "demo: the runner, pid 4501, ended",
+            "demo: the core, pid 4502, ended",
+            f"demo: the netbox demonstration is ended: its records stay under {kept.source.parent}",
+        ],
+        "",
+    )
+    shown = shows_a_secret(said.out, *(word for ran in host.ran for word in ran.argv))
+    assert not shown
+
+    # Run again, with nothing left to end but the source, which the record still names.
+    host.acts.clear()
+    assert status(host, down(local)) == 0
+    assert acts(host) == [made(local, "netbox-down")]
+
+    # The listen address is `local/.env`'s where it has one, and Infrahub's demonstration stops Infrahub.
+    local, kept, host = after_a_netbox_run(tmp_path / "infrahub")
+    kept.source.write_text("infrahub\n")
+    kept.core_pid.unlink()
+    with (local / ".env").open("a") as env_file:
+        env_file.write("FYLGJA_LISTEN=127.0.0.1:7700\n")
+    assert status(host, down(local)) == 0
+    assert acts(host) == [(4501, TERM), made(local, "prefect-down"), made(local, "infrahub-down")]
+    assert {(ran.env or {}).get("FYLGJA_API_ADDRESS") for ran in host.ran} == {"127.0.0.1:7700"}
+
+
+def test_down_leaves_a_prefect_it_did_not_start(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    for case in ("no prefect.pid", "another pid", "no server.pid", "no pid"):
+        local, kept, host = after_a_netbox_run(tmp_path / case.replace(" ", "-"))
+        if case == "no prefect.pid":
+            kept.prefect_pid.unlink()
+        elif case == "another pid":
+            # The server the demonstration started is gone, and another, started by hand since, is recorded.
+            EDGE_DEV.pid_file(local).write_text("4600\n")
+        elif case == "no server.pid":
+            EDGE_DEV.pid_file(local).unlink()
+        else:
+            kept.prefect_pid.write_text("\n")
+        assert status(host, down(local)) == 0, case
+        assert [words for words in acts(host) if words[:1] == ["make"]] == [made(local, "netbox-down")], case
+        assert host.signalled == [(4501, TERM), (4502, TERM)], case
+        assert 4503 in host.processes, case
+        # A record that no longer names the server `make prefect-up` records is removed, and said.
+        assert not kept.prefect_pid.exists(), case
+        left = [line for line in capsys.readouterr().out.splitlines() if "Prefect" in line]
+        assert left == (
+            []
+            if case == "no prefect.pid"
+            else [
+                f"demo: {kept.prefect_pid} does not name the Prefect server {EDGE_DEV.pid_file(local)} names: "
+                "whatever serves there is left, and the file removed"
+            ]
+        ), case
+
+
+def test_down_purges_only_by_the_flag(tmp_path: Path) -> None:
+    for source in demo.SOURCES:
+        local, kept, host = after_a_netbox_run(tmp_path / source)
+        kept.source.write_text(f"{source}\n")
+        assert status(host, down(local, "--purge")) == 0
+        assert acts(host)[-2:] == [made(local, "prefect-down"), made(local, f"{source}-down", "PURGE=1")]
+        assert kept.source.read_text() == f"{source}\n"
+
+        local, kept, host = after_a_netbox_run(tmp_path / f"{source}-kept")
+        kept.source.write_text(f"{source}\n")
+        assert status(host, down(local)) == 0
+        assert acts(host)[-1] == made(local, f"{source}-down")
+        assert [words for words in acts(host) if "PURGE=1" in words] == []
+
+
+def test_down_with_nothing_recorded_ends_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    host = passing()
+    assert status(host, ["down", *WHERE, "--purge"]) == 0
+    said = capsys.readouterr()
+    assert (said.out.splitlines(), said.err) == (
+        [f"demo: no demonstration is recorded under {LOCAL / 'demo'}: nothing to end"],
+        "",
+    )
     assert host.locked == [LOCK]
     assert (host.ran, host.started, host.signalled, host.asked) == ([], [], [], [])
+
+    # Whatever else stands under `local/demo/`: no `source`, no demonstration that passed its checks.
+    local, kept, host = after_a_netbox_run(tmp_path)
+    kept.source.unlink()
+    assert status(host, down(local)) == 0
+    assert (host.ran, host.started, host.signalled, host.asked) == ([], [], [], [])
+    assert sorted(host.processes) == [4501, 4502, 4503]
+    assert capsys.readouterr().out.splitlines() == [
+        f"demo: no demonstration is recorded under {local / 'demo'}: nothing to end"
+    ]
+
+
+def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    again = "demo: down: not everything was ended: read the lines above, then run make demo-down again"
+
+    # `prefect-down` exits 1: the source's `down` is still run, and the record of the server kept for another try.
+    local, kept, host = after_a_netbox_run(tmp_path)
+    host.answer(*made(local, "prefect-down")[:3], status=1)
+    assert status(host, down(local)) == 1
+    assert acts(host)[-2:] == [made(local, "prefect-down"), made(local, "netbox-down")]
+    assert kept.prefect_pid.read_text() == "4503\n"
+    assert capsys.readouterr().err.splitlines() == ["demo: make prefect-down exited 1", again]
+
+    # A twin that stays: the core is left, and Prefect and the source are still ended.
+    local, kept, host = after_a_netbox_run(tmp_path / "twin")
+    lists(host, ["rh-a"], ["rh-a"])
+    host.answer(*made(local, "netbox-down")[:3], status=2)
+    assert status(host, down(local, "--purge")) == 1
+    assert acts(host) == [
+        (4501, TERM),
+        [CLI, "twin", "list", "--json"],
+        [CLI, "twin", "destroy", "rh-a"],
+        [CLI, "twin", "list", "--json"],
+        made(local, "prefect-down"),
+        made(local, "netbox-down", "PURGE=1"),
+    ]
+    assert kept.core_pid.read_text() == "4502\n"
+    assert (kept.source.read_text(), kept.prefect_pid.exists()) == ("netbox\n", False)
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: still standing after its destroy: rh-a; the core, pid 4502, is left up at {LISTEN}: read "
+        f"{kept.core_log}, then run make demo-down again",
+        "demo: make netbox-down exited 2",
+        again,
+    ]
+
+    # A record that names no source: what is recorded is still ended, and neither source is stopped, which is said.
+    local, kept, host = after_a_netbox_run(tmp_path / "source")
+    kept.source.write_text("nautobot\n")
+    assert status(host, down(local)) == 1
+    assert acts(host) == [(4501, TERM), [CLI, "twin", "list", "--json"], (4502, TERM), made(local, "prefect-down")]
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: {kept.source} names neither infrahub nor netbox: no source was stopped",
+        again,
+    ]
+
+    # A line of `local/.env` that is not read ends the run before anything is ended, exit 2, as it ends `up`.
+    local, kept, host = after_a_netbox_run(tmp_path / "unread")
+    with (local / ".env").open("a") as env_file:
+        env_file.write("X=$HOME\n")
+    assert status(host, down(local)) == 2
+    assert (host.ran, host.started, host.signalled) == ([], [], [])
+
+
+def test_the_real_host_reads_a_process_whatever_its_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`Real.process` on `/proc` files of the test's own: a path that holds a byte that is not UTF-8 is read as the
+    script itself holds such a path, so a core recorded under one still reads as the demonstration's."""
+    checkout = os.fsdecode(b"/srv/ex\xffample/fylgja-core")
+    assert os.fsencode(checkout) == b"/srv/ex\xffample/fylgja-core"
+    core = Path(checkout) / "core" / ".venv" / "bin" / "fylgja-core-server"
+    kept = demo.records(Path(checkout) / "local")
+    held = {
+        "/proc/4502/cmdline": os.fsencode(f"{checkout}/core/.venv/bin/python3") + b"\0" + os.fsencode(core) + b"\0",
+        "/proc/4502/environ": b"PATH=/usr/bin\0FYLGJA_STORE=" + os.fsencode(kept.store) + b"\0NOT_AN_ENTRY\0X=a=b\0",
+    }
+
+    def read_bytes(path: Path) -> bytes:
+        if str(path) not in held:
+            raise FileNotFoundError(2, "No such file or directory", str(path))
+        return held[str(path)]
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    monkeypatch.setattr(demo, "CORE", core)
+    process = demo.Real().process(4502)
+    assert process == demo.Process(
+        [f"{checkout}/core/.venv/bin/python3", str(core)],
+        {"PATH": "/usr/bin", "FYLGJA_STORE": str(kept.store), "X": "a=b"},
+    )
+    assert demo.is_core(process, kept)
+    assert demo.Real().process(4503) is None
 
 
 @pytest.mark.parametrize(
@@ -1492,10 +2607,10 @@ def test_the_real_host_reads_processes_and_groups_from_the_host(monkeypatch: pyt
     found = me is not None
     assert found
     initial = Path(f"/proc/{os.getpid()}/environ").read_bytes().split(b"\0")
-    names = sorted(entry.partition(b"=")[0].decode(errors="replace") for entry in initial if b"=" in entry)
+    names = sorted(os.fsdecode(entry.partition(b"=")[0]) for entry in initial if b"=" in entry)
     argv_is_the_interpreters = same(me.argv, sys.orig_argv)
     names_are_its_environments = same(sorted(me.environ), names) and "PATH" in me.environ
-    path_is_as_it_began = same(me.environ["PATH"], dict(e.partition(b"=")[::2] for e in initial)[b"PATH"].decode())
+    path_is_as_it_began = same(me.environ["PATH"], os.fsdecode(dict(e.partition(b"=")[::2] for e in initial)[b"PATH"]))
     assert argv_is_the_interpreters
     assert names_are_its_environments
     assert path_is_as_it_began
@@ -1554,6 +2669,47 @@ def test_the_fake_host_answers_as_the_real_one_does() -> None:
     host.processes[9] = demo.Process([], {"A": "1"})
     assert host.pids() == [1, 7, 9]
     assert host.process(9) is None
+
+    # A child just started reads as `/proc` shows one: a `#!` script of the venv's by its interpreter and then its
+    # words, as the core was read, and any other by its words alone, each under the environment it was given.
+    host = passing()
+    log = LOCAL / "demo" / "core.log"
+    script = host.start([CORE], env={"A": "1"}, cwd=ROOT, log=log)
+    binary = host.start(["python3", "-I", "scripts/edge_dev.py", "serve"], env={"B": "2"}, cwd=ROOT, log=log)
+    assert host.process(script) == demo.Process([PYTHON, CORE], {"A": "1"})
+    assert host.process(binary) == demo.Process(["python3", "-I", "scripts/edge_dev.py", "serve"], {"B": "2"})
+    assert (script, binary) == (5000, 5001)
+    assert FakeHost().interpreters == {}
+    # What a test says the child does next is done once it is started, with what was started.
+    seen_started: list[Any] = []
+    host.on_start = seen_started.append
+    third = host.start(["a"], env={}, cwd=ROOT, log=log)
+    assert [(started.argv, started.pid) for started in seen_started] == [(["a"], third)]
+
+    # What a test says happens at a time happens once, in the order of the times, when a sleep first brings the
+    # clock there; and every run, start and signal is kept in one order.
+    happened: list[str] = []
+    host.at(2.0, lambda: happened.append("at 2"))
+    host.at(1.5, lambda: happened.append("at 1.5"))
+    host.at(5.0, lambda: happened.append("at 5"))
+    host.sleep(1.0)
+    assert happened == []
+    host.sleep(1.0)
+    assert happened == ["at 1.5", "at 2"]
+    host.sleep(1.0)
+    assert (happened, host.now) == (["at 1.5", "at 2"], 3.0)
+    host.sleep(2.0)
+    assert happened == ["at 1.5", "at 2", "at 5"]
+    host.answer("a")
+    host.run(["a", "b"])
+    host.signal(script, 15)
+    assert acts(host) == [
+        ("start", [CORE]),
+        ("start", ["python3", "-I", "scripts/edge_dev.py", "serve"]),
+        ("start", ["a"]),
+        ["a", "b"],
+        (script, 15),
+    ]
 
 
 class Reply:

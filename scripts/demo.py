@@ -9,7 +9,13 @@ checkout> --ref <branch or empty>` and `python3 -I scripts/demo.py down --local 
 - `up` holds `<local>/demo/lock` while it runs, reads the environment, the shell's overlaid by `<local>/.env`, and
   judges the host's preconditions, `checks`: what only the host's owner can give. Every one that fails is said in a
   line of its own, and nothing is started. Where they pass it says so.
-- `down` holds the same lock. What it ends is not built yet, and it says so.
+- `down` holds the same lock, and ends what the demonstration `<local>/demo/source` records started (`settle`,
+  then the Prefect server and the source by their own targets): the runner and the core by their recorded pids,
+  each only where the pid still reads as that process, and through the core every twin its store holds.
+
+The core and the runner are the two things no target starts in the background: `start_core` and `start_runner`
+start each in a session of its own, record its pid and wait until it serves, and `refuse_runners` stops a run beside
+a runner it may not end.
 
 What the script keeps is under `<local>/demo/` (`records`). What it writes that can be generated, `prepare`: that
 directory, the token file its core reads, and in `<local>/.env`, where the loaded environment gives the name no
@@ -37,12 +43,13 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from email.message import Message
 from ipaddress import IPv4Network
@@ -58,6 +65,15 @@ SOURCES = ("infrahub", "netbox")
 VENV = ROOT / "core" / ".venv"
 COMMANDS = ("fylgja-core-server", "fylgja-core", "fylgja-orchestrator", "prefect")
 """What a demonstration runs from `VENV`'s `bin`, which `make venv` puts there."""
+
+CORE = VENV / "bin" / "fylgja-core-server"
+CLI = VENV / "bin" / "fylgja-core"
+"""The core's server, which the demonstration starts from this checkout on the local driver, and its CLI, by which
+the twins an earlier run left are listed and destroyed."""
+
+RUNNER_COMMAND = "fylgja-orchestrator"
+"""The command a runner is, whatever checkout's venv it runs from: `edge_dev.py serve` becomes it, with the one word
+`serve`."""
 
 TOOLS = ("docker", "containerlab", "git", "make", "ss")
 """What a demonstration runs from PATH."""
@@ -104,6 +120,28 @@ API_TOKEN = "FYLGJA_API_TOKEN"
 API_CA = "FYLGJA_API_CA"
 RUNNER_TOKEN = "FYLGJA_ORCHESTRATOR_API_TOKEN"
 TOKENS = "FYLGJA_TOKENS"
+STORE = "FYLGJA_STORE"
+
+AUTH = "FYLGJA_ORCHESTRATOR_AUTH"
+"""The basic auth the edge's Prefect asks, a `user:password`, as `make orchestrator-env` names it in `<local>/.env`."""
+
+RUNNER_SOURCE = "FYLGJA_ORCHESTRATOR_SOURCE"
+"""The change source a runner serves, which `edge_dev.py serve` sets in its environment."""
+
+PREFECT_HOME = "PREFECT_HOME"
+"""Prefect's home, which the server and the runner of one `<local>/` are each given (`prefect_home`)."""
+
+FLOW = "twin-rehearse"
+PLAN_FLOW = "stage-plan"
+DEPLOYMENT = "main"
+"""The two flows the runner serves, each as the deployment `<flow>/main` (`fylgja_orchestrator.edge.flows`, held
+equal by a test)."""
+
+READY = "READY"
+"""A deployment's `status` once a runner serves it."""
+
+SERVING = "fylgja-orchestrator: serving"
+"""How the line begins that the runner prints once it has made its deployments, before it serves them."""
 
 PRINCIPALS = ((API_TOKEN, "demo"), (RUNNER_TOKEN, "orchestrator"))
 """The two tokens the demonstration's core knows, each by its name in the environment, with the principal its hash
@@ -116,8 +154,35 @@ REQUEST_TIMEOUT_S = 30
 """Seconds one request is given to answer."""
 
 DOCKER_TIMEOUT_S = 60
-"""Seconds one read of the host by a child is given, of `docker`, `containerlab`, `ss` or `git`: `netbox_dev.py`'s
-bound for an inspection."""
+"""Seconds one read by a child is given: of the host, by `docker`, `containerlab`, `ss` or `git`, `netbox_dev.py`'s
+bound for an inspection; of Prefect's API's address, by `edge_dev.py api`, which asks Docker for it; and of the
+core's twins, by its CLI."""
+
+CORE_WAIT_S = 60
+"""Seconds the core is given from its start to answer its version: it was read to answer 1.23 to 1.32 s after its
+start, five times (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3", 2026-11-14), of which this
+is 45 times the slowest."""
+
+SERVE_WAIT_S = 60
+"""Seconds the runner is given from its start to serve both deployments: both read `READY` 3.66 to 5.11 s after its
+start, five times ("Prefect 3.9.2", 2026-11-14), of which this is 11.7 times the slowest. Where `PREFECT_BIND` is not
+set, `edge_dev.py` first asks Docker for the bridge's gateway, within this."""
+
+STOP_WAIT_S = 30
+"""Seconds a process is given to exit after SIGTERM before it is killed, `edge_dev.py`'s `DOWN_WAIT_S`: the runner
+was read gone 0.69 to 3.93 s after its signal and the core 0.43 to 0.55 s (the same facts), of which this is 7.6
+times the slowest."""
+
+DESTROY_TIMEOUT_S = 300
+"""Seconds one `fylgja-core twin destroy` is given: one was read to take 2.3 s (the same facts), and
+`psp/nokia_srlinux.yaml` gives a node 60 s to stop; a first value."""
+
+ASK_S = 1.0
+"""Seconds between two asks of a process just started: of the core's version, and of the runner's line, process and
+deployments."""
+
+STOP_POLL_S = 0.5
+"""Seconds between two reads of a process that was signalled, `edge_dev.end_session`'s."""
 
 TIMED_OUT = 124
 """The status `Real.run` answers for a child that outlasted its timeout and was killed, as `timeout` exits."""
@@ -157,6 +222,10 @@ shell is part of the word (a carriage return, a form feed, a no-break space, a l
 shell drops it, and no child can be given one."""
 
 LOOPBACK = re.compile(r"127\.0\.0\.1:([1-9][0-9]{0,4})")
+
+AFTER_THE_SCHEME = re.compile(r"[^\s/?#@]+(?:/[^\s?#]*)?")
+"""What follows the scheme in Prefect's API as `edge_dev.py api` prints it: a host, with its port, and a path, with no
+login, query or fragment, and no white space."""
 
 
 class Stop(Exception):
@@ -372,8 +441,10 @@ class Real:
             environ = Path(f"/proc/{pid}/environ").read_bytes()
         except OSError:
             return None
-        parts = [part.decode(errors="replace") for part in argv.split(b"\0") if part]
-        pairs = [entry.decode(errors="replace").partition("=") for entry in environ.split(b"\0") if b"=" in entry]
+        # Decoded as this process's own arguments and environment were, `surrogateescape` and all: a path that
+        # holds a byte that is not UTF-8 then reads as this script itself holds that path, and compares equal.
+        parts = [os.fsdecode(part) for part in argv.split(b"\0") if part]
+        pairs = [os.fsdecode(entry).partition("=") for entry in environ.split(b"\0") if b"=" in entry]
         return Process(parts, {name: value for name, _, value in pairs}) if parts else None
 
     def pids(self) -> list[int]:
@@ -719,7 +790,7 @@ def core_env(env: Mapping[str, str], records: Records, listen: str) -> dict[str,
     given = {name: value for name, value in step_env(env, records, listen).items() if name not in NOT_THE_CORES}
     return given | {
         "FYLGJA_DRIVER": "containerlab",
-        "FYLGJA_STORE": str(records.store),
+        STORE: str(records.store),
         "FYLGJA_PACKAGES": f"{ROOT / 'psp'}:{ROOT / 'probes'}",
         LISTEN: listen,
     }
@@ -793,14 +864,25 @@ def available_mb(meminfo: str | None) -> int | None:
     return None
 
 
+def prefect_home(local: Path) -> Path:
+    """The edge's Prefect's home under `local`, `edge_dev.py`'s: its server's and every runner's `PREFECT_HOME`, and
+    where `make prefect-up` records its server's pid, in `server.pid`."""
+    return local / "prefect"
+
+
+def recorded(path: Path, host: Host) -> int | None:
+    """The pid the file `path` names; None where there is no such file or it names none."""
+    try:
+        return int((host.text(path) or "").strip())
+    except ValueError:
+        return None
+
+
 def prefect_recorded(local: Path, host: Host) -> bool:
     """Whether `<local>/prefect/server.pid`, `make prefect-up`'s, names a live process: whose it is, and whether the
     port is its, is that target's to judge."""
-    try:
-        pid = int((host.text(local / "prefect" / "server.pid") or "").strip())
-    except ValueError:
-        return False
-    return host.process(pid) is not None
+    pid = recorded(prefect_home(local) / "server.pid", host)
+    return pid is not None and host.process(pid) is not None
 
 
 def checks(source: str, env: Mapping[str, str], *, local: Path, ref: str, host: Host) -> list[str]:
@@ -942,6 +1024,310 @@ def checks(source: str, env: Mapping[str, str], *, local: Path, ref: str, host: 
     return failing
 
 
+def serve_argv(source: str, local: Path, main: Path) -> list[str]:
+    """The words `make orchestrator-serve SOURCE=<source>` runs, which become the runner of `source`: held to the
+    recipe by a test."""
+    edge = ["python3", "-I", "scripts/edge_dev.py", "serve"]
+    return [*edge, "--source", source, "--local", str(local), "--main", str(main)]
+
+
+def api_argv(local: Path, main: Path) -> list[str]:
+    """The words `make netbox-hook` reads Prefect's API by, which print it as the host reaches it."""
+    return ["python3", "-I", "scripts/edge_dev.py", "api", "--local", str(local), "--main", str(main)]
+
+
+def is_core(process: Process | None, records: Records) -> bool:
+    """Whether a process is the demonstration's core: its command line names `CORE`, this checkout's server, and its
+    store is the demonstration's, so that a reused pid, a core of another store and another checkout's are never
+    read as it, nor ended."""
+    return process is not None and str(CORE) in process.argv and process.environ.get(STORE) == str(records.store)
+
+
+def is_runner(process: Process | None, local: Path) -> bool:
+    """Whether a process is a runner that serves the Prefect of `local`, whatever checkout it runs from: a word of
+    its command line is named `fylgja-orchestrator`, `serve` is among them, and its `PREFECT_HOME` is
+    `prefect_home(local)`. `edge_dev.py serve` is none until it has become the runner."""
+    return (
+        process is not None
+        and any(Path(word).name == RUNNER_COMMAND for word in process.argv)
+        and "serve" in process.argv
+        and process.environ.get(PREFECT_HOME) == str(prefect_home(local))
+    )
+
+
+def runners(local: Path, host: Host) -> list[tuple[int, str]]:
+    """Every runner that serves the Prefect of `local`: its pid, and the change source it serves, `""` where its
+    environment names none."""
+    found = []
+    for pid in host.pids():
+        process = host.process(pid)
+        if process is not None and is_runner(process, local):
+            found.append((pid, process.environ.get(RUNNER_SOURCE, "")))
+    return found
+
+
+def refuse_runners(source: str, records: Records, local: Path, host: Host) -> None:
+    """Stop, exit 2, beside a runner that a demonstration of `source` may not end and cannot share Prefect with,
+    each said and nothing started or stopped: one under the home that `runner.pid` does not name, which this
+    demonstration did not start; and the recorded one where it serves the other source, since either source's runner
+    serves the same two deployments. This source's own recorded runner is none: `settle` ends it."""
+    ours = recorded(records.runner_pid, host)
+    refused = []
+    for pid, serves in runners(local, host):
+        if pid != ours:
+            refused.append(
+                f"a runner this demonstration did not start serves {prefect_home(local)}, pid {pid}: stop it by its "
+                "pid"
+            )
+        elif serves != source:
+            refused.append(
+                f"the {serves if serves in SOURCES else 'other'} demonstration's runner is up, pid {pid}: one "
+                "Prefect serves one source's runner; run make demo-down first"
+            )
+    if refused:
+        raise Stop(2, refused)
+
+
+def start_recorded(
+    what: str, argv: Sequence[str], env: Mapping[str, str], pid_file: Path, log: Path, host: Host
+) -> int:
+    """`argv` started in a session of its own under `env`, in the checkout, and its pid: the log of the start
+    before is kept as `<log>.1`, so that `log` is this start's own, and the pid is written to `pid_file` at once. A
+    command that cannot be started stops the run, exit 1, said in the error's own word with the command's path and
+    the log's, and nothing of `env` or of the other words; no pid file is left."""
+    if log.exists():
+        log.replace(log.with_name(f"{log.name}.1"))
+    try:
+        pid = host.start(argv, env=env, cwd=ROOT, log=log)
+    except OSError as refused:
+        pid_file.unlink(missing_ok=True)
+        word = os.strerror(refused.errno) if refused.errno else type(refused).__name__
+        raise Stop(1, [f"the {what} was not started, {word}: its command is {argv[0]} and its log {log}"]) from None
+    pid_file.write_text(f"{pid}\n")
+    return pid
+
+
+def start_core(env: Mapping[str, str], records: Records, listen: str, host: Host) -> int:
+    """Start the demonstration's core at `listen`, in a session of its own under `core_env`, and wait until it
+    answers `GET /v1/version`, which needs no token, asked every `ASK_S`; its pid, recorded in `core.pid`.
+
+    An answer counts only while the pid still reads as the core, so that another process's answer at the port is
+    never the core's. Where the process is gone first the record is removed and the run stops, exit 1, naming its
+    log; where `CORE_WAIT_S` passes it stops, exit 1, the core left up and recorded for `down` to end."""
+    core = core_env(env, records, listen)
+    pid = start_recorded("core", [str(CORE)], core, records.core_pid, records.core_log, host)
+    begun = host.clock()
+    while host.clock() - begun < CORE_WAIT_S:
+        answered = host.ask("GET", f"http://{listen}/v1/version").status == 200
+        if not is_core(host.process(pid), records):
+            records.core_pid.unlink(missing_ok=True)
+            raise Stop(1, [f"the core exited before it answered: read {records.core_log}"])
+        if answered:
+            say(f"the core answers at {listen}, pid {pid}, its log {records.core_log}")
+            return pid
+        host.sleep(ASK_S)
+    raise Stop(
+        1,
+        [
+            f"the core did not answer at {listen} within {CORE_WAIT_S} s: read {records.core_log}; make demo-down "
+            "ends it"
+        ],
+    )
+
+
+def prefect_api(env: Mapping[str, str], local: Path, main: Path, host: Host) -> str:
+    """Prefect's API as the host reaches it, `http://<the bind>:4200/api` with no slash after it: what `edge_dev.py
+    api` prints under `env`, a step's environment, as `make netbox-hook` reads it. `Host.ask` follows no redirect,
+    so every address built on this is exact. Stop, exit 1, where the command exits other than 0 or prints anything
+    but one http address with no login, query or fragment."""
+    argv = api_argv(local, main)
+    words = " ".join(argv[:4])
+    done = host.run(argv, env=env, cwd=ROOT, capture=True, timeout=DOCKER_TIMEOUT_S)
+    if done.status != 0:
+        raise Stop(1, [f"`{words}` exited {done.status}: Prefect's API was not read"])
+    api = done.out.strip().rstrip("/")
+    scheme, _, rest = api.partition("://")
+    if scheme != "http" or not AFTER_THE_SCHEME.fullmatch(rest):
+        raise Stop(1, [f"`{words}` printed no http address alone: Prefect's API was not read"])
+    return api
+
+
+def start_runner(
+    source: str, env: Mapping[str, str], records: Records, local: Path, main: Path, listen: str, host: Host
+) -> int:
+    """Start the runner of `source` by the words `make orchestrator-serve` runs, in a session of its own under a
+    step's environment, of which `edge_dev.py` makes the runner's own, and wait until it serves; its pid, recorded
+    in `runner.pid`.
+
+    It serves once all three hold, read every `ASK_S`: this start's log holds the runner's line; the pid reads as
+    the runner, which `edge_dev.py serve` has then become; and Prefect answers both deployments by name with the
+    status `READY`, asked with the basic auth of `env`. None alone says so: a runner that has stopped leaves both
+    `READY` by name. Prefect's API is read first, and where it is not read nothing is started. Where the process is
+    gone first the record is removed and the run stops, exit 1, naming its log; where `SERVE_WAIT_S` passes it
+    stops, exit 1, the runner left up and recorded for `down` to end."""
+    given = step_env(env, records, listen)
+    api = prefect_api(given, local, main, host)
+    argv = serve_argv(source, local, main)
+    pid = start_recorded("runner", argv, given, records.runner_pid, records.runner_log, host)
+    deployments = [f"{flow}/{DEPLOYMENT}" for flow in (PLAN_FLOW, FLOW)]
+
+    def ready(deployment: str) -> bool:
+        answer = host.ask("GET", f"{api}/deployments/name/{deployment}", auth=env.get(AUTH) or None)
+        return answer.status == 200 and isinstance(answer.body, dict) and answer.body.get("status") == READY
+
+    begun = host.clock()
+    while host.clock() - begun < SERVE_WAIT_S:
+        process = host.process(pid)
+        if process is None:
+            records.runner_pid.unlink(missing_ok=True)
+            raise Stop(1, [f"the runner exited before it served: read {records.runner_log}"])
+        if (
+            SERVING in (host.text(records.runner_log) or "")
+            and is_runner(process, local)
+            and all(ready(deployment) for deployment in deployments)
+        ):
+            say(f"the runner serves {' and '.join(deployments)}, pid {pid}, its log {records.runner_log}")
+            return pid
+        host.sleep(ASK_S)
+    raise Stop(
+        1,
+        [
+            f"the runner did not serve {' and '.join(deployments)} within {SERVE_WAIT_S} s: read "
+            f"{records.runner_log}; make demo-down ends it"
+        ],
+    )
+
+
+def end(pid: int, host: Host) -> None:
+    """SIGTERM to the session `pid` leads, and SIGKILL where the process still stands `STOP_WAIT_S` later, as
+    `edge_dev.end_session`. The caller has read `pid` as a process the demonstration started."""
+    if not host.signal(pid, signal.SIGTERM):
+        return
+    begun = host.clock()
+    while host.clock() - begun < STOP_WAIT_S:
+        if host.process(pid) is None:
+            return
+        host.sleep(STOP_POLL_S)
+    host.signal(pid, signal.SIGKILL)
+
+
+def held(path: Path, what: str, ours: Callable[[Process | None], bool], host: Host) -> tuple[int, Process] | None:
+    """The pid the record `path` names with its process, where that reads as what the file says, by `ours`: the
+    one case in which a recorded pid is signalled. In any other the file is removed and one line said, and None
+    answered: a file that names no pid, a pid that names no process, and a pid that by now names another process,
+    which is left as it is. None, with nothing said, where there is no file."""
+    if host.text(path) is None:
+        return None
+    pid = recorded(path, host)
+    process = None if pid is None else host.process(pid)
+    if pid is not None and process is not None and ours(process):
+        return pid, process
+    path.unlink(missing_ok=True)
+    if pid is None:
+        say(f"{path} names no pid: the file removed")
+    elif process is None:
+        say(f"the {what} recorded in {path}, pid {pid}, is gone: the file removed")
+    else:
+        say(f"pid {pid} of {path} is not the demonstration's {what}: it is left, and the file removed")
+    return None
+
+
+def client_env(env: Mapping[str, str], listen: str) -> dict[str, str]:
+    """The core's CLI's environment: `env`, the loaded one, whose `FYLGJA_API_TOKEN` is the client's, with the
+    core's address `listen` and no CA, since the demonstration's core serves HTTP."""
+    return {name: value for name, value in env.items() if name != API_CA} | {API_ADDRESS: listen}
+
+
+def twins(env: Mapping[str, str], listen: str, host: Host) -> list[str]:
+    """The names of the twins the core at `listen` lists, by `fylgja-core twin list --json`, given its address and
+    its token by its environment alone. Stop, exit 1, where the command exits other than 0 or prints anything but a
+    list of records that each have a name."""
+    asked = "`fylgja-core twin list --json`"
+    done = host.run(
+        [str(CLI), "twin", "list", "--json"],
+        env=client_env(env, listen),
+        cwd=ROOT,
+        capture=True,
+        timeout=DOCKER_TIMEOUT_S,
+    )
+    if done.status != 0:
+        raise Stop(1, [f"{asked} exited {done.status}: the twins of the core at {listen} were not read"])
+    try:
+        listed = json.loads(done.out)
+    except ValueError:
+        listed = None
+    if not isinstance(listed, list) or not all(
+        isinstance(record, dict) and isinstance(record.get("name"), str) for record in listed
+    ):
+        raise Stop(1, [f"{asked} printed no list of twins: those of the core at {listen} were not read"])
+    return [record["name"] for record in listed]
+
+
+def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, host: Host) -> None:
+    """End what an earlier run left, so that a demonstration leaves no twin, process or listener behind it, and
+    signal nothing but a process read as the recorded runner or core (`held`).
+
+    The recorded runner is ended and `runner.pid` removed: given SIGTERM it cancels the flow run it was running,
+    whose own clean-up asks its twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14). Then,
+    where `core.pid` is there, every twin the demonstration's store holds is destroyed through a core, and the core
+    ended and `core.pid` removed: the recorded core where it is up, asked at its own listen address, and else one
+    started for the purpose at `listen`, since a twin outlives the core that made it and is listed by the next over
+    the same store. A recorded core that is up and does not list its twins is ended and replaced likewise. Each twin
+    listed is asked destroyed by `fylgja-core twin destroy`, which waits for its verdict, within
+    `DESTROY_TIMEOUT_S`; the list is then read again, and a twin still on it stops the run, exit 1, naming it, with
+    the core left up and recorded. With no `core.pid` nothing of the core's is done.
+
+    Nothing of Docker is read: a lab's container that no twin names is not this script's to find."""
+    runner = held(records.runner_pid, "runner", lambda process: is_runner(process, local), host)
+    if runner is not None:
+        end(runner[0], host)
+        records.runner_pid.unlink(missing_ok=True)
+        say(f"the runner, pid {runner[0]}, ended")
+
+    if host.text(records.core_pid) is None:
+        return
+    core = held(records.core_pid, "core", lambda process: is_core(process, records), host)
+    pid, address = 0, listen
+    left: list[str] | None = None
+    if core is not None:
+        pid, address = core[0], core[1].environ.get(LISTEN) or DEFAULT_LISTEN
+        try:
+            left = twins(env, address, host)
+        except Stop:
+            say(f"the core, pid {pid}, did not list its twins at {address}: ending it, to start one that does")
+            end(pid, host)
+    if left is None:
+        say(f"starting a core at {listen}, to end what the store of an earlier one holds")
+        pid, address = start_core(env, records, listen, host), listen
+        left = twins(env, address, host)
+
+    for name in left:
+        say(f"destroying the twin {name}, which an earlier run left")
+        destroyed = host.run(
+            [str(CLI), "twin", "destroy", name], env=client_env(env, address), cwd=ROOT, timeout=DESTROY_TIMEOUT_S
+        )
+        if destroyed.status != 0:
+            say(f"`fylgja-core twin destroy {name}` exited {destroyed.status}")
+    still = twins(env, address, host) if left else []
+    if still:
+        raise Stop(
+            1,
+            [
+                f"still standing after its destroy: {', '.join(still)}; the core, pid {pid}, is left up at "
+                f"{address}: read {records.core_log}, then run make demo-down again"
+            ],
+        )
+    end(pid, host)
+    records.core_pid.unlink(missing_ok=True)
+    say(f"the core, pid {pid}, ended")
+
+
+def make_words(target: str, local: Path, *variables: str) -> list[str]:
+    """The words a make target is run by, in the checkout: `LOCAL` given, since `local` is the main checkout's
+    whatever checkout this is, then the target's own variables."""
+    return ["make", "--no-print-directory", target, f"LOCAL={local}", *variables]
+
+
 def locked(local: Path, host: Host) -> None:
     """Hold `<local>/demo/lock` until this process ends: one demonstration command runs at a time, and a second
     stops here, exit 2."""
@@ -965,10 +1351,60 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
 
 
 def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host: Host) -> int:
-    """Take the lock. What `down` ends is not built yet: it says so, and is never exit 0, which would say that all
-    is ended; nothing it is given but `local` is read yet."""
+    """Take the lock, and end what the demonstration recorded under `local` started: 0 where everything it had to
+    end is ended, and where no demonstration is recorded, `source` being absent, with nothing done.
+
+    Three acts, each tried whatever the one before did, a failure of each said and the exit 1 where any failed:
+    `settle`, the runner, every twin and the core; `make prefect-down`, only where `prefect.pid` names the pid
+    `make prefect-up` has recorded, the server it started for the demonstration, the record then removed, and a
+    record that names any other removed with nothing stopped; and `make <source>-down`, with `PURGE=1` where
+    `purge`. `source` is kept, so that a later `down` with `purge` knows whose volumes to remove. `main` is taken as
+    `up` takes it and is not read: each target finds the main checkout itself."""
     locked(local, host)
-    return fail("down: not built yet, and nothing was ended")
+    kept = records(local)
+    named = host.text(kept.source)
+    if named is None:
+        say(f"no demonstration is recorded under {kept.source.parent}: nothing to end")
+        return 0
+    source = named.strip()
+    env = loaded(local, environ, host)
+    listen = listen_of(env)
+    failed: list[str] = []
+
+    def make(target: str, *variables: str) -> bool:
+        made = host.run(make_words(target, local, *variables), env=step_env(env, kept, listen), cwd=ROOT)
+        if made.status != 0:
+            failed.append(f"make {target} exited {made.status}")
+        return made.status == 0
+
+    try:
+        settle(env, kept, local, listen, host)
+    except Stop as stop:
+        failed += stop.lines
+
+    if host.text(kept.prefect_pid) is not None:
+        server = prefect_home(local) / "server.pid"
+        ours = recorded(kept.prefect_pid, host)
+        if ours is None or ours != recorded(server, host):
+            kept.prefect_pid.unlink(missing_ok=True)
+            say(
+                f"{kept.prefect_pid} does not name the Prefect server {server} names: whatever serves there is left, "
+                "and the file removed"
+            )
+        elif make("prefect-down"):
+            kept.prefect_pid.unlink(missing_ok=True)
+
+    if source in SOURCES:
+        make(f"{source}-down", *(["PURGE=1"] if purge else []))
+    else:
+        failed.append(f"{kept.source} names neither {' nor '.join(SOURCES)}: no source was stopped")
+
+    for line in failed:
+        fail(line)
+    if failed:
+        return fail("down: not everything was ended: read the lines above, then run make demo-down again")
+    say(f"the {source} demonstration is ended: its records stay under {kept.source.parent}")
+    return 0
 
 
 def parser() -> argparse.ArgumentParser:

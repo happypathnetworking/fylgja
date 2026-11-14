@@ -196,7 +196,8 @@ class FakeHost:
         return demo.Done(0, "".join(f"{each}\n" for each in ids))
 
     def network_ids(self, ran: Ran) -> Any:
-        """What `docker network ls -q` prints: each network's short id, twelve hex digits, a line each."""
+        """What `docker network ls --format '{{.ID}}'` prints, the local driver's own question: each network's
+        short id, twelve hex digits, a line each."""
         return demo.Done(0, "".join(f"{short_id(name)}\n" for name, _ in self.networks))
 
     def networks_inspected(self, ran: Ran) -> Any:

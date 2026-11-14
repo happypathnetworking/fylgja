@@ -7,15 +7,22 @@ checkout> --ref <branch or empty>` and `python3 -I scripts/demo.py down --local 
 [--purge]`. The standard library alone; no script imports another, and this one is never installed.
 
 - `up` holds `<local>/demo/lock` while it runs and reads the environment, the shell's overlaid by `<local>/.env`.
-  It ends what an earlier run left (`settle`) and stops the other source where that is up (`alone`), since either
-  starts the same two deployments; then it judges the host's preconditions, `checks`: what only the host's owner
-  can give. Every one that fails is said in a line of its own, exit 2, and nothing is started by them. Where they
-  pass it writes what can be generated (`prepare`), records its source, pulls the images the seeded twin runs where
-  Docker holds none (`pull`), and takes its source's runbook in order (`STEPS`): each step the make target the
-  runbook names, run as a child with `<local>/.env` read again before it, and the core and the runner started
-  where the runbook has them. Once the source is up it reads Docker's networks as the local driver does and stops,
-  the source left up, where they leave the lab pool no /24 (`pool_checked`). A step that fails is exit 1, naming
-  the step and what is left up. It ends at the change opened.
+  It judges the host's preconditions, `checks`, what only the host's owner can give, in two parts. First those no
+  stop can cure: every one that fails is said in a line of its own, exit 2, and nothing is settled, stopped or
+  started for a run that could never start. Then it ends what an earlier run left (`settle`) and stops the other
+  source where that is up (`alone`), since either starts the same two deployments, and judges the host's room, its
+  memory and its ports, with both done. Where that passes it writes what can be generated (`prepare`), records its
+  source, pulls the images the seeded twin runs where Docker holds none (`pull`), and takes its source's runbook
+  in order (`STEPS`): each step the make target the runbook names, run as a child with `<local>/.env` read again
+  before it, and the core and the runner started where the runbook has them. Once the source is up it reads
+  Docker's networks as the local driver does and stops, the source left up, where they leave the lab pool no /24
+  (`pool_checked`). From `settle` on, every way out says last what is left up (`left_up`); a step that fails is
+  exit 1, naming the step. It ends at the change opened.
+- A make target is given no variable but its own. make reads variables from its environment and from what a make
+  above it hands on, so every make child, each step, the other source's stop and `down`'s targets, is given the
+  loaded environment without make's own names and without every name the `Makefile` assigns by `?=` (`make_env`),
+  and its variables on its command line alone; a stop that is no purge says `PURGE=` there (`stop_words`). The
+  names the caller set that no target is given are said once, and never a value.
 - `down` holds the same lock, and ends what the demonstration `<local>/demo/source` records started (`settle`,
   then the Prefect server and the source by their own targets): the runner and the core by their recorded pids,
   each only where the pid still reads as that process, and through the core every twin its store holds. It is exit
@@ -128,6 +135,24 @@ its IPAM config, a list of objects or `null`. This script's own copy of `fylgja_
 
 PLAIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 """A network's name that a refusal writes as it is; any other it writes as a JSON string, as the driver's does."""
+
+NETWORK_IDS = ("docker", "network", "ls", "--format", "{{.ID}}")
+"""The local driver's own words for the ids of Docker's networks (`fylgja_core.containerlab.driver`,
+`_docker_networks`), held to its source by a test."""
+
+MAKES_OWN = ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKELEVEL", "GNUMAKEFLAGS", "MAKEFILES")
+"""What make reads of its own from its environment: the flags and the command line's variables a make above it hands
+on, its depth, and makefiles to read before the checkout's. No make child of the script's is given one
+(`make_env`)."""
+
+MAKE_VARIABLES = (
+    "LOCAL", "INFRAHUB_VERSION", "INFRAHUB_SDK_VERSION", "REF", "SEED_BRANCH", "PURGE", "PROPOSED_CHANGE",
+    "NETBOX_VERSION", "NETBOX_DOCKER_VERSION", "NETBOX_BRANCHING_VERSION", "NETBOX_BRANCH", "NETBOX_TAG", "SOURCE",
+    "IMAGE", "DRIVER",
+)  # fmt: skip
+"""Every name the `Makefile` assigns by `?=`, in its order, held to it by a test: make takes each from its
+environment where that holds it, so no make child of the script's is given one (`make_env`), and a target's
+variables are its command line's alone."""
 
 IMAGES = ("ghcr.io/nokia/srlinux:24.7.1", "alpine:3.24.2")
 """The images the seeded twin runs, its nodes' and its probe hosts', as `psp/nokia_srlinux.yaml` and
@@ -844,6 +869,42 @@ def step_env(env: Mapping[str, str], records: Records, listen: str) -> dict[str,
     return given | {API_ADDRESS: listen, TOKENS: str(records.tokens)}
 
 
+def make_env(env: Mapping[str, str], records: Records, listen: str) -> dict[str, str]:
+    """Every make child's environment, each step's, the other source's stop and `down`'s targets alike: a step's
+    (`step_env`) without make's own names (`MAKES_OWN`) and without every name the `Makefile` would take from it
+    (`MAKE_VARIABLES`). `env` is the loaded environment, `<local>/.env` already laid over the shell's, so neither
+    can put one back.
+
+    make reads a variable from its environment and hands a command line's on in `MAKEFLAGS`: given the caller's, a
+    `PURGE=1` exported in a shell, written in `<local>/.env` or given to `make netbox-demo` would make a stop that
+    says "its volumes kept" remove them, a `SOURCE` drop a step, a branch's name have a seed delete and build
+    another branch, and a flag pass over a failure. So a target's variables are those of its command line and no
+    other (`make_words`, `stop_words`)."""
+    given = step_env(env, records, listen)
+    return {name: value for name, value in given.items() if name not in MAKES_OWN and name not in MAKE_VARIABLES}
+
+
+def not_passed_on(env: Mapping[str, str], given: Sequence[str]) -> list[str]:
+    """The names of `MAKE_VARIABLES` that `env`, the loaded environment, gives a value and that no make target will
+    see so: all but `LOCAL`, which the script gives every target itself, and but one whose very word, `NAME=value`,
+    is among `given`, the variables the command gives its targets on their command lines."""
+    return [
+        name
+        for name in MAKE_VARIABLES
+        if name != "LOCAL" and env.get(name) and f"{name}={env[name]}" not in given
+    ]
+
+
+def say_not_passed_on(env: Mapping[str, str], given: Sequence[str]) -> None:
+    """Say once, by their names and never a value, the make variables the caller set that no target is given."""
+    names = not_passed_on(env, given)
+    if names:
+        say(
+            f"not passed on to the make targets: {', '.join(names)}; the demonstration runs each at the Makefile's "
+            "own value"
+        )
+
+
 def core_env(env: Mapping[str, str], records: Records, listen: str) -> dict[str, str]:
     """The demonstration's core's environment: a step's, with the local driver, the demonstration's own store, this
     checkout's packages and the listen address, and with no certificate, key or lease. `<local>/.env`'s own token
@@ -909,20 +970,21 @@ def pool_of(env: Mapping[str, str]) -> IPv4Network:
     return network
 
 
-def docker_networks(host: Host) -> str:
-    """Docker's answer for every network of the host's in `FORMAT`, asked as the local driver asks
-    (`fylgja_core.containerlab.driver`, `_docker_networks`): the networks' ids, then one `docker network inspect` of
-    them all, never one a name; `""` where Docker lists none. Each is given `DOCKER_TIMEOUT_S`, and one that exits
-    other than 0 stops the run, exit 1, naming the command and its status."""
-    listing = ["docker", "network", "ls", "-q"]
-    listed = host.run(listing, capture=True, timeout=DOCKER_TIMEOUT_S)
+def docker_networks(env: Mapping[str, str], host: Host) -> str:
+    """Docker's answer for every network of the host's in `FORMAT`, asked in the local driver's own words
+    (`fylgja_core.containerlab.driver`, `_docker_networks`): the networks' ids (`NETWORK_IDS`), then one `docker
+    network inspect` of them all, never one a name; `""` where Docker lists none. Each is run under `env`, the
+    loaded environment, as the checks ask Docker and as the core's driver will, so that it is the same daemon that
+    is asked; each is given `DOCKER_TIMEOUT_S`, and one that exits other than 0 stops the run, exit 1, naming the
+    command and its status."""
+    listed = host.run(NETWORK_IDS, env=env, capture=True, timeout=DOCKER_TIMEOUT_S)
     if listed.status != 0:
-        raise Stop(1, [f"`{' '.join(listing)}` exited {listed.status}: Docker's networks were not read"])
+        raise Stop(1, [f"`{' '.join(NETWORK_IDS)}` exited {listed.status}: Docker's networks were not read"])
     ids = listed.out.split()
     if not ids:
         return ""
     inspected = host.run(
-        ["docker", "network", "inspect", "--format", FORMAT, *ids], capture=True, timeout=DOCKER_TIMEOUT_S
+        ["docker", "network", "inspect", "--format", FORMAT, *ids], env=env, capture=True, timeout=DOCKER_TIMEOUT_S
     )
     if inspected.status != 0:
         raise Stop(1, [f"`docker network inspect` exited {inspected.status}: Docker's networks were not read"])
@@ -977,14 +1039,14 @@ def refusal(pool: IPv4Network, holding: Sequence[tuple[str, IPv4Network]]) -> st
     )
 
 
-def pool_checked(source: str, pool: IPv4Network, host: Host) -> None:
-    """Once `source` is up, read Docker's networks and stop, exit 2, where they leave `pool` no /24: where the local
-    driver would refuse the twin's create, and only there. The lines are the driver's own refusal, which names each
-    network that overlaps the pool and the setting, and that the source is left up. Networks that overlap the pool
-    while a /24 of it is free stop nothing, and nothing is said of them. An answer of Docker's that is not in the
-    form asked for stops the run, exit 1."""
+def pool_checked(source: str, pool: IPv4Network, env: Mapping[str, str], host: Host) -> None:
+    """Once `source` is up, read Docker's networks, under `env`, and stop, exit 2, where they leave `pool` no /24:
+    where the local driver would refuse the twin's create, and only there. The lines are the driver's own refusal,
+    which names each network that overlaps the pool and the setting, and that the source is left up. Networks that
+    overlap the pool while a /24 of it is free stop nothing, and nothing is said of them. An answer of Docker's that
+    is not in the form asked for stops the run, exit 1."""
     try:
-        found = networks(docker_networks(host))
+        found = networks(docker_networks(env, host))
     except (ValueError, TypeError, KeyError, AttributeError):
         raise Stop(1, ["`docker network inspect` printed what is not read: Docker's networks were not read"]) from None
     if chosen(pool, [subnet for _, subnet in found]) is None:
@@ -1049,115 +1111,145 @@ def recorded(path: Path, host: Host) -> int | None:
         return None
 
 
+def is_prefect(process: Process | None, local: Path) -> bool:
+    """Whether a process is the Prefect server of `local`, as `make prefect-up` itself reads one up already
+    (`edge_dev.is_ours`, reproduced and held to it by a test): a word of its command line is named `prefect`,
+    `server` is among them, and its `PREFECT_HOME` is `prefect_home(local)`. A pid another process has since taken,
+    another home's server and a worker are none."""
+    return (
+        process is not None
+        and any(Path(word).name == "prefect" for word in process.argv)
+        and "server" in process.argv
+        and process.environ.get(PREFECT_HOME) == str(prefect_home(local))
+    )
+
+
 def prefect_recorded(local: Path, host: Host) -> bool:
-    """Whether `<local>/prefect/server.pid`, `make prefect-up`'s, names a live process: whose it is, and whether the
-    port is its, is that target's to judge."""
+    """Whether `<local>/prefect/server.pid`, `make prefect-up`'s, names this `local`'s Prefect server, up
+    (`is_prefect`): the one case in which that target starts none, and in which port 4200 is its own."""
     pid = recorded(prefect_home(local) / "server.pid", host)
-    return pid is not None and host.process(pid) is not None
+    return pid is not None and is_prefect(host.process(pid), local)
 
 
-def checks(source: str, env: Mapping[str, str], *, local: Path, ref: str, host: Host) -> list[str]:
+def checks(
+    source: str, env: Mapping[str, str], *, local: Path, ref: str, host: Host, room: bool | None = None
+) -> list[str]:
     """The host's preconditions for a demonstration of `source` that are not met, a sentence each and none where all
-    are: what only the host's owner can give, judged before anything is started. `env` is the loaded environment,
-    and `ref` the branch Infrahub registers this repository at.
+    are: what only the host's owner can give. `env` is the loaded environment, and `ref` the branch Infrahub
+    registers this repository at.
 
-    In order: the venv's commands; the tools on PATH; Docker's daemon, its Compose plugin and containerlab, each
-    answering; the two groups, but for root; the AppArmor widening, where the profile is; memory for the twin and
-    the edge, and for the source where it is not up; the ports of the core, the edge's Prefect and the source, each
-    free but where its own holder is recorded or running; the node login in `<local>/.env`; a listen address on
-    loopback; a pool that is one; and for Infrahub a branch that names a commit.
+    They are of two parts, which `up` asks for apart, and which keep one order when asked together:
 
-    A check that needs a tool is left out where the tool is not on PATH, which is said, and what rests on whether
-    the source is up, the memory and the source's port, where the Docker daemon does not say."""
+    - **what no stop can cure** (`room=False`), asked before anything is settled or stopped, so that nothing is
+      stopped for a run that could never start: the venv's commands; the tools on PATH; Docker's daemon, its Compose
+      plugin and containerlab, each answering; the two groups, but for root; the AppArmor widening, where the
+      profile is; the node login in `<local>/.env`; a listen address on loopback; a pool that is one; and for
+      Infrahub a branch that names a commit;
+    - **the host's room** (`room=True`), asked once an earlier run is settled and the other source stopped, since
+      each holds some of it: memory for the twin and the edge, and for the source where it is not up; and the ports
+      of the core, the edge's Prefect and the source, each free but where its own holder is recorded or running.
+
+    With `room` None both are asked, the room's sentences in their place, after the AppArmor widening's.
+
+    A check that needs a tool is left out where the tool is not on PATH, which the first part says, and what rests
+    on whether the source is up, the memory and the source's port, where the Docker daemon does not say. Asked for
+    alone, the room takes the daemon to answer, the first part having asked it."""
     failing: list[str] = []
     listen = listen_of(env)
+    cure, judge_room = room is not True, room is not False
 
     def read(*argv: str, cwd: Path | None = None) -> Done:
         return host.run(argv, env=env, cwd=cwd, capture=True, timeout=DOCKER_TIMEOUT_S)
 
-    lacking = [name for name in COMMANDS if host.which(str(VENV / "bin" / name)) is None]
-    if lacking:
-        failing.append(f"{VENV} lacks {', '.join(lacking)}: run make venv")
-
     on_path = {name: host.which(name) is not None for name in TOOLS}
-    failing += [f"{name} is not on PATH" for name in TOOLS if not on_path[name]]
-
     answers = on_path["docker"]
-    if on_path["docker"]:
-        info = read("docker", "info")
-        if info.status != 0:
-            answers = False
-            failing.append(f"`docker info` exited {info.status}: the Docker daemon does not answer this user")
-        compose = read("docker", "compose", "version")
-        if compose.status != 0:
-            failing.append(f"`docker compose version` exited {compose.status}: Docker's Compose plugin is needed")
-    if on_path["containerlab"]:
-        version = read("containerlab", "version")
-        if version.status != 0:
-            failing.append(f"`containerlab version` exited {version.status}")
+    if cure:
+        lacking = [name for name in COMMANDS if host.which(str(VENV / "bin" / name)) is None]
+        if lacking:
+            failing.append(f"{VENV} lacks {', '.join(lacking)}: run make venv")
 
-    if host.euid() != 0:
-        held = host.groups()
-        for group in GROUPS:
-            gid = host.gid(group)
-            if gid is None:
-                failing.append(f"the host has no group {group}")
-            elif gid not in held:
-                failing.append(
-                    f"this process is not in the group {group}: add the user to it and log in again, since a group "
-                    "added reaches no process begun before it"
-                )
+        failing += [f"{name} is not on PATH" for name in TOOLS if not on_path[name]]
 
-    missing = apparmor(host)
-    if missing:
-        failing.append(
-            f"{APPARMOR_LOCAL} lacks {quoted(missing)}: SR Linux's rsyslogd needs them on Ubuntu; add them as root "
-            f'and reload the profile with apparmor_parser -r {APPARMOR_PROFILE} (design/verified-facts.md, "Ubuntu '
-            'hosts")'
-        )
+        if on_path["docker"]:
+            info = read("docker", "info")
+            if info.status != 0:
+                answers = False
+                failing.append(f"`docker info` exited {info.status}: the Docker daemon does not answer this user")
+            compose = read("docker", "compose", "version")
+            if compose.status != 0:
+                failing.append(f"`docker compose version` exited {compose.status}: Docker's Compose plugin is needed")
+        if on_path["containerlab"]:
+            version = read("containerlab", "version")
+            if version.status != 0:
+                failing.append(f"`containerlab version` exited {version.status}")
 
-    source_up: bool | None = None  # None: not read
-    if answers:
-        listed = read("docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={PROJECTS[source]}")
-        if listed.status != 0:
-            failing.append(f"`docker ps` exited {listed.status}: whether {source} is up was not read")
-        else:
-            source_up = bool(listed.out.split())
-
-    if source_up is not None:
-        have = available_mb(host.text(Path("/proc/meminfo")))
-        need = TWIN_MB + (0 if source_up else SOURCE_MB[source])
-        if have is None:
-            failing.append("/proc/meminfo names no MemAvailable: the memory available was not read")
-        elif have < need:
-            parts = (
-                f"for the twin and the edge, {source} being up"
-                if source_up
-                else f"{SOURCE_MB[source]} for {source}, which is not up, and {TWIN_MB} for the twin and the edge"
-            )
-            failing.append(f"{have} MiB of memory is available and the {source} demonstration needs {need}: {parts}")
-
-    if on_path["ss"]:
-        heard = read("ss", "-Hltn")
-        if heard.status != 0:
-            failing.append(f"`ss -Hltn` exited {heard.status}: the listeners were not read")
-        else:
-            needed: list[tuple[int, str]] = []
-            port = port_of(listen)
-            if port is not None:
-                needed.append((port, "the core"))
-            if not prefect_recorded(local, host):
-                needed.append((PREFECT_PORT, "the edge's Prefect"))
-            if source_up is False:
-                needed.append((PORTS[source], source))
-            for port, needs in needed:
-                found = listeners(heard.out, port)
-                if found:
+        if host.euid() != 0:
+            held = host.groups()
+            for group in GROUPS:
+                gid = host.gid(group)
+                if gid is None:
+                    failing.append(f"the host has no group {group}")
+                elif gid not in held:
                     failing.append(
-                        f"port {port} is listened on at {found[0].rpartition(':')[0]} by a process the demonstration "
-                        f"did not start, and {needs} needs it"
+                        f"this process is not in the group {group}: add the user to it and log in again, since a "
+                        "group added reaches no process begun before it"
                     )
 
+        missing = apparmor(host)
+        if missing:
+            failing.append(
+                f"{APPARMOR_LOCAL} lacks {quoted(missing)}: SR Linux's rsyslogd needs them on Ubuntu; add them as "
+                f'root and reload the profile with apparmor_parser -r {APPARMOR_PROFILE} (design/verified-facts.md, '
+                '"Ubuntu hosts")'
+            )
+
+    if judge_room:
+        source_up: bool | None = None  # None: not read
+        if answers:
+            listed = read(*up_argv(source))
+            if listed.status != 0:
+                failing.append(f"`docker ps` exited {listed.status}: whether {source} is up was not read")
+            else:
+                source_up = bool(listed.out.split())
+
+        if source_up is not None:
+            have = available_mb(host.text(Path("/proc/meminfo")))
+            need = TWIN_MB + (0 if source_up else SOURCE_MB[source])
+            if have is None:
+                failing.append("/proc/meminfo names no MemAvailable: the memory available was not read")
+            elif have < need:
+                parts = (
+                    f"for the twin and the edge, {source} being up"
+                    if source_up
+                    else f"{SOURCE_MB[source]} for {source}, which is not up, and {TWIN_MB} for the twin and the edge"
+                )
+                failing.append(
+                    f"{have} MiB of memory is available and the {source} demonstration needs {need}: {parts}"
+                )
+
+        if on_path["ss"]:
+            heard = read("ss", "-Hltn")
+            if heard.status != 0:
+                failing.append(f"`ss -Hltn` exited {heard.status}: the listeners were not read")
+            else:
+                needed: list[tuple[int, str]] = []
+                port = port_of(listen)
+                if port is not None:
+                    needed.append((port, "the core"))
+                if not prefect_recorded(local, host):
+                    needed.append((PREFECT_PORT, "the edge's Prefect"))
+                if source_up is False:
+                    needed.append((PORTS[source], source))
+                for port, needs in needed:
+                    found = listeners(heard.out, port)
+                    if found:
+                        failing.append(
+                            f"port {port} is listened on at {found[0].rpartition(':')[0]} by a process the "
+                            f"demonstration did not start, and {needs} needs it"
+                        )
+
+    if not cure:
+        return failing
     path = local / ".env"
     if host.text(path) is None:
         failing.append(f"{path} is not there: make it, mode 0600, with {' and '.join(LOGIN)} (.env.example)")
@@ -1666,6 +1758,13 @@ def make_words(target: str, local: Path, *variables: str) -> list[str]:
     return ["make", "--no-print-directory", target, f"LOCAL={local}", *variables]
 
 
+def stop_words(source: str, local: Path, purge: bool = False) -> list[str]:
+    """The words a source is stopped by: its own `down` target, with `PURGE=1` where `purge` and `PURGE=` where
+    not, on the command line, which make takes before anything its environment holds: a stop that is no purge says
+    so itself."""
+    return make_words(f"{source}-down", local, "PURGE=1" if purge else "PURGE=")
+
+
 class Step(NamedTuple):
     """One step of a source's runbook: a make target with its variables (`kind` `make`), or the start of the core or
     of the runner (`core`, `runner`), which no target makes in the background; and how many times it is asked
@@ -1736,14 +1835,18 @@ def words_of(step: Step, ref: str) -> str:
     return " ".join(["make", step.target, *variables_of(step, ref)])
 
 
-def pull(host: Host) -> None:
+def pull(env: Mapping[str, str], host: Host) -> None:
     """Pull each image of `IMAGES` that Docker does not hold, so that no pull counts against a twin's deploy: each
     is asked of Docker, `docker image inspect`, which exits 0 for one it holds and 1 for one it does not, and one it
-    does not hold is pulled, `docker pull`, printing as it will, within `PULL_TIMEOUT_S`. A pull that exits other
-    than 0, and a read that exits neither 0 nor 1, stops the run, exit 1, naming the command and its status."""
+    does not hold is pulled, `docker pull`, printing as it will, within `PULL_TIMEOUT_S`; each under `env`, the
+    loaded environment, as the checks ask Docker and as the core's driver will. A pull that exits other than 0, and
+    a read that exits neither 0 nor 1, stops the run, exit 1, naming the command and its status."""
     for ref in IMAGES:
         held = host.run(
-            ["docker", "image", "inspect", "--format", "{{.Id}}", ref], capture=True, timeout=DOCKER_TIMEOUT_S
+            ["docker", "image", "inspect", "--format", "{{.Id}}", ref],
+            env=env,
+            capture=True,
+            timeout=DOCKER_TIMEOUT_S,
         )
         if held.status == 0:
             continue
@@ -1752,7 +1855,7 @@ def pull(host: Host) -> None:
                 1, [f"`docker image inspect {ref}` exited {held.status}: whether Docker holds the image was not read"]
             )
         say(f"pulling {ref}, which Docker does not hold")
-        pulled = host.run(["docker", "pull", ref], timeout=PULL_TIMEOUT_S)
+        pulled = host.run(["docker", "pull", ref], env=env, timeout=PULL_TIMEOUT_S)
         if pulled.status != 0:
             raise Stop(1, [f"`docker pull {ref}` exited {pulled.status}: the image the twin runs was not pulled"])
 
@@ -1765,10 +1868,10 @@ def up_argv(source: str) -> list[str]:
 def alone(source: str, env: Mapping[str, str], records: Records, local: Path, listen: str, host: Host) -> None:
     """Stop the other source where it is up, before `source` is brought up: either source, up, starts
     `stage-plan/main` and `twin-rehearse/main` by name, Infrahub's task workers and NetBox's webhook. Where any
-    container of the other's Compose project runs, that is said in one line and its own `down` target is run, with
-    no `PURGE`, so its volumes are kept; a `down` that exits other than 0 stops the run, exit 1, with nothing else
-    started. Where `docker` is not on PATH, or its read exits other than 0, nothing is stopped: the checks say what
-    is wrong with Docker."""
+    container of the other's Compose project runs, that is said in one line and its own `down` target is run, by
+    `stop_words`, whose `PURGE=` no environment can undo, under a make child's environment (`make_env`): its volumes
+    are kept. A `down` that exits other than 0 stops the run, exit 1, with nothing else started. Where `docker` is
+    not on PATH, or its read exits other than 0, nothing is stopped: the checks say what is wrong with Docker."""
     if host.which("docker") is None:
         return
     for other in SOURCES:
@@ -1778,10 +1881,11 @@ def alone(source: str, env: Mapping[str, str], records: Records, local: Path, li
         if listed.status != 0 or not listed.out.split():
             continue
         say(f"{other} is up: stopping it, its volumes kept, since it starts the same deployments")
-        target = f"{other}-down"
-        stopped = host.run(make_words(target, local), env=step_env(env, records, listen), cwd=ROOT)
+        stopped = host.run(stop_words(other, local), env=make_env(env, records, listen), cwd=ROOT)
         if stopped.status != 0:
-            raise Stop(1, [f"make {target} exited {stopped.status}: {other} is still up, and nothing was started"])
+            raise Stop(
+                1, [f"make {other}-down exited {stopped.status}: {other} is still up, and nothing was started"]
+            )
 
 
 def locked(local: Path, host: Host) -> None:
@@ -1792,25 +1896,43 @@ def locked(local: Path, host: Host) -> None:
         raise Stop(2, [f"another demonstration command holds {lock}: one runs at a time"])
 
 
-def left_up(source: str | None, records: Records, local: Path, host: Host) -> str:
-    """The last line of an `up` that ends before a verdict: what stands, and the target that ends it. `source`, where
-    a step of it was asked, since it may be up in part; the core and the runner, each where its recorded pid still
-    reads as it; and the edge's Prefect, where a live server is recorded, whoever started it: `make demo-down` ends
-    the one the demonstration started, and no other."""
-    standing = [] if source is None else [source]
+def left_up(source: str, env: Mapping[str, str], records: Records, local: Path, host: Host) -> str:
+    """The last line of an `up` that ends before a verdict: what stands, and the target that ends it.
+
+    `source`, where a container of its Compose project runs, read of Docker now (`up_argv`) and not taken from what
+    the run did, since it may have been up before; where Docker does not say, that is said. The core and the
+    runner, each where its recorded pid still reads as it. The edge's Prefect, where this `local`'s server is
+    recorded (`prefect_recorded`), whoever started it: `make demo-down` ends the one the demonstration started, and
+    no other. A core that does not listen at its address (`owns`) is named so, and as what `make demo-down` leaves:
+    it reads no twin through a core it cannot show to be listening, so that one is ended by its pid."""
+    standing = []
+    listed = host.run(up_argv(source), env=env, capture=True, timeout=DOCKER_TIMEOUT_S)
+    if listed.status != 0:
+        standing.append(f"{source}, if it is up, which Docker did not say")
+    elif listed.out.split():
+        standing.append(source)
+    deaf: int | None = None
     core = recorded(records.core_pid, host)
-    if core is not None and is_core(host.process(core), records):
-        standing.append(f"the core (pid {core})")
+    process = None if core is None else host.process(core)
+    if core is not None and process is not None and is_core(process, records):
+        if owns(core, process.environ.get(LISTEN) or DEFAULT_LISTEN, host):
+            standing.append(f"the core (pid {core})")
+        else:
+            deaf = core
+            standing.append(f"the core (pid {core}), which does not listen")
     if prefect_recorded(local, host):
         standing.append("the edge's Prefect")
     runner = recorded(records.runner_pid, host)
     if runner is not None:
-        process = host.process(runner)
-        if is_runner(process, local) or is_becoming_runner(process, local):
+        serving = host.process(runner)
+        if is_runner(serving, local) or is_becoming_runner(serving, local):
             standing.append(f"the runner (pid {runner})")
     if not standing:
         return "nothing the demonstration starts is left up"
-    return f"left up: {', '.join(standing)}; make demo-down ends what the demonstration started"
+    ends = "make demo-down ends what the demonstration started"
+    if deaf is not None:
+        ends += f", but for the core, which it leaves while it does not listen: end it by its pid, {deaf}"
+    return f"left up: {', '.join(standing)}; {ends}"
 
 
 def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str], host: Host) -> int:
@@ -1818,22 +1940,28 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
 
     - the lock, and the environment, `<local>/.env` laid over `environ`;
     - `refuse_runners`: beside a runner it may not end, nothing is started or stopped, exit 2;
-    - `settle`, so that an earlier run's runner, core and twins hold no port or memory the checks then judge; left
-      out where the listen address is none a port is read from, which the checks say;
+    - the checks no stop can cure (`checks`, `room=False`), with `notices` said first: exit 2 with every one not
+      met, and nothing settled, stopped or started, so that nothing is stopped for a run that could never start;
+    - once, the make variables the caller set that no target is given, by their names (`say_not_passed_on`);
+    - `settle`, so that an earlier run's runner, core and twins hold no port or memory; the listen address reads,
+      the checks having said so;
     - `alone`: the other source stopped where it is up;
-    - `checks`, with `notices` said first: exit 2 with every precondition not met, and nothing started by them;
+    - the checks of the host's room (`checks`, `room=True`), its memory and its ports, judged with the earlier run
+      settled and the other source stopped: exit 2 with each not met;
     - `prepare`, then the record of `source`, then `pull`;
     - the steps of `STEPS[source]`, each said first, `<local>/.env` read again before each: a make step run as a
-      child under `step_env`, printing as it will, with no bound of the script's, and asked again while it has asks
-      left, each further ask said; the core and the runner started (`start_core`, `start_runner`). After the first,
-      the pool (`pool_checked`). After `make orchestrator-env`, the token file is given the lines it lacks
-      (`token_lines`), so the core is started over a file that lists both its tokens. Before `make prefect-up`
-      whether a live server is recorded is read, and after it `prefect.pid` is written where none was and one is,
-      whatever the step's status: only a server the step started is the demonstration's to end.
+      child under `make_env`, its variables its command line's alone, printing as it will, with no bound of the
+      script's, and asked again while it has asks left, each further ask said; the core and the runner started
+      (`start_core`, `start_runner`). After the first, the pool (`pool_checked`). After `make orchestrator-env`, the
+      token file is given the lines it lacks (`token_lines`), so the core is started over a file that lists both
+      its tokens. Before `make prefect-up` whether this `local`'s server is recorded is read, and after it
+      `prefect.pid` is written where none was and one is, whatever the step's status: only a server the step
+      started is the demonstration's to end.
 
-    A step that fails stops the run, exit 1: `step <i>, make <target>, exited <n>`, or the core's or the runner's own
-    lines after its step, and last what is left up with `make demo-down` (`left_up`); no later step is run. A line a
-    step wrote into `<local>/.env` that is not read stops it at the next read, exit 2, with the same last line.
+    From `settle` on, every way out says last what is left up, with `make demo-down` (`left_up`): a step that fails,
+    exit 1, `step <i>, make <target>, exited <n>`, or the core's or the runner's own lines after its step, no later
+    step being run; the pool's refusal and a check of the room, exit 2; a line a step wrote into `<local>/.env`
+    that is not read, exit 2 at the next read; and an error of the host's, exit 1, in its own word.
 
     Until the verdict is read, a run that opens its change says so and is exit 1. `main`, the main checkout, is what
     the runner's words and the read of Prefect's API are given (`serve_argv`, `api_argv`); each target finds the main
@@ -1843,79 +1971,69 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
     kept = records(local)
     listen = listen_of(env)
     refuse_runners(source, kept, local, host)
-    if port_of(listen) is not None:
-        settle(env, kept, local, listen, host)
-    alone(source, env, kept, local, listen, host)
     for line in notices(host):
         say(line)
-    failing = checks(source, env, local=local, ref=ref, host=host)
+    failing = checks(source, env, local=local, ref=ref, host=host, room=False)
     if failing:
         raise Stop(2, failing)
-    say("the host's checks passed")
-    pool = pool_of(env)
-    prepare(local, env, listen, host)
-    kept.source.write_text(f"{source}\n")
-
     steps = STEPS[source]
-    begun: str | None = None
-
-    def stop(status: int, lines: Sequence[str]) -> Stop:
-        return Stop(status, [*lines, left_up(begun, kept, local, host)])
-
-    def read_again() -> dict[str, str]:
-        try:
-            return loaded(local, environ, host)
-        except Stop as unread:
-            raise stop(unread.status, unread.lines) from None
+    say_not_passed_on(env, ["PURGE=", *(word for step in steps for word in variables_of(step, ref))])
 
     def made(number: int, step: Step) -> None:
-        """A make step, asked until it exits 0 or has no ask left."""
+        """A make step, asked until it exits 0 or has no ask left, `<local>/.env` read again before each ask."""
         argv = make_argv(step, local, ref)
         served_before = step.target == "prefect-up" and prefect_recorded(local, host)
         exited = 0
         for ask in range(1, step.asks + 1):
-            exited = host.run(argv, env=step_env(read_again(), kept, listen), cwd=ROOT).status
+            exited = host.run(argv, env=make_env(loaded(local, environ, host), kept, listen), cwd=ROOT).status
             if exited == 0 or ask == step.asks:
                 break
             say(f"step {number}, make {step.target}, exited {exited}: asking it again, {ask + 1} of {step.asks}")
         if step.target == "prefect-up" and not served_before and prefect_recorded(local, host):
             kept.prefect_pid.write_text(f"{recorded(prefect_home(local) / 'server.pid', host)}\n")
         if exited != 0:
-            raise stop(1, [f"step {number}, make {step.target}, exited {exited}"])
+            raise Stop(1, [f"step {number}, make {step.target}, exited {exited}"])
         if step.target == "orchestrator-env":
-            lines = token_lines(host.text(kept.tokens) or "", read_again())
+            lines = token_lines(host.text(kept.tokens) or "", loaded(local, environ, host))
             if lines:
                 append(kept.tokens, lines)
             for line in lines:
                 say(f"{kept.tokens}: listed the principal {line.split()[1]} by its token's hash")
 
     try:
-        pull(host)
-    except Stop as unpulled:
-        raise stop(unpulled.status, unpulled.lines) from None
-    for number, step in enumerate(steps, 1):
-        say(f"step {number} of {len(steps)}: {words_of(step, ref)}")
-        begun = source
-        if step.kind == "make":
-            made(number, step)
-        else:
-            env = read_again()
-            try:
-                if step.kind == "core":
-                    start_core(env, kept, listen, host)
-                else:
-                    start_runner(source, env, kept, local, main, listen, host)
-            except Stop as failed:
-                first, *rest = failed.lines
-                raise stop(failed.status, [f"step {number}, {STEP_WORDS[step.kind]}: {first}", *rest]) from None
-        if number == 1:
-            try:
-                pool_checked(source, pool, host)
-            except Stop as refused:
-                if refused.status == 2:  # the pool's own refusal, whose second line says that the source is left up
-                    raise
-                raise stop(refused.status, refused.lines) from None
-    raise stop(1, ["the change is opened: its rehearsal's verdict is not read"])
+        settle(env, kept, local, listen, host)
+        alone(source, env, kept, local, listen, host)
+        short = checks(source, env, local=local, ref=ref, host=host, room=True)
+        if short:
+            raise Stop(2, short)
+        say("the host's checks passed")
+        pool = pool_of(env)
+        prepare(local, env, listen, host)
+        kept.source.write_text(f"{source}\n")
+        pull(env, host)
+        for number, step in enumerate(steps, 1):
+            say(f"step {number} of {len(steps)}: {words_of(step, ref)}")
+            if step.kind == "make":
+                made(number, step)
+            else:
+                again = loaded(local, environ, host)
+                try:
+                    if step.kind == "core":
+                        start_core(again, kept, listen, host)
+                    else:
+                        start_runner(source, again, kept, local, main, listen, host)
+                except Stop as failed:
+                    first, *rest = failed.lines
+                    raise Stop(failed.status, [f"step {number}, {STEP_WORDS[step.kind]}: {first}", *rest]) from None
+            if number == 1:
+                pool_checked(source, pool, loaded(local, environ, host), host)
+        raise Stop(1, ["the change is opened: its rehearsal's verdict is not read"])
+    except Stop as stop:
+        raise Stop(stop.status, [*stop.lines, left_up(source, env, kept, local, host)]) from None
+    except OSError as refused:
+        where = f": {refused.filename}" if refused.filename else ""
+        cut = f"up was cut short, {word_of(refused)}{where}"
+        raise Stop(1, [cut, left_up(source, env, kept, local, host)]) from None
 
 
 def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host: Host) -> int:
@@ -1928,7 +2046,9 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
     its own word, and the exit 1 where any failed: `settle`, the runner, every twin and the core; `make
     prefect-down`, only where `prefect.pid` names the pid `make prefect-up` has recorded, the server it started for
     the demonstration, the record then removed, and a record that names any other removed with nothing stopped; and
-    `make <source>-down`, with `PURGE=1` where `purge`. The exit is 1 too wherever the marker `unsettled` still
+    `make <source>-down`, with `PURGE=1` where `purge` and `PURGE=` where not (`stop_words`). Each target is run
+    under a make child's environment (`make_env`), so no variable of the caller's reaches it; those the caller set
+    are said first, once, by their names (`say_not_passed_on`). The exit is 1 too wherever the marker `unsettled` still
     stands at the end: a `down` that could not read the store never passes for one that found it empty. `source` is
     kept, so that a later `down` with `purge` knows whose volumes to remove. `main` is taken as `up` takes it and is
     not read: each target finds the main checkout itself."""
@@ -1953,10 +2073,10 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
             where = f": {refused.filename}" if refused.filename else ""
             failed.append(f"{what} was cut short, {word_of(refused)}{where}")
 
-    def make(target: str, *variables: str) -> bool:
-        made = host.run(make_words(target, local, *variables), env=step_env(env, kept, listen), cwd=ROOT)
+    def make(words: Sequence[str]) -> bool:
+        made = host.run(words, env=make_env(env, kept, listen), cwd=ROOT)
         if made.status != 0:
-            failed.append(f"make {target} exited {made.status}")
+            failed.append(f"make {words[2]} exited {made.status}")
         return made.status == 0
 
     def prefect_down() -> None:
@@ -1970,15 +2090,16 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
                 f"{kept.prefect_pid} does not name the Prefect server {server} names: whatever serves there is left, "
                 "and the file removed"
             )
-        elif make("prefect-down"):
+        elif make(make_words("prefect-down", local)):
             kept.prefect_pid.unlink(missing_ok=True)
 
     def source_down() -> None:
         if source in SOURCES:
-            make(f"{source}-down", *(["PURGE=1"] if purge else []))
+            make(stop_words(source, local, purge))
         else:
             failed.append(f"{kept.source} names neither {' nor '.join(SOURCES)}: no source was stopped")
 
+    say_not_passed_on(env, ["PURGE=1" if purge else "PURGE="])
     tried("the end of the runner, the twins and the core", lambda: settle(env, kept, local, listen, host))
     if named is None:
         say(f"no source is recorded under {home}: neither a source nor the Prefect server was stopped")

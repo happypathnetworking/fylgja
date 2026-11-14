@@ -225,15 +225,18 @@ contract-netbox:
 # A demonstration of one source of truth, infrahub or netbox, with no step by hand (CONTRIBUTING.md, "The
 # demonstrations"; D-104): the host's preconditions checked, then the source's runbook taken in order through the
 # targets above, the core and the runner started in the background by recorded pids, to the change opened. It reads
-# local/.env itself, before every step, and at REF it registers this repository with Infrahub.
+# local/.env itself, before every step, and at REF it registers this repository with Infrahub. No other variable
+# given here, or held by the shell or local/.env, reaches a target: each is run at this file's own value, the script
+# saying which were not passed on.
 infrahub-demo netbox-demo: | $(VENV)/bin/fylgja-core-server
-	python3 -I scripts/demo.py up $(@:-demo=) --local $(LOCAL) --main $(MAIN) --ref '$(REF)'
+	python3 -I scripts/demo.py up $(@:-demo=) --local $(LOCAL) --main $(MAIN) --ref='$(REF)'
 
 # The venv, made for a demonstration where the core's server command is missing, and never remade by one.
 $(VENV)/bin/fylgja-core-server:
 	$(MAKE) venv
 
 # What a demonstration started, ended: its runner, every twin its core holds, its core, the Prefect server it
-# started and its source, whose volumes are kept; PURGE=1, and no other value, removes them too.
+# started and its source, whose volumes are kept; PURGE=1 given here, and no other value and no PURGE of the shell's
+# or of local/.env's, removes them too.
 demo-down:
 	python3 -I scripts/demo.py down --local $(LOCAL) --main $(MAIN) $(if $(filter 1,$(PURGE)),--purge)

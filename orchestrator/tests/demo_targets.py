@@ -16,7 +16,20 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from demo_host import MAIN, NODE_PASSWORD, NODE_USER, ROOT, FakeHost, Ran, Started, demo, is_a_core, passing, same
+from demo_host import (
+    MAIN,
+    NODE_PASSWORD,
+    NODE_USER,
+    ROOT,
+    FakeHost,
+    Ran,
+    Started,
+    demo,
+    is_a_core,
+    meminfo,
+    passing,
+    same,
+)
 
 SHELL = {"PATH": "/usr/bin", "HOME": "/srv/example/home"}
 """The shell's environment, which `local/.env` is laid over."""
@@ -103,6 +116,28 @@ written and its containers running while the database is still unhealthy, and `p
 with the server it started still up and recorded."""
 
 
+def read_by_make(argv: Sequence[str], env: Mapping[str, str]) -> tuple[dict[str, str], str]:
+    """The variables and the flags a `make` run by `argv` under `env` holds, as make takes them: a variable from its
+    command line, else from the words `MAKEFLAGS` and `GNUMAKEFLAGS` hand on, with or without `--` before them,
+    else from its environment; a flag from either of the two. So read with `make -n` of this checkout's `Makefile`
+    on the development host (GNU Make 4.4.1, 2026-11-14): `PURGE=1` in the environment, in `MAKEFLAGS` or in
+    `GNUMAKEFLAGS` gave `infrahub-down` its `--purge`, and `PURGE=` on the command line took it away from all
+    three; `MAKEOVERRIDES` and `MFLAGS` alone carried nothing. `MAKEFILES` is not read here: `answered` refuses a
+    child that is given it."""
+    variables = dict(env)
+    flags = ""
+    for handed in (env.get("GNUMAKEFLAGS", ""), env.get("MAKEFLAGS", "")):
+        for word in handed.split():
+            if "=" in word:
+                variables[word.partition("=")[0]] = word.partition("=")[2]
+            else:
+                flags += word.strip("-")
+    for word in argv[1:]:
+        if "=" in word and not word.startswith("-"):
+            variables[word.partition("=")[0]] = word.partition("=")[2]
+    return variables, flags
+
+
 class Targets:
     """The make targets a demonstration runs and the core it starts, on a `FakeHost` over a `local/` of the test's
     own: each answered by what the real one leaves, and refused where the real one would refuse what the script gave
@@ -110,16 +145,26 @@ class Targets:
     path, the secrets it makes among it.
 
     - A target is answered by its name (`make --no-print-directory <target> LOCAL=<local> <variables…>`), kept in
-      `asked` with its variables. It exits 0, or `MAKE_FAILED` where a name it reads from its environment is not
-      there as `local/.env` holds it now (each says `Load local/.env first`), where what it needs is not up, and for
-      each ask a test lists in `fails`, by the target and the count of its asks from 1.
+      `asked` with the variables of its command line. It exits 0, or `MAKE_FAILED` where a name it reads from its
+      environment is not there as `local/.env` holds it now (each says `Load local/.env first`), where what it
+      needs is not up, and for each ask a test lists in `fails`, by the target and the count of its asks from 1.
+    - **A make variable is read as make reads it** (`read_by_make`): from the command line, else from `MAKEFLAGS`
+      or `GNUMAKEFLAGS`, else from the child's environment, else the `Makefile`'s own value. So a `PURGE`, a
+      `SOURCE` or a branch the script let through from its caller's environment acts here as it would on the
+      host. `LOCAL` must be the test's own whatever gives it; a child given `MAKEFILES` is refused outright, since
+      what another makefile would do is not known here; and under the flag `i` a target that fails exits 0, as
+      make ignores a recipe's errors.
     - `infrahub-up` and `netbox-up` write their names, `netbox-up` the superuser's token too, and bring the source
-      up: its project's containers running, its network standing and its port listened on at loopback by a process
-      of another user's, as Docker's proxy is. The two `down` targets stop it, and with `PURGE=1` remove the network.
+      up: its project's containers running, its network standing, its port listened on at loopback by a process
+      of another user's, as Docker's proxy is, and its memory taken from what `/proc/meminfo` says is available.
+      The two `down` targets stop it, the memory given back, and where `PURGE` is `1` remove the network, the
+      source then listed in `purged`.
     - `orchestrator-env` is `edge_dev.py env`: its lines by `edge_dev.env_lines`, the runner's token's hash appended
       to the file `FYLGJA_TOKENS` names, and exit 2 with nothing written where that is not set or names no file;
-      then, but with `SOURCE=netbox`, the example's Infrahub token's line, which needs Infrahub up and the admin's
-      token.
+      then, but where `SOURCE` is `netbox`, the example's Infrahub token's line, which needs Infrahub up and the
+      admin's token; a `SOURCE` that is neither source is make's own error.
+    - `built` lists each branch a seed built: `SEED_BRANCH`'s by `infrahub-seed` and `NETBOX_BRANCH`'s by
+      `netbox-change`, each `third-link` where the variable is not given.
     - `prefect-up` starts a Prefect server under `local/prefect/`, given the basic auth, records it in `server.pid`
       and listens on port 4200 of the bind; one of its own up already is left. `prefect-down` ends that one.
     - `netbox-seed` writes the two accounts' tokens; `netbox-hook` needs Prefect answering the auth it was given and
@@ -147,6 +192,8 @@ class Targets:
         self.done: set[str] = set()
         self.served = False
         self.opened: list[bool] = []
+        self.purged: list[str] = []
+        self.built: list[str] = []
         self.listed: dict[int, str] = {}
         self.twins: list[str] = []
         for target in (
@@ -172,21 +219,26 @@ class Targets:
         host.on_start = self.started
 
     def answered(self, ran: Ran) -> Any:
-        target, variables = ran.argv[2], ran.argv[4:]
-        assert ran.argv[3] == f"LOCAL={self.local}" and ran.cwd == ROOT and not ran.capture and ran.timeout is None
-        self.asked.append([target, *variables])
+        target, env = ran.argv[2], ran.env or {}
+        assert ran.cwd == ROOT and not ran.capture and ran.timeout is None
+        assert "MAKEFILES" not in env, "a make child was given MAKEFILES, and reads other makefiles first"
+        variables, flags = read_by_make(ran.argv, env)
+        assert variables.get("LOCAL") == str(self.local), "a make child's LOCAL is not the test's own"
+        self.asked.append([target, *ran.argv[4:]])
         fails = sum(1 for words in self.asked if words[0] == target) in self.fails.get(target, ())
-        if fails and target not in SIDE_EFFECTS_FIRST:
-            return demo.Done(MAKE_FAILED, "")
-        passed: bool = getattr(self, target.replace("-", "_"))(ran.env or {}, variables)
+        passed = False
+        if not fails or target in SIDE_EFFECTS_FIRST:
+            passed = getattr(self, target.replace("-", "_"))(env, variables)
         if passed and not fails:
             self.done.add(target)
-        return demo.Done(0 if passed and not fails else MAKE_FAILED, "")
+        return demo.Done(0 if (passed and not fails) or "i" in flags else MAKE_FAILED, "")
 
     def by_hand(self, target: str, *variables: str) -> None:
         """`target` as a person ran it before the demonstration, `local/.env` loaded first as its runbook says: what
         it leaves is left, and it is not among the targets the script asked."""
-        passed: bool = getattr(self, target.replace("-", "_"))(loaded_env(self.local, self.host), list(variables))
+        env = loaded_env(self.local, self.host)
+        given = read_by_make(["make", target, *variables], {})[0]
+        passed: bool = getattr(self, target.replace("-", "_"))(env, given)
         assert passed, target
         self.done.add(target)
 
@@ -204,8 +256,15 @@ class Targets:
         """Whether a target's child was given each of `names` as `local/.env` holds it now."""
         return all(bool(env.get(name)) and same(env.get(name), self.held(name)) for name in names)
 
+    def memory(self, mib: int) -> None:
+        """`mib` more MiB of memory is available on the host, or with a negative `mib` less."""
+        held = self.host.files[Path("/proc/meminfo")]
+        self.host.files[Path("/proc/meminfo")] = meminfo(demo.available_mb(held) + mib)
+
     def brought_up(self, source: str) -> None:
         """`source` as its `up` target leaves it."""
+        if not self.is_up(source):
+            self.memory(-demo.SOURCE_MB[source])
         self.host.up.add(demo.PROJECTS[source])
         if PROJECT_NETWORKS[source] not in self.host.networks:
             self.host.networks.append(PROJECT_NETWORKS[source])
@@ -213,60 +272,66 @@ class Targets:
         if served not in self.host.listening:
             self.host.listening.append(served)
 
-    def taken_down(self, source: str, variables: Sequence[str]) -> bool:
+    def taken_down(self, source: str, variables: Mapping[str, str]) -> bool:
+        if self.is_up(source):
+            self.memory(demo.SOURCE_MB[source])
         self.host.up.discard(demo.PROJECTS[source])
         self.host.listening = [held for held in self.host.listening if held[0] != f"127.0.0.1:{demo.PORTS[source]}"]
-        if "PURGE=1" in variables:
+        if variables.get("PURGE") == "1":
             self.host.networks = [held for held in self.host.networks if held != PROJECT_NETWORKS[source]]
+            self.purged.append(source)
         return True
 
     def is_up(self, source: str) -> bool:
         return demo.PROJECTS[source] in self.host.up
 
-    def infrahub_up(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def infrahub_up(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         INFRAHUB_DEV.write_env(self.env_file)
         self.brought_up("infrahub")
         return True
 
-    def infrahub_down(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def infrahub_down(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         return self.taken_down("infrahub", variables)
 
-    def infrahub_register(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
-        named = [word for word in variables if word.startswith("REF=") and word != "REF="]
+    def infrahub_register(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
+        named = variables.get("REF", "the-branch-checked-out")
         return self.is_up("infrahub") and bool(named) and self.given(env, "FYLGJA_INFRAHUB_WRITE_TOKEN")
 
-    def infrahub_seed(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def infrahub_seed(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         if not (
             self.is_up("infrahub")
             and "infrahub-register" in self.done
             and self.given(env, "FYLGJA_INFRAHUB_WRITE_TOKEN", "FYLGJA_INFRAHUB_TOKEN")
         ):
             return False
-        change = {"id": "the-proposed-changes-id", "name": "Rehearse third-link"}
+        branch = variables.get("SEED_BRANCH", "third-link")
+        proposed = variables.get("PROPOSED_CHANGE") == "1"
+        change = {"id": "the-proposed-changes-id", "name": f"Rehearse {branch}"}
         seeded: dict[str, Any] = {
-            "branch": "third-link",
+            "branch": branch,
             "scope": "tag:fylgja",
             "stages": [],
             "marks": [],
-            "proposed_change": change if "PROPOSED_CHANGE=1" in variables else None,
+            "proposed_change": change if proposed else None,
         }
         (self.local / "infrahub").mkdir(exist_ok=True)
         (self.local / "infrahub" / "seed.json").write_text(json.dumps(seeded))
-        if "PROPOSED_CHANGE=1" in variables:
+        self.built.append(branch)
+        if proposed:
             self.opened.append(self.serving())
         return True
 
-    def netbox_up(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def netbox_up(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         NETBOX_DEV.write_env(self.env_file)
         if not self.held(NETBOX_DEV.WRITE_TOKEN):
             NETBOX_DEV.set_line(self.env_file, NETBOX_DEV.WRITE_TOKEN, NETBOX_SUPERUSER)
         self.brought_up("netbox")
         return True
 
-    def netbox_down(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def netbox_down(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         return self.taken_down("netbox", variables)
 
-    def netbox_seed(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def netbox_seed(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         if not (self.is_up("netbox") and self.given(env, "FYLGJA_NETBOX_ADDRESS", NETBOX_DEV.WRITE_TOKEN)):
             return False
         for name, token in NETBOX_ACCOUNTS.items():
@@ -274,7 +339,7 @@ class Targets:
                 NETBOX_DEV.set_line(self.env_file, name, token)
         return True
 
-    def netbox_hook(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def netbox_hook(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         server = self.prefect()
         return (
             self.is_up("netbox")
@@ -284,10 +349,11 @@ class Targets:
             and self.served
         )
 
-    def netbox_change(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def netbox_change(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         if not (self.is_up("netbox") and self.given(env, NETBOX_DEV.WRITE_TOKEN)):
             return False
-        if "NETBOX_TAG=1" in variables and "netbox-hook" not in self.done:
+        tagged = variables.get("NETBOX_TAG") == "1"
+        if tagged and "netbox-hook" not in self.done:
             return False
         try:
             marks_under = EDGE_DEV.source_env(env, "netbox")
@@ -295,11 +361,15 @@ class Targets:
             return False
         if not self.admits(marks_under):
             return False
-        if "NETBOX_TAG=1" in variables:
+        self.built.append(variables.get("NETBOX_BRANCH", "third-link"))
+        if tagged:
             self.opened.append(self.serving())
         return True
 
-    def orchestrator_env(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def orchestrator_env(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
+        source = variables.get("SOURCE", "infrahub")
+        if source not in demo.SOURCES:
+            return False
         lines = EDGE_DEV.env_lines(EDGE_DEV.held_names(self.env_file), MAIN, "tag:fylgja")
         added = dict(lines)
         tokens = env.get(EDGE_DEV.TOKENS, "")
@@ -309,7 +379,7 @@ class Targets:
             EDGE_DEV.append(self.env_file, [f"{name}={value}" for name, value in lines])
         if EDGE_DEV.API_TOKEN in added:
             EDGE_DEV.append(Path(tokens), [f"{EDGE_DEV.hashed(added[EDGE_DEV.API_TOKEN])} {EDGE_DEV.PRINCIPAL}"])
-        if "SOURCE=netbox" in variables:
+        if source == "netbox":
             return True
         if not (self.is_up("infrahub") and self.given(env, "FYLGJA_INFRAHUB_ADDRESS", "FYLGJA_INFRAHUB_WRITE_TOKEN")):
             return False
@@ -322,7 +392,7 @@ class Targets:
         pid: int | None = EDGE_DEV.running(self.local, read=self.host.process)
         return pid
 
-    def prefect_up(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def prefect_up(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         if self.prefect() is not None:
             return True
         auth = env.get(EDGE_DEV.AUTH, "")
@@ -340,7 +410,7 @@ class Targets:
         EDGE_DEV.pid_file(self.local).write_text(f"{pid}\n")
         return True
 
-    def prefect_down(self, env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def prefect_down(self, env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         pid = self.prefect()
         if pid is not None:
             del self.host.processes[pid]

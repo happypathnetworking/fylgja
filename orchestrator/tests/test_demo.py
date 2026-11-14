@@ -27,6 +27,7 @@ import inspect
 import io
 import json
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -83,6 +84,7 @@ from demo_targets import (
     first,
     hashed,
     loaded_env,
+    read_by_make,
 )
 
 WHERE = ["--local", str(LOCAL), "--main", str(MAIN)]
@@ -822,8 +824,9 @@ def test_a_host_that_meets_every_precondition_passes(tmp_path: Path, capsys: pyt
         assert status(host, up_of(local, source, ref)) == 1
         assert capsys.readouterr().out.splitlines()[0] == "demo: the host's checks passed"
         assert host.locked == [kept.lock]
-        reads = [ran for ran in host.ran[1:] if ran.capture][: len(judged(source, ref))]
-        assert [ran.argv for ran in reads] == judged(source, ref)
+        asked = [*cured(source, ref), [*UP[OTHER[source]]], *room(source)]
+        reads = host.ran[: len(asked)]
+        assert [ran.argv for ran in reads] == asked
         the_file_was_laid_over_the_shell = all(same(ran.env, env) for ran in reads)
         assert the_file_was_laid_over_the_shell
 
@@ -1068,7 +1071,9 @@ def test_a_port_another_process_listens_on_is_named_with_what_needs_it() -> None
     host.answer("ss", "-Hltn", out=ss("127.0.0.1:7700"))
     assert checked(host, FYLGJA_LISTEN="127.0.0.1:7700") == [LISTENED.format(7700, "127.0.0.1", "the core")]
 
-    # Prefect's port is `make prefect-up`'s to judge where its pid file names a live process, and only there.
+    # Prefect's port is `make prefect-up`'s to judge where its pid file names this `local/`'s Prefect server, as
+    # that target reads one, and only there: not a pid that is gone, a pid another process has since taken, or
+    # another home's server.
     host = passing()
     host.answer("ss", "-Hltn", out=ss("192.0.2.1:4200"))
     pid_file = LOCAL / "prefect" / "server.pid"
@@ -1076,7 +1081,11 @@ def test_a_port_another_process_listens_on_is_named_with_what_needs_it() -> None
         host.files[pid_file] = held
         assert checked(host) == [LISTENED.format(4200, "192.0.2.1", "the edge's Prefect")], held
     host.files[pid_file] = "4243\n"
-    host.processes[4243] = demo.Process(["/srv/example/core/.venv/bin/prefect", "server", "start"], {})
+    server = ["/srv/example/core/.venv/bin/prefect", "server", "start"]
+    for another in (demo.Process(["sleep", "600"], {}), demo.Process(server, {"PREFECT_HOME": "/srv/another/prefect"})):
+        host.processes[4243] = another
+        assert checked(host) == [LISTENED.format(4200, "192.0.2.1", "the edge's Prefect")]
+    host.processes[4243] = demo.Process(server, {"PREFECT_HOME": str(LOCAL / "prefect")})
     assert checked(host) == []
 
     # The source's port is its own where a container of its project runs, and only of its project.
@@ -1222,13 +1231,19 @@ def test_several_preconditions_missing_are_all_said_and_nothing_is_started(capsy
     assert not shown
     assert not on_a_command_line
     assert said.out == ""
+    # Every check no stop can cure that fails is said, and the run ends there: the host's room, its memory and its
+    # ports, is judged only once an earlier run is settled and the other source stopped, and neither is done for a
+    # run that could not start.
     assert said.err.splitlines() == [
         f"demo: {IN_NO_GROUP.format('clab_admins')}",
-        "demo: 4096 MiB of memory is available and the infrahub demonstration needs 11776: 4608 for infrahub, which "
-        "is not up, and 7168 for the twin and the edge",
         "demo: local/.env gives FYLGJA_CREDENTIAL_SRLINUX_USERNAME and FYLGJA_CREDENTIAL_SRLINUX_PASSWORD no value: "
         "add the lines; the image's documented default login is enough (.env.example)",
     ]
+    assert [ran.argv for ran in host.ran] == cured("infrahub")
+    # Asked whole, as a test asks them, the checks say the memory too, in its place.
+    assert checked(host, "infrahub", "main", less=demo.LOGIN)[1].startswith(
+        "4096 MiB of memory is available and the infrahub demonstration needs 11776: 4608 for infrahub"
+    )
     secrets_made = len(host.secrets)
     assert (host.started, host.signalled, host.asked, secrets_made) == ([], [], [], 0)
     assert [ran.argv for ran in host.ran if ran.argv[0] == "make"] == []
@@ -1702,7 +1717,7 @@ def test_a_listener_at_the_port_before_the_start_is_refused_and_nothing_is_start
     for _ in range(2):
         host.acts.clear()
         assert status(host, down(local)) == 1
-        assert acts(host) == [HEARD, made(local, "netbox-down")]
+        assert acts(host) == [HEARD, stop_of(local, "netbox")]
         assert capsys.readouterr().err.splitlines() == [
             f"demo: {PORT_HELD.format('127.0.0.1')}",
             f"demo: {UNSETTLED.format(kept.unsettled)}",
@@ -1721,7 +1736,7 @@ def test_a_listener_at_the_port_before_the_start_is_refused_and_nothing_is_start
         LIST,
         HEARD_BY_PID,
         (started.pid, TERM),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert not kept.unsettled.exists() and not kept.core_pid.exists()
 
@@ -1824,7 +1839,7 @@ def test_a_core_that_never_answers_is_a_failure_at_60_s_and_is_left_for_demo_dow
         LIST,
         HEARD_BY_PID,
         (replacement.pid, TERM),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert not kept.core_pid.exists() and not kept.unsettled.exists()
     assert hung not in host.processes
@@ -1899,7 +1914,7 @@ def test_a_core_that_never_answers_is_a_failure_at_60_s_and_is_left_for_demo_dow
         host.answer("make")
         capsys.readouterr()
         assert status(host, down(local)) == 1
-        assert acts(host) == [HEARD_BY_PID, made(local, "netbox-down")]
+        assert acts(host) == [HEARD_BY_PID, stop_of(local, "netbox")]
         assert (host.signalled, host.started, host.asked) == ([], [], [])
         assert (kept.core_pid.read_text(), kept.unsettled.exists()) == ("4502\n", True)
         assert capsys.readouterr().err.splitlines() == [
@@ -2754,6 +2769,11 @@ def made(local: Path, target: str, *variables: str) -> list[str]:
     return ["make", "--no-print-directory", target, f"LOCAL={local}", *variables]
 
 
+def stop_of(local: Path, source: str, purge: bool = False) -> list[str]:
+    """The words a source is stopped by: its `down` target with `PURGE=` on its command line, or `PURGE=1`."""
+    return made(local, f"{source}-down", "PURGE=1" if purge else "PURGE=")
+
+
 def down(local: Path, *more: str) -> list[str]:
     return ["down", "--local", str(local), "--main", str(MAIN), *more]
 
@@ -2770,7 +2790,7 @@ def test_down_ends_what_the_demonstration_started_and_stops_its_source(
         HEARD_BY_PID,
         (4502, TERM),
         made(local, "prefect-down"),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert host.locked == [kept.lock]
     assert (host.started, host.asked) == ([], [])
@@ -2781,9 +2801,9 @@ def test_down_ends_what_the_demonstration_started_and_stops_its_source(
     # the loaded environment with the demonstration's address and token file.
     targets = [ran for ran in host.ran if ran.argv[0] == "make"]
     assert [(ran.cwd, ran.capture, ran.timeout) for ran in targets] == [(ROOT, False, None)] * 2
-    env = demo.step_env(loaded_env(local, host), kept, LISTEN)
-    each_given_a_steps_environment = all(same(ran.env, env) for ran in targets)
-    assert each_given_a_steps_environment
+    env = demo.make_env(loaded_env(local, host), kept, LISTEN)
+    each_given_a_make_childs_environment = all(same(ran.env, env) for ran in targets)
+    assert each_given_a_make_childs_environment
     said = capsys.readouterr()
     assert (said.out.splitlines(), said.err) == (
         [
@@ -2799,7 +2819,7 @@ def test_down_ends_what_the_demonstration_started_and_stops_its_source(
     # Run again, with nothing left to end but the source, which the record still names.
     host.acts.clear()
     assert status(host, down(local)) == 0
-    assert acts(host) == [made(local, "netbox-down")]
+    assert acts(host) == [stop_of(local, "netbox")]
 
     # The listen address is `local/.env`'s where it has one, and Infrahub's demonstration stops Infrahub.
     local, kept, host = after_a_netbox_run(tmp_path / "infrahub")
@@ -2809,7 +2829,7 @@ def test_down_ends_what_the_demonstration_started_and_stops_its_source(
     with (local / ".env").open("a") as env_file:
         env_file.write("FYLGJA_LISTEN=127.0.0.1:7700\n")
     assert status(host, down(local)) == 0
-    assert acts(host) == [(4501, TERM), made(local, "prefect-down"), made(local, "infrahub-down")]
+    assert acts(host) == [(4501, TERM), made(local, "prefect-down"), stop_of(local, "infrahub")]
     assert {(ran.env or {}).get("FYLGJA_API_ADDRESS") for ran in host.ran} == {"127.0.0.1:7700"}
 
 
@@ -2826,7 +2846,7 @@ def test_down_leaves_a_prefect_it_did_not_start(tmp_path: Path, capsys: pytest.C
         else:
             kept.prefect_pid.write_text("\n")
         assert status(host, down(local)) == 0, case
-        assert [words for words in acts(host) if words[:1] == ["make"]] == [made(local, "netbox-down")], case
+        assert [words for words in acts(host) if words[:1] == ["make"]] == [stop_of(local, "netbox")], case
         assert host.signalled == [(4501, TERM), (4502, TERM)], case
         assert 4503 in host.processes, case
         # A record that no longer names the server `make prefect-up` records is removed, and said.
@@ -2847,13 +2867,13 @@ def test_down_purges_only_by_the_flag(tmp_path: Path) -> None:
         local, kept, host = after_a_netbox_run(tmp_path / source)
         kept.source.write_text(f"{source}\n")
         assert status(host, down(local, "--purge")) == 0
-        assert acts(host)[-2:] == [made(local, "prefect-down"), made(local, f"{source}-down", "PURGE=1")]
+        assert acts(host)[-2:] == [made(local, "prefect-down"), stop_of(local, source, purge=True)]
         assert kept.source.read_text() == f"{source}\n"
 
         local, kept, host = after_a_netbox_run(tmp_path / f"{source}-kept")
         kept.source.write_text(f"{source}\n")
         assert status(host, down(local)) == 0
-        assert acts(host)[-1] == made(local, f"{source}-down")
+        assert acts(host)[-1] == stop_of(local, source)
         assert [words for words in acts(host) if "PURGE=1" in words] == []
 
 
@@ -2885,16 +2905,16 @@ def test_down_with_nothing_recorded_ends_nothing(tmp_path: Path, capsys: pytest.
 def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # `prefect-down` exits 1: the source's `down` is still run, and the record of the server kept for another try.
     local, kept, host = after_a_netbox_run(tmp_path)
-    host.answer(*made(local, "prefect-down")[:3], status=1)
+    host.answer(*made(local, "prefect-down")[:3], status=MAKE_FAILED)
     assert status(host, down(local)) == 1
-    assert acts(host)[-2:] == [made(local, "prefect-down"), made(local, "netbox-down")]
+    assert acts(host)[-2:] == [made(local, "prefect-down"), stop_of(local, "netbox")]
     assert kept.prefect_pid.read_text() == "4503\n"
-    assert capsys.readouterr().err.splitlines() == ["demo: make prefect-down exited 1", NOT_ALL_ENDED]
+    assert capsys.readouterr().err.splitlines() == [f"demo: make prefect-down exited {MAKE_FAILED}", NOT_ALL_ENDED]
 
     # A twin that stays: the core is left, the store unsettled, and Prefect and the source are still ended.
     local, kept, host = after_a_netbox_run(tmp_path / "twin")
     lists(host, ["rh-a"], ["rh-a"])
-    host.answer(*made(local, "netbox-down")[:3], status=2)
+    host.answer(*stop_of(local, "netbox")[:3], status=2)
     assert status(host, down(local, "--purge")) == 1
     assert acts(host) == [
         (4501, TERM),
@@ -2905,7 +2925,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
         HEARD_BY_PID,
         LIST,
         made(local, "prefect-down"),
-        made(local, "netbox-down", "PURGE=1"),
+        stop_of(local, "netbox", purge=True),
     ]
     assert kept.core_pid.read_text() == "4502\n"
     assert (kept.source.read_text(), kept.prefect_pid.exists(), kept.unsettled.exists()) == ("netbox\n", False, True)
@@ -2940,7 +2960,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
     with (local / ".env").open("a") as env_file:
         env_file.write("FYLGJA_LISTEN=0.0.0.0:7650\n")
     assert status(host, down(local)) == 1
-    assert acts(host) == [made(local, "prefect-down"), made(local, "netbox-down")]
+    assert acts(host) == [made(local, "prefect-down"), stop_of(local, "netbox")]
     assert capsys.readouterr().err.splitlines() == [
         f"demo: {LISTEN_REFUSED}",
         f"demo: {UNSETTLED.format(kept.unsettled)}",
@@ -2952,7 +2972,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
     local, kept, host = after_a_netbox_run(tmp_path / "denied")
     host.denied = {kept.runner_pid}
     assert status(host, down(local)) == 1
-    assert acts(host) == [made(local, "prefect-down"), made(local, "netbox-down")]
+    assert acts(host) == [made(local, "prefect-down"), stop_of(local, "netbox")]
     assert capsys.readouterr().err.splitlines() == [
         f"demo: the end of the runner, the twins and the core was cut short, Permission denied: {kept.runner_pid}",
         f"demo: {UNSETTLED.format(kept.unsettled)}",
@@ -2965,7 +2985,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
     in_the_way = kept.core_log.with_name("core.log.1")
     in_the_way.mkdir()
     assert status(host, down(local)) == 1
-    assert acts(host) == [(4501, TERM), HEARD, made(local, "prefect-down"), made(local, "netbox-down")]
+    assert acts(host) == [(4501, TERM), HEARD, made(local, "prefect-down"), stop_of(local, "netbox")]
     said = capsys.readouterr().err.splitlines()
     assert said[0].startswith("demo: the end of the runner, the twins and the core was cut short, Is a directory: ")
     assert said[1:] == [f"demo: {UNSETTLED.format(kept.unsettled)}", NOT_ALL_ENDED]
@@ -2974,7 +2994,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
     local, kept, host = after_a_netbox_run(tmp_path / "prefect")
     host.denied = {kept.prefect_pid}
     assert status(host, down(local)) == 1
-    assert acts(host)[-1] == made(local, "netbox-down")
+    assert acts(host)[-1] == stop_of(local, "netbox")
     assert capsys.readouterr().err.splitlines() == [
         f"demo: make prefect-down was cut short, Permission denied: {kept.prefect_pid}",
         NOT_ALL_ENDED,
@@ -2992,7 +3012,7 @@ def test_down_is_not_done_until_the_store_has_been_read(tmp_path: Path, capsys: 
         host.acts.clear()
         assert status(host, down(local)) == 1
         assert [words for words in acts(host) if words[:1] != ["make"]][-2:] == [HEARD, ("start", [CORE])]
-        assert acts(host)[-1] == made(local, "netbox-down")
+        assert acts(host)[-1] == stop_of(local, "netbox")
         assert len(host.started) == run + 1
         said = capsys.readouterr()
         assert said.err.splitlines() == [
@@ -3015,7 +3035,7 @@ def test_down_is_not_done_until_the_store_has_been_read(tmp_path: Path, capsys: 
         LIST,
         HEARD_BY_PID,
         (served.pid, TERM),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert not kept.unsettled.exists()
     assert capsys.readouterr().out.splitlines()[-1] == (
@@ -3061,7 +3081,7 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
         [CLI, "twin", "destroy", "rh-a"],
         HEARD_BY_PID,
         made(local, "prefect-down"),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert (kept.unsettled.exists(), kept.core_pid.read_text(), host.signalled) == (True, "4502\n", [(4501, TERM)])
     said = capsys.readouterr()
@@ -3086,7 +3106,7 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
         [CLI, "twin", "destroy", "rh-a"],
         HEARD_BY_PID,
         made(local, "prefect-down"),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert (kept.unsettled.exists(), host.signalled) == (True, [(4501, TERM)])
     assert capsys.readouterr().err.splitlines()[0] == f"demo: {NOT_WHOLE.format(4502, LISTEN)}"
@@ -3095,7 +3115,7 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
     # asked of it. Once the address is free, a core of the demonstration's own reads the store, and it is settled.
     host.acts.clear()
     assert status(host, down(local)) == 1
-    assert acts(host) == [HEARD, made(local, "netbox-down")]
+    assert acts(host) == [HEARD, stop_of(local, "netbox")]
     assert capsys.readouterr().err.splitlines()[0] == f"demo: {PORT_HELD.format('127.0.0.1')}"
     host.listening.clear()
     answers_its_version(host)
@@ -3110,7 +3130,7 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
         LIST,
         HEARD_BY_PID,
         (started.pid, TERM),
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert not kept.unsettled.exists()
     capsys.readouterr()
@@ -3394,16 +3414,17 @@ def up_of(local: Path, source: str, ref: str = "main") -> list[str]:
     return ["up", source, "--local", str(local), "--main", str(MAIN), "--ref", ref]
 
 
-def judged(source: str, ref: str = "main") -> list[list[str]]:
-    """The reads `checks` makes of a host that meets every precondition, in their order."""
-    reads = [
-        ["docker", "info"],
-        ["docker", "compose", "version"],
-        ["containerlab", "version"],
-        [*UP[source]],
-        ["ss", "-Hltn"],
-    ]
+def cured(source: str, ref: str = "main") -> list[list[str]]:
+    """The reads the checks no stop can cure make of a host that meets every precondition, in their order: asked
+    before anything is settled or stopped."""
+    reads = [["docker", "info"], ["docker", "compose", "version"], ["containerlab", "version"]]
     return reads + ([["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"]] if source == "infrahub" else [])
+
+
+def room(source: str) -> list[list[str]]:
+    """The reads the checks of the host's room make, memory and ports: asked once an earlier run is settled and the
+    other source stopped."""
+    return [[*UP[source]], ["ss", "-Hltn"]]
 
 
 def image_read(ref: str) -> list[str]:
@@ -3413,11 +3434,23 @@ def image_read(ref: str) -> list[str]:
 def networks_read(host: FakeHost) -> list[list[str]]:
     """The two reads of Docker's networks, as the local driver makes them of the networks `host` has."""
     ids = [short_id(name) for name, _ in host.networks]
-    return [["docker", "network", "ls", "-q"], ["docker", "network", "inspect", "--format", demo.FORMAT, *ids]]
+    return [[*NETWORK_IDS], ["docker", "network", "inspect", "--format", demo.FORMAT, *ids]]
 
 
-def left_up(*standing: str) -> str:
-    return f"left up: {', '.join(standing)}; make demo-down ends what the demonstration started"
+NETWORK_IDS = ("docker", "network", "ls", "--format", "{{.ID}}")
+"""The local driver's own words for the ids of Docker's networks."""
+
+
+def left_up(*standing: str, deaf: int | None = None) -> str:
+    """The last line of an `up` that ends before a verdict; with `deaf`, the pid of a core that does not listen,
+    which `make demo-down` leaves."""
+    ends = "make demo-down ends what the demonstration started"
+    if deaf is not None:
+        ends += f", but for the core, which it leaves while it does not listen: end it by its pid, {deaf}"
+    return f"left up: {', '.join(standing)}; {ends}"
+
+
+NOTHING_LEFT = "nothing the demonstration starts is left up"
 
 
 OPENED = "the change is opened: its rehearsal's verdict is not read"
@@ -3518,12 +3551,13 @@ RUNS = {
 `a-branch`: the script or the seed, with the word its variable adds."""
 
 
-def dry(words: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    """`make -n` of the words the script would run a target by, with `MAIN` given as the tests': the recipe printed,
-    and none of it run."""
+def dry(words: Sequence[str], environ: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """`make -n` of the words the script would run a target by, with `MAIN` given as the tests', under `environ`, or
+    a `PATH` alone: the recipe printed, and none of it run."""
     assert list(words[:2]) == ["make", "--no-print-directory"]
     argv = ["make", "-n", "-C", str(ROOT), *words[1:], f"MAIN={MAIN}"]
-    return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=60, env={"PATH": "/usr/bin:/bin"})
+    env = {"PATH": "/usr/bin:/bin"} if environ is None else dict(environ)
+    return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=60, env=env)
 
 
 def test_every_step_names_a_target_the_makefile_has(tmp_path: Path) -> None:
@@ -3564,9 +3598,11 @@ def test_the_three_targets_run_the_script(tmp_path: Path) -> None:
     script = "python3 -I scripts/demo.py"
     where = f"--local {tmp_path} --main {MAIN}"
     for source in demo.SOURCES:
-        assert make_n(tmp_path, f"{source}-demo", "REF=b") == [f"{script} up {source} {where} --ref 'b'"]
+        assert make_n(tmp_path, f"{source}-demo", "REF=b") == [f"{script} up {source} {where} --ref='b'"]
         # No branch checked out and none given: the script is told so, and says what Infrahub needs.
-        assert make_n(tmp_path, f"{source}-demo", "REF=") == [f"{script} up {source} {where} --ref ''"]
+        assert make_n(tmp_path, f"{source}-demo", "REF=") == [f"{script} up {source} {where} --ref=''"]
+        # A branch whose name begins with a dash is the option's value, never an option of the script's.
+        assert make_n(tmp_path, f"{source}-demo", "REF=--purge") == [f"{script} up {source} {where} --ref='--purge'"]
     assert [line.rstrip() for line in make_n(tmp_path, "demo-down")] == [f"{script} down {where}"]
     assert make_n(tmp_path, "demo-down", "PURGE=1") == [f"{script} down {where} --purge"]
     assert [line.rstrip() for line in make_n(tmp_path, "demo-down", "PURGE=yes")] == [f"{script} down {where}"]
@@ -3582,7 +3618,7 @@ def test_the_three_targets_run_the_script(tmp_path: Path) -> None:
     printed = "\n".join(make_n(tmp_path, "netbox-demo", "REF=b"))
     assert "pip" not in printed and "venv" not in printed
     absent = make_n(tmp_path, "netbox-demo", "REF=b", f"VENV={tmp_path / 'no-venv'}")
-    assert absent[-1] == f"{script} up netbox {where} --ref 'b'"
+    assert absent[-1] == f"{script} up netbox {where} --ref='b'"
     assert absent[0] == "make venv" and any("pip install" in line for line in absent[1:-1])
     assert make_n(tmp_path, "demo-down", f"VENV={tmp_path / 'no-venv'}") == make_n(tmp_path, "demo-down")
     # The rule that makes it is the server's command's own, the one the script starts.
@@ -3624,8 +3660,9 @@ def test_a_run_takes_its_steps_in_order_and_starts_the_core_after_the_token_file
         [core, runner] = host.started
         served = targets.prefect()
         assert acts(host) == [
+            *cured(source),
             [*UP[OTHER[source]]],
-            *judged(source),
+            *room(source),
             *(image_read(image) for image in demo.IMAGES),
             *(
                 act
@@ -3638,6 +3675,9 @@ def test_a_run_takes_its_steps_in_order_and_starts_the_core_after_the_token_file
                     else [demo.make_argv(step, local, "main"), *(networks_read(host) if step is steps[0] else [])]
                 )
             ),
+            # What is left up is read for the last line: the source's containers, and who listens at the core's port.
+            [*UP[source]],
+            HEARD_BY_PID,
         ]
         # The core is started once its token file is whole: the client's hash under `demo` and the runner's under
         # `orchestrator`, each once, which the core reads at its start alone.
@@ -3697,6 +3737,7 @@ def test_a_run_takes_its_steps_in_order_and_starts_the_core_after_the_token_file
         assert status(host, up_of(local, source)) == 1
         again = acts(host)
         assert again[: again.index([*UP[OTHER[source]]])] == [
+            *cured(source),
             (runner.pid, TERM),
             HEARD_BY_PID,
             LIST,
@@ -3769,6 +3810,20 @@ def test_a_prefect_server_up_before_the_run_is_not_recorded_as_the_demonstration
         assert (targets.prefect(), sorted(host.processes), kept.prefect_pid.exists()) == (None, [], False)
         capsys.readouterr()
 
+    # `server.pid` naming a live process that is no Prefect server, its pid taken by another since: no server of
+    # this `local/`'s is recorded, so the one the step starts is the demonstration's, and `make demo-down` ends it
+    # and leaves the other process be.
+    local, kept, host, targets = first(tmp_path / "reused")
+    EDGE_DEV.home_of(local).mkdir()
+    EDGE_DEV.pid_file(local).write_text("4503\n")
+    host.processes[4503] = demo.Process(["sleep", "600"], {})
+    assert status(host, up_of(local, "netbox", "")) == 1
+    served = targets.prefect()
+    assert served is not None and served != 4503 and kept.prefect_pid.read_text() == f"{served}\n"
+    assert status(host, down(local)) == 0
+    assert (targets.prefect(), sorted(host.processes), kept.prefect_pid.exists()) == (None, [4503], False)
+    capsys.readouterr()
+
     # A step that fails having started none leaves no record: the port another's, as the target refuses it.
     local, kept, host, targets = first(tmp_path / "refused")
 
@@ -3825,7 +3880,7 @@ def test_the_file_is_read_again_and_a_line_a_step_wrote_reaches_the_next(
     # its name and its line alone, saying what is left up.
     local, kept, host, targets = first(tmp_path / "unread")
 
-    def writes_a_path_with_a_space(env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def writes_a_path_with_a_space(env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         EDGE_DEV.append(local / ".env", ["FYLGJA_ORCHESTRATOR_ROOT=/srv/an example/local/orchestrator"])
         return True
 
@@ -3880,7 +3935,7 @@ def test_only_the_first_infrahub_up_and_the_registration_are_asked_again(
     ]
     assert (exited, said.err.splitlines()[0]) == (1, f"demo: {OPENED}")
     # The pool is read once the source is up, after the ask that passed and no other.
-    reads = [index for index, act in enumerate(acts(host)) if act == ["docker", "network", "ls", "-q"]]
+    reads = [index for index, act in enumerate(acts(host)) if act == [*NETWORK_IDS]]
     assert len(reads) == 1 and acts(host)[reads[0] - 1][2] == "infrahub-up"
 
     # Three times: the run stops, exit 1, naming it, and nothing else is run or started.
@@ -3888,7 +3943,7 @@ def test_only_the_first_infrahub_up_and_the_registration_are_asked_again(
     assert asked == ["infrahub-up"] * 3
     assert said.err.splitlines() == ["demo: step 1, make infrahub-up, exited 2", f"demo: {left_up('infrahub')}"]
     assert (exited, host.started) == (1, [])
-    assert ["docker", "network", "ls", "-q"] not in acts(host)
+    assert [*NETWORK_IDS] not in acts(host)
 
     # The second `infrahub-up`, and every other make step of either source, is asked once: one that exits other
     # than 0 stops the run there.
@@ -3921,7 +3976,7 @@ def test_a_step_that_fails_stops_the_run_and_names_it(tmp_path: Path, capsys: py
     # `make demo-down` then ends it: the source is recorded, and nothing else was started.
     assert kept.source.read_text() == "netbox\n"
     assert status(host, down(local)) == 0
-    assert (acts(host)[-1], host.up) == (made(local, "netbox-down"), set())
+    assert (acts(host)[-1], host.up) == (stop_of(local, "netbox"), set())
 
     # A core that exits at its start, its token file listing one hash twice: the step is named, with its log, and
     # the runner is not started.
@@ -3953,7 +4008,7 @@ def test_a_step_that_fails_stops_the_run_and_names_it(tmp_path: Path, capsys: py
     targets.fails = {"netbox-hook": {1}}
     brings_prefect_up = targets.prefect_up
 
-    def the_core_goes_first(env: Mapping[str, str], variables: Sequence[str]) -> bool:
+    def the_core_goes_first(env: Mapping[str, str], variables: Mapping[str, str]) -> bool:
         host.exit(host.started[0].pid)
         return brings_prefect_up(env, variables)
 
@@ -3982,7 +4037,7 @@ def test_a_network_that_holds_the_whole_pool_stops_the_run_with_the_source_left_
     assert status(host, up_of(local, "netbox", "")) == 2
     # After step 1 alone: the source is up, and it is left up, no `down` of it run.
     assert targets.asked == [["netbox-up"]]
-    assert acts(host)[-3:] == [made(local, "netbox-up"), *networks_read(host)]
+    assert acts(host)[-4:] == [made(local, "netbox-up"), *networks_read(host), [*UP["netbox"]]]
     assert (host.up, host.started) == ({"fylgja-core-netbox"}, [])
     holding = [
         ("a", IPv4Network("172.16.0.0/12")),
@@ -3993,6 +4048,7 @@ def test_a_network_that_holds_the_whole_pool_stops_the_run_with_the_source_left_
     assert said.err.splitlines() == [
         f"demo: {pool.refusal(pool.DEFAULT_POOL, holding)}",
         "demo: netbox is left up: set FYLGJA_LAB_POOL in local/.env, then run make netbox-demo again",
+        f"demo: {left_up('netbox')}",
     ]
     assert said.err.splitlines()[0] == (
         "demo: The pool 172.20.0.0/16 has no /24 that neither a Docker network nor another twin holds. Docker "
@@ -4027,6 +4083,7 @@ def test_a_network_that_holds_the_whole_pool_stops_the_run_with_the_source_left_
     assert capsys.readouterr().err.splitlines() == [
         f"demo: {pool.refusal(IPv4Network('192.0.2.0/24'), [('e', IPv4Network('192.0.2.128/25'))])}",
         "demo: infrahub is left up: set FYLGJA_LAB_POOL in local/.env, then run make infrahub-demo again",
+        f"demo: {left_up('infrahub')}",
     ]
     assert targets.asked == [["infrahub-up"]]
 
@@ -4180,30 +4237,36 @@ def test_docker_is_asked_once_for_every_network_as_the_driver_asks() -> None:
 
     host = passing()
     host.networks += pool_networks()
-    answered = demo.docker_networks(host)
+    # Under the loaded environment, as the checks ask Docker: a `DOCKER_HOST` that `local/.env` alone holds is the
+    # core's driver's, so the pool is asked of the same daemon.
+    env = ENV | {"DOCKER_HOST": "unix:///srv/example/docker.sock"}
+    answered = demo.docker_networks(env, host)
     ids = [short_id(name) for name, _ in host.networks]
     assert len(ids) == 7
     assert [ran.argv for ran in host.ran] == [
-        ["docker", "network", "ls", "-q"],
+        ["docker", "network", "ls", "--format", "{{.ID}}"],
         ["docker", "network", "inspect", "--format", pool.FORMAT, *ids],
     ]
-    assert [(ran.capture, ran.timeout, ran.env, ran.cwd) for ran in host.ran] == [
-        (True, demo.DOCKER_TIMEOUT_S, None, None)
-    ] * 2
+    assert [(ran.capture, ran.timeout, ran.cwd) for ran in host.ran] == [(True, demo.DOCKER_TIMEOUT_S, None)] * 2
+    given_the_loaded_environment = all(same(ran.env, env) for ran in host.ran)
+    assert given_the_loaded_environment
     assert answered == answer_of(host.networks)
     assert demo.networks(answered) == pool.networks(answered)
     # The driver's own second question, word for word, and its bound.
-    # The driver's own two questions: the ids, which it lists by a format of the id alone and the script by `-q`,
-    # each a line an id; then the one inspect, word for word.
+    # The driver's own two questions, word for word: the ids, then the one inspect. The script's words are held to
+    # the driver's source, where each is written as a list of strings.
     asks = inspect.getsource(driver.ContainerlabDriver._docker_networks)
-    assert '["docker", "network", "ls", "--format", "{{.ID}}"]' in asks
-    assert '["docker", "network", "inspect", "--format", pool.FORMAT, *ids]' in asks
+    assert f"self._run({json.dumps(list(demo.NETWORK_IDS))}, " in asks
+    assert demo.NETWORK_IDS == NETWORK_IDS
+    inspected = json.dumps(host.ran[1].argv[:4])[:-1] + ", pool.FORMAT, *ids]"
+    assert inspected == '["docker", "network", "inspect", "--format", pool.FORMAT, *ids]'
+    assert f"self._run({inspected}," in asks
 
     # No id listed: no inspect, and no network.
     host = passing()
     host.networks = []
-    assert demo.docker_networks(host) == ""
-    assert [ran.argv for ran in host.ran] == [["docker", "network", "ls", "-q"]]
+    assert demo.docker_networks(ENV, host) == ""
+    assert [ran.argv for ran in host.ran] == [[*NETWORK_IDS]]
     assert demo.networks("") == []
 
     # Either exiting other than 0 stops the run, exit 1, naming the command and its status; so does a network gone
@@ -4211,10 +4274,10 @@ def test_docker_is_asked_once_for_every_network_as_the_driver_asks() -> None:
     host = passing()
     host.answer("docker", "network", "ls", status=1)
     with pytest.raises(demo.Stop) as stop:
-        demo.docker_networks(host)
+        demo.docker_networks(ENV, host)
     assert (stop.value.status, stop.value.lines) == (
         1,
-        ("`docker network ls -q` exited 1: Docker's networks were not read",),
+        ("`docker network ls --format {{.ID}}` exited 1: Docker's networks were not read",),
     )
     assert len(host.ran) == 1
 
@@ -4230,9 +4293,9 @@ def test_docker_is_asked_once_for_every_network_as_the_driver_asks() -> None:
                 host.networks.pop()
                 return done
 
-            host.answers[("docker", "network", "ls", "-q")] = goes
+            host.answers[("docker", "network", "ls")] = goes
         with pytest.raises(demo.Stop) as stop:
-            demo.docker_networks(host)
+            demo.docker_networks(ENV, host)
         assert (stop.value.status, stop.value.lines) == (
             1,
             (f"`docker network inspect` exited {status_}: Docker's networks were not read",),
@@ -4244,7 +4307,7 @@ def test_docker_is_asked_once_for_every_network_as_the_driver_asks() -> None:
         host = passing()
         host.answer("docker", "network", "inspect", out=answered)
         with pytest.raises(demo.Stop) as stop:
-            demo.pool_checked("netbox", IPv4Network("172.20.0.0/16"), host)
+            demo.pool_checked("netbox", IPv4Network("172.20.0.0/16"), ENV, host)
         assert (stop.value.status, stop.value.lines) == (
             1,
             ("`docker network inspect` printed what is not read: Docker's networks were not read",),
@@ -4259,18 +4322,20 @@ def test_the_other_source_is_stopped_first_where_it_is_up(tmp_path: Path, capsys
         targets.by_hand(f"{other}-up")
         before = loaded_env(local, host)
         assert status(host, up_of(local, source)) == 1
-        # Its `down` target is the first command run, after the one read that finds it up and before the host is
-        # judged, with no `PURGE`: its volumes are kept. The checks then find it stopped.
-        assert acts(host)[:3] == [[*UP[other]], made(local, f"{other}-down"), ["docker", "info"]]
-        assert targets.asked[0] == [f"{other}-down"]
-        assert [words for words in targets.asked if words[0].endswith("-down")] == [[f"{other}-down"]]
-        assert not [word for ran in host.ran for word in ran.argv if word.startswith("PURGE")]
-        assert host.up == {demo.PROJECTS[source]}
-        stopped, read = host.ran[1], host.ran[0]
+        # Its `down` target is the first command run that is no read: after the checks no stop can cure and the one
+        # read that finds it up, and before the host's room is judged, which then finds it stopped. Its command line
+        # says `PURGE=`, so that nothing make holds can purge it: its volumes are kept.
+        head = len(cured(source))
+        assert acts(host)[: head + 4] == [*cured(source), [*UP[other]], stop_of(local, other), *room(source)]
+        assert targets.asked[0] == [f"{other}-down", "PURGE="]
+        assert [words for words in targets.asked if words[0].endswith("-down")] == [[f"{other}-down", "PURGE="]]
+        assert not [word for ran in host.ran for word in ran.argv if word == "PURGE=1"]
+        assert (targets.purged, host.up) == ([], {demo.PROJECTS[source]})
+        read, stopped = host.ran[head], host.ran[head + 1]
         assert (stopped.cwd, stopped.capture, stopped.timeout) == (ROOT, False, None)
         assert (read.capture, read.timeout) == (True, demo.DOCKER_TIMEOUT_S)
-        given_a_steps_environment = same(stopped.env, demo.step_env(before, kept, LISTEN))
-        assert given_a_steps_environment
+        given_a_make_childs_environment = same(stopped.env, demo.make_env(before, kept, LISTEN))
+        assert given_a_make_childs_environment
         said = capsys.readouterr()
         assert said.out.splitlines()[:2] == [stopping.format(other), "demo: the host's checks passed"]
         # The other's network still stands, its volumes kept, and is read with the rest once this source is up.
@@ -4279,7 +4344,7 @@ def test_the_other_source_is_stopped_first_where_it_is_up(tmp_path: Path, capsys
         # None of it running: no such command, and nothing said of it.
         local, kept, host, targets = first(tmp_path / f"{source}-alone")
         assert status(host, up_of(local, source)) == 1
-        assert acts(host)[:2] == [[*UP[other]], ["docker", "info"]]
+        assert acts(host)[: len(cured(source)) + 3] == [*cured(source), [*UP[other]], *room(source)]
         assert [words for words in targets.asked if words[0].endswith("-down")] == []
         assert "stopping" not in capsys.readouterr().out
 
@@ -4297,7 +4362,11 @@ def test_the_other_source_is_stopped_first_where_it_is_up(tmp_path: Path, capsys
     host.answer("docker", "ps", status=1)
     assert status(host, up_of(local, "netbox", "")) == 2
     assert [ran.argv for ran in host.ran if ran.argv[0] == "make"] == []
-    assert capsys.readouterr().err.splitlines() == ["demo: `docker ps` exited 1: whether netbox is up was not read"]
+    assert capsys.readouterr().err.splitlines() == [
+        "demo: `docker ps` exited 1: whether netbox is up was not read",
+        "demo: left up: netbox, if it is up, which Docker did not say; make demo-down ends what the demonstration "
+        "started",
+    ]
     assert host.up == {"fylgja-core-infrahub"}
 
 
@@ -4308,8 +4377,9 @@ def test_a_stop_of_the_other_source_that_fails_ends_the_run(
     targets.by_hand("infrahub-up")
     targets.fails = {"infrahub-down": {1}}
     assert status(host, up_of(local, "netbox", "")) == 1
-    # Nothing else is run, read or started, and nothing is written: neither the checks nor a step.
-    assert acts(host) == [[*UP["infrahub"]], made(local, "infrahub-down")]
+    # Nothing else is run or started, and nothing is written: neither the checks of the host's room nor a step. The
+    # one read after it is of what is left up, for the last line.
+    assert acts(host) == [*cured("netbox"), [*UP["infrahub"]], stop_of(local, "infrahub"), [*UP["netbox"]]]
     assert (host.started, host.signalled, host.asked) == ([], [], [])
     assert sorted(path.name for path in local.iterdir()) == [".env"]
     said = capsys.readouterr()
@@ -4317,15 +4387,17 @@ def test_a_stop_of_the_other_source_that_fails_ends_the_run(
         "demo: infrahub is up: stopping it, its volumes kept, since it starts the same deployments"
     ]
     assert said.err.splitlines() == [
-        f"demo: make infrahub-down exited {MAKE_FAILED}: infrahub is still up, and nothing was started"
+        f"demo: make infrahub-down exited {MAKE_FAILED}: infrahub is still up, and nothing was started",
+        f"demo: {NOTHING_LEFT}",
     ]
 
 
 def test_up_settles_what_an_earlier_run_left_before_it_judges_the_host(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`up`'s order before its steps: the lock, the environment, the runners it may not end, what an earlier run
-    left, the other source, the checks, what is generated, the record of the source, the images."""
+    """`up`'s order before its steps: the lock, the environment, the runners it may not end, the checks no stop can
+    cure, what an earlier run left, the other source, the host's room, what is generated, the record of the source,
+    the images."""
     # A NetBox run's twin, left in the store of a core that is gone, its runner gone too, and NetBox still up: for
     # an Infrahub run a core is started for the twin and ended, then NetBox is stopped, then the host is judged.
     local, kept, host, targets = first(tmp_path)
@@ -4350,7 +4422,11 @@ def test_up_settles_what_an_earlier_run_left_before_it_judges_the_host(
     host.answers[("docker", "image", "inspect")] = read_then
     assert status(host, up_of(local, "infrahub")) == 1
     settled = host.started[2]
-    assert acts(host)[: acts(host).index(["docker", "info"])] == [
+    run = acts(host)
+    judged = run.index([*UP["infrahub"]])
+    assert run[judged:][:4] == [*room("infrahub"), *(image_read(image) for image in demo.IMAGES)]
+    assert run[:judged] == [
+        *cured("infrahub"),
         HEARD,
         ("start", [CORE]),
         HEARD_BY_PID,
@@ -4362,10 +4438,10 @@ def test_up_settles_what_an_earlier_run_left_before_it_judges_the_host(
         HEARD_BY_PID,
         (settled.pid, TERM),
         [*UP["netbox"]],
-        made(local, "netbox-down"),
+        stop_of(local, "netbox"),
     ]
     assert targets.twins == []
-    # The record names the source once the checks have passed, before an image is read or a step is run.
+    # The record names the source once every check has passed, before an image is read or a step is run.
     assert recorded == [("the checks", "netbox\n"), ("the images", "infrahub\n"), ("the images", "infrahub\n")]
     assert capsys.readouterr().out.splitlines()[:8] == [
         f"demo: the runner recorded in {kept.runner_pid}, pid {runner.pid}, is gone: the file removed",
@@ -4414,6 +4490,517 @@ def test_up_settles_what_an_earlier_run_left_before_it_judges_the_host(
     ]
 
 
+HOSTILE = {
+    "MAKEFLAGS": "ik -- PURGE=1 SOURCE=netbox SEED_BRANCH=mine NETBOX_BRANCH=mine",
+    "MFLAGS": "-ik",
+    "MAKEOVERRIDES": "PURGE=1 SOURCE=netbox",
+    "MAKELEVEL": "1",
+    "GNUMAKEFLAGS": "-e PURGE=1",
+    "MAKEFILES": "/srv/example/hostile.mk",
+    "LOCAL": "/srv/example/elsewhere/local",
+    "INFRAHUB_VERSION": "9.9.1",
+    "INFRAHUB_SDK_VERSION": "9.9.2",
+    "REF": "another-branch",
+    "SEED_BRANCH": "mine",
+    "PURGE": "1",
+    "PROPOSED_CHANGE": "0",
+    "NETBOX_VERSION": "9.9.3",
+    "NETBOX_DOCKER_VERSION": "9.9.4",
+    "NETBOX_BRANCHING_VERSION": "9.9.5",
+    "NETBOX_BRANCH": "mine",
+    "NETBOX_TAG": "0",
+    "SOURCE": "nautobot",
+    "IMAGE": "registry.example/another",
+    "DRIVER": "clabernetes",
+}
+"""Every name make would read from a child's environment in the script's place, each with a value that would change
+what a target does: purge a stop, drop a step, build another branch, start another version, ignore a failure."""
+
+NOT_PASSED_ON = "demo: not passed on to the make targets: {}; the demonstration runs each at the Makefile's own value"
+
+
+def assigned_by_default(makefile: str) -> list[str]:
+    """The names a makefile assigns by `?=`, which make takes from its environment where that holds them."""
+    return re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)[ \t]*\?=", makefile, re.MULTILINE)
+
+
+def referred(makefile: str) -> tuple[set[str], set[str]]:
+    """The variables and the functions a makefile's `$(…)` refer to, comments aside: a word followed by a blank is a
+    function's name; any other is a variable's, a substitution's among them (`$(@:-demo=)`). A `$$(…)` is the
+    shell's."""
+    variables: set[str] = set()
+    functions: set[str] = set()
+    for line in makefile.splitlines():
+        if line.startswith("#"):
+            continue
+        for found in re.finditer(r"(?<!\$)\$\(([^\s():,$]+)(.?)", line):
+            (functions if found[2] in (" ", "\t") else variables).add(found[1])
+    return variables, functions
+
+
+def test_the_names_no_make_child_is_given_are_makes_own_and_the_makefiles() -> None:
+    makefile = (ROOT / "Makefile").read_text()
+    # Every name the Makefile assigns by `?=`, in its order: one added there and not here fails this.
+    assert tuple(assigned_by_default(makefile)) == demo.MAKE_VARIABLES
+    assert len(set(demo.MAKE_VARIABLES)) == 15 and {"PURGE", "SOURCE", "SEED_BRANCH", "NETBOX_BRANCH"} < set(
+        demo.MAKE_VARIABLES
+    )
+    assert demo.MAKES_OWN == ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKELEVEL", "GNUMAKEFLAGS", "MAKEFILES")
+    assert set(HOSTILE) == {*demo.MAKES_OWN, *demo.MAKE_VARIABLES}
+
+    # Every variable the Makefile refers to is one it assigns, or make's own: so none is read from the environment
+    # alone, and a bare reference added later fails here until it is assigned, and then by `?=` above or not at all.
+    assigned = set(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:\?=|:=|=)", makefile, re.MULTILINE))
+    variables, functions = referred(makefile)
+    assert variables - assigned == {"MAKE", "@"}
+    assert functions == {"shell", "if", "filter", "filter-out", "words", "error"}
+    assert set(demo.MAKE_VARIABLES) <= assigned and {"VENV", "MAIN", "TAG", "SOURCES"} <= assigned
+    # The reading itself, on lines of the test's own.
+    sample = "a: $(NEW)\n\t$(if $(X),$(Y:.c=.o)) $$(sh) $(@)\n# $(NOT_READ)\n"
+    assert referred(sample) == ({"NEW", "X", "Y", "@"}, {"if"})
+    assert assigned_by_default("A ?= 1\nB := 2\nC?=3\n  D ?= 4\n") == ["A", "C"]
+
+    # A make child's environment is a step's, less those names and no other, whatever holds them.
+    kept = demo.records(LOCAL)
+    env = ENV | EDGE | HOSTILE | {"MAKEFLAGS_OF_MINE": "kept", "PURGE_": "kept"}
+    given = demo.make_env(env, kept, LISTEN)
+    assert [name for name in given if name in HOSTILE] == []
+    step = demo.step_env(env, kept, LISTEN)
+    the_rest_is_a_steps = same(given, {name: value for name, value in step.items() if name not in HOSTILE})
+    assert the_rest_is_a_steps
+    assert (given["MAKEFLAGS_OF_MINE"], given["PURGE_"], given["FYLGJA_TOKENS"]) == ("kept", "kept", str(kept.tokens))
+    # The stops' words: `PURGE=` unless a purge is asked for.
+    assert demo.stop_words("netbox", LOCAL) == made(LOCAL, "netbox-down", "PURGE=")
+    assert demo.stop_words("infrahub", LOCAL, purge=True) == made(LOCAL, "infrahub-down", "PURGE=1")
+
+
+def hostile_lines() -> list[str]:
+    """`HOSTILE` as lines of `local/.env`, each value in single quotes."""
+    return [f"{name}='{value}'" for name, value in HOSTILE.items()]
+
+
+@pytest.mark.parametrize("held_by", ["the shell", "the file", "both"])
+@pytest.mark.parametrize("source", ["infrahub", "netbox"])
+def test_a_make_child_is_given_no_make_variable_but_its_own(
+    source: str, held_by: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A whole `up` and `down` under an environment, a `local/.env` or both that hold every name make would read in
+    the script's place, the other source up so that it is stopped. The fake's make reads a variable as make does, so
+    one let through would purge, drop the account's step, build another branch or pass over a failure."""
+    other = OTHER[source]
+    local, _, host, targets = first(tmp_path)
+    targets.by_hand(f"{other}-up")
+    if held_by != "the shell":
+        EDGE_DEV.append(local / ".env", hostile_lines())
+    shell = SHELL | (HOSTILE if held_by != "the file" else {})
+
+    def run(argv: list[str]) -> int:
+        exited: int = demo.main(argv, environ=shell, host=host)
+        return exited
+
+    assert run(up_of(local, source)) == 1
+    said = capsys.readouterr()
+    assert said.err.splitlines()[0] == f"demo: {OPENED}"
+    assert run(down(local)) == 0
+    again = capsys.readouterr()
+
+    # No make child's environment holds one of the names: its variables are its command line's alone.
+    makes = [ran for ran in host.ran if ran.argv[0] == "make"]
+    assert [ran.argv[2] for ran in makes] == [
+        f"{other}-down",
+        *(step.target for step in demo.STEPS[source] if step.kind == "make"),
+        "prefect-down",
+        f"{source}-down",
+    ]
+    assert sorted({name for ran in makes for name in (ran.env or {}) if name in HOSTILE}) == []
+    each_holds_the_rest = all(
+        same([(ran.env or {}).get(name) for name in ("PATH", *demo.LOGIN)], ["/usr/bin", NODE_USER, NODE_PASSWORD])
+        for ran in makes
+    )
+    assert each_holds_the_rest
+    # Every stop says `PURGE=` on its command line, and nothing was purged: the other source's network stands.
+    assert [ran.argv for ran in makes if ran.argv[2] in (f"{other}-down", f"{source}-down")] == [
+        stop_of(local, other),
+        stop_of(local, source),
+    ]
+    assert (targets.purged, PROJECT_NETWORKS[other] in host.networks) == ([], True)
+    # Each step ran at the Makefile's own value: the seeded branch, Infrahub's own account, the change opened once.
+    assert (targets.built, targets.opened) == (["third-link"], [True])
+    assert source == "netbox" or targets.held(EDGE_DEV.INFRAHUB_TOKEN) is not None
+    # The children that are no make's keep what they had: the core and the runner are given the file as loaded.
+    assert len(host.started) == 2
+
+    # It is said once in each command, before anything is stopped or run, by the names alone: every name of the
+    # Makefile's that was set, but `LOCAL`, which the script gives itself.
+    names = ", ".join(name for name in demo.MAKE_VARIABLES if name != "LOCAL")
+    for printed in (said.out, again.out):
+        lines = printed.splitlines()
+        assert [line for line in lines if "not passed on" in line] == [NOT_PASSED_ON.format(names)]
+        before = lines[: lines.index(NOT_PASSED_ON.format(names))]
+        assert not [line for line in before if "step" in line or "stopping" in line or "ended" in line]
+    values = ("another-branch", "mine", "nautobot", "registry.example", "clabernetes", "9.9.", "hostile", "elsewhere")
+    shown = [value for value in values if value in said.out + said.err + again.out + again.err]
+    assert shown == []
+
+    # A purge that is asked for is given, on the command line, and `PURGE` is then one the script gives itself.
+    assert run(down(local, "--purge")) == 0
+    assert host.ran[-1].argv == stop_of(local, source, purge=True)
+    assert "PURGE" not in (host.ran[-1].env or {}) and targets.purged == [source]
+    names = ", ".join(name for name in demo.MAKE_VARIABLES if name not in ("LOCAL", "PURGE"))
+    assert [line for line in capsys.readouterr().out.splitlines() if "not passed on" in line] == [
+        NOT_PASSED_ON.format(names)
+    ]
+
+
+def test_a_make_variable_the_caller_set_is_said_not_passed_on_by_its_name_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def said(host: FakeHost, argv: list[str], environ: Mapping[str, str]) -> list[str]:
+        demo.main(argv, environ=environ, host=host)
+        return [line for line in capsys.readouterr().out.splitlines() if "not passed on" in line]
+
+    # None set: nothing is said. A name held with no value is not held.
+    local, _, host, targets = first(tmp_path)
+    assert said(host, up_of(local, "infrahub"), SHELL | {"SEED_BRANCH": "", "PURGE": ""}) == []
+    # As `make infrahub-demo REF=main SEED_BRANCH=mine` gives its recipe's child: the two variables, `LOCAL` and
+    # make's own. `REF` is the script's own word to the registration, and `LOCAL` its own to every target.
+    recipes = SHELL | {
+        "MAKEFLAGS": " -- SEED_BRANCH=mine REF=main",
+        "MFLAGS": "",
+        "MAKELEVEL": "1",
+        "SEED_BRANCH": "mine",
+        "REF": "main",
+        "LOCAL": str(local),
+    }
+    assert said(host, up_of(local, "infrahub"), recipes) == [NOT_PASSED_ON.format("SEED_BRANCH")]
+    assert targets.built == ["third-link", "third-link"]
+    # The same `REF` under NetBox, no step of which is given one; and another `REF` than the script was told.
+    assert status(host, down(local)) == 0
+    capsys.readouterr()
+    assert said(host, up_of(local, "infrahub", "main"), SHELL | {"REF": "another"}) == [NOT_PASSED_ON.format("REF")]
+    assert status(host, down(local)) == 0
+    capsys.readouterr()
+    assert said(host, up_of(local, "netbox", "main"), SHELL | {"REF": "main"}) == [NOT_PASSED_ON.format("REF")]
+
+    # `make demo-down PURGE=1`: the script is told `--purge` and gives `PURGE=1` itself, so nothing is said.
+    purging = SHELL | {"MAKEFLAGS": " -- PURGE=1", "PURGE": "1"}
+    assert said(host, down(local, "--purge"), purging) == []
+    assert targets.purged == ["netbox"]
+
+    # `PURGE=1` in `local/.env` alone, and a `down` without `--purge`: said, and nothing purged.
+    local, _, host, targets = first(tmp_path / "file")
+    EDGE_DEV.append(local / ".env", ["PURGE=1"])
+    assert status(host, up_of(local, "netbox", "")) == 1
+    capsys.readouterr()
+    assert said(host, down(local), SHELL) == [NOT_PASSED_ON.format("PURGE")]
+    assert (targets.purged, PROJECT_NETWORKS["netbox"] in host.networks) == ([], True)
+    assert host.ran[-1].argv == stop_of(local, "netbox")
+
+
+MAKE_READS = [
+    ((), {"PURGE": "1"}, True),
+    (("PURGE=",), {"PURGE": "1"}, False),
+    ((), {"MAKEFLAGS": " -- PURGE=1"}, True),
+    (("PURGE=",), {"MAKEFLAGS": " -- PURGE=1"}, False),
+    ((), {"MAKEFLAGS": "PURGE=1"}, True),
+    ((), {"GNUMAKEFLAGS": "PURGE=1"}, True),
+    (("PURGE=",), {"GNUMAKEFLAGS": "PURGE=1"}, False),
+    ((), {"PURGE": "1", "MAKEFLAGS": " -- PURGE="}, False),
+    ((), {"PURGE": "yes"}, False),
+    ((), {"MAKEOVERRIDES": "PURGE=1"}, False),
+    ((), {"MFLAGS": "-- PURGE=1"}, False),
+    ((), {}, False),
+    (("PURGE=1",), {}, True),
+    (("PURGE=1",), {"PURGE": "", "MAKEFLAGS": " -- PURGE="}, True),
+]
+"""A stop's variables on its command line, its environment, and whether make then purges: as `make -n` prints the
+recipe of this checkout's `Makefile`."""
+
+
+@pytest.mark.parametrize(("words", "environ", "purges"), MAKE_READS)
+def test_the_fakes_make_reads_a_variable_as_make_does(
+    words: tuple[str, ...], environ: dict[str, str], purges: bool, tmp_path: Path
+) -> None:
+    """The fake of the targets decides by `read_by_make`; make itself, asked by `make -n`, which runs nothing, decides
+    the same for every row: so a variable the script lets through acts in a faked run as it would on the host."""
+    for source in demo.SOURCES:
+        argv = demo.make_words(f"{source}-down", tmp_path, *words)
+        printed = dry(argv, {"PATH": "/usr/bin:/bin"} | environ)
+        assert printed.returncode == 0
+        assert ("--purge" in printed.stdout) == purges
+        assert (read_by_make(argv, environ)[0].get("PURGE") == "1") == purges
+        local, _, host, targets = first(tmp_path / source)
+        targets.by_hand(f"{source}-up")
+        done = host.run(demo.make_words(f"{source}-down", local, *words), env=SHELL | environ, cwd=ROOT)
+        assert (done.status, targets.purged) == (0, [source] if purges else [])
+
+
+def test_no_stop_purges_under_a_hostile_environment_as_make_itself_reads_it(tmp_path: Path) -> None:
+    """Real `make -n`, which prints a recipe and runs none of it, of the words the script stops a source by, under the
+    hostile environment as a make child is given it: no `--purge`. And under the same environment as it came, the
+    recipe is printed with `--purge`, so the test bites."""
+    read_first = tmp_path / "hostile.mk"
+    read_first.write_text("override PURGE := 1\noverride SOURCE := netbox\n")
+    hostile = {"PATH": "/usr/bin:/bin"} | HOSTILE | {"MAKEFILES": str(read_first)}
+    kept = demo.records(tmp_path)
+    stripped = demo.make_env(hostile, kept, LISTEN)
+    assert stripped["PATH"] == "/usr/bin:/bin" and not [name for name in stripped if name in HOSTILE]
+    for source, script in (("infrahub", "infrahub_dev"), ("netbox", "netbox_dev")):
+        words = demo.stop_words(source, tmp_path)
+        kept_volumes = dry(words, stripped)
+        assert kept_volumes.returncode == 0
+        assert f"scripts/{script}.py down --local {tmp_path} " in kept_volumes.stdout
+        assert "--purge" not in kept_volumes.stdout
+        # As it came, a makefile read first overrides the command line itself: the stripping is what holds.
+        assert "--purge" in dry(words, hostile).stdout
+        # And the command line's `PURGE=` is what holds against a child's environment that is not make's own names.
+        bare = demo.make_words(f"{source}-down", tmp_path)
+        assert "--purge" in dry(bare, {"PATH": "/usr/bin:/bin", "PURGE": "1"}).stdout
+        assert "--purge" not in dry(words, {"PATH": "/usr/bin:/bin", "PURGE": "1"}).stdout
+        # A purge that is asked for is given.
+        assert dry(demo.stop_words(source, tmp_path, purge=True), stripped).stdout.rstrip().endswith(" --purge")
+
+    # Every make step prints under the stripped hostile environment what it prints under a plain one, and under the
+    # hostile one as it came Infrahub's `orchestrator-env` has lost its account's step.
+    plain = {"PATH": "/usr/bin:/bin"}
+    for steps in demo.STEPS.values():
+        for step in steps:
+            if step.kind == "make":
+                words = demo.make_argv(step, tmp_path, "a-branch")
+                assert dry(words, stripped).stdout == dry(words, plain).stdout != ""
+    accounts = demo.make_argv(demo.Step("make", "orchestrator-env"), tmp_path, "")
+    assert "infrahub/seed/account.py" in dry(accounts, stripped).stdout
+    assert "infrahub/seed/account.py" not in dry(accounts, hostile).stdout
+
+
+def test_a_recorded_prefect_server_is_this_homes_as_make_prefect_up_reads_one(tmp_path: Path) -> None:
+    """`prefect_recorded` is `edge_dev.is_ours` of the process `server.pid` names, held to it row by row: a reused
+    pid, another home's server and a worker are no server of this `local/`'s."""
+    local, kept, _ = place(tmp_path)
+    home = EDGE_DEV.home_of(local)
+    home.mkdir()
+    EDGE_DEV.pid_file(local).write_text("4503\n")
+    server = [PYTHON, str(EDGE_DEV.PREFECT), "server", "start", "--host", BIND, "--port", "4200", "--no-ui"]
+    rows = {
+        "this home's server": (demo.Process(server, {"PREFECT_HOME": str(home)}), True),
+        "this home's server, from another checkout": (
+            demo.Process(["/srv/another/.venv/bin/prefect", "server", "start"], {"PREFECT_HOME": str(home)}),
+            True,
+        ),
+        "a reused pid": (demo.Process(["sleep", "600"], {}), False),
+        "a reused pid under this home": (demo.Process(["sleep", "600"], {"PREFECT_HOME": str(home)}), False),
+        "another home's server": (demo.Process(server, {"PREFECT_HOME": "/srv/another/local/prefect"}), False),
+        "a server with no home": (demo.Process(server, {}), False),
+        "this home's worker": (
+            demo.Process([PYTHON, str(EDGE_DEV.PREFECT), "worker", "start"], {"PREFECT_HOME": str(home)}),
+            False,
+        ),
+        "this home's runner": (runner_process(local), False),
+        "another server": (demo.Process(["/usr/bin/gunicorn", "server"], {"PREFECT_HOME": str(home)}), False),
+        "no process": (None, False),
+    }
+    for row, (process, ours) in rows.items():
+        host = passing(local, disk=tmp_path)
+        if process is not None:
+            host.processes[4503] = process
+        assert demo.is_prefect(process, local) == EDGE_DEV.is_ours(process, home) == ours, row
+        running = EDGE_DEV.running(local, read=host.process) is not None
+        assert demo.prefect_recorded(local, host) == running == ours, row
+        # The port is the edge's to need unless this home's server is recorded; and that is what the last line names.
+        host.listening.append((f"{BIND}:4200", 4503, "prefect"))
+        env = loaded_env(local, host)
+        needs_the_port: list[str] = demo.checks("netbox", env, local=local, ref="", host=host)
+        assert needs_the_port == ([] if ours else [LISTENED.format(4200, BIND, "the edge's Prefect")]), row
+        assert ("the edge's Prefect" in demo.left_up("netbox", env, kept, local, host)) == ours, row
+    # No file, and a file that names no pid.
+    host = passing(local, disk=tmp_path)
+    for held in (None, "", "no pid\n"):
+        EDGE_DEV.pid_file(local).unlink(missing_ok=True)
+        if held is not None:
+            EDGE_DEV.pid_file(local).write_text(held)
+        assert not demo.prefect_recorded(local, host)
+
+
+def test_nothing_is_stopped_for_a_run_that_could_never_start(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The checks no stop can cure are asked before anything is settled or stopped; the host's room, its memory and
+    its ports, once an earlier run is settled and the other source stopped."""
+    no_branch = (
+        "demo: no branch is checked out and REF names none: Infrahub registers this repository at a branch; check one "
+        "out, or give REF=<branch>"
+    )
+    # No `REF` for Infrahub, with NetBox up: exit 2, and NetBox is not stopped; no make, no signal, no start.
+    local, kept, host, targets = first(tmp_path)
+    targets.by_hand("netbox-up")
+    assert status(host, up_of(local, "infrahub", "")) == 2
+    assert capsys.readouterr().err.splitlines() == [no_branch]
+    assert acts(host) == [["docker", "info"], ["docker", "compose", "version"], ["containerlab", "version"]]
+    assert (host.up, targets.asked, host.started, host.signalled) == ({"fylgja-core-netbox"}, [], [], [])
+    assert sorted(path.name for path in local.iterdir()) == [".env"]
+
+    # The same of each such check over what an earlier NetBox run left, its runner and its core up with a twin: no
+    # login, a tool not on PATH, a group not held, a listen address off loopback, a pool that is none. Nothing is
+    # signalled, listed, destroyed, stopped or started, and the records stay.
+    refusals: dict[str, Any] = {
+        "no login": lambda local, host: (local / ".env").write_text(
+            (local / ".env").read_text().replace(f"FYLGJA_CREDENTIAL_SRLINUX_PASSWORD={NODE_PASSWORD}\n", "")
+        ),
+        "no containerlab": lambda local, host: host.on_path.discard("containerlab"),
+        "no group": lambda local, host: host.held.discard(997),
+        "a listen address off loopback": lambda local, host: EDGE_DEV.append(
+            local / ".env", ["FYLGJA_LISTEN=0.0.0.0:7650"]
+        ),
+        "no pool": lambda local, host: EDGE_DEV.append(local / ".env", ["FYLGJA_LAB_POOL=198.51.100.0/25"]),
+        "no daemon": lambda local, host: host.answer("docker", "info", status=1),
+    }
+    for case, arrange in refusals.items():
+        local, kept, host, targets = first(tmp_path / case.replace(" ", "-"))
+        assert status(host, up_of(local, "netbox", "")) == 1
+        targets.twins = ["rh-left"]
+        arrange(local, host)
+        host.acts.clear()
+        del targets.asked[:]
+        capsys.readouterr()
+        assert status(host, up_of(local, "netbox", "")) == 2, case
+        err = capsys.readouterr().err.splitlines()
+        assert len(err) == 1 and "left up" not in err[0], case
+        assert all(isinstance(act, list) and act[0] in ("docker", "containerlab") for act in acts(host)), case
+        assert [act for act in acts(host) if act[:2] == ["docker", "ps"]] == [], case
+        assert (targets.asked, targets.twins, len(host.started), host.signalled) == ([], ["rh-left"], 2, []), case
+        assert (kept.core_pid.exists(), kept.runner_pid.exists(), kept.unsettled.exists()) == (True, True, True), case
+
+    # The room: memory that is short only while the other source is up is enough once it is stopped, and the run
+    # goes on.
+    local, kept, host, targets = first(tmp_path / "room")
+    host.files[MEMINFO] = meminfo(12000)
+    targets.by_hand("netbox-up")
+    assert demo.available_mb(host.files[MEMINFO]) == 12000 - demo.SOURCE_MB["netbox"] < 11776 <= 12000
+    assert status(host, up_of(local, "infrahub")) == 1
+    said = capsys.readouterr()
+    assert said.err.splitlines()[0] == f"demo: {OPENED}" and len(host.started) == 2
+    assert said.out.splitlines()[:2] == [
+        "demo: netbox is up: stopping it, its volumes kept, since it starts the same deployments",
+        "demo: the host's checks passed",
+    ]
+
+    # Short still, with the other stopped: exit 2 with the check's own sentence, then what is left up, which is
+    # nothing of the demonstration's. The other source has been stopped by then, and was said to be.
+    local, kept, host, targets = first(tmp_path / "short")
+    host.files[MEMINFO] = meminfo(6000)
+    targets.by_hand("netbox-up")
+    assert status(host, up_of(local, "infrahub")) == 2
+    said = capsys.readouterr()
+    assert said.out.splitlines() == [
+        "demo: netbox is up: stopping it, its volumes kept, since it starts the same deployments"
+    ]
+    assert said.err.splitlines() == [
+        "demo: 6000 MiB of memory is available and the infrahub demonstration needs 11776: 4608 for infrahub, which "
+        "is not up, and 7168 for the twin and the edge",
+        f"demo: {NOTHING_LEFT}",
+    ]
+    assert (host.up, targets.asked, host.started) == (set(), [["netbox-down", "PURGE="]], [])
+    assert not kept.source.exists()
+
+    # A port of the room's held by a process that is recorded nowhere: the same, judged after an earlier run of this
+    # source is settled, whose core held the core's port until then. Here the earlier run's Prefect server, its
+    # `server.pid` since removed by hand: the source is still up, and named in the last line.
+    local, kept, host, targets = first(tmp_path / "port")
+    assert status(host, up_of(local, "netbox", "")) == 1
+    [core, runner] = host.started
+    EDGE_DEV.pid_file(local).unlink()
+    del targets.asked[:]
+    capsys.readouterr()
+    assert status(host, up_of(local, "netbox", "")) == 2
+    said = capsys.readouterr()
+    assert said.out.splitlines() == [
+        f"demo: the runner, pid {runner.pid}, ended",
+        f"demo: the core, pid {core.pid}, ended",
+    ]
+    assert said.err.splitlines() == [
+        f"demo: {LISTENED.format(4200, BIND, "the edge's Prefect")}",
+        f"demo: {left_up('netbox')}",
+    ]
+    assert (len(host.started), targets.asked) == (2, [])
+
+
+def test_every_way_out_of_up_after_something_was_settled_says_what_is_left_up(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # An error of the host's after that point: the record of the source cannot be written, a directory standing in
+    # its place. It is said in the error's own word with the path, then what is left up.
+    local, kept, host, targets = first(tmp_path)
+    (local / "demo" / "source").mkdir(parents=True)
+    assert status(host, up_of(local, "netbox", "")) == 1
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: up was cut short, Is a directory: {kept.source}",
+        f"demo: {NOTHING_LEFT}",
+    ]
+    assert (targets.asked, host.started) == ([], [])
+
+    # The same once the source, the core and Prefect are up: the record of the server cannot be written.
+    local, kept, host, targets = first(tmp_path / "record")
+    kept.prefect_pid.mkdir(parents=True)
+    assert status(host, up_of(local, "netbox", "")) == 1
+    [core] = host.started
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: up was cut short, Is a directory: {kept.prefect_pid}",
+        "demo: " + left_up("netbox", f"the core (pid {core.pid})", "the edge's Prefect"),
+    ]
+    assert targets.asked[-1] == ["prefect-up"]
+
+    # What an earlier run left that cannot be settled: `settle`'s own lines, then what is left up, the core that did
+    # not list among it, and the other source is not stopped.
+    local, kept, host, targets = first(tmp_path / "settle")
+    assert status(host, up_of(local, "netbox", "")) == 1
+    [core, runner] = host.started
+    targets.twins = ["rh-stays"]
+    host.answer(CLI, "twin", "destroy", status=3)
+    capsys.readouterr()
+    assert status(host, up_of(local, "netbox", "")) == 1
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: still standing after its destroy: rh-stays; {LEFT_UP.format(core.pid, LISTEN, kept.core_log)}",
+        "demo: " + left_up("netbox", f"the core (pid {core.pid})", "the edge's Prefect"),
+    ]
+    assert (host.signalled, len(host.started)) == ([(runner.pid, TERM)], 2)
+
+    # A core that never comes to listen: its step's line says to end it by its pid, and so does the last line, which
+    # names it as what `make demo-down` leaves.
+    local, kept, host, targets = first(tmp_path / "deaf")
+
+    def never_listens(child: Started) -> None:
+        targets.started(child)
+        if child.argv == [CORE]:
+            host.not_listening.add(child.pid)
+
+    host.on_start = never_listens
+    assert status(host, up_of(local, "netbox", "")) == 1
+    [core] = host.started
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: step 4, the core: the core did not answer at {LISTEN} within 60 s: read {kept.core_log}; end it by "
+        f"its pid, {core.pid}, then run make demo-down",
+        "demo: " + left_up("netbox", f"the core (pid {core.pid}), which does not listen", deaf=core.pid),
+    ]
+    # And `make demo-down` does leave it, saying so, exit 1, the source stopped all the same.
+    assert status(host, down(local)) == 1
+    assert (core.pid in host.processes, host.up, host.signalled) == (True, set(), [])
+    assert "end it by its pid" in capsys.readouterr().err
+
+
+def test_a_ref_that_begins_with_a_dash_reaches_the_checks_own_sentence(capsys: pytest.CaptureFixture[str]) -> None:
+    """As the Makefile gives it, `--ref='<REF>'` in one word: a `REF` that begins with a dash is the option's value,
+    and the check says that it names no commit; it is not argparse's to refuse as an option of the script's."""
+    for ref in ("--purge", "-x", "--all"):
+        host = passing()
+        assert status(host, ["up", "infrahub", *WHERE, f"--ref={ref}"]) == 2
+        assert capsys.readouterr().err.splitlines() == [f"demo: REF names {ref}, which is no commit of this repository"]
+        assert host.locked == [LOCK]
+    # In two words, as the recipe had it, argparse takes the value for an option and prints its usage.
+    host = passing()
+    assert status(host, ["up", "infrahub", *WHERE, "--ref", "--purge"]) == 2
+    assert "usage:" in capsys.readouterr().err and host.locked == []
+
+
 def test_the_images_are_the_packages_the_seeded_twin_runs() -> None:
     import yaml
 
@@ -4438,25 +5025,28 @@ def test_an_image_absent_is_pulled_and_one_present_is_not(tmp_path: Path, capsys
     srlinux, alpine = demo.IMAGES
     # Both held: each is asked of Docker once, read and bounded, and nothing is pulled or said.
     host = passing()
-    demo.pull(host)
+    demo.pull(ENV, host)
     assert [ran.argv for ran in host.ran] == [image_read(srlinux), image_read(alpine)]
-    assert [(ran.capture, ran.timeout, ran.env) for ran in host.ran] == [(True, demo.DOCKER_TIMEOUT_S, None)] * 2
+    assert [(ran.capture, ran.timeout) for ran in host.ran] == [(True, demo.DOCKER_TIMEOUT_S)] * 2
     assert capsys.readouterr().out == ""
 
     # One absent: it alone is pulled, printing as it will, within its own bound, and then Docker holds it.
     host = passing()
     host.images = {alpine}
-    demo.pull(host)
+    demo.pull(ENV, host)
     assert [ran.argv for ran in host.ran] == [image_read(srlinux), ["docker", "pull", srlinux], image_read(alpine)]
     pulled = host.ran[1]
-    assert (pulled.capture, pulled.timeout, pulled.env, demo.PULL_TIMEOUT_S) == (False, 1800, None, 1800)
+    assert (pulled.capture, pulled.timeout, demo.PULL_TIMEOUT_S) == (False, 1800, 1800)
+    # Each is asked of Docker under the loaded environment, as the checks ask it.
+    given_the_loaded_environment = all(same(ran.env, ENV) for ran in host.ran)
+    assert given_the_loaded_environment
     assert host.images == set(demo.IMAGES)
     assert capsys.readouterr().out.splitlines() == [f"demo: pulling {srlinux}, which Docker does not hold"]
 
     # Neither held: both pulled, in order.
     host = passing()
     host.images = set()
-    demo.pull(host)
+    demo.pull(ENV, host)
     assert [ran.argv[:2] for ran in host.ran] == [["docker", "image"], ["docker", "pull"]] * 2
     capsys.readouterr()
 
@@ -4467,7 +5057,7 @@ def test_an_image_absent_is_pulled_and_one_present_is_not(tmp_path: Path, capsys
         host.images = set()
         host.answer("docker", "pull", status=status_)
         with pytest.raises(demo.Stop) as stop:
-            demo.pull(host)
+            demo.pull(ENV, host)
         assert (stop.value.status, stop.value.lines) == (
             1,
             (f"`docker pull {srlinux}` exited {status_}: the image the twin runs was not pulled",),
@@ -4476,7 +5066,7 @@ def test_an_image_absent_is_pulled_and_one_present_is_not(tmp_path: Path, capsys
     host = passing()
     host.answer("docker", "image", "inspect", status=demo.TIMED_OUT)
     with pytest.raises(demo.Stop) as stop:
-        demo.pull(host)
+        demo.pull(ENV, host)
     assert (stop.value.status, stop.value.lines) == (
         1,
         (f"`docker image inspect {srlinux}` exited 124: whether Docker holds the image was not read",),
@@ -4505,7 +5095,22 @@ def test_an_image_absent_is_pulled_and_one_present_is_not(tmp_path: Path, capsys
     assert (targets.asked, host.started) == ([], [])
     assert capsys.readouterr().err.splitlines() == [
         f"demo: `docker pull {srlinux}` exited 1: the image the twin runs was not pulled",
-        "demo: nothing the demonstration starts is left up",
+        f"demo: {NOTHING_LEFT}",
+    ]
+
+    # A second run, the source and Prefect up from the first, whose pull fails: the last line says the source is up,
+    # though no step of this run was asked.
+    local, _, host, targets = first(tmp_path / "again")
+    assert status(host, up_of(local, "netbox", "")) == 1
+    host.images = set()
+    host.answer("docker", "pull", status=1)
+    del targets.asked[:]
+    capsys.readouterr()
+    assert status(host, up_of(local, "netbox", "")) == 1
+    assert targets.asked == [] and len(host.started) == 2 and len(host.processes) == 1
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: `docker pull {srlinux}` exited 1: the image the twin runs was not pulled",
+        "demo: " + left_up("netbox", "the edge's Prefect"),
     ]
 
 
@@ -4544,7 +5149,7 @@ def test_no_secret_is_printed_or_put_on_a_command_line_over_a_whole_run(
         )
         assert the_core_holds_the_login and the_runner_holds_the_auth and the_runner_holds_its_token
         last = [ran for ran in host.ran if ran.argv[0] == "make"][-1]
-        the_last_step_holds_the_file = same(last.env, demo.step_env(env, kept, LISTEN))
+        the_last_step_holds_the_file = same(last.env, demo.make_env(env, kept, LISTEN))
         assert the_last_step_holds_the_file
         # The auth goes to Prefect in the seam's own argument, and in no URL.
         the_auth_was_given_to_the_seam = all(
@@ -5038,7 +5643,7 @@ def test_the_fake_host_answers_as_the_real_one_does() -> None:
     assert host.run(["docker", "ps", "-q"], capture=True).out.split() == ids
     host.networks.append(("fylgja-core-netbox_default", ["198.51.100.0/24"]))
     host.networks.append(("both", ["172.20.0.0/16", "fd00::/64"]))
-    listed = host.run(["docker", "network", "ls", "-q"], capture=True).out.split()
+    listed = host.run([*NETWORK_IDS], capture=True).out.split()
     assert len(listed) == len(set(listed)) == 5 and all(len(each) == 12 for each in listed)
     inspect_ = ["docker", "network", "inspect", "--format", "{{json .Name}} {{json .IPAM.Config}}"]
     assert host.run([*inspect_, *listed], capture=True) == demo.Done(

@@ -6076,99 +6076,107 @@ read `phase-10/2-demonstrations`, and the second proposed change below stood ope
   runner is ended by SIGKILL; a seed run again while the old check still waits, which this run did not meet, the check
   having concluded 8.3 s after the signal; why the stages' reads took as long as they did.
 
-**`make infrahub-demo` end to end on the local driver, again over the proposed change it left open, its refusals,
-and `make demo-down`** *(Infrahub 1.11.11, Prefect 3.9.2, containerlab 0.81.0, Docker 29.8.1, `scripts/demo.py` at
-`e4212a9`, 2026-11-14)*. Read on 2026-11-14 on the development host, for phase 10's plan 2: the three targets run in
-the plan's worktree at `e4212a9` with the main checkout's `local/`, `LOCAL` the targets' default, `REF` its default,
-the worktree's branch `phase-10/2-demonstrations`, no make variable and no `FYLGJA_` name set in the shell, and
-`local/.env` loaded by the script alone; the development NetBox first brought up by `make netbox-up` with
-`local/.env` loaded, so that the first run met it running. Each target was timed as under "NetBox 4.7.5 with
-netbox-branching 1.2.3" for `make netbox-demo` the same day, so every step's time below is a derivation, from its
-`step <n>` line to the next line the script printed. Prefect's runs and documents and the proposed change's
-validators, checks and thread were read by hand after each run, with the credentials read from the environment and
-sent in a header the reading built. Every output was saved, and none held a credential of `local/.env`. No purge was
-made, so the time from new volumes was not read. *(2026-11-14)*
+**`make infrahub-demo` end to end on the local driver, again over the proposed change it left open, its refusals, and
+`make demo-down`** *(Infrahub 1.11.11, Prefect 3.9.2, containerlab 0.81.0, Docker 29.8.1, `scripts/demo.py` at
+`e4212a9`, 2026-11-14)*. Read on 2026-11-14 on the development host, for phase 10's plan 2: the three targets run in the
+plan's worktree at `e4212a9` with the main checkout's `local/`, `LOCAL` the targets' default, `REF` its default, the
+worktree's branch `phase-10/2-demonstrations`, no make variable and no `FYLGJA_` name set in the shell, and `local/.env`
+loaded by the script alone; the development NetBox first brought up by `make netbox-up` with `local/.env` loaded, so
+that the first run met it running. Each target was timed as under "NetBox 4.7.5 with netbox-branching 1.2.3" for `make
+netbox-demo` the same day, so every step's time below is a derivation, from its `step <n>` line to the next line the
+script printed. Prefect's runs and documents and the proposed change's validators, checks and thread were read by hand
+after each run, with the credentials read from the environment and sent in a header the reading built. Every output was
+saved. A count of each credential of `local/.env` in every log of the reading, taken after the runs, found none in any;
+the files of `local/demo/` were scanned once, 11 s into the second run, `tokens` aside, and held none; what the second
+run and `make demo-down` wrote there after that was not scanned. No purge was made, so the time from new volumes was not
+read. *(2026-11-14)*
 
 - **From Infrahub stopped on kept volumes, NetBox up: exit 0 in 1536.4 s, `the rehearsal passed`.** The script said
   `netbox is up: stopping it, its volumes kept, since it starts the same deployments` and ran `make netbox-down` with
-  `PURGE=`, which said NetBox `stopped; its containers, network and volumes are kept`, 9.8 s; then `the host's checks
-  passed`, and no line of `local/.env`, of an image pulled or of a make variable not passed on. Its steps: `make
-  infrahub-up` 94.3 s at its first ask, the database healthy at the target's first start this time, `Infrahub
-  1.11.11 answered at http://127.0.0.1:8000 62 s after Compose's start returned`; `make orchestrator-env` 27.8 s,
-  `nothing written` and the example's token `accepted by Infrahub`; the core answering 1.06 s after its step began;
-  `make infrahub-up` again 2.0 s, every container `Running` and none recreated, the two task workers holding the
-  container ids and creation times they held before the run (made 2026-11-11); `make infrahub-register
-  REF=phase-10/2-demonstrations` 373.9 s over two asks: the first said `fylgja reads b2abb81; asked the import of
-  phase-10/2-demonstrations's last commit` and, 300.2 s later, `the repository fylgja in sync at
-  phase-10/2-demonstrations's e4212a9 not within 300 s: commit b2abb81, not e4212a9`, exit 2, and the script said
-  `asking it again, 2 of 2`; the second asked the import again and said `in-sync and online, 56 s on` and `each of the
-  2 task workers holds the tree of fylgja at e4212a9, 5 s on`; `make prefect-up` 8.6 s; the runner serving both
-  deployments 5.65 s after its step began; `make infrahub-seed PROPOSED_CHANGE=1` 255.2 s to its last line, which
+  `PURGE=`, which said NetBox `stopped; its containers, network and volumes are kept`, 9.8 s by the stamps (a
+  derivation); then `the host's checks passed`, and no line of `local/.env`, of an image pulled or of a make variable
+  not passed on. Its steps: `make infrahub-up` 94.3 s at its first ask, the database healthy at the target's first start
+  this time, `Infrahub 1.11.11 answered at http://127.0.0.1:8000 62 s after Compose's start returned`; `make
+  orchestrator-env` 27.8 s, `nothing written` and the example's token `accepted by Infrahub`; the core answering 1.06 s
+  after its step began; `make infrahub-up` again 2.0 s, every container `Running` and none recreated, the two task
+  workers holding the container ids and creation times they held before the run (made 2026-11-11); `make
+  infrahub-register REF=phase-10/2-demonstrations` 373.9 s over two asks: the first said `fylgja reads b2abb81; asked
+  the import of phase-10/2-demonstrations's last commit` and, 300.2 s later by the stamps (a derivation), `the
+  repository fylgja in sync at phase-10/2-demonstrations's e4212a9 not within 300 s: commit b2abb81, not e4212a9`, the
+  recipe exiting 1 and make 2, and the script said `asking it again, 2 of 2`; the second asked the import again and said
+  `in-sync and online, 56 s on` and `each of the 2 task workers holds the tree of fylgja at e4212a9, 5 s on`, 62.3 s
+  after the script's line of the second ask by the stamps (a derivation); `make prefect-up` 8.6 s; the runner serving
+  both deployments 5.65 s after its step began; `make infrahub-seed PROPOSED_CHANGE=1` 255.2 s to its last line, which
   removed the earlier seed's open proposed change, deleted `third-link` in 37 s, made it from `main` in 28 s and made
   the proposed change `Rehearse third-link` 1.8 s before that line by the two clocks (a derivation). The run of
-  `twin-rehearse/main` was listed `SCHEDULED` 141.0 s after the seed's last line, `RUNNING` 5.0 s later and
-  `COMPLETED` 614.9 s after it was listed, and the verdict said 0.26 s after that; Prefect's row for it was `created`
-  140.0 s after the seed's last line (a derivation). A run of `stage-plan/main` was `created` 0.45 s after it; the
-  script printed no line of it, and followed the one run of `twin-rehearse/main`. The document read `passed`, 4
-  stages, `took_s` 604.7. While the rehearsal ran the twin's three SR Linux containers and two hosts were up, and
-  listeners stood on the core's port, on 4200 and on 8000; after it, no container labelled `containerlab`. The
-  proposed change's five validators read `completed` `success`, `fylgja-twin`'s check `Rehearsal passed: 4 stages`,
-  and it held one thread, labelled `Fylgja rehearsal`, of two comments, 812 and 1,404 bytes, the first beginning `##
-  Rehearsal passed: 4 stages`. *(2026-11-14)*
-- **What it left under `local/demo/`**, as under "NetBox 4.7.5 with netbox-branching 1.2.3" the same day: the
-  directory `0700`, `tokens` `0600` with the principals `demo` and `orchestrator`, `rehearsal.json` and `lock`
-  `0600`, the three pid files, `source`, `unsettled`, the two logs with the earlier starts' as `.1`, and `store/`.
-  `local/.env` held the same 55 lines' names before the runs and after them. *(2026-11-14)*
-- **`make netbox-demo` with that demonstration up** exited 2 in 0.6 s, its one line `the infrahub demonstration's
-  runner is up, pid <its pid>: one Prefect serves one source's runner; run make demo-down first`; what stood, read
-  before and after it, was the same. *(2026-11-14)*
-- **Again at once, over the proposed change left open: exit 0 in 942.8 s, `the rehearsal passed`.** `settle` said
-  `the runner, pid <pid>, ended` 2.26 s and `the core, pid <pid>, ended` 3.64 s into the run, no twin being listed;
-  the stop of the other source said nothing, NetBox being stopped. `make infrahub-up` 2.3 s; `make orchestrator-env`
-  1.9 s; the core 2.1 s; `make infrahub-up` 2.1 s; `make infrahub-register` 2.1 s at its first ask, `fylgja reads
-  phase-10/2-demonstrations at e4212a9 already`; `make prefect-up` 0.4 s, the server up already; the runner 5.47 s;
-  `make infrahub-seed PROPOSED_CHANGE=1` 214.8 s, saying `removed the open proposed change <the first run's id> of
-  third-link, an earlier seed's`. The run was listed `PENDING` 106.2 s after the seed's last line (`created` 101.0 s
-  after it, a derivation), `RUNNING` 5.1 s later and `COMPLETED` 600.5 s after it was listed; the document `passed`,
-  `took_s` 596.4. Prefect then listed one run of `twin-rehearse/main` and one of `stage-plan/main` more than after the
-  first run, 20 where there had been 19 and 9 where there had been 8, the new `stage-plan/main` run `created` 2.0 s
-  before the rehearsal's; the script followed the one new rehearsal and printed no line of more than one new run and
-  none of a run not followed. Read again 3.8 min after the run passed, the listings were the same, 20 and 9: the
-  first run's proposed change, removed by the seed, started no late run. The branch's proposed changes read the new
-  one `open` and two `closed`, of earlier phases; it held one thread, `Fylgja rehearsal`, of two comments, 812 and
-  1,404 bytes. *(2026-11-14)*
-- **The maintainer's reading.** The maintainer, signed in to Infrahub where the readout said, read the standing
-  run's proposed change at about 14:36Z: "The rehearsal's passing report is lsted under the change's overview tab.
-  It's in two messages and the table and lists render correctly." *(the maintainer, 2026-11-14)*
-- **A branch not checked out.** In a clone of the worktree outside every checkout, its head detached at `e4212a9`:
-  `make -n infrahub-demo` printed the script's words with `--ref=''`, and `python3 -I scripts/demo.py up infrahub
-  --local <an empty directory> --main <the clone> --ref ''` exited 2 in 1.3 s with three lines, the venv's four
-  commands missing, `<local>/.env` not there, and `no branch is checked out and REF names none: Infrahub registers
-  this repository at a branch; check one out, or give REF=<branch>`; it wrote `demo/lock` under the empty directory
-  and nothing else. *(2026-11-14)*
-- **`make demo-down`** exited 0 in 24.7 s: the runner ended 1.29 s and the core 2.59 s into it, no twin being
-  listed; `make prefect-down`, the Prefect server the first run had started ended; `make infrahub-down` with
-  `PURGE=`, Infrahub `stopped; its containers, network and volumes are kept`, the database the last to stop, 11.3 s
-  after the others; and `the infrahub demonstration is ended: its records stay under <local>/demo`. Read after:
-  `docker ps -a --filter label=containerlab` listed nothing; Infrahub's eight containers exited, the task manager
-  with 143 and the rest with 0; `docker volume ls` the same 22 names as before the first run; `ss -Hltn` nothing on
-  4200, 7650, 7651, 8000 or 8800; none of the five pids the two runs recorded in `/proc`; `local/demo/` holding no pid
-  file and no `unsettled`. `make demo-down` again exited 0 in 1.3 s, running `make infrahub-down` once more and
-  saying `the infrahub demonstration is ended` again, `source` being kept. *(2026-11-14)*
+  `twin-rehearse/main` was listed `SCHEDULED` 141.0 s after the seed's last line, `RUNNING` 5.0 s later and `COMPLETED`
+  614.9 s after it was listed, and the verdict said 0.26 s after that (each a derivation from the stamps); Prefect's row
+  for it was `created` 140.0 s after the seed's last line (a derivation). A run of `stage-plan/main` was `created` 0.45
+  s after it; the script printed no line of it, and followed the one run of `twin-rehearse/main`. The document read
+  `passed`, 4 stages, `took_s` 604.7. While the rehearsal ran, `docker ps -a` listed `clab-rh-380d0790-c0e81e3a-n1`,
+  `-n2`, `-n3`, `-n1-loop-a` and `-n1-loop-b`, each `Up 4 seconds`, and listeners stood on the core's port, on 4200 and
+  on 8000; after it, no container labelled `containerlab`. The proposed change's five validators read `completed`
+  `success`, `fylgja-twin`'s check `Rehearsal passed: 4 stages`, and it held one thread, labelled `Fylgja rehearsal`, of
+  two comments, 812 and 1,404 bytes, the first beginning `## Rehearsal passed: 4 stages`. *(2026-11-14)*
+- **What it left under `local/demo/`**, as under "NetBox 4.7.5 with netbox-branching 1.2.3" the same day: the directory
+  `0700`; `tokens` `0600`, two lines, the principals `demo` and `orchestrator`; `rehearsal.json` and `lock` `0600`;
+  `core.pid`, `runner.pid`, `prefect.pid`, `source`, `unsettled`, `core.log`, `core.log.1`, `runner.log` and
+  `runner.log.1` each `0664`; and `store/` `0775`. `local/.env` held 55 lines, the same 37 names, before the runs and
+  after them. *(2026-11-14)*
+- **`make netbox-demo` with that demonstration up** exited 2 in 0.6 s, its one line `the infrahub demonstration's runner
+  is up, pid <its pid>: one Prefect serves one source's runner; run make demo-down first`; what stood, read before and
+  after it, was the same. *(2026-11-14)*
+- **Again at once, over the proposed change left open: exit 0 in 942.8 s, `the rehearsal passed`.** `settle` said `the
+  runner, pid <pid>, ended` 2.26 s and `the core, pid <pid>, ended` 3.64 s into the run, printing no line of a twin; the
+  stop of the other source said nothing, the first run having stopped NetBox. `make infrahub-up` 2.3 s; `make
+  orchestrator-env` 1.9 s; the core 2.1 s; `make infrahub-up` 2.1 s; `make infrahub-register` 2.1 s at its first ask,
+  `fylgja reads phase-10/2-demonstrations at e4212a9 already`; `make prefect-up` 0.4 s, the server up already; the
+  runner 5.47 s; `make infrahub-seed PROPOSED_CHANGE=1` 214.8 s, saying `removed the open proposed change <the first
+  run's id> of third-link, an earlier seed's`. The run was listed `PENDING` 106.2 s after the seed's last line
+  (`created` 101.0 s after it), `RUNNING` 5.1 s later and `COMPLETED` 600.5 s after it was listed (each a derivation);
+  the document `passed`, `took_s` 596.4. Prefect then listed one run of `twin-rehearse/main` and one of
+  `stage-plan/main` more than after the first run, 20 where there had been 19 and 9 where there had been 8, the new
+  `stage-plan/main` run `created` 2.0 s before the rehearsal's; the script followed the one new rehearsal and printed no
+  line of more than one new run and none of a run not followed. Read again 3.8 min after the run passed, the listings
+  were the same, 20 and 9: the first run's proposed change, removed by the seed, started no late run. The branch's
+  proposed changes read the new one `open` and two `closed`, of earlier phases; it held one thread, `Fylgja rehearsal`,
+  of two comments, 812 and 1,404 bytes. *(2026-11-14)*
+- **The maintainer's reading.** The maintainer, signed in to Infrahub where the readout said, read the standing run's
+  proposed change at about 14:36Z: "The rehearsal's passing report is lsted under the change's overview tab. It's in two
+  messages and the table and lists render correctly." *(the maintainer, 2026-11-14)*
+- **A branch not checked out.** In a clone of the worktree outside every checkout, its head detached at `e4212a9`: `make
+  -n infrahub-demo` printed the script's words with `--ref=''`, and `python3 -I scripts/demo.py up infrahub --local <an
+  empty directory> --main <the clone> --ref ''` exited 2 in 1.3 s with three lines, the venv's four commands missing,
+  `<local>/.env` not there, and `no branch is checked out and REF names none: Infrahub registers this repository at a
+  branch; check one out, or give REF=<branch>`; it wrote `demo/lock` under the empty directory and nothing else.
+  *(2026-11-14)*
+- **`make demo-down`** exited 0 in 24.7 s: the runner ended 1.29 s and the core 2.59 s into it, printing no line of a
+  twin; `make prefect-down`, the Prefect server the first run had started ended; `make infrahub-down` with `PURGE=`,
+  Infrahub `stopped; its containers, network and volumes are kept`, the database the last to stop, 11.3 s after the
+  others by the stamps (a derivation); and `the infrahub demonstration is ended: its records stay under <local>/demo`.
+  Read after: `docker ps -a --filter label=containerlab` listed nothing; Infrahub's eight containers exited, the task
+  manager with 143 and the rest with 0; `docker volume ls` the same 22 names as before the first run; `ss -Hltn` nothing
+  on 4200, 7650, 7651, 8000 or 8800; the five pids the two runs recorded checked in `/proc`, the check printing a line
+  only for one held and printing none; `local/demo/` holding no pid file and no `unsettled`. `make demo-down` again
+  exited 0 in 1.3 s, running `make infrahub-down` once more and saying `the infrahub demonstration is ended` again;
+  `source` was read standing in `local/demo/` after the first. *(2026-11-14)*
 - **The script's waits against what ran** (each ratio the bound over the slower of the two runs; derivations):
   `CORE_WAIT_S` 60 s over the core's 2.1 s, 28.6 times; `SERVE_WAIT_S` 60 s over the runner's 5.65 s, 10.6 times;
   `APPEAR_WAIT_S` 300 s over 141.0 s from the seed's last line to the run listed, 2.13 times, where 116.4 and 113.8 s
-  were read from the seed's return to the run's `created` above; `RUN_WAIT_S` 4200 s over 614.9 s from listed to
-  ended, 6.8 times; `DOCUMENT_WAIT_S` 60 s over 0.26 s, the document read at the first ask both times ("Prefect
-  3.9.2"). The registration's own bound of 300 s ran out at its first ask in the first run, and its second ask, the
-  last the script gives, passed in 56 s. *(2026-11-14)*
-- **Not read:** the time from new volumes, since no purge was given (the first starts recorded above: answering 155
-  and 158 s after Compose's start); a first `make infrahub-up` that needed a second ask, the database being healthy
-  at the first this time; a task worker recreated by the second `make infrahub-up`, none being; why the
-  registration's first import did not reach `e4212a9` within 300 s; `STOP_WAIT_S` from a signal to the process gone;
-  `DESTROY_TIMEOUT_S`, no twin being left; `PULL_TIMEOUT_S`, both images being held; a `make infrahub-demo` that
-  fails at a step or ends with a verdict other than `passed`; the earlier proposed change's check left open while a
-  second run seeds, the seed having removed it. *(2026-11-14)*
+  were read from the seed's return to the run's `created` above; `RUN_WAIT_S` 4200 s over 614.9 s from listed to ended,
+  6.8 times; `DOCUMENT_WAIT_S` 60 s over 0.26 s from `COMPLETED` read to the verdict, 231 times, which is under one
+  `POLL_S` of 5 s, so the document is inferred read at the first ask both times ("Prefect 3.9.2"); `POLL_S`, 5 s, the
+  listings' own interval, `SCHEDULED` to `RUNNING` 5.0 s and `PENDING` to `RUNNING` 5.1 s apart. The registration's own
+  bound of 300 s ran out at its first ask in the first run; its second ask, the last the script gives, said `in-sync and
+  online, 56 s on`, its own count, and took 62.3 s by the stamps (a derivation). *(2026-11-14)*
+- **Not read:** the time from new volumes, since no purge was given (the first starts recorded above: answering 155 and
+  158 s after Compose's start); a first `make infrahub-up` that needed a second ask, the database being healthy at the
+  first this time; a task worker recreated by the second `make infrahub-up`, none being; why the registration's first
+  import did not reach `e4212a9` within 300 s; `STOP_WAIT_S` from a signal to the process gone, the signals' times not
+  being logged; `DOCKER_TIMEOUT_S` (60 s) and `REQUEST_TIMEOUT_S` (30 s), the reads they bound not being stamped apart;
+  `DESTROY_TIMEOUT_S`, `settle` and `make demo-down` printing no line of a twin; `PULL_TIMEOUT_S`, both images being
+  held; a `make infrahub-demo` that fails at a step or ends with a verdict other than `passed`; the earlier proposed
+  change's check left open while a second run seeds, the seed having removed it. *(2026-11-14)*
 
 ---
 
@@ -6541,26 +6549,26 @@ saved. *(2026-11-14)*
 - **Not read:** the runner's and the server's times from a signal to their end by the script's own clock; a document
   filed late, or a run that ends with none, under the demonstration. *(2026-11-14)*
 
-Read on 2026-11-14 on the development host, for phase 10's plan 2: the edge's Prefect as `make infrahub-demo` brought
-it up and `make demo-down` ended it, `scripts/demo.py` at `e4212a9` run twice end to end by that target with Infrahub
-as the change source (under "Infrahub 1.11.11", which says how each run was timed), and Prefect read by hand after
-each run and once more 3.8 min after the second, as for `make netbox-demo` above. Every output was saved, and none
-held a credential of `local/.env`. *(2026-11-14)*
+Read on 2026-11-14 on the development host, for phase 10's plan 2: the edge's Prefect as `make infrahub-demo` brought it
+up and `make demo-down` ended it, `scripts/demo.py` at `e4212a9` run twice end to end by that target with Infrahub as
+the change source (under "Infrahub 1.11.11", which says how each run was timed), and Prefect read by hand after each run
+and once more 3.8 min after the second, as for `make netbox-demo` above. Every output was saved, and the count of each
+credential of `local/.env` taken over every log of the reading after the runs found none. *(2026-11-14)*
 
 - **A run's document is filed before the run ends.** For the two runs the artifact's `created` was 0.030 and 0.068 s
-  before the run's `end_time` (derivations), and the script read the document at its first ask, 0.26 s after the
-  listing that first gave the run `COMPLETED`, both times. *(2026-11-14)*
-- **The runs a proposed change starts, as the demonstration lists them.** Each run started one run of each
-  deployment: `twin-rehearse/main` `created` 140.0 and 101.0 s after the seed's last line, by the host's clock and
-  Prefect's (derivations), and `stage-plan/main` 0.45 s after it in the first run and 2.0 s before it in the second.
-  The script listed the rehearsal 141.0 and 106.2 s after the seed's last line, `SCHEDULED` and `PENDING`, and
-  `COMPLETED` 614.9 and 600.5 s after; `start_time` to `end_time` 607.5 and 597.5 s (derivations). It printed no line
-  of the `stage-plan/main` runs, which are another deployment's. *(2026-11-14)*
-- **A second run over the proposed change left open started one run of each.** `twin-rehearse/main` listed 20 runs
-  where it had listed 19 after the first, `stage-plan/main` 9 where it had listed 8, and the same 20 and 9 when read
-  3.8 min after the second run passed. *(2026-11-14)*
-- **The runner's start by the demonstration.** The script said the runner served both deployments 5.65 and 5.47 s
-  after its step began; `make prefect-up` took 8.6 s where it started the server and 0.4 s where it was up already.
+  before the run's `end_time` (derivations), and the script said its verdict 0.26 s after the listing that first gave
+  the run `COMPLETED`, both times, under one `POLL_S`, so the document is inferred read at the first ask. *(2026-11-14)*
+- **The runs a proposed change starts, as the demonstration lists them.** Each run started one run of each deployment:
+  `twin-rehearse/main` `created` 140.0 and 101.0 s after the seed's last line, by the host's clock and Prefect's
+  (derivations), and `stage-plan/main` 0.45 s after it in the first run and 2.0 s before it in the second. The script
+  listed the rehearsal 141.0 and 106.2 s after the seed's last line, `SCHEDULED` and `PENDING`, and `COMPLETED` 614.9
+  and 600.5 s after (derivations from the stamps); `start_time` to `end_time` 607.5 and 597.5 s (derivations). It
+  printed no line of the `stage-plan/main` runs, which are another deployment's. *(2026-11-14)*
+- **A second run over the proposed change left open started one run of each.** `twin-rehearse/main` listed 20 runs where
+  it had listed 19 after the first, `stage-plan/main` 9 where it had listed 8, and the same 20 and 9 when read 3.8 min
+  after the second run passed. *(2026-11-14)*
+- **The runner's start by the demonstration.** The script said the runner served both deployments 5.65 and 5.47 s after
+  its step began; `make prefect-up` took 8.6 s where it started the server and 0.4 s where it was up already.
   *(2026-11-14)*
 - **Not read:** the runner's and the server's times from a signal to their end by the script's own clock; a document
   filed late, or a run that ends with none, under the demonstration. *(2026-11-14)*

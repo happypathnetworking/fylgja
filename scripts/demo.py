@@ -17,8 +17,9 @@ checkout> --ref <branch or empty>` and `python3 -I scripts/demo.py down --local 
 The core and the runner are the two things no target starts in the background: `start_core` and `start_runner`
 start each in a session of its own, record its pid and wait until it serves, and `refuse_runners` stops a run beside
 a runner it may not end. A core's answer is taken for the demonstration's only where the listener at its port is
-its own pid (`owns`), read again before each destroy and before the store is called settled, and none is started
-where anything listens there already: a twin is listed and destroyed through no other core.
+its own pid (`owns`), read again before each destroy, before the list that follows them and before the store is
+called settled, and none is started where anything listens there already: a twin is listed and destroyed through no
+other core.
 
 What the script keeps is under `<local>/demo/` (`records`). What it writes that can be generated, `prepare`: that
 directory, the token file its core reads, and in `<local>/.env`, where the loaded environment gives the name no
@@ -1449,9 +1450,11 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
     recorded, the marker standing. An empty list removes the marker, and the core is then ended and `core.pid`
     removed.
 
-    Who owns the listener is read again immediately before each destroy, and after the list that answers empty,
-    before the marker is removed: the core may have gone since the last reading and another process be at its
-    address. Where it no longer owns it the run stops, exit 1, the store not read whole and the marker standing.
+    Who owns the listener is read again immediately before each destroy; before the list that follows the destroys,
+    since a destroy waits minutes at the longest and that list goes, with the client's token, to whatever is at the
+    address; and after the list that answers empty, before the marker is removed: the core may have gone since the
+    last reading and another process be at its address. Where it no longer owns it the run stops, exit 1, the store
+    not read whole and the marker standing.
 
     Nothing of Docker is read: a lab's container that no twin names is not this script's to find."""
     if port_of(listen) is None:
@@ -1535,6 +1538,7 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
         if destroyed.status != 0:
             say(f"`fylgja-core twin destroy {name}` exited {destroyed.status}")
     if left:
+        still_owned(pid, address)
         try:
             still = twins(env, address, host)
         except Stop as unread:

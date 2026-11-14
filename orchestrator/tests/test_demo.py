@@ -2423,6 +2423,7 @@ def test_settle_ends_the_runner_then_destroys_every_twin_then_ends_the_core(
         [CLI, "twin", "destroy", "rh-a"],
         HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-b"],
+        HEARD_BY_PID,
         LIST,
         HEARD_BY_PID,
         (4502, TERM),
@@ -2594,6 +2595,7 @@ def test_a_twin_left_by_a_core_that_died_is_destroyed_through_a_core_started_for
         LIST,
         HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
+        HEARD_BY_PID,
         LIST,
         HEARD_BY_PID,
         (started.pid, TERM),
@@ -2666,6 +2668,7 @@ def test_a_twin_that_stays_is_a_failure_that_names_it_and_the_core_is_left(
         [CLI, "twin", "destroy", "rh-b"],
         HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-c"],
+        HEARD_BY_PID,
         LIST,
     ]
     assert (kept.core_pid.read_text(), kept.unsettled.exists()) == ("4502\n", True)
@@ -2916,6 +2919,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
         LIST,
         HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
+        HEARD_BY_PID,
         LIST,
         made(local, "prefect-down"),
         made(local, "netbox-down", "PURGE=1"),
@@ -3042,22 +3046,24 @@ NOT_WHOLE = (
 )
 
 
+def dies_and_anothers_binds(host: FakeHost, done: Any, others_pid: int | None = 4600) -> Any:
+    """An answer of the CLI's during which the recorded core, pid 4502, exits and another process takes its address:
+    one this user runs, which `ss -Hltnp` names by `others_pid`, or with None another user's, which it names by none."""
+
+    def answer(ran: Any) -> Any:
+        if 4502 in host.processes:
+            host.exit(4502)
+            host.listening.append((LISTEN, others_pid, "fylgja-core-ser"))
+        return done
+
+    return answer
+
+
 def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_called_settled(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The core that owned its listener at the first list may be gone by the next act, and another process at its
     address by then: no twin is destroyed through that one, and an empty list from it settles nothing."""
-
-    def dies_and_anothers_binds(host: FakeHost, done: Any) -> Any:
-        """An answer of the CLI's during which the recorded core exits and another process takes its address."""
-
-        def answer(ran: Any) -> Any:
-            if 4502 in host.processes:
-                host.exit(4502)
-                host.listening.append((LISTEN, 4600, "fylgja-core-ser"))
-            return done
-
-        return answer
 
     # During the first of two destroys: the second twin is not asked destroyed there, and the list is not read again.
     local, kept, host = after_a_netbox_run(tmp_path)
@@ -3083,7 +3089,8 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
     ]
     assert "demonstration is ended" not in said.out
 
-    # During the one destroy there is, the other process then answering the list empty: its answer settles nothing.
+    # During the one destroy there is, the other process ready to answer the list empty: it is asked for none, and
+    # nothing is settled.
     local, kept, host = after_a_netbox_run(tmp_path / "last")
     lists(host, ["rh-a"], [])
     host.answers[(CLI, "twin", "destroy", "rh-a")] = dies_and_anothers_binds(host, demo.Done(0, ""))
@@ -3094,7 +3101,6 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
         LIST,
         HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
-        LIST,
         HEARD_BY_PID,
         made(local, "prefect-down"),
         made(local, "netbox-down"),
@@ -3151,6 +3157,42 @@ def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_cal
         demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
     assert (stop.value.status, stop.value.lines) == (1, (NOT_WHOLE.format(host.started[0].pid, LISTEN),))
     assert (kept.unsettled.exists(), host.signalled) == (True, [])
+
+
+def test_ownership_is_read_before_the_list_that_follows_the_destroys(tmp_path: Path) -> None:
+    """A destroy waits for its verdict, for minutes at the longest, so by the list that follows the destroys the
+    reading of who listens made before the last of them is that old. The owned core may be gone by then and another
+    process at its address, which a list would reach with the client's token in its environment: the listener is
+    read once more, and no list is asked of what is not shown to be the core's."""
+    for case, others_pid in enumerate((4600, None)):
+        local, kept, host = after_a_netbox_run(tmp_path / str(case))
+        # What is at the address by then would list no twin, and every list the test answers is counted.
+        lists(host, ["rh-a", "rh-b"], [])
+        host.answers[(CLI, "twin", "destroy", "rh-b")] = dies_and_anothers_binds(host, demo.Done(0, ""), others_pid)
+        with pytest.raises(demo.Stop) as stop:
+            demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+        assert (stop.value.status, stop.value.lines) == (1, (NOT_WHOLE.format(4502, LISTEN),))
+        assert acts(host) == [
+            (4501, TERM),
+            HEARD_BY_PID,
+            LIST,
+            HEARD_BY_PID,
+            [CLI, "twin", "destroy", "rh-a"],
+            HEARD_BY_PID,
+            [CLI, "twin", "destroy", "rh-b"],
+            HEARD_BY_PID,
+        ]
+        # Nothing run after the last destroy was given the client's token, or anything of the loaded environment.
+        assert [ran.env for ran in host.ran[-1:]] == [None]
+        # The marker stands and the record is kept, for the `down` that finds the address free again.
+        assert (kept.unsettled.exists(), kept.core_pid.read_text(), host.signalled) == (True, "4502\n", [(4501, TERM)])
+
+    # Where the core still owns its listener after the last destroy, the list is asked of it, on that reading.
+    local, kept, host = after_a_netbox_run(tmp_path / "owned")
+    lists(host, ["rh-a"], [])
+    demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert acts(host)[4:] == [[CLI, "twin", "destroy", "rh-a"], HEARD_BY_PID, LIST, HEARD_BY_PID, (4502, TERM)]
+    assert not kept.unsettled.exists()
 
 
 def test_a_port_still_closing_after_a_cores_end_is_waited_for_before_the_next_start(tmp_path: Path) -> None:
@@ -3300,6 +3342,7 @@ def test_down_settles_what_is_recorded_though_no_source_is(tmp_path: Path, capsy
         LIST,
         HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
+        HEARD_BY_PID,
         LIST,
         HEARD_BY_PID,
         (4502, TERM),

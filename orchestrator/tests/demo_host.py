@@ -4,7 +4,10 @@ of the host's or sleeps. Every secret here is the tests' own."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import ipaddress
+import json
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -104,6 +107,10 @@ class FakeHost:
       A core a test ends by `exit` keeps its listener for `lingers` seconds of the clock after it, with no process
       named for it, as a socket still closes for a moment after `/proc` has let its process go; the script reads
       that window by `ss -Hltn` alone.
+    - `docker`'s reads of what Docker holds are answered from what a test says it holds, where `passing` lists them
+      (the methods `containers`, `network_ids`, `networks_inspected`, `image_inspected` and `pulled`, each saying
+      what the command prints): `up`, the Compose projects of which a container runs; `networks`, each Docker
+      network by its name with its subnets; and `images`, the references Docker holds.
     - `sleep` advances `now`, which `clock` answers, and then lets happen, once each and in the order of their
       times, what a test said with `at` would happen on the host by then: a process that exits or becomes another
       by `execve`, a line that reaches a log.
@@ -123,6 +130,9 @@ class FakeHost:
         self.lingers = 0.0
         self.closing: list[tuple[str, float]] = []
         self.interpreters: dict[str, str] = {}
+        self.up: set[str] = set()
+        self.networks: list[tuple[str, list[str]]] = []
+        self.images: set[str] = set()
         self.on_start: Callable[[Started], None] | None = None
         self.later: list[tuple[float, Callable[[], None]]] = []
         self.acts: list[Any] = []
@@ -175,6 +185,47 @@ class FakeHost:
         named = "-Hltnp" in ran.argv
         lines = [listener(address, pid if named else None, name) for address, pid, name in held]
         return demo.Done(0, "\n".join([SS, *lines]))
+
+    def containers(self, ran: Ran) -> Any:
+        """What `docker ps -q` prints: the short id, twelve hex digits, of each running container, a line each, and
+        nothing where none runs. With `--filter label=com.docker.compose.project=<project>`, that project's alone:
+        two where the project is of `up`, as a source's stack runs several."""
+        named = [word.partition("com.docker.compose.project=")[2] for word in ran.argv if word.startswith("label=")]
+        running = [project for project in sorted(self.up) if not named or project in named]
+        ids = [short_id(f"{project}-{number}") for project in running for number in (1, 2)]
+        return demo.Done(0, "".join(f"{each}\n" for each in ids))
+
+    def network_ids(self, ran: Ran) -> Any:
+        """What `docker network ls -q` prints: each network's short id, twelve hex digits, a line each."""
+        return demo.Done(0, "".join(f"{short_id(name)}\n" for name, _ in self.networks))
+
+    def networks_inspected(self, ran: Ran) -> Any:
+        """What `docker network inspect --format '{{json .Name}} {{json .IPAM.Config}}' <ids…>` prints: a line a
+        network in the order of the ids, its name as a JSON string as Go writes one, no character above ASCII
+        escaped, one space, and its IPAM config, a list of `{"Subnet", "Gateway"}` objects with no space in it, or
+        `null` for a network with none, as `host` and `none` (design/verified-facts.md, Docker 29.8.1: the line read
+        was `"fylgja-core-netbox_default" [{"Subnet":"198.51.100.0/24","Gateway":"198.51.100.1"}]`). An id no
+        network has is exit 1, as read of a name no network has."""
+        held = {short_id(name): (name, subnets) for name, subnets in self.networks}
+        ids = ran.argv[ran.argv.index("--format") + 2 :]
+        if any(each not in held for each in ids):
+            return demo.Done(1, "")
+        return demo.Done(0, "".join(f"{network_line(*held[each])}\n" for each in ids))
+
+    def image_inspected(self, ran: Ran) -> Any:
+        """What `docker image inspect --format '{{.Id}}' <ref>` does: prints the image's id, `sha256:` and 64 hex
+        digits, exit 0, where Docker holds the reference; exit 1 having printed nothing on stdout where it holds
+        none (design/verified-facts.md: `No such image`, on stderr)."""
+        ref = ran.argv[-1]
+        if ref not in self.images:
+            return demo.Done(1, "")
+        return demo.Done(0, f"sha256:{hashlib.sha256(ref.encode()).hexdigest()}\n")
+
+    def pulled(self, ran: Ran) -> Any:
+        """What `docker pull <ref>` leaves where it exits 0: Docker holds the reference. Its progress is printed to
+        the terminal, and the script captures none of it."""
+        self.images.add(ran.argv[-1])
+        return demo.Done(0, "")
 
     def exit(self, pid: int) -> None:
         """Process `pid` exits now: it is no process from here on, and where it was a core that listened and
@@ -272,6 +323,22 @@ def is_a_core(process: Any) -> bool:
     return any(Path(word).name == "fylgja-core-server" for word in process.argv)
 
 
+def short_id(name: str) -> str:
+    """The short id Docker would print for a container or a network of the tests': twelve hex digits."""
+    return hashlib.sha256(name.encode()).hexdigest()[:12]
+
+
+def network_line(name: str, subnets: Sequence[str]) -> str:
+    """One line of `docker network inspect`'s answer to `{{json .Name}} {{json .IPAM.Config}}` for the network
+    `name` holding `subnets`, each with the gateway Docker gives it, the subnet's first address
+    (`FakeHost.networks_inspected`)."""
+    config = [
+        {"Subnet": subnet, "Gateway": str(ipaddress.ip_network(subnet).network_address + 1)} for subnet in subnets
+    ]
+    held = json.dumps(config, separators=(",", ":")) if config else "null"
+    return f"{json.dumps(name, ensure_ascii=False)} {held}"
+
+
 def listener(address: str, pid: int | None = None, name: str = "python3") -> str:
     """One line of `ss -Hltn` for a listener at `address`, an address with its port; with `pid`, the line `ss
     -Hltnp` prints for a process this user runs, as read on the development host:
@@ -332,7 +399,9 @@ def passing(local: Path = LOCAL, disk: Path | None = None) -> FakeHost:
     Compose and containerlab answering, the user in both groups, the AppArmor widening made, memory for a source and
     the twin, no listener on a port the demonstration needs but a core's own where one runs (`FakeHost.heard`),
     `local/.env` with the node login, and a commit for any ref. Each of the venv's commands is a `#!` script of the
-    venv's `python3`, as `pip` writes one."""
+    venv's `python3`, as `pip` writes one. Docker holds what a host does where neither source has yet run: no
+    container, the three networks Docker makes itself, of which the bridge alone has a subnet, and both images the
+    seeded twin runs."""
     host = FakeHost(disk)
     host.on_path = {*demo.TOOLS, *(str(demo.ROOT / "core" / ".venv" / "bin" / name) for name in demo.COMMANDS)}
     host.interpreters = {
@@ -341,7 +410,13 @@ def passing(local: Path = LOCAL, disk: Path | None = None) -> FakeHost:
     }
     host.answer("docker", "info")
     host.answer("docker", "compose", "version")
-    host.answer("docker", "ps")
+    host.answers[("docker", "ps")] = host.containers
+    host.answers[("docker", "network", "ls")] = host.network_ids
+    host.answers[("docker", "network", "inspect")] = host.networks_inspected
+    host.answers[("docker", "image", "inspect")] = host.image_inspected
+    host.answers[("docker", "pull")] = host.pulled
+    host.networks = [("bridge", ["172.17.0.0/16"]), ("host", []), ("none", [])]
+    host.images = {"ghcr.io/nokia/srlinux:24.7.1", "alpine:3.24.2"}
     host.answer("containerlab", "version")
     host.answers[("ss", "-Hltn")] = host.heard
     host.answers[("ss", "-Hltnp")] = host.heard

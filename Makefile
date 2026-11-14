@@ -2,7 +2,7 @@
 
 .PHONY: all venv test live cluster conformance lint linkcheck wheelcheck image imagecheck infrahub-up infrahub-down \
 	infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down orchestrator-serve netbox-up \
-	netbox-down netbox-seed netbox-hook netbox-change contract-netbox
+	netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo netbox-demo demo-down
 
 VENV := core/.venv
 
@@ -221,3 +221,19 @@ contract-netbox:
 	cd netbox && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd readers/netbox && ../../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd orchestrator && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract_netbox
+
+# A demonstration of one source of truth, infrahub or netbox, with no step by hand (CONTRIBUTING.md, "The
+# demonstrations"; D-104): the host's preconditions checked, then the source's runbook taken in order through the
+# targets above, the core and the runner started in the background by recorded pids, to the change opened. It reads
+# local/.env itself, before every step, and at REF it registers this repository with Infrahub.
+infrahub-demo netbox-demo: | $(VENV)/bin/fylgja-core-server
+	python3 -I scripts/demo.py up $(@:-demo=) --local $(LOCAL) --main $(MAIN) --ref '$(REF)'
+
+# The venv, made for a demonstration where the core's server command is missing, and never remade by one.
+$(VENV)/bin/fylgja-core-server:
+	$(MAKE) venv
+
+# What a demonstration started, ended: its runner, every twin its core holds, its core, the Prefect server it
+# started and its source, whose volumes are kept; PURGE=1, and no other value, removes them too.
+demo-down:
+	python3 -I scripts/demo.py down --local $(LOCAL) --main $(MAIN) $(if $(filter 1,$(PURGE)),--purge)

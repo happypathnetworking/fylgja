@@ -17,8 +17,8 @@ checkout> --ref <branch or empty>` and `python3 -I scripts/demo.py down --local 
 The core and the runner are the two things no target starts in the background: `start_core` and `start_runner`
 start each in a session of its own, record its pid and wait until it serves, and `refuse_runners` stops a run beside
 a runner it may not end. A core's answer is taken for the demonstration's only where the listener at its port is
-its own pid (`owns`), and none is started where anything listens there already: a twin is listed and destroyed
-through no other core.
+its own pid (`owns`), read again before each destroy and before the store is called settled, and none is started
+where anything listens there already: a twin is listed and destroyed through no other core.
 
 What the script keeps is under `<local>/demo/` (`records`). What it writes that can be generated, `prepare`: that
 directory, the token file its core reads, and in `<local>/.env`, where the loaded environment gives the name no
@@ -198,8 +198,14 @@ STOP_POLL_S = 0.5
 """Seconds between two reads of a process that was signalled, `edge_dev.end_session`'s."""
 
 KILL_WAIT_S = 1.0
-"""Seconds a process is given to be gone after SIGKILL, so that what it held, its port among it, is free for what is
-started next; a first value."""
+"""Seconds a process is given to be gone after SIGKILL; a first value."""
+
+PORT_FREE_WAIT_S = 5.0
+"""Seconds the port of a core just ended is given to be free before one is started at the same address: a listener
+was read to outlast its process by 3 to 107 ms, the longest for a process of 600 MiB; a first value, 47 times that."""
+
+PORT_FREE_POLL_S = 0.1
+"""Seconds between two reads of that port."""
 
 TIMED_OUT = 124
 """The status `Real.run` answers for a child that outlasted its timeout and was killed, as `timeout` exits."""
@@ -1111,6 +1117,15 @@ def is_runner(process: Process | None, local: Path) -> bool:
     )
 
 
+def is_becoming_runner(process: Process | None, local: Path) -> bool:
+    """Whether a process is `edge_dev.py serve` as the script starts it for `local`, before it has become the runner:
+    its command line is the words `serve_argv` gives for a source of `SOURCES` and this `--local`, whatever `--main`,
+    and no word more. For about three seconds after its start this is what a recorded runner's pid reads as."""
+    if process is None or len(process.argv) != len(serve_argv(SOURCES[0], local, ROOT)):
+        return False
+    return any(process.argv[:-1] == serve_argv(source, local, ROOT)[:-1] for source in SOURCES)
+
+
 def runners(local: Path, host: Host) -> list[tuple[int, str]]:
     """Every runner that serves the Prefect of `local`: its pid, and the change source it serves, `""` where its
     environment names none."""
@@ -1193,7 +1208,8 @@ def start_core(env: Mapping[str, str], records: Records, listen: str, host: Host
     port's listener (`owns`): a 200 proves nothing of who answered, and a child just started is alive whoever
     answers. One the pid does not own is no answer, and the wait goes on. Where the process is gone first the record
     is removed and the run stops, exit 1, naming its log; where `CORE_WAIT_S` passes it stops, exit 1, the core left
-    up and recorded for `down` to end."""
+    up and recorded, and named by its pid for the user to end: `down` ends one that has come to listen by then, and
+    leaves one that has not."""
     port = port_of(listen)
     if port is None:
         raise Stop(1, [LISTEN_REFUSED])
@@ -1227,8 +1243,8 @@ def start_core(env: Mapping[str, str], records: Records, listen: str, host: Host
     raise Stop(
         1,
         [
-            f"the core did not answer at {listen} within {CORE_WAIT_S} s: read {records.core_log}; make demo-down "
-            "ends it"
+            f"the core did not answer at {listen} within {CORE_WAIT_S} s: read {records.core_log}; end it by its "
+            f"pid, {pid}, then run make demo-down"
         ],
     )
 
@@ -1373,6 +1389,20 @@ def twins(env: Mapping[str, str], listen: str, host: Host) -> list[str]:
     return [record["name"] for record in listed]
 
 
+def port_freed(listen: str, host: Host) -> None:
+    """Wait until nothing listens at the port of `listen`, by `ss -Hltn` read every `PORT_FREE_POLL_S`, for at most
+    `PORT_FREE_WAIT_S`: a core the script has just ended can hold its port for a moment after its process is gone,
+    and a core started at once at the same address would be refused for a listener that is the script's own. Past
+    the bound, or where `ss` is not read, the start's own read of the port decides."""
+    port = port_of(listen)
+    begun = host.clock()
+    while port is not None and host.clock() - begun < PORT_FREE_WAIT_S:
+        heard = host.run(["ss", "-Hltn"], capture=True, timeout=DOCKER_TIMEOUT_S)
+        if heard.status != 0 or not listeners(heard.out, port):
+            return
+        host.sleep(PORT_FREE_POLL_S)
+
+
 def ended(what: str, pid: int, ours: Callable[[Process | None], bool], pid_file: Path, host: Host) -> None:
     """End the recorded process `pid`, remove its record and say that it ended; where it still stands, stop the
     run, exit 1, naming it, its record kept: nothing is said to be ended that is not."""
@@ -1396,7 +1426,9 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
     Where `listen` is no address a port is read from, nothing is done: Stop, exit 1, with the check's sentence.
 
     The recorded runner is ended and `runner.pid` removed: given SIGTERM it cancels the flow run it was running,
-    whose own clean-up asks its twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14).
+    whose own clean-up asks its twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14). The recorded
+    pid is the demonstration's runner where it reads as the runner, and where it is still `edge_dev.py serve` by the
+    words the script started it by, which becomes the runner (`is_becoming_runner`).
 
     The core's part goes by the marker `unsettled`, which `start_core` writes before it starts a core and which is
     removed here alone, once a list through an owned core has answered empty. With no marker the store was read
@@ -1404,9 +1436,10 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
     the store holds is destroyed through a core:
 
     - the recorded core where it is up, asked at its own listen address, and only where it owns the listener there:
-      where it does not, what answers there may be another's, and the run stops, exit 1, no twin read and the core
-      left up;
-    - where that core does not list its twins, why is said, it is ended, and it is replaced;
+      where it does not, or its address is none a port is read from, what answers may be another's, and the run
+      stops, exit 1, no twin read and the core left up;
+    - where that core does not list its twins, why is said, it is ended, its port waited for where a core is to be
+      started at the same one (`port_freed`), and it is replaced;
     - else, and where no core is recorded up, one started for the purpose at `listen` (`start_core`), since a twin
       outlives the core that made it and is listed by the next over the same store.
 
@@ -1416,12 +1449,16 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
     recorded, the marker standing. An empty list removes the marker, and the core is then ended and `core.pid`
     removed.
 
+    Who owns the listener is read again immediately before each destroy, and after the list that answers empty,
+    before the marker is removed: the core may have gone since the last reading and another process be at its
+    address. Where it no longer owns it the run stops, exit 1, the store not read whole and the marker standing.
+
     Nothing of Docker is read: a lab's container that no twin names is not this script's to find."""
     if port_of(listen) is None:
         raise Stop(1, [LISTEN_REFUSED])
 
     def the_runner(process: Process | None) -> bool:
-        return is_runner(process, local)
+        return is_runner(process, local) or is_becoming_runner(process, local)
 
     def the_core(process: Process | None) -> bool:
         return is_core(process, records)
@@ -1430,6 +1467,16 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
         return (
             f"the core, pid {pid}, is left up at {address}: read {records.core_log}, then run make demo-down again"
         )
+
+    def still_owned(pid: int, address: str) -> None:
+        if not owns(pid, address, host):
+            raise Stop(
+                1,
+                [
+                    f"the core, pid {pid}, is no longer shown by `ss -Hltnp` to listen at {address}: the store was "
+                    "not read whole, since what answers there may be another's; run make demo-down again"
+                ],
+            )
 
     runner = held(records.runner_pid, "runner", the_runner, host)
     if runner is not None:
@@ -1445,6 +1492,14 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
     left: list[str] | None = None
     if core is not None:
         pid, address = core[0], core[1].environ.get(LISTEN) or DEFAULT_LISTEN
+        if port_of(address) is None:
+            raise Stop(
+                1,
+                [
+                    f"the core, pid {pid}, was given a {LISTEN} that is not 127.0.0.1:<port>: no twin was read "
+                    "through it; it is left up: end it by its pid, then run make demo-down again"
+                ],
+            )
         if not owns(pid, address, host):
             raise Stop(
                 1,
@@ -1461,6 +1516,8 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
                 say(line)
             say(f"ending the core, pid {pid}, which did not list its twins, to start one that does")
             ended("core", pid, the_core, records.core_pid, host)
+            if port_of(address) == port_of(listen):
+                port_freed(listen, host)
     if left is None:
         say(f"starting a core at {listen}, to end what the store of an earlier one holds")
         pid, address = start_core(env, records, listen, host), listen
@@ -1470,6 +1527,7 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
             raise Stop(1, [*unread.lines, left_up(pid, address)]) from None
 
     for name in left:
+        still_owned(pid, address)
         say(f"destroying the twin {name}, which an earlier run left")
         destroyed = host.run(
             [str(CLI), "twin", "destroy", name], env=client_env(env, address), cwd=ROOT, timeout=DESTROY_TIMEOUT_S
@@ -1483,6 +1541,7 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
             raise Stop(1, [*unread.lines, left_up(pid, address)]) from None
         if still:
             raise Stop(1, [f"still standing after its destroy: {', '.join(still)}; {left_up(pid, address)}"])
+    still_owned(pid, address)
     records.unsettled.unlink(missing_ok=True)
     ended("core", pid, the_core, records.core_pid, host)
 
@@ -1517,8 +1576,9 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
 
 def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host: Host) -> int:
     """Take the lock, and end what the demonstration recorded under `local` started: 0 where everything it had to
-    end is ended and its store is settled, and where no demonstration is recorded, `source` being absent, with
-    nothing done.
+    end is ended and its store is settled, and where nothing is recorded, neither `source` nor the marker nor a
+    core's or a runner's pid, with nothing done. Where the marker or a pid is there with no `source`, `settle` is run
+    all the same, no source and no Prefect server is stopped, which is said, and the exit is by the marker.
 
     Three acts, each tried whatever the one before did or raised, a failure of each said, an error of the host's by
     its own word, and the exit 1 where any failed: `settle`, the runner, every twin and the core; `make
@@ -1530,11 +1590,12 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
     not read: each target finds the main checkout itself."""
     locked(local, host)
     kept = records(local)
+    home = kept.source.parent
     named = host.text(kept.source)
-    if named is None:
-        say(f"no demonstration is recorded under {kept.source.parent}: nothing to end")
+    if named is None and all(host.text(left) is None for left in (kept.unsettled, kept.core_pid, kept.runner_pid)):
+        say(f"no demonstration is recorded under {home}: nothing to end")
         return 0
-    source = named.strip()
+    source = "" if named is None else named.strip()
     env = loaded(local, environ, host)
     listen = listen_of(env)
     failed: list[str] = []
@@ -1575,8 +1636,11 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
             failed.append(f"{kept.source} names neither {' nor '.join(SOURCES)}: no source was stopped")
 
     tried("the end of the runner, the twins and the core", lambda: settle(env, kept, local, listen, host))
-    tried("make prefect-down", prefect_down)
-    tried(f"make {source}-down" if source in SOURCES else "the source's stop", source_down)
+    if named is None:
+        say(f"no source is recorded under {home}: neither a source nor the Prefect server was stopped")
+    else:
+        tried("make prefect-down", prefect_down)
+        tried(f"make {source}-down" if source in SOURCES else "the source's stop", source_down)
     if host.text(kept.unsettled) is not None:
         failed.append(
             f"{kept.unsettled} stands: the demonstration's store was not read empty through a core of its own"
@@ -1586,7 +1650,10 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
         fail(line)
     if failed:
         return fail("down: not everything was ended: read the lines above, then run make demo-down again")
-    say(f"the {source} demonstration is ended: its records stay under {kept.source.parent}")
+    if named is None:
+        say(f"what was recorded under {home} is ended")
+    else:
+        say(f"the {source} demonstration is ended: its records stay under {home}")
     return 0
 
 

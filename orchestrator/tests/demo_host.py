@@ -101,6 +101,9 @@ class FakeHost:
       `FYLGJA_LISTEN`, or the core's default. Under `-p` a line names its process as `ss` names one this user runs,
       `users:(("<name>",pid=<pid>,fd=4))`, and names none for a listener whose pid is None, a process of another
       user's. A core listens from its start: the script asks who listens only before a start and after an answer.
+      A core a test ends by `exit` keeps its listener for `lingers` seconds of the clock after it, with no process
+      named for it, as a socket still closes for a moment after `/proc` has let its process go; the script reads
+      that window by `ss -Hltn` alone.
     - `sleep` advances `now`, which `clock` answers, and then lets happen, once each and in the order of their
       times, what a test said with `at` would happen on the host by then: a process that exits or becomes another
       by `execve`, a line that reaches a log.
@@ -117,6 +120,8 @@ class FakeHost:
         self.processes: dict[int, Any] = {}
         self.listening: list[tuple[str, int | None, str]] = []
         self.not_listening: set[int] = set()
+        self.lingers = 0.0
+        self.closing: list[tuple[str, float]] = []
         self.interpreters: dict[str, str] = {}
         self.on_start: Callable[[Started], None] | None = None
         self.later: list[tuple[float, Callable[[], None]]] = []
@@ -163,12 +168,21 @@ class FakeHost:
     def heard(self, ran: Ran) -> Any:
         """What `ss -Hltn` prints, and with `-p` among the words `ss -Hltnp`: the class says which listeners."""
         held = list(self.listening)
+        held += [(address, None, "") for address, until in self.closing if self.now < until]
         for pid, process in sorted(self.processes.items()):
             if pid > 1 and pid not in self.not_listening and is_a_core(process):
                 held.append((process.environ.get("FYLGJA_LISTEN") or "127.0.0.1:7650", pid, "fylgja-core-ser"))
         named = "-Hltnp" in ran.argv
         lines = [listener(address, pid if named else None, name) for address, pid, name in held]
         return demo.Done(0, "\n".join([SS, *lines]))
+
+    def exit(self, pid: int) -> None:
+        """Process `pid` exits now: it is no process from here on, and where it was a core that listened and
+        `lingers` is set, its listener stays that long."""
+        process = self.processes.pop(pid)
+        if self.lingers > 0 and pid not in self.not_listening and is_a_core(process):
+            address = process.environ.get("FYLGJA_LISTEN") or "127.0.0.1:7650"
+            self.closing.append((address, self.now + self.lingers))
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
         pid = self.next_pid

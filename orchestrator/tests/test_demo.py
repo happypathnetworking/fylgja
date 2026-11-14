@@ -1320,7 +1320,7 @@ def exits_at_its_signal(host: FakeHost) -> None:
     """Every process of `host` exits at the first signal it is sent, as the core and the runner were read to."""
 
     def exit_(pid: int, number: int) -> None:
-        del host.processes[pid]
+        host.exit(pid)
 
     host.on_signal = exit_
 
@@ -1736,6 +1736,7 @@ def test_a_listener_at_the_port_before_the_start_is_refused_and_nothing_is_start
         ("start", [CORE]),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         (started.pid, TERM),
         made(local, "netbox-down"),
     ]
@@ -1762,7 +1763,10 @@ def test_an_answer_from_a_port_the_child_does_not_own_is_not_the_cores(tmp_path:
             demo.start_core(loaded_env(local, host), kept, LISTEN, host)
         assert (stop.value.status, stop.value.lines) == (
             1,
-            (f"the core did not answer at {LISTEN} within 60 s: read {kept.core_log}; make demo-down ends it",),
+            (
+                f"the core did not answer at {LISTEN} within 60 s: read {kept.core_log}; end it by its pid, "
+                f"{host.started[0].pid}, then run make demo-down",
+            ),
         ), who
         # Who listens is asked after every 200, and never believed.
         assert acts(host) == [HEARD, ("start", [CORE]), *([HEARD_BY_PID] * 60)], who
@@ -1786,10 +1790,14 @@ def test_a_core_that_never_answers_is_a_failure_at_60_s_and_is_left_for_demo_dow
         demo.start_core(loaded_env(local, host), kept, LISTEN, host)
     assert (stop.value.status, stop.value.lines) == (
         1,
-        (f"the core did not answer at {LISTEN} within 60 s: read {kept.core_log}; make demo-down ends it",),
+        (
+            f"the core did not answer at {LISTEN} within 60 s: read {kept.core_log}; end it by its pid, "
+            f"{host.started[0].pid}, then run make demo-down",
+        ),
     )
-    # No ask at or after the bound; the core is left as it is, recorded, for `down` to end. Who listens is not asked
-    # where nothing answered.
+    # No ask at or after the bound; the core is left as it is, recorded: the next `down` ends one that has come to
+    # listen, and leaves and names one that has not, so the sentence says what is true of both. Who listens is not
+    # asked where nothing answered.
     assert asked_at == [second * demo.ASK_S for second in range(60)]
     assert max(asked_at) < demo.CORE_WAIT_S <= host.now
     [started] = host.started
@@ -1827,9 +1835,11 @@ def test_a_core_that_never_answers_is_a_failure_at_60_s_and_is_left_for_demo_dow
         LIST,
         (hung, TERM),
         HEARD,
+        HEARD,
         ("start", [CORE]),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         (replacement.pid, TERM),
         made(local, "netbox-down"),
     ]
@@ -1866,6 +1876,24 @@ def test_a_core_that_never_answers_is_a_failure_at_60_s_and_is_left_for_demo_dow
     )
     assert host.signalled == [(4502, TERM)]
     assert (kept.core_pid.read_text(), kept.unsettled.exists()) == (f"{replacement.pid}\n", True)
+
+    # A recorded core whose own `FYLGJA_LISTEN` is no address a port is read from is said as that, `ss` not being
+    # asked: it is left, and nothing is read through it.
+    local, kept, host = place(tmp_path / "its-own-listen")
+    off_loopback = demo.core_env(ENV | EDGE, kept, LISTEN) | {"FYLGJA_LISTEN": "0.0.0.0:7650"}
+    host.processes[4502] = demo.Process([PYTHON, CORE], off_loopback)
+    kept.core_pid.write_text("4502\n")
+    unsettle(kept)
+    with pytest.raises(demo.Stop) as stop:
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (
+        1,
+        (
+            "the core, pid 4502, was given a FYLGJA_LISTEN that is not 127.0.0.1:<port>: no twin was read through "
+            "it; it is left up: end it by its pid, then run make demo-down again",
+        ),
+    )
+    assert (host.acts, host.asked, kept.unsettled.exists()) == ([], [], True)
 
     # Where the recorded core is not shown to own the listener at its own address, as one that never came to bind,
     # it is asked nothing and left, and that no twin was read is said: the address may be another's to answer at.
@@ -2391,16 +2419,19 @@ def test_settle_ends_the_runner_then_destroys_every_twin_then_ends_the_core(
         (4501, TERM),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-b"],
         LIST,
+        HEARD_BY_PID,
         (4502, TERM),
     ]
     assert (host.started, host.asked) == ([], [])
     assert not kept.runner_pid.exists() and not kept.core_pid.exists() and not kept.unsettled.exists()
     assert sorted(host.processes) == []
     # Who listens at the recorded core's own address is asked first, of `ss`, read and bounded.
-    heard, *asked_of_the_core = host.ran
+    heard, asked_of_the_core = host.ran[0], [ran for ran in host.ran if ran.argv[0] == CLI]
     assert (heard.env, heard.capture, heard.timeout) == (None, True, demo.DOCKER_TIMEOUT_S)
     # The CLI's environment holds the client's token and the address the recorded core listens on, its own and not
     # the one a core would be started at; its words hold neither. A list is read and bounded; a destroy prints as it
@@ -2440,7 +2471,7 @@ def test_settle_ends_the_runner_then_destroys_every_twin_then_ends_the_core(
     lists(host, [])
     demo.settle(loaded_env(local, host) | {"FYLGJA_API_CA": "/srv/example/ca.pem"}, kept, local, LISTEN, host)
     # Where the core lists none, as after a runner's own end, which asks its twin's deletion: one list, no destroy.
-    assert acts(host) == [HEARD_BY_PID, LIST, (4502, TERM)]
+    assert acts(host) == [HEARD_BY_PID, LIST, HEARD_BY_PID, (4502, TERM)]
     assert "FYLGJA_API_CA" not in (host.ran[1].env or {})
     capsys.readouterr()
 
@@ -2468,7 +2499,7 @@ def test_settle_ends_the_runner_then_destroys_every_twin_then_ends_the_core(
     with pytest.raises(demo.Stop) as stop:
         demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
     assert (stop.value.status, stop.value.lines) == (1, (STANDS.format("core", 4502, kept.core_pid),))
-    assert acts(host) == [HEARD_BY_PID, LIST, (4502, TERM), (4502, KILL)]
+    assert acts(host) == [HEARD_BY_PID, LIST, HEARD_BY_PID, (4502, TERM), (4502, KILL)]
     assert (kept.core_pid.read_text(), kept.unsettled.exists()) == ("4502\n", False)
     assert "ended" not in capsys.readouterr().out
 
@@ -2561,8 +2592,10 @@ def test_a_twin_left_by_a_core_that_died_is_destroyed_through_a_core_started_for
         ("start", [CORE]),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
         LIST,
+        HEARD_BY_PID,
         (started.pid, TERM),
     ]
     started_as_the_demonstrations_core = same(started.env, demo.core_env(env, kept, LISTEN))
@@ -2627,8 +2660,11 @@ def test_a_twin_that_stays_is_a_failure_that_names_it_and_the_core_is_left(
         (4501, TERM),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-b"],
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-c"],
         LIST,
     ]
@@ -2745,6 +2781,7 @@ def test_down_ends_what_the_demonstration_started_and_stops_its_source(
         (4501, TERM),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         (4502, TERM),
         made(local, "prefect-down"),
         made(local, "netbox-down"),
@@ -2845,9 +2882,12 @@ def test_down_with_nothing_recorded_ends_nothing(tmp_path: Path, capsys: pytest.
     assert host.locked == [LOCK]
     assert (host.ran, host.started, host.signalled, host.asked) == ([], [], [], [])
 
-    # Whatever else stands under `local/demo/`: no `source`, no demonstration that passed its checks.
+    # Whatever else stands under `local/demo/` but the marker and the two recorded pids: no `source`, and nothing
+    # of the demonstration's to settle.
     local, kept, host = after_a_netbox_run(tmp_path)
-    kept.source.unlink()
+    for record in (kept.source, kept.unsettled, kept.core_pid, kept.runner_pid):
+        record.unlink()
+    kept.core_log.write_text("an earlier start's\n")
     assert status(host, down(local)) == 0
     assert (host.ran, host.started, host.signalled, host.asked) == ([], [], [], [])
     assert sorted(host.processes) == [4501, 4502, 4503]
@@ -2874,6 +2914,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
         (4501, TERM),
         HEARD_BY_PID,
         LIST,
+        HEARD_BY_PID,
         [CLI, "twin", "destroy", "rh-a"],
         LIST,
         made(local, "prefect-down"),
@@ -2892,7 +2933,7 @@ def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsy
     local, kept, host = after_a_netbox_run(tmp_path / "source")
     kept.source.write_text("nautobot\n")
     assert status(host, down(local)) == 1
-    assert acts(host) == [(4501, TERM), HEARD_BY_PID, LIST, (4502, TERM), made(local, "prefect-down")]
+    assert acts(host) == [(4501, TERM), HEARD_BY_PID, LIST, HEARD_BY_PID, (4502, TERM), made(local, "prefect-down")]
     assert capsys.readouterr().err.splitlines() == [
         f"demo: {kept.source} names neither infrahub nor netbox: no source was stopped",
         NOT_ALL_ENDED,
@@ -2980,11 +3021,326 @@ def test_down_is_not_done_until_the_store_has_been_read(tmp_path: Path, capsys: 
     host.acts.clear()
     assert status(host, down(local)) == 0
     served = host.started[-1]
-    assert acts(host) == [HEARD, ("start", [CORE]), HEARD_BY_PID, LIST, (served.pid, TERM), made(local, "netbox-down")]
+    assert acts(host) == [
+        HEARD,
+        ("start", [CORE]),
+        HEARD_BY_PID,
+        LIST,
+        HEARD_BY_PID,
+        (served.pid, TERM),
+        made(local, "netbox-down"),
+    ]
     assert not kept.unsettled.exists()
     assert capsys.readouterr().out.splitlines()[-1] == (
         f"demo: the netbox demonstration is ended: its records stay under {kept.source.parent}"
     )
+
+
+NOT_WHOLE = (
+    "the core, pid {}, is no longer shown by `ss -Hltnp` to listen at {}: the store was not read whole, since what "
+    "answers there may be another's; run make demo-down again"
+)
+
+
+def test_ownership_is_read_again_before_each_destroy_and_before_the_store_is_called_settled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The core that owned its listener at the first list may be gone by the next act, and another process at its
+    address by then: no twin is destroyed through that one, and an empty list from it settles nothing."""
+
+    def dies_and_anothers_binds(host: FakeHost, done: Any) -> Any:
+        """An answer of the CLI's during which the recorded core exits and another process takes its address."""
+
+        def answer(ran: Any) -> Any:
+            if 4502 in host.processes:
+                host.exit(4502)
+                host.listening.append((LISTEN, 4600, "fylgja-core-ser"))
+            return done
+
+        return answer
+
+    # During the first of two destroys: the second twin is not asked destroyed there, and the list is not read again.
+    local, kept, host = after_a_netbox_run(tmp_path)
+    lists(host, ["rh-a", "rh-b"], [])
+    host.answers[(CLI, "twin", "destroy", "rh-a")] = dies_and_anothers_binds(host, demo.Done(2, ""))
+    assert status(host, down(local)) == 1
+    assert acts(host) == [
+        (4501, TERM),
+        HEARD_BY_PID,
+        LIST,
+        HEARD_BY_PID,
+        [CLI, "twin", "destroy", "rh-a"],
+        HEARD_BY_PID,
+        made(local, "prefect-down"),
+        made(local, "netbox-down"),
+    ]
+    assert (kept.unsettled.exists(), kept.core_pid.read_text(), host.signalled) == (True, "4502\n", [(4501, TERM)])
+    said = capsys.readouterr()
+    assert said.err.splitlines() == [
+        f"demo: {NOT_WHOLE.format(4502, LISTEN)}",
+        f"demo: {UNSETTLED.format(kept.unsettled)}",
+        NOT_ALL_ENDED,
+    ]
+    assert "demonstration is ended" not in said.out
+
+    # During the one destroy there is, the other process then answering the list empty: its answer settles nothing.
+    local, kept, host = after_a_netbox_run(tmp_path / "last")
+    lists(host, ["rh-a"], [])
+    host.answers[(CLI, "twin", "destroy", "rh-a")] = dies_and_anothers_binds(host, demo.Done(0, ""))
+    assert status(host, down(local)) == 1
+    assert acts(host) == [
+        (4501, TERM),
+        HEARD_BY_PID,
+        LIST,
+        HEARD_BY_PID,
+        [CLI, "twin", "destroy", "rh-a"],
+        LIST,
+        HEARD_BY_PID,
+        made(local, "prefect-down"),
+        made(local, "netbox-down"),
+    ]
+    assert (kept.unsettled.exists(), host.signalled) == (True, [(4501, TERM)])
+    assert capsys.readouterr().err.splitlines()[0] == f"demo: {NOT_WHOLE.format(4502, LISTEN)}"
+
+    # Run again, the other still there: its core's record gone stale, nothing is started beside the other and nothing
+    # asked of it. Once the address is free, a core of the demonstration's own reads the store, and it is settled.
+    host.acts.clear()
+    assert status(host, down(local)) == 1
+    assert acts(host) == [HEARD, made(local, "netbox-down")]
+    assert capsys.readouterr().err.splitlines()[0] == f"demo: {PORT_HELD.format('127.0.0.1')}"
+    host.listening.clear()
+    answers_its_version(host)
+    lists(host, [])
+    host.acts.clear()
+    assert status(host, down(local)) == 0
+    [started] = host.started
+    assert acts(host) == [
+        HEARD,
+        ("start", [CORE]),
+        HEARD_BY_PID,
+        LIST,
+        HEARD_BY_PID,
+        (started.pid, TERM),
+        made(local, "netbox-down"),
+    ]
+    assert not kept.unsettled.exists()
+    capsys.readouterr()
+
+    # Between the read of who listens and the first list, which the other answers empty.
+    local, kept, host = after_a_netbox_run(tmp_path / "first")
+    host.answers[(CLI, "twin", "list", "--json")] = dies_and_anothers_binds(host, demo.Done(0, "[]\n"))
+    with pytest.raises(demo.Stop) as stop:
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (1, (NOT_WHOLE.format(4502, LISTEN),))
+    assert acts(host) == [(4501, TERM), HEARD_BY_PID, LIST, HEARD_BY_PID]
+    assert kept.unsettled.exists()
+
+    # The same of a core `settle` itself started: gone by the end of its one destroy.
+    local, kept, host = place(tmp_path / "started")
+    unsettle(kept)
+    answers_its_version(host)
+    lists(host, ["rh-a"], [])
+
+    def its_own_dies(ran: Any) -> Any:
+        host.exit(host.started[0].pid)
+        host.listening.append((LISTEN, None, "fylgja-core-ser"))
+        return demo.Done(0, "")
+
+    host.answers[(CLI, "twin", "destroy", "rh-a")] = its_own_dies
+    with pytest.raises(demo.Stop) as stop:
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (1, (NOT_WHOLE.format(host.started[0].pid, LISTEN),))
+    assert (kept.unsettled.exists(), host.signalled) == (True, [])
+
+
+def test_a_port_still_closing_after_a_cores_end_is_waited_for_before_the_next_start(tmp_path: Path) -> None:
+    """A core that did not list is ended and one started in its place at the same address: the first's listener can
+    outlast its process for a moment, and the start waits for the port, read every tenth of a second, before it
+    reads it for its own refusal."""
+    local, kept, host = place(tmp_path)
+    host.processes[4502] = core_process(kept)
+    kept.core_pid.write_text("4502\n")
+    unsettle(kept)
+    host.lingers = 0.15
+    exits_at_its_signal(host)
+    answers_its_version(host)
+    listings = iter([demo.Done(2, ""), demo.Done(0, "[]\n")])
+
+    def in_turn(ran: Any) -> Any:
+        return next(listings)
+
+    host.answers[(CLI, "twin", "list", "--json")] = in_turn
+    demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    [started] = host.started
+    # The listener is there at the first two reads and gone at the third; the start's own read follows.
+    assert acts(host) == [
+        HEARD_BY_PID,
+        LIST,
+        (4502, TERM),
+        HEARD,
+        HEARD,
+        HEARD,
+        HEARD,
+        ("start", [CORE]),
+        HEARD_BY_PID,
+        LIST,
+        HEARD_BY_PID,
+        (started.pid, TERM),
+    ]
+    assert (host.slept, demo.PORT_FREE_POLL_S, demo.PORT_FREE_WAIT_S) == ([0.1, 0.1], 0.1, 5.0)
+    assert not kept.unsettled.exists()
+
+    # Still there at the bound, as where another process has taken the port: the start's refusal stands.
+    local, kept, host = place(tmp_path / "held")
+    host.processes[4502] = core_process(kept)
+    kept.core_pid.write_text("4502\n")
+    unsettle(kept)
+    host.lingers = 60.0
+    exits_at_its_signal(host)
+    host.answers[(CLI, "twin", "list", "--json")] = demo.Done(2, "")
+    with pytest.raises(demo.Stop) as stop:
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert (stop.value.status, stop.value.lines) == (1, (PORT_HELD.format("127.0.0.1"),))
+    waited = acts(host)[3:]
+    assert set(map(tuple, waited)) == {("ss", "-Hltn")} and len(waited) >= 51
+    assert demo.PORT_FREE_WAIT_S <= host.now + 1e-9 < demo.PORT_FREE_WAIT_S + 2 * demo.PORT_FREE_POLL_S
+    assert (host.started, kept.unsettled.exists(), kept.core_pid.exists()) == ([], True, False)
+
+    # A core ended at another port than the one a core is started at is not waited for.
+    local, kept, host = place(tmp_path / "elsewhere")
+    host.processes[4502] = core_process(kept, "127.0.0.1:7700")
+    kept.core_pid.write_text("4502\n")
+    unsettle(kept)
+    host.lingers = 60.0
+    exits_at_its_signal(host)
+    answers_its_version(host)
+    listings = iter([demo.Done(2, ""), demo.Done(0, "[]\n")])
+    host.answers[(CLI, "twin", "list", "--json")] = in_turn
+    demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+    assert acts(host)[2:5] == [(4502, TERM), HEARD, ("start", [CORE])]
+    assert host.slept == []
+
+
+def test_a_recorded_runner_not_yet_become_the_runner_is_ended_as_the_runner(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """For about three seconds after its start the pid `runner.pid` names is still `edge_dev.py serve`, by the words
+    the script started it by: it is the demonstration's to end, and is not left behind with its record removed."""
+    for source in demo.SOURCES:
+        local, kept, host = place(tmp_path / source)
+        words = demo.serve_argv(source, local, MAIN)
+        host.processes[4501] = demo.Process(words, demo.step_env(ENV | EDGE, kept, LISTEN))
+        kept.runner_pid.write_text("4501\n")
+        exits_at_its_signal(host)
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+        assert (acts(host), sorted(host.processes), kept.runner_pid.exists()) == ([(4501, TERM)], [], False)
+        assert capsys.readouterr().out.splitlines() == ["demo: the runner, pid 4501, ended"]
+        # By then it may have become the runner: it is the same process, and is ended as that.
+        host.processes[4501] = demo.Process(words, demo.step_env(ENV | EDGE, kept, LISTEN))
+        kept.runner_pid.write_text("4501\n")
+        host.on_signal = None
+
+        def execs(host: FakeHost = host, local: Path = local, source: str = source) -> None:
+            becomes(host, 4501, runner_process(local, source))
+
+        def exits(host: FakeHost = host) -> None:
+            host.exit(4501)
+
+        host.at(host.now + 2.0, execs)
+        host.at(host.now + 4.0, exits)
+        host.acts.clear()
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+        assert (acts(host), sorted(host.processes), kept.runner_pid.exists()) == ([(4501, TERM)], [], False)
+        capsys.readouterr()
+
+    # With another `--local`, or other words after `serve`, it is not: left, its record removed, and said.
+    local, kept, host = place(tmp_path / "others")
+    env = demo.step_env(ENV | EDGE, kept, LISTEN)
+    words = demo.serve_argv("netbox", local, MAIN)
+    for case, others in enumerate(
+        (
+            demo.serve_argv("netbox", tmp_path / "another" / "local", MAIN),
+            [*words, "--more"],
+            words[:-2],
+            [*words[:5], "nautobot", *words[6:]],
+            [*words[:3], "run", *words[4:], "--", "stage", "mark"],
+            demo.api_argv(local, MAIN),
+            ["/bin/bash", "-c", " ".join(words)],
+        )
+    ):
+        host.processes[4501] = demo.Process(others, env)
+        kept.runner_pid.write_text("4501\n")
+        demo.settle(loaded_env(local, host), kept, local, LISTEN, host)
+        assert (host.acts, sorted(host.processes), kept.runner_pid.exists()) == ([], [4501], False), case
+        assert capsys.readouterr().out.splitlines() == [
+            f"demo: pid 4501 of {kept.runner_pid} is not the demonstration's runner: it is left, and the file removed"
+        ], case
+
+    # What serves is still judged by `is_runner` alone: a process not yet the runner is none to `runners`, and is
+    # not refused as one the demonstration did not start.
+    host.processes[4501] = demo.Process(words, env)
+    assert demo.runners(local, host) == []
+    demo.refuse_runners("netbox", kept, local, host)
+    is_a_runner = demo.is_runner(host.processes[4501], local)
+    assert not is_a_runner
+
+
+def test_down_settles_what_is_recorded_though_no_source_is(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A marker or a recorded pid with no `source` beside it is still the demonstration's to settle: `down` does not
+    answer that there is nothing to end before it has read them. No source and no Prefect server is stopped, which
+    is said, and the exit is by the marker."""
+    no_source = "demo: no source is recorded under {}: neither a source nor the Prefect server was stopped"
+    local, kept, host = after_a_netbox_run(tmp_path)
+    kept.source.unlink()
+    lists(host, ["rh-a"], [])
+    assert status(host, down(local, "--purge")) == 0
+    assert acts(host) == [
+        (4501, TERM),
+        HEARD_BY_PID,
+        LIST,
+        HEARD_BY_PID,
+        [CLI, "twin", "destroy", "rh-a"],
+        LIST,
+        HEARD_BY_PID,
+        (4502, TERM),
+    ]
+    assert sorted(host.processes) == [4503]
+    assert sorted(path.name for path in kept.source.parent.iterdir()) == ["prefect.pid"]
+    said = capsys.readouterr()
+    assert (said.out.splitlines()[-2:], said.err) == (
+        [
+            no_source.format(kept.source.parent),
+            f"demo: what was recorded under {kept.source.parent} is ended",
+        ],
+        "",
+    )
+
+    # Each of the three alone is enough for `settle` to be run: the marker, a core's record, a runner's.
+    lives = {"unsettled": None, "core_pid": 4502, "runner_pid": 4501}
+    for case, record in enumerate(lives):
+        local, kept, host = after_a_netbox_run(tmp_path / str(case))
+        for other in ("source", "prefect_pid", "unsettled", "core_pid", "runner_pid"):
+            if other != record:
+                getattr(kept, other).unlink()
+        for pid in (4501, 4502):
+            if pid != lives[record]:
+                del host.processes[pid]
+        answers_its_version(host)
+        assert status(host, down(local)) == 0, record
+        assert [words for words in acts(host) if words[:1] == ["make"]] == [], record
+        assert (len(host.started), bool(host.signalled)) == (int(record == "unsettled"), True), record
+        assert sorted(path.name for path in kept.source.parent.iterdir()) == [], record
+        capsys.readouterr()
+
+    # The store not read: exit 1, by the marker, and said so.
+    local, kept, host = after_a_netbox_run(tmp_path / "unread")
+    kept.source.unlink()
+    host.not_listening.add(4502)
+    assert status(host, down(local)) == 1
+    assert [words for words in acts(host) if words[:1] == ["make"]] == []
+    said = capsys.readouterr()
+    assert said.err.splitlines()[1:] == [f"demo: {UNSETTLED.format(kept.unsettled)}", NOT_ALL_ENDED]
+    assert said.out.splitlines()[-1] == no_source.format(kept.source.parent)
 
 
 def test_the_real_host_reads_a_process_whatever_its_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3425,6 +3781,25 @@ def test_the_fake_host_answers_as_the_real_one_does() -> None:
     ]
     host.not_listening.add(4502)
     assert len(host.run(HEARD, capture=True).out.splitlines()) == len(SS.splitlines()) + 2
+    # A core ended keeps its listener for the time a test states, named no process, and then it is gone; one that
+    # did not listen keeps none, and with no time stated none is kept.
+    host = passing()
+    host.processes[4502] = core_process(demo.records(LOCAL), "127.0.0.1:7700")
+    host.processes[4504] = core_process(demo.records(LOCAL), "127.0.0.1:7701")
+    host.not_listening.add(4504)
+    host.lingers = 0.15
+    host.exit(4502)
+    host.exit(4504)
+    closing = "LISTEN 0      2048       127.0.0.1:7700 0.0.0.0:*"
+    assert (host.process(4502), host.run(HEARD_BY_PID, capture=True).out.splitlines()[-1]) == (None, closing)
+    host.sleep(0.1)
+    assert host.run(HEARD, capture=True).out.splitlines()[-1] == closing
+    host.sleep(0.1)
+    assert host.run(HEARD, capture=True) == demo.Done(0, SS)
+    host.lingers = 0.0
+    host.processes[4502] = core_process(demo.records(LOCAL), "127.0.0.1:7700")
+    host.exit(4502)
+    assert host.run(HEARD, capture=True) == demo.Done(0, SS)
 
 
 class Reply:

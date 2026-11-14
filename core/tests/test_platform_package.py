@@ -4,6 +4,7 @@ fixture under testdata/packages/invalid/platform/ is refused for its fault alone
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ from fylgja_core.platform_package import (
     Image,
     Resources,
     Rule,
+    ValueAt,
     Version,
 )
 
@@ -36,6 +38,7 @@ CHASSISOS = ROOT / "testdata" / "packages" / "chassisos.yaml"
 SHIPPED = [*sorted(PSP.glob("*.yaml")), CHASSISOS]
 INVALID = ROOT / "testdata" / "packages" / "invalid" / "platform"
 SOURCE = ROOT / "core" / "src" / "fylgja_core"
+SCHEMA = ROOT / "formats" / "platform-package-1.schema.json"
 
 # Every rejection fixture, and the (pointer, rule) pairs the loader must report for it:
 # exactly these, so a fixture with one fault yields one fault. several.yaml carries five;
@@ -108,6 +111,7 @@ def test_the_sr_linux_package_reads_as_written() -> None:
     assert package.runtime.containerlab.resources == Resources(cpu=0.5, memory_mb=2048)
     assert package.versions == (Version(name="24.7.1"),)
     assert package.runtime.containerlab.images == {"24.7.1": Image(ref="ghcr.io/nokia/srlinux:24.7.1")}
+    assert package.conformance.port.discovering is not None
     assert package.conformance.port.discovering.absent is None
 
 
@@ -119,7 +123,32 @@ def test_the_eos_package_renames_every_data_rule() -> None:
     assert package.versions == (Version(name="4.32.0.2F"),)
     assert containerlab.images["4.32.0.2F"] == Image(ref="ceos:4.32.0.2F", pull_secret="arista-ceos")
     assert list(containerlab.images) == ["4.32.0.2F"] and containerlab.hot_add_ports is False
+    assert package.conformance.port.discovering is not None
     assert package.conformance.port.discovering.absent == "true"
+
+
+def test_a_package_without_port_discovering_loads_with_none() -> None:
+    """No code reads the path that says LLDP runs on a port, so a package may leave it out: it
+    is valid, and its model holds None there and every other member as the file gives it."""
+    whole = platform_package.load(CHASSISOS)
+    assert whole.conformance.port.discovering is not None
+    doc = yaml.safe_load(CHASSISOS.read_text())
+    del doc["conformance"]["port"]["discovering"]
+    assert platform_package.validate(doc) == []
+    package = platform_package.decode(doc)
+    assert package.conformance.port.discovering is None
+    assert package.conformance.port.enabled == whole.conformance.port.enabled == ValueAt(
+        path="/interfaces/interface[name={node_name}]/state/admin-status", value="UP"
+    )
+    assert package.conformance.port.neighbor == whole.conformance.port.neighbor
+    assert package.conformance.port.neighbor.path == "/lldp/interfaces/interface[name={node_name}]/neighbors/neighbor"
+    assert documents.encode(package) == doc
+
+
+def test_the_schema_requires_a_ports_enabled_and_neighbor_alone() -> None:
+    port = json.loads(SCHEMA.read_text())["properties"]["conformance"]["properties"]["port"]
+    assert port["required"] == ["enabled", "neighbor"]
+    assert port["properties"]["discovering"]["$ref"] == "#/$defs/value_at"
 
 
 def test_the_image_of_a_package_is_its_one_versions() -> None:

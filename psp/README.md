@@ -26,7 +26,7 @@ package, and each property's description for its consumer.
 | `interfaces.rules` | Which production interface names the platform has, in order: each data rule's `match` and `ranges`, and one management rule. A `node_name` only where the node's name differs from the production name |
 | `push` | How the configuration reaches a booted node: `json_rpc` or `eapi`, always a replace with one atomic commit ([D-027](../design/decisions.md#d-027)) |
 | `readiness` | How long the push transport may take to answer once the nodes are up |
-| `gnmi`, `conformance` | How verify reads a booted node: the port and transport it dials, and the paths it reads, the host name and each cabled port's `enabled` and `neighbor`. `conformance.version` and `conformance.port.discovering` have no reader yet |
+| `gnmi`, `conformance` | How verify reads a booted node: the port and transport it dials, and the paths it reads, the host name and each cabled port's `enabled` and `neighbor`. `conformance.version` and `conformance.port.discovering` have no reader yet, and a package may leave the second out |
 | `fidelity.approximations` | How a twin of this platform differs from production |
 | `runtime.containerlab` | The kind, `images`, the image of each listed version under its quoted name (with a `pull_secret` when gated), per-node `resources`, the deploy and destroy bounds, `link_apply_mode`, `alias` (with a `rename` per data rule when false) and `hot_add_ports` |
 

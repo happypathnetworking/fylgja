@@ -108,17 +108,19 @@ class Neighbor:
 
 @dataclass(frozen=True, kw_only=True)
 class Port:
-    """Per-port reads; {node_name} renders the port's node name."""
+    """Per-port reads; {node_name} renders the port's node name. `discovering`, the leaf and value
+    saying LLDP runs on a port, is None where the package leaves it out."""
 
     enabled: ValueAt
-    discovering: ValueAt
+    discovering: ValueAt | None = None
     neighbor: Neighbor
 
 
 @dataclass(frozen=True, kw_only=True)
 class Conformance:
     """The gNMI paths of a booted node. Verify reads `host_name` and each cabled port's
-    `enabled` and `neighbor`; `version` and `port.discovering` have no reader yet."""
+    `enabled` and `neighbor`; `version` and `port.discovering`, which a package may leave out,
+    have no reader yet."""
 
     host_name: str
     version: str

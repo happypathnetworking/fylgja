@@ -148,7 +148,6 @@
           "additionalProperties": false,
           "required": [
             "enabled",
-            "discovering",
             "neighbor"
           ],
           "properties": {
@@ -158,7 +157,7 @@
             },
             "discovering": {
               "$ref": "#/$defs/value_at",
-              "description": "The leaf and value saying LLDP runs on a port. No code reads it yet: verify reads a port's neighbours without it."
+              "description": "Optional: the leaf and value saying LLDP runs on a port. No code reads it: verify reads a port's neighbours without it, and a package may leave it out."
             },
             "neighbor": {
               "type": "object",
@@ -190,7 +189,7 @@
           "description": "Per-port reads; {node_name} renders the port's node name."
         }
       },
-      "description": "The gNMI paths of a booted node. verify reads host_name and, for each cabled port intent enables, port.enabled and port.neighbor; version and port.discovering have no reader yet."
+      "description": "The gNMI paths of a booted node. verify reads host_name and, for each cabled port intent enables, port.enabled and port.neighbor. No code reads the other two: version, which every package gives, and port.discovering, which a package may leave out."
     },
     "fidelity": {
       "type": "object",
@@ -261,7 +260,7 @@
       "properties": {
         "path": {
           "$ref": "#/$defs/path",
-          "description": "The leaf the fact is read at; verify reads it for port.enabled, and port.discovering has no reader yet."
+          "description": "The leaf the fact is read at. verify reads it for port.enabled; no code reads it for port.discovering, which is optional."
         },
         "value": {
           "type": "string",
@@ -269,7 +268,7 @@
         },
         "absent": {
           "type": "string",
-          "description": "The value an unreported leaf is taken to mean (cEOS reports nothing at port.discovering while LLDP runs); without it nothing read fails. verify applies it where it reads the leaf, for port.enabled."
+          "description": "The value an unreported leaf is taken to mean (cEOS reports nothing at port.discovering while LLDP runs); without it nothing read fails. verify applies it where it reads the leaf, for port.enabled; for port.discovering, which is optional, no code reads the leaf."
         }
       }
     },

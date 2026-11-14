@@ -6,8 +6,9 @@ can repeat it by hand; no command's stdout is ever logged, since it can hold a n
 configuration. A command that fails or outruns its budget raises `CommandFailed`, and one
 whose caller is cancelled is killed. Each command leads a process group of its own, which is
 killed whole, so neither it nor a child it spawned outlives the call that ran it. What it had
-already asked of the Docker daemon is not so ended: a container whose create was sent is made
-after the kill (verified-facts.md, 2026-11-14), which the driver's teardown settles for.
+already asked of the Docker daemon is not so ended: a create it had sent may still be made by
+the daemon and listed only after the kill (verified-facts.md, 2026-11-14), which the driver's
+teardown settles for.
 
 A command given a `log` file writes its stdout and stderr there instead of into pipes the
 core holds, so that a core killed under it ends nothing: containerlab dies of SIGPIPE once a

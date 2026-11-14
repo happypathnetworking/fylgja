@@ -576,7 +576,10 @@ class ContainerlabDriver:
         After a deploy of the twin this driver killed, the teardown ends with `_settle`, bounded by
         the destroy's budget, and the network's removal once more: the daemon may make a container
         the kill's listing missed. The kill is forgotten once that has passed, or once a later
-        deploy of the twin returns 0, so a destroy that fails settles again when it is retried.
+        deploy of the twin returns 0, so a destroy that fails settles again when it is retried. The
+        destroy reads the mark before rule 2's deploy and settles on that reading, though that
+        deploy's return clears it: a late container its topology does not name is left by
+        containerlab's destroy.
 
         A command that fails (the destroy, rule 2's deploy, the network's removal, or the settle's
         listing or removal of a container) raises `CommandFailed`, logged at WARNING, and leaves the
@@ -593,6 +596,7 @@ class ContainerlabDriver:
         inspection = await self.inspect(twin)
         lab = inspection.state == "present"
         named = set(yaml.safe_load(files[TOPOLOGY])["topology"]["nodes"])
+        killed = twin in self._killed  # read before rule 2's deploy, whose return of 0 clears it
         try:
             if inspection.state == "residue" and self._root_owned_residue(twin):
                 _log.info("destroy %s: residue and no container: deploy, then destroy (D-023)", twin)
@@ -607,7 +611,7 @@ class ContainerlabDriver:
                                 timeout_s=budget, cwd=directory)
             if inspection.state != "absent" and await self._network_exists(twin):
                 await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
-            if twin in self._killed:
+            if killed:
                 await self._settle(twin, budget)
                 if await self._network_exists(twin):
                     await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)

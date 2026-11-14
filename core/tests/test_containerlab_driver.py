@@ -1458,6 +1458,30 @@ def test_a_deploy_that_fails_after_a_killed_one_keeps_the_mark(tmp_path: Path) -
                             (5.0, NETWORK)]
 
 
+@pytest.mark.parametrize("killed", [True, False], ids=["killed", "not-killed"])
+def test_a_destroy_that_deploys_for_residue_settles_on_the_mark_it_found(tmp_path: Path, killed: bool) -> None:
+    # Rule 2: root-owned residue and no container, so the destroy deploys, then destroys. That deploy returns 0 and
+    # clears the mark, but the kill before it may still have a container coming that the topology does not name and
+    # containerlab's destroy leaves: the destroy settles on the mark it found before its own deploy.
+    daemon = Daemon({"clab-t-x9": 0.25} if killed else None)
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    if killed:
+        kill_a_deploy(daemon, d, p)
+    (tmp_path / "ssh_config.d" / "clab-t.conf").write_text("Host clab-t-n1\n")
+    daemon.deploy_returns = True
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    rule_2 = [(0.0, PS), (0.0, ("containerlab", "deploy", "-t", topology)),
+              (0.0, ("containerlab", "destroy", "-t", topology, "--cleanup")), (0.0, NETWORK)]
+    if killed:
+        assert daemon.calls == [*rule_2, (0.0, PS), (0.5, PS), (0.5, (*RM, "clab-t-x9")), *settle_polls(1.0, 6.0),
+                                (6.0, NETWORK)]
+        assert daemon.listed() == []
+    else:
+        assert daemon.calls == rule_2 and daemon.sleeps == []
+
+
 def test_a_destroy_of_a_twin_no_deploy_ran_for_waits_nothing(tmp_path: Path) -> None:
     daemon = Daemon({"clab-t-n1": 0.25})
     p = planned("three-node")

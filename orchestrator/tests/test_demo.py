@@ -2903,7 +2903,8 @@ def test_down_with_nothing_recorded_ends_nothing(tmp_path: Path, capsys: pytest.
 
 
 def test_down_tries_every_act_and_exits_1_where_one_failed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # `prefect-down` exits 1: the source's `down` is still run, and the record of the server kept for another try.
+    # `prefect-down` fails, exiting `MAKE_FAILED` as make does: the source's `down` is still run, and the record of
+    # the server kept for another try.
     local, kept, host = after_a_netbox_run(tmp_path)
     host.answer(*made(local, "prefect-down")[:3], status=MAKE_FAILED)
     assert status(host, down(local)) == 1
@@ -3606,6 +3607,19 @@ def test_the_three_targets_run_the_script(tmp_path: Path) -> None:
     assert [line.rstrip() for line in make_n(tmp_path, "demo-down")] == [f"{script} down {where}"]
     assert make_n(tmp_path, "demo-down", "PURGE=1") == [f"{script} down {where} --purge"]
     assert [line.rstrip() for line in make_n(tmp_path, "demo-down", "PURGE=yes")] == [f"{script} down {where}"]
+    # A purge is a `PURGE=1` given on a make command line alone: one exported by the shell, or written in a
+    # `local/.env` a shell has loaded, removes nothing. One a make above hands down in `MAKEFLAGS` is of the command
+    # line to make (`$(origin PURGE)`), a purge a person asked for on a make command line, and stands.
+    ended = demo.make_words("demo-down", tmp_path)
+    for environ, purges in (
+        ({}, False),
+        ({"PURGE": "1"}, False),
+        ({"MAKEFLAGS": "-- PURGE=1"}, True),
+        ({"PURGE": "1", "MAKEFLAGS": "-- PURGE="}, False),
+    ):
+        dried = dry(ended, {"PATH": "/usr/bin:/bin"} | environ)
+        assert (dried.returncode, "--purge" in dried.stdout) == (0, purges), environ
+    assert dry([*ended, "PURGE=1"], {"PATH": "/usr/bin:/bin", "PURGE": ""}).stdout.rstrip().endswith(" --purge")
 
     # All three are phony: a file of a target's name stops none of them.
     makefile = (ROOT / "Makefile").read_text()
@@ -4525,15 +4539,18 @@ def assigned_by_default(makefile: str) -> list[str]:
 
 
 def referred(makefile: str) -> tuple[set[str], set[str]]:
-    """The variables and the functions a makefile's `$(…)` refer to, comments aside: a word followed by a blank is a
-    function's name; any other is a variable's, a substitution's among them (`$(@:-demo=)`). A `$$(…)` is the
-    shell's."""
+    """The variables and the functions a makefile's `$(…)` and `${…}` refer to, and the variables its `ifdef` and
+    `ifndef` ask of, comments aside: a word followed by a blank is a function's name; any other is a variable's, a
+    substitution's among them (`$(@:-demo=)`). A `$$(…)` and a `$${…}` are the shell's."""
     variables: set[str] = set()
     functions: set[str] = set()
     for line in makefile.splitlines():
         if line.startswith("#"):
             continue
-        for found in re.finditer(r"(?<!\$)\$\(([^\s():,$]+)(.?)", line):
+        asked = re.match(r"[ \t]*(?:ifdef|ifndef)[ \t]+([A-Za-z_][A-Za-z0-9_]*)", line)
+        if asked:
+            variables.add(asked[1])
+        for found in re.finditer(r"(?<!\$)\$[({]([^\s(){}:,$]+)(.?)", line):
             (functions if found[2] in (" ", "\t") else variables).add(found[1])
     return variables, functions
 
@@ -4553,11 +4570,23 @@ def test_the_names_no_make_child_is_given_are_makes_own_and_the_makefiles() -> N
     assigned = set(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:\?=|:=|=)", makefile, re.MULTILINE))
     variables, functions = referred(makefile)
     assert variables - assigned == {"MAKE", "@"}
-    assert functions == {"shell", "if", "filter", "filter-out", "words", "error"}
+    assert functions == {"shell", "if", "and", "filter", "filter-out", "origin", "words", "error"}
     assert set(demo.MAKE_VARIABLES) <= assigned and {"VENV", "MAIN", "TAG", "SOURCES"} <= assigned
     # The reading itself, on lines of the test's own.
     sample = "a: $(NEW)\n\t$(if $(X),$(Y:.c=.o)) $$(sh) $(@)\n# $(NOT_READ)\n"
     assert referred(sample) == ({"NEW", "X", "Y", "@"}, {"if"})
+    braced = "b: ${BRACED}\n\t${if ${Z},${W:.c=.o}} $${sh}\n# ${NOT_READ}\n"
+    assert referred(braced) == ({"BRACED", "Z", "W"}, {"if"})
+    assert referred("ifdef DEFINED\nx := 1\nendif\n  ifndef UNDEFINED\nendif\n# ifdef NOT_READ\n") == (
+        {"DEFINED", "UNDEFINED"},
+        set(),
+    )
+    # A copy of the Makefile with one reference of each form added names it among those it does not assign.
+    for added, name in (
+        ("\nx:\n\techo ${ONLY_BRACED}\n", "ONLY_BRACED"),
+        ("\nifndef ONLY_ASKED\nendif\n", "ONLY_ASKED"),
+    ):
+        assert referred(makefile + added)[0] - assigned == {"MAKE", "@", name}
     assert assigned_by_default("A ?= 1\nB := 2\nC?=3\n  D ?= 4\n") == ["A", "C"]
 
     # A make child's environment is a step's, less those names and no other, whatever holds them.

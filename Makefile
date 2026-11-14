@@ -236,7 +236,7 @@ $(VENV)/bin/fylgja-core-server:
 	$(MAKE) venv
 
 # What a demonstration started, ended: its runner, every twin its core holds, its core, the Prefect server it
-# started and its source, whose volumes are kept; PURGE=1 given here, and no other value and no PURGE of the shell's
-# or of local/.env's, removes them too.
+# started and its source, whose volumes are kept; PURGE=1 on a make command line removes them too, and no other value
+# and no PURGE of the environment's, exported by the shell or by a local/.env it loaded, does.
 demo-down:
-	python3 -I scripts/demo.py down --local $(LOCAL) --main $(MAIN) $(if $(filter 1,$(PURGE)),--purge)
+	python3 -I scripts/demo.py down --local $(LOCAL) --main $(MAIN) $(if $(and $(filter 1,$(PURGE)),$(filter command line,$(origin PURGE))),--purge)

@@ -311,12 +311,12 @@ def test_9_a_deploy_killed_mid_create_leaves_nothing_once_its_teardown_has_settl
     30 of them, each labelled for the lab and named as containerlab names a node, and the apply is cancelled 0.4 s
     after the network stands; the cancel kills the script's group, its `docker create` clients with it, as it kills a
     deploy's. `destroy` follows at once. On this idle host the creates in flight at such a kill were made within about
-    0.1 s of it, mostly before the teardown's first listing answered (task-1-calibrate.log), so the race alone would
-    test the settle only now and then. So that it is tested every run, the late container is made certain: once the
-    teardown's first listing has answered, the test starts one more `docker create` labelled for the lab
-    (`clab-drv-cut-late`, no network), which the daemon makes after that listing, as it made the containers of the
-    cut. Ten seconds after the destroy returns nothing labelled for the lab is listed, its network is gone, and the
-    settle is what removed the late container.
+    0.1 s of it, mostly before the teardown's first listing answered (verified-facts.md, 2026-11-14, the stream of
+    `docker create` clients), so the race alone would test the settle only now and then. So that it is tested every
+    run, the late container is made certain: once the teardown's first listing has answered, the test starts one
+    more `docker create` labelled for the lab (`clab-drv-cut-late`, no network), which the daemon makes after that
+    listing, as it made the containers of the cut. Ten seconds after the destroy returns nothing labelled for the
+    lab is listed, its network is gone, and the settle is what removed the late container.
 
     The window rests on these readings, on Docker 29.8.1: a container whose `docker create` client was killed was
     listed 0.1 to 0.6 s after the kill, and in a cut of a create through the core one was not yet listed 0.35 s after
@@ -379,10 +379,13 @@ def test_9_a_deploy_killed_mid_create_leaves_nothing_once_its_teardown_has_settl
         assert left["containers"] == [] and not left["network"], left
         assert any(f"removed clab-{CUT}-late," in message for message in removed), removed
     finally:
-        for process in late:
-            if process.poll() is None:
+        for process in late:  # ended before the lab is listed: a client killed mid-create is the race itself
+            try:
+                process.wait(timeout=60)
+            except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
+                time.sleep(CUT_LEFT_AFTER_S)  # what the daemon was already asked is made after the kill
         names = docker("ps", "-a", "--filter", f"label=containerlab={CUT}", "--format", "{{.Names}}").stdout.split()
         if names:
             docker("rm", "-f", *names, check=False)

@@ -67,7 +67,8 @@ daemon, which lists a container only once it has made it, after the kill (verifi
 2026-11-14). So the twin's next teardown does not trust one empty listing: it lists the lab
 again every `SETTLE_POLL_S` until the listing has been empty for `SETTLE_WINDOW_S`, removing by
 name each container that appears, then removes the network again (`_settle`). The driver holds
-which twins it killed a deploy of in memory alone; a destroy of any other twin is unchanged.
+which twins it killed a deploy of in memory alone, until the teardown has settled or a later
+deploy of the twin returns 0; a destroy of any other twin is unchanged.
 
 `events` follows `docker events` for the containers that carry the lab label, a start, a die
 or a destroy (`EVENTS_ARGV`), as one long-lived command under the allow-listed environment
@@ -473,7 +474,8 @@ class ContainerlabDriver:
         The order is: wait for a stray deploy, take the deploy lock, read the previous topology,
         compute the changes, remove each hot-add container, write the new files, deploy, release
         the lock. A deploy the runner killed, cancelled or past its budget, is remembered for the
-        twin's next `destroy`, which settles (`_settle`). The on-disk topology is the record of
+        twin's next `destroy`, which settles (`_settle`), until a deploy of the twin returns 0; a
+        deploy that fails with its own status changes nothing of it. The on-disk topology is the record of
         what the lab was built from, so it moves only once the containers that must go are gone: a
         core killed before the write leaves the old topology, the retry computes the same hot-add, and the
         removal tolerates the containers already gone. Written first, a kill would leave a retry
@@ -516,6 +518,7 @@ class ContainerlabDriver:
                 if not isinstance(e, Exception) or (isinstance(e, cli.CommandFailed) and e.returncode == cli.TIMED_OUT):
                     self._killed.add(twin)
                 raise
+            self._killed.discard(twin)  # a deploy that returned 0 made the lab whole: its teardown need not settle
 
     async def inspect(self, twin: str) -> Inspection:
         """The twin's containers, by node name, `present` when there is one; else `residue` when
@@ -572,14 +575,16 @@ class ContainerlabDriver:
 
         After a deploy of the twin this driver killed, the teardown ends with `_settle`, bounded by
         the destroy's budget, and the network's removal once more: the daemon may make a container
-        the kill's listing missed. The kill is forgotten only once that has passed, so a destroy
-        that fails settles again when it is retried.
+        the kill's listing missed. The kill is forgotten once that has passed, or once a later
+        deploy of the twin returns 0, so a destroy that fails settles again when it is retried.
 
-        A command that fails (the destroy, rule 2's deploy, or the network's removal) raises
-        `CommandFailed`, logged at WARNING, and leaves the rest undone: the next destroy finds
-        what is left and goes on from there. A twin's directory that cannot be removed, such as a root-owned lab
-        directory containerlab left, is logged at WARNING and left, so that it never wedges
-        a destroy."""
+        A command that fails (the destroy, rule 2's deploy, the network's removal, or the settle's
+        listing or removal of a container) raises `CommandFailed`, logged at WARNING, and leaves the
+        rest undone: the next destroy finds what is left and goes on from there. A lab the settle
+        still finds containers in once the destroy's budget has passed is `DriverFailed`, not
+        logged here, as a stray deploy that outlives its budget is. A twin's directory that cannot
+        be removed, such as a root-owned lab directory containerlab left, is logged at WARNING and
+        left, so that it never wedges a destroy."""
         _check_files(deployment, files)
         twin = deployment.twin
         budget = destroy_budget(files, platforms, probe_packages)

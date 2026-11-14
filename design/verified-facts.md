@@ -382,31 +382,36 @@ the local driver and the step; a fact re-verified there gets a *(0.81.0, date)* 
     `SIGKILL` to the command's process group (`cli.run`, with the command started in a
     session of its own): `CommandFailed` with status -1 after 4 s, and no `containerlab`
     process left.
-  - **The creates a killed deploy had sent are made by the daemon after the kill, and listed
-    only then.** *(0.81.0, Docker 29.8.1, SR Linux 24.7.1, 2026-11-14)* Docker alone: five
+  - **Some creates a killed client had sent are still made, and are listed only after the
+    kill.** *(0.81.0, Docker 29.8.1, SR Linux 24.7.1, 2026-11-14)* Docker alone: five
     `docker create` clients started at once (three SR Linux, two `alpine:3.24.2`), each one's
     process group sent `SIGKILL`. Where the kill came 0.089, 0.118, 0.126 and 0.134 s in, a
-    `docker ps -a` by the run's label taken right after it listed nothing, and one or two
-    containers were listed afterwards, first seen 0.14, 0.13, 0.61 and 0.16 s after the kill,
-    each `Created`, never started, its `Created` time before the kill. Where it came 0.18 to
-    0.26 s in, the listing right after it held three to five. Through a core on the local
-    driver, a deletion during a create's deploy of `three-node-probed`: the driver killed the
-    deploy's group 27–29 ms after Docker's `Created` time of `n1`, `n2` and `n3`, and its
-    teardown's listing, begun 96 ms after the kill, held nothing. So it removed the management
-    network alone (the removal succeeded) and the record was deleted, and the three containers
-    were listed afterwards, `Created`. In a cut of the NetBox demonstration the same day, five
-    such containers had `Created` times 0.20–0.25 s before the core logged the deploy stopped,
-    and its teardown's listing, begun 0.10 s after that line, held none of them. With the
-    deletion timed to containerlab's first `Creating container` line in `deploy.log`, and the
-    loop's cancel poll set to 0.02 s for the runs, 1 cut of `three-node-probed` in 8 left
-    containers so; 43 cuts of `three-node`, 11 of them so timed, left none. Once the driver's
-    teardown after a killed deploy settled (`_settle`, listing the lab until it has been empty
-    for 5 s), 16 cuts of `three-node-probed` so timed left none: in one, the teardown's
-    listing held nothing and the settle's first, 0.43 s later, held `n1`, `n2` and `n3`,
-    which it removed. In five runs of a stream of SR Linux `docker create` clients (30 or 60,
-    one every 0.005 to 0.03 s), killed 0.3–0.4 s after the lab's network stood, two to five
-    containers were made after the kill, the last 0.04–0.08 s after it, and a listing taken
-    at once missed one of them in one run.
+    `docker ps -a` by the run's label taken right after it listed nothing; one or two of the
+    five containers were listed afterwards, first seen 0.14, 0.13, 0.61 and 0.16 s after the
+    kill (derivations), each `Created`, never started, its `Created` time before the kill, and
+    the others were never made. Where it came 0.18 to 0.26 s in, the listing right after it
+    held three to five. Through a core on the local driver, a deletion during a create's
+    deploy of `three-node-probed`: the driver killed the deploy's group 27–29 ms after
+    Docker's `Created` time of `n1`, `n2` and `n3`, and its teardown's listing, begun 96 ms
+    after the kill (both derivations), held nothing. So it removed the management network
+    alone (the removal succeeded) and the record was deleted, and the three containers were
+    listed afterwards, `Created`. In a cut of the NetBox demonstration the same day, five such
+    containers had `Created` times 0.20–0.25 s before the core logged the deploy stopped, and
+    its teardown's listing, begun 0.10 s after that line (derivations), held none of them.
+    Cuts through a core of the tree, the deletion asked at a set offset from the deploy's log
+    line or from containerlab's first `Creating container` line in `deploy.log`: 15 cuts of
+    `three-node` at the loop's shipped cancel poll of 0.5 s, by the offset, left none; with
+    the poll set to 0.02 s for the runs, 17 cuts of `three-node` by the offset and 11 timed to
+    the `Creating container` line left none, and 1 of 8 cuts of `three-node-probed` so timed
+    left containers so. Once the driver's teardown after a killed deploy settled (the driver's
+    `_settle`, listing the lab until it has been empty for 5 s), 16 cuts of
+    `three-node-probed` so timed, at the 0.02 s poll, left none: in one, the teardown's listing
+    held nothing and the settle's first, begun 0.43 s later (a derivation), held `n1`, `n2`
+    and `n3`, which it removed. In five runs of a stream of SR Linux `docker create` clients
+    (30 or 60, one every 0.005 to 0.03 s), killed 0.3–0.4 s after the lab's network stood,
+    Docker's `create` events since the kill named two to five containers, the last 0.04–0.08 s
+    after the kill by the event's time (derivations), and a listing taken at once missed one of
+    them in one run.
 - **A deploy killed in post-deploy** leaves running nodes that never answer, the network
   and the lab directory. *(2026-10-30)* *(0.81.0, 2026-11-03)* One SR Linux node killed
   4 s in, in its post-deploy, left the node running, the network and the lab directory, and

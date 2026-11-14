@@ -1399,7 +1399,8 @@ def test_a_deploy_killed_at_its_budget_is_settled_too(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("how", ["returned", "failed"])
 def test_a_deploy_the_driver_did_not_kill_leaves_the_destroy_as_it_is(tmp_path: Path, how: str) -> None:
-    # A deploy that ended by itself, ok or with its own status, had every create answered: no listing is added.
+    # A deploy that ended by itself, ok or with its own status, was not killed by the driver; that containerlab had
+    # every create answered by then is assumed, not read: no listing is added.
     daemon = Daemon({"clab-t-n1": 0.25}, deploy=CommandFailed(("containerlab", "deploy"), 1, "") if how == "failed"
                     else None, deploy_returns=how == "returned")
     d = daemon_driver(tmp_path, daemon)
@@ -1413,6 +1414,48 @@ def test_a_deploy_the_driver_did_not_kill_leaves_the_destroy_as_it_is(tmp_path: 
     bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
     assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM)]
     assert daemon.sleeps == []
+
+
+def kill_a_deploy(daemon: Daemon, d: ContainerlabDriver, p: Planned) -> None:
+    """Apply `p` with its deploy cancelled once it runs, as the loop cancels an apply; the calls are cleared."""
+
+    async def body() -> None:
+        applying = asyncio.ensure_future(d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+        while not any(args[:2] == DEPLOY for _, args in daemon.calls):
+            await asyncio.sleep(0)
+        await cancelled(applying)
+
+    bounded(body)
+    daemon.calls.clear()
+
+
+def test_a_deploy_that_succeeds_after_a_killed_one_clears_the_mark(tmp_path: Path) -> None:
+    # A create retried to success, or a step's apply cancelled and then applied: the deploy that returned made the
+    # lab whole, so the twin's later deletion is today's, with no listing added and no wait.
+    daemon = Daemon()
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    kill_a_deploy(daemon, d, p)
+    daemon.deploy_returns = True
+    bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM)]
+    assert daemon.sleeps == []
+
+
+def test_a_deploy_that_fails_after_a_killed_one_keeps_the_mark(tmp_path: Path) -> None:
+    daemon = Daemon()
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    kill_a_deploy(daemon, d, p)
+    daemon.deploy = CommandFailed(("containerlab", "deploy"), 1, "")
+    with pytest.raises(CommandFailed):
+        bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM), *settle_polls(0.0, 5.0),
+                            (5.0, NETWORK)]
 
 
 def test_a_destroy_of_a_twin_no_deploy_ran_for_waits_nothing(tmp_path: Path) -> None:

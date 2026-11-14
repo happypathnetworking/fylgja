@@ -1255,8 +1255,8 @@ the next day, `task-5-versions.log`)*
 The live tier ran whole once, and one of its modules once more after a mend to that module's
 test. **The tier had no one whole passing run, and no time of a whole passing tier was
 measured**: the run below is the only whole one, and by a ruling it was not made again. Each log
-named is the run's own output, kept with the plan's records outside the tree; `local/.env` was
-loaded in each run's command.
+named is the run's own output, or a reading of the host taken beside it, kept outside the tree
+with the records of phase 10's plan 1, Task 5; `local/.env` was loaded in each run's command.
 
 - **The host before the whole run**, at 21:48:42Z (`task-5-before-live.log`): `docker ps -a -q
   --filter label=containerlab` and `docker ps` each printed nothing, no network was named
@@ -1276,10 +1276,14 @@ loaded in each run's command.
   `mgmt_subnet` equal each time: to `steps/two-node` it held 2 nodes, 1.0 CPU and 4096 MiB, to
   `three-node-probed` and to `steps/three-node-probed-moved` 5 nodes, 1.7 CPU and 6208 MiB, and
   to `steps/three-node-n3-eos` 3 nodes, 1.5 CPU and 5632 MiB, against the first admit's 3 nodes,
-  1.5 CPU and 6144 MiB. The other three failed for want of the step before them: `changes`
-  answered `kept` for a node never removed, and `docker exec` into a probe host never made
-  failed with status 1. Tests 02 to 04, whose targets hold three SR Linux nodes as the first
-  admit did, passed, as did the module's two destroys and its cEOS tests.
+  1.5 CPU and 6144 MiB. The other three failed for want of the step before them. `test_06`, the
+  step back to `three-node`: `changes` answered `kept` for all three nodes, where `n1` and `n2`
+  recabled and `n3` added were expected, the node never having been removed. `test_08`: `docker
+  exec` into the probe host `n1-loop-a` failed with status 1, the host never having been made.
+  `test_10`, the step that removes the probe: `changes` answered `kept` for `n2`, where
+  recabled was expected, and named neither probe host, where both removed were expected, the
+  probe never having been added. Tests 02 to 04, whose targets hold three SR Linux nodes as the
+  first admit did, passed, as did the module's two destroys and its cEOS tests.
   - The driver answered as [D-073](decisions.md#d-073) has it, a step's allocation carrying the
     target's demand. That the comparison is phase 5's and the answer phase 7's, both on `main`
     and neither changed by phase 10, is the tree's history and no reading of this run; so is
@@ -1301,9 +1305,13 @@ loaded in each run's command.
 - **`core/tests/live/test_changes_live.py` alone, at `f337d7c`: 15 passed in 264.83 s**
   (22:59:52 to 23:04:18Z), exit 0 (`task-5-changes-live.log`), after the helper was mended to
   hold a step's answer to the twin's allocation in every member but `demand`, and its `demand`
-  to the one the target's plan answers. Tests 05 to 11 passed. The host was read as before the
-  whole run at 22:59:47Z and as after it at 23:04:24Z (`task-5-before-changes-live.log`,
-  `task-5-after-changes-live.log`).
+  to the one the target's plan answers. Tests 05 to 11 passed. Before it, at 22:59:47Z
+  (`task-5-before-changes-live.log`), the host answered as before the whole run: no container
+  labelled `containerlab`, none running, no network named `clab-`, and the same six networks
+  with the same subnets. After it, at 23:04:24Z (`task-5-after-changes-live.log`):
+  no container labelled `containerlab` and none running, the stopped ones not listed; no
+  network named `clab-`; the same six networks by name, their subnets not read again; and no
+  line of `/etc/hosts` naming a lab.
 - **Not shown:** the tier whole and passing in one run, at either commit; the time of such a
   run; the suite alone on this harness.
 
@@ -2663,8 +2671,9 @@ The cluster tier ran whole once, and one of its modules once more after a mend t
 test; then the conformance suite ran once against the deployed core. **The tier had no one whole
 passing run, and no time of a whole passing tier was measured**: the run below is the only whole
 one, and by a ruling it was not made again. Each log named is the run's own output, or a
-read-only reading by `kubectl get`, kept with the plan's records outside the tree; `local/.env`
-was loaded in each command, and nothing was scaled, applied or deleted by hand.
+read-only reading by `kubectl get` and `docker`, kept outside the tree with the records of phase
+10's plan 1, Task 5; `local/.env` was loaded in each command, and nothing was scaled, applied or
+deleted by hand.
 
 - **The cluster before the tier**, at 23:04:36Z (`task-5-before-cluster.log`): the Deployment
   `fylgja-core` in `fylgja` at no replica, its image's tag `ea4cbde1d213`, and no pod of the
@@ -2681,7 +2690,9 @@ was loaded in each command, and nothing was scaled, applied or deleted by hand.
   create's run started and reached `compiled`; the queue then logged `handling rst-cluster
   failed (AttributeError)` 15 times and the loop `resumed after compiled` 14 times; the run
   stayed `running` and the fixture failed after 600.80 s, `rst-cluster's create: not within
-  600 s`. No test of the module ran, and the twin's namespace was never made.
+  600 s`. No test of the module ran. That the twin's namespace was never made is an inference,
+  and no reading: the run never left `compiled`, the phase before admit, and the module's end
+  read the namespace gone 0.0 s after asking its deletion.
   - The log names the exception's type and not the attribute. That the wrapper lacked `nodes`
     and `all_pods`, the two reads the driver's capacity reading makes at each admit
     ([D-073](decisions.md#d-073)), is a reading of the code; that the wrapper is phase 6's, the
@@ -2692,8 +2703,12 @@ was loaded in each command, and nothing was scaled, applied or deleted by hand.
   cluster; and **the changes module passed whole**, 14 tests, its helper `step` mended as the
   live tier's was ("containerlab 0.79.0", phase 10's block) before the run (`task-5-cluster.log`).
 - **The cluster after the tier**, at 23:32:33Z (`task-5-after-cluster.log`): the same seven
-  namespaces, no Topology, the Deployment still at no replica; the one Lease whose name or
-  namespace holds `fylgja` was the deployed core's own, with no holder.
+  namespaces, no Topology, the Deployment still at no replica. The Leases were read at
+  23:33:07Z, in the same log: `kubectl -n fylgja get leases` listed one, `fylgja-core`, made on
+  2026-11-07, its holder empty; and `kubectl get leases -A`, printed as namespace, name and
+  creation time and passed through `grep -i fylgja`, gave that one line alone. The log's label
+  for the second, "leases of every namespace whose name holds fylgja", says less than the
+  command did, which matched the name too.
 - **`core/tests/cluster/test_restore_cluster.py` alone, at `1d460b4`: 8 passed in 770.61 s**
   (23:41:48 to 23:54:40Z), exit 0 (`task-5-restore-cluster.log`), after the wrapper was given
   the two reads, each passed on to the reach as its other reads are. The loop's create of the
@@ -2701,12 +2716,16 @@ was loaded in each command, and nothing was scaled, applied or deleted by hand.
   13.32 s and 0.25 s into its 180 s; the step to `three-node-probed` took 66.6 s and the step to
   `steps/three-node-n3-eos` 79.8 s; the teardown's destroy took 46.30 s. No run of this module
   is recorded in this file between phase 6's ("a node's pod deleted behind the core", above) and
-  this one. The cluster was read as before the tier at 23:41:42Z and as after it at 23:54:50Z
-  (`task-5-before-restore-cluster.log`, `task-5-after-restore-cluster.log`).
+  this one. Before it, at 23:41:42Z (`task-5-before-restore-cluster.log`): the Deployment at no
+  replica and no pod of the core's, its image's tag not read again; the seven namespaces, none
+  `fylgja-twin-*`; no Topology. After it, at 23:54:50Z (`task-5-after-restore-cluster.log`):
+  the same seven namespaces, no Topology, the Deployment at no replica, and `kubectl get leases
+  -A` through `grep -i fylgja`, with the holder printed, giving `fylgja/fylgja-core` alone, its
+  holder empty.
 - **The core before the suite**, at 23:58:29Z (`task-5-before-conformance-cluster.log`): the
   Deployment at one replica, ready, its image's tag `1d460b456e9d`, built at `1d460b4`; its pod
   Running since 23:57:21Z with no restart, `FYLGJA_RESYNC_S` 3600; no Topology and no twin's
-  namespace. The development host held no container.
+  namespace. The development host held no running container and none labelled `containerlab`.
 - **`make conformance DRIVER=clabernetes`, at `1d460b4`, against that core: 53 passed, 1 skipped
   in 4092.37 s** (1:08:12 by pytest, 23:58:37 to 01:06:51Z), exit 0
   (`task-5-conformance-cluster.log`): 12 tests of `test_lifecycle.py`, 20 of `test_steps.py`, 10
@@ -2722,7 +2741,7 @@ was loaded in each command, and nothing was scaled, applied or deleted by hand.
   Deployment at one replica, ready, the same tag; its pod, the one the last kill left, Running
   since 00:51:01Z with no restart and no label of the suite's; the namespace's one NetworkPolicy
   `versity`, the gateway's; the Lease held by that pod, with no annotation. The development host
-  held no container.
+  held no running container, none labelled `containerlab` and no network named `clab-`.
 - **Not shown:** the tier whole and passing in one run, at any commit; the time of such a run.
 
 ---

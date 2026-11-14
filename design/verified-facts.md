@@ -6518,23 +6518,26 @@ the change source (under "NetBox 4.7.5 with netbox-branching 1.2.3", which says 
 read by hand after each run by a script of the reading's own over `urllib` with no proxy, the basic auth read from the
 environment and sent in a header it built, never printed: `twin-rehearse/main`'s and `stage-plan/main`'s runs by the
 body above, newest first, and each run's `fylgja-document` artifact as the checks' glue asks for it. Every output was
-saved, and none held a credential of `local/.env`. *(2026-11-14)*
+saved, and searched by hand for the credentials of `local/.env`, every count 0; those searches' results were not
+saved. *(2026-11-14)*
 
 - **A run's document is filed before the run ends.** For both runs the artifact's `created` was 0.068 s before the
-  run's `end_time` (derivations; 0.052 and 0.055 s for two earlier completed runs the same listing held), and the
-  script read the document at its first ask, 0.20 and 0.21 s after the listing that first gave the run `COMPLETED`.
-  `DOCUMENT_WAIT_S`, 60 s, was not reached by either. *(2026-11-14)*
+  run's `end_time`, and for the 13 earlier runs with a document that the same listing held, 0.033 to 0.118 s before
+  it (derivations); the script read the document at its first ask, 0.20 and 0.21 s after the listing that first gave
+  the run `COMPLETED`. `DOCUMENT_WAIT_S`, 60 s, was not reached by either. *(2026-11-14)*
 - **The run a NetBox tag starts, as the demonstration lists it.** `created` 0.46 and 0.71 s after `make netbox-change`
-  printed its tag's line, by the host's clock (derivations); the script's first list after the step's return did not
-  hold it, and its second, 5 s on at its `POLL_S`, did, `SCHEDULED` the first time and already `RUNNING` the second.
-  From that listing to the listing that gave `COMPLETED`, 105.7 and 110.7 s; `start_time` to `end_time` 100.3 and
-  107.0 s (derivations). *(2026-11-14)*
+  printed its tag's line, by the host's clock (derivations). The script printed the run's first state 5.1 and 5.2 s
+  after that line, `SCHEDULED` the first time and already `RUNNING` the second; by the script's code its first list is
+  asked at the step's return and the next one `POLL_S`, 5 s, later, so it was the second list that held the run (read
+  from the code, not from a line the run printed). From that listing to the listing that gave `COMPLETED`, 105.7 and
+  110.7 s; `start_time` to `end_time` 100.3 and 107.0 s (derivations). *(2026-11-14)*
 - **A second run over the change left open started one run.** After the second `make netbox-demo`,
   `twin-rehearse/main` listed 18 runs where it had listed 17 after the first, the new one of the branch `third-link`,
   and `stage-plan/main` none newer than before. *(2026-11-14)*
 - **The runner's start by the demonstration.** The script said the runner served both deployments 7.47 s and 3.39 s
-  after its step began, each time after reading Prefect's address by `edge_dev.py api`; `make prefect-up` took 16.3 s
-  where it started the server and 0.38 s where the server was up already. *(2026-11-14)*
+  after its step began, a time that by the script's code holds its read of Prefect's address by `edge_dev.py api`
+  before the start; `make prefect-up` took 16.3 s where it started the server and 0.38 s where the server was up
+  already. *(2026-11-14)*
 - **Not read:** the runner's and the server's times from a signal to their end by the script's own clock; a document
   filed late, or a run that ends with none, under the demonstration. *(2026-11-14)*
 
@@ -8725,13 +8728,16 @@ Docker 29.8.1, `scripts/demo.py` at `af0b325`, 2026-11-14)*. Read on 2026-11-14 
 host, for phase 10's plan 2: the three targets run in the plan's worktree at `af0b325` with the main checkout's
 `local/`, `LOCAL` the targets' default, no make variable and no `FYLGJA_` name set in the shell, and `local/.env` loaded
 by the script alone; the development Infrahub first brought up by `make infrahub-up` with `local/.env` loaded, so that
-the first run met it running. Each target was run by a script of the reading's own that read its stdout and stderr
+the first run met it running: its first ask exited 2, the database `unhealthy` at both of the target's own starts, and
+the second exited 0 in 75.6 s. Each target was run by a script of the reading's own that read its stdout and stderr
 from one pipe and stamped each line with the seconds since the command's start by the host's monotonic clock, its exit
 the command's own; the script under test prints no times, so every step's time below is a derivation, from its
 `step <n>` line to the next line the script printed. Prefect's runs and documents and NetBox's branch and journal were
 read by hand after each run, with the credentials read from the environment and sent in a header the reading built.
-Every output was saved, and none held a credential of `local/.env`. No purge was made, so the time from new volumes was
-not read. *(2026-11-14)*
+Every output was saved. The first run's output was searched for ten credentials of `local/.env` and `local/demo/`'s
+files for all twenty, every count 0, and those searches' results were saved; every other saved output was searched for
+the twenty by hand, every count 0, and those results were not saved. No purge was made, so the time from new volumes
+was not read. *(2026-11-14)*
 
 - **From NetBox stopped on kept volumes, Infrahub up: exit 0 in 329.5 s, `the rehearsal passed`.** The script said
   `infrahub is up: stopping it, its volumes kept, since it starts the same deployments`, ran `make infrahub-down`
@@ -8742,37 +8748,40 @@ not read. *(2026-11-14)*
   token file given the principals `demo` and `orchestrator` by their hashes; the core answering at its listen address
   1.05 s after its step began; `make prefect-up` 16.3 s; the runner serving both deployments 7.47 s after its step
   began; `make netbox-hook` 1.36 s, `nothing made or changed`; `make netbox-change NETBOX_TAG=1` 32.9 s to its line
-  that set the tag, the branch `third-link` standing from an earlier day and built anew. The change's run was listed
-  `SCHEDULED` 5.1 s after that line, at the script's second ask, `RUNNING` 5.0 s later and `COMPLETED` 105.7 s after
-  it was listed, and the verdict said 0.20 s after that. Prefect's row for it, read after: `created` 0.46 s after the
-  tag's line by the host's clock, `start_time` to `end_time` 100.3 s (derivations). While the rehearsal ran the twin's
-  three SR Linux containers and two hosts were up, and listeners stood on the core's port, on 4200 and on 8800;
-  after it, no container labelled `containerlab`. The branch's journal held three entries: the two marks, kind
-  `info`, and the report, kind `success`, `## Rehearsal passed: 4 stages`. *(2026-11-14)*
-- **What it left under `local/demo/`.** The directory mode `0700`; `tokens` `0600`, two lines, the principals `demo`
-  and `orchestrator`; `rehearsal.json` `0600`, 5,736 bytes, the document as Prefect gave it; `lock` `0600`; beside
-  them the three pid files, `source`, `unsettled`, the two logs and `store/`. `unsettled` stood while the core was up and was gone once a later `settle` had read the store empty. `local/.env`
-  held the same 55 lines' names before the runs and after them, the demonstration appending nothing, since it gave
+  that set the tag, the branch `third-link` standing, as the runbook's run by hand above left it that morning, and
+  built anew. The change's run was said `SCHEDULED` 5.1 s after that line (by the script's code, at its second list),
+  `RUNNING` 5.0 s later and `COMPLETED` 105.7 s after it was first said, and the verdict 0.20 s after that. Prefect's
+  row for it, read after: `created` 0.46 s after the tag's line by the host's clock, `start_time` to `end_time` 100.3 s
+  (derivations). While the rehearsal ran the twin's three SR Linux containers and two hosts were up, and listeners
+  stood on the core's port, on 4200 and on 8800; after it, no container labelled `containerlab`. The branch's journal
+  held three entries: the two marks, kind `info`, and the report, kind `success`, `## Rehearsal passed: 4 stages`.
+  *(2026-11-14)*
+- **`local/demo/` as read after the first run.** The directory mode `0700`; `tokens` `0600`, two lines, the
+  principals `demo` and `orchestrator`; `rehearsal.json` `0600`, 5,736 bytes, the document as Prefect gave it; `lock`
+  `0600`; beside them the three pid files, `source`, `unsettled`, the two logs and `store/`. `unsettled` was there
+  after the first run, its core still up, and absent after the second refusal below. `local/.env` held the same 55
+  lines' names before the runs and after them, the demonstration appending nothing, since it gave
   `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` values already. *(2026-11-14)*
 - **`make infrahub-demo` with that demonstration up** exited 2 in 0.5 s, its one line `the netbox demonstration's
   runner is up, pid <its pid>: one Prefect serves one source's runner; run make demo-down first`; the processes,
   listeners and containers read before and after it were the same. *(2026-11-14)*
 - **`FYLGJA_LAB_POOL=198.51.100.0/24 make netbox-demo`**, `local/.env` holding no line of that name, exited 2 in 6.7
-  s: `settle` said `the runner, pid <pid>, ended` 2.06 s and `the core, pid <pid>, ended` 3.25 s into the run, no twin
-  being listed, then `make netbox-up` found NetBox up, recreating nothing, and the script printed `The pool
+  s: `settle` said `the runner, pid <pid>, ended` 2.06 s and `the core, pid <pid>, ended` 3.25 s into the run,
+  naming no twin, then `make netbox-up` found NetBox up, recreating nothing, and the script printed `The pool
   198.51.100.0/24 has no /24 that neither a Docker network nor another twin holds. Docker networks holding part of it:
   fylgja-core-netbox_default (198.51.100.0/24). Set FYLGJA_LAB_POOL to an IPv4 network with a free /24, and start the
   core again.`, `netbox is left up: set FYLGJA_LAB_POOL in local/.env, then run make netbox-demo again` and `left up:
-  netbox, the edge's Prefect; make demo-down ends what the demonstration started`. The runner's log held `SIGTERM
-  received` 1.0 s before the script said it ended, and the core's `stopped by SIGTERM` 0.32 s before (derivations;
-  the signals' own times were not logged). *(2026-11-14)*
+  netbox, the edge's Prefect; make demo-down ends what the demonstration started`. Read by hand from the
+  demonstration's own logs, since rotated by later runs and not saved: the runner's log held `SIGTERM received` 1.0 s
+  before the script said it ended, and the core's `stopped by SIGTERM` 0.32 s before (derivations; the signals' own
+  times were not logged). *(2026-11-14)*
 - **Again at once, over the change left open: exit 0 in 179.3 s, `the rehearsal passed`.** `settle` and the stop of
   the other source said nothing, nothing being recorded up and Infrahub stopped. `make netbox-up` 3.5 s; `make
   netbox-seed` 19.4 s; the core 2.09 s; `make prefect-up` 0.38 s, the server up already; the runner 3.39 s; `make
   netbox-hook` 2.03 s, the same deployment's id; `make netbox-change NETBOX_TAG=1` 30.4 s to its tag's line, saying
   `the branch third-link stands: deleting it, and every journal entry on it, its marks among them, to build it anew
-  from main`. The run was listed 5.2 s after that line, already `RUNNING`, and `COMPLETED` 110.7 s after it was
-  listed. Prefect then listed one run of `twin-rehearse/main` more than after the first run, 18 where there had been
+  from main`. The run was said 5.2 s after that line, already `RUNNING`, and `COMPLETED` 110.7 s after it was first
+  said. Prefect then listed one run of `twin-rehearse/main` more than after the first run, 18 where there had been
   17, and no new run of `stage-plan/main`; the one new run was the one the script followed, and it printed no line of
   more than one new run and none of a run not followed. The branch had a new id, untagged, and its journal three
   entries, the report the newest, kind `success`. *(2026-11-14)*
@@ -8780,8 +8789,8 @@ not read. *(2026-11-14)*
   Journal tab: "The journal has three entries. The most recent is the rehearsal's passing report, with tables and
   lists rendered correctly." *(the maintainer, 2026-11-14)*
 - **`make demo-down`** exited 0 in 14.9 s: `the runner, pid <pid>, ended` 1.44 s and `the core, pid <pid>, ended`
-  3.10 s into it, no twin being listed; `make prefect-down`, the Prefect server the first run had started ended;
-  `make netbox-down` with `PURGE=`, NetBox `stopped; its containers, network and volumes are kept`; and `the netbox
+  3.10 s into it, naming no twin; `make prefect-down`, the Prefect server the first run had started ended; `make
+  netbox-down` with `PURGE=`, NetBox `stopped; its containers, network and volumes are kept`; and `the netbox
   demonstration is ended: its records stay under <local>/demo`. Read after: `docker ps -a --filter label=containerlab`
   listed nothing; NetBox's five containers `Exited (0)`; `docker volume ls` the same 22 names as before the first
   run; `ss -Hltn` nothing on 4200, 7651, 8000 or 8800; none of the three recorded pids in `/proc`; `local/demo/`
@@ -8790,14 +8799,17 @@ not read. *(2026-11-14)*
   NetBox's containers `Stopped` at once, and said `the netbox demonstration is ended` again, `source` being kept; it
   said nothing of there being nothing to end. *(2026-11-14)*
 - **The script's waits against what ran** (each ratio the bound over the slower of the two runs; derivations):
-  `CORE_WAIT_S` 60 s over the core's 2.09 s, 28.7 times; `SERVE_WAIT_S` 60 s over the runner's 7.47 s, which holds
-  the read of Prefect's address before the start, 8.0 times; `APPEAR_WAIT_S` 300 s over 5.2 s from the tag's line to
-  the run listed, 58 times; `RUN_WAIT_S` 4200 s over 110.7 s from listed to ended, 37.9 times; `DOCUMENT_WAIT_S` 60 s
-  over 0.21 s, the document read at the first ask both times ("Prefect 3.9.2", above). *(2026-11-14)*
+  `CORE_WAIT_S` 60 s over the core's 2.09 s, 28.7 times; `SERVE_WAIT_S` 60 s over the runner's 7.47 s, which by the
+  script's code holds the read of Prefect's address before the start, 8.0 times; `APPEAR_WAIT_S` 300 s over 5.2 s
+  from the tag's line to the run said, 58 times; `RUN_WAIT_S` 4200 s over 110.7 s from said to ended, 37.9 times;
+  `DOCUMENT_WAIT_S` 60 s over 0.21 s, the document read at the first ask both times, 286 times ("Prefect 3.9.2",
+  above). *(2026-11-14)*
 - **Not read:** the time from new volumes, since no purge was given (the first starts recorded are above: NetBox
   healthy 748.9 s, 764.4 s and 749.6 s after its start); `STOP_WAIT_S` from a signal to the process gone, the signals'
   times not being logged; `DESTROY_TIMEOUT_S`, no twin being left for `settle` to destroy; `PULL_TIMEOUT_S`, both
-  images being held; a `make netbox-demo` that fails at a step or ends with a verdict other than `passed`.
+  images being held; `DOCKER_TIMEOUT_S`, 60 s, and `REQUEST_TIMEOUT_S`, 30 s, every read of Docker, `ss` and the CLI
+  and every request having answered, but none stamped apart from the lines around it; a `make netbox-demo` that fails
+  at a step or ends with a verdict other than `passed`.
 
 **Not read**: what a rule meets after a merge; a sync or a merge that fails; the time a read takes
 of a scope beyond a handful of devices; a render under the

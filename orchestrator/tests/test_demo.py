@@ -1,7 +1,8 @@
 """`scripts/demo.py`, the demonstration script: the environment it reads, what it writes under `local/`, and the
 host's checks. The script is loaded by its path, as `make` runs it, and given `demo_host.FakeHost` for its host:
-nothing here starts a process, opens a socket, reads a file of the host's or sleeps. What is written is written under
-`tmp_path`, and every secret is the tests' own, compared outside an assert."""
+nothing here starts a process, opens a socket or sleeps. Of the host, two tests of `Real` read this process's own
+entry in `/proc` and the group database, and one reads the checkout's `.env.example`; no other file of the host's is
+read. What is written is written under `tmp_path`, and every secret is the tests' own, compared outside an assert."""
 
 from __future__ import annotations
 
@@ -194,10 +195,29 @@ NOT_AN_ASSIGNMENT = (
     "demo: {} line {} is not blank, a comment or [export ]NAME=value, and this script reads no other line, since a "
     "shell that loads the file would act on it: take the line out"
 )
-CARRIAGE_RETURN = (
-    "demo: {} line {} holds a carriage return, which a shell takes for part of the line: the file may be saved with "
-    "CRLF line ends; save it with LF alone"
+CARRIAGE_RETURN = "the file may be saved with CRLF line ends; save it with LF alone"
+KEPT_BY_BASH = (
+    "demo: {} line {} assigns {}, a name bash keeps for itself, so that a shell that loads the file may not hold the "
+    "value: take the line out"
 )
+
+
+def carriage_return_said(path: Path, line: int, name: str | None) -> str:
+    """The refusal of a line that reads but for its carriage return: the file, the line and the name it has."""
+    where = f"demo: {path} line {line}"
+    if name is None:
+        return f"{where} holds a carriage return, which a shell takes for part of the line: {CARRIAGE_RETURN}"
+    return f"{where} gives {name} a carriage return, which a shell keeps in the value: {CARRIAGE_RETURN}"
+
+
+BASH_KEEPS = (
+    "UID", "EUID", "PPID", "BASHOPTS", "SHELLOPTS", "BASH_VERSINFO", "GROUPS", "RANDOM", "SRANDOM", "SECONDS", "LINENO",
+    "FUNCNAME", "DIRSTACK", "BASHPID", "EPOCHSECONDS", "EPOCHREALTIME", "HISTCMD", "BASH_COMMAND", "BASH_SUBSHELL",
+    "BASH_MONOSECONDS", "PIPESTATUS", "COMP_WORDBREAKS", "BASH_LINENO", "BASH_SOURCE", "BASH_ARGC", "BASH_ARGV",
+    "BASH_ALIASES", "BASH_CMDS", "_",
+)
+"""Names bash keeps for itself: assigned by a file it loads, bash exports its own value or none, where dash exports
+the file's. Read once on both shells, as the rows of `test_a_value_is_read_as_a_shell_reads_it` were."""
 
 
 @pytest.mark.parametrize(
@@ -226,6 +246,11 @@ CARRIAGE_RETURN = (
         ("X=p q\r\n", "X", 1, False),
         ("X=p\x0cq\n", "X", 1, False),
         ("X=p\x00q\n", "X", 1, False),
+        # A name bash keeps for itself, plain and after `export`, whatever it is given.
+        *((f"A=1\n{name}=5\n", name, 2, False) for name in BASH_KEEPS),
+        *((f"export {name}=5\n", name, 1, False) for name in BASH_KEEPS),
+        ("UID='5'\r\n", "UID", 1, False),
+        ("UID=$HOME\n", "UID", 1, False),
     ],
 )
 def test_a_line_a_shell_would_read_otherwise_is_refused_by_its_number(
@@ -234,6 +259,7 @@ def test_a_line_a_shell_would_read_otherwise_is_refused_by_its_number(
     with pytest.raises(demo.Unread) as unread:
         demo.read_env(text)
     assert (unread.value.name, unread.value.line, unread.value.carriage_return) == (name, line, carriage_return)
+    assert unread.value.kept_by_bash is (name in BASH_KEEPS)
 
     host = passing()
     host.files[ENV_FILE] = text
@@ -241,12 +267,68 @@ def test_a_line_a_shell_would_read_otherwise_is_refused_by_its_number(
     said = capsys.readouterr()
     [sentence] = said.err.split("\n")[:-1]
     if carriage_return:
-        assert sentence == CARRIAGE_RETURN.format(ENV_FILE, line)
+        assert sentence == carriage_return_said(ENV_FILE, line, name)
+    elif name in BASH_KEEPS:
+        assert sentence == KEPT_BY_BASH.format(ENV_FILE, line, name)
     elif name is None:
         assert sentence == NOT_AN_ASSIGNMENT.format(ENV_FILE, line)
     else:
         assert sentence.startswith(f"demo: {ENV_FILE} line {line} gives {name} a value this script does not read")
     assert (said.out, host.ran, host.started) == ("", [], [])
+
+
+def test_the_names_bash_keeps_are_the_scripts() -> None:
+    assert sorted(demo.BASH_KEEPS) == sorted(BASH_KEEPS)
+    # A name that only begins as one of them is read.
+    assert demo.read_env("UIDS=5\nexport BASH_OF_MINE=6\n__=7\n") == {"UIDS": "5", "BASH_OF_MINE": "6", "__": "7"}
+
+
+@pytest.mark.parametrize(
+    ("held", "name", "line"),
+    [
+        (b"# a note\nX=1\r\nY=2\r\n", "X", 2),
+        (b"X=1\r\n", "X", 1),
+        (b"X=1\rY=2\n", "X", 1),
+        (b'A=1\nexport X="1"\r\n', "X", 2),
+        (b"A=1\n\r\nX=1\n", None, 2),
+    ],
+)
+def test_a_carriage_return_in_the_file_reaches_the_reader_and_is_refused(
+    tmp_path: Path, held: bytes, name: str | None, line: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Through `Real.text` and `loaded` on a file of the test's own: the seam the rows that give `read_env` a string
+    never cross. A file's line ends are not translated on the way, so what a shell would keep is refused."""
+    local = tmp_path / "local"
+    local.mkdir()
+    env_file = local / ".env"
+    env_file.write_bytes(held)
+    real = demo.Real()
+
+    text = real.text(env_file)
+    assert text is not None
+    assert text.encode() == held
+    with pytest.raises(demo.Unread) as unread:
+        demo.read_env(text)
+    assert (unread.value.name, unread.value.line, unread.value.carriage_return) == (name, line, True)
+
+    with pytest.raises(demo.Stop) as stop:
+        demo.loaded(local, {}, real)
+    said = carriage_return_said(env_file, line, name).removeprefix("demo: ")
+    assert (stop.value.status, stop.value.lines) == (2, (said,))
+
+    # The fake reads a file of a test's own as the real host does, and `up` says the same of it.
+    host = passing(local, disk=tmp_path)
+    assert host.text(env_file) == text
+    assert status(host, ["up", "netbox", "--local", str(local), "--main", str(tmp_path), "--ref", ""]) == 2
+    assert capsys.readouterr().err.split("\n")[:-1] == [f"demo: {said}"]
+    assert host.ran == []
+
+
+def test_a_carriage_return_inside_quotes_is_read_from_the_file_as_a_shell_reads_it(tmp_path: Path) -> None:
+    local = tmp_path / "local"
+    local.mkdir()
+    (local / ".env").write_bytes(b"X='p\rq'\nY=1 # a note\r\n# a comment\r\nZ=\"\rp\"\n")
+    assert demo.loaded(local, {"W": "kept"}, demo.Real()) == {"W": "kept", "X": "p\rq", "Y": "1", "Z": "\rp"}
 
 
 def test_a_name_held_with_no_value_is_not_held() -> None:
@@ -298,6 +380,41 @@ def test_a_value_the_script_does_not_read_is_named_by_its_name_and_line_alone(
             "blanks, control characters and ~ ; & | < > ( ) { }; write it in single quotes"
         ], value
         assert host.ran == [] and host.started == []
+
+
+def test_a_value_the_locale_cannot_encode_is_refused_by_its_name_alone(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The encoding step replaced by one that refuses a value as a locale that is not UTF-8 refuses a character it
+    lacks: the exception's own text holds the character, so the refusal is by the name, and holds nothing of it."""
+    fsencode = os.fsencode
+
+    def narrow(value: str) -> bytes:
+        if "zzqj" in value:
+            raise UnicodeEncodeError("iso8859-1", value, value.index("zzqj"), len(value), "ordinal not in range(256)")
+        return fsencode(value)
+
+    monkeypatch.setattr(demo.os, "fsencode", narrow)
+    refused = "{} holds a character this locale cannot encode"
+
+    host = passing()
+    host.files[ENV_FILE] = "A=1\nX='zzqj kkwv'\nexport Y=zzqjkkwv\n"
+    with pytest.raises(demo.Stop) as stop:
+        demo.loaded(LOCAL, {"W": "kept"}, host)
+    assert (stop.value.status, stop.value.lines) == (2, (refused.format("X"), refused.format("Y")))
+    assert status(host, up("netbox", "")) == 2
+    said = capsys.readouterr()
+    assert said.err.split("\n")[:-1] == [f"demo: {refused.format(name)}" for name in ("X", "Y")]
+    shown = any(part in said.out + said.err for part in ("zzqj", "kkwv"))
+    assert not shown
+    assert (said.out, host.ran, host.started) == ("", [], [])
+
+    # And where a value is hashed, should one reach there unjudged.
+    with pytest.raises(demo.Stop) as stop:
+        demo.token_lines("", {"FYLGJA_API_TOKEN": "zzqjkkwv"})
+    assert (stop.value.status, stop.value.lines) == (2, (refused.format("FYLGJA_API_TOKEN"),))
+    in_the_stop = any(part in str(stop.value) for part in ("zzqj", "kkwv"))
+    assert not in_the_stop
 
 
 def test_own_lines_add_the_address_and_a_clients_token_only_where_absent() -> None:
@@ -1173,6 +1290,10 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
             raise demo.subprocess.TimeoutExpired(argv, 1)
         if argv[0] == "not-on-the-childs-path":
             raise FileNotFoundError(2, "No such file or directory", argv[0])
+        if argv[0] == "under-a-file-on-the-path":
+            raise NotADirectoryError(20, "Not a directory", argv[0])
+        if argv[0] == "not-executable":
+            raise PermissionError(13, "Permission denied", argv[0])
         return demo.subprocess.CompletedProcess(argv, 3, stdout=None if kwargs["stdout"] is None else "printed\n")
 
     def popen(argv: list[str], **kwargs: Any) -> Child:
@@ -1207,6 +1328,10 @@ def test_the_real_host_runs_starts_and_signals_a_child_as_the_seam_says(
     assert real.run(["not-on-the-childs-path", "info"], env={"PATH": "/srv/example/bin"}, capture=True) == demo.Done(
         127, ""
     )
+    # A PATH one of whose elements is a file finds nothing either; a name found that may not be run is 126.
+    assert real.run(["under-a-file-on-the-path"], env={"PATH": "/srv/example/file"}) == demo.Done(127, "")
+    assert demo.NOT_RUN == 126
+    assert real.run(["not-executable"], capture=True) == demo.Done(126, "")
 
     log = tmp_path / "core.log"
     log.write_bytes(b"an earlier start's\n")
@@ -1275,7 +1400,8 @@ def test_the_real_host_reads_processes_and_groups_from_the_host(monkeypatch: pyt
     assert real.euid() == os.geteuid()
     # The effective group with the supplementary ones: under `sg` it is the one group held that the list lacks.
     assert real.groups() == {*os.getgroups(), os.getegid()}
-    assert real.gid(grp.getgrgid(os.getegid()).gr_name) == os.getegid()
+    listed = grp.getgrall()[0]
+    assert real.gid(listed.gr_name) == listed.gr_gid
     assert real.gid("fylgja-no-such-group") is None
 
 
@@ -1299,6 +1425,10 @@ def test_the_fake_host_answers_as_the_real_one_does() -> None:
     assert host.signalled == [(-1, 15), (0, 15), (1, 15), (7, 15), (8, 15)]
     assert seen == [(7, 15)]
     assert [host.process(pid) is None for pid in (-1, 0, 1, 7, 8)] == [True, True, True, False, True]
+    # `/proc` lists no pid under 1, and a process with no command line, a zombie or a kernel thread, is none.
+    host.processes[9] = demo.Process([], {"A": "1"})
+    assert host.pids() == [1, 7, 9]
+    assert host.process(9) is None
 
 
 class Reply:

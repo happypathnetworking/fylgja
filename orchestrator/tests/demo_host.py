@@ -84,11 +84,13 @@ class FakeHost:
       An argv no key begins is the test's mistake, and raises.
     - `start` answers the next pid from `next_pid` and puts the process in `processes`, the `/proc` a test writes.
     - `signal` answers whether `processes` holds the pid, and calls `on_signal` where a test gives one; a pid at
-      or under 1 is no process to it or to `process`, as to `Real`, whatever `processes` holds.
+      or under 1 is no process to it or to `process`, as to `Real`, whatever `processes` holds; `pids` lists none
+      under 1, as `/proc` has none, and a process with no command line is none to `process`, as to `Real`.
     - `ask` answers the first of `replies` whose method is the request's and whose URL begins it, an `Answer` or a
       function of the `Asked`; where none does, nothing answered.
     - `text` answers `files`, raises `PermissionError` for a path of `denied`, and reads a file under `disk`, a
-      directory of the test's own, where one is given; any other path is absent.
+      directory of the test's own, where one is given, its bytes decoded as `Real` decodes them and no line end
+      translated; any other path is absent.
     - `sleep` advances `now`, which `clock` answers.
 
     Every `run`, `start`, `signal`, `ask` and `lock` is kept, in order, in `ran`, `started`, `signalled`, `asked` and
@@ -147,10 +149,11 @@ class FakeHost:
         return pid
 
     def process(self, pid: int) -> Any:
-        return self.processes.get(pid) if pid > 1 else None
+        held = self.processes.get(pid) if pid > 1 else None
+        return held if held is not None and held.argv else None
 
     def pids(self) -> list[int]:
-        return sorted(self.processes)
+        return sorted(pid for pid in self.processes if pid >= 1)
 
     def signal(self, pid: int, number: int) -> bool:
         self.signalled.append((pid, number))
@@ -187,7 +190,7 @@ class FakeHost:
         if path in self.files:
             return self.files[path]
         if self.disk is not None and path.is_relative_to(self.disk) and path.is_file():
-            return path.read_text(encoding="utf-8", errors="surrogateescape")
+            return path.read_bytes().decode("utf-8", "surrogateescape")
         return None
 
     def clock(self) -> float:

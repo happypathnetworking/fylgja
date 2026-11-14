@@ -124,6 +124,20 @@ TIMED_OUT = 124
 NOT_FOUND = 127
 """The status `Real.run` answers for a command the PATH it was run under does not hold, as a shell exits."""
 
+NOT_RUN = 126
+"""The status `Real.run` answers for a command that is found and is not this user's to run, as a shell exits."""
+
+BASH_KEEPS = frozenset(
+    {
+        "UID", "EUID", "PPID", "BASHOPTS", "SHELLOPTS", "BASH_VERSINFO", "GROUPS", "RANDOM", "SRANDOM", "SECONDS",
+        "LINENO", "FUNCNAME", "DIRSTACK", "BASHPID", "EPOCHSECONDS", "EPOCHREALTIME", "HISTCMD", "BASH_COMMAND",
+        "BASH_SUBSHELL", "BASH_MONOSECONDS", "PIPESTATUS", "COMP_WORDBREAKS", "BASH_LINENO", "BASH_SOURCE", "BASH_ARGC",
+        "BASH_ARGV", "BASH_ALIASES", "BASH_CMDS", "_",
+    }
+)  # fmt: skip
+"""Names bash keeps for itself: where a file it loads assigns one, bash exports its own value or none, and dash the
+file's. The shells do not agree, so a line that assigns one is not read."""
+
 BLANK = " \t"
 """What a shell takes for a blank between words: a space and a tab, and no other character Python calls white."""
 
@@ -153,13 +167,17 @@ class Stop(Exception):
 
 class Unread(Exception):
     """A line this script does not read as a shell would: its number, the name it assigns, None where it assigns
-    none, and whether a carriage return is all that stands in the way. Never the value."""
+    none, whether a carriage return is all that stands in the way, and whether the name is one bash keeps for itself.
+    Never the value."""
 
-    def __init__(self, name: str | None, line: int, carriage_return: bool = False) -> None:
+    def __init__(
+        self, name: str | None, line: int, carriage_return: bool = False, kept_by_bash: bool = False
+    ) -> None:
         super().__init__(f"line {line} is not read" if name is None else f"line {line} gives {name} what is not read")
         self.name = name
         self.line = line
         self.carriage_return = carriage_return
+        self.kept_by_bash = kept_by_bash
 
 
 class Done(NamedTuple):
@@ -200,7 +218,8 @@ class Host(Protocol):
         """A child run to its end, under `env` where it is given and this process's environment where not. A child
         not captured prints as it will; one captured prints nothing, and its stdout is answered. One that outlasts
         `timeout` is killed, and its status is `TIMED_OUT`; a command that is not found, on the PATH of `env` where
-        that is given, is no exception, and its status is `NOT_FOUND`."""
+        that is given, is no exception, and its status is `NOT_FOUND`, nor is one found that may not be run, whose
+        status is `NOT_RUN`."""
         ...
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -244,9 +263,10 @@ class Host(Protocol):
         ...
 
     def text(self, path: Path) -> str | None:
-        """What the file `path` holds, or None where there is no such file: read as UTF-8, a byte that is none kept
-        as `os.fsencode` gives it back, so that a value reaches a child byte for byte. One that is not this user's
-        to read raises `PermissionError`."""
+        """What the file `path` holds, or None where there is no such file: its bytes decoded as UTF-8 and nothing
+        else done to them, so that no line end is translated and a carriage return is still there, and a byte that
+        is no UTF-8 is kept as `os.fsencode` gives it back: a value reaches its reader and a child byte for byte.
+        One that is not this user's to read raises `PermissionError`."""
         ...
 
     def clock(self) -> float: ...
@@ -309,8 +329,10 @@ class Real:
             )
         except subprocess.TimeoutExpired:
             return Done(TIMED_OUT, "")
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError):  # the second: an element of PATH that is a file
             return Done(NOT_FOUND, "")
+        except PermissionError:
+            return Done(NOT_RUN, "")
         return Done(done.returncode, done.stdout or "")
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
@@ -400,7 +422,7 @@ class Real:
 
     def text(self, path: Path) -> str | None:
         try:
-            return path.read_text(encoding="utf-8", errors="surrogateescape")
+            return path.read_bytes().decode("utf-8", "surrogateescape")
         except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
             return None
 
@@ -478,12 +500,12 @@ def read_env(text: str) -> dict[str, str]:
     its quotes taken off and a comment after it aside; a name assigned nothing holds `""`.
 
     What is refused, with the line's number and the name where the line has one: any other line, since a shell
-    would act on it (`unset X`, `X+=2`, `. other`); and a value a shell would do more to than this does, which is
-    not guessed at: one holding a `$`, a backquote or a backslash outside single quotes, a quote left open, more
-    than one word or pair of quotes, a NUL, or, outside quotes, a `~`, a brace, a character that ends a command
-    (`;`, `&`, `|`, `<`, `>`, `(`, `)`), a control character or a character Python alone calls white space. So a
-    file saved with CRLF line ends is refused at its first line that is no comment, and `Unread` says where taking
-    the carriage returns out is all the line needs."""
+    would act on it (`unset X`, `X+=2`, `. other`); a name of `BASH_KEEPS`, whatever it is given; and a value a
+    shell would do more to than this does, which is not guessed at: one holding a `$`, a backquote or a backslash
+    outside single quotes, a quote left open, more than one word or pair of quotes, a NUL, or, outside quotes, a
+    `~`, a brace, a character that ends a command (`;`, `&`, `|`, `<`, `>`, `(`, `)`), a control character or a
+    character Python alone calls white space. So a file saved with CRLF line ends is refused at its first line that
+    is no comment, and `Unread` says where taking the carriage returns out is all the line needs."""
     held: dict[str, str] = {}
     for number, line in enumerate(text.split("\n"), 1):
         try:
@@ -496,7 +518,7 @@ def read_env(text: str) -> dict[str, str]:
                     carriage_return = True
                 except Unread:
                     pass
-            raise Unread(unread.name, number, carriage_return) from None
+            raise Unread(unread.name, number, carriage_return, unread.kept_by_bash) from None
         if assigned is not None:
             held[assigned[0]] = assigned[1]
     return held
@@ -511,6 +533,8 @@ def assignment(line: str) -> tuple[str, str] | None:
     assigned = ASSIGNMENT.fullmatch(line)
     if not assigned:
         raise Unread(None, 0)
+    if assigned[1] in BASH_KEEPS:
+        raise Unread(assigned[1], 0, kept_by_bash=True)
     value = VALUE.fullmatch(assigned[2])
     if not value:
         raise Unread(assigned[1], 0)
@@ -520,7 +544,8 @@ def assignment(line: str) -> tuple[str, str] | None:
 def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str]:
     """`environ` overlaid by `<local>/.env`, as a shell that loads the file has it, and `environ` alone where there
     is no file. A file that is not this user's to read stops the run, exit 2, and so does a line `read_env` does not
-    read, naming the line by its number and the name where it has one, and never the value."""
+    read, naming the line by its number and the name where it has one, and never the value; and so does a value
+    the process's locale cannot encode, by its name alone, since every value here is a child's to be given."""
     path = local / ".env"
     try:
         text = host.text(path)
@@ -529,18 +554,43 @@ def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str
     if text is None:
         return dict(environ)
     try:
-        return {**environ, **read_env(text)}
+        env = {**environ, **read_env(text)}
     except Unread as unread:
         raise Stop(2, [f"{path} line {unread.line} {unread_as(unread)}"]) from None
+    refused: list[str] = []
+    for name, value in env.items():
+        try:
+            encoded(name, value)
+        except Stop as stop:
+            refused += stop.lines
+    if refused:
+        raise Stop(2, refused)
+    return env
+
+
+def encoded(name: str, value: str) -> bytes:
+    """The bytes of `value` as a child is given them and as a token is hashed: those `<local>/.env` holds for it
+    (`Host.text`). A value the process's locale cannot encode stops the run, exit 2, by its name alone: the
+    exception's own text holds a character of the value, and nothing of a value is ever said."""
+    try:
+        return os.fsencode(value)
+    except UnicodeEncodeError:
+        raise Stop(2, [f"{name} holds a character this locale cannot encode"]) from None
 
 
 def unread_as(unread: Unread) -> str:
-    """What is said of a line that is not read, after its file and its number: the carriage return where that is
-    all that stands in the way, as in a file saved with CRLF line ends; else what the script reads."""
+    """What is said of a line that is not read, after its file and its number: the carriage return, with the name
+    it is given to where there is one, where that is all that stands in the way, as in a file saved with CRLF line
+    ends; a name bash keeps; else what the script reads."""
     if unread.carriage_return:
+        crlf = "the file may be saved with CRLF line ends; save it with LF alone"
+        if unread.name is None:
+            return f"holds a carriage return, which a shell takes for part of the line: {crlf}"
+        return f"gives {unread.name} a carriage return, which a shell keeps in the value: {crlf}"
+    if unread.kept_by_bash:
         return (
-            "holds a carriage return, which a shell takes for part of the line: the file may be saved with CRLF line "
-            "ends; save it with LF alone"
+            f"assigns {unread.name}, a name bash keeps for itself, so that a shell that loads the file may not hold "
+            "the value: take the line out"
         )
     if unread.name is None:
         return (
@@ -576,10 +626,10 @@ def own_lines(env: Mapping[str, str], listen: str, host: Host) -> list[tuple[str
     return lines
 
 
-def hashed(token: str) -> str:
+def hashed(name: str, token: str) -> str:
     """A token's line in the token file holds this, the SHA-256 of its bytes in hex (D-025): the bytes the file it
-    was read from holds, which are a child's too (`Host.text`)."""
-    return hashlib.sha256(os.fsencode(token)).hexdigest()
+    was read from holds, which are a child's too (`encoded`, under the token's name in the environment)."""
+    return hashlib.sha256(encoded(name, token)).hexdigest()
 
 
 def token_lines(held: str, env: Mapping[str, str]) -> list[str]:
@@ -590,9 +640,9 @@ def token_lines(held: str, env: Mapping[str, str]) -> list[str]:
     lines = []
     for name, principal in PRINCIPALS:
         token = env.get(name)
-        if token and hashed(token) not in listed:
-            listed.add(hashed(token))
-            lines.append(f"{hashed(token)} {principal}")
+        if token and hashed(name, token) not in listed:
+            listed.add(hashed(name, token))
+            lines.append(f"{hashed(name, token)} {principal}")
     return lines
 
 

@@ -33,7 +33,7 @@ from demo_host import (
     passing,
     same,
 )
-from test_formats import full_rehearsal, minimal_rehearsal
+from test_formats import full_plan, full_rehearsal, minimal_rehearsal
 
 SHELL = {"PATH": "/usr/bin", "HOME": "/srv/example/home"}
 """The shell's environment, which `local/.env` is laid over."""
@@ -127,14 +127,21 @@ DEPLOYMENT_IDS = {
 """Each deployment's id as the fake Prefect answers it: one each, the same at every ask, as the two were read to keep
 theirs at every start of the runner (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14)."""
 
-APPEARS_S = {"infrahub": 69.0, "netbox": 1.0}
-"""Seconds from the change opened to its flow run of `twin-rehearse/main` made, as each was read: 69.0 s after a
-proposed change's creation ("Infrahub 1.11.11", 2026-11-12) and 0.94 to 1.03 s after the tag's `PATCH` ("NetBox 4.7.5
-with netbox-branching 1.2.3")."""
+APPEARS_S = {"infrahub": 113.8, "netbox": 1.0}
+"""Seconds from the step that opens the change returning to the change's flow run of `twin-rehearse/main` made, as
+each was read: 116.4 and 113.8 s after `make infrahub-seed PROPOSED_CHANGE=1` returned ("Infrahub 1.11.11",
+2026-11-14), the second here, and 0.94 to 1.03 s after the tag's `PATCH` ("NetBox 4.7.5 with netbox-branching
+1.2.3")."""
+
+PLAN_AHEAD_S = 4.6
+"""Seconds by which Infrahub's change made its run of `stage-plan/main` before its run of `twin-rehearse/main`, by
+their `created` in the second reading of 2026-11-14 (109.4 and 114.0 s after the proposed change's creation, a
+derivation); its check `fylgja-step` starts it, and NetBox's webhook starts none."""
 
 COURSE = (("PENDING", "Pending", 1.0), ("RUNNING", "Running", 3.0), ("COMPLETED", "Completed", 420.0))
 """A run's states after it is made `SCHEDULED`, each with its seconds since it was made, in the order a rehearsal's run
-was read to go them (Scheduled, Pending, Running, then its end); the seconds are the fake's own."""
+was read to go them (Scheduled, Pending, Running, then its end); the seconds are the fake's own, shorter than the
+14.1 s to `Running` and 563.1 s to `Completed` read on 2026-11-14."""
 
 EPOCH = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
 """The wall time the fake host's clock starts at, for the timestamps Prefect writes."""
@@ -624,17 +631,30 @@ class Targets:
         return None
 
     def rehearsed(self, source: str, branch: str) -> None:
-        """The change opened while a runner serves starts a run of `twin-rehearse/main` (`Targets`, `opened`)."""
+        """The change opened while a runner serves starts a run of `twin-rehearse/main` (`Targets`, `opened`), and,
+        Infrahub's, a run of `stage-plan/main` `PLAN_AHEAD_S` before it."""
         if not (self.starts_runs and self.serving()):
             return
-        self.host.at(self.host.now + APPEARS_S[source], lambda: self.made(branch))
+        appears = self.host.now + APPEARS_S[source]
+        if source == "infrahub":
+            planned = appears - PLAN_AHEAD_S
+            self.host.at(planned, lambda: self.made(branch, deployment="stage-plan/main", when=planned))
+        self.host.at(appears, lambda: self.made(branch, when=appears))
 
-    def made(self, branch: str, *, course: tuple[tuple[str, str, float], ...] | None = None) -> dict[str, Any]:
-        """A run of `twin-rehearse/main` made now, `SCHEDULED`, that goes `course` from here, `self.course` where none
-        is given, and files its document at its end; its row."""
-        now = self.host.now
+    def made(
+        self,
+        branch: str,
+        *,
+        course: tuple[tuple[str, str, float], ...] | None = None,
+        deployment: str = "twin-rehearse/main",
+        when: float | None = None,
+    ) -> dict[str, Any]:
+        """A run of `deployment` made `when`, by the fake clock, or now, `SCHEDULED`, that goes `course` from there,
+        `self.course` where none is given, and files its document at its end; its row. A `sleep` brings the clock past
+        `when` before it is made, so its `created` is the time it was due, as Prefect writes the time it made it."""
+        now = self.host.now if when is None else when
         ident = f"0f1e2d3c-4b5a-4697-8a8b-{len(self.runs) + 1:012x}"
-        row = flow_run(ident, DEPLOYMENT_IDS["twin-rehearse/main"], branch, now)
+        row = flow_run(ident, DEPLOYMENT_IDS[deployment], branch, now)
         self.runs.append(row)
         for kind, name, after in self.course if course is None else course:
             self.host.at(now + after, functools.partial(self.goes, row, kind, name))
@@ -642,9 +662,11 @@ class Targets:
 
     def goes(self, row: dict[str, Any], kind: str, name: str) -> None:
         """`row`'s run moves to `kind` now; where that is `COMPLETED` it files its document first, as a flow files it
-        before it returns, where `verdict` names one."""
-        if kind == "COMPLETED" and self.verdict is not None:
-            document = rehearsal(self.verdict)
+        before it returns: a plan's, `planned`, for a run of `stage-plan/main`, and for one of `twin-rehearse/main` the
+        rehearsal `verdict` names, where it names one."""
+        twin = row["deployment_id"] == DEPLOYMENT_IDS["twin-rehearse/main"]
+        if kind == "COMPLETED" and (self.verdict is not None or not twin):
+            document = rehearsal(self.verdict) if twin and self.verdict is not None else full_plan()
             self.filed[row["id"]] = document if self.as_object else json.dumps(document)
         moved(row, kind, name, self.host.now)
 

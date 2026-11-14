@@ -1001,7 +1001,7 @@ def test_the_apparmor_lines_are_asked_only_where_the_profile_is(
         "demo: the host's checks passed",
         f"demo: {local / '.env'}: added FYLGJA_API_ADDRESS, FYLGJA_API_TOKEN",
     ]
-    assert said.err == "" and said.out.splitlines()[-1] == f"demo: {passed_last(local, 'netbox')}"
+    assert said.err == "" and said.out.splitlines()[-1] == f"demo: {passed_last(local, 'netbox', host)}"
 
     # A profile that is there and not the user's to read is there all the same.
     host = passing()
@@ -3470,12 +3470,10 @@ REPORT_LINES = {
 `local/.env`, the proposed change `make infrahub-seed` recorded, and the branch the run was started for."""
 
 
-def passed_last(local: Path, source: str) -> str:
-    """The last line of an `up` that read a document: where it is kept, and what is left up."""
-    return (
-        f"the document is {demo.records(local).rehearsal}; the core, the runner, Prefect and {source} are left up: "
-        "make demo-down ends them"
-    )
+def passed_last(local: Path, source: str, host: FakeHost) -> str:
+    """The last line of an `up` that read a document: where it is kept, and what `left_up` reads is left up, here
+    the source, the core, the edge's Prefect and the runner of a whole run."""
+    return f"the document is {demo.records(local).rehearsal}; {left_up(*standing_after(source, host))}"
 
 
 def secrets_of(local: Path, host: FakeHost) -> list[str]:
@@ -3714,7 +3712,10 @@ def test_a_run_takes_its_steps_in_order_and_starts_the_core_after_the_token_file
                     ]
                 )
             ),
-            # After it, Prefect alone is asked: the readout reads nothing of the host's.
+            # After it, Prefect is asked, then what is left up is read for the last line: the source's containers, and
+            # who listens at the core's port.
+            [*UP[source]],
+            HEARD_BY_PID,
         ]
         # The core is started once its token file is whole: the client's hash under `demo` and the runner's under
         # `orchestrator`, each once, which the core reads at its start alone.
@@ -3762,12 +3763,12 @@ def test_a_run_takes_its_steps_in_order_and_starts_the_core_after_the_token_file
                 if step.target == "orchestrator-env":
                     # The runner's line is the target's own; the client's is the script's.
                     expected.append(f"demo: {kept.tokens}: listed the principal demo by its token's hash")
-        [row] = targets.runs
+        [row] = twin_runs(targets)
         expected += [
             *run_lines(row["id"], *RUN_STATES),
             f"demo: the rehearsal passed: 5 stages, 412.6 s, flow run {row['id']}",
             f"demo: {REPORT_LINES[source]}",
-            f"demo: {passed_last(local, source)}",
+            f"demo: {passed_last(local, source, host)}",
         ]
         assert said.out.splitlines() == expected
         assert said.err == ""
@@ -3799,7 +3800,7 @@ def test_a_run_takes_its_steps_in_order_and_starts_the_core_after_the_token_file
         assert targets.opened == [True, True]
         # The second change's run is the one followed, the first's listed before it.
         out = capsys.readouterr().out.splitlines()
-        assert out[-3] == f"demo: the rehearsal passed: 5 stages, 412.6 s, flow run {targets.runs[1]['id']}"
+        assert out[-3] == f"demo: the rehearsal passed: 5 stages, 412.6 s, flow run {twin_runs(targets)[1]['id']}"
         assert out[:3] == [
             f"demo: the runner, pid {runner.pid}, ended",
             f"demo: the core, pid {core.pid}, ended",
@@ -3825,7 +3826,7 @@ def test_a_prefect_server_up_before_the_run_is_not_recorded_as_the_demonstration
     assert served is not None
     assert status(host, up_of(local, "netbox", "")) == 0
     assert (targets.prefect(), kept.prefect_pid.exists()) == (served, False)
-    assert capsys.readouterr().out.splitlines()[-1] == f"demo: {passed_last(local, 'netbox')}"
+    assert capsys.readouterr().out.splitlines()[-1] == f"demo: {passed_last(local, 'netbox', host)}"
     # `make demo-down` then leaves it, and ends the rest.
     assert status(host, down(local)) == 0
     assert (targets.prefect(), sorted(host.processes), "prefect-down" in targets.done) == (served, [served], False)
@@ -4569,8 +4570,9 @@ def assigned_by_default(makefile: str) -> list[str]:
 
 def referred(makefile: str) -> tuple[set[str], set[str]]:
     """The variables and the functions a makefile's `$(…)` and `${…}` refer to, and the variables its `ifdef` and
-    `ifndef` ask of, comments aside: a word followed by a blank is a function's name; any other is a variable's, a
-    substitution's among them (`$(@:-demo=)`). A `$$(…)` and a `$${…}` are the shell's."""
+    `ifndef` ask of and that `origin`, `value` and `flavor` are given by name, comments aside: a word followed by a
+    blank is a function's name; any other is a variable's, a substitution's among them (`$(@:-demo=)`). A `$$(…)` and
+    a `$${…}` are the shell's."""
     variables: set[str] = set()
     functions: set[str] = set()
     for line in makefile.splitlines():
@@ -4579,6 +4581,8 @@ def referred(makefile: str) -> tuple[set[str], set[str]]:
         asked = re.match(r"[ \t]*(?:ifdef|ifndef)[ \t]+([A-Za-z_][A-Za-z0-9_]*)", line)
         if asked:
             variables.add(asked[1])
+        # A function that is given a variable's name, not its value.
+        variables.update(re.findall(r"(?<!\$)\$[({](?:origin|value|flavor)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[)}]", line))
         for found in re.finditer(r"(?<!\$)\$[({]([^\s(){}:,$]+)(.?)", line):
             (functions if found[2] in (" ", "\t") else variables).add(found[1])
     return variables, functions
@@ -4606,6 +4610,7 @@ def test_the_names_no_make_child_is_given_are_makes_own_and_the_makefiles() -> N
     assert referred(sample) == ({"NEW", "X", "Y", "@"}, {"if"})
     braced = "b: ${BRACED}\n\t${if ${Z},${W:.c=.o}} $${sh}\n# ${NOT_READ}\n"
     assert referred(braced) == ({"BRACED", "Z", "W"}, {"if"})
+    assert referred("x := $(origin A) $(value B) ${flavor C}\n") == ({"A", "B", "C"}, {"origin", "value", "flavor"})
     assert referred("ifdef DEFINED\nx := 1\nendif\n  ifndef UNDEFINED\nendif\n# ifdef NOT_READ\n") == (
         {"DEFINED", "UNDEFINED"},
         set(),
@@ -6024,7 +6029,8 @@ def test_the_document_is_asked_for_as_the_check_asks(tmp_path: Path) -> None:
     assert (demo.POLL_S, demo.APPEAR_WAIT_S) == (glue.POLL_S, 300)
     # The thread the readout names is the one the example posts the report in.
     run = demo.Run("a-runs-id", "COMPLETED", "Completed", "third-link")
-    _, lines = demo.readout("infrahub", run, {"status": "passed", "stages": [], "took_s": 1.0}, {}, tmp_path)
+    passed = {"rehearsal_version": "1", "status": "passed", "stages": [], "took_s": 1.0}
+    _, lines = demo.readout("infrahub", run, passed, {}, tmp_path, "left up: …")
     assert [line for line in lines if f'its thread "{THREAD_LABEL}"' in line] == [lines[1]]
 
 
@@ -6050,7 +6056,7 @@ def test_a_run_listed_before_the_change_is_never_the_changes(
     host.at(begun + 200.0, lambda: moved(left, "CRASHED", "Crashed", host.now))
     run = demo.follow(prefect, TWIN_DEPLOYMENT, known, host)
     [new] = [row for row in targets.runs if row["id"] not in known]
-    assert run == demo.Run(new["id"], "COMPLETED", "Completed", "third-link")
+    assert run[:4] == (new["id"], "COMPLETED", "Completed", "third-link")
     assert capsys.readouterr().out.splitlines() == run_lines(new["id"], *RUN_STATES)
     # Every poll asked the same list, with the edge's auth; the first three answered the two alone.
     asked = listings(host)
@@ -6088,6 +6094,11 @@ WHERE_TO_LOOK = {
     "infrahub": "read the proposed change's checks in Infrahub, and the task workers' logs",
     "netbox": "the tag's request did not reach Prefect; read NetBox's background tasks, and run make netbox-hook",
 }
+
+
+def twin_runs(targets: Targets) -> list[dict[str, Any]]:
+    """The fake's runs of `twin-rehearse/main`, which the change's run is one of."""
+    return [row for row in targets.runs if row["deployment_id"] == TWIN_DEPLOYMENT]
 
 
 def standing_after(source: str, host: FakeHost) -> tuple[str, ...]:
@@ -6158,24 +6169,26 @@ def test_a_read_unanswered_is_asked_again_and_a_refused_auth_is_not(
     host.replies.insert(
         0, ("POST", f"{API}/artifacts/filter", lambda asked: late.pop(0) if late else targets.artifacts(asked))
     )
-    held = demo.filed(prefect, run, host.now + 60.0, kept.runner_log, host)
-    assert held is not None and held["status"] == "passed"
+    held = demo.filed(prefect, run, kept.runner_log, host)
+    assert held is not None and json.loads(held[1])["status"] == "passed"
     assert [asked.url for asked in host.asked].count(f"{API}/artifacts/filter") == 3
-    # A read that is never answered ends at its bound, with no ask at or after it.
-    host.replies.insert(0, ("POST", f"{API}/artifacts/filter", demo.Answer(None, None)))
-    host.asked.clear()
-    until = host.now + 12.0
-    with pytest.raises(demo.Stop) as stop:
-        demo.filed(prefect, run, until, kept.runner_log, host)
-    assert (stop.value.status, stop.value.lines) == (
-        1,
-        (
-            f"flow run {run.id} of twin-rehearse/main ended Completed, and Prefect did not answer the read of its "
-            f"document: read {kept.runner_log}",
-        ),
-    )
-    assert len(host.asked) == 3 and host.now >= until
-    del host.replies[0]
+    # A read that is never answered ends at its bound, `DOCUMENT_WAIT_S` from the call, with no ask at or after it,
+    # saying what the last ask answered.
+    for answered, why in ((demo.Answer(None, None), "nothing answered"), (demo.Answer(503, None), "HTTP 503")):
+        host.replies.insert(0, ("POST", f"{API}/artifacts/filter", answered))
+        host.asked.clear()
+        until = host.now + demo.DOCUMENT_WAIT_S
+        with pytest.raises(demo.Stop) as stop:
+            demo.filed(prefect, run, kept.runner_log, host)
+        assert (stop.value.status, stop.value.lines) == (
+            1,
+            (
+                f"flow run {run.id} of twin-rehearse/main ended Completed, and its document was not read within 60 s "
+                f"({why}): read {kept.runner_log}",
+            ),
+        )
+        assert len(host.asked) == 12 and host.now >= until
+        del host.replies[0]
 
     # A 401, to the list or to the document: the run stops at once, naming the variable and never the auth.
     for path in ("flow_runs/filter", "artifacts/filter", "deployments/name/twin-rehearse/main"):
@@ -6254,7 +6267,7 @@ def test_only_passed_is_exit_0(tmp_path: Path, capsys: pytest.CaptureFixture[str
         if course is not None:
             targets.course = course
         assert status(host, up_of(local, "netbox", "")) == exits, verdict
-        [row] = targets.runs
+        [row] = twin_runs(targets)
         said = capsys.readouterr()
         lines = (said.out if exits == 0 else said.err).splitlines()
         document = None if targets.verdict is None else rehearsal(targets.verdict)
@@ -6262,12 +6275,14 @@ def test_only_passed_is_exit_0(tmp_path: Path, capsys: pytest.CaptureFixture[str
         said_first = lines[-2 if document is None else -3]
         assert said_first == f"demo: {expected}", verdict
         firsts.append(said_first)
-        assert lines[-1].endswith(": make demo-down ends them")
-        # The document is kept as it was read, and none where the run filed none.
+        assert lines[-1].endswith("; make demo-down ends what the demonstration started")
+        # The document is kept as it was read: the artifact's data as Prefect gave it where that is a string, and the
+        # object written as JSON where it came as one; none where the run filed none.
         if document is None:
             assert not kept.rehearsal.exists()
         else:
-            assert json.loads(kept.rehearsal.read_text()) == document
+            as_read = json.dumps(document, indent=2) + "\n" if as_object else json.dumps(document)
+            assert kept.rehearsal.read_text() == as_read
             assert documents.validate("rehearsal-1", document) == []
     # A document filed as a JSON string and one given as an object read alike: each case's run is its fake's first.
     assert firsts[0] == firsts[1]
@@ -6288,11 +6303,12 @@ def test_the_readout_says_where_the_report_is_read_and_names_the_password_by_its
         "FYLGJA_NETBOX_SUPERUSER_PASSWORD": "the-tests-netbox-superuser-password",
     }
     run = demo.Run("a-runs-id", "COMPLETED", "Completed", "third-link")
-    document = {"status": "failed", "stages": [{}, {}], "took_s": 75.2}
+    document = {"rehearsal_version": "1", "status": "failed", "stages": [{}, {}], "took_s": 75.2}
     rehearsal = local.resolve() / "demo" / "rehearsal.json"
+    left = "left up: the source; make demo-down ends what the demonstration started"
     said = {}
     for source in demo.SOURCES:
-        exited, lines = demo.readout(source, run, document, env, local)
+        exited, lines = demo.readout(source, run, document, env, local, left)
         said[source] = lines
         assert exited == 1
         password_said = any(value in line for value in env.values() if "password" in value for line in lines)
@@ -6302,31 +6318,50 @@ def test_the_readout_says_where_the_report_is_read_and_names_the_password_by_its
         'the report is in Infrahub at http://127.0.0.1:8000: the proposed change "Rehearse third-link" of the branch '
         'third-link, its thread "Fylgja rehearsal"; sign in as admin with the password local/.env holds as '
         "INFRAHUB_INITIAL_ADMIN_PASSWORD",
-        f"the document is {rehearsal}; the core, the runner, Prefect and infrahub are left up: make demo-down ends "
-        "them",
+        f"the document is {rehearsal}; {left}",
     ]
     assert said["netbox"] == [
         "the rehearsal ended failed, not passed: flow run a-runs-id",
         "the report is in NetBox at http://127.0.0.1:8800: the branch third-link, its Journal tab, the newest entry; "
         "sign in as admin with the password local/.env holds as FYLGJA_NETBOX_SUPERUSER_PASSWORD",
-        f"the document is {rehearsal}; the core, the runner, Prefect and netbox are left up: make demo-down ends them",
+        f"the document is {rehearsal}; {left}",
     ]
     # Passed, with its count of stages and its time.
-    exited, lines = demo.readout("netbox", run, document | {"status": "passed"}, env, local)
+    exited, lines = demo.readout("netbox", run, document | {"status": "passed"}, env, local, left)
     assert (exited, lines[0]) == (0, "the rehearsal passed: 2 stages, 75.2 s, flow run a-runs-id")
-    # No document: where to read why, and nothing said of a report or a document that was not filed.
-    exited, lines = demo.readout("infrahub", run._replace(state="CRASHED", name="Crashed"), None, env, local)
+    # No document: where to read why, Infrahub's check among it, and nothing said of a report or a document that was
+    # not filed; the last line `left_up`'s alone.
+    crashed = run._replace(state="CRASHED", name="Crashed")
     log = local.resolve() / "demo" / "runner.log"
-    assert (exited, lines) == (
+    assert demo.readout("infrahub", crashed, None, env, local, left) == (
         1,
         [
-            f"flow run a-runs-id ended Crashed and filed no rehearsal: read {log}",
-            "no document was filed; the core, the runner, Prefect and infrahub are left up: make demo-down ends them",
+            f"flow run a-runs-id ended Crashed and filed no rehearsal: read {log}, and the check fylgja-twin of the "
+            "proposed change in Infrahub, which says why",
+            left,
         ],
     )
+    assert demo.readout("netbox", crashed, None, env, local, left) == (
+        1,
+        [f"flow run a-runs-id ended Crashed and filed no rehearsal: read {log}", left],
+    )
+    # A document that is no rehearsal 1 document, as the glue reads one: no verdict, said by the member alone.
+    for held, what in (
+        (document | {"rehearsal_version": "2", "status": "passed"}, 'its rehearsal_version is not "1"'),
+        ({key: value for key, value in document.items() if key != "rehearsal_version"}, "it has no rehearsal_version"),
+        ({key: value for key, value in document.items() if key != "status"}, "it has no status"),
+        (document | {"status": ["passed"]}, "its status is not a string"),
+    ):
+        assert demo.readout("netbox", run, held, env, local, left) == (
+            1,
+            [
+                f"flow run a-runs-id filed a document that is no rehearsal 1 document: {what}",
+                f"the document is {rehearsal}; {left}",
+            ],
+        ), what
     # Where seed.json names no proposed change, the change is named by its branch alone.
     (local / "infrahub" / "seed.json").write_text(json.dumps({"branch": "third-link", "proposed_change": None}))
-    _, lines = demo.readout("infrahub", run, document, env, local)
+    _, lines = demo.readout("infrahub", run, document, env, local, left)
     assert lines[1].startswith("the report is in Infrahub at http://127.0.0.1:8000: the proposed change of the branch ")
 
 
@@ -6338,16 +6373,16 @@ def test_the_document_read_is_kept_at_mode_0600(tmp_path: Path, capsys: pytest.C
     kept.rehearsal.chmod(0o644)
     assert status(host, up_of(local, "netbox", "")) == 0
     assert mode(kept.rehearsal) == 0o600
-    assert json.loads(kept.rehearsal.read_text()) == rehearsal("passed")
+    assert kept.rehearsal.read_text() == json.dumps(rehearsal("passed"))
     capsys.readouterr()
-    # Made anew: at 0600 from its creation, whatever the umask.
+    # Made anew: at 0600 from its creation, whatever the umask, the text as given.
     kept.rehearsal.unlink()
     held = os.umask(0)
     try:
-        demo.keep(kept.rehearsal, {"status": "passed"})
+        demo.keep(kept.rehearsal, '{"status":  "passed"}')
     finally:
         os.umask(held)
-    assert mode(kept.rehearsal) == 0o600 and json.loads(kept.rehearsal.read_text()) == {"status": "passed"}
+    assert mode(kept.rehearsal) == 0o600 and kept.rehearsal.read_text() == '{"status":  "passed"}'
 
 
 def test_a_whole_run_ends_with_the_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -6355,29 +6390,24 @@ def test_a_whole_run_ends_with_the_verdict(tmp_path: Path, capsys: pytest.Captur
         local, kept, host, targets = first(tmp_path / source)
         times = timed(host, targets)
         assert status(host, up_of(local, source)) == 0
-        [row] = targets.runs
+        [row] = twin_runs(targets)
         steps = demo.STEPS[source]
         last = demo.make_argv(steps[-1], local, "main")
         done = acts(host)
         # The ids are listed, under the API read again, before the last step's make, and the wait after it.
         at = done.index(last)
         assert done[at - 2 : at] == [demo.api_argv(local, MAIN), ("listed", times[0])]
-        assert all(act == ("listed", act[1]) for act in done[at + 1 :]) and len(done) - at - 1 == len(times) - 1
-        assert len(targets.runs) == 1 and row["parameters"] == {"branch": "third-link"}
+        waited = done[at + 1 : done.index([*UP[source]], at)]
+        assert all(act == ("listed", act[1]) for act in waited) and len(waited) == len(times) - 1
+        assert row["parameters"] == {"branch": "third-link"}
         said = capsys.readouterr()
         assert said.err == ""
         out = said.out.splitlines()
         assert out[-7] == f"demo: step {len(steps)} of {len(steps)}: {demo.words_of(steps[-1], 'main')}"
         assert out[-6:-3] == run_lines(row["id"], *RUN_STATES)
         assert out[-3] == f"demo: the rehearsal passed: 5 stages, 412.6 s, flow run {row['id']}"
-        assert out[-1] == (
-            f"demo: the document is {kept.rehearsal}; the core, the runner, Prefect and {source} are left up: make "
-            "demo-down ends them"
-        )
-        # It is so: everything is left up, as `left_up` reads it, and `make demo-down` then ends it.
-        assert left_up(*standing_after(source, host)).startswith("left up: ")
-        read_now = demo.left_up(source, loaded_env(local, host), kept, local, host)
-        assert read_now == left_up(*standing_after(source, host))
+        # The last line is what `left_up` reads after the verdict: the source, the core, Prefect and the runner.
+        assert out[-1] == f"demo: the document is {kept.rehearsal}; {left_up(*standing_after(source, host))}"
         assert status(host, down(local)) == 0
         capsys.readouterr()
 
@@ -6394,6 +6424,24 @@ def test_ctrl_c_is_exit_130_and_says_what_is_left(tmp_path: Path, capsys: pytest
     standing = ("netbox", f"the core (pid {core.pid})", "the edge's Prefect", f"the runner (pid {runner.pid})")
     assert capsys.readouterr().err.splitlines() == ["demo: up was interrupted", f"demo: {left_up(*standing)}"]
     assert host.signalled == []
+
+    # A second Ctrl-C while the last line is read, after a step failed: the step's line is kept, and the last line
+    # says what is left up was not read.
+    local, _, host, targets = first(tmp_path / "twice")
+    targets.fails = {"netbox-hook": {1}}
+
+    def interrupted_once_failed(ran: Ran) -> Any:
+        if ["netbox-hook"] in targets.asked:
+            raise KeyboardInterrupt
+        return host.containers(ran)
+
+    host.answers[("docker", "ps")] = interrupted_once_failed
+    assert status(host, up_of(local, "netbox", "")) == 130
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: step 7, make netbox-hook, exited {MAKE_FAILED}",
+        "demo: up was interrupted",
+        f"demo: {demo.LEFT_UNREAD}",
+    ]
 
     # In the wait: likewise.
     local, _, host, _ = first(tmp_path / "wait")
@@ -6423,3 +6471,178 @@ def test_ctrl_c_is_exit_130_and_says_what_is_left(tmp_path: Path, capsys: pytest
     assert err[0].startswith("demo: still standing after its destroy: rh-a; ")
     assert err[1:] == ["demo: down was interrupted", NOT_ALL_ENDED]
     assert kept.unsettled.exists()
+
+
+def test_the_document_is_read_once_the_run_has_ended_however_late_it_was_listed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The ask begun 295 s after the change answers 30 s later, under load, listing the run: it is listed 325 s on, and
+    ends within its own bound but past 4500 s from the change, the whole of the two waits. Its document is read all
+    the same, `DOCUMENT_WAIT_S` being measured from the end `follow` returns."""
+    local, _, host, targets = first(tmp_path)
+    targets.course = (("RUNNING", "Running", 3.0), ("COMPLETED", "Completed", 4500.0))
+    before: list[float] = []
+
+    def slow(asked: Any) -> Any:
+        if not before:
+            before.append(host.now)
+        elif host.now < before[0] + 295.0:
+            return demo.Answer(None, None)
+        elif len(before) == 1:
+            before.append(host.now)
+            host.now += 30.0
+        return targets.flow_runs(asked)
+
+    host.replies.insert(0, ("POST", f"{API}/flow_runs/filter", slow))
+    read: list[float] = []
+
+    def document(asked: Any) -> Any:
+        read.append(host.now)
+        return targets.artifacts(asked)
+
+    host.replies.insert(0, ("POST", f"{API}/artifacts/filter", document))
+    assert status(host, up_of(local, "netbox", "")) == 0
+    returned = before[0]
+    assert len(read) == 1 and read[0] > returned + demo.APPEAR_WAIT_S + demo.RUN_WAIT_S
+    assert capsys.readouterr().out.splitlines()[-3].startswith("demo: the rehearsal passed: ")
+
+
+def test_the_last_line_says_the_runner_is_gone_where_its_run_crashed_with_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, kept, host, targets = first(tmp_path)
+    targets.verdict = None
+    targets.course = (("RUNNING", "Running", 3.0), ("CRASHED", "Crashed", 50.0))
+    goes = targets.goes
+
+    def dies_with_it(row: dict[str, Any], kind: str, name: str) -> None:
+        goes(row, kind, name)
+        if kind == "CRASHED":
+            host.exit(host.started[1].pid)
+
+    targets.goes = dies_with_it  # type: ignore[method-assign]
+    assert status(host, up_of(local, "netbox", "")) == 1
+    [row] = twin_runs(targets)
+    [core, _] = host.started
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: flow run {row['id']} ended Crashed and filed no rehearsal: read {kept.runner_log}",
+        "demo: " + left_up("netbox", f"the core (pid {core.pid})", "the edge's Prefect"),
+    ]
+
+
+def test_only_a_run_of_the_changes_branch_made_after_every_known_one_is_the_changes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import re as regex
+
+    # A new run of another branch is said once and not followed; the change's, made later, is.
+    _, _, host, targets, prefect = serving(tmp_path / "branch")
+    host.at(host.now + 1.0, lambda: targets.made("another-branch"))
+    host.at(host.now + 12.0, lambda: targets.made("third-link"))
+    run = demo.follow(prefect, TWIN_DEPLOYMENT, frozenset(), host, branch="third-link")
+    other, ours = twin_runs(targets)
+    assert (run.id, run.branch, run.state) == (ours["id"], "third-link", "COMPLETED")
+    assert capsys.readouterr().out.splitlines() == [
+        f"demo: flow run {other['id']} of twin-rehearse/main is of the branch another-branch, not third-link: not "
+        "followed",
+        *run_lines(ours["id"], *RUN_STATES),
+    ]
+
+    # A run not among the ids listed before the change, as one past the first page would be, that was made before
+    # the newest of them, is never the change's.
+    _, _, host, targets, prefect = serving(tmp_path / "older")
+    host.now = 10.0
+    older = targets.made("third-link", course=())
+    host.now = 20.0
+    newest = targets.made("third-link", course=())
+    moved(older, "COMPLETED", "Completed", 30.0)
+    moved(newest, "COMPLETED", "Completed", 40.0)
+    host.now = 100.0
+    listed = demo.listed(prefect, TWIN_DEPLOYMENT)
+    after = max(each.created for each in listed if each.created is not None)
+    host.at(host.now + 30.0, lambda: targets.made("third-link"))
+    run = demo.follow(prefect, TWIN_DEPLOYMENT, frozenset({newest["id"]}), host, branch="third-link", after=after)
+    assert run.id == twin_runs(targets)[-1]["id"] and run.id not in (older["id"], newest["id"])
+    assert not [line for line in capsys.readouterr().out.splitlines() if older["id"] in line]
+
+    # The branch each change is of, as the script knows it: Infrahub's from the seed's record, which the last step
+    # writes; NetBox's the Makefile's own `NETBOX_BRANCH`, since no step is given another.
+    makefile = (ROOT / "Makefile").read_text()
+    found = regex.search(r"^NETBOX_BRANCH \?= (\S+)$", makefile, regex.MULTILINE)
+    assert found is not None and found[1] == demo.NETBOX_BRANCH
+    local = tmp_path / "local"
+    (local / "infrahub").mkdir(parents=True)
+    assert demo.change_branch("infrahub", local) == ""
+    (local / "infrahub" / "seed.json").write_text(json.dumps({"branch": "seeded", "proposed_change": None}))
+    assert (demo.change_branch("infrahub", local), demo.change_branch("netbox", local)) == ("seeded", "third-link")
+
+
+def test_a_wait_that_runs_out_after_failed_asks_says_what_the_last_answered(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # No run: the lists fail from 200 s on, the last with 503.
+    local, _, host, targets = first(tmp_path / "no-run")
+    targets.starts_runs = False
+    begun: list[float] = []
+
+    def failing_late(asked: Any) -> Any:
+        begun.append(host.now)
+        if host.now >= begun[0] + 200.0:
+            return demo.Answer(503, {"detail": "Service Unavailable"})
+        return targets.flow_runs(asked)
+
+    host.replies.insert(0, ("POST", f"{API}/flow_runs/filter", failing_late))
+    assert status(host, up_of(local, "infrahub")) == 1
+    assert capsys.readouterr().err.splitlines() == [
+        f"demo: no run of twin-rehearse/main was started within 300 s of the change: {WHERE_TO_LOOK['infrahub']}",
+        "demo: the last list of the runs of twin-rehearse/main was not read: HTTP 503",
+        f"demo: {left_up(*standing_after('infrahub', host))}",
+    ]
+
+    # A run that does not end, its lists answered by nothing from 4000 s after it was listed.
+    _, _, host, targets, prefect = serving(tmp_path / "no-end")
+    host.at(host.now + 1.0, lambda: targets.made("third-link", course=(("RUNNING", "Running", 3.0),)))
+    seen: list[float] = []
+
+    def unanswered_late(asked: Any) -> Any:
+        if twin_runs(targets):
+            seen.append(host.now)
+            if host.now >= seen[0] + 4000.0:
+                return demo.Answer(None, None)
+        return targets.flow_runs(asked)
+
+    host.replies.insert(0, ("POST", f"{API}/flow_runs/filter", unanswered_late))
+    with pytest.raises(demo.NotEnded) as stop:
+        demo.follow(prefect, TWIN_DEPLOYMENT, frozenset(), host)
+    [row] = twin_runs(targets)
+    assert stop.value.lines == (
+        f"flow run {row['id']} of twin-rehearse/main had not ended 4200 s after it was listed, RUNNING",
+        "the last list of the runs of twin-rehearse/main was not read: nothing answered",
+    )
+    capsys.readouterr()
+
+    # Before the change, a list answered other than 200 is said by its status, and the change is not opened.
+    local, _, host, targets = first(tmp_path / "before")
+    host.replies.insert(0, ("POST", f"{API}/flow_runs/filter", demo.Answer(503, {"detail": "Service Unavailable"})))
+    assert status(host, up_of(local, "netbox", "")) == 1
+    err = capsys.readouterr().err.splitlines()
+    assert err[0] == (
+        f"demo: the runs of twin-rehearse/main were not listed at Prefect at {API} (HTTP 503): the change was not "
+        "opened"
+    )
+    assert targets.opened == []
+
+
+def test_the_plan_run_the_change_also_starts_is_never_followed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local, _, host, targets = first(tmp_path)
+    assert status(host, up_of(local, "infrahub")) == 0
+    [plan] = [row for row in targets.runs if row["deployment_id"] == DEPLOYMENT_IDS["stage-plan/main"]]
+    [twin] = twin_runs(targets)
+    made_before = datetime.fromisoformat(twin["created"]) - datetime.fromisoformat(plan["created"])
+    assert made_before.total_seconds() == pytest.approx(4.6)
+    out = capsys.readouterr().out
+    assert plan["id"] not in out and f"flow run {twin['id']}" in out
+    asked = [each.body for each in listings(host)]
+    assert asked and all(body == demo.runs_body(TWIN_DEPLOYMENT) for body in asked)

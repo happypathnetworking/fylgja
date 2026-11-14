@@ -95,6 +95,12 @@ class FakeHost:
     - `text` answers `files`, raises `PermissionError` for a path of `denied`, and reads a file under `disk`, a
       directory of the test's own, where one is given, its bytes decoded as `Real` decodes them and no line end
       translated; any other path is absent.
+    - `heard` is `ss -Hltn` and `ss -Hltnp` as the host answers them while the processes of `processes` run: the
+      lines of `SS`; a line for each listener of `listening`, a test's own; and one for each process that is a
+      core (a word of its command line a path named `fylgja-core-server`) and not of `not_listening`, at its
+      `FYLGJA_LISTEN`, or the core's default. Under `-p` a line names its process as `ss` names one this user runs,
+      `users:(("<name>",pid=<pid>,fd=4))`, and names none for a listener whose pid is None, a process of another
+      user's. A core listens from its start: the script asks who listens only before a start and after an answer.
     - `sleep` advances `now`, which `clock` answers, and then lets happen, once each and in the order of their
       times, what a test said with `at` would happen on the host by then: a process that exits or becomes another
       by `execve`, a line that reaches a log.
@@ -109,6 +115,8 @@ class FakeHost:
         self.files: dict[Path, str] = {}
         self.denied: set[Path] = set()
         self.processes: dict[int, Any] = {}
+        self.listening: list[tuple[str, int | None, str]] = []
+        self.not_listening: set[int] = set()
         self.interpreters: dict[str, str] = {}
         self.on_start: Callable[[Started], None] | None = None
         self.later: list[tuple[float, Callable[[], None]]] = []
@@ -151,6 +159,16 @@ class FakeHost:
                 done = answer(ran) if callable(answer) else answer
                 return done if capture else demo.Done(done.status, "")
         raise AssertionError(f"the test lists no answer for {ran.argv}")
+
+    def heard(self, ran: Ran) -> Any:
+        """What `ss -Hltn` prints, and with `-p` among the words `ss -Hltnp`: the class says which listeners."""
+        held = list(self.listening)
+        for pid, process in sorted(self.processes.items()):
+            if pid > 1 and pid not in self.not_listening and is_a_core(process):
+                held.append((process.environ.get("FYLGJA_LISTEN") or "127.0.0.1:7650", pid, "fylgja-core-ser"))
+        named = "-Hltnp" in ran.argv
+        lines = [listener(address, pid if named else None, name) for address, pid, name in held]
+        return demo.Done(0, "\n".join([SS, *lines]))
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
         pid = self.next_pid
@@ -234,6 +252,20 @@ class FakeHost:
         return self.free
 
 
+def is_a_core(process: Any) -> bool:
+    """Whether a process of the tests' `/proc` is a core's server, whatever its store: a word of its command line
+    is a path named `fylgja-core-server`."""
+    return any(Path(word).name == "fylgja-core-server" for word in process.argv)
+
+
+def listener(address: str, pid: int | None = None, name: str = "python3") -> str:
+    """One line of `ss -Hltn` for a listener at `address`, an address with its port; with `pid`, the line `ss
+    -Hltnp` prints for a process this user runs, as read on the development host:
+    `LISTEN 0      2048       127.0.0.1:7651 0.0.0.0:* users:(("fylgja-core-ser",pid=3163539,fd=4))`."""
+    users = "" if pid is None else f' users:(("{name}",pid={pid},fd=4))'
+    return f"LISTEN 0      2048       {address} {'[::]' if address.startswith('[') else '0.0.0.0'}:*{users}"
+
+
 NODE_USER = "the-tests-node-user"
 NODE_PASSWORD = "the-tests-node-password"
 CLIENT_TOKEN = "the-tests-clients-core-token"
@@ -284,8 +316,9 @@ def ss(*addresses: str) -> str:
 def passing(local: Path = LOCAL, disk: Path | None = None) -> FakeHost:
     """A host on which every check passes for either source, neither up: the venv's commands and the tools, Docker,
     Compose and containerlab answering, the user in both groups, the AppArmor widening made, memory for a source and
-    the twin, no listener on a port the demonstration needs, `local/.env` with the node login, and a commit for any
-    ref. Each of the venv's commands is a `#!` script of the venv's `python3`, as `pip` writes one."""
+    the twin, no listener on a port the demonstration needs but a core's own where one runs (`FakeHost.heard`),
+    `local/.env` with the node login, and a commit for any ref. Each of the venv's commands is a `#!` script of the
+    venv's `python3`, as `pip` writes one."""
     host = FakeHost(disk)
     host.on_path = {*demo.TOOLS, *(str(demo.ROOT / "core" / ".venv" / "bin" / name) for name in demo.COMMANDS)}
     host.interpreters = {
@@ -296,7 +329,8 @@ def passing(local: Path = LOCAL, disk: Path | None = None) -> FakeHost:
     host.answer("docker", "compose", "version")
     host.answer("docker", "ps")
     host.answer("containerlab", "version")
-    host.answer("ss", "-Hltn", out=SS)
+    host.answers[("ss", "-Hltn")] = host.heard
+    host.answers[("ss", "-Hltnp")] = host.heard
     host.answer("git", "rev-parse")
     host.gids = {"docker": 998, "clab_admins": 997}
     host.held = {1000, 998, 997}

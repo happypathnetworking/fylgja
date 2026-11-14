@@ -11,11 +11,14 @@ checkout> --ref <branch or empty>` and `python3 -I scripts/demo.py down --local 
   line of its own, and nothing is started. Where they pass it says so.
 - `down` holds the same lock, and ends what the demonstration `<local>/demo/source` records started (`settle`,
   then the Prefect server and the source by their own targets): the runner and the core by their recorded pids,
-  each only where the pid still reads as that process, and through the core every twin its store holds.
+  each only where the pid still reads as that process, and through the core every twin its store holds. It is exit
+  0 only where the store is settled: read empty through a core of the demonstration's own.
 
 The core and the runner are the two things no target starts in the background: `start_core` and `start_runner`
 start each in a session of its own, record its pid and wait until it serves, and `refuse_runners` stops a run beside
-a runner it may not end.
+a runner it may not end. A core's answer is taken for the demonstration's only where the listener at its port is
+its own pid (`owns`), and none is started where anything listens there already: a twin is listed and destroyed
+through no other core.
 
 What the script keeps is under `<local>/demo/` (`records`). What it writes that can be generated, `prepare`: that
 directory, the token file its core reads, and in `<local>/.env`, where the loaded environment gives the name no
@@ -115,6 +118,16 @@ LISTEN = "FYLGJA_LISTEN"
 DEFAULT_LISTEN = "127.0.0.1:7650"
 """The server's setting of its listen address, and the address where it gives none, the core's own default."""
 
+LISTEN_REFUSED = (
+    f"{LISTEN} is not 127.0.0.1:<port>: the demonstration's core serves HTTP on loopback; set it so in local/.env, "
+    "or delete the line"
+)
+"""What is said of a listen address that is not loopback's with a port: the check's sentence, and the reason why
+nothing is started or settled at such an address."""
+
+OWN = "FYLGJA_"
+"""How the names begin whose values the script itself reads, hashes, writes or sends."""
+
 API_ADDRESS = "FYLGJA_API_ADDRESS"
 API_TOKEN = "FYLGJA_API_TOKEN"
 API_CA = "FYLGJA_API_CA"
@@ -184,6 +197,10 @@ deployments."""
 STOP_POLL_S = 0.5
 """Seconds between two reads of a process that was signalled, `edge_dev.end_session`'s."""
 
+KILL_WAIT_S = 1.0
+"""Seconds a process is given to be gone after SIGKILL, so that what it held, its port among it, is free for what is
+started next; a first value."""
+
 TIMED_OUT = 124
 """The status `Real.run` answers for a child that outlasted its timeout and was killed, as `timeout` exits."""
 
@@ -222,6 +239,9 @@ shell is part of the word (a carriage return, a form feed, a no-break space, a l
 shell drops it, and no child can be given one."""
 
 LOOPBACK = re.compile(r"127\.0\.0\.1:([1-9][0-9]{0,4})")
+
+USER = re.compile(r'",pid=([0-9]+),fd=[0-9]+\)')
+"""A user of a listener as `ss -Hltnp` writes one after its name: its pid."""
 
 AFTER_THE_SCHEME = re.compile(r"[^\s/?#@]+(?:/[^\s?#]*)?")
 """What follows the scheme in Prefect's API as `edge_dev.py api` prints it: a host, with its port, and a path, with no
@@ -540,7 +560,9 @@ def fail(line: str, status: int = 1) -> int:
 class Records:
     """What the script keeps under `<local>/demo/`: the word of the last `up` that passed its checks; the pids of the
     core and the runner it started, and of the Prefect server where `make prefect-up` started one for it; the core's
-    and the runner's logs; the core's store and its token file; the lock; and the last rehearsal's document."""
+    and the runner's logs; the core's store, and the marker that it is unsettled, empty, which stands from before a
+    core is started over the store until a core of the demonstration's own has listed no twin; its token file; the
+    lock; and the last rehearsal's document."""
 
     source: Path
     core_pid: Path
@@ -549,13 +571,16 @@ class Records:
     core_log: Path
     runner_log: Path
     store: Path
+    unsettled: Path
     tokens: Path
     lock: Path
     rehearsal: Path
 
 
 def records(local: Path) -> Records:
-    home = local / "demo"
+    """The records of `local`, each path resolved, so that it has one spelling whatever spelling of `local` a command
+    was given: a core is known by its store's path."""
+    home = local.resolve() / "demo"
     return Records(
         source=home / "source",
         core_pid=home / "core.pid",
@@ -564,6 +589,7 @@ def records(local: Path) -> Records:
         core_log=home / "core.log",
         runner_log=home / "runner.log",
         store=home / "store",
+        unsettled=home / "unsettled",
         tokens=home / "tokens",
         lock=home / "lock",
         rehearsal=home / "rehearsal.json",
@@ -625,8 +651,9 @@ def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str
     """`environ` overlaid by `<local>/.env`, as a shell that loads the file has it, and `environ` alone where there
     is no file. A file that is not this user's to read stops the run, exit 2, and so does a line `read_env` does not
     read, naming the line by its number and the name where it has one, and never the value; and so does a value
-    that is not carried (`unfit`), each said by its name alone: every value here is valid UTF-8, the shell's and the
-    file's alike, and one the file gives is a child's as the file has it."""
+    that is not carried (`unfit`), each said by its name alone. Every value the file gives is judged. Of the shell's
+    own, only one whose name begins `FYLGJA_`, which the script may read, hash, write or send: every other passes
+    through untouched, whatever its bytes, and reaches a child as it came."""
     path = local / ".env"
     try:
         text = host.text(path)
@@ -637,7 +664,11 @@ def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str
     except Unread as unread:
         raise Stop(2, [f"{path} line {unread.line} {unread_as(unread)}"]) from None
     env = {**environ, **held}
-    refused = [said for name, value in env.items() if (said := unfit(name, value, of_the_file=name in held))]
+    refused = [
+        said
+        for name, value in env.items()
+        if (name in held or name.startswith(OWN)) and (said := unfit(name, value, of_the_file=name in held))
+    ]
     if refused:
         raise Stop(2, refused)
     return env
@@ -646,9 +677,10 @@ def loaded(local: Path, environ: Mapping[str, str], host: Host) -> dict[str, str
 def unfit(name: str, value: str, *, of_the_file: bool = True) -> str | None:
     """What is said of a value the script does not carry, by its name alone, and None for one it does.
 
-    No value holds a byte that is not UTF-8, which `Host.text` hands on as a surrogate, and under a locale of UTF-8
-    the process's environment too: the script writes a value into a line, sends one in a header and hashes one,
-    each as UTF-8. And a value `<local>/.env` gives is one the process's locale gives a child as the file has it,
+    No value the script may itself use holds a byte that is not UTF-8, which `Host.text` hands on as a surrogate,
+    and under a locale of UTF-8 the process's environment too: the script writes a value into a line, sends one in a
+    header and hashes one, each as UTF-8. And a value `<local>/.env` gives is one the process's locale gives a child
+    as the file has it,
     since a shell that loads the file gives a child the file's own bytes: not one the locale cannot encode, nor one
     it would write as other bytes, as ISO-8859-1 writes one byte for a character the file holds as two. A value of
     the shell's own is not asked that: its bytes are given back to a child as they came."""
@@ -805,6 +837,28 @@ def listeners(ss_output: str, port: int) -> list[str]:
         if len(fields) >= 4 and fields[3].rpartition(":")[2] == str(port):
             found.append(fields[3])
     return found
+
+
+def listener_pids(ss_output: str, port: int) -> set[int]:
+    """The pids `ss -Hltnp`'s lines name for the listeners at `port`, whatever the address: each `pid=` of a line's
+    `users:(("<name>",pid=<pid>,fd=<fd>),…)`. A listener that is another user's process is named none."""
+    found: set[int] = set()
+    for line in ss_output.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[3].rpartition(":")[2] == str(port):
+            found.update(int(pid) for pid in USER.findall(line.partition("users:(")[2]))
+    return found
+
+
+def owns(pid: int, listen: str, host: Host) -> bool:
+    """Whether the listener at the port of `listen` is process `pid`'s own, by `ss -Hltnp`: only then is what answers
+    there that process. An answer proves nothing of who gave it, and every twin the demonstration lists and destroys
+    is to be its own core's. False too where `listen` is no address a port is read from, or `ss` is not read."""
+    port = port_of(listen)
+    if port is None:
+        return False
+    heard = host.run(["ss", "-Hltnp"], capture=True, timeout=DOCKER_TIMEOUT_S)
+    return heard.status == 0 and pid in listener_pids(heard.out, port)
 
 
 def pool_of(env: Mapping[str, str]) -> IPv4Network:
@@ -999,10 +1053,7 @@ def checks(source: str, env: Mapping[str, str], *, local: Path, ref: str, host: 
             )
 
     if port_of(listen) is None:
-        failing.append(
-            f"{LISTEN} is not 127.0.0.1:<port>: the demonstration's core serves HTTP on loopback; set it so in "
-            "local/.env, or delete the line"
-        )
+        failing.append(LISTEN_REFUSED)
 
     try:
         pool_of(env)
@@ -1037,10 +1088,15 @@ def api_argv(local: Path, main: Path) -> list[str]:
 
 
 def is_core(process: Process | None, records: Records) -> bool:
-    """Whether a process is the demonstration's core: its command line names `CORE`, this checkout's server, and its
-    store is the demonstration's, so that a reused pid, a core of another store and another checkout's are never
-    read as it, nor ended."""
-    return process is not None and str(CORE) in process.argv and process.environ.get(STORE) == str(records.store)
+    """Whether a process is the demonstration's core, whatever checkout it runs from: a word of its command line is a
+    path named `fylgja-core-server`, and its store is the demonstration's, the one under the main checkout's
+    `local/`, by its resolved path. A reused pid, a core of another store and a child of the core's, which inherits
+    its environment, are never read as it, nor ended."""
+    return (
+        process is not None
+        and any(Path(word).name == CORE.name for word in process.argv)
+        and process.environ.get(STORE) == str(records.store)
+    )
 
 
 def is_runner(process: Process | None, local: Path) -> bool:
@@ -1094,26 +1150,68 @@ def start_recorded(
     """`argv` started in a session of its own under `env`, in the checkout, and its pid: the log of the start
     before is kept as `<log>.1`, so that `log` is this start's own, and the pid is written to `pid_file` at once. A
     command that cannot be started stops the run, exit 1, said in the error's own word with the command's path and
-    the log's, and nothing of `env` or of the other words; no pid file is left."""
+    the log's, and nothing of `env` or of the other words; no pid file is left. No child runs unrecorded: where its
+    pid cannot be written it is ended, and the run stops, exit 1, saying so, or that it still stands."""
     if log.exists():
         log.replace(log.with_name(f"{log.name}.1"))
     try:
         pid = host.start(argv, env=env, cwd=ROOT, log=log)
     except OSError as refused:
         pid_file.unlink(missing_ok=True)
-        word = os.strerror(refused.errno) if refused.errno else type(refused).__name__
-        raise Stop(1, [f"the {what} was not started, {word}: its command is {argv[0]} and its log {log}"]) from None
-    pid_file.write_text(f"{pid}\n")
+        raise Stop(
+            1, [f"the {what} was not started, {word_of(refused)}: its command is {argv[0]} and its log {log}"]
+        ) from None
+    try:
+        pid_file.write_text(f"{pid}\n")
+    except OSError as refused:
+        gone = end(pid, host, lambda process: process is not None)
+        raise Stop(
+            1,
+            [
+                f"the {what}, pid {pid}, was started and its pid could not be written to {pid_file}, "
+                f"{word_of(refused)}: {'it was ended' if gone else 'it still stands, and is to be ended by its pid'}"
+            ],
+        ) from None
     return pid
+
+
+def word_of(refused: OSError) -> str:
+    """An error of the host's in its own word, `os.strerror`'s, and never its text, which may hold more."""
+    return os.strerror(refused.errno) if refused.errno else type(refused).__name__
 
 
 def start_core(env: Mapping[str, str], records: Records, listen: str, host: Host) -> int:
     """Start the demonstration's core at `listen`, in a session of its own under `core_env`, and wait until it
     answers `GET /v1/version`, which needs no token, asked every `ASK_S`; its pid, recorded in `core.pid`.
 
-    An answer counts only while the pid still reads as the core, so that another process's answer at the port is
-    never the core's. Where the process is gone first the record is removed and the run stops, exit 1, naming its
-    log; where `CORE_WAIT_S` passes it stops, exit 1, the core left up and recorded for `down` to end."""
+    Nothing is started where anything listens at the port already (`ss -Hltn`): what answers there is not the
+    demonstration's core, and no core of its own could bind beside it. Stop, exit 1; likewise where the listeners
+    are not read, or `listen` is no address a port is read from. Before the start the store is marked unsettled
+    (`Records.unsettled`), since from then on it may hold a twin that only a list through this core finds.
+
+    An answer of 200 counts only while the pid still reads as the core and `ss -Hltnp` names that pid for the
+    port's listener (`owns`): a 200 proves nothing of who answered, and a child just started is alive whoever
+    answers. One the pid does not own is no answer, and the wait goes on. Where the process is gone first the record
+    is removed and the run stops, exit 1, naming its log; where `CORE_WAIT_S` passes it stops, exit 1, the core left
+    up and recorded for `down` to end."""
+    port = port_of(listen)
+    if port is None:
+        raise Stop(1, [LISTEN_REFUSED])
+    heard = host.run(["ss", "-Hltn"], capture=True, timeout=DOCKER_TIMEOUT_S)
+    if heard.status != 0:
+        raise Stop(
+            1, [f"`ss -Hltn` exited {heard.status}: whether port {port} is free was not read, and no core was started"]
+        )
+    held = listeners(heard.out, port)
+    if held:
+        raise Stop(
+            1,
+            [
+                f"port {port} is listened on at {held[0].rpartition(':')[0]} by a process the demonstration did not "
+                "start: its core cannot start there, and no twin was read"
+            ],
+        )
+    records.unsettled.touch()
     core = core_env(env, records, listen)
     pid = start_recorded("core", [str(CORE)], core, records.core_pid, records.core_log, host)
     begun = host.clock()
@@ -1122,7 +1220,7 @@ def start_core(env: Mapping[str, str], records: Records, listen: str, host: Host
         if not is_core(host.process(pid), records):
             records.core_pid.unlink(missing_ok=True)
             raise Stop(1, [f"the core exited before it answered: read {records.core_log}"])
-        if answered:
+        if answered and owns(pid, listen, host):
             say(f"the core answers at {listen}, pid {pid}, its log {records.core_log}")
             return pid
         host.sleep(ASK_S)
@@ -1198,17 +1296,29 @@ def start_runner(
     )
 
 
-def end(pid: int, host: Host) -> None:
-    """SIGTERM to the session `pid` leads, and SIGKILL where the process still stands `STOP_WAIT_S` later, as
-    `edge_dev.end_session`. The caller has read `pid` as a process the demonstration started."""
+def end(pid: int, host: Host, ours: Callable[[Process | None], bool]) -> bool:
+    """End the process `pid` that `ours` reads as the caller's, and answer whether it is gone: SIGTERM to the session
+    it leads, and SIGKILL where it still stands `STOP_WAIT_S` later, as `edge_dev.end_session`, then `KILL_WAIT_S`
+    for it to be gone, so that what it held is free.
+
+    A signal rests on the latest reading: `/proc` is read by `ours` immediately before each, and a pid that no
+    longer reads as the caller's is not signalled, the caller's process being gone. False where the process stands
+    after SIGKILL and its wait, or stands and could not be signalled."""
+    if not ours(host.process(pid)):
+        return True
     if not host.signal(pid, signal.SIGTERM):
-        return
-    begun = host.clock()
-    while host.clock() - begun < STOP_WAIT_S:
-        if host.process(pid) is None:
-            return
-        host.sleep(STOP_POLL_S)
-    host.signal(pid, signal.SIGKILL)
+        return not ours(host.process(pid))
+    for number, wait in ((signal.SIGKILL, STOP_WAIT_S), (None, KILL_WAIT_S)):
+        begun = host.clock()
+        while host.clock() - begun < wait:
+            if not ours(host.process(pid)):
+                return True
+            host.sleep(STOP_POLL_S)
+        if not ours(host.process(pid)):
+            return True
+        if number is not None:
+            host.signal(pid, number)
+    return False
 
 
 def held(path: Path, what: str, ours: Callable[[Process | None], bool], host: Host) -> tuple[int, Process] | None:
@@ -1263,43 +1373,101 @@ def twins(env: Mapping[str, str], listen: str, host: Host) -> list[str]:
     return [record["name"] for record in listed]
 
 
+def ended(what: str, pid: int, ours: Callable[[Process | None], bool], pid_file: Path, host: Host) -> None:
+    """End the recorded process `pid`, remove its record and say that it ended; where it still stands, stop the
+    run, exit 1, naming it, its record kept: nothing is said to be ended that is not."""
+    if not end(pid, host, ours):
+        raise Stop(
+            1,
+            [
+                f"the {what}, pid {pid}, still stands after SIGKILL, or could not be signalled: its record {pid_file} "
+                "is kept; end it by its pid, then run make demo-down again"
+            ],
+        )
+    pid_file.unlink(missing_ok=True)
+    say(f"the {what}, pid {pid}, ended")
+
+
 def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, host: Host) -> None:
-    """End what an earlier run left, so that a demonstration leaves no twin, process or listener behind it, and
-    signal nothing but a process read as the recorded runner or core (`held`).
+    """End what an earlier run left, so that a demonstration leaves no twin, process or listener behind it; signal
+    nothing but a process read as the recorded runner or core (`held`, and `end` again before each signal); and list
+    and destroy through nothing but a core whose pid owns its listener (`owns`).
+
+    Where `listen` is no address a port is read from, nothing is done: Stop, exit 1, with the check's sentence.
 
     The recorded runner is ended and `runner.pid` removed: given SIGTERM it cancels the flow run it was running,
-    whose own clean-up asks its twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14). Then,
-    where `core.pid` is there, every twin the demonstration's store holds is destroyed through a core, and the core
-    ended and `core.pid` removed: the recorded core where it is up, asked at its own listen address, and else one
-    started for the purpose at `listen`, since a twin outlives the core that made it and is listed by the next over
-    the same store. A recorded core that is up and does not list its twins is ended and replaced likewise. Each twin
-    listed is asked destroyed by `fylgja-core twin destroy`, which waits for its verdict, within
-    `DESTROY_TIMEOUT_S`; the list is then read again, and a twin still on it stops the run, exit 1, naming it, with
-    the core left up and recorded. With no `core.pid` nothing of the core's is done.
+    whose own clean-up asks its twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14).
+
+    The core's part goes by the marker `unsettled`, which `start_core` writes before it starts a core and which is
+    removed here alone, once a list through an owned core has answered empty. With no marker the store was read
+    empty, and nothing is asked of it: a recorded core is ended as a recorded pid is. With the marker, every twin
+    the store holds is destroyed through a core:
+
+    - the recorded core where it is up, asked at its own listen address, and only where it owns the listener there:
+      where it does not, what answers there may be another's, and the run stops, exit 1, no twin read and the core
+      left up;
+    - where that core does not list its twins, why is said, it is ended, and it is replaced;
+    - else, and where no core is recorded up, one started for the purpose at `listen` (`start_core`), since a twin
+      outlives the core that made it and is listed by the next over the same store.
+
+    Each twin listed is asked destroyed by `fylgja-core twin destroy`, which waits for its verdict, within
+    `DESTROY_TIMEOUT_S`, and the list is read again. A twin still on it, or a list that is not read through the
+    core started or after the destroys, stops the run, exit 1, saying why and naming the core, which is left up and
+    recorded, the marker standing. An empty list removes the marker, and the core is then ended and `core.pid`
+    removed.
 
     Nothing of Docker is read: a lab's container that no twin names is not this script's to find."""
-    runner = held(records.runner_pid, "runner", lambda process: is_runner(process, local), host)
-    if runner is not None:
-        end(runner[0], host)
-        records.runner_pid.unlink(missing_ok=True)
-        say(f"the runner, pid {runner[0]}, ended")
+    if port_of(listen) is None:
+        raise Stop(1, [LISTEN_REFUSED])
 
-    if host.text(records.core_pid) is None:
+    def the_runner(process: Process | None) -> bool:
+        return is_runner(process, local)
+
+    def the_core(process: Process | None) -> bool:
+        return is_core(process, records)
+
+    def left_up(pid: int, address: str) -> str:
+        return (
+            f"the core, pid {pid}, is left up at {address}: read {records.core_log}, then run make demo-down again"
+        )
+
+    runner = held(records.runner_pid, "runner", the_runner, host)
+    if runner is not None:
+        ended("runner", runner[0], the_runner, records.runner_pid, host)
+
+    core = held(records.core_pid, "core", the_core, host)
+    if host.text(records.unsettled) is None:
+        if core is not None:
+            ended("core", core[0], the_core, records.core_pid, host)
         return
-    core = held(records.core_pid, "core", lambda process: is_core(process, records), host)
+
     pid, address = 0, listen
     left: list[str] | None = None
     if core is not None:
         pid, address = core[0], core[1].environ.get(LISTEN) or DEFAULT_LISTEN
+        if not owns(pid, address, host):
+            raise Stop(
+                1,
+                [
+                    f"the core, pid {pid}, is not shown by `ss -Hltnp` to listen at {address}: no twin was read, "
+                    "since what answers there may be another's; it is left up: end it by its pid if it never "
+                    "listens, then run make demo-down again"
+                ],
+            )
         try:
             left = twins(env, address, host)
-        except Stop:
-            say(f"the core, pid {pid}, did not list its twins at {address}: ending it, to start one that does")
-            end(pid, host)
+        except Stop as unread:
+            for line in unread.lines:
+                say(line)
+            say(f"ending the core, pid {pid}, which did not list its twins, to start one that does")
+            ended("core", pid, the_core, records.core_pid, host)
     if left is None:
         say(f"starting a core at {listen}, to end what the store of an earlier one holds")
         pid, address = start_core(env, records, listen, host), listen
-        left = twins(env, address, host)
+        try:
+            left = twins(env, address, host)
+        except Stop as unread:
+            raise Stop(1, [*unread.lines, left_up(pid, address)]) from None
 
     for name in left:
         say(f"destroying the twin {name}, which an earlier run left")
@@ -1308,18 +1476,15 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
         )
         if destroyed.status != 0:
             say(f"`fylgja-core twin destroy {name}` exited {destroyed.status}")
-    still = twins(env, address, host) if left else []
-    if still:
-        raise Stop(
-            1,
-            [
-                f"still standing after its destroy: {', '.join(still)}; the core, pid {pid}, is left up at "
-                f"{address}: read {records.core_log}, then run make demo-down again"
-            ],
-        )
-    end(pid, host)
-    records.core_pid.unlink(missing_ok=True)
-    say(f"the core, pid {pid}, ended")
+    if left:
+        try:
+            still = twins(env, address, host)
+        except Stop as unread:
+            raise Stop(1, [*unread.lines, left_up(pid, address)]) from None
+        if still:
+            raise Stop(1, [f"still standing after its destroy: {', '.join(still)}; {left_up(pid, address)}"])
+    records.unsettled.unlink(missing_ok=True)
+    ended("core", pid, the_core, records.core_pid, host)
 
 
 def make_words(target: str, local: Path, *variables: str) -> list[str]:
@@ -1352,14 +1517,17 @@ def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str
 
 def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host: Host) -> int:
     """Take the lock, and end what the demonstration recorded under `local` started: 0 where everything it had to
-    end is ended, and where no demonstration is recorded, `source` being absent, with nothing done.
+    end is ended and its store is settled, and where no demonstration is recorded, `source` being absent, with
+    nothing done.
 
-    Three acts, each tried whatever the one before did, a failure of each said and the exit 1 where any failed:
-    `settle`, the runner, every twin and the core; `make prefect-down`, only where `prefect.pid` names the pid
-    `make prefect-up` has recorded, the server it started for the demonstration, the record then removed, and a
-    record that names any other removed with nothing stopped; and `make <source>-down`, with `PURGE=1` where
-    `purge`. `source` is kept, so that a later `down` with `purge` knows whose volumes to remove. `main` is taken as
-    `up` takes it and is not read: each target finds the main checkout itself."""
+    Three acts, each tried whatever the one before did or raised, a failure of each said, an error of the host's by
+    its own word, and the exit 1 where any failed: `settle`, the runner, every twin and the core; `make
+    prefect-down`, only where `prefect.pid` names the pid `make prefect-up` has recorded, the server it started for
+    the demonstration, the record then removed, and a record that names any other removed with nothing stopped; and
+    `make <source>-down`, with `PURGE=1` where `purge`. The exit is 1 too wherever the marker `unsettled` still
+    stands at the end: a `down` that could not read the store never passes for one that found it empty. `source` is
+    kept, so that a later `down` with `purge` knows whose volumes to remove. `main` is taken as `up` takes it and is
+    not read: each target finds the main checkout itself."""
     locked(local, host)
     kept = records(local)
     named = host.text(kept.source)
@@ -1371,18 +1539,24 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
     listen = listen_of(env)
     failed: list[str] = []
 
+    def tried(what: str, act: Callable[[], None]) -> None:
+        try:
+            act()
+        except Stop as stop:
+            failed.extend(stop.lines)
+        except OSError as refused:
+            where = f": {refused.filename}" if refused.filename else ""
+            failed.append(f"{what} was cut short, {word_of(refused)}{where}")
+
     def make(target: str, *variables: str) -> bool:
         made = host.run(make_words(target, local, *variables), env=step_env(env, kept, listen), cwd=ROOT)
         if made.status != 0:
             failed.append(f"make {target} exited {made.status}")
         return made.status == 0
 
-    try:
-        settle(env, kept, local, listen, host)
-    except Stop as stop:
-        failed += stop.lines
-
-    if host.text(kept.prefect_pid) is not None:
+    def prefect_down() -> None:
+        if host.text(kept.prefect_pid) is None:
+            return
         server = prefect_home(local) / "server.pid"
         ours = recorded(kept.prefect_pid, host)
         if ours is None or ours != recorded(server, host):
@@ -1394,10 +1568,19 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
         elif make("prefect-down"):
             kept.prefect_pid.unlink(missing_ok=True)
 
-    if source in SOURCES:
-        make(f"{source}-down", *(["PURGE=1"] if purge else []))
-    else:
-        failed.append(f"{kept.source} names neither {' nor '.join(SOURCES)}: no source was stopped")
+    def source_down() -> None:
+        if source in SOURCES:
+            make(f"{source}-down", *(["PURGE=1"] if purge else []))
+        else:
+            failed.append(f"{kept.source} names neither {' nor '.join(SOURCES)}: no source was stopped")
+
+    tried("the end of the runner, the twins and the core", lambda: settle(env, kept, local, listen, host))
+    tried("make prefect-down", prefect_down)
+    tried(f"make {source}-down" if source in SOURCES else "the source's stop", source_down)
+    if host.text(kept.unsettled) is not None:
+        failed.append(
+            f"{kept.unsettled} stands: the demonstration's store was not read empty through a core of its own"
+        )
 
     for line in failed:
         fail(line)

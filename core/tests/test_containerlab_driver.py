@@ -1205,6 +1205,258 @@ def test_a_failed_rule_2_deploy_is_raised_and_destroys_nothing(
     assert any(r.levelname == "WARNING" and "destroy t failed" in r.getMessage() for r in caplog.records)
 
 
+# A deploy the driver killed (a create's or a step's apply cancelled, or a deploy past its budget) leaves the
+# creates containerlab had sent running in the daemon: a container is listed only once the daemon has made it,
+# after the kill, so the destroy's one listing can miss it (verified-facts.md, 2026-11-14). The teardown after such
+# a kill lists the lab again until it has been empty for the settle window.
+
+RM: tuple[str, ...] = ("docker", "rm", "-f")
+
+
+class Daemon:
+    """Docker under a killed deploy, on a fake clock that `sleep` moves: the lab's listing answers each container of
+    `late` whose time has come (the daemon has made it) and that no `docker rm -f` removed; the management network
+    is there from `network_at` until `docker network rm`. `containerlab deploy` waits until it is cancelled, or
+    raises `deploy` when given, or returns for `deploy_returns`. `rm` is the (status, stderr) of each removal;
+    `again` lists a removed container again at the next listing, as a daemon that keeps making it would. `docker
+    inspect` answers a node for each container named, and `containerlab destroy` removes each container listed and
+    the network."""
+
+    def __init__(
+        self, late: Mapping[str, float] | None = None, *, network_at: float | None = 0.0,
+        deploy: BaseException | None = None, deploy_returns: bool = False, rm: tuple[int, str] = (0, ""),
+        again: bool = False,
+    ) -> None:
+        self.now = 0.0
+        self.late = dict(late or {})
+        self.removed: set[str] = set()
+        self.network_at = network_at
+        self.network_removed = False
+        self.deploy = deploy
+        self.deploy_returns = deploy_returns
+        self.rm = rm
+        self.again = again
+        self.calls: list[tuple[float, tuple[str, ...]]] = []
+        self.budgets: list[float] = []
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+        await asyncio.sleep(0)
+
+    def listed(self) -> list[str]:
+        return sorted(h for h, at in self.late.items() if at <= self.now and h not in self.removed)
+
+    async def run(
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None,
+        log: Path | None = None,
+    ) -> str:
+        args = tuple(argv)
+        self.calls.append((self.now, args))
+        self.budgets.append(timeout_s)
+        if args[:2] == DEPLOY:
+            if self.deploy is not None:
+                raise self.deploy
+            if not self.deploy_returns:
+                await asyncio.Event().wait()
+            return ""
+        if args == PS:
+            return "".join(f"{h}\n" for h in self.listed())
+        if args == NETWORK:
+            if self.network_at is not None and self.network_at <= self.now and not self.network_removed:
+                return "[]\n"
+            raise CommandFailed(args, 1, "Error response from daemon: network clab-t not found\n")
+        if args == NETWORK_RM:
+            self.network_removed = True
+            return ""
+        if args[:4] == INSPECT:
+            return json.dumps([{**container(h.removeprefix("clab-t-")), "Name": f"/{h}"} for h in args[4:]])
+        if args[:2] == DESTROY:  # it removes the lab's nodes it lists, and the network
+            self.removed |= set(self.listed())
+            self.network_removed = True
+            return ""
+        raise AssertionError(f"unexpected command {args}")
+
+    async def run_status(
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None
+    ) -> tuple[int, str, str]:
+        args = tuple(argv)
+        self.calls.append((self.now, args))
+        self.budgets.append(timeout_s)
+        assert args[:3] == RM, f"unexpected command {args}"
+        status, stderr = self.rm
+        if status == 0 and not self.again:
+            self.removed.add(args[3])
+        return status, "", stderr
+
+    def commands(self) -> list[tuple[str, ...]]:
+        return [args for _, args in self.calls]
+
+
+def daemon_driver(tmp_path: Path, daemon: Daemon) -> ContainerlabDriver:
+    """The driver over `daemon`, its clock and sleep the daemon's, the host's residue staged as `driver` stages it."""
+    hosts = tmp_path / "etc-hosts"
+    if not hosts.exists():
+        hosts.write_text("127.0.0.1 localhost\n")
+    (tmp_path / "ssh_config.d").mkdir(exist_ok=True)
+    return ContainerlabDriver(tmp_path / "root", runner=daemon.run, status_runner=daemon.run_status,
+                              hosts_path=hosts, ssh_config_dir=tmp_path / "ssh_config.d", clock=daemon.clock,
+                              sleep=daemon.sleep)
+
+
+def killed_then_destroyed(tmp_path: Path, daemon: Daemon, d: ContainerlabDriver | None = None) -> ContainerlabDriver:
+    """Apply three-node with the deploy cancelled once it runs, as the loop cancels a create's apply for a
+    deletion, then destroy it; the calls are those of the destroy alone."""
+    d = d or daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+
+    async def body() -> None:
+        applying = asyncio.ensure_future(d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+        while not any(args[:2] == DEPLOY for _, args in daemon.calls):
+            await asyncio.sleep(0)
+        await cancelled(applying)
+        daemon.calls.clear()
+        daemon.budgets.clear()
+        await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    return d
+
+
+def settle_polls(start: float, end: float) -> list[tuple[float, tuple[str, ...]]]:
+    """The settle's listings, one every `SETTLE_POLL_S` from `start` to `end` inclusive."""
+    poll = driver_module.SETTLE_POLL_S
+    return [(start + i * poll, PS) for i in range(round((end - start) / poll) + 1)]
+
+
+def test_the_settle_constants_are_the_ruled_first_values() -> None:
+    assert (driver_module.SETTLE_POLL_S, driver_module.SETTLE_WINDOW_S) == (0.5, 5.0)
+
+
+def test_after_a_killed_deploy_the_teardown_removes_the_containers_the_daemon_made_after_it(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The cut of 2026-11-14: the destroy's listing came before the daemon had made the nodes, so it read residue,
+    # removed the network, and the three containers were listed afterwards, `Created`, the record gone.
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    late = {"clab-t-n1": 0.25, "clab-t-n2": 0.25, "clab-t-n3": 0.25}
+    daemon = Daemon(late)
+    d = killed_then_destroyed(tmp_path, daemon)
+    # Today's teardown at the kill's time, then the settle: the late nodes are listed at 0.5 and removed, and the
+    # listing is then empty from 1.0 to 6.0, the whole window; the network is looked for again after.
+    assert daemon.calls == [
+        (0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM),
+        (0.0, PS), (0.5, PS), *[(0.5, (*RM, h)) for h in sorted(late)],
+        *settle_polls(1.0, 6.0), (6.0, NETWORK)]
+    assert set(daemon.sleeps) == {driver_module.SETTLE_POLL_S}
+    assert daemon.listed() == [] and daemon.network_removed
+    assert all(b == DOCKER_TIMEOUT_S for b in daemon.budgets)
+    assert not (tmp_path / "root/containerlab/t").exists()
+    assert ("destroy t: its deploy was killed, so the daemon may still make its containers: the lab is listed "
+            "until it has been empty for 5s") in caplog.messages
+    assert ("destroy t: removed clab-t-n1, or it was already gone (docker answers 0 for both), since the daemon "
+            "made it after the deploy was killed") in caplog.messages
+    # The kill is settled: the next destroy of the twin is today's, and waits nothing.
+    daemon.calls.clear()
+    daemon.sleeps.clear()
+    p = planned("three-node")
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.commands() == [PS, NETWORK] and daemon.sleeps == []  # nothing left, and no settle
+
+
+def test_a_network_the_daemon_made_after_the_kill_is_removed_after_the_settle(tmp_path: Path) -> None:
+    # Killed before the network was listed: the teardown reads nothing at all, and the settle finds the network.
+    daemon = Daemon(network_at=0.25)
+    killed_then_destroyed(tmp_path, daemon)
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), *settle_polls(0.0, 5.0), (5.0, NETWORK), (5.0, NETWORK_RM)]
+
+
+def test_a_container_listed_at_the_last_poll_before_the_windows_end_restarts_the_window(tmp_path: Path) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25, "clab-t-n2": 5.25})
+    killed_then_destroyed(tmp_path, daemon)
+    settle = [args for _, args in daemon.calls[4:]]
+    assert [c for c in daemon.calls if c[1][:3] == RM] == [(0.5, (*RM, "clab-t-n1")), (5.5, (*RM, "clab-t-n2"))]
+    # Empty from 1.0, n2 at 5.5 (the poll before 6.0 would end it), empty again from 6.0 to 11.0.
+    assert daemon.calls[-1] == (11.0, NETWORK) and daemon.calls[-2] == (11.0, PS)
+    assert settle.count(PS) == 1 + 1 + 10 + 11
+
+
+def test_a_deploy_killed_at_its_budget_is_settled_too(tmp_path: Path) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25}, deploy=CommandFailed(("containerlab", "deploy"), TIMED_OUT,
+                                                              "timed out after 240 s"))
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    with pytest.raises(CommandFailed):
+        bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert (0.5, (*RM, "clab-t-n1")) in daemon.calls and daemon.calls[-1] == (6.0, NETWORK)
+
+
+@pytest.mark.parametrize("how", ["returned", "failed"])
+def test_a_deploy_the_driver_did_not_kill_leaves_the_destroy_as_it_is(tmp_path: Path, how: str) -> None:
+    # A deploy that ended by itself, ok or with its own status, had every create answered: no listing is added.
+    daemon = Daemon({"clab-t-n1": 0.25}, deploy=CommandFailed(("containerlab", "deploy"), 1, "") if how == "failed"
+                    else None, deploy_returns=how == "returned")
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    if how == "failed":
+        with pytest.raises(CommandFailed):
+            bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    else:
+        bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM)]
+    assert daemon.sleeps == []
+
+
+def test_a_destroy_of_a_twin_no_deploy_ran_for_waits_nothing(tmp_path: Path) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25})
+    p = planned("three-node")
+    bounded(lambda: daemon_driver(tmp_path, daemon).destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.commands() == [PS, NETWORK, NETWORK, NETWORK_RM] and daemon.sleeps == []
+
+
+def test_a_late_container_that_cannot_be_removed_fails_the_destroy_and_the_next_one_settles_again(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25}, rm=(1, "Error response from daemon: removal of container clab-t-n1 is "
+                                                "already in progress"))
+    d = daemon_driver(tmp_path, daemon)
+    with pytest.raises(CommandFailed) as raised:
+        killed_then_destroyed(tmp_path, daemon, d)
+    assert raised.value.argv == (*RM, "clab-t-n1")
+    assert daemon.calls[-1] == (0.5, (*RM, "clab-t-n1"))  # nothing after the failure: no network, no directory
+    assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
+    assert any(r.levelname == "WARNING" and r.getMessage().startswith("destroy t failed") for r in caplog.records)
+    # The loop's retry, on the same driver: the kill is not forgotten, so the next destroy settles again.
+    daemon.rm = (0, "")
+    daemon.calls.clear()
+    p = planned("three-node")
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    assert daemon.calls == [(0.5, PS), (0.5, (*INSPECT, "clab-t-n1")),
+                            (0.5, ("containerlab", "destroy", "-t", topology, "--cleanup")), (0.5, NETWORK),
+                            *settle_polls(0.5, 5.5), (5.5, NETWORK)]
+    assert daemon.listed() == [] and not (tmp_path / "root/containerlab/t").exists()
+
+
+def test_a_lab_still_listed_past_the_destroys_budget_is_a_driver_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A container the daemon lists again after each removal never lets the window pass: the settle is bounded.
+    monkeypatch.setattr(driver_module, "destroy_budget", lambda *args: 3.0)
+    daemon = Daemon({"clab-t-n1": 0.25}, again=True)
+    with pytest.raises(DriverFailed, match=r"^the lab t still lists containers 3s after its teardown: clab-t-n1$"):
+        killed_then_destroyed(tmp_path, daemon)
+    assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
+
+
 def test_an_unreadable_hosts_file_holds_no_residue(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     unreadable = tmp_path / "hosts-is-a-directory"
     unreadable.mkdir()

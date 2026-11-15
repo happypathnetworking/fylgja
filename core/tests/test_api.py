@@ -1591,3 +1591,16 @@ def test_403_is_described_as_reserved_as_the_rules_say() -> None:
     server = ROOT / "core" / "src" / "fylgja_core" / "server"
     filed = [p.name for p in server.glob("*.py") if "auth.forbidden" in p.read_text()]
     assert filed == []
+
+
+def test_the_build_is_described_for_people_and_its_form_is_not_promised() -> None:
+    description = DOCUMENT["components"]["schemas"]["Version"]["properties"]["build"]["description"]
+    assert "<version> (commit <commit>)" in description
+    assert "may change within major 1" in description
+    assert "--version" not in description
+
+
+def test_the_document_says_nothing_in_front_of_the_server_ends_tls() -> None:
+    description = DOCUMENT["servers"][0]["description"]
+    assert "nothing stands in front" not in description
+    assert "nothing in front of it ends TLS" in description

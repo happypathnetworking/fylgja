@@ -1,0 +1,4 @@
+# The build backend of the published wheels, for `make wheels` (`uv build --build-constraints`): the setuptools every
+# reading of the release's builds was made with (design/verified-facts.md, "uv 0.12.23"). Each member's
+# `build-system.requires` is `setuptools>=80`; a new setuptools is taken here, by hand, after a wheel check passes on it.
+setuptools==84.2.1

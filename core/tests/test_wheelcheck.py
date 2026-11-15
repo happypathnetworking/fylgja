@@ -18,6 +18,7 @@ import zipfile
 from functools import cache
 from pathlib import Path
 from types import ModuleType
+from typing import ClassVar
 
 import pytest
 from test_boundary_base import BASE
@@ -375,19 +376,22 @@ def test_a_published_wheel_states_the_projects_metadata_and_any_other_is_named(t
     good = _published_fields(module, True)
     module.published_metadata(_described(tmp_path, good, readme), "tree/main/docs", core=True)
     module.published_metadata(_described(tmp_path, _published_fields(module, False)), "tree/main/readers/netbox")
+    # Each fault, and the line of the failure that names it.
     bad = {
-        "no expression": [f for f in good if not f.startswith("License-Expression")],
-        "another expression": [f.replace("Apache-2.0", "MIT") for f in good],
-        "a missing url": [f for f in good if not f.startswith("Project-URL: Changelog")],
-        "a missing classifier": [f for f in good if "Typing" not in f],
-        "an extra classifier": [*good, "Classifier: License :: OSI Approved :: Apache Software License"],
-        "an author": [*good, "Author-email: someone@example.org"],
-        "no content type": [f for f in good if not f.startswith("Description-Content-Type")],
+        "License-Expression is None": [f for f in good if not f.startswith("License-Expression")],
+        "License-Expression is ['MIT']": [f.replace("Apache-2.0", "MIT") for f in good],
+        "Project-URL is": [f for f in good if not f.startswith("Project-URL: Changelog")],
+        "Classifier is": [f for f in good if "Typing" not in f],
+        "'License :: OSI Approved :: Apache Software License'": [
+            *good, "Classifier: License :: OSI Approved :: Apache Software License"],
+        "Author-email is ['someone@example.org']": [*good, "Author-email: someone@example.org"],
+        "Description-Content-Type is None": [f for f in good if not f.startswith("Description-Content-Type")],
     }
-    for why, fields in bad.items():
-        with pytest.raises(module.Failure, match="METADATA"):
+    for said, fields in bad.items():
+        with pytest.raises(module.Failure, match="METADATA") as raised:
             module.published_metadata(_described(tmp_path, fields, readme), "tree/main/docs", core=True)
-        assert why
+        (line,) = [line for line in str(raised.value).splitlines()[1:]]
+        assert said in line, (said, line)
     with pytest.raises(module.Failure, match="README"):
         module.published_metadata(_described(tmp_path, good, "another text"), "tree/main/docs", core=True)
     with pytest.raises(module.Failure, match="Classifier"):
@@ -414,3 +418,161 @@ def test_a_wheel_holds_the_roots_licence_or_is_named(tmp_path: Path) -> None:
         wheel = _described(tmp_path, ["Name: x"], licence=licence)
         with pytest.raises(module.Failure, match="LICENSE"):
             module.held_licence(wheel, "fylgja_core", expected)
+
+
+def test_the_netbox_readers_links_directory_is_the_two_wheels_alone(tmp_path: Path,
+                                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    core = tmp_path / "fylgja_core-1.0.0rc1-py3-none-any.whl"
+    reader = tmp_path / "netbox-reader" / "dist" / "fylgja_netbox-1.0.0rc1-py3-none-any.whl"
+    reader.parent.mkdir(parents=True)
+    for wheel in (core, reader):
+        wheel.write_bytes(b"a wheel")
+    (reader.parent / "fylgja_infrahub-1.0.0rc1-py3-none-any.whl").write_bytes(b"another, built beside it")
+    for name in ("versioned", "requires_core", "held_commit", "published_metadata", "held_licence",
+                 "carried_by_netbox_reader", "run", "answers_version", "refused_without_token"):
+        monkeypatch.setattr(module, name, lambda *a, **k: None)
+    monkeypatch.setattr(module, "build_netbox_reader", lambda tmp: reader)
+    monkeypatch.setattr(module, "base_requirements", lambda wheel: ["httpx>=0.27.0,<1"])
+    monkeypatch.setattr(module, "venv", lambda path: path / "bin")
+    installs: list[tuple[tuple[str, ...], list[str] | None]] = []
+
+    def install(env: Path, *requirements: str, constraints: Path | None = None,
+                find_links: Path | None = None) -> None:
+        installs.append((requirements, sorted(p.name for p in find_links.iterdir()) if find_links else None))
+
+    monkeypatch.setattr(module, "install", install)
+    module.check_netbox_reader(tmp_path, core)
+    version = module.tree_version()
+    by_name = [links for requirements, links in installs if requirements == (f"fylgja-netbox=={version}",)]
+    assert by_name == [sorted([core.name, reader.name])]
+    assert [links for _, links in installs if links is not None] == by_name
+
+
+def test_a_loopback_request_goes_by_no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    import http.server
+    import socket
+    import threading
+
+    class Answer(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"direct")
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with socket.socket() as probe:  # a port nothing listens on, as the proxy the environment names
+        probe.bind(("127.0.0.1", 0))
+        closed = probe.getsockname()[1]
+    for name in ("no_proxy", "NO_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    for name in ("http_proxy", "HTTP_PROXY"):
+        monkeypatch.setenv(name, f"http://127.0.0.1:{closed}")
+    server = http.server.HTTPServer(("127.0.0.1", 0), Answer)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert _script().answers(f"http://127.0.0.1:{server.server_address[1]}/", "t") == (200, b"direct")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+class _Server:
+    """A `subprocess.Popen` of the server that never ends by itself: its `returncode` is `None` until it is signalled
+    (143) or killed (-9); it records its environment and whether it was killed and waited on."""
+
+    made: ClassVar[list[_Server]] = []
+
+    def __init__(self, argv: list[str], *, env: dict[str, str], stdout: object, **kw: object) -> None:
+        self.env = env
+        self.returncode: int | None = None
+        self.killed = self.waited = False
+        _Server.made.append(self)
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def kill(self) -> None:
+        self.killed = True
+        self.returncode = -9
+
+    def wait(self, timeout: float | None = None) -> int | None:
+        self.waited = True
+        return self.returncode
+
+    def send_signal(self, sig: int) -> None:
+        self.returncode = 143
+
+
+def _serving(monkeypatch: pytest.MonkeyPatch, replies: list[object]) -> ModuleType:
+    """The script with the token, the hash, the server and its answers faked: `replies` are what `answers` gives in
+    turn, an exception raised, anything else returned."""
+    import secrets
+
+    module = _script()
+    _Server.made.clear()
+    monkeypatch.setattr(module.secrets, "token_urlsafe", lambda n: "the-token-of-the-check")
+    assert module.secrets is secrets
+
+    def hashed(argv: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        assert kw.get("input") == "the-token-of-the-check"
+        return subprocess.CompletedProcess(argv, 0, "ab" * 32 + "\n", "")
+
+    monkeypatch.setattr(module.subprocess, "run", hashed)
+    monkeypatch.setattr(module.subprocess, "Popen", _Server)
+    monkeypatch.setattr(module.time, "sleep", lambda s: None)
+    replies = list(replies)
+
+    def answers(url: str, token: str, body: bytes | None = None) -> tuple[int, bytes]:
+        assert token == "the-token-of-the-check"
+        reply = replies.pop(0)
+        if isinstance(reply, BaseException):
+            raise reply
+        assert isinstance(reply, tuple)
+        return reply
+
+    monkeypatch.setattr(module, "answers", answers)
+    monkeypatch.setenv("PYTHONPATH", "/elsewhere")
+    monkeypatch.setenv("PYTHONHOME", "/elsewhere")
+    monkeypatch.setenv("FYLGJA_PACKAGES", "/elsewhere")
+    return module
+
+
+def _holds_the_token(tmp: Path) -> list[str]:
+    return [str(p) for p in tmp.rglob("*") if p.is_file() and b"the-token-of-the-check" in p.read_bytes()]
+
+
+def test_serve_fails_at_once_on_an_answer_other_than_200_and_ends_the_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _serving(monkeypatch, [(503, b"not ready")])
+    (tmp_path / "env").mkdir()
+    with pytest.raises(module.Failure, match="503") as raised:
+        module.serve(tmp_path, tmp_path / "env", "1.0.0rc1 (commit unknown)")
+    assert "the-token-of-the-check" not in str(raised.value)
+    (server,) = _Server.made
+    assert server.killed and server.waited
+    assert not [k for k in server.env if k.startswith(("FYLGJA_", "PYTHON")) and k not in (
+        "FYLGJA_STORE", "FYLGJA_TOKENS", "FYLGJA_LISTEN")]
+    assert (tmp_path / "serve" / "tokens").read_text() == "ab" * 32 + " wheelcheck\n"
+    assert _holds_the_token(tmp_path) == []
+
+
+def test_serve_waits_through_a_broken_answer_and_ends_the_server_on_a_wrong_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import http.client
+    import json
+
+    module = _serving(monkeypatch, [http.client.BadStatusLine("garbled"), ConnectionRefusedError(),
+                                    (200, json.dumps({"build": "another"}).encode())])
+    (tmp_path / "env").mkdir()
+    with pytest.raises(module.Failure, match="says the build 'another'") as raised:
+        module.serve(tmp_path, tmp_path / "env", "1.0.0rc1 (commit unknown)")
+    assert "the-token-of-the-check" not in str(raised.value)
+    (server,) = _Server.made
+    assert server.killed and server.waited
+    assert _holds_the_token(tmp_path) == []

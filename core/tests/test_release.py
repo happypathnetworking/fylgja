@@ -74,7 +74,6 @@ def load_setup(member: str, monkeypatch: pytest.MonkeyPatch) -> tuple[ModuleType
 def test_the_version_is_one_line_of_a_release_or_a_candidate() -> None:
     assert (ROOT / "VERSION").read_text() == VERSION + "\n"
     assert FORM.fullmatch(VERSION), VERSION
-    assert VERSION == "1.0.0rc1"
 
 
 @pytest.mark.parametrize("member", MEMBERS)
@@ -347,3 +346,31 @@ def test_the_changelogs_head_is_the_version() -> None:
     for line in text.splitlines():
         if line.startswith("## "):
             assert re.fullmatch(r"## \S+ - (unreleased|\d{4}-\d{2}-\d{2})", line), line
+
+
+def _wheels_recipe() -> list[str]:
+    """The recipe of `make wheels`, its lines without the leading tab."""
+    lines = (ROOT / "Makefile").read_text().splitlines()
+    start = lines.index("wheels:") + 1
+    end = next(i for i in range(start, len(lines)) if not lines[i].startswith("\t"))
+    return [line[1:] for line in lines[start:end]]
+
+
+def test_make_wheels_removes_each_members_build_directory_first() -> None:
+    recipe = _wheels_recipe()
+    (build,) = [i for i, line in enumerate(recipe) if "uv build" in line]
+    removed = [line for line in recipe[:build] if line.startswith("rm -rf ")]
+    assert removed, recipe
+    gone = {word for line in removed for word in line.split()[2:]}
+    assert {"dist", "core/build", "readers/infrahub/build", "readers/netbox/build"} <= gone
+
+
+def test_make_wheels_builds_with_the_setuptools_the_build_constraints_name() -> None:
+    (build,) = [line for line in _wheels_recipe() if "uv build" in line]
+    assert "--build-constraints build-constraints.txt" in build
+    lines = [line.strip() for line in (ROOT / "build-constraints.txt").read_text().splitlines()]
+    assert [line for line in lines if line and not line.startswith("#")] == ["setuptools==84.2.1"]
+    # Each published member's backend allows the pinned version.
+    for member in ("core", "readers/infrahub", "readers/netbox"):
+        with (ROOT / member / "pyproject.toml").open("rb") as f:
+            assert tomllib.load(f)["build-system"]["requires"] == ["setuptools>=80"], member

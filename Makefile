@@ -106,14 +106,16 @@ wheelcheck:
 	python3 -I scripts/wheelcheck.py
 
 # The three published wheels (D-106), core, readers/infrahub and readers/netbox, and no other, built by uv into dist/
-# (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. scripts/publish.py check holds
-# them, the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check
-# refuses any file but the three wheels. Needs the network.
+# (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. Each member's build/ is
+# removed first, so that no file since removed from the tree rides along from an earlier build. The backend is the
+# setuptools build-constraints.txt names, not whatever the index holds that day. scripts/publish.py check holds them,
+# the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check refuses any
+# file but the three wheels. Needs the network.
 wheels:
-	rm -rf dist
+	rm -rf dist core/build readers/infrahub/build readers/netbox/build
 	mkdir dist
 	for member in core readers/infrahub readers/netbox; do \
-		FYLGJA_BUILD_COMMIT=$(COMMIT) uv build --wheel --no-python-downloads --python python3 --out-dir dist $$member || exit 1; \
+		FYLGJA_BUILD_COMMIT=$(COMMIT) uv build --wheel --no-python-downloads --python python3 --build-constraints build-constraints.txt --out-dir dist $$member || exit 1; \
 	done
 	rm -f dist/.gitignore
 

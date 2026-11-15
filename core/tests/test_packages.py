@@ -76,3 +76,30 @@ def test_an_install_with_neither_has_none(tmp_path: Path, monkeypatch: pytest.Mo
         packages.shipped("bare_pkg")
     with pytest.raises(ModuleNotFoundError):
         packages.shipped("no_such_package_anywhere")
+
+
+def test_an_install_with_no_shipped_directory_at_all_has_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = tmp_path / "site" / "empty_pkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path / "site"))
+    importlib.invalidate_caches()
+    with pytest.raises(FileNotFoundError, match="empty_pkg carries no packages"):
+        packages.shipped("empty_pkg")
+
+
+def test_a_package_under_src_with_no_ancestor_holding_both_has_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A checkout's shape with one of the two directories at its root, and the other one level above it: no one
+    # directory holds both, so neither is taken.
+    checkout = tmp_path / "outer" / "checkout"
+    package = checkout / "src" / "src_pkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (checkout / "psp").mkdir()
+    (tmp_path / "outer" / "probes").mkdir()
+    monkeypatch.syspath_prepend(str(checkout / "src"))
+    importlib.invalidate_caches()
+    with pytest.raises(FileNotFoundError, match="src_pkg carries no packages"):
+        packages.shipped("src_pkg")

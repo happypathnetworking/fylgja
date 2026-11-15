@@ -17,6 +17,7 @@ import argparse
 import re
 import sys
 import zipfile
+from datetime import date
 from email.parser import Parser
 from pathlib import Path
 
@@ -54,6 +55,11 @@ def head(changelog: str) -> tuple[str, str]:
             found = HEADING.match(line)
             if found is None:
                 raise Failure(f"CHANGELOG.md: the first heading {line!r} is not '## <version> - <date or unreleased>'")
+            if found.group(2) != "unreleased":
+                try:
+                    date.fromisoformat(found.group(2))
+                except ValueError:
+                    raise Failure(f"CHANGELOG.md: the first heading's date {found.group(2)} is no date") from None
             return found.group(1), found.group(2)
     raise Failure("CHANGELOG.md holds no '## ' heading")
 

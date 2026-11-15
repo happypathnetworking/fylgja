@@ -9133,6 +9133,28 @@ once. *(2026-11-13)*
   - `make wheelcheck` holds all of it: each published wheel's expression, three URLs, exact classifiers,
     no author and `<package>/LICENSE` equal to the root's, the core's content type and description,
     and the example's classifier.
+- **Two readings of the version's task, as they were kept** *(2026-11-15, uv 0.12.23)*.
+  - **`make venv` over the tree's own cache-keys**, which name `setup.cfg` beside `pyproject.toml`,
+    `setup.py` and the root `VERSION`: its output was not saved. The task's report says it rebuilt
+    the four members and left the lock unchanged; the saved readings above are of the scratch copy's
+    keys, without `setup.cfg`. In the fix wave, with the core's keys only rewrapped, `make venv`
+    exited 0 and reinstalled the four at `1.0.0rc1`, `uv.lock` unchanged.
+  - **The by-name install takes a candidate without a pre-release flag.** The wheel check's line,
+    saved in the run's `wheelcheck.log`: `fylgja-netbox==1.0.0rc1` "installs by name from a
+    directory of the two wheels and no index, with no pre-release flag", the core's wheel at
+    `1.0.0rc1` taken for the reader's `fylgja-core>=1.0.0rc1,<2`. The install names the reader's
+    version exactly, and the core's range names a candidate as its floor; an install by a bare
+    name, or under a range with no candidate in it, was not read.
+- **A build's backend constrained** *(2026-11-15, uv 0.12.23)*. `uv build --help` lists
+  `-b, --build-constraints <BUILD_CONSTRAINTS>`, "Constrain build dependencies using the given
+  requirements files when building distributions" (env `UV_BUILD_CONSTRAINT`). The uv lock holds
+  no build dependency: no `setuptools` entry is in `uv.lock`, nor in `core/.venv`. `make wheels`
+  with `build-constraints.txt` holding `setuptools==84.2.1` wrote the three wheels, each `WHEEL`
+  saying `Generator: setuptools (84.2.1)`; `uv build --wheel core` with a constraints file of
+  `setuptools==79.0.1` exited 2, "Because you require setuptools>=80 and setuptools==79.0.1, we can
+  conclude that your requirements are unsatisfiable", so the file is read. Each run once. Only
+  `make wheels` is constrained: the wheel check's, the image's and the editable builds take what
+  `setuptools>=80` resolves.
 - **Not read:**
   - `uv sync` against a venv of another Python minor.
   - the uv'd CI: it has not run, and plan 5's run is its first.

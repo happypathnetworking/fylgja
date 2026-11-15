@@ -119,7 +119,7 @@ def test_every_fault_of_the_wheels_is_named_in_one_pass(tmp_path: Path) -> None:
 def test_an_undated_or_other_head_is_refused(tmp_path: Path) -> None:
     three(tmp_path / "dist")
     for head, why in (("## 1.0.0rc1 - unreleased", "unreleased"), ("## 1.0.1 - 2026-11-20", "1.0.1"),
-                      ("## 1.0.0rc1 2026-11-20", "heading")):
+                      ("## 1.0.0rc1 2026-11-20", "heading"), ("## 1.0.0rc1 - 2026-99-99", "2026-99-99")):
         root = tree(tmp_path / "r", head=head)
         with pytest.raises(_script().Failure) as caught:
             _script().check("v1.0.0rc1", COMMIT, tmp_path / "dist", root)

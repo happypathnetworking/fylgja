@@ -20,7 +20,7 @@ read directly. The image:
   `fylgja_core/shipped/psp` and `fylgja_core/shipped/probes` under the installed package, holding the YAML git tracks
   in the tree's `psp/` and `probes/`, by name and by bytes, and no other file (`git ls-files`): a file git ignores
   under a directory the context allows (an editor's `*.swp` or `*~`) reaches the context with no `-dirty` tag to say
-  so, and fails here;
+  so, and fails here; and its wheel's `fylgja_core/LICENSE` is the root's `LICENSE`;
 
 - answers `fylgja-core --version` and `fylgja-core-server --version` with the tree's version, `VERSION`, and a commit
   that begins with the tag's twelve characters and has `-dirty` exactly where the tag has it: the image's build stage
@@ -59,7 +59,8 @@ print(json.dumps({"here": str(here), "read": str(schemas.formats_dir()), "files"
 """
 
 
-# Run inside the image: where `packages.shipped()` answers, and the files under each directory, by path and bytes.
+# Run inside the image: where `packages.shipped()` answers, the files under each directory, by path and bytes, and the
+# bytes of the installed package's `LICENSE` (null where it has none).
 PROBE_PACKAGES = """
 import base64, json
 from pathlib import Path
@@ -69,7 +70,9 @@ here = Path(fylgja_core.__file__).resolve().parent / "shipped"
 found = packages.shipped()
 files = {f"{d.name}/{p.name}": base64.b64encode(p.read_bytes()).decode()
          for d in found for p in sorted(d.rglob("*")) if p.is_file()}
-print(json.dumps({"here": str(here), "found": [str(d) for d in found], "files": files}))
+licence = here.parent / "LICENSE"
+held = base64.b64encode(licence.read_bytes()).decode() if licence.is_file() else None
+print(json.dumps({"here": str(here), "found": [str(d) for d in found], "files": files, "licence": held}))
 """
 
 
@@ -174,8 +177,10 @@ def tracked(paths: list[str]) -> set[str]:
 
 
 def check_packages(image: str) -> int:
-    """How many package files the image carries, once it has no copies of its own, sets no `FYLGJA_PACKAGES`, and its
-    `packages.shipped()` holds the tree's tracked YAML of `psp/` and `probes/`, by name and by bytes, and no other."""
+    """How many package files the image carries, once it has no copies of its own (`test -e` exiting 1; any other
+    status but 0 a failure, never taken as absent), sets no `FYLGJA_PACKAGES`, its `packages.shipped()` holds the
+    tree's tracked YAML of `psp/` and `probes/`, by name and by bytes, and no other, and its wheel's
+    `fylgja_core/LICENSE` is the root's `LICENSE`."""
     inspected = docker(["image", "inspect", "--format", "{{json .Config.Env}}", image]).stdout
     try:
         environment = json.loads(inspected)
@@ -186,8 +191,12 @@ def check_packages(image: str) -> int:
     if any(str(entry).split("=", 1)[0] == VARIABLE for entry in environment):
         raise Failure(f"the image sets {VARIABLE}: its packages are the wheel's, with the variable unset")
     for path in GONE:
-        if docker([*RUN, "--entrypoint", "test", image, "-e", path], status=None).returncode == 0:
+        tested = docker([*RUN, "--entrypoint", "test", image, "-e", path], status=None)
+        if tested.returncode == 0:
             raise Failure(f"the image still holds its own copy, {path}")
+        if tested.returncode != 1:
+            raise Failure(f"test -e {path} in the image exited {tested.returncode}, neither 0 nor 1:\n"
+                          f"{tested.stdout}{tested.stderr}")
     done = docker([*RUN, "--entrypoint", "python", image, "-I", "-c", PROBE_PACKAGES])
     try:
         found = json.loads(done.stdout)
@@ -210,6 +219,10 @@ def check_packages(image: str) -> int:
     if problems:
         raise Failure("the image's packages differ from git's tracked YAML of psp/ and probes/:\n"
                       + "\n".join(problems))
+    if found.get("licence") is None:
+        raise Failure("the image's fylgja_core holds no LICENSE")
+    if base64.b64decode(found["licence"]) != (ROOT / "LICENSE").read_bytes():
+        raise Failure("the image's fylgja_core/LICENSE is not the root's LICENSE")
     return len(carried)
 
 
@@ -261,7 +274,8 @@ def main(argv: list[str]) -> int:
     print(f"imagecheck: given no token file it exits 2 naming {REFUSED}: {refusal}")
     print(f"imagecheck: it carries the core's {count} formats, formats/'s byte for byte, and reads them there")
     print(f"imagecheck: it has no copies of psp/ or probes/ and sets no {VARIABLE}; its wheel's shipped packages "
-          f"are git's {carried} tracked YAML files there, byte for byte, and no other")
+          f"are git's {carried} tracked YAML files there, byte for byte, and no other, and its "
+          "fylgja_core/LICENSE is the root's")
     print(f"imagecheck: fylgja-core and fylgja-core-server answer --version with the tree's version and the commit "
           f"{built}, the tag's")
     print(image.rpartition(":")[2])

@@ -100,7 +100,10 @@ def test_an_install_with_no_packages_is_refused_naming_the_variable(monkeypatch:
     with pytest.raises(config.Misconfigured) as e:
         config.from_environ(env)
     assert (e.value.variable, e.value.rule) == ("FYLGJA_PACKAGES", "settings.missing")
-    assert "this install carries no packages" in str(e.value)
+    assert "is empty or not set, and this install carries no packages" in str(e.value)
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ({**env, "FYLGJA_PACKAGES": ""})
+    assert "is empty or not set, and this install carries no packages" in str(e.value)
 
 
 def test_an_empty_required_variable_counts_as_missing() -> None:

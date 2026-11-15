@@ -274,7 +274,7 @@ def _packages(given: str) -> tuple[Path, ...]:
         try:
             return tuple(packages_module.shipped())
         except FileNotFoundError as e:
-            raise Misconfigured("FYLGJA_PACKAGES", "is not set, and this install carries no packages") from e
+            raise Misconfigured("FYLGJA_PACKAGES", "is empty or not set, and this install carries no packages") from e
     found = tuple(Path(p) for p in given.split(":") if p)
     if not found:
         raise Misconfigured("FYLGJA_PACKAGES", "names no directory")

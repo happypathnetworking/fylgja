@@ -106,6 +106,7 @@ import ast
 import email.message
 import email.parser
 import functools
+import http.client
 import json
 import os
 import re
@@ -909,12 +910,16 @@ def stub_docker(directory: Path) -> Path:
     return directory
 
 
+# Requests to the server on loopback go by no proxy, whatever the environment's `*_proxy` say.
+DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def answers(url: str, token: str, body: bytes | None = None) -> tuple[int, bytes]:
-    """The status and body of `url`, a GET or, given `body`, a JSON POST, with the bearer token."""
+    """The status and body of `url`, a GET or, given `body`, a JSON POST, with the bearer token, by no proxy."""
     request = urllib.request.Request(url, data=body, headers={"Authorization": f"Bearer {token}",
                                                               "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(request, timeout=10) as reply:
+        with DIRECT.open(request, timeout=10) as reply:
             return reply.status, reply.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -924,7 +929,9 @@ def serve(tmp: Path, env: Path, build: str) -> float:
     """`fylgja-core-server`, started from the environment `env` with no `FYLGJA_PACKAGES`: the seconds to its first
     answer of `GET /v1/version`, which must come within `START_S` and say `build`; `three-node.json` filed and its
     bundle built, 201; and SIGTERM ending it with 143 within `STOP_S`. The token is made here, hashed by the installed
-    `auth.hash_token`, handed to it by stdin, written as its hash alone and printed nowhere."""
+    `auth.hash_token`, handed to it by stdin, written as its hash alone and printed nowhere. The server is started
+    with no `FYLGJA_*` or `PYTHON*` variable of this process; an answer other than 200 fails at once, naming it, and
+    a failure ends the server and waits on it."""
     token = secrets.token_urlsafe(24)
     hashing = "import sys; from fylgja_core.server import auth; print(auth.hash_token(sys.stdin.read()))"
     hashed = subprocess.run([str(env / "python"), "-I", "-c", hashing], input=token, capture_output=True, text=True,
@@ -939,7 +946,7 @@ def serve(tmp: Path, env: Path, build: str) -> float:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    environment = {k: v for k, v in os.environ.items() if not k.startswith("FYLGJA_")}
+    environment = {k: v for k, v in os.environ.items() if not k.startswith(("FYLGJA_", "PYTHON"))}
     (root / "bin").mkdir()
     environment["PATH"] = f"{stub_docker(root / 'bin')}:{os.environ.get('PATH', os.defpath)}"
     environment.update(FYLGJA_STORE=str(root / "store"), FYLGJA_TOKENS=str(tokens),
@@ -958,11 +965,14 @@ def serve(tmp: Path, env: Path, build: str) -> float:
                               f"answered:\n{log.read_text()}".replace(token, "<token>"))
             try:
                 status, body = answers(f"{base}/v1/version", token)
-                if status == 200:
-                    took = time.monotonic() - started
-                    break
-            except OSError:
+            except (OSError, http.client.HTTPException):
                 pass
+            else:
+                if status != 200:
+                    raise Failure(f"GET /v1/version answered {status}, not 200:\n"
+                                  + body.decode(errors="replace").replace(token, "<token>"))
+                took = time.monotonic() - started
+                break
             if time.monotonic() - started > START_S:
                 raise Failure(f"fylgja-core-server gave no answer to GET /v1/version within {START_S} s")
             time.sleep(0.1)

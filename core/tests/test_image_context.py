@@ -211,3 +211,48 @@ def test_imagecheck_reads_a_build_against_the_tag() -> None:
     ):
         with pytest.raises(check.Failure):
             check.parse_build(program, text, "1.0.0rc1", tag)
+
+
+def _docker(monkeypatch: pytest.MonkeyPatch, check: ModuleType, test_status: int, licence: bytes | None) -> None:
+    """`check.docker` faked for `check_packages`: no `FYLGJA_PACKAGES`, `test -e` exiting `test_status`, and the
+    probe answering the tree's packages and `licence` as the image's `fylgja_core/LICENSE` (`None`, none)."""
+    import base64
+    import subprocess
+
+    names = check.tracked([f"{name}/*.yaml" for name in check.PACKAGE_DIRS])
+    here = "/opt/venv/lib/python3.14/site-packages/fylgja_core/shipped"
+    probe = {"here": here, "found": [f"{here}/{name}" for name in check.PACKAGE_DIRS],
+             "files": {n: base64.b64encode((ROOT / n).read_bytes()).decode() for n in names},
+             "licence": None if licence is None else base64.b64encode(licence).decode()}
+
+    def docker(argv: list[str], status: int | None = 0) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["image", "inspect"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps(["PATH=/opt/venv/bin"]), "")
+        if "test" in argv:
+            assert status is None
+            return subprocess.CompletedProcess(argv, test_status, "", "")
+        return subprocess.CompletedProcess(argv, 0, json.dumps(probe), "")
+
+    monkeypatch.setattr(check, "docker", docker)
+
+
+def test_imagecheck_takes_a_copy_as_absent_only_where_test_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    check = _imagecheck()
+    licence = (ROOT / "LICENSE").read_bytes()
+    _docker(monkeypatch, check, 1, licence)
+    assert check.check_packages("fylgja-core:x") > 0
+    _docker(monkeypatch, check, 0, licence)
+    with pytest.raises(check.Failure, match="still holds its own copy"):
+        check.check_packages("fylgja-core:x")
+    for status in (2, 125, 126):  # test's error, docker's, the entry point's
+        _docker(monkeypatch, check, status, licence)
+        with pytest.raises(check.Failure, match=rf"exited {status}"):
+            check.check_packages("fylgja-core:x")
+
+
+def test_imagecheck_holds_the_images_licence_to_the_roots(monkeypatch: pytest.MonkeyPatch) -> None:
+    check = _imagecheck()
+    for licence in (None, b"another licence\n"):
+        _docker(monkeypatch, check, 1, licence)
+        with pytest.raises(check.Failure, match="LICENSE"):
+            check.check_packages("fylgja-core:x")

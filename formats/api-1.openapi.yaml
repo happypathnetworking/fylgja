@@ -19,7 +19,7 @@ servers:
   - url: http://127.0.0.1:7650
     description: >-
       Local development, over HTTP on loopback. The server ends TLS itself where FYLGJA_TLS_CERT and
-      FYLGJA_TLS_KEY are set (D-063); nothing stands in front of it, and a client reaches it at the address and
+      FYLGJA_TLS_KEY are set (D-063); nothing in front of it ends TLS, and a client reaches it at the address and
       scheme its operator gives.
 security:
   - bearer: []
@@ -656,8 +656,9 @@ components:
           type: string
           minLength: 1
           description: >-
-            The core's build, `<version> (commit <commit>)`, the commit `unknown` where the build could not
-            read it; as each command's --version prints it, and bug reports show it.
+            The core's build, for people: its version and the commit it was built at, as they were read, such
+            as `<version> (commit <commit>)`, the commit `unknown` where the build could not read it. Bug
+            reports show it. Its form may change within major 1, so a client shows it and parses nothing of it.
         formats:
           type: object
           additionalProperties: false

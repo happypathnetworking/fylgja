@@ -254,3 +254,81 @@ def test_the_cores_build_ships_each_packages_yaml_and_nothing_else(
     monkeypatch.setattr(module, "ROOT", copy)
     with pytest.raises(SystemExit, match=re.escape(str(copy / "probes"))):
         build_core(module, tmp_path / "lib2")
+
+
+PUBLISHED = ["core", "readers/infrahub", "readers/netbox"]
+REPOSITORY = "https://github.com/happypathnetworking/fylgja"
+CLASSIFIERS = {
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
+}
+
+
+@pytest.mark.parametrize("member", PUBLISHED)
+def test_each_published_distribution_states_its_metadata(member: str) -> None:
+    found = project(member)
+    documentation = f"{REPOSITORY}/tree/main/docs" if member == "core" else f"{REPOSITORY}/tree/main/{member}"
+    assert found["urls"] == {
+        "Repository": REPOSITORY,
+        "Changelog": f"{REPOSITORY}/blob/main/CHANGELOG.md",
+        "Documentation": documentation,
+    }
+    expected = CLASSIFIERS | ({"Operating System :: POSIX :: Linux"} if member == "core" else set())
+    assert len(found["classifiers"]) == len(set(found["classifiers"]))
+    assert set(found["classifiers"]) == expected
+    assert found["license"] == "Apache-2.0"
+    assert found["requires-python"] == ">=3.14"
+    assert "authors" not in found and "maintainers" not in found
+    if member == "core":
+        assert "readme" in found["dynamic"]
+        assert "readme" not in found
+    else:
+        assert found["readme"] == "README.md"
+
+
+def test_the_example_is_marked_never_to_be_uploaded() -> None:
+    found = project("orchestrator")
+    assert found["classifiers"] == ["Private :: Do Not Upload"]
+    assert "urls" not in found and "authors" not in found and "maintainers" not in found
+
+
+@pytest.mark.parametrize("member", PUBLISHED)
+def test_each_published_build_carries_the_licence(
+    member: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module, given = load_setup(member, monkeypatch)
+    monkeypatch.setenv(VARIABLE, HEX)
+    step = module.BuildPy()
+    step.build_lib = str(tmp_path / "lib")
+    step.run()
+    assert (tmp_path / "lib" / PACKAGES[member] / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
+    if member == "core":
+        assert given[0]["long_description"] == (ROOT / "README.md").read_text()
+        assert given[0]["long_description_content_type"] == "text/markdown"
+    else:
+        assert "long_description" not in given[0]
+
+    # a build whose root holds the packages but no LICENSE stops, naming the file
+    bare = tmp_path / "bare"
+    for name in ("psp", "probes"):
+        shutil.copytree(ROOT / name, bare / name)
+    monkeypatch.setattr(module, "ROOT", bare)
+    step = module.BuildPy()
+    step.build_lib = str(tmp_path / "lib2")
+    with pytest.raises(SystemExit, match=re.escape(str(bare / "LICENSE"))):
+        step.run()
+
+
+def test_the_example_build_is_not_given_the_licence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module, _ = load_setup("orchestrator", monkeypatch)
+    monkeypatch.setenv(VARIABLE, HEX)
+    step = module.BuildPy()
+    step.build_lib = str(tmp_path / "lib")
+    step.run()
+    assert not (tmp_path / "lib" / "fylgja_orchestrator" / "LICENSE").exists()

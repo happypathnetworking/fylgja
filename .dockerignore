@@ -8,5 +8,7 @@
 !psp
 !probes
 !VERSION
+!LICENSE
+!README.md
 **/__pycache__
 **/*.egg-info

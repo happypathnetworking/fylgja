@@ -108,6 +108,19 @@ class BuildPy(build_py):
         package = Path(self.build_lib) / "fylgja_core"
         self.mkpath(str(package))
         (package / "COMMIT").write_text(commit(os.environ, ROOT) + "\n")
+        # The licence's text, as package data: setuptools takes no licence file from outside the project, and the
+        # Apache License asks that a copy go with the work (D-106).
+        licence = ROOT / "LICENSE"
+        if not licence.is_file():
+            raise SystemExit(f"no {licence}: the wheel carries the repository's licence, the root's LICENSE")
+        self.copy_file(str(licence), str(package / "LICENSE"))
 
 
-setup(version=version(), cmdclass={"build_py": BuildPy})
+setup(
+    version=version(),
+    # The core's page on the index is the repository's README, which `readme` lists as dynamic: setuptools reads no
+    # file outside a project (D-106).
+    long_description=(ROOT / "README.md").read_text(),
+    long_description_content_type="text/markdown",
+    cmdclass={"build_py": BuildPy},
+)

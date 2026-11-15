@@ -343,3 +343,74 @@ def test_a_wheel_whose_shipped_packages_differ_from_the_trees_is_named(tmp_path:
     changed = {**carried, "fylgja_core/shipped/psp/arista_eos.yaml": b"changed\n"}
     with pytest.raises(module.Failure, match=r"differs from the tree's: psp/arista_eos\.yaml"):
         module.shipped(_shipped_wheel(tmp_path, changed))
+
+
+def _described(tmp_path: Path, fields: list[str], body: str = "", licence: bytes | None = None) -> Path:
+    """A wheel holding a `METADATA` of `fields` (one `Name: value` line each) and `body`, and `fylgja_core/LICENSE`
+    where `licence` is given."""
+    path = tmp_path / "fylgja_core-1.0.0rc1-py3-none-any.whl"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("fylgja_core-1.0.0rc1.dist-info/METADATA", "\n".join(fields) + "\n\n" + body)
+        if licence is not None:
+            archive.writestr("fylgja_core/LICENSE", licence)
+    return path
+
+
+def _published_fields(module: ModuleType, core: bool) -> list[str]:
+    classifiers = [*module.CLASSIFIERS, *([module.CORE_CLASSIFIER] if core else [])]
+    docs = "tree/main/docs" if core else "tree/main/readers/netbox"
+    return [
+        "Metadata-Version: 2.4", "Name: fylgja-core", "Version: 1.0.0rc1", "License-Expression: Apache-2.0",
+        f"Project-URL: Repository, {module.REPOSITORY}",
+        f"Project-URL: Changelog, {module.REPOSITORY}/blob/main/CHANGELOG.md",
+        f"Project-URL: Documentation, {module.REPOSITORY}/{docs}",
+        *(f"Classifier: {c}" for c in classifiers),
+        *(["Description-Content-Type: text/markdown"] if core else []),
+    ]
+
+
+def test_a_published_wheel_states_the_projects_metadata_and_any_other_is_named(tmp_path: Path) -> None:
+    module = _script()
+    readme = (ROOT / "README.md").read_text()
+    good = _published_fields(module, True)
+    module.published_metadata(_described(tmp_path, good, readme), "tree/main/docs", core=True)
+    module.published_metadata(_described(tmp_path, _published_fields(module, False)), "tree/main/readers/netbox")
+    bad = {
+        "no expression": [f for f in good if not f.startswith("License-Expression")],
+        "another expression": [f.replace("Apache-2.0", "MIT") for f in good],
+        "a missing url": [f for f in good if not f.startswith("Project-URL: Changelog")],
+        "a missing classifier": [f for f in good if "Typing" not in f],
+        "an extra classifier": [*good, "Classifier: License :: OSI Approved :: Apache Software License"],
+        "an author": [*good, "Author-email: someone@example.org"],
+        "no content type": [f for f in good if not f.startswith("Description-Content-Type")],
+    }
+    for why, fields in bad.items():
+        with pytest.raises(module.Failure, match="METADATA"):
+            module.published_metadata(_described(tmp_path, fields, readme), "tree/main/docs", core=True)
+        assert why
+    with pytest.raises(module.Failure, match="README"):
+        module.published_metadata(_described(tmp_path, good, "another text"), "tree/main/docs", core=True)
+    with pytest.raises(module.Failure, match="Classifier"):
+        module.published_metadata(_described(tmp_path, _published_fields(module, False), readme), "tree/main/docs",
+                                  core=True)
+
+
+def test_the_example_must_be_marked_never_to_be_uploaded(tmp_path: Path) -> None:
+    module = _script()
+    base = ["Metadata-Version: 2.4", "Name: fylgja-core", "Version: 1.0.0rc1"]
+    module.private_metadata(_described(tmp_path, [*base, "Classifier: Private :: Do Not Upload"]))
+    for fields in (base, [*base, "Classifier: Private :: Do Not Upload", "Classifier: Typing :: Typed"],
+                   [*base, "Classifier: Private :: Do Not Upload", f"Project-URL: Repository, {module.REPOSITORY}"]):
+        with pytest.raises(module.Failure):
+            module.private_metadata(_described(tmp_path, fields))
+
+
+def test_a_wheel_holds_the_roots_licence_or_is_named(tmp_path: Path) -> None:
+    module = _script()
+    text = (ROOT / "LICENSE").read_bytes()
+    module.held_licence(_described(tmp_path, ["Name: x"], licence=text), "fylgja_core")
+    module.held_licence(_described(tmp_path, ["Name: x"]), "fylgja_core", expected=False)
+    for licence, expected in ((None, True), (text + b"x", True), (text, False)):
+        wheel = _described(tmp_path, ["Name: x"], licence=licence)
+        with pytest.raises(module.Failure, match="LICENSE"):
+            module.held_licence(wheel, "fylgja_core", expected)

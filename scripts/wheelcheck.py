@@ -126,6 +126,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # The one version every distribution is built at (D-106), copied beside each build's copy of the tree, as `formats/` is.
 VERSION = ROOT / "VERSION"
+# What the builds read at the root: the version, the licence the three published wheels carry, and the core's long
+# description.
+ROOT_FILES = ("VERSION", "LICENSE", "README.md")
+# The metadata every published wheel states (D-106): the project's repository and what hangs off it, the classifiers
+# (the core's alone adds its operating system), and the expression setuptools writes for `license = "Apache-2.0"`.
+REPOSITORY = "https://github.com/happypathnetworking/fylgja"
+CLASSIFIERS = (
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
+)
+CORE_CLASSIFIER = "Operating System :: POSIX :: Linux"
+PRIVATE_CLASSIFIER = "Private :: Do Not Upload"
 # The variable the builds read the commit they are made at from (each `setup.py`).
 COMMIT_VARIABLE = "FYLGJA_BUILD_COMMIT"
 PREFIX = "fylgja_core/formats/"
@@ -690,6 +708,65 @@ def held_commit(wheel: Path, package: str, commit: str) -> None:
         raise Failure(f"{wheel.name}'s {package}/COMMIT says {said.strip()!r}, and the tree is at {commit}")
 
 
+def published_metadata(wheel: Path, documentation: str, core: bool = False) -> None:
+    """Nothing, once the published wheel's `METADATA` says `License-Expression: Apache-2.0`, no `License-File` and no
+    licence classifier, the three `Project-URL`s with `documentation` as the documentation's, exactly `CLASSIFIERS`
+    (and the core's operating system where `core`), and no author, maintainer or contact; where `core`, also
+    `Description-Content-Type: text/markdown` and a description that is the root `README.md`; `Failure` naming the
+    wheel and each difference otherwise."""
+    found = metadata(wheel)
+    problems: list[str] = []
+    if found.get_all("License-Expression") != ["Apache-2.0"]:
+        problems.append(f"License-Expression is {found.get_all('License-Expression')}, not ['Apache-2.0']")
+    urls = sorted(found.get_all("Project-URL", []))
+    expected_urls = sorted([f"Repository, {REPOSITORY}", f"Changelog, {REPOSITORY}/blob/main/CHANGELOG.md",
+                            f"Documentation, {REPOSITORY}/{documentation}"])
+    if urls != expected_urls:
+        problems.append(f"Project-URL is {urls}, not {expected_urls}")
+    classifiers = sorted(found.get_all("Classifier", []))
+    expected_classifiers = sorted([*CLASSIFIERS, *([CORE_CLASSIFIER] if core else [])])
+    if classifiers != expected_classifiers:
+        problems.append(f"Classifier is {classifiers}, not {expected_classifiers}")
+    for field in ("Author", "Author-email", "Maintainer", "Maintainer-email", "License-File", "License"):
+        if found.get_all(field):
+            problems.append(f"{field} is {found.get_all(field)}, and the wheel states none")
+    if core:
+        if found.get_all("Description-Content-Type") != ["text/markdown"]:
+            problems.append(f"Description-Content-Type is {found.get_all('Description-Content-Type')}, "
+                            "not ['text/markdown']")
+        if str(found.get_payload()).strip() != (ROOT / "README.md").read_text().strip():
+            problems.append("the description is not the root README.md")
+    if problems:
+        raise Failure(f"{wheel.name}'s METADATA differs from the metadata of D-106:\n" + "\n".join(problems))
+
+
+def private_metadata(wheel: Path) -> None:
+    """Nothing, once the example's wheel is marked `Classifier: Private :: Do Not Upload`, the one classifier it holds,
+    so that PyPI refuses it (D-106), and holds no `Project-URL`; `Failure` otherwise."""
+    found = metadata(wheel)
+    if found.get_all("Classifier") != [PRIVATE_CLASSIFIER]:
+        raise Failure(f"{wheel.name} holds the classifiers {found.get_all('Classifier')}, "
+                      f"not [{PRIVATE_CLASSIFIER!r}]: it could be uploaded")
+    if found.get_all("Project-URL") or found.get_all("Author") or found.get_all("Author-email"):
+        raise Failure(f"{wheel.name} states a project URL or an author, and the example states neither")
+
+
+def held_licence(wheel: Path, package: str, expected: bool = True) -> None:
+    """Nothing, once the wheel holds `<package>/LICENSE`, the root `LICENSE`'s bytes (or, where `expected` is false,
+    holds no file of that name); `Failure` naming the wheel and the file otherwise."""
+    with zipfile.ZipFile(wheel) as archive:
+        try:
+            held = archive.read(f"{package}/LICENSE")
+        except KeyError:
+            held = None
+    if expected and held is None:
+        raise Failure(f"{wheel.name} holds no {package}/LICENSE")
+    if expected and held != (ROOT / "LICENSE").read_bytes():
+        raise Failure(f"{wheel.name}'s {package}/LICENSE is not the root LICENSE's bytes")
+    if not expected and held is not None:
+        raise Failure(f"{wheel.name} holds {package}/LICENSE, and the example carries none")
+
+
 def answers_version(command: Path, program: str, version: str, commit: str, cwd: Path) -> None:
     """Nothing, once `command --version` exits 0 printing exactly `<program> <version> (commit <commit>)` and a newline
     on stdout; `Failure` with what it printed otherwise."""
@@ -763,6 +840,13 @@ def install(env: Path, *requirements: str, constraints: Path | None = None, find
          *(["--no-index", "--find-links", str(find_links)] if find_links else []), *requirements], env.parent.parent)
 
 
+def copy_root_files(src: Path) -> None:
+    """`ROOT_FILES` copied to the root of a build's copy of the tree, where each `setup.py` reads them (`../VERSION`,
+    `../LICENSE`, `../README.md`)."""
+    for name in ROOT_FILES:
+        shutil.copyfile(ROOT / name, src / name)
+
+
 def build(tmp: Path) -> Path:
     """The core's one wheel, built by `uv build --wheel` from a copy of `core/` and `formats/`
     under `tmp`, the copy of `formats/` given `PLANTED` first. Built once: called again with the
@@ -776,7 +860,7 @@ def build(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
-        shutil.copyfile(VERSION, src / "VERSION")
+        copy_root_files(src)
         for name in core_packages():
             shutil.copytree(ROOT / name, src / name)
         planted = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
@@ -948,12 +1032,16 @@ def check(tmp: Path) -> str:
     wheel = build(tmp)
     versioned(wheel, tree_version())
     held_commit(wheel, "fylgja_core", tree_commit())
+    published_metadata(wheel, "tree/main/docs", core=True)
+    held_licence(wheel, "fylgja_core")
     count = carried(wheel)
     kept = shipped(wheel)
     took = with_server(tmp, wheel)
     alone(tmp, wheel, found)
     at = ", ".join(f"{name} {floor}" for name, floor in found.items())
-    return (f"wheelcheck: {wheel.name} is built at {tree_commit()} and carries the core's {count} formats and no "
+    return (f"wheelcheck: {wheel.name} is built at {tree_commit()}, states Apache-2.0, the project's URLs and "
+            f"classifiers, no author and the README as its description, holds the licence's text, and carries the "
+            f"core's {count} formats and no "
             f"other, and {kept} package files, the tracked YAML of {' and '.join(f'{n}/' for n in core_packages())} "
             f"and no other; started with no FYLGJA_PACKAGES it answered in {took:.1f} s, built {FIXTURE.name}'s "
             "bundle and ended 143 on SIGTERM; fylgja-core and fylgja-core-server answer --version with it; with "
@@ -974,7 +1062,7 @@ def build_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
-        shutil.copyfile(VERSION, src / "VERSION")
+        copy_root_files(src)
         wheel(src / "readers" / "infrahub", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -1016,6 +1104,8 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     versioned(wheel, version)
     requires_core(wheel, version)
     held_commit(wheel, "fylgja_infrahub", tree_commit())
+    published_metadata(wheel, "tree/main/readers/infrahub")
+    held_licence(wheel, "fylgja_infrahub")
     queries = carried_by_reader(wheel)
     commit = DCIM_COMMIT.read_text().strip()
     env = venv(tmp / "reader" / "venv")
@@ -1024,7 +1114,8 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
         tmp)
     run([str(env / "fylgja-infrahub"), "--help"], tmp)
     answers_version(env / "fylgja-infrahub", "fylgja-infrahub", version, tree_commit(), tmp)
-    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major; it carries the reader's "
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major; it states the "
+            f"project's metadata and holds the licence's text; it carries the reader's "
             f"{len(READER_FORMATS)} format and no other, and its "
             f"{queries} GraphQL documents; beside {core_wheel.name} alone it decodes {READER_DOCUMENT.name} outside "
             "the tree, its command imports with nothing of the server, Prefect, Infrahub's SDK or the example, and "
@@ -1044,7 +1135,7 @@ def build_netbox_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
-        shutil.copyfile(VERSION, src / "VERSION")
+        copy_root_files(src)
         wheel(src / "readers" / "netbox", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -1095,6 +1186,8 @@ def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
     versioned(wheel, version)
     requires_core(wheel, version)
     held_commit(wheel, "fylgja_netbox", tree_commit())
+    published_metadata(wheel, "tree/main/readers/netbox")
+    held_licence(wheel, "fylgja_netbox")
     carried_by_netbox_reader(wheel)
     here = tmp / "netbox-reader"
     reader = here / NETBOX_READER_DOCUMENT.name
@@ -1111,7 +1204,8 @@ def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "fylgja-netbox"), "--help"], tmp)
     answers_version(env / "fylgja-netbox", "fylgja-netbox", version, tree_commit(), tmp)
     refused_without_token(env / "fylgja-netbox", tmp)
-    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, and fylgja-netbox=={version} "
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, states the "
+            f"project's metadata and holds the licence's text, and fylgja-netbox=={version} "
             "installs by name from a directory of the two wheels and no index, with no pre-release flag; it carries "
             f"the NetBox reader's {len(NETBOX_READER_FORMATS)} format and no other; beside {core_wheel.name} alone it "
             f"decodes {NETBOX_READER_DOCUMENT.name} outside the tree, its command "
@@ -1160,7 +1254,7 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
         ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
     )
     shutil.copytree(ROOT / "formats", src / "formats")
-    shutil.copyfile(VERSION, src / "VERSION")
+    copy_root_files(src)
     wheel(src / "orchestrator", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -1168,6 +1262,8 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
     built = wheels[0]
     versioned(built, tree_version())
     held_commit(built, "fylgja_orchestrator", tree_commit())
+    private_metadata(built)
+    held_licence(built, "fylgja_orchestrator", expected=False)
     queries = carried_by_example(built)
     reader, netbox_reader = build_reader(tmp), build_netbox_reader(tmp)
     env = venv(here / "venv")
@@ -1178,7 +1274,8 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "fylgja-orchestrator"), "--help"], tmp)
     answers_version(env / "fylgja-orchestrator", "fylgja-orchestrator", tree_version(), tree_commit(), tmp)
     run([str(env / "fylgja-orchestrator"), "stage", "mark", "--help"], tmp)
-    return (f"wheelcheck: {built.name} carries the example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
+    return (f"wheelcheck: {built.name} is marked {PRIVATE_CLASSIFIER!r} and carries no licence file; it carries the "
+            f"example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
             f"its {queries} GraphQL documents; beside {core_wheel.name}, {reader.name} and {netbox_reader.name} alone "
             "it validates a plan and a rehearsal outside the tree, its rehearsal library imports with nothing of the "
             "server, either reader or Prefect, both change sources import, each with nothing of the other or its "

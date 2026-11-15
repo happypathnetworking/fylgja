@@ -81,6 +81,12 @@ class BuildPy(build_py):
         package = Path(self.build_lib) / "fylgja_infrahub"
         self.mkpath(str(package))
         (package / "COMMIT").write_text(commit(os.environ, ROOT) + "\n")
+        # The licence's text, as package data: setuptools takes no licence file from outside the project, and the
+        # Apache License asks that a copy go with the work (D-106).
+        licence = ROOT / "LICENSE"
+        if not licence.is_file():
+            raise SystemExit(f"no {licence}: the wheel carries the repository's licence, the root's LICENSE")
+        self.copy_file(str(licence), str(package / "LICENSE"))
 
 
 setup(version=version(), cmdclass={"build_py": BuildPy})

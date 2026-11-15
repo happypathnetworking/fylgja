@@ -16,14 +16,15 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce
 
 # The tree's layout: core/setup.py copies into the wheel the formats its CORE_FORMATS names, each
 # byte for byte its file in ../formats (D-066, D-084), the YAML of the packages its CORE_PACKAGES names,
-# each byte for byte its file in ../psp and ../probes, and reads the version from ../VERSION (D-106).
+# each byte for byte its file in ../psp and ../probes, reads the version from ../VERSION, the licence's text from
+# ../LICENSE and the long description from ../README.md (D-106).
 # The final stage has no copy of the packages: the server finds the wheel's with FYLGJA_PACKAGES unset.
 COPY core/pyproject.toml core/setup.py /src/core/
 COPY core/src /src/core/src
 COPY formats /src/formats
 COPY psp /src/psp
 COPY probes /src/probes
-COPY VERSION /src/VERSION
+COPY VERSION LICENSE README.md /src/
 # The commit the image is built at, which the wheel's build writes into the package (core/setup.py): an argument, since
 # the context holds no .git. `make image` gives it; with none the build says unknown. In this stage alone, so the final
 # image's environment never holds it.

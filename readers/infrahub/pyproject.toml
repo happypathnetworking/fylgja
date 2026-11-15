@@ -8,12 +8,29 @@ name = "fylgja-infrahub"
 dynamic = ["version"]
 description = "Fylgja's Infrahub reader: a branch of Infrahub read into a blueprint, or the findings that refused it."
 license = "Apache-2.0"
+# No licence classifier: setuptools refuses one beside the expression. No author or contact (D-106).
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
+]
+readme = "README.md"
 requires-python = ">=3.14"
 # The core's base install, the model package and the client library, at the reader's own version or later within the
 # major, so a candidate's reader takes the candidate's core and a later reader never an earlier core (D-106); the
 # floor is VERSION's, which a test holds. The core states its libraries' ranges (D-084). httpx is the transport's, at
 # the core's range (D-083).
 dependencies = ["fylgja-core>=1.0.0rc1,<2", "httpx>=0.27.0,<1"]
+
+[project.urls]
+Repository = "https://github.com/happypathnetworking/fylgja"
+Changelog = "https://github.com/happypathnetworking/fylgja/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/happypathnetworking/fylgja/tree/main/readers/infrahub"
 
 [project.scripts]
 fylgja-infrahub = "fylgja_infrahub.cli:main"

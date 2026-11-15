@@ -9111,6 +9111,28 @@ once. *(2026-11-13)*
     included) and in each installed command's `--version`: `fylgja-core` and `fylgja-core-server` with
     the extra, `fylgja-core` at the base's floors, `fylgja-infrahub`, `fylgja-netbox` and
     `fylgja-orchestrator`, each `<program> 1.0.0rc1 (commit <40 hex>-dirty)`.
+- **A wheel's metadata and licence text** *(2026-11-15, uv 0.12.23, setuptools 84.2.1)*. Read by
+  `uv build --wheel` of each of the four distributions from a copy of the tree holding `formats/`,
+  `psp/`, `probes/`, `VERSION`, `LICENSE` and `README.md` at its root (no warning in the build's
+  log), then each wheel's `METADATA` and file list:
+  - **`license = "Apache-2.0"` is written as `License-Expression: Apache-2.0`** (Metadata-Version 2.4),
+    with no `License` and no `License-File` field: the project holds no licence file for setuptools
+    to find, so the `LICENSE` is carried as package data, `<package>/LICENSE`, by each published
+    `setup.py`'s `BuildPy` (the root's bytes), since setuptools takes no `license-files` pattern
+    from outside the project.
+  - **`[project.urls]` becomes three `Project-URL: <label>, <url>` lines and every classifier a
+    `Classifier:` line**, in the order written; a reader's `readme = "README.md"` gives
+    `Description-Content-Type: text/markdown` and its own README as the body.
+  - **The core's `readme`, listed in `dynamic`, takes `long_description` and
+    `long_description_content_type` from `setup()`**: the wheel's `METADATA` says
+    `Description-Content-Type: text/markdown`, `Dynamic: description` and
+    `Dynamic: description-content-type`, and its body is the root `README.md`, read by `core/setup.py`
+    as `../README.md` (a copy of the tree must hold it beside `core/`, as it does `VERSION`).
+  - **The example's wheel** holds `Classifier: Private :: Do Not Upload` alone, no `Project-URL` and no
+    `<package>/LICENSE`. That PyPI refuses an upload carrying it is its documented rule, not exercised.
+  - `make wheelcheck` holds all of it: each published wheel's expression, three URLs, exact classifiers,
+    no author and `<package>/LICENSE` equal to the root's, the core's content type and description,
+    and the example's classifier.
 - **Not read:**
   - `uv sync` against a venv of another Python minor.
   - the uv'd CI: it has not run, and plan 5's run is its first.

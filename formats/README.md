@@ -144,6 +144,11 @@ relative to them.
     `auth.forbidden`, is described as reserved until roles exist, as `docs/rules.md` says, and no
     route answers it; `Version.build` is `<version> (commit <commit>)`. No route, operation,
     parameter, member or status changed.
+26. **A `pattern` is ECMA-262's, as JSON Schema says: its `$` is the end of the text.** Python's
+    `re`, which the validators read a pattern with, lets `$` match before a final newline, so a
+    checkout before 1.0.0rc1 took a value matching a `$`-ended pattern with a newline after it,
+    such as a device name written as a folded YAML scalar. From 1.0.0rc1 that text is refused,
+    in every format and in the API's request bodies; no other pattern's meaning moved.
 
 ## Settled by measurement (2026-10-30)
 

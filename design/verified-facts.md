@@ -8968,6 +8968,28 @@ The timing is one run. *(2026-11-09)*
   jsonschema-specifications 2023.7.1, rpds-py 2026.9.1, sniffio 1.3.1 and typing-extensions
   4.16.0: the 2026-11-09 list's transitive set for the base (jsonschema-specifications
   2023.7.1 and sniffio as there), and no other version differed. No floor moved.
+- **A `pattern`'s `$` under jsonschema** *(2026-11-15)*, with Python 3.14.4 on the development
+  host, each reading run once: in the core's environment (jsonschema 4.26.0, referencing 0.37.0)
+  and in a scratch environment outside the tree made by `uv venv`, holding jsonschema 4.18.0 and
+  referencing 0.28.4 installed by `uv pip install` (with jsonschema-specifications 2023.7.1).
+  At both, `Draft202012Validator({"pattern": "^a$"}).is_valid("a\n")` was `True`;
+  `jsonschema.validators.extend` was there, and the class it made from `Draft202012Validator`
+  with a `pattern` that reads `$` as `\Z` answered `False` for `"a\n"` and `True` for `"a"`;
+  `validator_for` of each of the thirteen `formats/*.schema.json` answered
+  `Draft202012Validator`. At both, the extended class given `{"$ref": …}` to a resource
+  holding `"$schema"` (draft 2020-12) and `"pattern": "^a$"` answered `True` for `"a\n"`, and
+  `False` where the same resource was made by `DRAFT202012.create_resource` without
+  `$schema`: the source of each shows `evolve`, which `descend` calls on every subschema,
+  making its validator by `validator_for(schema, default=cls)`. In the core's environment,
+  before the registry's resources were made without `$schema`,
+  `api_body_validator("/v1/blueprints", "post")` took a device name ending in a newline. With
+  the mend, `core/tests/test_schemas.py`,
+  `test_bundle.py`, `test_findings.py` and `test_twin_record.py` (48 tests) passed at the
+  floor over the tree's source (`PYTHONPATH=src:tests`), beside pytest 9.2.0 and rfc8785
+  0.1.4. In `formats/` no file holds `patternProperties`, `propertyNames` or
+  `unevaluatedProperties`, and no `pattern` holds `\d`, `\w`, `\s` or `\b` (the one `\w` is
+  in a description's text); 31 patterns end in `$`, in eleven formats, and `api-1.openapi.yaml`
+  holds no `pattern`.
 
 ## uv 0.12.23
 

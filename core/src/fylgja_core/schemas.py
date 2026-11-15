@@ -5,12 +5,18 @@ Each distribution's wheel carries the formats its own code reads, beside its pac
 and `formats/` at the repository's root holds every one of them (D-066). A package reads the
 core's formats and its own: installed, those the core's wheel and its own carry; in a
 checkout, the repository's. The API's document is the core's.
+
+Every validator is made from `Validator`, draft 2020-12 with one keyword mended: JSON Schema reads
+a `pattern` as ECMA-262 does, where `$` is the end of the text, and Python's `re`, which jsonschema
+reads it with, lets `$` match before a final newline too.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import re
+from collections.abc import Iterator
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -18,11 +24,46 @@ from urllib.parse import quote
 
 import jsonschema
 import yaml
+from jsonschema.exceptions import ValidationError
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 ID_PREFIX = "https://github.com/happypathnetworking/fylgja/schemas/"
 API_ID = f"{ID_PREFIX}api-1.openapi.yaml"
+DIALECT = "https://json-schema.org/draft/2020-12/schema"
+
+
+def ecma(pattern: str) -> str:
+    """`pattern` written so that Python's `re` reads it as ECMA-262 reads `pattern`: each `$`
+    neither escaped nor inside a character class becomes `\\Z`, the end of the text; all else is
+    unchanged."""
+    out: list[str] = []
+    in_class = False
+    i = 0
+    while i < len(pattern):
+        c = pattern[i]
+        if c == "\\":
+            out.append(pattern[i:i + 2])
+            i += 2
+            continue
+        if in_class:
+            in_class = c != "]"
+        elif c == "[":
+            in_class = True
+        elif c == "$":
+            c = r"\Z"
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def _pattern(validator: Any, pattern: str, instance: Any, schema: Any) -> Iterator[ValidationError]:
+    """The `pattern` keyword, `$` read as ECMA-262 reads it; the message names the pattern as written."""
+    if validator.is_type(instance, "string") and not re.search(ecma(pattern), instance):
+        yield ValidationError(f"{instance!r} does not match {pattern!r}")
+
+
+Validator: Any = jsonschema.validators.extend(jsonschema.Draft202012Validator, {"pattern": _pattern})
 
 
 def formats_dir(package: str = "fylgja_core") -> Path:
@@ -43,6 +84,16 @@ def formats_dir(package: str = "fylgja_core") -> Path:
     raise FileNotFoundError(f"the package {package} has no formats: none at {here / 'formats'}, and no checkout's")
 
 
+def _resource(contents: dict[str, Any], where: Path) -> Resource[Any]:
+    """A format as a draft 2020-12 resource, its `$schema` left out: where a `$ref` enters a schema
+    that names its dialect, jsonschema validates it with that dialect's stock class, so a format
+    naming none is validated by `Validator` throughout. A format of another dialect is a
+    `ValueError`."""
+    if contents.get("$schema") != DIALECT:
+        raise ValueError(f"{where} is not a draft 2020-12 schema")
+    return DRAFT202012.create_resource({key: value for key, value in contents.items() if key != "$schema"})
+
+
 @cache
 def _registry(package: str = "fylgja_core") -> Registry[Any]:
     """The core's schemas and `package`'s, one resource an `$id`: the core's where both hold one."""
@@ -50,7 +101,7 @@ def _registry(package: str = "fylgja_core") -> Registry[Any]:
     for directory in dict.fromkeys((formats_dir(), formats_dir(package))):
         for path in sorted(directory.glob("*.schema.json")):
             contents = json.loads(path.read_text())
-            resources.setdefault(contents["$id"], Resource.from_contents(contents))
+            resources.setdefault(contents["$id"], _resource(contents, path))
     return Registry().with_resources(resources.items())
 
 
@@ -60,8 +111,7 @@ def validator(name: str, package: str = "fylgja_core") -> Any:
     formats and `package`'s; a name neither holds is a `LookupError`."""
     registry = _registry(package)
     schema = registry.contents(f"{ID_PREFIX}{name}.schema.json")
-    cls = jsonschema.validators.validator_for(schema)
-    return cls(schema, registry=registry, format_checker=cls.FORMAT_CHECKER)
+    return Validator(schema, registry=registry, format_checker=Validator.FORMAT_CHECKER)
 
 
 @cache
@@ -76,8 +126,7 @@ def _api_at(parts: tuple[str, ...]) -> Any:
     """A validator for the schema at the JSON pointer `parts` into the OpenAPI document."""
     _, registry = _api_registry()
     fragment = "/".join(quote(p.replace("~", "~0").replace("/", "~1"), safe="~") for p in parts)
-    cls = jsonschema.Draft202012Validator
-    return cls({"$ref": f"{API_ID}#/{fragment}"}, registry=registry, format_checker=cls.FORMAT_CHECKER)
+    return Validator({"$ref": f"{API_ID}#/{fragment}"}, registry=registry, format_checker=Validator.FORMAT_CHECKER)
 
 
 @cache

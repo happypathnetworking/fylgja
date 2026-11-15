@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fylgja-orchestrator"
-version = "0.0.0"
+# The version is VERSION's at the root, which setup.py reads (D-106).
+dynamic = ["version"]
 description = "Fylgja's example orchestrator: a change rehearsed on a twin through the core's API."
 license = "Apache-2.0"
 requires-python = ">=3.14"

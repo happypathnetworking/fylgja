@@ -1,4 +1,8 @@
-"""The one build step `pyproject.toml` cannot state: the wheel carries the core's formats as package data.
+"""The build steps `pyproject.toml` cannot state: the distribution's version, and the wheel carries the core's
+formats as package data.
+
+`VERSION` at the root is the one place the version is written, read by every distribution's build (D-106):
+setuptools reads no file outside a project, so `version()` reads it and passes it to `setup()`.
 
 `formats/` stays the one place a format is changed (D-066); this copies the core's, by the list
 `CORE_FORMATS`, into the build directory, never into `src/`, so a checkout keeps reading the
@@ -11,7 +15,8 @@ from pathlib import Path
 from setuptools import setup
 from setuptools.command.build_py import build_py
 
-FORMATS = Path(__file__).resolve().parent.parent / "formats"
+ROOT = Path(__file__).resolve().parent.parent
+FORMATS = ROOT / "formats"
 CORE_FORMATS = (
     "api-1.openapi.yaml",
     "blueprint-1.schema.json",
@@ -24,6 +29,18 @@ CORE_FORMATS = (
     "problem-1.schema.json",
     "twin-record-1.schema.json",
 )
+
+
+def version(root: Path = ROOT) -> str:
+    """The one line of `root`'s `VERSION`, stripped; `SystemExit` naming the file where it is not one line."""
+    path = root / "VERSION"
+    try:
+        lines = path.read_text().splitlines()
+    except OSError as e:
+        raise SystemExit(f"{path} cannot be read: {e.strerror or e}") from e
+    if len(lines) != 1 or not lines[0].strip():
+        raise SystemExit(f"{path} is not one line holding the version")
+    return lines[0].strip()
 
 
 class BuildPy(build_py):
@@ -41,4 +58,4 @@ class BuildPy(build_py):
             self.copy_file(str(FORMATS / name), str(target / name))
 
 
-setup(cmdclass={"build_py": BuildPy})
+setup(version=version(), cmdclass={"build_py": BuildPy})

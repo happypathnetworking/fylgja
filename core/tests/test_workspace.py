@@ -1,5 +1,5 @@
 """The uv workspace and its lock (D-108): the root `pyproject.toml` is uv's tables alone and names the four
-distributions as members; `uv.lock` holds them editable at their versions and each exact pin of theirs at that
+distributions as members; `uv.lock` holds them editable, their version dynamic, and each exact pin of theirs at that
 version, so the pins stay the statement the lock is checked against (`uv sync --locked` checks the rest); and
 `make venv` is a locked sync into `core/.venv`."""
 
@@ -60,13 +60,15 @@ def packages() -> dict[str, list[dict[str, Any]]]:
     return found
 
 
-def test_the_lock_holds_the_four_editable_at_their_versions() -> None:
+def test_the_lock_holds_the_four_editable_and_their_version_dynamic() -> None:
+    """Each member's version is `VERSION`'s, read by its `setup.py` (`test_release.py`), so `uv lock` records none."""
     locked = packages()
     for member in MEMBERS:
         name = NAMES[member]
         (entry,) = locked[name]
         assert entry["source"] == {"editable": member}
-        assert entry["version"] == load(f"{member}/pyproject.toml")["project"]["version"]
+        assert "version" not in entry
+        assert "version" in load(f"{member}/pyproject.toml")["project"]["dynamic"]
 
 
 def test_each_exact_pin_is_the_locks_version() -> None:

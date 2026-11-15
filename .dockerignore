@@ -7,5 +7,6 @@
 !formats
 !psp
 !probes
+!VERSION
 **/__pycache__
 **/*.egg-info

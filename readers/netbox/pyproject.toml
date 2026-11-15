@@ -4,13 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fylgja-netbox"
-version = "0.0.0"
+# The version is VERSION's at the root, which setup.py reads (D-106).
+dynamic = ["version"]
 description = "Fylgja's NetBox reader: a branch of NetBox read into a blueprint, or the findings that refused it."
 license = "Apache-2.0"
 requires-python = ">=3.14"
-# The core's base install, the model package and the client library, with no range of its own: the core states its
-# libraries' ranges (D-084). httpx is the transport's, at the core's range (D-096).
-dependencies = ["fylgja-core", "httpx>=0.27.0,<1"]
+# The core's base install, the model package and the client library, at the reader's own version or later within the
+# major, so a candidate's reader takes the candidate's core and a later reader never an earlier core (D-106); the
+# floor is VERSION's, which a test holds. The core states its libraries' ranges (D-084). httpx is the transport's, at
+# the core's range (D-096).
+dependencies = ["fylgja-core>=1.0.0rc1,<2", "httpx>=0.27.0,<1"]
 
 [project.scripts]
 fylgja-netbox = "fylgja_netbox.cli:main"

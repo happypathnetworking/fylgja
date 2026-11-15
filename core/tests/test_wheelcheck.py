@@ -14,6 +14,7 @@ import ast
 import importlib.util
 import subprocess
 import tomllib
+import zipfile
 from functools import cache
 from pathlib import Path
 from types import ModuleType
@@ -161,10 +162,77 @@ def test_each_environment_wheel_and_install_is_uv(monkeypatch: pytest.MonkeyPatc
     module.wheel(Path("/t/src/core"), Path("/t/dist"))
     module.install(Path("/t/e/bin"), "w.whl", constraints=Path("/t/c.txt"))
     module.install(Path("/t/e/bin"), "a.whl", "b.whl")
+    module.install(Path("/t/e/bin"), "fylgja-netbox==1.0.0rc1", find_links=Path("/t/links"))
     assert ran == [
         (["uv", "venv", "--no-project", "--no-python-downloads", "--python", python, "/t/e"], Path("/t")),
         (["uv", "build", "--wheel", "--no-python-downloads", "--python", python, "--out-dir", "/t/dist",
           "/t/src/core"], Path("/t")),
         (["uv", "pip", "install", "--python", "/t/e/bin/python", "--constraints", "/t/c.txt", "w.whl"], Path("/t")),
         (["uv", "pip", "install", "--python", "/t/e/bin/python", "a.whl", "b.whl"], Path("/t")),
+        (["uv", "pip", "install", "--python", "/t/e/bin/python", "--no-index", "--find-links", "/t/links",
+          "fylgja-netbox==1.0.0rc1"], Path("/t")),
     ]
+
+
+def _wheel(tmp_path: Path, name: str, version: str, requires: list[str]) -> Path:
+    """A wheel holding only its `METADATA`: `name` at `version`, one `Requires-Dist` an entry of `requires`."""
+    stem = f"{name.replace('-', '_')}-{version}"
+    path = tmp_path / f"{stem}-py3-none-any.whl"
+    lines = ["Metadata-Version: 2.4", f"Name: {name}", f"Version: {version}",
+             *(f"Requires-Dist: {entry}" for entry in requires)]
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(f"{stem}.dist-info/METADATA", "\n".join(lines) + "\n\n")
+    return path
+
+
+def test_the_tree_version_is_the_one_line_of_version(tmp_path: Path) -> None:
+    module = _script()
+    assert module.tree_version() == (ROOT / "VERSION").read_text().strip()
+    for text in ("", "\n", "1.0.0\n2.0.0\n"):
+        (tmp_path / "VERSION").write_text(text)
+        with pytest.raises(module.Failure, match="VERSION"):
+            module.tree_version(tmp_path / "VERSION")
+    with pytest.raises(module.Failure, match="VERSION"):
+        module.tree_version(tmp_path / "absent" / "VERSION")
+
+
+def test_a_wheel_of_another_version_is_named(tmp_path: Path) -> None:
+    module = _script()
+    wheel = _wheel(tmp_path, "fylgja-core", "1.0.0rc1", [])
+    module.versioned(wheel, "1.0.0rc1")
+    with pytest.raises(module.Failure) as raised:
+        module.versioned(wheel, "1.0.0")
+    assert wheel.name in str(raised.value) and "1.0.0rc1" in str(raised.value) and "1.0.0" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "entry", ["fylgja-core<2,>=1.0.0rc1", "fylgja-core>=1.0.0rc1,<2", "fylgja_core (<2, >=1.0.0rc1)"]
+)
+def test_a_reader_requiring_the_core_at_the_version_within_the_major_passes(tmp_path: Path, entry: str) -> None:
+    wheel = _wheel(tmp_path, "fylgja-netbox", "1.0.0rc1", [entry, "httpx<1,>=0.27.0"])
+    _script().requires_core(wheel, "1.0.0rc1")
+
+
+@pytest.mark.parametrize(
+    "requires",
+    [
+        [],
+        ["fylgja-core"],
+        ["fylgja-core>=1.0.0"],
+        ["fylgja-core<2,>=1.0.0"],
+        ["fylgja-core<3,>=1.0.0rc1"],
+        ["fylgja-core<2,>=1.0.0rc1", "fylgja-core<2,>=1.0.0rc1; extra == 'dev'"],
+    ],
+)
+def test_a_reader_requiring_the_core_otherwise_is_named(tmp_path: Path, requires: list[str]) -> None:
+    module = _script()
+    wheel = _wheel(tmp_path, "fylgja-netbox", "1.0.0rc1", requires)
+    with pytest.raises(module.Failure) as raised:
+        module.requires_core(wheel, "1.0.0rc1")
+    assert wheel.name in str(raised.value) and ">=1.0.0rc1" in str(raised.value)
+
+
+def test_the_base_requirements_are_the_cores_unmarked_entries(tmp_path: Path) -> None:
+    wheel = _wheel(tmp_path, "fylgja-core", "1.0.0rc1",
+                   ["httpx<1,>=0.27.0", "PyYAML<7,>=6.0.3", "uvicorn==0.54.0; extra == \"server\""])
+    assert _script().base_requirements(wheel) == ["httpx<1,>=0.27.0", "PyYAML<7,>=6.0.3"]

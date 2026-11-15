@@ -6,7 +6,9 @@ Run from the repository root: `python3 -I scripts/wheelcheck.py`, or `make wheel
 D-084). Everything happens in one temporary directory, so the tree is left as it was; uv builds and installs
 from directories outside the tree, so no workspace or lock reaches what it checks (D-108), and a host
 with no `uv` on the PATH is told so before anything is made. Needs the
-network, for the build's requirements and the wheel's dependencies. The core's check, `check`:
+network, for the build's requirements and the wheel's dependencies. Each build's copy of the tree holds
+`VERSION` at its root beside `formats/`, as each `setup.py` reads it, and each wheel's `METADATA` says
+`VERSION`'s version (D-106). The core's check, `check`:
 
 1. **The wheel.** It is built from a copy of `core/` and `formats/` whose `formats/` is first given
    `other-1.schema.json`, a schema no list names, as a format another distribution reads would be
@@ -30,9 +32,11 @@ same temporary directory:
 
 1. **Its wheel.** It is built once, by `build_reader`, with `uv build --wheel` from a copy of
    `readers/infrahub/` and `formats/` at their places, as `readers/infrahub/setup.py` finds
-   `formats/` two directories up; its `fylgja_infrahub/formats/` holds the format of the reader's
-   document, `READER_FORMATS`, and no other, its `fylgja_infrahub/queries/` the tree's GraphQL
-   documents, of which there is at least one, and no other, and the package carries `py.typed`.
+   `formats/` two directories up; its `METADATA` names `fylgja-core` once, its specifiers
+   `>=<VERSION>` and `<` the next major (`requires_core`); its `fylgja_infrahub/formats/` holds
+   the format of the reader's document, `READER_FORMATS`, and no other, its
+   `fylgja_infrahub/queries/` the tree's GraphQL documents, of which there is at least one, and
+   no other, and the package carries `py.typed`.
 2. **Beside the base alone**, `uv pip install <the core's wheel> <its wheel>` in an empty environment, the
    core with no extra: `PROBE_READER`, run outside the tree, finds the format the package reads
    beside it and not in the tree; the seed's `reader.yaml` decodes; `schema.COMMIT` is the tree's
@@ -46,13 +50,16 @@ The NetBox reader's check, `check_netbox_reader`, follows it in directories of i
 
 1. **Its wheel.** It is built once, by `build_netbox_reader`, with `uv build --wheel` from a
    copy of `readers/netbox/` and `formats/` at their places, as `readers/netbox/setup.py` finds
-   `formats/` two directories up; its `fylgja_netbox/formats/` holds the format of the reader's
-   document, `NETBOX_READER_FORMATS`, and no other, and the package carries `py.typed`.
-2. **Beside the base alone**, `uv pip install <the core's wheel> <its wheel>` in an empty environment
-   of its own, the core with no extra: `PROBE_NETBOX_READER`, run outside the tree, finds
-   the format the package reads beside it and not in the tree; a copy of the seed's
-   `netbox/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the mapping is
-   `netbox-dcim`; and once the command's module has imported, no module of the server's
+   `formats/` two directories up; it requires the core as the Infrahub reader's does; its
+   `fylgja_netbox/formats/` holds the format of the reader's document, `NETBOX_READER_FORMATS`,
+   and no other, and the package carries `py.typed`.
+2. **Beside the base alone**, in an empty environment of its own: the core's base libraries from the
+   index, then `uv pip install --no-index --find-links <dir> fylgja-netbox==<VERSION>`, the directory
+   holding the core's wheel and its own and nothing else, with no pre-release flag, so the reader's
+   requirement takes the candidate's core; the core with no extra: `PROBE_NETBOX_READER`, run
+   outside the tree, finds the format the package reads beside it and not in the tree; a copy of
+   the seed's `netbox/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the
+   mapping is `netbox-dcim`; and once the command's module has imported, no module of the server's
    libraries, Prefect, Infrahub's SDK, NetBox's client library, the Infrahub reader or the example
    (`NOT_BESIDE_NETBOX_READER`) is loaded, or installed. Then `fylgja-netbox --help` exits 0, and
    `fylgja-netbox check`, given an address and no token, exits 2 with the one line that names the
@@ -88,6 +95,8 @@ under `orchestrator/` in the same temporary directory:
 """
 
 import ast
+import email.message
+import email.parser
 import json
 import os
 import re
@@ -100,6 +109,8 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# The one version every distribution is built at (D-106), copied beside each build's copy of the tree, as `formats/` is.
+VERSION = ROOT / "VERSION"
 PREFIX = "fylgja_core/formats/"
 FIXTURE = ROOT / "testdata" / "blueprint" / "three-node.json"
 # Planted in the copy of `formats/` the wheel is built from: a format no distribution's list names.
@@ -532,6 +543,56 @@ def floors(pyproject: Path = ROOT / "core" / "pyproject.toml") -> dict[str, str]
     return found
 
 
+def tree_version(path: Path = VERSION) -> str:
+    """The tree's version, the one line of `path` stripped; `Failure` naming the file where it is not one line."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError as e:
+        raise Failure(f"{path} cannot be read: {e.strerror or e}") from e
+    if len(lines) != 1 or not lines[0].strip():
+        raise Failure(f"{path} is not one line holding the version")
+    return lines[0].strip()
+
+
+def metadata(wheel: Path) -> email.message.Message:
+    """The wheel's `*.dist-info/METADATA`, parsed; `Failure` where it holds none, or more than one."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = [n for n in archive.namelist() if n.count("/") == 1 and n.endswith(".dist-info/METADATA")]
+        if len(names) != 1:
+            raise Failure(f"{wheel.name} holds {len(names)} METADATA, not one")
+        return email.parser.Parser().parsestr(archive.read(names[0]).decode())
+
+
+def versioned(wheel: Path, version: str) -> None:
+    """Nothing, once the wheel's `METADATA` says `Version: <version>`; `Failure` naming both otherwise."""
+    said = metadata(wheel)["Version"]
+    if said != version:
+        raise Failure(f"{wheel.name} is version {said}, and VERSION says {version}")
+
+
+def base_requirements(wheel: Path) -> list[str]:
+    """The wheel's `Requires-Dist` entries that carry no marker: the core's base libraries, at their ranges."""
+    return [entry for entry in metadata(wheel).get_all("Requires-Dist", []) if ";" not in entry]
+
+
+def requires_core(wheel: Path, version: str) -> None:
+    """Nothing, once the reader's wheel names `fylgja-core` in exactly one `Requires-Dist`, with no marker, whose
+    specifiers, taken as a set, are `>=<version>` and `<` the next major (D-106); `Failure` naming the wheel and what
+    it should say otherwise."""
+    expected = {f">={version}", f"<{int(version.split('.')[0]) + 1}"}
+    found = [
+        entry
+        for entry in metadata(wheel).get_all("Requires-Dist", [])
+        if re.match(r"fylgja[-_.]core(?![A-Za-z0-9_.-])", entry, re.IGNORECASE)
+    ]
+    specifiers = None
+    if len(found) == 1 and ";" not in found[0]:
+        written = re.sub(r"\s+", "", found[0])[len("fylgja-core"):].strip("()")
+        specifiers = set(written.split(",")) if written else set()
+    if specifiers != expected:
+        raise Failure(f"{wheel.name} requires the core as {found}, not once as {','.join(sorted(expected))}")
+
+
 def run(argv: list[str], cwd: Path) -> None:
     """`argv` run in `cwd`, which must exit 0; `Failure` with what it printed otherwise."""
     exits(argv, cwd, 0)
@@ -581,11 +642,13 @@ def wheel(source: Path, dist: Path) -> None:
          str(source)], dist.parent)
 
 
-def install(env: Path, *requirements: str, constraints: Path | None = None) -> None:
+def install(env: Path, *requirements: str, constraints: Path | None = None, find_links: Path | None = None) -> None:
     """`requirements` installed by `uv pip` into the environment whose `bin/` is `env`, held to the `name==version`
-    lines of `constraints` where it is given, from `env`'s grandparent."""
+    lines of `constraints` where it is given, and from the directory `find_links` alone, no index, where that is given;
+    from `env`'s grandparent."""
     run([uv(), "pip", "install", "--python", str(env / "python"),
-         *(["--constraints", str(constraints)] if constraints else []), *requirements], env.parent.parent)
+         *(["--constraints", str(constraints)] if constraints else []),
+         *(["--no-index", "--find-links", str(find_links)] if find_links else []), *requirements], env.parent.parent)
 
 
 def build(tmp: Path) -> Path:
@@ -601,6 +664,7 @@ def build(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
+        shutil.copyfile(VERSION, src / "VERSION")
         planted = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
         (src / "formats" / PLANTED).write_text(json.dumps(planted) + "\n")
         wheel(src / "core", dist)
@@ -656,6 +720,7 @@ def check(tmp: Path) -> str:
     """The core's check, in `tmp`: the wheel's formats, then the wheel with `[server]`, then alone at its floors."""
     found = floors()
     wheel = build(tmp)
+    versioned(wheel, tree_version())
     count = carried(wheel)
     with_server(tmp, wheel)
     alone(tmp, wheel, found)
@@ -678,6 +743,7 @@ def build_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
+        shutil.copyfile(VERSION, src / "VERSION")
         wheel(src / "readers" / "infrahub", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -715,6 +781,9 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     installed beside `core_wheel`, the core with no extra, in an empty environment of its own,
     where `PROBE_READER` runs outside the tree and `fylgja-infrahub --help` exits 0."""
     wheel = build_reader(tmp)
+    version = tree_version()
+    versioned(wheel, version)
+    requires_core(wheel, version)
     queries = carried_by_reader(wheel)
     commit = DCIM_COMMIT.read_text().strip()
     env = venv(tmp / "reader" / "venv")
@@ -722,7 +791,8 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "python"), "-I", "-c", PROBE_READER, str(ROOT), str(READER_DOCUMENT), commit, *NOT_BESIDE_READER],
         tmp)
     run([str(env / "fylgja-infrahub"), "--help"], tmp)
-    return (f"wheelcheck: {wheel.name} carries the reader's {len(READER_FORMATS)} format and no other, and its "
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major; it carries the reader's "
+            f"{len(READER_FORMATS)} format and no other, and its "
             f"{queries} GraphQL documents; beside {core_wheel.name} alone it decodes {READER_DOCUMENT.name} outside "
             "the tree, its command imports with nothing of the server, Prefect, Infrahub's SDK or the example, and "
             "answers --help")
@@ -741,6 +811,7 @@ def build_netbox_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
+        shutil.copyfile(VERSION, src / "VERSION")
         wheel(src / "readers" / "netbox", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -780,23 +851,35 @@ def refused_without_token(command: Path, tmp: Path) -> None:
 
 
 def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
-    """The NetBox reader's check, under `tmp/netbox-reader`: its wheel, from `build_netbox_reader`, and what it carries;
-    then the wheel installed beside `core_wheel`, the core with no extra, in an empty venv of its own,
+    """The NetBox reader's check, under `tmp/netbox-reader`: its wheel, from `build_netbox_reader`, its version and its
+    requirement of the core, and what it carries; then, in an empty venv of its own, the core's base libraries from the
+    index and `fylgja-netbox==<VERSION>` by name from a directory of `core_wheel` and its wheel alone, no index, so the
+    core with no extra,
     where `PROBE_NETBOX_READER` runs outside the tree over a copy of the seed's reader document,
     `fylgja-netbox --help` exits 0 and `fylgja-netbox check` with no token is refused, naming the variable."""
     wheel = build_netbox_reader(tmp)
+    version = tree_version()
+    versioned(wheel, version)
+    requires_core(wheel, version)
     carried_by_netbox_reader(wheel)
     here = tmp / "netbox-reader"
     reader = here / NETBOX_READER_DOCUMENT.name
     shutil.copyfile(NETBOX_READER_DOCUMENT, reader)
+    links = here / "links"
+    links.mkdir()
+    shutil.copyfile(core_wheel, links / core_wheel.name)
+    shutil.copyfile(wheel, links / wheel.name)
     env = venv(here / "venv")
-    install(env, str(core_wheel), str(wheel))
+    install(env, *base_requirements(core_wheel))
+    install(env, f"fylgja-netbox=={version}", find_links=links)
     run([str(env / "python"), "-I", "-c", PROBE_NETBOX_READER, str(ROOT), str(reader), NETBOX_PROBES, NETBOX_MAPPING,
          *NOT_BESIDE_NETBOX_READER], tmp)
     run([str(env / "fylgja-netbox"), "--help"], tmp)
     refused_without_token(env / "fylgja-netbox", tmp)
-    return (f"wheelcheck: {wheel.name} carries the NetBox reader's {len(NETBOX_READER_FORMATS)} format and no other; "
-            f"beside {core_wheel.name} alone it decodes {NETBOX_READER_DOCUMENT.name} outside the tree, its command "
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, and fylgja-netbox=={version} "
+            "installs by name from a directory of the two wheels and no index, with no pre-release flag; it carries "
+            f"the NetBox reader's {len(NETBOX_READER_FORMATS)} format and no other; beside {core_wheel.name} alone it "
+            f"decodes {NETBOX_READER_DOCUMENT.name} outside the tree, its command "
             "imports with nothing of the server, Prefect, a client library of Infrahub's or NetBox's, the Infrahub "
             "reader or the example, answers --help, and refuses a check without a token, naming the variable")
 
@@ -841,11 +924,13 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
         ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
     )
     shutil.copytree(ROOT / "formats", src / "formats")
+    shutil.copyfile(VERSION, src / "VERSION")
     wheel(src / "orchestrator", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
     built = wheels[0]
+    versioned(built, tree_version())
     queries = carried_by_example(built)
     reader, netbox_reader = build_reader(tmp), build_netbox_reader(tmp)
     env = venv(here / "venv")

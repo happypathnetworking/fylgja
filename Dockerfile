@@ -15,10 +15,11 @@ FROM python:3.14.9-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a0
 COPY --from=ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 /uv /usr/local/bin/uv
 
 # The tree's layout: core/setup.py copies into the wheel the formats its CORE_FORMATS names, each
-# byte for byte its file in ../formats (D-066, D-084).
+# byte for byte its file in ../formats (D-066, D-084), and reads the version from ../VERSION (D-106).
 COPY core/pyproject.toml core/setup.py /src/core/
 COPY core/src /src/core/src
 COPY formats /src/formats
+COPY VERSION /src/VERSION
 # The wheel built, then installed with its server extra, the server's libraries at their pins
 # (D-084): resolved as an integrator's install is, not from the lock. The interpreter is the
 # image's, never a uv-managed one. Bytecode is compiled at install: uv compiles none by default,

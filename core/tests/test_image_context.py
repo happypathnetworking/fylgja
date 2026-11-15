@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 # What the build context may hold: the wheel's sources, beside the formats it carries (core/setup.py reads
-# ../formats), and the packages the image serves.
-ALLOWED = ["core/pyproject.toml", "core/setup.py", "core/src", "formats", "psp", "probes"]
+# ../formats), and the packages the image serves; then the version the build reads (core/setup.py reads ../VERSION).
+ALLOWED = ["core/pyproject.toml", "core/setup.py", "core/src", "formats", "psp", "probes", "VERSION"]
 
 _DIGEST = re.compile(r"@sha256:([0-9a-f]{64})(?:\s|$)")
 _UV_IMAGE = re.compile(r"ghcr\.io/astral-sh/uv:([0-9.]+)@sha256:[0-9a-f]{64}")

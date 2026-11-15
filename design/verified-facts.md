@@ -9033,6 +9033,37 @@ once. *(2026-11-13)*
   ("Resolved 130 packages", "Checked 127 packages"), `uv.lock` unchanged; `uv python list
   --only-installed` showed `/usr/bin/python3.14` and `/usr/bin/python3` (cpython 3.14.4) and no
   uv-managed Python.
+- **A version read from a file** *(2026-11-15, uv 0.12.23, setuptools 84.2.1)*. Read in a scratch
+  copy of `phase-10-integration` at 4a8b1ba (a `git archive`), with `VERSION` at its root holding
+  `1.0.0rc1`, each member's `pyproject.toml` listing `dynamic = ["version"]` in place of `version`,
+  and each `setup.py` passing the file's line to `setup(version=...)`; the second `make venv`
+  below again in the worktree of `phase-10/3-release`. Each reading was run once.
+  - **The build takes it.** `uv build --wheel` of `core` wrote `fylgja_core-1.0.0rc1-py3-none-any.whl`;
+    its `METADATA` says `Version: 1.0.0rc1`, its `WHEEL` `Generator: setuptools (84.2.1)`, the
+    setuptools the build's `setuptools>=80` resolved that day.
+  - **The lock records no version for a dynamic one.** `uv sync --locked` over the old lock exited 1
+    ("The lockfile at `uv.lock` needs to be updated"); `uv lock` printed "Updated fylgja-core v0.0.0
+    -> (dynamic)" and the same for the other three, and the lock differed in the four members'
+    `version = "0.0.0"` lines, removed, and nowhere else.
+  - **A workspace member's range is not recorded.** With each reader's dependency
+    `fylgja-core>=1.0.0rc1,<2`, `uv lock` changed nothing: the readers' `requires-dist` holds
+    `{ name = "fylgja-core", editable = "core" }` with no specifier. With `fylgja-core>=9,<10` in
+    the Infrahub reader, which the core at `1.0.0rc1` does not meet, `uv lock --locked` and
+    `uv lock` each exited 0 and the lock was byte-identical.
+  - **A changed `VERSION` does not reach `core/.venv` by itself.** After a sync at `1.0.0rc1`,
+    `VERSION` set to `1.0.0rc2` and `uv sync --locked --all-packages --all-extras` run again: exit 0,
+    "Checked 127 packages", nothing built, and `importlib.metadata.version` still answered `1.0.0rc1`
+    for all four. In the worktree, `make venv` the same: exit 0, "Checked 127 packages", the core
+    still `1.0.0rc1`.
+  - **With `tool.uv.cache-keys` naming it, it does.** Each member given `[tool.uv] cache-keys =
+    [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "<up>/VERSION" }]`, `<up>` the
+    relative path to the root: the next sync rebuilt the four ("Building fylgja-core ...") and,
+    with `VERSION` at `1.0.0rc2`, installed all four at `1.0.0rc2`; `uv sync --locked` exited 0
+    both times and the lock was unchanged.
+  - **A build's copy needs the file beside it.** A copy of `core/` and `formats/` alone, built by
+    `uv build --wheel`, exited 2, the backend's `get_requires_for_build_wheel` failing on
+    "`<copy>/VERSION` cannot be read"; with `VERSION` copied to the copy's root, beside `formats/`,
+    it built `fylgja_core-1.0.0rc1-py3-none-any.whl`.
 - **Not read:**
   - `uv sync` against a venv of another Python minor.
   - the uv'd CI: it has not run, and plan 5's run is its first.

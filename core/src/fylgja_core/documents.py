@@ -9,9 +9,9 @@ is None, and a document member whose name is not a Python name is declared with
 Each format module follows one pattern: `validate(doc)` reports every problem in one pass
 (Constitution III), the version first, then the schema, then the rules the schema cannot
 state, each with a stable rule id and a JSON pointer; `decode(doc)` validates and builds the
-model type, or raises `Rejected`; `load(path)` reads a file and decodes it. A format the core
-answers with has `decode_answer(doc)` too, for what a client reads: `decode` with a member the
-schema does not name passed over (`answer_problems`, D-105).
+model type, or raises `Rejected`; `load(path)` reads a file and decodes it. Findings and problem,
+which a client decodes from what the core answers, have `decode_answer(doc)` too: `decode` with a
+member the schema does not name passed over (`answer_problems`, D-105).
 """
 
 from __future__ import annotations

@@ -212,6 +212,8 @@ def _at(doc: Any, path: tuple[Any, ...]) -> Any:
 def _widen(parts: tuple[str, ...], doc: Any) -> Any:
     """`doc` with `later` added to every object the schema at `parts` refuses it in, one at a time,
     so that an object a map of names types, which takes any name, gains nothing."""
+    # A map whose value schema refused `{"member": 1}` would gain a name here, not a member, and
+    # an answer's validator would refuse it rightly; API 1 has no such map today.
     validator = _validator(parts)
     refused = []
     for path in _objects(doc):

@@ -157,11 +157,12 @@ netbox-hook:
 netbox-change:
 	$(VENV)/bin/python netbox/seed/change.py --branch $(NETBOX_BRANCH) $(if $(filter 1,$(NETBOX_TAG)),--tag )-- python3 -I scripts/edge_dev.py run --source netbox --local $(LOCAL) --main $(MAIN) -- stage mark
 
-# infrahubctl, in a venv of its own under local/infrahub/, so that the SDK meets nothing else (D-083).
+# infrahubctl, in a venv of its own under local/infrahub/, so that the SDK meets nothing else (D-083): made by uv, at
+# the SDK's pin, and no part of the workspace.
 $(LOCAL)/infrahub/.venv/bin/infrahubctl:
-	python3 -m venv $(LOCAL)/infrahub/.venv
+	uv venv --no-project --clear --python python3 $(LOCAL)/infrahub/.venv
 	printf '*\n' > $(LOCAL)/infrahub/.venv/.gitignore
-	$(LOCAL)/infrahub/.venv/bin/pip install -q 'infrahub-sdk[ctl]==$(INFRAHUB_SDK_VERSION)'
+	uv pip install -q --python $(LOCAL)/infrahub/.venv/bin/python 'infrahub-sdk[ctl]==$(INFRAHUB_SDK_VERSION)'
 
 # The schema library, the group fylgja-devices and this repository's registration on main, at REF, the branch checked
 # out, and its commit (CONTRIBUTING.md); a detached head names no branch and is refused. Load local/.env first.

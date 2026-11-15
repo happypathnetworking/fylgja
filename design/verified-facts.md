@@ -9001,9 +9001,26 @@ once. *(2026-11-13)*
   `/tmp`, a tmpfs, a different filesystem from the cache, `make venv` took 6 s, printed "Failed to
   hardlink files; falling back to full copy", installed 127 packages, made no `bin/pip`, and wrote
   `uv = 0.12.23` into `pyvenv.cfg`. *(2026-11-15)*
+- **`astral-sh/setup-uv`, read and not run.** Read on 2026-11-15 from GitHub by anonymous
+  requests. The repository's tags carry a floating major tag up to `v7` (`v7` at
+  `94527f2e458b27549849d47d273a16bec83a01e9`, `v7.6.0`, released 2026-03-16, at
+  `37802adc94f370d6bfd71619e3f0bf239e1f3b78`); from `v8.0.0` to `v10.3.3` (released 2026-10-28)
+  there is a tag for each release and none for a major (`git/ref/tags/v10` answered 404). Its
+  `action.yml` at `v7` has the input `version` ("The version of uv to install e.g., `0.5.0`
+  Defaults to the version in pyproject.toml or 'latest'"), and `python-version` (sets
+  `UV_PYTHON`, empty by default), `enable-cache` (default `"auto"`), `version-file`,
+  `activate-environment` (default `"false"`); it runs on `node24`. That the workflow as changed
+  here has not run is so: its first run is the release candidate's.
+- **`infrahubctl`'s environment by uv.** With `LOCAL` an empty scratch directory,
+  `uv venv --no-project --clear --python python3 <LOCAL>/infrahub/.venv`, the `.gitignore` of `*`
+  and `uv pip install -q --python <venv>/bin/python 'infrahub-sdk[ctl]==1.23.2'` ran in 4.8 s
+  and exited 0; `infrahubctl version` printed "Python: 3.14.4" and "Python SDK: v1.23.2", as
+  the pip-made environment did on 2026-11-09. `python -m pip` in it answered "No module named
+  pip"; its `pyvenv.cfg` holds `uv = 0.12.23`. The recipe run again over that environment
+  (`--clear`) made it anew and installed the same, exit 0. *(2026-11-15)*
 - **Not read:** `uv sync` against a venv of another Python minor;
   `scripts/wheelcheck.py`'s empty-environment installs under uv, the base at its floors among
-  them; CI's `setup-uv`.
+  them.
 
 ## Docker Compose v5.6.0
 

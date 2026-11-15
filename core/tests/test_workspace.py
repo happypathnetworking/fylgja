@@ -11,6 +11,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 MEMBERS = ["core", "readers/infrahub", "readers/netbox", "orchestrator"]
 NAMES = {
@@ -91,3 +93,63 @@ def test_venv_is_a_locked_sync_into_core_venv() -> None:
     assert f"UV_PROJECT_ENVIRONMENT={ROOT}/core/.venv" in sync[0]
     assert "uv sync --locked --all-packages --all-extras --python python3" in sync[0]
     assert not [line for line in lines if "pip" in line]
+
+
+def test_ci_installs_the_trees_uv_before_make_venv() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"lint-and-test", "image"}
+    steps = jobs["lint-and-test"]["steps"]
+    uses = [step.get("uses", "") for step in steps]
+    (python,) = [i for i, name in enumerate(uses) if name.startswith("actions/setup-python@")]
+    (setup,) = [i for i, name in enumerate(uses) if name.startswith("astral-sh/setup-uv@")]
+    (venv,) = [i for i, step in enumerate(steps) if step.get("run") == "make venv"]
+    assert python < setup < venv
+    assert steps[python]["with"] == {"python-version": "3.14"}
+    assert re.fullmatch(r"astral-sh/setup-uv@v\d+", steps[setup]["uses"])
+    assert steps[setup]["with"] == {"version": UV_VERSION}
+    assert not [step for step in jobs["image"]["steps"] if "setup-uv" in step.get("uses", "")]
+
+
+# What calls pip or makes a venv by anything but uv: `pip install` and its kin not led by `uv `, `python -m pip`,
+# `-m venv`, a call of an environment's `bin/pip`, and the same two as the words of an argument list.
+PIP_OR_VENV = {
+    "pip as a command": re.compile(r"(?<!uv )\bpip (install|wheel|download|freeze)\b"),
+    "-m pip": re.compile(r"-m pip\b"),
+    "bin/pip": re.compile(r"/bin/pip\b"),
+    "-m venv": re.compile(r"-m venv\b"),
+    "an argument list's pip or venv": re.compile(r'"-m",\s*"(pip|venv)"'),
+}
+PIP_OR_VENV_EXAMPLES = {
+    "pip as a command": "\t$(VENV)/bin/pip install -q thing",
+    "-m pip": "    python3 -m pip install thing",
+    "bin/pip": "ENV=/opt/venv/bin/pip",
+    "-m venv": "\tpython3 -m venv $(LOCAL)/x",
+    "an argument list's pip or venv": 'run(["python3", "-m", "venv", "x"])',
+}
+
+
+def test_the_patterns_that_find_pip_and_venvs_are_not_blind() -> None:
+    assert PIP_OR_VENV.keys() == PIP_OR_VENV_EXAMPLES.keys()
+    for kind, example in PIP_OR_VENV_EXAMPLES.items():
+        assert PIP_OR_VENV[kind].search(example), kind
+    assert not PIP_OR_VENV["pip as a command"].search("RUN uv pip install --python /v/bin/python x")
+
+
+def test_what_the_tree_runs_calls_pip_and_makes_venvs_by_uv_alone() -> None:
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", "Makefile", "Dockerfile", "netbox/dev/Dockerfile", ".github/workflows/*.yml",
+         "scripts/*.py", "testdata/s3/generate.py"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split("\0")
+    files = [name for name in tracked if name]
+    assert {"Makefile", "Dockerfile", "netbox/dev/Dockerfile", ".github/workflows/ci.yml", "scripts/wheelcheck.py",
+            "testdata/s3/generate.py"} <= set(files)
+    found = [
+        f"{name}:{number}: {line.strip()}"
+        for name in files
+        for number, line in enumerate((ROOT / name).read_text().splitlines(), 1)
+        for pattern in PIP_OR_VENV.values()
+        if pattern.search(line)
+    ]
+    assert found == []

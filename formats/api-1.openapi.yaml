@@ -13,10 +13,14 @@ info:
     problem-1 document. The API answers JSON only; clients render. Twins are independent: each has
     at most one run at a time.
   license:
-    name: see repository
+    name: Apache-2.0
+    identifier: Apache-2.0
 servers:
   - url: http://127.0.0.1:7650
-    description: Local development; TLS terminates at the ingress in production.
+    description: >-
+      Local development, over HTTP on loopback. The server ends TLS itself where FYLGJA_TLS_CERT and
+      FYLGJA_TLS_KEY are set (D-063); nothing stands in front of it, and a client reaches it at the address and
+      scheme its operator gives.
 security:
   - bearer: []
 tags:
@@ -538,8 +542,9 @@ components:
       description: >-
         A per-client token, each mapped to a principal (from Secrets, or a local file of token hashes in
         development); several may be valid at once for rotation. A missing or unknown token is 401
-        (auth.token.missing, auth.token.unknown); a known principal not allowed the call is 403
-        (auth.forbidden). Every request's principal is written to the audit log and to the runs it starts.
+        (auth.token.missing, auth.token.unknown). 403 (auth.forbidden), a known principal not allowed
+        the call, is reserved until roles exist (D-025): no route answers it, and every known principal
+        makes every call. Every request's principal is written to the audit log and to the runs it starts.
 
   parameters:
     TwinName:
@@ -601,7 +606,9 @@ components:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
     Forbidden:
-      description: The principal may not make this call.
+      description: >-
+        The principal may not make this call (auth.forbidden). It is reserved until roles exist: no route
+        answers it yet, and every known principal makes every call (D-025).
       content:
         application/problem+json:
           schema: { $ref: "problem-1.schema.json" }
@@ -648,7 +655,9 @@ components:
         build:
           type: string
           minLength: 1
-          description: The core's build (version and commit); the CLI's --version and bug reports show it.
+          description: >-
+            The core's build, `<version> (commit <commit>)`, the commit `unknown` where the build could not
+            read it; as each command's --version prints it, and bug reports show it.
         formats:
           type: object
           additionalProperties: false

@@ -1540,3 +1540,54 @@ def test_the_thin_cli_destroying_a_twin_mid_create_waits_until_it_is_gone(
     assert cli.main(["twin", "destroy", "t"]) == 0
     assert "twin t deleted" in capsys.readouterr().out
     assert core.store.list_twins() == []
+
+
+# The document held to the server (D-105: 1.0 holds API 1 as the document states it; D-107's one
+# test of routes, so a page of the user's documents does not write it again).
+DOCUMENT = yaml.safe_load((ROOT / "formats" / "api-1.openapi.yaml").read_text())
+HTTP_METHODS = {"get", "put", "post", "delete", "patch", "options", "head", "trace"}
+
+
+def test_the_routes_are_the_documents_paths_and_methods(core: Core) -> None:
+    from starlette.routing import Route
+
+    routes: dict[str, set[str]] = {}
+    for route in core.app.routes:
+        assert isinstance(route, Route), route
+        routes[route.path] = {m for m in (route.methods or ()) if m != "HEAD"}
+    paths = {path: {m.upper() for m in item if m in HTTP_METHODS} for path, item in DOCUMENT["paths"].items()}
+    assert routes == paths
+
+
+def test_every_status_the_document_names_is_one_the_server_answers_with() -> None:
+    from fylgja_core.server import problems
+
+    answered_with = set(problems.TITLES) | set(problems.CLASSES)
+    for path, item in DOCUMENT["paths"].items():
+        for method, operation in item.items():
+            if method not in HTTP_METHODS:
+                continue
+            for status in operation["responses"]:
+                if status != "default" and not status.startswith("2"):
+                    assert int(status) in answered_with, (path, method, status)
+
+
+def test_the_documents_licence_is_the_distributions() -> None:
+    import tomllib
+
+    project = tomllib.loads((ROOT / "core" / "pyproject.toml").read_text())["project"]
+    assert DOCUMENT["info"]["license"] == {"name": "Apache-2.0", "identifier": "Apache-2.0"}
+    assert project["license"] == DOCUMENT["info"]["license"]["identifier"]
+
+
+def test_the_document_says_tls_ends_at_the_server() -> None:
+    assert "FYLGJA_TLS_CERT" in DOCUMENT["servers"][0]["description"]
+    assert "ingress" not in (ROOT / "formats" / "api-1.openapi.yaml").read_text().lower()
+
+
+def test_403_is_described_as_reserved_as_the_rules_say() -> None:
+    assert "reserved" in DOCUMENT["components"]["responses"]["Forbidden"]["description"]
+    assert "reserved" in DOCUMENT["components"]["securitySchemes"]["bearer"]["description"]
+    server = ROOT / "core" / "src" / "fylgja_core" / "server"
+    filed = [p.name for p in server.glob("*.py") if "auth.forbidden" in p.read_text()]
+    assert filed == []

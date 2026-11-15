@@ -3369,7 +3369,8 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
   - **What it installed**, `importlib.metadata` in its venv: the 33 distributions of the bullet
     "What it installed" at the same versions, `pip` 26.2.2 not among them and PyYAML 6.0.3 and
     fylgja-core 0.0.0 as before; no other difference. `readlink /opt/fylgja/venv/bin/python` is
-    `/usr/local/bin/python3`; the venv's `bin` holds no `pip`, and holds no `uv`.
+    `/usr/local/bin/python3`; the venv's `bin` holds no `pip`, and `command -v uv` in
+    the final stage found nothing (next bullet).
   - **The base holds pip.** In the final stage `command -v uv` found nothing, but `command -v pip`
     found `/usr/local/bin/pip`, and `/usr/local/bin/python3 -m pip --version` answered pip 26.2.2
     from `/usr/local/lib/python3.14/site-packages/pip`: the base image's own, which the
@@ -8935,7 +8936,7 @@ The timing is one run. *(2026-11-09)*
   anyio 4.16.0, attrs 26.1.0, certifi 2026.10.23, h11 0.16.0, httpcore 1.0.9, idna 3.20,
   jsonschema-specifications 2023.7.1, rpds-py 2026.9.1, sniffio 1.3.1 and typing-extensions
   4.16.0: the 2026-11-09 list's transitive set for the base (jsonschema-specifications
-  2023.7.1 and sniffio as there), by a resolver that put no other version. No floor moved.
+  2023.7.1 and sniffio as there), and no other version differed. No floor moved.
 
 ## uv 0.12.23
 
@@ -9011,8 +9012,7 @@ once. *(2026-11-13)*
   (`"auto"`) and `activate-environment` (`"false"`) have the same defaults; `save-cache` went from
   `"true"` to `"auto"` and `prune-cache` from `"true"` to `"false"`; `python-arch`, `no-project`,
   `download-from-astral-mirror` (default `"true"`), `quiet` and the output `python-runtime-id`
-  are new. Not run. That the workflow as changed here has not run is so: its first run is the
-  release candidate's.
+  are new. Not run in this task; plan 5's run is its first with this step.
 - **`infrahubctl`'s environment by uv.** With `LOCAL` an empty scratch directory,
   `uv venv --no-project --clear --python python3 <LOCAL>/infrahub/.venv`, the `.gitignore` of `*`
   and `uv pip install -q --python <venv>/bin/python 'infrahub-sdk[ctl]==1.23.2'` ran in 4.8 s
@@ -9028,7 +9028,27 @@ once. *(2026-11-13)*
   orchestrator 832, readers/netbox 340). `git status --porcelain` then printed nothing and
   `uv.lock` was byte-identical. The first `make venv` ran with uv's wheel cache warm, so a
   download from PyPI was not timed. *(2026-11-15)*
-- **Not read:** `uv sync` against a venv of another Python minor.
+- **`python-preference`** *(2026-11-15, uv 0.12.23)*. With `python-preference = "only-system"`
+  added to the root's `[tool.uv]`, `make venv` over the worktree's `core/.venv` exited 0
+  ("Resolved 130 packages", "Checked 127 packages"), `uv.lock` unchanged; `uv python list
+  --only-installed` showed `/usr/bin/python3.14` and `/usr/bin/python3` (cpython 3.14.4) and no
+  uv-managed Python.
+- **Not read:**
+  - `uv sync` against a venv of another Python minor.
+  - the uv'd CI: it has not run, and plan 5's run is its first.
+  - `make venv` on a host with no uv on the PATH (the shell's `uv: not found` is what is expected,
+    not read).
+  - a host with a uv-managed Python installed: none is on the development host, and installing one
+    is a download the root forbids; so `python-preference = "only-system"` was not read to refuse one.
+  - `uv lock` and `make venv` with an index configured (`UV_INDEX*`, a `uv.toml` index): none was
+    set in any reading above.
+  - whether `uv venv --no-project` and `uv pip install` refuse under a `required-version`
+    mismatch (`uv sync`, `uv lock` and `uv venv` were read to; the wheel check therefore compares
+    the version itself).
+  - a hand-installed library removed at the next `make venv`: D-108's consequence, taken from uv's
+    help, not run.
+  - a cold download from PyPI: every sync above ran with uv's wheel cache warm.
+  - the image on linux/arm64.
 
 ## Docker Compose v5.6.0
 

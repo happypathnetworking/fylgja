@@ -4951,7 +4951,7 @@ core writes comes from its `now()`.
 **Status:** Accepted 2026-11-09 (phase 8). Adds to [D-039](#d-039): httpx is the reader's
 one library beside the core's package. [D-034](#d-034) stands and binds the reader's tests.
 Superseded in part by [D-091](#d-091) on 2026-11-12: the development Infrahub held 4.46 GiB,
-not about 5.5.
+not about 5.5. Detailed by [D-108](#d-108) (provisional): `infrahubctl`'s environment is made by uv.
 
 #### Context
 

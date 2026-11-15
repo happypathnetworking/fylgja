@@ -87,7 +87,7 @@ statement for people, and is the one that is right where the two disagree.
 | Tool | Version | Notes |
 |---|---|---|
 | Python | 3.14 | [D-001](design/decisions.md#d-001) |
-| uv | 0.12.23 | Makes every Python environment the tree makes, in place of pip and `python -m venv` ([D-108](design/decisions.md#d-108)): `core/.venv`, the image's build stage, the wheel check's builds and empty environments and `infrahubctl`'s own; the root `pyproject.toml` requires exactly this version |
+| uv | 0.12.23 | Makes every Python environment the tree makes, in place of pip and `python -m venv` ([D-108](design/decisions.md#d-108)): `core/.venv`, the image's build stage, the wheel check's builds and empty environments and `infrahubctl`'s own; the root `pyproject.toml` requires exactly this version. Install exactly 0.12.23, by uv's own installer or the distribution's package, pinned to it; another uv is refused by `make venv` ("Required uv version `==0.12.23` does not match the running version") and by `make wheelcheck` in one line naming both, and with no uv on the PATH `make venv` is the shell's `uv: not found`, exit 127 |
 | httpx, jsonschema, referencing, PyYAML | `>=0.27.0,<1`, `>=4.18.0,<5`, `>=0.28.4,<1`, `>=6.0.3,<7`; in the `server` extra 0.28.1, 4.26.0, 0.37.0, 6.0.3 | The base install, the model and the client ([D-084](design/decisions.md#d-084)): the formats' validation, the packages' YAML and the client's HTTP; the server's readiness wait and push use the same httpx ([D-039](design/decisions.md#d-039)) |
 | Starlette, uvicorn | 1.9.0, 0.54.0 | The `server` extra: the server's ASGI application and the process that serves it ([D-025](design/decisions.md#d-025)) |
 | pygnmi, grpcio, protobuf | 0.8.15, 1.84.0, 7.36.2 | The `server` extra: verify's gNMI reader ([D-052](design/decisions.md#d-052)) |
@@ -110,7 +110,9 @@ least two weeks old when it was chosen, but Prefect's and NetBox's, as their row
 `core/.venv` from `uv.lock`, the uv workspace's lock at the root ([D-108](design/decisions.md#d-108)):
 the core, the reader, the NetBox reader and the example orchestrator, each editable with every
 extra, the versions every tier runs on. A pin is moved in its `pyproject.toml` and the lock made
-again by `uv lock`, in one commit. The lock's other versions are the ones PyPI held the day it
+again by `uv lock`, in one commit. uv's own version is written in the root
+`pyproject.toml`'s `required-version`, the `Dockerfile`'s image tag and, with the tag, its digest, CI's `version`,
+`README.md`, `AGENTS.md`, this file and the `Dockerfile`'s comment, and moves in all of them together. The lock's other versions are the ones PyPI held the day it
 was made, as an install's are: the two-week rule binds the pins. A venv inside the tree carries
 a `.gitignore` of `*`.
 
@@ -118,7 +120,7 @@ a `.gitignore` of `*`.
 
 | Target | What it does |
 |---|---|
-| `make venv` | The core's venv, `core/.venv`, a locked `uv sync` of the workspace from `uv.lock` ([D-108](design/decisions.md#d-108)): the core, the reader, the NetBox reader and the example orchestrator, each editable with every extra, at the versions every tier runs on; a lock that disagrees with a `pyproject.toml` is refused |
+| `make venv` | The core's venv, `core/.venv`, a locked `uv sync` of the workspace from `uv.lock` ([D-108](design/decisions.md#d-108)): the core, the reader, the NetBox reader and the example orchestrator, each editable with every extra, at the versions every tier runs on; a lock that disagrees with a `pyproject.toml` is refused. A `core/.venv` that pip made before keeps its pip: `make venv` syncs it in place, and removing `core/.venv` once gives one with none |
 | `make lint` | ruff over `core/`, `scripts/`, `infrahub/` and `netbox/`, then mypy in strict mode over the core, its tests and `scripts/`, and again, apart, over `infrahub/seed/`, `infrahub/tests/` and `scripts/infrahub_dev.py`, and a third time over `netbox/seed/`, `netbox/tests/` and `scripts/netbox_dev.py`, since the three directories of tests name modules alike; then the same over the reader, `readers/infrahub/`, and over `orchestrator/`, and over the NetBox reader, `readers/netbox/` |
 | `make test` | The pure tier: no infrastructure. `core/tests/`, then `infrahub/tests/`, then `netbox/tests/`, then the reader's, then the example orchestrator's, then the NetBox reader's. Gates every pull request |
 | `make live` | The live tier on the local driver: the driver's own modules under `core/tests/live/`, then the conformance suite on the local harness. The driver's own: readiness and the push on one SR Linux and one cEOS node booted under containerlab (`core/tests/live/test_push.py`); labs through the local driver, `admit`, `apply`, `inspect` and `destroy`, a `destroy` refused under packages that do not list a node's image, the residue rule, two labs at once, and an `admit` refused on a pool a Docker network of the test's own holds, naming the network and `FYLGJA_LAB_POOL` (`core/tests/live/test_containerlab_driver_live.py`); three labs applied at once, their deploys one after the other, with the host's load and connections read (`core/tests/live/test_many_labs_live.py`, about 2.5 minutes alone); `changes` held to containerlab's own dry run for every step fixture, with the hot-add recreate of two cEOS nodes and `exec` in a probe host (`core/tests/live/test_changes_live.py`, about 4.5 minutes alone); verify over gNMI on a probed twin, with a node stopped and started by containerlab and by Docker, and a configured cEOS node's host name (`core/tests/live/test_verify_live.py`, about 5 minutes alone); the trigger and the restore through Docker's own restart paths, the loop run in-process with its resync an hour away: a node restarted by `docker restart` and one started again by Docker's restart policy, each pushed again by a restore the driver's events started within seconds (its links are not restored), and one removed, reported missing once its boot window passed (`core/tests/live/test_restore_live.py`, about 4 minutes alone); and the object store against Versity S3 Gateway under Docker, the store contract whole and every compare-and-set raced by 32 stores (`core/tests/live/test_object_store_live.py`, about 1 minute alone). Then the suite, as `make conformance DRIVER=containerlab` runs it (below), its many-twins scenario among it, about 36 minutes of the whole. 167 tests by collection; the tier was last timed whole at about 54 minutes, with the cluster quiet, and the suite has since grown from about 31 minutes to 36, so about 59 minutes, a derivation and not a reading. Load `local/.env` first |
@@ -175,7 +177,7 @@ Development and the live tier never need Kubernetes (Constitution XIII).
 
 ## Local environment
 
-**uv** reads its own configuration (`~/.config/uv/uv.toml`, the `UV_*` variables). An index set there is written into `uv.lock` by `uv lock` and refused by the tree's test, so a lock is written against PyPI alone.
+**uv** reads its own configuration (`~/.config/uv/uv.toml`, the `UV_*` variables). An index set there is written into `uv.lock` by `uv lock` and refused by the tree's test, so a lock is written against PyPI alone. That was not read with an index set (design/verified-facts.md, "uv 0.12.23", "Not read"): it follows from the tree's test, which names the host of any address that is not PyPI's.
 
 **Credentials** live in `local/.env` alone (git-ignored, mode `0600`), with the names in
 [`.env.example`](.env.example).
@@ -753,9 +755,9 @@ fails its check. NetBox's change is its runbook's last step, with the tag.
 
 What only the host's owner can give, each with what the script says where it is not met:
 
-- **A Linux host with Python 3.14, GNU make, git, `ss` and the network.** Each of `docker`, `containerlab`, `git`,
-  `make` and `ss` not on `PATH` is `<name> is not on PATH`. Python's version and the network are not checked: `make
-  venv` needs Python 3.14, and a fetch, a build and a pull need the network.
+- **A Linux host with Python 3.14, uv 0.12.23, GNU make, git, `ss` and the network.** Each of `docker`, `containerlab`, `git`,
+  `make` and `ss` not on `PATH` is `<name> is not on PATH`. Python's and uv's versions and the network are not checked: `make
+  venv` needs Python 3.14 and uv 0.12.23, and a fetch, a build and a pull need the network.
 - **The venv**, `core/.venv`: `<checkout>/core/.venv lacks <commands>: run make venv`. Through make the target runs
   `make venv` first where the core's server command is missing.
 - **Docker with its Compose plugin, and containerlab**, each answering: `` `docker info` exited <n>: the Docker

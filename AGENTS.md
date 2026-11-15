@@ -36,7 +36,7 @@ history, and as the reference the Infrahub reader and the example were written a
   that supersedes the old one.
 - **A change to a format is made in `formats/`,** in the same change as the code.
 - **Verify against the running system** before asserting how containerlab, clabernetes,
-  Infrahub, NetBox, Prefect or a network operating system behaves. Record the result in
+  Infrahub, NetBox, Prefect, uv or a network operating system behaves. Record the result in
   `design/verified-facts.md`.
 - **Never echo, log or persist a token or a password.** `local/.env` holds every value.
 - **Commit with a conventional-commit message whose body says why.** Never commit `local/`.
@@ -46,5 +46,5 @@ history, and as the reference the Infrahub reader and the example were written a
 
 ## Build and test
 
-`make venv`, then `make lint` (ruff, mypy strict) and `make test` (the pure tier, no
-infrastructure).
+`make venv` (it needs uv 0.12.23), then `make lint` (ruff, mypy strict) and `make test` (the
+pure tier, no infrastructure).

@@ -41,7 +41,7 @@ from starlette.routing import BaseRoute, Route
 from starlette.testclient import TestClient
 from test_containerlab_cli import gone_within
 
-from fylgja_core import config, kubeapi, lease, packages
+from fylgja_core import config, kubeapi, lease, packages, release
 from fylgja_core import drivers as registry
 from fylgja_core.client import messages
 from fylgja_core.config import Misconfigured, Settings
@@ -200,6 +200,60 @@ def test_the_help_names_the_lab_pool(capsys: pytest.CaptureFixture[str]) -> None
         server.main(["--help"])
     assert stopped.value.code == 0
     assert "FYLGJA_LAB_POOL" in capsys.readouterr().out
+
+
+def test_the_help_says_the_packages_default_to_the_installs(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--help"])
+    assert stopped.value.code == 0
+    text = " ".join(capsys.readouterr().out.split())
+    assert "the packages this install carries" in text
+    assert "FYLGJA_STORE and FYLGJA_TOKENS, which are required" in text
+
+
+def test_a_server_given_no_packages_loads_the_shipped_ones(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("FYLGJA_PACKAGES")
+    made_drivers(monkeypatch)
+    results: list[packages.Loaded] = []
+    real = packages.load
+
+    def recording(dirs: Sequence[Path]) -> packages.Loaded:
+        results.append(real(dirs))
+        return results[-1]
+
+    monkeypatch.setattr(packages, "load", recording)
+    app, store = server.build_app(config.from_environ(os.environ))
+    store.close()
+    del app
+    (loaded,) = results
+    assert {"nokia_srlinux", "arista_eos"} <= set(loaded.platforms)
+    assert "ping" in loaded.probes
+
+
+def test_version_names_the_build_before_anything_is_read(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in [n for n in os.environ if n.startswith("FYLGJA_")]:
+        monkeypatch.delenv(name)
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--version"])
+    assert stopped.value.code == 0
+    out, err = capsys.readouterr()
+    assert (out, err) == (f"fylgja-core-server {release.build('fylgja-core', 'fylgja_core')}\n", "")
+
+
+def test_the_servers_build_is_the_release_build(environ: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> None:
+    endpoint = Endpoint(FakeS3("fylgja"))
+    monkeypatch.setattr(server, "S3", endpoint)
+    made_drivers(monkeypatch)
+    app, store = server.build_app(object_store(environ, "dev/core", Path("/etc/fylgja/s3-ca.pem")))
+    try:
+        with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as client:
+            assert client.get("/v1/version").json()["build"] == release.build("fylgja-core", "fylgja_core")
+    finally:
+        store.close()
 
 
 def test_python_run_optimised_exits_2_before_the_settings_are_read(

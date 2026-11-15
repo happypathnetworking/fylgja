@@ -627,7 +627,6 @@ wheels = [
 
 [[package]]
 name = "fylgja-core"
-version = "0.0.0"
 source = { editable = "core" }
 dependencies = [
     { name = "httpx" },
@@ -689,7 +688,6 @@ provides-extras = ["dev", "server"]
 
 [[package]]
 name = "fylgja-infrahub"
-version = "0.0.0"
 source = { editable = "readers/infrahub" }
 dependencies = [
     { name = "fylgja-core" },
@@ -717,7 +715,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "fylgja-netbox"
-version = "0.0.0"
 source = { editable = "readers/netbox" }
 dependencies = [
     { name = "fylgja-core" },
@@ -745,7 +742,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "fylgja-orchestrator"
-version = "0.0.0"
 source = { editable = "orchestrator" }
 dependencies = [
     { name = "fylgja-core" },

@@ -4,7 +4,7 @@ tried, on which the base's tests passed (verified-facts.md, "The base install at
 major. The server's libraries are the extra `server`, which repeats the base's four at today's pins, so that an
 install of the extra is today's install.
 
-The sixteen modules of the base, imported in a fresh interpreter, load no module of the extra, and their source
+The seventeen modules of the base, imported in a fresh interpreter, load no module of the extra, and their source
 imports, of anything outside the standard library and `fylgja_core`, the base's four alone, a function-local import
 included. The extra is told by its own libraries' modules, never by their dependencies: a library the extra brings
 may be one a base library loads where it finds it installed (httpx imports `click` when it is there, and click is
@@ -40,13 +40,14 @@ BASE: tuple[str, ...] = (
     "probe_package",
     "probes",
     "problem",
+    "release",
     "run",
     "schemas",
     "twin_record",
     "ulid",
 )
-# The seven of them the Infrahub reader needs (D-084).
-READER = {"blueprint", "probes", "findings", "schemas", "documents", "problem", "client"}
+# The eight of them the Infrahub reader needs (D-084).
+READER = {"blueprint", "probes", "findings", "schemas", "documents", "problem", "client", "release"}
 
 # The extra's libraries beyond the base's four, each to the module it installs: a top-level name, but for protobuf,
 # whose `google` is a namespace other distributions share.

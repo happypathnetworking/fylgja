@@ -42,6 +42,7 @@ REFERENCES = {
     "infrahub.opsmill.io": "Infrahub's published Compose file, fetched by scripts/infrahub_dev.py",
     "containerlab.dev": "containerlab's documentation, cited",
     "ghcr.io": "the registry a public image is pulled from",
+    "test.pypi.org": "TestPyPI's upload address, where the publish workflow uploads a candidate's wheels",
 }
 """Hosts the tree names as public references, none of them a site's."""
 

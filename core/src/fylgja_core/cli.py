@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-from fylgja_core import blueprint, documents, findings
+from fylgja_core import blueprint, documents, findings, release
 from fylgja_core.client import (
     Client,
     FollowError,
@@ -164,6 +164,7 @@ def _parser() -> argparse.ArgumentParser:
         description=f"The core's thin CLI, a client of API 1 at ${ADDRESS} with the token in ${TOKEN}.",
     )
     parser.add_argument("--json", action="store_true", help="print the API's documents as JSON")
+    release.add_version(parser, "fylgja-core", "fylgja_core")
     nouns = parser.add_subparsers(dest="noun", required=True, metavar="NOUN")
 
     def verbs(noun: str, about: str) -> Callable[[str, str, Command], argparse.ArgumentParser]:

@@ -102,7 +102,6 @@ import ssl
 import sys
 import threading
 from collections.abc import Awaitable, Callable, Iterator, Sequence
-from importlib.metadata import version
 from pathlib import Path
 from types import FrameType
 from typing import cast
@@ -111,7 +110,7 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from fylgja_core import config, drivers, lease, logs, packages
+from fylgja_core import config, drivers, lease, logs, packages, release
 from fylgja_core.config import Misconfigured, S3Location, Settings
 from fylgja_core.credentials import Provider
 from fylgja_core.documents import Rejected
@@ -450,8 +449,8 @@ def build_app(settings: Settings, *, closing: threading.Event | None = None) -> 
                                     workers=settings.workers, resync_s=settings.resync_s, verifier=verifier,
                                     step_wait_s=settings.step_wait_s)
             app = create_app(store=store, loaded=loaded, drivers=served, default_driver=driver.name,
-                             reconciler=reconciler, verifier=verifier, tokens=tokens, build=version("fylgja-core"),
-                             closing=closing)
+                             reconciler=reconciler, verifier=verifier, tokens=tokens,
+                             build=release.build("fylgja-core", "fylgja_core"), closing=closing)
         except BaseException:
             _closed_anyway(lambda: asyncio.run(drivers.close(driver)), "the driver")  # no loop runs here yet
             raise
@@ -542,11 +541,12 @@ async def _released(held: lease.Lease) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Serve API 1 until uvicorn is stopped; the exit status (the module's docstring lists them)."""
-    argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog="fylgja-core-server",
         description="Serve API 1 and run the reconcile loop over one store. Every setting is a FYLGJA_* "
-                    "variable: FYLGJA_STORE, FYLGJA_PACKAGES and FYLGJA_TOKENS; FYLGJA_LISTEN, FYLGJA_DRIVER, "
-                    "FYLGJA_WORKERS, FYLGJA_STEP_WAIT_S and FYLGJA_RESYNC_S with their defaults; "
+                    "variable: FYLGJA_STORE and FYLGJA_TOKENS, which are required; FYLGJA_PACKAGES, the directories of "
+                    "platform and probe packages, unset or empty the packages this install carries; FYLGJA_LISTEN, "
+                    "FYLGJA_DRIVER, FYLGJA_WORKERS, FYLGJA_STEP_WAIT_S and FYLGJA_RESYNC_S with their defaults; "
                     "FYLGJA_CLABERNETES_NAMESPACE and FYLGJA_POD_CIDR, required by the clabernetes driver, which "
                     "reaches the cluster through KUBECONFIG off it; FYLGJA_LAB_POOL, an IPv4 network the local driver "
                     "takes each lab's /24 from in place of its default; FYLGJA_S3_ENDPOINT, FYLGJA_S3_ACCESS_KEY, "
@@ -556,7 +556,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "core\"). It exits 0 when stopped, 130 on SIGINT, 143 on SIGTERM, 1 when the store is held or "
                     "cannot be opened, the Lease is lost or the application does not start, and 2 on a "
                     "misconfiguration.",
-    ).parse_args(argv)
+    )
+    release.add_version(parser, "fylgja-core", "fylgja_core")
+    parser.parse_args(argv)
     logs.configure()
     terminated = threading.Event()
     before = signal.signal(signal.SIGTERM, functools.partial(_on_sigterm, terminated))

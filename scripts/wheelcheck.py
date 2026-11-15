@@ -6,20 +6,30 @@ Run from the repository root: `python3 -I scripts/wheelcheck.py`, or `make wheel
 D-084). Everything happens in one temporary directory, so the tree is left as it was; uv builds and installs
 from directories outside the tree, so no workspace or lock reaches what it checks (D-108), and a host
 with no `uv` on the PATH is told so before anything is made. Needs the
-network, for the build's requirements and the wheel's dependencies. The core's check, `check`:
+network, for the build's requirements and the wheel's dependencies. Each build's copy of the tree holds
+`VERSION` at its root beside `formats/`, as each `setup.py` reads it, and each wheel's `METADATA` says
+`VERSION`'s version (D-106). Each wheel is built at the tree's commit, `tree_commit`, which the build is given as
+`FYLGJA_BUILD_COMMIT` (the copy holds no `.git`), and holds it as `<package>/COMMIT`; and each installed command's
+`--version` is `<program> <version> (commit <commit>)`, one line. The core's check, `check`:
 
-1. **The wheel.** It is built from a copy of `core/` and `formats/` whose `formats/` is first given
-   `other-1.schema.json`, a schema no list names, as a format another distribution reads would be
-   there; its `fylgja_core/formats/` holds the core's formats, `CORE_FORMATS` in `core/setup.py`,
-   and no other.
+1. **The wheel.** It is built from a copy of `core/`, `formats/`, `psp/` and `probes/` (their READMEs among them)
+   whose `formats/` is first given `other-1.schema.json`, a schema no list names, as a format another distribution
+   reads would be there; its `fylgja_core/formats/` holds the core's formats, `CORE_FORMATS` in `core/setup.py`,
+   and no other, and its `fylgja_core/shipped/` holds, under `CORE_PACKAGES`' names, exactly the YAML git tracks in
+   the tree's `psp/` and `probes/`, byte for byte, and no README (D-106).
 2. **With the extra**, `uv pip install "<wheel>[server]"` in an empty environment: the formats the package
    reads are its own, outside the tree; `three-node.json` validates and `{}` does not; API 1's
    `Created` reads; and `fylgja-core --help` and `fylgja-core-server --help` exit 0, the second
-   once the server's modules have imported, since the server's own parser answers it.
+   once the server's modules have imported, since the server's own parser answers it. Then `fylgja-core-server`
+   is started from that environment with `FYLGJA_STORE`, `FYLGJA_TOKENS` (a token this script makes, never prints and
+   hashes by the installed `auth.hash_token`), `FYLGJA_LISTEN` on a free loopback port and no `FYLGJA_PACKAGES`, a stub
+   `docker` that prints nothing and exits 0 first on `PATH`, so no Docker is needed: `GET /v1/version` answers within
+   `START_S` seconds with the build the wheel holds, `three-node.json` is filed and its bundle built, 201, which only
+   the shipped `nokia_srlinux` and `ping` make possible, and SIGTERM ends it with 143 within `STOP_S` seconds.
 3. **Alone, at its floors**, in a second empty environment: `uv pip install --constraints <file> <wheel>`,
    the file one `name==floor` line a base library, the floors of `core/pyproject.toml`'s ranges.
    There each of the four is installed at its floor; no other library the wheel names for the
-   `server` extra is installed; the base's sixteen modules import (`BASE_MODULES`); the fixture
+   `server` extra is installed; the base's seventeen modules import (`BASE_MODULES`); the fixture
    validates; the client follows a create, over a fake transport answering the version, one
    watch stream of a settling record and an ended run, to that run, the twin not gone; then
    `fylgja-core --help` exits 0, and `fylgja-core-server` exits 2 with one line on stderr whose
@@ -30,9 +40,11 @@ same temporary directory:
 
 1. **Its wheel.** It is built once, by `build_reader`, with `uv build --wheel` from a copy of
    `readers/infrahub/` and `formats/` at their places, as `readers/infrahub/setup.py` finds
-   `formats/` two directories up; its `fylgja_infrahub/formats/` holds the format of the reader's
-   document, `READER_FORMATS`, and no other, its `fylgja_infrahub/queries/` the tree's GraphQL
-   documents, of which there is at least one, and no other, and the package carries `py.typed`.
+   `formats/` two directories up; its `METADATA` names `fylgja-core` once, its specifiers
+   `>=<VERSION>` and `<` the next major (`requires_core`); its `fylgja_infrahub/formats/` holds
+   the format of the reader's document, `READER_FORMATS`, and no other, its
+   `fylgja_infrahub/queries/` the tree's GraphQL documents, of which there is at least one, and
+   no other, and the package carries `py.typed`.
 2. **Beside the base alone**, `uv pip install <the core's wheel> <its wheel>` in an empty environment, the
    core with no extra: `PROBE_READER`, run outside the tree, finds the format the package reads
    beside it and not in the tree; the seed's `reader.yaml` decodes; `schema.COMMIT` is the tree's
@@ -46,13 +58,16 @@ The NetBox reader's check, `check_netbox_reader`, follows it in directories of i
 
 1. **Its wheel.** It is built once, by `build_netbox_reader`, with `uv build --wheel` from a
    copy of `readers/netbox/` and `formats/` at their places, as `readers/netbox/setup.py` finds
-   `formats/` two directories up; its `fylgja_netbox/formats/` holds the format of the reader's
-   document, `NETBOX_READER_FORMATS`, and no other, and the package carries `py.typed`.
-2. **Beside the base alone**, `uv pip install <the core's wheel> <its wheel>` in an empty environment
-   of its own, the core with no extra: `PROBE_NETBOX_READER`, run outside the tree, finds
-   the format the package reads beside it and not in the tree; a copy of the seed's
-   `netbox/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the mapping is
-   `netbox-dcim`; and once the command's module has imported, no module of the server's
+   `formats/` two directories up; it requires the core as the Infrahub reader's does; its
+   `fylgja_netbox/formats/` holds the format of the reader's document, `NETBOX_READER_FORMATS`,
+   and no other, and the package carries `py.typed`.
+2. **Beside the base alone**, in an empty environment of its own: the core's base libraries from the
+   index, then `uv pip install --no-index --find-links <dir> fylgja-netbox==<VERSION>`, the directory
+   holding the core's wheel and its own and nothing else, with no pre-release flag, so the reader's
+   requirement takes the candidate's core; the core with no extra: `PROBE_NETBOX_READER`, run
+   outside the tree, finds the format the package reads beside it and not in the tree; a copy of
+   the seed's `netbox/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the
+   mapping is `netbox-dcim`; and once the command's module has imported, no module of the server's
    libraries, Prefect, Infrahub's SDK, NetBox's client library, the Infrahub reader or the example
    (`NOT_BESIDE_NETBOX_READER`) is loaded, or installed. Then `fylgja-netbox --help` exits 0, and
    `fylgja-netbox check`, given an address and no token, exits 2 with the one line that names the
@@ -88,19 +103,55 @@ under `orchestrator/` in the same temporary directory:
 """
 
 import ast
+import email.message
+import email.parser
+import functools
+import http.client
 import json
 import os
 import re
+import secrets
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# The one version every distribution is built at (D-106), copied beside each build's copy of the tree, as `formats/` is.
+VERSION = ROOT / "VERSION"
+# What the builds read at the root: the version, the licence the three published wheels carry, and the core's long
+# description.
+ROOT_FILES = ("VERSION", "LICENSE", "README.md")
+# The metadata every published wheel states (D-106): the project's repository and what hangs off it, the classifiers
+# (the core's alone adds its operating system), and the expression setuptools writes for `license = "Apache-2.0"`.
+REPOSITORY = "https://github.com/happypathnetworking/fylgja"
+CLASSIFIERS = (
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
+)
+CORE_CLASSIFIER = "Operating System :: POSIX :: Linux"
+PRIVATE_CLASSIFIER = "Private :: Do Not Upload"
+# The variable the builds read the commit they are made at from (each `setup.py`).
+COMMIT_VARIABLE = "FYLGJA_BUILD_COMMIT"
 PREFIX = "fylgja_core/formats/"
+SHIPPED_PREFIX = "fylgja_core/shipped/"
+# The server's start, and its stop on SIGTERM: the seconds each may take (D-106, D-062).
+START_S = 30
+STOP_S = 10
 FIXTURE = ROOT / "testdata" / "blueprint" / "three-node.json"
 # Planted in the copy of `formats/` the wheel is built from: a format no distribution's list names.
 PLANTED = "other-1.schema.json"
@@ -120,6 +171,7 @@ BASE_MODULES = (
     "probe_package",
     "probes",
     "problem",
+    "release",
     "run",
     "schemas",
     "twin_record",
@@ -141,6 +193,11 @@ here = Path(fylgja_core.__file__).resolve().parent / "formats"
 found = schemas.formats_dir()
 assert found == here, f"formats_dir() is {found}, not {here}"
 assert root not in found.parents, f"formats_dir() {found} is under the tree {root}"
+from fylgja_core import packages
+shipped = packages.shipped()
+want = (here.parent / "shipped" / "psp", here.parent / "shipped" / "probes")
+assert shipped == want, f"packages.shipped() is {shipped}, not {want}"
+assert not any(root in d.parents for d in shipped), f"shipped() {shipped} is under the tree {root}"
 blueprint = schemas.validator("blueprint-1")
 import json
 assert blueprint.is_valid(json.loads(fixture.read_text())), f"{fixture.name} does not validate"
@@ -515,6 +572,46 @@ def core_formats(setup: Path = ROOT / "core" / "setup.py") -> tuple[str, ...]:
     return found
 
 
+def core_packages(setup: Path = ROOT / "core" / "setup.py") -> tuple[str, ...]:
+    """The directories whose YAML the core's wheel carries, `CORE_PACKAGES` in `setup`, read by `ast` as
+    `core_formats` reads its list."""
+    try:
+        module = ast.parse(setup.read_text(), str(setup))
+    except (OSError, SyntaxError) as e:
+        raise Failure(f"{setup} cannot be read: {e}") from e
+    assigned = [
+        statement.value
+        for statement in module.body
+        if isinstance(statement, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "CORE_PACKAGES" for target in statement.targets)
+    ]
+    if not assigned:
+        raise Failure(f"{setup} assigns no CORE_PACKAGES")
+    try:
+        found = ast.literal_eval(assigned[-1])
+    except (ValueError, TypeError) as e:
+        raise Failure(f"{setup}'s CORE_PACKAGES is no literal: {e}") from e
+    if not isinstance(found, tuple) or not all(isinstance(name, str) for name in found):
+        raise Failure(f"{setup}'s CORE_PACKAGES is no tuple of strings: {found!r}")
+    return found
+
+
+def tracked_packages(names: tuple[str, ...], root: Path = ROOT) -> dict[str, bytes]:
+    """The YAML git tracks directly under each of `names` in `root`, by its path from `root`, and its bytes."""
+    try:
+        done = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", *(f"{n}/*.yaml" for n in names)],
+                              capture_output=True, text=True, check=False)
+    except OSError as e:
+        raise Failure(f"git cannot be run: {e}") from e
+    if done.returncode != 0:
+        raise Failure(f"git ls-files exited {done.returncode}:\n{done.stderr}")
+    found = {path: (root / path).read_bytes() for path in filter(None, done.stdout.split("\0"))
+             if path.count("/") == 1}
+    if not found:
+        raise Failure(f"git tracks no YAML under {', '.join(names)}: the comparison would pass vacuously")
+    return found
+
+
 def floors(pyproject: Path = ROOT / "core" / "pyproject.toml") -> dict[str, str]:
     """Each base library's floor, the lower bound of its entry in `pyproject`'s `dependencies`, read
     by `tomllib`; `Failure` naming an entry that is no `name>=floor,<ceiling`."""
@@ -532,9 +629,158 @@ def floors(pyproject: Path = ROOT / "core" / "pyproject.toml") -> dict[str, str]
     return found
 
 
-def run(argv: list[str], cwd: Path) -> None:
-    """`argv` run in `cwd`, which must exit 0; `Failure` with what it printed otherwise."""
-    exits(argv, cwd, 0)
+def tree_version(path: Path = VERSION) -> str:
+    """The tree's version, the one line of `path` stripped; `Failure` naming the file where it is not one line."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError as e:
+        raise Failure(f"{path} cannot be read: {e.strerror or e}") from e
+    if len(lines) != 1 or not lines[0].strip():
+        raise Failure(f"{path} is not one line holding the version")
+    return lines[0].strip()
+
+
+def metadata(wheel: Path) -> email.message.Message:
+    """The wheel's `*.dist-info/METADATA`, parsed; `Failure` where it holds none, or more than one."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = [n for n in archive.namelist() if n.count("/") == 1 and n.endswith(".dist-info/METADATA")]
+        if len(names) != 1:
+            raise Failure(f"{wheel.name} holds {len(names)} METADATA, not one")
+        return email.parser.Parser().parsestr(archive.read(names[0]).decode())
+
+
+def versioned(wheel: Path, version: str) -> None:
+    """Nothing, once the wheel's `METADATA` says `Version: <version>`; `Failure` naming both otherwise."""
+    said = metadata(wheel)["Version"]
+    if said != version:
+        raise Failure(f"{wheel.name} is version {said}, and VERSION says {version}")
+
+
+def base_requirements(wheel: Path) -> list[str]:
+    """The wheel's `Requires-Dist` entries that carry no marker: the core's base libraries, at their ranges."""
+    return [entry for entry in metadata(wheel).get_all("Requires-Dist", []) if ";" not in entry]
+
+
+def requires_core(wheel: Path, version: str) -> None:
+    """Nothing, once the reader's wheel names `fylgja-core` in exactly one `Requires-Dist`, with no marker, whose
+    specifiers, taken as a set, are `>=<version>` and `<` the next major (D-106); `Failure` naming the wheel and what
+    it should say otherwise."""
+    expected = {f">={version}", f"<{int(version.split('.')[0]) + 1}"}
+    found = [
+        entry
+        for entry in metadata(wheel).get_all("Requires-Dist", [])
+        if re.match(r"fylgja[-_.]core(?![A-Za-z0-9_.-])", entry, re.IGNORECASE)
+    ]
+    specifiers = None
+    if len(found) == 1 and ";" not in found[0]:
+        written = re.sub(r"\s+", "", found[0])[len("fylgja-core"):].strip("()")
+        specifiers = set(written.split(",")) if written else set()
+    if specifiers != expected:
+        raise Failure(f"{wheel.name} requires the core as {found}, not once as {','.join(sorted(expected))}")
+
+
+@functools.cache
+def tree_commit() -> str:
+    """The tree's commit as `Makefile`'s `COMMIT` and each `setup.py` read it: git's HEAD at `ROOT`, `-dirty` after it
+    where `git status --porcelain` prints anything; `unknown` where git cannot say. Worked out once, so the builds and
+    the checks of one run agree whatever changes in the tree meanwhile."""
+    outputs = []
+    for argv in (["rev-parse", "HEAD"], ["status", "--porcelain"]):
+        try:
+            done = subprocess.run(["git", "-C", str(ROOT), *argv], capture_output=True, text=True, check=False)
+        except OSError:
+            return "unknown"
+        if done.returncode != 0:
+            return "unknown"
+        outputs.append(done.stdout.strip())
+    head, status = outputs
+    return head + ("-dirty" if status else "") if re.fullmatch(r"[0-9a-f]{40}", head) else "unknown"
+
+
+def held_commit(wheel: Path, package: str, commit: str) -> None:
+    """Nothing, once the wheel holds `<package>/COMMIT` saying `commit` on one line; `Failure` naming the wheel and the
+    file otherwise."""
+    with zipfile.ZipFile(wheel) as archive:
+        try:
+            said = archive.read(f"{package}/COMMIT").decode()
+        except KeyError:
+            raise Failure(f"{wheel.name} holds no {package}/COMMIT") from None
+    if said != commit + "\n":
+        raise Failure(f"{wheel.name}'s {package}/COMMIT says {said.strip()!r}, and the tree is at {commit}")
+
+
+def published_metadata(wheel: Path, documentation: str, core: bool = False) -> None:
+    """Nothing, once the published wheel's `METADATA` says `License-Expression: Apache-2.0`, no `License-File` and no
+    licence classifier, the three `Project-URL`s with `documentation` as the documentation's, exactly `CLASSIFIERS`
+    (and the core's operating system where `core`), and no author, maintainer or contact; where `core`, also
+    `Description-Content-Type: text/markdown` and a description that is the root `README.md`; `Failure` naming the
+    wheel and each difference otherwise."""
+    found = metadata(wheel)
+    problems: list[str] = []
+    if found.get_all("License-Expression") != ["Apache-2.0"]:
+        problems.append(f"License-Expression is {found.get_all('License-Expression')}, not ['Apache-2.0']")
+    urls = sorted(found.get_all("Project-URL", []))
+    expected_urls = sorted([f"Repository, {REPOSITORY}", f"Changelog, {REPOSITORY}/blob/main/CHANGELOG.md",
+                            f"Documentation, {REPOSITORY}/{documentation}"])
+    if urls != expected_urls:
+        problems.append(f"Project-URL is {urls}, not {expected_urls}")
+    classifiers = sorted(found.get_all("Classifier", []))
+    expected_classifiers = sorted([*CLASSIFIERS, *([CORE_CLASSIFIER] if core else [])])
+    if classifiers != expected_classifiers:
+        problems.append(f"Classifier is {classifiers}, not {expected_classifiers}")
+    for field in ("Author", "Author-email", "Maintainer", "Maintainer-email", "License-File", "License"):
+        if found.get_all(field):
+            problems.append(f"{field} is {found.get_all(field)}, and the wheel states none")
+    if core:
+        if found.get_all("Description-Content-Type") != ["text/markdown"]:
+            problems.append(f"Description-Content-Type is {found.get_all('Description-Content-Type')}, "
+                            "not ['text/markdown']")
+        if str(found.get_payload()).strip() != (ROOT / "README.md").read_text().strip():
+            problems.append("the description is not the root README.md")
+    if problems:
+        raise Failure(f"{wheel.name}'s METADATA differs from the metadata of D-106:\n" + "\n".join(problems))
+
+
+def private_metadata(wheel: Path) -> None:
+    """Nothing, once the example's wheel is marked `Classifier: Private :: Do Not Upload`, the one classifier it holds,
+    so that PyPI refuses it (D-106), and holds no `Project-URL`; `Failure` otherwise."""
+    found = metadata(wheel)
+    if found.get_all("Classifier") != [PRIVATE_CLASSIFIER]:
+        raise Failure(f"{wheel.name} holds the classifiers {found.get_all('Classifier')}, "
+                      f"not [{PRIVATE_CLASSIFIER!r}]: it could be uploaded")
+    if found.get_all("Project-URL") or found.get_all("Author") or found.get_all("Author-email"):
+        raise Failure(f"{wheel.name} states a project URL or an author, and the example states neither")
+
+
+def held_licence(wheel: Path, package: str, expected: bool = True) -> None:
+    """Nothing, once the wheel holds `<package>/LICENSE`, the root `LICENSE`'s bytes (or, where `expected` is false,
+    holds no file of that name); `Failure` naming the wheel and the file otherwise."""
+    with zipfile.ZipFile(wheel) as archive:
+        try:
+            held = archive.read(f"{package}/LICENSE")
+        except KeyError:
+            held = None
+    if expected and held is None:
+        raise Failure(f"{wheel.name} holds no {package}/LICENSE")
+    if expected and held != (ROOT / "LICENSE").read_bytes():
+        raise Failure(f"{wheel.name}'s {package}/LICENSE is not the root LICENSE's bytes")
+    if not expected and held is not None:
+        raise Failure(f"{wheel.name} holds {package}/LICENSE, and the example carries none")
+
+
+def answers_version(command: Path, program: str, version: str, commit: str, cwd: Path) -> None:
+    """Nothing, once `command --version` exits 0 printing exactly `<program> <version> (commit <commit>)` and a newline
+    on stdout; `Failure` with what it printed otherwise."""
+    done = exits([str(command), "--version"], cwd, 0)
+    expected = f"{program} {version} (commit {commit})\n"
+    if done.stdout != expected or done.stderr:
+        raise Failure(f"{command.name} --version printed {done.stdout!r} on stdout and {done.stderr!r} on stderr, "
+                      f"not {expected!r}")
+
+
+def run(argv: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+    """`argv` run in `cwd`, in `env` where it is given, which must exit 0; `Failure` with what it printed otherwise."""
+    exits(argv, cwd, 0, env)
 
 
 def exits(
@@ -576,16 +822,30 @@ def venv(path: Path) -> Path:
 
 
 def wheel(source: Path, dist: Path) -> None:
-    """The one wheel of the distribution at `source`, built by `uv build` into `dist`, from `dist`'s parent."""
+    """The one wheel of the distribution at `source`, built by `uv build` into `dist`, from `dist`'s parent, at the
+    tree's commit: the build is given `FYLGJA_BUILD_COMMIT`, whatever this process's environment holds, since the copy
+    it builds from holds no `.git`; where the tree's commit is `unknown` it is given none, and the build says so."""
+    env = {k: v for k, v in os.environ.items() if k != COMMIT_VARIABLE}
+    if tree_commit() != "unknown":
+        env[COMMIT_VARIABLE] = tree_commit()
     run([uv(), "build", "--wheel", "--no-python-downloads", "--python", sys.executable, "--out-dir", str(dist),
-         str(source)], dist.parent)
+         str(source)], dist.parent, env)
 
 
-def install(env: Path, *requirements: str, constraints: Path | None = None) -> None:
+def install(env: Path, *requirements: str, constraints: Path | None = None, find_links: Path | None = None) -> None:
     """`requirements` installed by `uv pip` into the environment whose `bin/` is `env`, held to the `name==version`
-    lines of `constraints` where it is given, from `env`'s grandparent."""
+    lines of `constraints` where it is given, and from the directory `find_links` alone, no index, where that is given;
+    from `env`'s grandparent."""
     run([uv(), "pip", "install", "--python", str(env / "python"),
-         *(["--constraints", str(constraints)] if constraints else []), *requirements], env.parent.parent)
+         *(["--constraints", str(constraints)] if constraints else []),
+         *(["--no-index", "--find-links", str(find_links)] if find_links else []), *requirements], env.parent.parent)
+
+
+def copy_root_files(src: Path) -> None:
+    """`ROOT_FILES` copied to the root of a build's copy of the tree, where each `setup.py` reads them (`../VERSION`,
+    `../LICENSE`, `../README.md`)."""
+    for name in ROOT_FILES:
+        shutil.copyfile(ROOT / name, src / name)
 
 
 def build(tmp: Path) -> Path:
@@ -601,6 +861,9 @@ def build(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
+        copy_root_files(src)
+        for name in core_packages():
+            shutil.copytree(ROOT / name, src / name)
         planted = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
         (src / "formats" / PLANTED).write_text(json.dumps(planted) + "\n")
         wheel(src / "core", dist)
@@ -622,13 +885,133 @@ def carried(wheel: Path) -> int:
     return len(found)
 
 
-def with_server(tmp: Path, wheel: Path) -> None:
-    """The wheel with its `server` extra, in an empty venv: `PROBE`, and each console script's `--help`."""
+def shipped(wheel: Path) -> int:
+    """How many package files the wheel carries under `fylgja_core/shipped/`, once they are the YAML git tracks in the
+    tree's `CORE_PACKAGES` directories, byte for byte, and no other file: no README."""
+    with zipfile.ZipFile(wheel) as archive:
+        carried = {n[len(SHIPPED_PREFIX):]: archive.read(n) for n in archive.namelist()
+                   if n.startswith(SHIPPED_PREFIX) and not n.endswith("/")}
+    tree = tracked_packages(core_packages())
+    problems = [f"missing from the wheel: {n}" for n in sorted(tree.keys() - carried.keys())]
+    problems += [f"extra in the wheel: {n}" for n in sorted(carried.keys() - tree.keys())]
+    problems += [f"differs from the tree's: {n}" for n in sorted(tree.keys() & carried.keys()) if tree[n] != carried[n]]
+    if problems:
+        raise Failure("the wheel's shipped packages differ from the YAML git tracks in " + ", ".join(core_packages())
+                      + ":\n" + "\n".join(problems))
+    return len(carried)
+
+
+def stub_docker(directory: Path) -> Path:
+    """A `docker` that prints nothing and exits 0, in `directory`, which goes first on the server's `PATH`: the local
+    driver asks the host's docker at start, and this check needs none."""
+    stub = directory / "docker"
+    stub.write_text("#!/bin/sh\nexit 0\n")
+    stub.chmod(0o755)
+    return directory
+
+
+# Requests to the server on loopback go by no proxy, whatever the environment's `*_proxy` say.
+DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def answers(url: str, token: str, body: bytes | None = None) -> tuple[int, bytes]:
+    """The status and body of `url`, a GET or, given `body`, a JSON POST, with the bearer token, by no proxy."""
+    request = urllib.request.Request(url, data=body, headers={"Authorization": f"Bearer {token}",
+                                                              "Content-Type": "application/json"})
+    try:
+        with DIRECT.open(request, timeout=10) as reply:
+            return reply.status, reply.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def serve(tmp: Path, env: Path, build: str) -> float:
+    """`fylgja-core-server`, started from the environment `env` with no `FYLGJA_PACKAGES`: the seconds to its first
+    answer of `GET /v1/version`, which must come within `START_S` and say `build`; `three-node.json` filed and its
+    bundle built, 201; and SIGTERM ending it with 143 within `STOP_S`. The token is made here, hashed by the installed
+    `auth.hash_token`, handed to it by stdin, written as its hash alone and printed nowhere. The server is started
+    with no `FYLGJA_*` or `PYTHON*` variable of this process; an answer other than 200 fails at once, naming it, and
+    a failure ends the server and waits on it."""
+    token = secrets.token_urlsafe(24)
+    hashing = "import sys; from fylgja_core.server import auth; print(auth.hash_token(sys.stdin.read()))"
+    hashed = subprocess.run([str(env / "python"), "-I", "-c", hashing], input=token, capture_output=True, text=True,
+                            check=False)
+    if hashed.returncode != 0 or not re.fullmatch(r"[0-9a-f]{64}\n", hashed.stdout):
+        raise Failure("the installed fylgja_core.server.auth.hash_token did not hash a token: "
+                      + hashed.stderr.replace(token, "<token>"))
+    root = tmp / "serve"
+    root.mkdir()
+    tokens = root / "tokens"
+    tokens.write_text(f"{hashed.stdout.strip()} wheelcheck\n")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    environment = {k: v for k, v in os.environ.items() if not k.startswith(("FYLGJA_", "PYTHON"))}
+    (root / "bin").mkdir()
+    environment["PATH"] = f"{stub_docker(root / 'bin')}:{os.environ.get('PATH', os.defpath)}"
+    environment.update(FYLGJA_STORE=str(root / "store"), FYLGJA_TOKENS=str(tokens),
+                       FYLGJA_LISTEN=f"127.0.0.1:{port}")
+    base = f"http://127.0.0.1:{port}"
+    started = time.monotonic()
+    log = root / "server.log"
+    with log.open("w") as sink:
+        server = subprocess.Popen([str(env / "fylgja-core-server")], cwd=root, env=environment,
+                                  stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.STDOUT, text=True)
+    try:
+        took = -1.0
+        while True:
+            if server.poll() is not None:
+                raise Failure(f"fylgja-core-server with no FYLGJA_PACKAGES exited {server.returncode} before it "
+                              f"answered:\n{log.read_text()}".replace(token, "<token>"))
+            try:
+                status, body = answers(f"{base}/v1/version", token)
+            except (OSError, http.client.HTTPException):
+                pass
+            else:
+                if status != 200:
+                    raise Failure(f"GET /v1/version answered {status}, not 200:\n"
+                                  + body.decode(errors="replace").replace(token, "<token>"))
+                took = time.monotonic() - started
+                break
+            if time.monotonic() - started > START_S:
+                raise Failure(f"fylgja-core-server gave no answer to GET /v1/version within {START_S} s")
+            time.sleep(0.1)
+        said = json.loads(body).get("build")
+        if said != build:
+            raise Failure(f"GET /v1/version says the build {said!r}, and the wheel holds {build!r}")
+        status, body = answers(f"{base}/v1/blueprints", token, FIXTURE.read_bytes())
+        if status not in (200, 201):
+            raise Failure(f"filing {FIXTURE.name} answered {status}, not 201:\n{body.decode(errors='replace')}")
+        blueprint_id = json.loads(body)["id"]
+        status, body = answers(f"{base}/v1/bundles", token, json.dumps({"blueprint_id": blueprint_id}).encode())
+        if status != 201:
+            raise Failure(f"building {FIXTURE.name}'s bundle answered {status}, not 201: the shipped packages did "
+                          f"not load\n{body.decode(errors='replace')}")
+        server.send_signal(signal.SIGTERM)
+        try:
+            server.wait(timeout=STOP_S)
+        except subprocess.TimeoutExpired:
+            raise Failure(f"fylgja-core-server did not end within {STOP_S} s of SIGTERM") from None
+        if server.returncode != 143:
+            raise Failure(f"fylgja-core-server ended {server.returncode} on SIGTERM, not 143")
+        return took
+    finally:
+        if server.poll() is None:
+            server.kill()
+            server.wait()
+
+
+def with_server(tmp: Path, wheel: Path) -> float:
+    """The wheel with its `server` extra, in an empty venv: `PROBE`, each console script's `--help` and `--version`,
+    and the server started there with no `FYLGJA_PACKAGES` (`serve`): the seconds it took to answer."""
     env = venv(tmp / "venv-server")
     install(env, f"{wheel}[server]")
     run([str(env / "python"), "-I", "-c", PROBE, str(FIXTURE), str(ROOT)], tmp)
     run([str(env / "fylgja-core"), "--help"], tmp)
     run([str(env / "fylgja-core-server"), "--help"], tmp)
+    for program in ("fylgja-core", "fylgja-core-server"):
+        answers_version(env / program, program, tree_version(), tree_commit(), tmp)
+    return serve(tmp, env, f"{tree_version()} (commit {tree_commit()})")
 
 
 def alone(tmp: Path, wheel: Path, found: dict[str, str]) -> None:
@@ -641,6 +1024,7 @@ def alone(tmp: Path, wheel: Path, found: dict[str, str]) -> None:
     given = {"floors": found, "modules": list(BASE_MODULES), "fixture": str(FIXTURE)}
     run([str(env / "python"), "-I", "-c", PROBE_ALONE, json.dumps(given)], tmp)
     run([str(env / "fylgja-core"), "--help"], tmp)
+    answers_version(env / "fylgja-core", "fylgja-core", tree_version(), tree_commit(), tmp)
     done = exits([str(env / "fylgja-core-server")], tmp, 2)
     lines = done.stderr.splitlines()
     try:
@@ -656,13 +1040,23 @@ def check(tmp: Path) -> str:
     """The core's check, in `tmp`: the wheel's formats, then the wheel with `[server]`, then alone at its floors."""
     found = floors()
     wheel = build(tmp)
+    versioned(wheel, tree_version())
+    held_commit(wheel, "fylgja_core", tree_commit())
+    published_metadata(wheel, "tree/main/docs", core=True)
+    held_licence(wheel, "fylgja_core")
     count = carried(wheel)
-    with_server(tmp, wheel)
+    kept = shipped(wheel)
+    took = with_server(tmp, wheel)
     alone(tmp, wheel, found)
     at = ", ".join(f"{name} {floor}" for name, floor in found.items())
-    return (f"wheelcheck: {wheel.name} carries the core's {count} formats and no other; with [server] it validates "
-            f"{FIXTURE.name} outside the tree and the server imports; alone at its floors ({at}) the base imports, "
-            "follows a run and refuses to serve")
+    return (f"wheelcheck: {wheel.name} is built at {tree_commit()}, states Apache-2.0, the project's URLs and "
+            f"classifiers, no author and the README as its description, holds the licence's text, and carries the "
+            f"core's {count} formats and no "
+            f"other, and {kept} package files, the tracked YAML of {' and '.join(f'{n}/' for n in core_packages())} "
+            f"and no other; started with no FYLGJA_PACKAGES it answered in {took:.1f} s, built {FIXTURE.name}'s "
+            "bundle and ended 143 on SIGTERM; fylgja-core and fylgja-core-server answer --version with it; with "
+            f"[server] it validates {FIXTURE.name} outside the tree and the server imports; alone at its floors "
+            f"({at}) the base imports, follows a run and refuses to serve")
 
 
 def build_reader(tmp: Path) -> Path:
@@ -678,6 +1072,7 @@ def build_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
+        copy_root_files(src)
         wheel(src / "readers" / "infrahub", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -715,6 +1110,12 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     installed beside `core_wheel`, the core with no extra, in an empty environment of its own,
     where `PROBE_READER` runs outside the tree and `fylgja-infrahub --help` exits 0."""
     wheel = build_reader(tmp)
+    version = tree_version()
+    versioned(wheel, version)
+    requires_core(wheel, version)
+    held_commit(wheel, "fylgja_infrahub", tree_commit())
+    published_metadata(wheel, "tree/main/readers/infrahub")
+    held_licence(wheel, "fylgja_infrahub")
     queries = carried_by_reader(wheel)
     commit = DCIM_COMMIT.read_text().strip()
     env = venv(tmp / "reader" / "venv")
@@ -722,10 +1123,13 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "python"), "-I", "-c", PROBE_READER, str(ROOT), str(READER_DOCUMENT), commit, *NOT_BESIDE_READER],
         tmp)
     run([str(env / "fylgja-infrahub"), "--help"], tmp)
-    return (f"wheelcheck: {wheel.name} carries the reader's {len(READER_FORMATS)} format and no other, and its "
+    answers_version(env / "fylgja-infrahub", "fylgja-infrahub", version, tree_commit(), tmp)
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major; it states the "
+            f"project's metadata and holds the licence's text; it carries the reader's "
+            f"{len(READER_FORMATS)} format and no other, and its "
             f"{queries} GraphQL documents; beside {core_wheel.name} alone it decodes {READER_DOCUMENT.name} outside "
             "the tree, its command imports with nothing of the server, Prefect, Infrahub's SDK or the example, and "
-            "answers --help")
+            "answers --help and --version")
 
 
 def build_netbox_reader(tmp: Path) -> Path:
@@ -741,6 +1145,7 @@ def build_netbox_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
+        copy_root_files(src)
         wheel(src / "readers" / "netbox", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
@@ -780,25 +1185,43 @@ def refused_without_token(command: Path, tmp: Path) -> None:
 
 
 def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
-    """The NetBox reader's check, under `tmp/netbox-reader`: its wheel, from `build_netbox_reader`, and what it carries;
-    then the wheel installed beside `core_wheel`, the core with no extra, in an empty venv of its own,
+    """The NetBox reader's check, under `tmp/netbox-reader`: its wheel, from `build_netbox_reader`, its version and its
+    requirement of the core, and what it carries; then, in an empty venv of its own, the core's base libraries from the
+    index and `fylgja-netbox==<VERSION>` by name from a directory of `core_wheel` and its wheel alone, no index, so the
+    core with no extra,
     where `PROBE_NETBOX_READER` runs outside the tree over a copy of the seed's reader document,
     `fylgja-netbox --help` exits 0 and `fylgja-netbox check` with no token is refused, naming the variable."""
     wheel = build_netbox_reader(tmp)
+    version = tree_version()
+    versioned(wheel, version)
+    requires_core(wheel, version)
+    held_commit(wheel, "fylgja_netbox", tree_commit())
+    published_metadata(wheel, "tree/main/readers/netbox")
+    held_licence(wheel, "fylgja_netbox")
     carried_by_netbox_reader(wheel)
     here = tmp / "netbox-reader"
     reader = here / NETBOX_READER_DOCUMENT.name
     shutil.copyfile(NETBOX_READER_DOCUMENT, reader)
+    links = here / "links"
+    links.mkdir()
+    shutil.copyfile(core_wheel, links / core_wheel.name)
+    shutil.copyfile(wheel, links / wheel.name)
     env = venv(here / "venv")
-    install(env, str(core_wheel), str(wheel))
+    install(env, *base_requirements(core_wheel))
+    install(env, f"fylgja-netbox=={version}", find_links=links)
     run([str(env / "python"), "-I", "-c", PROBE_NETBOX_READER, str(ROOT), str(reader), NETBOX_PROBES, NETBOX_MAPPING,
          *NOT_BESIDE_NETBOX_READER], tmp)
     run([str(env / "fylgja-netbox"), "--help"], tmp)
+    answers_version(env / "fylgja-netbox", "fylgja-netbox", version, tree_commit(), tmp)
     refused_without_token(env / "fylgja-netbox", tmp)
-    return (f"wheelcheck: {wheel.name} carries the NetBox reader's {len(NETBOX_READER_FORMATS)} format and no other; "
-            f"beside {core_wheel.name} alone it decodes {NETBOX_READER_DOCUMENT.name} outside the tree, its command "
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, states the "
+            f"project's metadata and holds the licence's text, and fylgja-netbox=={version} "
+            "installs by name from a directory of the two wheels and no index, with no pre-release flag; it carries "
+            f"the NetBox reader's {len(NETBOX_READER_FORMATS)} format and no other; beside {core_wheel.name} alone it "
+            f"decodes {NETBOX_READER_DOCUMENT.name} outside the tree, its command "
             "imports with nothing of the server, Prefect, a client library of Infrahub's or NetBox's, the Infrahub "
-            "reader or the example, answers --help, and refuses a check without a token, naming the variable")
+            "reader or the example, answers --help and --version, and refuses a check without a token, naming the "
+            "variable")
 
 
 def carried_by_example(wheel: Path) -> int:
@@ -841,11 +1264,16 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
         ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
     )
     shutil.copytree(ROOT / "formats", src / "formats")
+    copy_root_files(src)
     wheel(src / "orchestrator", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
     built = wheels[0]
+    versioned(built, tree_version())
+    held_commit(built, "fylgja_orchestrator", tree_commit())
+    private_metadata(built)
+    held_licence(built, "fylgja_orchestrator", expected=False)
     queries = carried_by_example(built)
     reader, netbox_reader = build_reader(tmp), build_netbox_reader(tmp)
     env = venv(here / "venv")
@@ -854,13 +1282,15 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "python"), "-I", "-c", PROBE_ORCHESTRATOR, str(ROOT), json.dumps(given)], tmp)
     run([str(env / "python"), "-I", "-c", PROBE_EDGE, json.dumps(list(NOT_BESIDE_EDGE))], tmp)
     run([str(env / "fylgja-orchestrator"), "--help"], tmp)
+    answers_version(env / "fylgja-orchestrator", "fylgja-orchestrator", tree_version(), tree_commit(), tmp)
     run([str(env / "fylgja-orchestrator"), "stage", "mark", "--help"], tmp)
-    return (f"wheelcheck: {built.name} carries the example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
+    return (f"wheelcheck: {built.name} is marked {PRIVATE_CLASSIFIER!r} and carries no licence file; it carries the "
+            f"example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
             f"its {queries} GraphQL documents; beside {core_wheel.name}, {reader.name} and {netbox_reader.name} alone "
             "it validates a plan and a rehearsal outside the tree, its rehearsal library imports with nothing of the "
             "server, either reader or Prefect, both change sources import, each with nothing of the other or its "
             "reader, its command's module with nothing of the server or Prefect, and fylgja-orchestrator answers "
-            "--help, and stage mark --help")
+            "--help, stage mark --help and --version")
 
 
 def main() -> int:

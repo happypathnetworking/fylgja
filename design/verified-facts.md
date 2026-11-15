@@ -3432,6 +3432,37 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
     Python 3.14.9, and its asyncio still holds the line the cut rests on: `Server._attach`'s
     `assert self._sockets is not None`, at `base_events.py` line 297, the line it holds in the
     host's 3.14.4.
+- **The commit the image is built at** *(Docker 29.8.1, uv 0.12.23, 2026-11-15)*. The Dockerfile's
+  build stage takes `ARG FYLGJA_BUILD_COMMIT`, with no default, before the wheel's build; `make image`
+  passes `--build-arg FYLGJA_BUILD_COMMIT=$(COMMIT)`, the full HEAD with `-dirty` where `git status
+  --porcelain` prints anything. Read once, at `5949003` with the change uncommitted:
+  - `docker image inspect` of `fylgja-core:5949003a641a-dirty`: `Config.Env` is `PATH`,
+    `PYTHON_VERSION`, `PYTHON_SHA256` and `FYLGJA_PACKAGES` and no `FYLGJA_BUILD_COMMIT`: the final
+    stage's `Config.Env` does not hold it.
+  - the build stage's `RUN` did see it: `fylgja-core --version` and `fylgja-core-server --version`
+    in that image each printed `<program> 1.0.0rc1 (commit 5949003a641aba277c092e2a0c23549b31f52254-dirty)`,
+    the tag's twelve characters and `-dirty` where the tag has it (`make imagecheck`'s `check_build`
+    holds this).
+  - built with no argument (`docker build` alone), `fylgja-core-server --version` printed `1.0.0rc1
+    (commit unknown)`. The reason is inferred, not read: `.dockerignore`'s allow-list names no `.git`, so
+    the build's git is taken to find no repository (whether the image has a `git` was not looked for).
+- **The packages in the core's wheel, in an image and outside the tree** *(Docker 29.8.1, uv 0.12.23, 2026-11-15)*.
+  `core/setup.py`'s `CORE_PACKAGES = ("psp", "probes")` copies each directory's `*.yaml` to
+  `fylgja_core/shipped/<name>/`; the Dockerfile's build stage copies `psp` and `probes` to `/src/` and its final stage
+  has no copy of either and no `ENV FYLGJA_PACKAGES`. Read once each, at `8129a6a` with the change uncommitted:
+  - `make wheelcheck`, in a copy of `core/`, `formats/`, `psp/` and `probes/` (READMEs among them) built by
+    `uv build --wheel`: the wheel's `fylgja_core/shipped/` held 3 files, the tracked YAML of `psp/` and `probes/`
+    byte for byte and no README; in the extra's environment, outside the tree, `packages.shipped()` answered
+    `<site-packages>/fylgja_core/shipped/psp` and `.../probes`, the same `find_spec` `schemas.formats_dir` rests on.
+  - `fylgja-core-server` of that environment, started with `FYLGJA_STORE`, `FYLGJA_TOKENS`, `FYLGJA_LISTEN` on a free
+    loopback port, no `FYLGJA_PACKAGES` and a stub `docker` that prints nothing and exits 0 first on `PATH`: its first
+    answer of `GET /v1/version` came 1.4 s after the process began (one run), with the build the wheel holds;
+    `three-node.json` was filed and its bundle built, 201; SIGTERM ended it with 143, inside 10 s.
+  - `make imagecheck` of `fylgja-core:8129a6aac989-dirty`: `/opt/fylgja/psp` and `/opt/fylgja/probes` were absent,
+    `FYLGJA_PACKAGES` was in no entry of `Config.Env`, and `packages.shipped()` in the image answered
+    `fylgja_core/shipped/psp` and `.../probes` under the installed package, holding 3 files, the tracked YAML by name
+    and bytes; with only `FYLGJA_STORE` and an unreadable `FYLGJA_TOKENS` the server exited 2 naming `FYLGJA_TOKENS`,
+    so it had loaded the shipped packages first.
 - **Pushed, by CONTRIBUTING.md's recipe as written** *(crane 0.22.1, Docker 29.8.1, 2026-11-07)*.
   Its first run, the image `fylgja-core:73c2f149ef62` to the cluster's registry, `<registry>`:
   - `crane auth login` with `--password-stdin`, `DOCKER_CONFIG` a new directory and the registry's
@@ -9033,6 +9064,97 @@ once. *(2026-11-13)*
   ("Resolved 130 packages", "Checked 127 packages"), `uv.lock` unchanged; `uv python list
   --only-installed` showed `/usr/bin/python3.14` and `/usr/bin/python3` (cpython 3.14.4) and no
   uv-managed Python.
+- **A version read from a file** *(2026-11-15, uv 0.12.23, setuptools 84.2.1)*. Read in a scratch
+  copy of `phase-10-integration` at 4a8b1ba (a `git archive`), with `VERSION` at its root holding
+  `1.0.0rc1`, each member's `pyproject.toml` listing `dynamic = ["version"]` in place of `version`,
+  and each `setup.py` passing the file's line to `setup(version=...)`; the second `make venv`
+  below again in the worktree of `phase-10/3-release`. Each reading was run once.
+  - **The build takes it.** `uv build --wheel` of `core` wrote `fylgja_core-1.0.0rc1-py3-none-any.whl`;
+    its `METADATA` says `Version: 1.0.0rc1`, its `WHEEL` `Generator: setuptools (84.2.1)`, the
+    setuptools the build's `setuptools>=80` resolved that day.
+  - **The lock records no version for a dynamic one.** `uv sync --locked` over the old lock exited 1
+    ("The lockfile at `uv.lock` needs to be updated"); `uv lock` printed "Updated fylgja-core v0.0.0
+    -> (dynamic)" and the same for the other three, and the lock differed in the four members'
+    `version = "0.0.0"` lines, removed, and nowhere else.
+  - **A workspace member's range is not recorded.** With each reader's dependency
+    `fylgja-core>=1.0.0rc1,<2`, `uv lock` changed nothing: the readers' `requires-dist` holds
+    `{ name = "fylgja-core", editable = "core" }` with no specifier. With `fylgja-core>=9,<10` in
+    the Infrahub reader, which the core at `1.0.0rc1` does not meet, `uv lock --locked` and
+    `uv lock` each exited 0 and the lock was byte-identical.
+  - **A changed `VERSION` does not reach `core/.venv` by itself.** After a sync at `1.0.0rc1`,
+    `VERSION` set to `1.0.0rc2` and `uv sync --locked --all-packages --all-extras` run again: exit 0,
+    "Checked 127 packages", nothing built, and `importlib.metadata.version` still answered `1.0.0rc1`
+    for all four. In the worktree, `make venv` the same: exit 0, "Checked 127 packages", the core
+    still `1.0.0rc1`.
+  - **With `tool.uv.cache-keys` naming it, it does.** Each member given `[tool.uv] cache-keys =
+    [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "<up>/VERSION" }]`, `<up>` the
+    relative path to the root: the next sync rebuilt the four ("Building fylgja-core ...") and,
+    with `VERSION` at `1.0.0rc2`, installed all four at `1.0.0rc2`; `uv sync --locked` exited 0
+    both times and the lock was unchanged.
+    The tree now declares these keys in each member, with uv's default `setup.cfg` beside them.
+  - **A build's copy needs the file beside it.** A copy of `core/` and `formats/` alone, built by
+    `uv build --wheel`, exited 2, the backend's `get_requires_for_build_wheel` failing on
+    "`<copy>/VERSION` cannot be read"; with `VERSION` copied to the copy's root, beside `formats/`,
+    it built `fylgja_core-1.0.0rc1-py3-none-any.whl`.
+- **A build reads the commit it is made at** *(2026-11-15, uv 0.12.23, setuptools 84.2.1)*. Each
+  `setup.py`'s `BuildPy` writes `<package>/COMMIT`, from `FYLGJA_BUILD_COMMIT` where it is given and
+  from `git -C <root> rev-parse HEAD` otherwise. Read in the worktree of `phase-10/3-release`
+  (`5949003`, the change uncommitted), by `uv build --wheel` of `core` from a directory outside the
+  tree, the variable unset and then `0000000000000000000000000000000000000007`:
+  - **the build runs in place.** With the variable unset `fylgja_core/COMMIT` in the wheel read
+    `5949003a641aba277c092e2a0c23549b31f52254-dirty`: `setup.py` ran in `core/`, inside the checkout,
+    so git answered, and the tree was dirty. Given the variable, the file read the variable's value.
+    A build of a copy outside any checkout (the wheel check's, the image's) has no git, so it says
+    `unknown` unless it is given the commit: `make wheelcheck` and `make image` pass it, and a build in
+    place needs none.
+  - **`make wheelcheck` held it** in all four wheels (`<package>/COMMIT` the tree's commit, `-dirty`
+    included) and in each installed command's `--version`: `fylgja-core` and `fylgja-core-server` with
+    the extra, `fylgja-core` at the base's floors, `fylgja-infrahub`, `fylgja-netbox` and
+    `fylgja-orchestrator`, each `<program> 1.0.0rc1 (commit <40 hex>-dirty)`.
+- **A wheel's metadata and licence text** *(2026-11-15, uv 0.12.23, setuptools 84.2.1)*. Read by
+  `uv build --wheel` of each of the four distributions from a copy of the tree holding `formats/`,
+  `psp/`, `probes/`, `VERSION`, `LICENSE` and `README.md` at its root (no warning in the build's
+  log), then each wheel's `METADATA` and file list:
+  - **`license = "Apache-2.0"` is written as `License-Expression: Apache-2.0`** (Metadata-Version 2.4),
+    with no `License` and no `License-File` field: the project holds no licence file for setuptools
+    to find, so the `LICENSE` is carried as package data, `<package>/LICENSE`, by each published
+    `setup.py`'s `BuildPy` (the root's bytes), since setuptools takes no `license-files` pattern
+    from outside the project.
+  - **`[project.urls]` becomes three `Project-URL: <label>, <url>` lines and every classifier a
+    `Classifier:` line**, in the order written; a reader's `readme = "README.md"` gives
+    `Description-Content-Type: text/markdown` and its own README as the body.
+  - **The core's `readme`, listed in `dynamic`, takes `long_description` and
+    `long_description_content_type` from `setup()`**: the wheel's `METADATA` says
+    `Description-Content-Type: text/markdown`, `Dynamic: description` and
+    `Dynamic: description-content-type`, and its body is the root `README.md`, read by `core/setup.py`
+    as `../README.md` (a copy of the tree must hold it beside `core/`, as it does `VERSION`).
+  - **The example's wheel** holds `Classifier: Private :: Do Not Upload` alone, no `Project-URL` and no
+    `<package>/LICENSE`. That PyPI refuses an upload carrying it is its documented rule, not exercised.
+  - `make wheelcheck` holds all of it: each published wheel's expression, three URLs, exact classifiers,
+    no author and `<package>/LICENSE` equal to the root's, the core's content type and description,
+    and the example's classifier.
+- **Two readings of the version's task, as they were kept** *(2026-11-15, uv 0.12.23)*.
+  - **`make venv` over the tree's own cache-keys**, which name `setup.cfg` beside `pyproject.toml`,
+    `setup.py` and the root `VERSION`: its output was not saved. The task's report says it rebuilt
+    the four members and left the lock unchanged; the saved readings above are of the scratch copy's
+    keys, without `setup.cfg`. In the fix wave, with the core's keys only rewrapped, `make venv`
+    exited 0 and reinstalled the four at `1.0.0rc1`, `uv.lock` unchanged.
+  - **The by-name install takes a candidate without a pre-release flag.** The wheel check's line,
+    saved in the run's `wheelcheck.log`: `fylgja-netbox==1.0.0rc1` "installs by name from a
+    directory of the two wheels and no index, with no pre-release flag", the core's wheel at
+    `1.0.0rc1` taken for the reader's `fylgja-core>=1.0.0rc1,<2`. The install names the reader's
+    version exactly, and the core's range names a candidate as its floor; an install by a bare
+    name, or under a range with no candidate in it, was not read.
+- **A build's backend constrained** *(2026-11-15, uv 0.12.23)*. `uv build --help` lists
+  `-b, --build-constraints <BUILD_CONSTRAINTS>`, "Constrain build dependencies using the given
+  requirements files when building distributions" (env `UV_BUILD_CONSTRAINT`). The uv lock holds
+  no build dependency: no `setuptools` entry is in `uv.lock`, nor in `core/.venv`. `make wheels`
+  with `build-constraints.txt` holding `setuptools==84.2.1` wrote the three wheels, each `WHEEL`
+  saying `Generator: setuptools (84.2.1)`; `uv build --wheel core` with a constraints file of
+  `setuptools==79.0.1` exited 2, "Because you require setuptools>=80 and setuptools==79.0.1, we can
+  conclude that your requirements are unsatisfiable", so the file is read. Each run once. Only
+  `make wheels` is constrained: the wheel check's, the image's and the editable builds take what
+  `setuptools>=80` resolves.
 - **Not read:**
   - `uv sync` against a venv of another Python minor.
   - the uv'd CI: it has not run, and plan 5's run is its first.
@@ -9073,6 +9195,59 @@ interpolates `${A:-unset}`, `${B:-unset}` and `${C:-unset}`; no container starte
   take it when a publisher is registered, its rule against names like another's among the
   reasons it may not, was not read. *(2026-11-13)*
 
+Read on 2026-11-15, as documented and not exercised, by anonymous requests and no account: PyPI's
+trusted-publisher pages ("Adding a Trusted Publisher to an Existing PyPI Project", "Creating a PyPI
+Project with a Trusted Publisher", "Publishing with a Trusted Publisher", "Security model and
+considerations", "Troubleshooting"), read as their source in `pypi/warehouse`'s
+`docs/user/trusted-publishers/` on its `main`; and `pypa/gh-action-pypi-publish`'s `README.md` and
+`action.yml` at the commit of `v1.14.3` (below). Nothing was registered, uploaded or run.
+*(2026-11-15)*
+
+- **A GitHub publisher's fields.** The repository's owner, the repository's name and the file
+  name of the workflow allowed to upload are required; a GitHub environment's name is optional
+  and "strongly recommended", for its "manual approval on each run". A **pending** publisher, made
+  from the account's "Publishing" page since the project does not exist, takes the same fields
+  and the PyPI project's name; it creates the project on its first use and becomes an ordinary
+  publisher. It reserves no name until used, and is invalidated if another user registers the
+  name first. TestPyPI is named as an index the action publishes to by trusted publishing once a
+  publisher is configured there (`repository-url: https://test.pypi.org/legacy/`, an OIDC
+  audience `testpypi` where PyPI's is `pypi`); TestPyPI's own form was not read apart.
+- **What it asks of the workflow.** `id-token: write` on the uploading job, "mandatory for
+  Trusted Publishing", at the job level "strongly recommended" over the workflow's; no username,
+  password or token. A reusable workflow cannot be the trusted workflow, so the job that uploads
+  is in the workflow the publisher names. The triggers `pull_request_target` and `issue_comment`
+  are refused. A token whose environment, owner, repository or workflow file differs from the
+  publisher's is refused (`invalid-publisher`); an upload whose metadata names another project
+  than a pending publisher's is refused with "Non-user identities cannot create new projects".
+- **Attestations** are made and uploaded by default when the action publishes by trusted
+  publishing (`attestations: true`), signed by Sigstore with the same OIDC identity; the pages
+  ask nothing more of the workflow for them.
+- **The action at `v1.14.3`** is a composite action over a Docker image, usable "only from
+  within GNU/Linux based jobs". Its inputs: `repository-url` (PyPI's `upload.pypi.org/legacy/` over
+  HTTPS, the default its older alias gives), `packages-dir` (`dist`), `verify-metadata` (`true`, a
+  `twine check` before upload), `skip-existing` (`false`), `attestations` (`true`), `user`,
+  `password`, `verbose` and `print-hash`. Its README advises the build in a separate job with
+  restricted privileges and `id-token: write` on the publishing job alone; it builds nothing.
+- **A pending publisher is unique without its project.** Read in `pypi/warehouse`'s source at
+  `main` `748d628` (`warehouse/oidc/models/github.py`, `warehouse/oidc/views.py`,
+  `warehouse/accounts/views.py`), by the plan's whole-branch review on 2026-11-15 and again from
+  its saved copies the same day; not exercised. `PendingGitHubPublisher`'s one unique constraint,
+  `_pending_github_oidc_publisher_uc`, is on `repository_name`, `repository_owner`,
+  `workflow_filename` and `environment`, not the project's name; the account's form refuses a
+  second with the same four ("This trusted publisher has already been registered"), and a
+  comment beside it says the constraint fires "when another pending publisher already targets
+  the same external identity under a different project name". A token's first upload finds one
+  pending publisher by its claims, creates that publisher's project and reifies it. So three new
+  projects from one workflow need three environments, one a project's, on each index.
+  *(2026-11-15)*
+- **The action uploads a directory, never one named file.** Read in `twine-upload.sh` and
+  `action.yml` at the commit of `v1.14.3`, anonymously, 2026-11-15: no input names a file;
+  `packages-dir` (default `dist`) is checked by `twine check <dir>/*` and uploaded by
+  `twine upload <dir>/*`, so a job uploads one wheel by downloading it alone into that
+  directory. `actions/download-artifact`'s `README.md` at `v8.0.2`: `pattern` matches artifacts'
+  names ("Ignored if name is specified"), and `merge-multiple: true` extracts every matched
+  artifact into `path` itself. *(2026-11-15)*
+
 ---
 
 ## GitHub Actions, `ubuntu-26.04`
@@ -9084,6 +9259,52 @@ interpolates `${A:-unset}`, `${B:-unset}` and `${C:-unset}`; no container starte
   private one the API answers `Upgrade to GitHub Pro or make this repository public`. No
   setting disables pull requests; interaction limits last at most six months and cover
   issues too. *(2026-10-07)*
+
+Read on 2026-11-15, as documented and not exercised, by anonymous requests: GitHub's pages
+"Managing environments for deployment", "Deployments and environments", "Workflow syntax for
+GitHub Actions" and "Using GitHub CLI in workflows" on docs.github.com; each action's `action.yml`
+and `README.md` at the commit named below; its releases from the API's `releases` list, and the
+commit each tag names by `git ls-remote`; and `gh release create --help` of the development host's
+gh 2.46.0, the runner's gh not read. No environment, setting or run was made. *(2026-11-15)*
+
+- **Environments and the plan.** On GitHub Free an environment can be configured for a public
+  repository alone; Pro and Team configure them for private ones. On Free, Pro and Team, required
+  reviewers and wait timers are for public repositories alone; deployment branches and tags are
+  for every public repository, and for private ones on Pro or Team. Up to six people or teams may
+  be required reviewers, and one approval lets the job proceed. "Prevent self-review" stops the
+  user who started a run approving it; off, the pages do not say outright that that user may.
+  Deployment rules are name patterns for branches or for tags, matched against the run's
+  `GITHUB_REF`, `*` not matching `/`. Every protection rule passes before a job naming the
+  environment is sent to a runner. Running a workflow that names an environment that does not
+  exist makes one by that name, with no protection rule and no secret. Secrets are optional.
+- **Workflow syntax.** Where `permissions` names any scope, every scope it does not name is
+  `none`; `id-token` takes `write` or `none` and lets an action fetch an OIDC token; `contents:
+  write` lets one make a release. A `push` filter that names tags alone runs on no branch's push.
+  A job's `outputs` map its steps' outputs for jobs that `needs` it. The GitHub CLI is
+  preinstalled on GitHub-hosted runners and reads its token from `GH_TOKEN` (the page's example
+  gives it `secrets.GITHUB_TOKEN`); `gh release create --verify-tag` aborts where the tag is not
+  already in the remote repository, `--notes-file` reads the notes from a file.
+- **Artifacts.** `actions/upload-artifact` at `v7.0.2` (`node24`) takes `name` (`artifact`),
+  `path` (required) and `if-no-files-found` (`warn`), among others; past a path's first wildcard
+  the hierarchy is kept, so `dist/*.whl` holds the wheels at the artifact's root.
+  `actions/download-artifact` at `v8.0.2` (`node24`), given `name`, extracts that artifact into
+  `path` with no subdirectory.
+- **The commits the publish workflow pins**, each its release's tag at least two weeks before
+  2026-11-14, the date the plan's two weeks are counted from; the lightweight tags name the
+  commit, and `v1.14.3`, annotated, names `aef6c9b6…` and the commit by `^{}`:
+
+  | Action | Release | Published | Commit |
+  | --- | --- | --- | --- |
+  | `actions/checkout` | `v5.1.0` | 2026-07-20 | `fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09` |
+  | `actions/setup-python` | `v6.3.0` | 2026-06-24 | `ece7cb06caefa5fff74198d8649806c4678c61a1` |
+  | `astral-sh/setup-uv` | `v10.3.3` | 2026-10-28 | `68559e99cc807c1eb7e9238fd43a15bba460eec2` |
+  | `actions/upload-artifact` | `v7.0.2` | 2026-10-07 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
+  | `actions/download-artifact` | `v8.0.2` | 2026-10-07 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` |
+  | `pypa/gh-action-pypi-publish` | `v1.14.3` | 2026-10-20 | `7245906fb61fa33a13554f9d5fb856fe61758086` |
+
+  `checkout` and `setup-python` are the latest releases of the majors `ci.yml` names (`v5`, `v6`);
+  later majors were released (`checkout` `v7.0.1` and `setup-python` `v7.1.0`, both more than two
+  weeks old) and not read.
 
 ---
 

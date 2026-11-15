@@ -12,6 +12,11 @@ name.
 endpoint and keys are `FYLGJA_S3_*` variables read for it alone (D-061). The scheme is read in
 any case, and any other value that begins `s3:` is refused, never taken for a directory.
 
+`FYLGJA_PACKAGES` names the directories of platform and probe packages the server loads, colon-separated, every
+one of them and no other; unset or empty it means the packages the install carries (D-106): the wheel's, or a
+checkout's `psp/` and `probes/`. A site that wants its own beside the shipped lists `packages.shipped()`'s paths
+itself.
+
 `FYLGJA_LEASE` names the Lease that holds the store for one core (D-062), and `FYLGJA_TLS_CERT`
 and `FYLGJA_TLS_KEY` the certificate and key the server serves TLS with, set together or not at
 all (D-063). What one setting rules out of another `check` refuses, after each is read alone: an
@@ -29,6 +34,7 @@ from ipaddress import IPv4Network
 from pathlib import Path
 
 from fylgja_core import drivers
+from fylgja_core import packages as packages_module
 from fylgja_core.store import check_file_key
 
 # Rule id. Clients and tests match on it.
@@ -261,14 +267,26 @@ def check(settings: Settings) -> None:
                                                  "and FYLGJA_STORE names none")
 
 
+def _packages(given: str) -> tuple[Path, ...]:
+    """The directories of packages: those `given` names, colon-separated and every one of them, none other (D-042);
+    unset or empty, the ones this install carries (D-106). `given` is read exactly as it was before the default."""
+    if not given:
+        try:
+            return tuple(packages_module.shipped())
+        except FileNotFoundError as e:
+            raise Misconfigured("FYLGJA_PACKAGES", "is empty or not set, and this install carries no packages") from e
+    found = tuple(Path(p) for p in given.split(":") if p)
+    if not found:
+        raise Misconfigured("FYLGJA_PACKAGES", "names no directory")
+    return found
+
+
 def from_environ(environ: Mapping[str, str]) -> Settings:
     """The `Settings` an environment holds, or `Misconfigured` naming the first fault: each
     setting read alone, then what one rules out of another (`check`)."""
     store = _required(environ, "FYLGJA_STORE")
     tokens = _required(environ, "FYLGJA_TOKENS")
-    packages = tuple(Path(p) for p in _required(environ, "FYLGJA_PACKAGES").split(":") if p)
-    if not packages:
-        raise Misconfigured("FYLGJA_PACKAGES", "names no directory")
+    packages = _packages(environ.get("FYLGJA_PACKAGES", ""))
     listen = _listen(environ.get("FYLGJA_LISTEN") or DEFAULT_LISTEN)
     driver = _driver(environ.get("FYLGJA_DRIVER") or DEFAULT_DRIVER)
     lease = environ.get("FYLGJA_LEASE", "")

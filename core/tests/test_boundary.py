@@ -32,6 +32,7 @@ MODEL = {
     "probes",
     "clock",
     "ulid",
+    "release",
 }
 ALLOWED = {"fylgja_core", "fylgja_core.cli", "fylgja_core.client"} | {f"fylgja_core.{m}" for m in MODEL}
 

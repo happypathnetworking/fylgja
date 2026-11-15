@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from fylgja_core import config
+from fylgja_core import config, packages
 
 FULL = {
     "FYLGJA_STORE": "/var/lib/fylgja",
@@ -21,7 +21,7 @@ FULL = {
     "FYLGJA_RESYNC_S": "600",
     "FYLGJA_LAB_POOL": "198.51.100.0/24",
 }
-REQUIRED = ("FYLGJA_STORE", "FYLGJA_TOKENS", "FYLGJA_PACKAGES")
+REQUIRED = ("FYLGJA_STORE", "FYLGJA_TOKENS")
 S3 = {**FULL, "FYLGJA_STORE": "s3://fylgja/dev/core", "FYLGJA_S3_ENDPOINT": "http://s3.example.internal:7070",
       "FYLGJA_S3_ACCESS_KEY": "AKIDEXAMPLE", "FYLGJA_S3_SECRET_KEY": "fixture-secret-not-a-credential",
       "FYLGJA_LEASE": "fylgja-core", "FYLGJA_DRIVER": "clabernetes", "FYLGJA_CLABERNETES_NAMESPACE": "c9s",
@@ -70,6 +70,40 @@ def test_each_missing_required_variable_is_named(variable: str) -> None:
         config.from_environ(env)
     assert e.value.variable == variable
     assert variable in str(e.value)
+
+
+@pytest.mark.parametrize("given", [None, ""])
+def test_packages_unset_or_empty_are_the_shipped_ones(given: str | None) -> None:
+    env = {k: v for k, v in FULL.items() if k != "FYLGJA_PACKAGES"}
+    if given is not None:
+        env["FYLGJA_PACKAGES"] = given
+    assert config.from_environ(env).packages == packages.shipped()
+
+
+def test_packages_set_are_every_directory_named_and_no_other() -> None:
+    shipped = packages.shipped()
+    site = "/srv/site-packages"
+    assert config.from_environ({**FULL, "FYLGJA_PACKAGES": site}).packages == (Path(site),)
+    both = f"{site}:{shipped[0]}:{shipped[1]}"
+    assert config.from_environ({**FULL, "FYLGJA_PACKAGES": both}).packages == (Path(site), *shipped)
+    with pytest.raises(config.Misconfigured, match="names no directory") as e:
+        config.from_environ({**FULL, "FYLGJA_PACKAGES": ":"})
+    assert e.value.variable == "FYLGJA_PACKAGES"
+
+
+def test_an_install_with_no_packages_is_refused_naming_the_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    def none() -> tuple[Path, Path]:
+        raise FileNotFoundError("no packages")
+
+    monkeypatch.setattr(packages, "shipped", none)
+    env = {k: v for k, v in FULL.items() if k != "FYLGJA_PACKAGES"}
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ(env)
+    assert (e.value.variable, e.value.rule) == ("FYLGJA_PACKAGES", "settings.missing")
+    assert "is empty or not set, and this install carries no packages" in str(e.value)
+    with pytest.raises(config.Misconfigured) as e:
+        config.from_environ({**env, "FYLGJA_PACKAGES": ""})
+    assert "is empty or not set, and this install carries no packages" in str(e.value)
 
 
 def test_an_empty_required_variable_counts_as_missing() -> None:

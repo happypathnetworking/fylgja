@@ -128,8 +128,9 @@ a `.gitignore` of `*`.
 | `make conformance DRIVER=containerlab\|clabernetes` | The driver conformance suite alone (`core/tests/conformance/`): one set of scenarios, written once, on the harness of the driver `DRIVER` names, `containerlab` by default; any other name is refused in one line. A twin created and shown; stepped through every step fixture with verify after each and the burst held, and the step's refusals; the core killed at each phase boundary of a create and of a step, during an apply and during a destroy, a waiting CLI riding through, a deletion after a kill, and a step cancelled; a node replaced behind the core and one stopped; leftovers read by label; node access through each node's own transport; and isolation over TCP between two twins and from a third namespace, where the driver declares it. Then many twins at once (`core/tests/conformance/test_many.py`): the harness's count, three here and five on the cluster, created together and all Ready, each stepped while the others run with no node unread, a twin of forty nodes refused in a dry run and at its create with the capacity read agreeing, and every twin destroyed, about 5 minutes here and 8 on the cluster. The scenario needs a band of room: about 4.5 CPU and 17 GiB free here for its three twins and 7.5 CPU and 28 GiB on the cluster for its five, and, with them up, under about 80 GiB free on either, since the forty-node twin must be refused; on a roomier runtime its dry run is answered and the scenario fails there, having made no twin of it. `containerlab` runs `fylgja-core-server` on this host under the live tier's marker: 54 tests, about 36 minutes. `clabernetes` drives the core deployed on the cluster over TLS, killing it by its pod, under the cluster tier's marker: 54 tests, about 68 minutes. Load `local/.env` first, and for the cluster the suite's own variables ([Running the core on a cluster](#running-the-core-on-a-cluster)) |
 | `make linkcheck` | Every relative link and anchor in the tracked Markdown resolves |
 | `make wheelcheck` | Builds the core's wheel from `core/` and `formats/`, which carries the core's formats and no other, and installs it, with uv, into two empty venvs outside the tree, each made by `uv venv` and the wheel built by `uv build`: with the `server` extra, where it validates a fixture and the server's modules import; and alone, each of the base's four libraries at the floor of its range, where the model and the client import, a run is followed over a fake transport and `fylgja-core-server` refuses in one line; then the reader's wheel, from `readers/infrahub/` and `formats/` and carrying its one format, `infrahub-reader-1`, and no other, with its GraphQL documents, beside the base alone in a third, where the seed's reader document decodes, the command's module imports with nothing of the server, Prefect or Infrahub's SDK, and `fylgja-infrahub --help` exits 0; then the example orchestrator's wheel, from `orchestrator/` and `formats/` and carrying its two formats and no other, with its Infrahub change source's GraphQL documents, beside the base and the two readers' wheels alone in a fifth, where a plan and a rehearsal validate, the rehearsal library imports with nothing of the server, either reader or Prefect loaded, both change sources import, the Infrahub one reading each of its GraphQL documents from the installed package, the command's module imports with nothing of the server or Prefect, nothing of the server's libraries is installed but the two Prefect brings, starlette and uvicorn, and `fylgja-orchestrator --help` and `fylgja-orchestrator stage mark --help` exit 0 ([D-066](design/decisions.md#d-066), [D-084](design/decisions.md#d-084)). Between the reader's and the example's, the NetBox reader's wheel, from `readers/netbox/` and `formats/` and carrying its one format, `netbox-reader-1`, and no other, is installed beside the base alone in an empty venv of its own, where a copy of the seed's reader document decodes, the command's module imports with nothing of the server, Prefect, a client library of Infrahub's or NetBox's, the Infrahub reader or the example, `fylgja-netbox --help` exits 0, and `fylgja-netbox check` given no token exits 2 with the one line that names `FYLGJA_NETBOX_TOKEN` ([D-095](design/decisions.md#d-095)). Needs the network, so it is no part of `make test`; CI runs it on every push to `main` and every pull request |
+| `make wheels` | Builds the three published wheels, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, by `uv build` into `dist/` (git-ignored, emptied first, each member's `build/` removed), with the setuptools `build-constraints.txt` names, each at the tree's commit, which each wheel holds, and never the example's ([D-106](design/decisions.md#d-106)). Then `python3 -I scripts/publish.py check --tag v<version> --commit <commit> --dist dist` holds the tag, `VERSION`, `CHANGELOG.md`'s head and the wheels to one another, naming every fault in one pass, and prints `index=pypi` or `index=testpypi`; `notes` prints the changelog's head section. The script uploads, tags and pushes nothing. Needs the network |
 | `make image` | Builds the core's image from the `Dockerfile` at the root ([D-062](design/decisions.md#d-062)) as `fylgja-core:<tag>`, the tag the commit's first 12 characters, with `-dirty` where `git status --porcelain` prints anything. Its build context is `.dockerignore`'s allow-list, so nothing under `local/` reaches a layer. Needs Docker and the network |
-| `make imagecheck` | Builds the image, then runs it: its user is 10001; given only `FYLGJA_STORE` and a `FYLGJA_TOKENS` that names no file, it exits 2 naming `FYLGJA_TOKENS`, its packages loaded against the wheel's formats; and the formats it carries are the core's, `CORE_FORMATS` in `core/setup.py`, equal to `formats/`'s by name and by bytes; and its copies of `psp/` and `probes/` hold the files git tracks there and no other, by path, so a file git ignores there (an editor's `*.swp`, a nested `local/`), which reaches the image with no `-dirty` tag, fails it. Prints the tag it checked last. CI runs it on every push to `main` and every pull request, and pushes nothing |
+| `make imagecheck` | Builds the image, then runs it: its user is 10001; given only `FYLGJA_STORE` and a `FYLGJA_TOKENS` that names no file, it exits 2 naming `FYLGJA_TOKENS`, the packages in its wheel loaded against the wheel's formats, `FYLGJA_PACKAGES` unset; and the formats it carries are the core's, `CORE_FORMATS` in `core/setup.py`, equal to `formats/`'s by name and by bytes; and it has no copies of `psp/` and `probes/` of its own and sets no `FYLGJA_PACKAGES`: `packages.shipped()` in the image holds the YAML git tracks there, by name and by bytes, and no other file, so a file git ignores there (an editor's `*.swp`, a nested `local/`), which reaches the image with no `-dirty` tag, fails it. Prints the tag it checked last. CI runs it on every push to `main` and every pull request, and pushes nothing |
 | `make infrahub-up` | The development Infrahub, the Compose project `fylgja-core-infrahub` at `INFRAHUB_VERSION` (1.11.11), run by `scripts/infrahub_dev.py` against the main checkout's `local/`, from a worktree too. It adds to `local/.env` each of its eight names ([`.env.example`](.env.example)) that the file does not hold, generated and never printed, and changes no line already there, since a token made again would not open the kept database; a name the file holds with no value (`NAME=`, `NAME=""`, read from its last line where it has several) is refused, exit 2 and before anything is fetched or started, naming it, since Compose would replace it by the published file's own default; so is `NAME= # a note`, which a shell reads as empty and Compose as the text `# a note`; makes `local/infrahub/repos/` (mode `0700`) where it is absent; fetches Infrahub's published Compose file for the version into `local/infrahub/` once; starts the project with `infrahub/dev/compose.override.yml`, asking Compose once more where its first start fails; and waits up to 600 s for `/api/info` to answer that version, failing at once on another. `VERSION` is the make variable's whatever the shell or `local/.env` holds, and Compose is given none of the eight names and no other name beginning `INFRAHUB_` from the shell, whatever it exports, so that it reads them from `local/.env` alone or takes the published file's defaults: an `INFRAHUB_ADDRESS` exported for a client would otherwise be the task workers' address of Infrahub. The task workers mount the main checkout's `.git` and `local/infrahub/repos/` read-only, and nothing else of the checkout, and are given the edge's Prefect's address and basic auth ([Running the example orchestrator](#running-the-example-orchestrator)). About 3.5 minutes on new volumes and 1.5 minutes on kept ones; it then holds about 4.5 GiB. Needs Docker, and the network for the first fetch |
 | `make infrahub-down` | Stops the development Infrahub (`docker compose stop --timeout 60`), in 20 to 50 s: each container is given 60 s to exit by itself, since Compose's own 10 s killed Neo4j, which needs about 11 s, and the server once took 31 s. Its containers, network and volumes and everything under `local/infrahub/` are kept, port 8000 and the memory released, and `make infrahub-up` starts it again. `PURGE=1`, and no other value of `PURGE`, removes the containers, the network and the volumes (`down -v`), and `local/infrahub/seed.json` with them; `local/.env` and the rest of `local/infrahub/`, the fetched file among it, stay. It is stopped for every live, cluster or conformance run |
 | `make infrahub-register` | The schema library, the group and this repository's registration on the development Infrahub's `main` (`infrahub/seed/register.py`), at `REF`, the branch checked out, from a worktree too, and that branch's commit; an empty `REF`, a detached head, is refused in one line. The library under `infrahub/schema/dcim/` is loaded by `infrahubctl`, given 600 s (`INFRAHUB_TIMEOUT`), where `main` holds none of its kinds, and `main` is read for up to 120 s until it lists them all; a `main` holding part of them is refused with nothing written. The group `fylgja-devices` is made where it is not there. The read-only repository `fylgja` is registered from the main checkout's `.git`, mounted at `/srv/fylgja`: created where there is none; its `ref` updated and its last commit imported where it names another branch; its last commit imported where it reads another commit; then read for up to 300 s until it reads the commit `in-sync` and `online`, with the artifact definition `device-config` on `main`. Then each running task worker of the project is read by `docker` for the tree of that commit, `/opt/infrahub/git/<the registration's id>/commits/<the commit>`: a recreated worker holds no clone, and a check Infrahub runs on it fails, so one lacking the tree is not settled. Its import is asked, at once where the run sent nothing and else 30 s on, and again every 30 s until each holds it, within 300 s: an import with no new commit clones on the one worker that runs it, and after a new commit's import each worker held the tree by an import or a pull of its own, Infrahub's fetch to each beginning after. One already there, settled and its commit's tree on each worker is sent nothing. Its first run builds `infrahubctl`'s venv, `local/infrahub/.venv/`, in about 45 s. About 2.5 minutes on an empty instance, read once, and seconds where all of it is there. Load `local/.env` first |
@@ -247,7 +248,7 @@ in [`.env.example`](.env.example):
 | `FYLGJA_S3_REGION` | `us-east-1` | The region its requests are signed for |
 | `FYLGJA_S3_CA` | the system's | A CA bundle for an `https://` endpoint a private CA signed |
 | `FYLGJA_LEASE` | none; required by `s3://` | The Lease that holds the store for one core ([D-062](design/decisions.md#d-062)), in the core's namespace (the service account's in a pod, the kubeconfig context's off the cluster), taken before the store is opened: a core that finds it held waits, saying once whom for, and one that loses it stops at once (`lease.lost`): its loop's stop begun, given 2 s, every connection dropped, one still in its TLS handshake among them, and each request in flight cancelled, none answered and none given grace, nothing released, exit status 1 |
-| `FYLGJA_PACKAGES` | required | Colon-separated directories of platform and probe packages, loaded once at start: `psp:probes` |
+| `FYLGJA_PACKAGES` | the packages the install carries: `psp/` and `probes/`, in a checkout the tree's | Colon-separated directories of platform and probe packages, every one of them loaded once at start and no other: set, it names them all, so a site that wants its own beside the shipped lists the shipped ones' paths too (`packages.shipped()` answers them; [D-106](design/decisions.md#d-106)) |
 | `FYLGJA_TOKENS` | required | The token file (below) |
 | `FYLGJA_LISTEN` | `127.0.0.1:7650` | The address it serves on, `host:port` |
 | `FYLGJA_TLS_CERT` | none | The certificate the server ends TLS with, set with `FYLGJA_TLS_KEY` ([D-063](design/decisions.md#d-063)); without the two it serves HTTP, which is for loopback, and a listen address off loopback is one warning at start |
@@ -2096,6 +2097,81 @@ build.
 - **Clean up** there is as above, and besides: the twin's namespace `fylgja-twin-<twin>` read gone in `<kubectl> get
   namespaces`, and the deployed core left as it runs, at one replica, no core started on the host; its scale is the
   maintainer's word.
+
+## Releasing
+
+A release publishes the three wheels, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, at
+one version, never the example's ([D-106](design/decisions.md#d-106)). Every act below but the
+workflow's own is the maintainer's alone, each on the maintainer's word: no one else makes an
+environment, registers a publisher, tags, pushes a tag or approves an upload.
+
+**Before the first tag is pushed**, once, all of it:
+
+- **A tag ruleset** on `v*`, its creation, update and deletion the maintainer's alone, so that
+  no one else can start the workflow or move a tag it ran on. On GitHub's Free plan a ruleset
+  needs the repository public (design/verified-facts.md, "GitHub Actions, `ubuntu-26.04`").
+- **Six GitHub environments**, one an upload job's and named as it is:
+  `testpypi-fylgja-core`, `testpypi-fylgja-infrahub`, `testpypi-fylgja-netbox`,
+  `pypi-fylgja-core`, `pypi-fylgja-infrahub` and `pypi-fylgja-netbox`, each made, or if one
+  exists, given these rules, by hand, since a workflow that names an environment that does not
+  exist makes it with no protection rule. Each has the maintainer as its required reviewer,
+  "Prevent self-review" off (the maintainer pushes the tag and approves its uploads),
+  deployment tags `v*` alone, and no secret. On GitHub's Free plan an environment and its
+  required reviewers need the repository public.
+- **Six pending publishers**, one an index and a distribution, each with its own environment,
+  each from an account with two-factor authentication: on TestPyPI, PyPI Project Name
+  `fylgja-core` with Environment name `testpypi-fylgja-core`, `fylgja-infrahub` with
+  `testpypi-fylgja-infrahub` and `fylgja-netbox` with `testpypi-fylgja-netbox`; on PyPI the same
+  three with `pypi-fylgja-core`, `pypi-fylgja-infrahub` and `pypi-fylgja-netbox`; and for every
+  one Owner `happypathnetworking`, Repository name `fylgja` and Workflow name `publish.yml`. A
+  pending publisher is unique on its owner, repository, workflow and environment, not its
+  project, so no two may share an environment (design/verified-facts.md, "PyPI and TestPyPI").
+  A pending publisher reserves no name until it is used.
+
+**A release** is then:
+
+1. **One commit** sets `VERSION` and dates `CHANGELOG.md`'s head: `VERSION` the version,
+   `X.Y.ZrcN` for a candidate or `X.Y.Z` for a release, the readers' `fylgja-core` floor the same
+   version, and the head `## <version> - <YYYY-MM-DD>`, with its known limits. A release's commit
+   is on `main`.
+2. **Before the tag**, on that commit with a clean tree, `make wheels` and then the check the
+   workflow runs, so that a fault is found before anything can be uploaded:
+
+   ```bash
+   make wheels
+   python3 -I scripts/publish.py check --tag v<version> --commit "$(git rev-parse HEAD)" --dist dist
+   ```
+
+3. **The tag** `v<version>` on that commit, pushed. Nothing else starts the workflow: a branch's
+   push and a pull request do not.
+4. **`.github/workflows/publish.yml`** runs. Its job `build` runs `make venv`, `make lint`,
+   `make test` and `make wheelcheck`, builds the wheels by `make wheels`, and runs
+   `scripts/publish.py check` against the tag and its commit, which refuses a tag that is not
+   `v` + `VERSION`, a changelog's head that is another version or undated, and any wheel but the
+   three at the tag's commit, and names the index by the version's form; a release's commit must
+   be an ancestor of `main`. It puts each wheel in an artifact of its own. Its three jobs
+   `testpypi-<distribution>` (a candidate) or `pypi-<distribution>` (a release) then each wait
+   on its environment.
+5. **The approval.** The maintainer approves the three waiting jobs; one review may approve
+   several waiting environments at once. Each uploads its one wheel by trusted publishing: no
+   token is stored anywhere, and only the six upload jobs may ask GitHub for an identity token.
+   A file uploaded to an index can never be uploaded again, nor replaced.
+6. **For a release**, once its three uploads have passed, the job `release` makes the GitHub
+   release, titled by the tag, carrying the same wheels and the changelog's head section. A
+   candidate has none.
+
+**Where a run fails.** A tag whose `build` job failed, before any upload, may be deleted and
+pushed again on a mended commit. Where one upload job failed and the others uploaded, that job
+is re-run alone; `skip-existing` is not set, so a re-run of a job whose wheel went up fails, and
+that failure says the wheel is already there. A tag that uploaded anything is never deleted or
+moved: where its uploads cannot all be completed, the version cannot be uploaded again, so the
+next one is cut, `X.Y.Zrc<N+1>` for a candidate or the next patch for a release, by the steps
+above.
+
+Each action the workflow uses is pinned by the commit of a release at least two weeks old, the
+release named beside it, as CI's `setup-uv` is. What PyPI and GitHub require of the workflow was
+read from their documentation (design/verified-facts.md, "PyPI and TestPyPI", "GitHub Actions,
+`ubuntu-26.04`") and is first exercised by a candidate's tag.
 
 ## Conventions
 

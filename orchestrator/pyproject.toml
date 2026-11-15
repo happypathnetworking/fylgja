@@ -4,9 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fylgja-orchestrator"
-version = "0.0.0"
+# The version is VERSION's at the root, which setup.py reads (D-106).
+dynamic = ["version"]
 description = "Fylgja's example orchestrator: a change rehearsed on a twin through the core's API."
 license = "Apache-2.0"
+# Never published: PyPI refuses an upload of a distribution with this classifier (D-106).
+classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.14"
 # The core's base install, the model package and the client library, with no range of its own: the core states its
 # libraries' ranges (D-084). The two readers, which the Infrahub change source (D-082) and the NetBox change source
@@ -23,6 +26,11 @@ dev = [
     "pytest==9.2.0",
     "ruff==0.17.3",
 ]
+
+# uv rebuilds this editable install's metadata when a key changes: its own defaults, and the root's VERSION, which
+# setup.py reads and which lies outside the member (D-106; verified-facts.md, "A version read from a file").
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "setup.cfg" }, { file = "../VERSION" }]
 
 [tool.setuptools.packages.find]
 where = ["src"]

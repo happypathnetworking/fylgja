@@ -1,6 +1,6 @@
 # fylgja-core (CONTRIBUTING.md).
 
-.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck image imagecheck infrahub-up infrahub-down \
+.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck infrahub-up infrahub-down \
 	infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down orchestrator-serve netbox-up \
 	netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo netbox-demo demo-down
 
@@ -43,6 +43,9 @@ SOURCE_REFUSED = $(filter-out 1,$(words $(SOURCE)))$(filter-out $(SOURCES),$(SOU
 # `image` and `imagecheck` build and check one tag, whatever changes in the tree meanwhile.
 IMAGE ?= fylgja-core
 TAG := $(shell git rev-parse HEAD 2>/dev/null | cut -c1-12)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
+# The same commit in full, which the image's build stage writes into the core's package as the build it answers
+# --version with (D-106): `image` passes it, and `imagecheck` holds the image's --version to TAG's twelve characters.
+COMMIT := $(shell git rev-parse HEAD 2>/dev/null)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
 
 all: lint test
 
@@ -97,16 +100,34 @@ linkcheck:
 # the base alone, where its command answers --help; then the NetBox reader's, with its one format, beside the base
 # alone, where it answers --help and refuses a missing token; then the example's, built from orchestrator/ and
 # formats/ with its two formats and its Infrahub change source's queries, installed beside the base and the two
-# readers alone, where both its change sources import and its command answers --help.
+# readers alone, where both its change sources import and its command answers --help. Each wheel is built at the
+# tree's commit and holds it, and each installed command's --version names the tree's version and that commit.
 wheelcheck:
 	python3 -I scripts/wheelcheck.py
 
-# The core's image from the Dockerfile; its build context is .dockerignore's allow-list. Needs Docker and the network.
+# The three published wheels (D-106), core, readers/infrahub and readers/netbox, and no other, built by uv into dist/
+# (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. Each member's build/ is
+# removed first, so that no file since removed from the tree rides along from an earlier build. The backend is the
+# setuptools build-constraints.txt names, not whatever the index holds that day. scripts/publish.py check holds them,
+# the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check refuses any
+# file but the three wheels. Needs the network.
+wheels:
+	rm -rf dist core/build readers/infrahub/build readers/netbox/build
+	mkdir dist
+	for member in core readers/infrahub readers/netbox; do \
+		FYLGJA_BUILD_COMMIT=$(COMMIT) uv build --wheel --no-python-downloads --python python3 --build-constraints build-constraints.txt --out-dir dist $$member || exit 1; \
+	done
+	rm -f dist/.gitignore
+
+# The core's image from the Dockerfile; its build context is .dockerignore's allow-list. The commit it is built at,
+# COMMIT, is given as the build stage's one argument. Needs Docker and the network.
 image:
-	docker build -t $(IMAGE):$(TAG) .
+	docker build --build-arg FYLGJA_BUILD_COMMIT=$(COMMIT) -t $(IMAGE):$(TAG) .
 
 # The image built, then run: its user, its entry point's refusal, its formats (those CORE_FORMATS in core/setup.py
-# names, each byte for byte its file in formats/), its packages' files against git's; the tag printed last.
+# names, each byte for byte its file in formats/), its wheel's packages (the YAML git tracks in psp/ and probes/, no
+# copy of its own and no FYLGJA_PACKAGES), and the build its two commands
+# answer --version with, which names the commit in TAG; the tag printed last.
 imagecheck: image
 	python3 -I scripts/imagecheck.py $(IMAGE):$(TAG)
 

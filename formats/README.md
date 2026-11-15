@@ -137,6 +137,13 @@ relative to them.
     refusal lifted. Nothing reads `conformance.port.discovering` either, the path that says
     LLDP runs on a port, and it is optional: a package may leave it out, where every package
     gives `conformance.version`.
+25. **API 1's document is corrected where it disagreed with the server**
+    ([D-105](../design/decisions.md#d-105)). Its licence is `Apache-2.0`, as the distributions'
+    metadata say; its server says TLS ends at the server where `FYLGJA_TLS_CERT` and
+    `FYLGJA_TLS_KEY` are set ([D-063](../design/decisions.md#d-063)), not at an ingress; 403,
+    `auth.forbidden`, is described as reserved until roles exist, as `docs/rules.md` says, and no
+    route answers it; `Version.build` is `<version> (commit <commit>)`. No route, operation,
+    parameter, member or status changed.
 
 ## Settled by measurement (2026-10-30)
 

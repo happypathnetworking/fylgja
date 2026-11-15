@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 from fake import THREE_NODE, FakeSource, dcim_schema, listing, stamp, three_node
-from fylgja_core import blueprint
+from fylgja_core import blueprint, release
 from fylgja_core.findings import Finding
 
 from fylgja_infrahub import InfrahubError, cli, schema
@@ -129,6 +129,11 @@ def renamed_n1(source: FakeSource) -> None:
     """`n1` named `N1` in Infrahub, which the blueprint names by its label, `n1`."""
     rows = [dataclasses.replace(d, name="N1") if d.name == "n1" else d for d in source.held_devices.items]
     source.held_devices = listing("DcimDevice", rows)
+
+
+def test_version_names_the_version_and_the_commit(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["--version"]) == 0
+    assert capsys.readouterr() == (f"fylgja-infrahub {release.build('fylgja-infrahub', 'fylgja_infrahub')}\n", "")
 
 
 def test_read_writes_the_blueprint_and_prints_its_id(run: Command, tmp_path: Path) -> None:

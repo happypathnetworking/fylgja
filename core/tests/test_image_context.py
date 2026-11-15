@@ -1,7 +1,8 @@
 """The core's image as the tree states it (D-062): the build context is an allow-list, so nothing
 under `local/` can reach a layer, and the `Dockerfile` copies from the context nothing else; both
-stages are one base pinned by digest; the image installs the wheel with its `server` extra (D-084),
-runs as a user that is not root, takes no build argument, and never runs Python optimised, which
+stages are one base pinned by digest; uv comes into the build stage alone, from its image pinned by
+digest, and the image installs the wheel with its `server` extra (D-084) by uv, so the image holds no uv and
+its venv no pip; it runs as a user that is not root, takes no build argument, and never runs Python optimised, which
 strips the `assert` inside asyncio that a lost Lease's cut rests on (verified-facts.md, uvicorn
 0.54.0). `make imagecheck` builds and runs it."""
 
@@ -10,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWED = ["core/pyproject.toml", "core/setup.py", "core/src", "formats", "psp", "probes"]
 
 _DIGEST = re.compile(r"@sha256:([0-9a-f]{64})(?:\s|$)")
+_UV_IMAGE = re.compile(r"ghcr\.io/astral-sh/uv:([0-9.]+)@sha256:[0-9a-f]{64}")
 _OPTIMISED = re.compile(r"-[A-Za-z]*O[A-Za-z]*")  # -O, -OO, or -O among other short options
 
 
@@ -101,9 +104,40 @@ def test_both_stages_are_one_base_pinned_by_digest() -> None:
 
 
 def test_the_image_installs_the_wheel_with_the_server_extra() -> None:
-    installs = [args for keyword, args in _instructions() if keyword == "RUN" and "pip install" in args]
+    runs = [args for keyword, args in _instructions() if keyword == "RUN"]
+    installs = [args for args in runs if "uv pip install" in args]
     assert len(installs) == 1, installs
-    assert "[server]" in installs[0]
+    for needle in ("[server]", "--compile-bytecode", "--python /opt/fylgja/venv/bin/python"):
+        assert needle in installs[0], needle
+    # No pip, and no venv made but by uv: a `pip` not after `uv `, a `-m pip` or a `-m venv`.
+    assert [r for r in runs if re.search(r"(?<!uv )pip (install|wheel)|-m pip|-m venv", r)] == []
+
+
+def test_uv_comes_from_its_image_pinned_by_digest_into_the_build_stage_alone() -> None:
+    found = _instructions()
+    last = max(i for i, (keyword, _) in enumerate(found) if keyword == "FROM")
+
+    def stage_sources(part: list[tuple[str, str]]) -> list[str]:
+        return [
+            flag[len("--from=") :]
+            for keyword, args in part
+            if keyword == "COPY"
+            for flag in _copy(args)[0]
+            if flag.startswith("--from=")
+        ]
+
+    root = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    version = root["tool"]["uv"]["required-version"].removeprefix("==")
+    stages = {
+        args.split()[-1] for keyword, args in found if keyword == "FROM" and " AS " in args.upper()
+    }
+    assert stages == {"build"}
+    external = [s for s in stage_sources(found[:last]) if s not in stages]
+    assert len(external) == 1, external
+    match = _UV_IMAGE.fullmatch(external[0])
+    assert match, external
+    assert match.group(1) == version
+    assert set(stage_sources(found[last + 1 :])) == {"build"}
 
 
 def test_the_image_runs_as_a_user_that_is_not_root() -> None:

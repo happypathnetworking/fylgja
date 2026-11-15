@@ -3358,6 +3358,28 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
   1.0.1, lightkube-models 1.37.0.8, msgspec 0.22.0, pip 26.2.2, protobuf 7.36.2, pycparser 3.12,
   pygnmi 0.8.15, PyYAML 6.0.3, referencing 0.37.0, rpds-py 2026.9.1, starlette 1.9.0, truststore
   0.10.5, typing_extensions 4.16.0, uvicorn 0.54.0, wsproto 1.3.2.
+- **Built by uv 0.12.23** *(Docker 29.8.1, buildx v0.37.1, 2026-11-15)*. The build stage copies
+  `/uv` from `ghcr.io/astral-sh/uv:0.12.23`, whose index `docker buildx imagetools inspect` read as
+  `sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21` (linux/amd64 and
+  linux/arm64, each with an attestation manifest), the image built 2026-10-03 with entry point
+  `/uv`; the base's index was read again, the digest above unchanged. The build, `make image`,
+  took 29.5 s with the base's layers on the host and the uv image pulled by it, and 0.9 s cached.
+  The image is 266 MB on disk and 64.1 MB of content (284 MB and 68 MB built by pip), and
+  `make imagecheck` passed on it.
+  - **What it installed**, `importlib.metadata` in its venv: the 33 distributions of the bullet
+    "What it installed" at the same versions, `pip` 26.2.2 not among them and PyYAML 6.0.3 and
+    fylgja-core 0.0.0 as before; no other difference. `readlink /opt/fylgja/venv/bin/python` is
+    `/usr/local/bin/python3`; the venv's `bin` holds no `pip`, and holds no `uv`.
+  - **The base holds pip.** In the final stage `command -v uv` found nothing, but `command -v pip`
+    found `/usr/local/bin/pip`, and `/usr/local/bin/python3 -m pip --version` answered pip 26.2.2
+    from `/usr/local/lib/python3.14/site-packages/pip`: the base image's own, which the
+    `Dockerfile` does not install or remove.
+  - **Bytecode.** The venv holds 835 `.pyc` files, 61 under `fylgja_core`; its directory is not
+    writable to 10001 (`touch` answered `Permission denied`), `id` printed `uid=10001 gid=10001`.
+  - **The entry point's refusal**, with `FYLGJA_STORE=/tmp/store` and
+    `FYLGJA_TOKENS=/nonexistent`, three runs by `docker run --rm`, each exited 2 with the token
+    file's refusal as one line: 3.10, 3.30 and 3.75 s, the container's start and removal included.
+
 - **The server is the container's PID 1, which ignores a signal it has no handler for.** In the
   image `python` as PID 1, its SIGTERM handler `SIG_DFL`, went on after
   `signal.raise_signal(SIGTERM)`. So the server installs its own: the console script's
@@ -8968,9 +8990,9 @@ once. *(2026-11-13)*
   `/tmp`, a tmpfs, a different filesystem from the cache, `make venv` took 6 s, printed "Failed to
   hardlink files; falling back to full copy", installed 127 packages, made no `bin/pip`, and wrote
   `uv = 0.12.23` into `pyvenv.cfg`. *(2026-11-15)*
-- **Not read:** `uv sync` against a venv of another Python minor; the `Dockerfile`'s two stages
-  built with uv; `scripts/wheelcheck.py`'s empty-environment installs under uv, the base at its
-  floors among them; CI's `setup-uv`.
+- **Not read:** `uv sync` against a venv of another Python minor;
+  `scripts/wheelcheck.py`'s empty-environment installs under uv, the base at its floors among
+  them; CI's `setup-uv`.
 
 ## Docker Compose v5.6.0
 

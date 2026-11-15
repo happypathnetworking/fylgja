@@ -47,19 +47,29 @@ def _install_lines() -> list[list[str]]:
     return found
 
 
-def _requirement(token: str) -> tuple[str, set[str]]:
-    """The distribution and the extras a requirement or a wheel path names; fails on any other form."""
-    wheel = re.fullmatch(r"dist/(fylgja_[a-z]+)-[^/]*\.whl(?:\[([a-z,]+)\])?", token)
-    if wheel:
-        name, extras = wheel.group(1).replace("_", "-"), wheel.group(2)
+def _wheels(lines: list[str]) -> dict[str, str]:
+    """The shell variables the page's `sh` blocks set to one wheel: `name=$(ls dist/<wheel>-*.whl)`, the glob
+    expanded by the shell and kept out of the install line."""
+    return {m.group(1): m.group(2).replace("_", "-")
+            for line in lines if (m := re.fullmatch(r"(\w+)=\$\(ls dist/(fylgja_[a-z]+)-\*\.whl\)", line))}
+
+
+def _requirement(token: str, wheels: dict[str, str]) -> tuple[str, set[str]]:
+    """The distribution and the extras a requirement or a variable holding a wheel names; fails on any other form,
+    a `*` among them, which neither uv nor pip expands."""
+    assert "*" not in token, f"a glob that reaches the installer cannot install: {token}"
+    variable = re.fullmatch(r"\$(\w+)(?:\[([a-z,]+)\])?", token)
+    plain = re.fullmatch(r"(fylgja-[a-z]+)(?:\[([a-z,]+)\])?", token)
+    if variable and variable.group(1) in wheels:
+        name, extras = wheels[variable.group(1)], variable.group(2)
     else:
-        plain = re.fullmatch(r"(fylgja-[a-z]+)(?:\[([a-z,]+)\])?", token)
         assert plain, f"not a requirement the page may give: {token}"
         name, extras = plain.group(1), plain.group(2)
     return name, set(extras.split(",")) if extras else set()
 
 
 def test_each_install_line_names_a_published_distribution_and_its_extras() -> None:
+    wheels = _wheels([line for info, body in blocks(text(PAGE)) if info == "sh" for line in body])
     lines = _install_lines()
     assert lines, "the parse is blind"
     named: set[str] = set()
@@ -70,14 +80,14 @@ def test_each_install_line_names_a_published_distribution_and_its_extras() -> No
         requirements = [a for k, a in enumerate(rest) if not a.startswith("-") and rest[k - 1:k] != ["--python"]]
         assert requirements, f"nothing to install: {argv}"
         for token in requirements:
-            name, extras = _requirement(token)
+            name, extras = _requirement(token, wheels)
             assert name in _published(), f"{name} is no published distribution"
             assert extras <= (_extras() if name == "fylgja-core" else set()), f"{token}: no such extra"
             named.add(name)
             extras_named |= extras
     assert named == _published(), "each distribution is named at least once"
     assert extras_named == _extras(), "each extra is named at least once"
-    assert "fylgja-orchestrator" not in text(PAGE).replace("pip install", ""), "the orchestrator is not published"
+    assert "fylgja-orchestrator" not in text(PAGE), "the orchestrator is not published"
 
 
 def test_the_python_the_page_asks_for_is_the_floor() -> None:
@@ -106,3 +116,28 @@ def test_the_version_line_is_the_builds_form() -> None:
     shown = found[0][1].replace("<version>", release.version("fylgja-core", "fylgja_core"))
     shown = shown.replace("<commit>", release.commit("fylgja_core"))
     assert shown == "fylgja-core " + release.build("fylgja-core", "fylgja_core")
+
+
+def test_a_glob_or_an_unset_variable_is_no_requirement() -> None:
+    wheels = {"core": "fylgja-core"}
+    assert _requirement("$core[server]", wheels) == ("fylgja-core", {"server"})
+    for token in ("dist/fylgja_core-*.whl[server]", "$other"):
+        try:
+            _requirement(token, wheels)
+        except AssertionError:
+            continue
+        raise AssertionError(f"{token} was accepted")
+
+
+def test_the_readers_requirement_on_the_core_is_what_their_pyprojects_say() -> None:
+    wanted = {dep.removeprefix("fylgja-core") for member in PYPROJECTS[1:]
+              for dep in _project(member)["dependencies"] if dep.startswith("fylgja-core")}  # type: ignore[attr-defined]
+    assert len(wanted) == 1, "the readers state one requirement"
+    assert f"`fylgja-core{wanted.pop()}`" in text(PAGE)
+
+
+def test_the_uv_the_page_names_is_the_pinned_one() -> None:
+    pin = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["required-version"]
+    named = re.findall(r"uv (\d+\.\d+\.\d+)", text(PAGE))
+    assert named, "the parse is blind"
+    assert {f"=={v}" for v in named} == {pin}

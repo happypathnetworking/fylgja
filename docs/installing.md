@@ -12,8 +12,7 @@ published to PyPI as a wheel from version 1.0.0 on.
 
 Install `fylgja-core` where you only call a server or read a blueprint. Install the extra `server`
 where the server runs. Install a reader beside the core where you read that source of truth. A
-reader requires the core at its own version or a later one of the same major version, so
-installing it brings the core in.
+reader requires `fylgja-core>=1.0.0rc1,<2`, so installing it brings the core in.
 
 The example orchestrator, which rehearses a change of a source of truth on a twin, is not
 published. It is installed from a clone of the repository and is described in
@@ -45,19 +44,23 @@ The commands are then in `fylgja-env/bin/`.
 ## From a clone
 
 Where a version is not on PyPI yet, or you want the tree as it is, build the wheels from a clone.
-You need Python 3.14, uv and GNU make. `make wheels` builds the three published wheels into
-`dist/`, at the version in the file `VERSION`.
+You need Python 3.14, git, GNU make, uv 0.12.23 and the network: the build fetches its tools. Another
+uv is refused. `make wheels` builds the three published wheels into `dist/`, at the version in the
+file `VERSION`. The shell finds each wheel by its name, since neither uv nor pip expands a pattern.
 
 ```sh
 make wheels
+core=$(ls dist/fylgja_core-*.whl)
+infrahub=$(ls dist/fylgja_infrahub-*.whl)
+netbox=$(ls dist/fylgja_netbox-*.whl)
 uv venv --python 3.14 fylgja-env
-uv pip install --python fylgja-env/bin/python dist/fylgja_core-*.whl
-uv pip install --python fylgja-env/bin/python "dist/fylgja_core-*.whl[server]"
-uv pip install --python fylgja-env/bin/python dist/fylgja_infrahub-*.whl dist/fylgja_netbox-*.whl
+uv pip install --python fylgja-env/bin/python "$core"
+uv pip install --python fylgja-env/bin/python "$core[server]"
+uv pip install --python fylgja-env/bin/python "$core" "$infrahub" "$netbox"
 ```
 
-Install the readers' wheels in the same command as the core's, as in the last line's pair, or
-after it, so that the core they require is found.
+Install a reader's wheel in the same command as the core's, as in the last line, so that the core it
+requires is found beside it and not on an index.
 
 ## Checking it
 

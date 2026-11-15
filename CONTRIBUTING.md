@@ -967,8 +967,8 @@ target does.
    /v1/version` answering there, which takes no token. It reads `FYLGJA_LISTEN`, `FYLGJA_TOKENS`
    and the SR Linux login, `FYLGJA_CREDENTIAL_SRLINUX_USERNAME` and `_PASSWORD`, from
    `local/.env`. `FYLGJA_API_ADDRESS`, where the CLI and the runner reach it, is `local/.env`'s,
-   equal to `FYLGJA_LISTEN`, and is never set by hand: the `export` of
-   [Running the core](#running-the-core) names the default port, and is not copied here.
+   equal to `FYLGJA_LISTEN`, and is never set by hand: the default port
+   is in [the server page](docs/server.md), and is not copied here.
 7. `make orchestrator-serve`, in a shell of its own. Its end: `fylgja-orchestrator: serving
    stage-plan/main, twin-rehearse/main at http://<the bridge's gateway>:4200/api`, and both
    deployments `READY` some 8 s on, as R5 reads them. It reads the runner's own tokens,

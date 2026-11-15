@@ -30,9 +30,13 @@ Two variables are required, `FYLGJA_STORE` and `FYLGJA_TOKENS`. A start with the
 `127.0.0.1:7650`, with the local driver, over HTTP.
 
 ```sh
-export FYLGJA_STORE=/var/lib/fylgja FYLGJA_TOKENS=/etc/fylgja/tokens
+mkdir -p "$HOME/fylgja" && touch "$HOME/fylgja/tokens"
+export FYLGJA_STORE="$HOME/fylgja/store" FYLGJA_TOKENS="$HOME/fylgja/tokens"
 fylgja-core-server
 ```
+
+An empty token file is valid, and the server then admits no client. [The token file](#the-token-file)
+adds one.
 
 ## Settings
 
@@ -54,7 +58,7 @@ with a driver that keeps files in the store's directory, and one of the TLS pair
 | `FYLGJA_LAB_POOL` | `172.20.0.0/16` | The pool the local driver takes each lab's management subnet from: an IPv4 network in CIDR form, with no host bit set, that holds at least one /24. A create that finds no /24 of it free is refused. A twin already made keeps its subnet when the value changes. The server checks the value whichever the driver is. |
 | `FYLGJA_CLABERNETES_NAMESPACE` | none; required by `clabernetes` | The namespace clabernetes runs in, a DNS label. |
 | `FYLGJA_POD_CIDR` | none; required by `clabernetes` | The cluster's pod network as an IPv4 network in CIDR form, such as `198.51.100.0/24`. Each twin's network policy admits any source outside this network. |
-| `FYLGJA_LEASE` | none; required with `s3://` | The name of the Kubernetes Lease that holds the store for one core, in the namespace the server runs in. The server takes it before it opens the store. A server that finds the Lease held waits and says once whom it waits for. A server that loses it stops at once, with status 1. |
+| `FYLGJA_LEASE` | none; required with `s3://` | The name of the Kubernetes Lease that holds the store for one core, in the namespace of the service account in a pod and of the kubeconfig's context off the cluster. The server takes it before it opens the store. A server that finds the Lease held waits and logs one line for each holder it waits for. A server that loses it stops at once, with status 1. |
 | `FYLGJA_S3_ENDPOINT` | required with `s3://` | The object store's endpoint, an `http://` or `https://` URL of a host and an optional port. |
 | `FYLGJA_S3_ACCESS_KEY` | required with `s3://` | The endpoint's access key. |
 | `FYLGJA_S3_SECRET_KEY` | required with `s3://` | The endpoint's secret key. |
@@ -77,16 +81,18 @@ The token file lists the clients that may call the server. It holds one line for
 SHA-256 hash of the client's token in lower-case hex, a space and the client's principal, a name
 that the server logs for every write. Blank lines and lines that begin with `#` are skipped. The
 file never holds a token, and several lines are valid at once. The server reads the file at start,
-so a line added later is read at the next start. A line that does not have a hash and a principal,
+so a line added later is read when the server is restarted. A line that does not have a hash and a principal,
 a hash that is not 64 characters of lower-case hex and the same hash twice are each refused, and
 the refusal names the line and never its content.
 
-This makes a token for a client named `alice`, adds its line to the file and leaves the token in
+This makes a token for a client named `alice`, adds its line to the file that `FYLGJA_TOKENS`
+names, which must exist in a directory you can write, and writes the token to a new file
 `client.env`, readable by its owner alone. It prints nothing.
 
 ```sh
 token=$(head -c 24 /dev/urandom | base64)
 printf '%s %s\n' "$(printf %s "$token" | sha256sum | cut -d' ' -f1)" alice >> "$FYLGJA_TOKENS"
+rm -f client.env
 (umask 077; printf 'FYLGJA_API_TOKEN=%s\n' "$token" > client.env)
 unset token
 ```
@@ -118,9 +124,21 @@ fault. A start that has to wait for a Lease says so once and binds no socket.
 
 SIGTERM and Ctrl-C stop the server in the same way: open watches are told to end, the loop stops,
 the store is closed and the Lease is released. They stop it during the start too, and whatever the
-start had opened is closed again. A second Ctrl-C gives the loop two seconds to stop. The server
+start had opened is closed again. A second Ctrl-C that lands before the server has begun to stop the loop gives the loop two
+seconds to stop, and the Lease is released once it has. One that lands after that changes nothing:
+the loop's stop runs on without a bound, and nothing is released until it ends. The server
 handles SIGTERM itself, so it stops as PID 1 in a container. A create that a stop cut short resumes
 at the next start. The exit statuses are [below](#exit-statuses).
+
+To check that the server is up, ask which API version it speaks. The call needs no token:
+
+```sh
+curl http://127.0.0.1:7650/v1/version
+```
+
+To check that a client is admitted, run a `fylgja-core` command with the address and token the
+client is given, as [the command page](cli.md) says; `fylgja-core twin list` answers `no twins`
+on a new store.
 
 ## TLS
 

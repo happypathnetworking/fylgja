@@ -11,6 +11,7 @@ import subprocess
 import sys
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import get_args, get_type_hints
 
 from pages import ROOT, blocks, flags, options, rows, section, statuses, text, ticked
 from test_config import FULL, S3
@@ -59,7 +60,9 @@ def test_the_settings_table_is_every_variable_the_configuration_reads() -> None:
     directory = {**FULL, "FYLGJA_TLS_CERT": "/etc/fylgja/tls.crt", "FYLGJA_TLS_KEY": "/etc/fylgja/tls.key"}
     object_store = {**S3, "FYLGJA_S3_CA": "/etc/fylgja/ca.pem", "FYLGJA_S3_REGION": "us-west-2"}
     read = _read(directory) | _read(object_store)
-    read |= {credentials.variable("X", p).replace("_X_", "_<NAME>_") for p in ("USERNAME", "PASSWORD", "REGISTRY")}
+    parts = get_args(get_type_hints(credentials.variable)["part"])
+    assert len(parts) == 3, "the parse is blind"
+    read |= {credentials.variable("X", p).replace("_X_", "_<NAME>_") for p in parts}
     assert len(read) >= 20, "the parse is blind"
     listed = {name for row in _settings() for name in ticked(row[0])}
     assert listed == read
@@ -129,15 +132,18 @@ def _recipe() -> tuple[str, str]:
 def test_the_token_recipe_makes_a_line_the_server_accepts(tmp_path: Path) -> None:
     recipe, principal = _recipe()
     tokens = tmp_path / "tokens"
+    (tmp_path / "client.env").write_text("stale\n")
+    (tmp_path / "client.env").chmod(0o644)  # a file already there keeps its mode under a umask
     environ = {"PATH": "/usr/bin:/bin", "FYLGJA_TOKENS": str(tokens)}
     run = subprocess.run(["bash", "-eu", "-c", recipe], cwd=tmp_path, env=environ, capture_output=True, text=True,
                          check=False)
-    assert (run.returncode, run.stdout) == (0, "")
+    assert (run.returncode, run.stdout, run.stderr) == (0, "", "")
     (client,) = [path for path in tmp_path.iterdir() if path != tokens]
     (assignment,) = client.read_text().splitlines()
     name, _, token = assignment.partition("=")
     assert name == "FYLGJA_API_TOKEN"
     assert token
+    assert client.stat().st_mode & 0o777 == 0o600
     assert auth.Tokens.load(tokens).principal(token) == principal
     assert token not in tokens.read_text()
 

@@ -85,7 +85,7 @@ conformance:
 
 # mypy runs three times: the core's tests, infrahub/'s and netbox/'s would name modules alike in one run.
 lint:
-	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../infrahub ../netbox && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py
+	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../readme_links.py ../infrahub ../netbox && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py
 	cd readers/infrahub && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
 	cd orchestrator && ../core/.venv/bin/ruff check --config pyproject.toml . && ../core/.venv/bin/mypy
 	cd readers/netbox && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy

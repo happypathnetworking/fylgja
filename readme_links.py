@@ -4,11 +4,12 @@ Each published distribution's description is its README (D-106), and a relative 
 three `setup.py` files, which read the repository's root for `VERSION`, load this file from there by path and call
 `readme`, so the rule is written once; `scripts/wheelcheck.py` and the tests load it the same way.
 
-A link `[t](target)` or a reference definition `[t]: target` whose target has no scheme is made absolute: joined to the
-README's own directory, normalised, and put under `https://github.com/happypathnetworking/fylgja/blob/v<version>/`, or
-under `raw/` where it is an image. A target that is an anchor alone is the README's own page. A target that climbs
-above the root is an error. An absolute link, and anything inside fenced or inline code (`scripts/linkcheck.py`'s FENCE
-and INLINE), stays as it is.
+A link `[t](target)` or a reference definition `[t]: target` whose target has no scheme and does not begin `//` is made
+absolute: joined to the README's own directory, normalised, and put under
+`https://github.com/happypathnetworking/fylgja/blob/v<version>/`, or under `raw/` where it is an image. A target that
+is an anchor alone is the README's own page. A target that climbs above the root is an error. An absolute link (a
+network path and a one-letter scheme among them), and anything inside fenced or inline code (`scripts/linkcheck.py`'s
+FENCE and INLINE), stays as it is.
 """
 
 import posixpath
@@ -32,13 +33,10 @@ def readme_text(text: str, directory: str, version: str) -> str:
     """`text`, the README of `directory` (from the root, "" for the root's own), with its relative links absolute."""
 
     def absolute(target: str, image: bool) -> str:
-        if _SCHEME.match(target):
+        if _SCHEME.match(target) or target.startswith("//"):
             return target
         path, hash_, fragment = target.partition("#")
-        if path:
-            path = posixpath.normpath(posixpath.join(directory, path))
-        else:
-            path = posixpath.join(directory, "README.md")
+        path = posixpath.normpath(posixpath.join(directory, path)) if path else posixpath.join(directory, "README.md")
         if path.startswith("/") or path == ".." or path.startswith("../"):
             raise ValueError(f"{target!r} in the README of {directory or '.'!r} climbs above the root")
         return (IMAGE_BASE if image else README_BASE).format(version=version) + path + hash_ + fragment

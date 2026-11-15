@@ -541,6 +541,8 @@ async def _released(held: lease.Lease) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     """The server's command line: `--version` and `--help`, the settings being variables."""
+    tag = release.version("fylgja-core", "fylgja_core")
+    page = f"https://github.com/happypathnetworking/fylgja/blob/v{tag}/docs/server.md"
     parser = argparse.ArgumentParser(
         prog="fylgja-core-server",
         description="Serve API 1 and run the reconcile loop over one store. Every setting is a FYLGJA_* "
@@ -552,10 +554,10 @@ def _parser() -> argparse.ArgumentParser:
                     "takes each lab's /24 from in place of its default; FYLGJA_S3_ENDPOINT, FYLGJA_S3_ACCESS_KEY, "
                     "FYLGJA_S3_SECRET_KEY, FYLGJA_S3_REGION and FYLGJA_S3_CA for an s3:// store, which needs "
                     "FYLGJA_LEASE, the Lease taken before the store is opened; and FYLGJA_TLS_CERT and "
-                    "FYLGJA_TLS_KEY, set together, the key unencrypted, for TLS (docs/server.md). It exits 0 when "
-                    "stopped, 130 on SIGINT, 143 on SIGTERM, 1 when the store is held or "
-                    "cannot be opened, the Lease is lost or the application does not start, and 2 on a "
-                    "misconfiguration.",
+                    "FYLGJA_TLS_KEY, set together, the key unencrypted, for TLS. The settings, the token file and "
+                    f"the exit statuses are described at {page}. It exits 0 when stopped, 130 on SIGINT, "
+                    "143 on SIGTERM, 1 when the store is held or cannot be opened, the Lease is lost or the "
+                    "application does not start, and 2 on a misconfiguration.",
     )
     release.add_version(parser, "fylgja-core", "fylgja_core")
     return parser

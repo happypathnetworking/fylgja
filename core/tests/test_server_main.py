@@ -12,6 +12,7 @@ import functools
 import json
 import logging
 import os
+import re
 import shlex
 import signal
 import socket
@@ -209,6 +210,16 @@ def test_the_help_says_the_packages_default_to_the_installs(capsys: pytest.Captu
     text = " ".join(capsys.readouterr().out.split())
     assert "the packages this install carries" in text
     assert "FYLGJA_STORE and FYLGJA_TOKENS, which are required" in text
+
+
+def test_the_help_cites_the_servers_page_at_the_installed_versions_tag(capsys: pytest.CaptureFixture[str]) -> None:
+    """A pip-installed user has no `docs/`: the help gives the page's URL at the tag of the version installed."""
+    with pytest.raises(SystemExit):
+        server.main(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    version = release.version("fylgja-core", "fylgja_core")
+    url = f"https://github.com/happypathnetworking/fylgja/blob/v{version}/docs/server.md"
+    assert re.search(re.escape(url) + r"(?![\w/])", text), "the URL of the page, whole"
 
 
 def test_a_server_given_no_packages_loads_the_shipped_ones(

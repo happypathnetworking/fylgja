@@ -325,6 +325,11 @@ def test_a_readmes_links_are_written_absolute_under_the_tagged_tree() -> None:
         links.readme_text("[a](../../../x.md)\n", "readers/infrahub", "1.0.0rc1")
 
 
+def test_a_network_path_and_a_one_letter_scheme_are_absolute_and_left_as_they_are() -> None:
+    text = "[a](//cdn.example/x.js) and [b](c:/x.md)\n\n[ref]: //cdn.example/r\n"
+    assert links_module().readme_text(text, "readers/infrahub", "1.0.0rc1") == text
+
+
 @pytest.mark.parametrize("member", PUBLISHED)
 def test_every_published_readme_is_rewritten_and_each_target_is_a_file_of_the_tree(member: str) -> None:
     links = links_module()

@@ -11,7 +11,8 @@ info:
     Every change of spec starts a run, linked from the status, read by id and by an event cursor, and
     cancelled by id. Verdicts are findings-1 documents; anything malformed or refused at the door is an RFC 9457
     problem-1 document. The API answers JSON only; clients render. Twins are independent: each has
-    at most one run at a time.
+    at most one run at a time. Within API 1 an answer may gain members, and a client passes over a
+    member it does not know (D-105).
   license:
     name: Apache-2.0
     identifier: Apache-2.0

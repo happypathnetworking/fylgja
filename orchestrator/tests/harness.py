@@ -7,7 +7,7 @@ itself. Starlette's `TestClient` answers a request only once its response has en
 through it: the application is served for real. The runtime seeds the gNMI reader from every bundle it applies, so
 verify holds on every twin unless a test says otherwise. Every clock and wait the library is handed in a test is a
 `Clock`, which never waits what it is asked; a test acts on the harness through it, through a `Wrapped` client, or
-at a `progress` line it names.
+at a `progress` line it names. A client over `Widening` reads the served core as a later minor release may answer.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
+import httpx
 import uvicorn
 from fakes import FakeDriver, FakePush, FakeReader, FakeReady, fake_push, fake_ready
 from fylgja_core import bundle, packages
@@ -173,3 +174,58 @@ class Wrapped(Client):
         # The client's state shared, not its initialiser run again: the same connection pool and the same token.
         vars(self).update(vars(client))
         vars(self).update(calls)
+
+
+LATER = {"member": 1}
+"""The member a `Widening` adds, which no format of this release names."""
+
+
+class Widening(httpx.BaseTransport):
+    """An `httpx` transport over the network that answers as a later minor release of the core may (D-105): `later`
+    added to every verdict a JSON answer carries (a run's, a plan's, a verify's own) and to each of its findings, and
+    to every problem document and each of its findings. A stream passes as it is. `widened` counts the verdicts and
+    the problems it widened."""
+
+    def __init__(self) -> None:
+        self.inner = httpx.HTTPTransport()
+        self.widened = {"verdicts": 0, "problems": 0}
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        response = self.inner.handle_request(request)
+        media = response.headers.get("content-type", "").partition(";")[0].strip()
+        if media not in ("application/json", "application/problem+json"):
+            return response
+        try:
+            doc = json.loads(response.read())
+        finally:
+            response.close()
+        if media == "application/problem+json":
+            self._widen(doc, "problems")
+        else:
+            self._verdicts(doc)
+        headers = [(k, v) for k, v in response.headers.multi_items()
+                   if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")]
+        return httpx.Response(response.status_code, headers=headers, content=json.dumps(doc).encode(), request=request)
+
+    def close(self) -> None:
+        self.inner.close()
+
+    def _verdicts(self, value: Any) -> None:
+        """Every verdict in `value`, at any depth, widened."""
+        if isinstance(value, dict):
+            if "findings_version" in value:
+                self._widen(value, "verdicts")
+            for member in value.values():
+                self._verdicts(member)
+        elif isinstance(value, list):
+            for member in value:
+                self._verdicts(member)
+
+    def _widen(self, doc: dict[str, Any], kind: str) -> None:
+        """A verdict or a problem, and each of its findings, given `later`."""
+        if "later" in doc:
+            return
+        for finding in doc.get("findings") or []:
+            finding["later"] = LATER
+        doc["later"] = LATER
+        self.widened[kind] += 1

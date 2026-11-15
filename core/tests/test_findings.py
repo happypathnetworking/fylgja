@@ -87,3 +87,21 @@ def test_findings_sort_by_severity_then_rule_then_object() -> None:
     ordered = findings.order([info, warning, error_y, error_x, error_none])
     assert ordered == (error_none, error_x, error_y, warning, info)
     assert findings.SEVERITIES == ("error", "warning", "info")
+
+
+def test_a_verdict_answered_with_a_member_more_decodes_as_without() -> None:
+    wider = doc()
+    wider["later"] = {"member": 1}
+    for at in (wider["subject"], wider["findings"][0], wider["counts"], wider["wait"], wider["loss"][0]):
+        at["later"] = {"member": 1}
+    assert findings.decode_answer(wider) == STEP
+    # A verdict a user or a test files is still held whole; an answer lacking what a reader uses is refused.
+    with pytest.raises(Rejected):
+        findings.decode(wider)
+    del wider["status"]
+    with pytest.raises(Rejected) as e:
+        findings.decode_answer(wider)
+    assert e.value.problems == (Problem("", RULE_INVALID, "'status' is a required property"),)
+    with pytest.raises(Rejected) as e:
+        findings.decode_answer({**doc(), "findings_version": "2"})
+    assert [p.rule for p in e.value.problems] == [RULE_VERSION]

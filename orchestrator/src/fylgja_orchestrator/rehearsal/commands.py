@@ -203,7 +203,7 @@ def _taken(
                     (*got.findings, _said(rules.TARGET_CURRENT, f"Twin {twin}'s spec is stage {target.label}'s "
                                                                 "already, so no run was started.", twin)))
     followed = core.follow(answered, operations, progress=progress)
-    if findings.decode(followed.run["verdict"]).status == "ok" and not followed.gone:
+    if findings.decode_answer(followed.run["verdict"]).status == "ok" and not followed.gone:
         stands()
     return Made(twin, target, blueprint_id, followed.run, got.findings)
 

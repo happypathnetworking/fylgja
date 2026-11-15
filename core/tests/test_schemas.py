@@ -227,3 +227,31 @@ def test_a_request_body_is_held_the_same() -> None:
     assert v.is_valid(blueprint)
     blueprint["network"]["devices"][0]["name"] += "\n"
     assert [e.validator for e in v.iter_errors(blueprint)] == ["pattern"]
+
+
+LATER = {"member": 1}
+"""A member a later minor release's answer might carry, which no format of this one names."""
+
+
+def test_an_answers_validator_passes_over_a_member_and_nothing_else() -> None:
+    answer, closed = schemas.answer_validator("findings-1"), schemas.validator("findings-1")
+    doc = test_findings.doc()
+    doc["later"] = LATER
+    doc["findings"][0]["later"] = LATER
+    assert [e.json_path for e in closed.iter_errors(doc)] == ["$", "$.findings[0]"]
+    assert list(answer.iter_errors(doc)) == []
+    # What a reader uses must still be there and of its kind, and a pattern is still ECMA-262's.
+    lacking = {k: v for k, v in doc.items() if k != "status"}
+    assert [e.validator for e in answer.iter_errors(lacking)] == ["required"]
+    doc["findings"][0]["rule"] += "\n"
+    assert [e.validator for e in answer.iter_errors(doc)] == ["pattern"]
+    # A map of names is typed by its additionalProperties, which an answer's validator still holds it to.
+    record = test_twin_record.doc()
+    record["status"]["allocation"] = {"lab": 1}
+    assert [e.json_path for e in schemas.answer_validator("twin-record-1").iter_errors(record)] == [
+        "$.status.allocation.lab"]
+    # What a user writes is still held whole.
+    blueprint = _file("testdata", "blueprint", "three-node.json")()
+    blueprint["later"] = LATER
+    assert [e.validator for e in schemas.validator("blueprint-1").iter_errors(blueprint)] == ["additionalProperties"]
+    assert schemas.answer_validator("findings-1") is answer

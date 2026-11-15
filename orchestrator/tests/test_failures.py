@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import socket
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,7 +19,7 @@ from fylgja_core.client import Client, FollowError, ProblemError, TransportError
 from fylgja_core.driver import Planned, Refusal, Unplannable
 from fylgja_core.findings import Finding
 from fylgja_core.problem import ProblemDocument
-from harness import ALICE, Clock, Served, Wrapped, wait_for
+from harness import ALICE, Clock, Served, Widening, Wrapped, serving, wait_for
 from sources import BLUEPRINTS, CHANGE, FIVE, SCOPE, FakeSource
 
 from fylgja_orchestrator.rehearsal import (
@@ -890,3 +891,28 @@ def test_each_remedy_is_said_in_the_sources_words(
     assert cause["rule"] == rule
     assert cause["message"].endswith(ending)
     assert "checks" not in cause["message"]
+
+
+# A core whose answers gain a member (D-105).
+
+
+def _as_said(doc: dict[str, Any]) -> dict[str, Any]:
+    """A rehearsal's document less what one run of it cannot share with another: the core's run ids, the time taken,
+    which the polls make, and when the plan was read."""
+    stages = [{k: v for k, v in stage.items() if k not in ("run_id", "took_s")} for stage in doc["stages"]]
+    plan = {k: v for k, v in doc["plan"].items() if k != "read_at"}
+    return {**{k: v for k, v in doc.items() if k != "took_s"}, "stages": stages, "plan": plan}
+
+
+def test_a_rehearsal_through_a_core_whose_answers_gain_a_member_ends_as_before(served: Served, tmp_path: Path) -> None:
+    plain, _ = rehearsed(served, Clock(), [])
+    assert plain["status"] == "passed"
+    (tmp_path / "wider").mkdir()
+    widening = Widening()
+    with serving(tmp_path / "wider") as wider, Client(wider.address, ALICE, transport=widening) as core:
+        wide, source = rehearsed(wider, Clock(), [], core=core)
+    assert _as_said(wide) == _as_said(plain)
+    (posted,) = source.posted
+    assert posted.status == "passed"
+    # A run's verdict, a verify's and a refusal's problem (the twin's deletion read until it is gone) were widened.
+    assert widening.widened["verdicts"] > 0 and widening.widened["problems"] > 0

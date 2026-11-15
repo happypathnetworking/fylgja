@@ -9,6 +9,10 @@ checkout, the repository's. The API's document is the core's.
 Every validator is made from `Validator`, draft 2020-12 with one keyword mended: JSON Schema reads
 a `pattern` as ECMA-262 does, where `$` is the end of the text, and Python's `re`, which jsonschema
 reads it with, lets `$` match before a final newline too.
+
+What the core answers is read with `Answer`, `Validator` with each closed object left open: within
+major version 1 an answer may gain a member, and a reader passes over one it does not know (D-105).
+What a user writes, what is filed and what the server checks are held whole, by `Validator`.
 """
 
 from __future__ import annotations
@@ -66,6 +70,16 @@ def _pattern(validator: Any, pattern: str, instance: Any, schema: Any) -> Iterat
 Validator: Any = jsonschema.validators.extend(jsonschema.Draft202012Validator, {"pattern": _pattern})
 
 
+def _additional_properties(validator: Any, value: Any, instance: Any, schema: Any) -> Iterator[ValidationError]:
+    """The `additionalProperties` keyword of an answer: `false`, which closes an object, yields
+    nothing; a schema, which types a map's every name, is checked as `Validator` checks it."""
+    if value is not False:
+        yield from Validator.VALIDATORS["additionalProperties"](validator, value, instance, schema)
+
+
+Answer: Any = jsonschema.validators.extend(Validator, {"additionalProperties": _additional_properties})
+
+
 def formats_dir(package: str = "fylgja_core") -> Path:
     """The directory holding `package`'s formats: `formats/` beside the package, where its wheel
     put them; else, for a package under a checkout's `src/`, the first `formats/` above that
@@ -112,6 +126,16 @@ def validator(name: str, package: str = "fylgja_core") -> Any:
     registry = _registry(package)
     schema = registry.contents(f"{ID_PREFIX}{name}.schema.json")
     return Validator(schema, registry=registry, format_checker=Validator.FORMAT_CHECKER)
+
+
+@cache
+def answer_validator(name: str, package: str = "fylgja_core") -> Any:
+    """`validator`'s for an answer of the core's: the format `name` with each closed object left
+    open, so that a member a later minor release adds is passed over and what a reader uses is
+    still held to its kind."""
+    registry = _registry(package)
+    schema = registry.contents(f"{ID_PREFIX}{name}.schema.json")
+    return Answer(schema, registry=registry, format_checker=Answer.FORMAT_CHECKER)
 
 
 @cache

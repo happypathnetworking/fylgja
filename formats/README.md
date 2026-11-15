@@ -149,6 +149,13 @@ relative to them.
     checkout before 1.0.0rc1 took a value matching a `$`-ended pattern with a newline after it,
     such as a device name written as a folded YAML scalar. From 1.0.0rc1 that text is refused,
     in every format and in the API's request bodies; no other pattern's meaning moved.
+27. **A reader of an answer passes over a member it does not know**
+    ([D-105](../design/decisions.md#d-105)). Within API 1 what the core answers may gain a
+    member, so the client library, the CLI and the example orchestrator hold a problem document
+    and a verdict the core answered to its schema with each object closed by
+    `additionalProperties: false` left open: what they use must still be there and of its kind,
+    and a map of names is still held to the schema its `additionalProperties` gives. What a user
+    writes, what is filed and what the server checks are still held whole. No format changed.
 
 ## Settled by measurement (2026-10-30)
 

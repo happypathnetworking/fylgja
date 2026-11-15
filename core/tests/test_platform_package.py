@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -250,3 +251,39 @@ def test_versions_and_images_are_read_by_the_package_module_alone() -> None:
     assert {"versions", "images"} <= attributes(SOURCE / "platform_package.py")  # the walk is not blind
     readers = {str(m.relative_to(SOURCE)): attributes(m) & {"versions", "images"} for m in modules}
     assert {m: found for m, found in readers.items() if found} == {"platform_package.py": {"versions", "images"}}
+
+
+def test_a_ports_discovering_given_as_null_is_refused() -> None:
+    """`discovering` may be left out, not given as nothing: its type is an object."""
+    doc: dict[str, Any] = yaml.safe_load(CHASSISOS.read_text())
+    doc["conformance"]["port"]["discovering"] = None
+    assert {(p.pointer, p.rule) for p in platform_package.validate(doc)} == {
+        ("/conformance/port/discovering", RULE_INVALID)
+    }
+
+
+def _descriptions(node: Any) -> list[str]:
+    """Every description and comment text of a schema, at any depth."""
+    if isinstance(node, dict):
+        own = [v for k, v in node.items() if k in ("description", "$comment") and isinstance(v, str)]
+        return own + [text for v in node.values() for text in _descriptions(v)]
+    if isinstance(node, list):
+        return [text for v in node for text in _descriptions(v)]
+    return []
+
+
+def test_every_rule_a_package_format_names_is_one_the_core_files() -> None:
+    """A description that says a rule follows an event names a `RULE_*` value of `core/src`, so the
+    formats promise no finding that no module files."""
+    filed = {
+        value
+        for module in SOURCE.rglob("*.py")
+        for value in re.findall(r'^\s*RULE_[A-Z_]+ = "([a-z_.]+)"', module.read_text(), re.M)
+    }
+    named: set[str] = set()
+    for name in ("platform-package-1", "probe-package-1"):
+        schema = json.loads((ROOT / "formats" / f"{name}.schema.json").read_text())
+        for text in _descriptions(schema):
+            named |= set(re.findall(r"\b(?:rule|records?|fails with)\s+\(?([a-z_]+(?:\.[a-z_]+)+)(?![\w.\[])", text))
+    assert {"push.timeout", "readiness.timeout"} <= named  # the walk is not blind
+    assert named - filed == set()

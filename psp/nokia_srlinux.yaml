@@ -42,7 +42,7 @@ gnmi:
   tls: true                           # the boot-time certificate accepted unverified; set the encoding (json_ietf), or the node answers Unimplemented
 
 # The paths of a booted node. verify reads host_name and each cabled port's enabled and neighbor; no code reads version or
-# port.discovering yet. {node_name} is the port's node name.
+# port.discovering, which a package may leave out. {node_name} is the port's node name.
 conformance:
   host_name: /system/name/host-name
   version: /system/information/version

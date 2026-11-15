@@ -51,7 +51,7 @@ gnmi:
   tls: false                          # plaintext: that transport has no SSL profile, and a TLS dial is refused at the handshake. cEOS refuses a gNMI Set
 
 # The paths of a booted node. verify reads host_name and each cabled port's enabled and neighbor; no code reads version or
-# port.discovering yet. {node_name} is the port's node name.
+# port.discovering, which a package may leave out. {node_name} is the port's node name.
 conformance:
   host_name: /system/state/hostname
   version: /system/state/software-version

@@ -2657,7 +2657,7 @@ core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver
 `local/.env` loaded), from 19:26:31 to 19:30:49Z: **8 passed in 255.63 s**, exit 0, none skipped.
 Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` (the run's log,
 `task-1-cluster3.log`, names it `…_is_refused_before_any_request`: the test was renamed after the
-run, no line of its body changed) pins what follows ([D-102](decisions.md#d-102)), as the local
+run, by a change of its name alone) pins what follows ([D-102](decisions.md#d-102)), as the local
 driver's block does above ("containerlab 0.79.0"), but the cluster before the run and after the
 module, which were read by hand and are no assertion of the module's.
 

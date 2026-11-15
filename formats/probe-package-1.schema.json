@@ -77,12 +77,12 @@
         "start_timeout_s": {
           "type": "integer",
           "minimum": 1,
-          "description": "Bound on starting a flow; flows record flow.start.failed after it."
+          "description": "No code reads it yet: a step's flows phase records each flow as not started and starts none, so no bound is applied and no rule is filed."
         },
         "read_timeout_s": {
           "type": "integer",
           "minimum": 1,
-          "description": "Bound on stopping and reading a flow; flows record flow.read.failed after it."
+          "description": "No code reads it yet: a step's flows phase records each flow as not started and reads none, so no bound is applied and no rule is filed."
         }
       },
       "description": "The continuous flow a step measures loss with; read by flows."
@@ -157,12 +157,12 @@
             "deploy_timeout_s": {
               "type": "integer",
               "minimum": 1,
-              "description": "Bound on bringing a host up; the apply phase fails with apply.timeout after it."
+              "description": "Bound on bringing a host up. A driver bounds its apply by the largest of the bounds of the packages the twin's nodes use, and a minute; an apply that outlasts it is the driver's runtime failure, which the reconcile loop takes as transient: the phase's failed event, no finding, the run still in flight, and the apply made again after a backoff."
             },
             "destroy_timeout_s": {
               "type": "integer",
               "minimum": 1,
-              "description": "Bound on removing a host; the destroy phase leaves the twin unclean after it."
+              "description": "Bound on removing a host. A driver bounds its destroy by the largest of the bounds of the packages the twin's nodes use, and a minute; a destroy that outlasts it is the driver's runtime failure, which the reconcile loop takes as transient: the phase's failed event, no finding, the twin's record kept, and the destroy made again after a backoff, finding what the one before left."
             }
           },
           "description": "Read by both containerlab drivers; the host's kind is always linux."

@@ -138,8 +138,8 @@ fylgja-netbox check [--branch B]
   `, branch B ready`. For `main` it sends nothing beyond `connect`'s `GET /api/status/`, which a
   token of no grant may read, so it checks none of the grants below.
 
-`--version` prints the command's version and the build it came from, and `--help`, given alone
-or after a command, lists its options.
+`--version` prints the command's version and the build it came from, and `--help`, given alone,
+lists the commands and `--version`; given after a command, it lists that command's options.
 
 Each finding is one line on stderr, `<severity> <rule> <object>: <message>`, in a result's order.
 A blueprint holds every device's configuration, so it is written to `--out` and never printed,

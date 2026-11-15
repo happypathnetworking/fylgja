@@ -162,7 +162,9 @@ def test_the_readme_names_the_exit_statuses_and_variables_the_command_has() -> N
     section = _section((READER / "README.md").read_text(), COMMAND_HEADING)
     statuses = {int(row[0]) for row in _rows(section, "Status")}
     assert statuses, "the parse is blind"
-    assert statuses == {cli.EXIT_OK, cli.EXIT_REFUSED, cli.EXIT_FAILURE}
+    held = {value for name, value in vars(cli).items() if name.startswith("EXIT_") and type(value) is int}
+    assert len(held) >= 3, "the parse is blind"
+    assert statuses == held
     text = "\n".join(section)
     for variable in (cli.ADDRESS, cli.TOKEN, cli.CA):
         assert f"`{variable}`" in text

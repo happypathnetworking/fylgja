@@ -41,8 +41,10 @@ other core.
 
 What the script keeps is under `<local>/demo/` (`records`). What it writes that can be generated, `prepare`: that
 directory, the token file its core reads, and in `<local>/.env`, where the loaded environment gives the name no
-value, the core's address and a client's token. No value of `<local>/.env` is ever printed: a refusal names a
-variable by its name and a line by its number.
+value, the core's address and a client's token. What is printed of `<local>/.env` is two addresses, the core's
+listen address, which is `127.0.0.1:<port>` or refused, and the source's, which the readout prints only where it is
+an http address with no login, query or fragment; no credential is ever printed: a refusal names a variable by its
+name and a line by its number.
 
 Every process, socket, file of the host's and clock the script touches goes through one seam, `Host`, and `Real` is
 its one implementation.
@@ -255,14 +257,15 @@ PULL_TIMEOUT_S = 1800
 (design/verified-facts.md, 2026-11-12), and the one pulled here Docker lists at 5.19 GB."""
 
 CORE_WAIT_S = 60
-"""Seconds the core is given from its start to answer its version: it was read to answer 1.23 to 1.32 s after its
-start, five times (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3", 2026-11-14), of which this
-is 45 times the slowest."""
+"""Seconds the core is given from its start to answer its version: under the two demonstrations it was said to
+answer 1.05 to 2.1 s after its step began, four times (design/verified-facts.md, "Infrahub 1.11.11" and "NetBox
+4.7.5 with netbox-branching 1.2.3", 2026-11-14), of which this is 28.6 times the slowest."""
 
 SERVE_WAIT_S = 60
-"""Seconds the runner is given from its start to serve both deployments: both read `READY` 3.66 to 5.11 s after its
-start, five times ("Prefect 3.9.2", 2026-11-14), of which this is 11.7 times the slowest. Where `PREFECT_BIND` is not
-set, `edge_dev.py` first asks Docker for the bridge's gateway, within this."""
+"""Seconds the runner is given from its start to serve both deployments: under the two demonstrations it was said to
+serve them 3.39 to 7.47 s after its step began, four times, a time that holds the read of Prefect's address before
+the start (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14), of which this is 8.0 times the slowest. Where
+`PREFECT_BIND` is not set, `edge_dev.py` first asks Docker for the bridge's gateway, within this."""
 
 STOP_WAIT_S = 30
 """Seconds a process is given to exit after SIGTERM before it is killed, `edge_dev.py`'s `DOWN_WAIT_S`: the runner
@@ -273,19 +276,21 @@ POLL_S = 5.0
 """Seconds between two asks of Prefect while the change's flow run is waited for, the checks' glue's."""
 
 APPEAR_WAIT_S = 300
-"""Seconds from the last step's return for the change's flow run to be listed: a proposed change's run of
-`twin-rehearse/main` was read made 116.4 and 113.8 s after `make infrahub-seed PROPOSED_CHANGE=1` returned
-("Infrahub 1.11.11", 2026-11-14), and the tag's 0.94 to 1.03 s after its `PATCH` ("NetBox 4.7.5 with netbox-branching
-1.2.3"), of which this is about 2.6 times the slowest."""
+"""Seconds from the last step's return for the change's flow run to be listed: under the two demonstrations a
+proposed change's run of `twin-rehearse/main` was listed 141.0 and 106.2 s after `make infrahub-seed
+PROPOSED_CHANGE=1` printed its last line (design/verified-facts.md, "Infrahub 1.11.11", 2026-11-14), and the tag's 5.1
+and 5.2 s after `make netbox-change NETBOX_TAG=1` printed its tag's line ("NetBox 4.7.5 with netbox-branching
+1.2.3"), of which this is 2.13 times the slowest."""
 
 RUN_WAIT_S = 4200
 """Seconds from the change's flow run listed to its end: no reading, but the flow's own bound,
 `flows.REHEARSE_TIMEOUT_S`, 3900 s, and 300 s, held equal by a test."""
 
 DOCUMENT_WAIT_S = 60
-"""Seconds from the run's end read to its document read, a read unanswered being asked again: a first value. The run
-files its document before it ends, and a completed run's artifact was answered by the same request ("Prefect 3.9.2",
-2026-11-14), so the first ask is expected to find it."""
+"""Seconds from the run's end read to its document read, a read unanswered being asked again. The run files its
+document before it ends, and under the two demonstrations the document was read at the first ask, four times, its
+verdict said 0.20 to 0.26 s after the listing that gave the run `COMPLETED` (design/verified-facts.md, "Prefect
+3.9.2", 2026-11-14), of which this is 231 times the slowest."""
 
 DESTROY_TIMEOUT_S = 300
 """Seconds one `fylgja-core twin destroy` is given: one was read to take 2.3 s (the same facts), and
@@ -424,8 +429,8 @@ class Host(Protocol):
         ...
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
-        """A child started in a session of its own, its stdin null and both its outputs appended to `log`; its
-        pid."""
+        """A child started in a session of its own, its stdin null and both its outputs appended to `log`, which is
+        made, or made again, at mode 0600 whatever the umask; its pid."""
         ...
 
     def process(self, pid: int) -> Process | None:
@@ -541,7 +546,8 @@ class Real:
         return Done(done.returncode, done.stdout or "")
 
     def start(self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path, log: Path) -> int:
-        with log.open("ab") as out:
+        with open(log, "ab", opener=lambda path, flags: os.open(path, flags, 0o600)) as out:
+            os.fchmod(out.fileno(), 0o600)
             started = subprocess.Popen(
                 list(argv),
                 env=dict(env),
@@ -896,6 +902,16 @@ def append(path: Path, lines: Sequence[str]) -> None:
         out.write(ending + "".join(f"{line}\n" for line in lines).encode())
 
 
+def written(path: Path, text: str) -> None:
+    """`text` written to `path` at mode 0600 from its creation, whatever the umask; one there already is replaced, and
+    its mode made 0600. Every file the script writes under `<local>/demo/` is written so, but the token file, which
+    `append` makes at 0600 and `prepare` keeps so, and the logs, which `Host.start` makes."""
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as out:
+        os.fchmod(out.fileno(), 0o600)
+        out.write(text)
+
+
 def prepare(local: Path, env: Mapping[str, str], listen: str, host: Host) -> None:
     """What the demonstration needs under `local` that can be generated, made where it is missing: `<local>/demo/`,
     mode 0700; the core's token file there, empty, mode 0600; and `own_lines` appended to `<local>/.env`, whose names
@@ -1152,7 +1168,8 @@ def available_mb(meminfo: str | None) -> int | None:
 
 def prefect_home(local: Path) -> Path:
     """The edge's Prefect's home under `local`, `edge_dev.py`'s: its server's and every runner's `PREFECT_HOME`, and
-    where `make prefect-up` records its server's pid, in `server.pid`."""
+    where `make prefect-up` records its server's pid, in `server.pid`. `local` is the one `main` resolved, which every
+    target is given as `LOCAL`, so that the home `edge_dev.py` makes of it is this one, spelled as this is."""
     return local / "prefect"
 
 
@@ -1422,7 +1439,9 @@ def start_recorded(
     before is kept as `<log>.1`, so that `log` is this start's own, and the pid is written to `pid_file` at once. A
     command that cannot be started stops the run, exit 1, said in the error's own word with the command's path and
     the log's, and nothing of `env` or of the other words; no pid file is left. No child runs unrecorded: where its
-    pid cannot be written it is ended, and the run stops, exit 1, saying so, or that it still stands."""
+    pid cannot be written it is ended, and the run stops, exit 1, saying so, or that it still stands; and where a
+    Ctrl-C comes before the record stands the child is ended, its record removed where it is gone, and the interrupt
+    raised on."""
     if log.exists():
         log.replace(log.with_name(f"{log.name}.1"))
     try:
@@ -1433,7 +1452,7 @@ def start_recorded(
             1, [f"the {what} was not started, {word_of(refused)}: its command is {argv[0]} and its log {log}"]
         ) from None
     try:
-        pid_file.write_text(f"{pid}\n")
+        written(pid_file, f"{pid}\n")
     except OSError as refused:
         gone = end(pid, host, lambda process: process is not None)
         raise Stop(
@@ -1443,6 +1462,10 @@ def start_recorded(
                 f"{word_of(refused)}: {'it was ended' if gone else 'it still stands, and is to be ended by its pid'}"
             ],
         ) from None
+    except BaseException:  # a Ctrl-C before the record stood: the child is ended by its pid, and it is raised on
+        if end(pid, host, lambda process: process is not None):
+            pid_file.unlink(missing_ok=True)
+        raise
     return pid
 
 
@@ -1483,7 +1506,7 @@ def start_core(env: Mapping[str, str], records: Records, listen: str, host: Host
                 "start: its core cannot start there, and no twin was read"
             ],
         )
-    records.unsettled.touch()
+    written(records.unsettled, "")
     core = core_env(env, records, listen)
     pid = start_recorded("core", [str(CORE)], core, records.core_pid, records.core_log, host)
     begun = host.clock()
@@ -1533,16 +1556,18 @@ def start_runner(
     the runner, which `edge_dev.py serve` has then become; and Prefect answers both deployments by name with the
     status `READY`, asked with the basic auth of `env`. None alone says so: a runner that has stopped leaves both
     `READY` by name. Prefect's API is read first, and where it is not read nothing is started. Where the process is
-    gone first the record is removed and the run stops, exit 1, naming its log; where `SERVE_WAIT_S` passes it
-    stops, exit 1, the runner left up and recorded for `down` to end."""
+    gone first the record is removed and the run stops, exit 1, naming its log; where Prefect refuses the auth, 401,
+    it stops at that ask, exit 1, with the credential's sentence (`Prefect`); and where `SERVE_WAIT_S` passes it
+    stops, exit 1. In both the runner is left up and recorded for `down` to end."""
     given = step_env(env, records, listen)
     api = prefect_api(given, local, main, host)
     argv = serve_argv(source, local, main)
     pid = start_recorded("runner", argv, given, records.runner_pid, records.runner_log, host)
     deployments = [f"{flow}/{DEPLOYMENT}" for flow in (PLAN_FLOW, FLOW)]
+    prefect = Prefect(api, env.get(AUTH, ""), host)
 
     def ready(deployment: str) -> bool:
-        answer = host.ask("GET", f"{api}/deployments/name/{deployment}", auth=env.get(AUTH) or None)
+        answer = prefect.get(f"deployments/name/{deployment}")
         return answer.status == 200 and isinstance(answer.body, dict) and answer.body.get("status") == READY
 
     begun = host.clock()
@@ -1674,43 +1699,53 @@ def ended(what: str, pid: int, ours: Callable[[Process | None], bool], pid_file:
     say(f"the {what}, pid {pid}, ended")
 
 
-def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, host: Host) -> None:
+def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, host: Host) -> str | None:
     """End what an earlier run left, so that a demonstration leaves no twin, process or listener behind it; signal
-    nothing but a process read as the recorded runner or core (`held`, and `end` again before each signal); and list
-    and destroy through nothing but a core whose pid owns its listener (`owns`).
+    nothing but a process read as the recorded runner or core (`held`, and `end` again before each signal); list and
+    destroy through nothing but a core whose pid owns its listener (`owns`); and answer the listen address of the last
+    core it ended, None where it ended none, so that `up` waits for that port (`port_freed`).
 
     Where `listen` is no address a port is read from, nothing is done: Stop, exit 1, with the check's sentence.
 
-    The recorded runner is ended and `runner.pid` removed: given SIGTERM it cancels the flow run it was running,
-    whose own clean-up asks its twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14). The recorded
-    pid is the demonstration's runner where it reads as the runner, and where it is still `edge_dev.py serve` by the
-    words the script started it by, which becomes the runner (`is_becoming_runner`).
+    **The runner**, first. `runner.pid` absent: nothing. Naming no pid, a pid that is gone or another process: the
+    file removed and said, nothing signalled. Naming this home's runner (`is_runner`), or `edge_dev.py serve` by the
+    words the script started it by, which it is for a moment before it becomes the runner (`is_becoming_runner`):
+    ended (`ended`), so that, given SIGTERM, it cancels the flow run it was running, whose own clean-up asks its
+    twin's deletion (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14), and the file removed; still standing,
+    Stop, exit 1, its record kept and the core's part not begun.
 
-    The core's part goes by the marker `unsettled`, which `start_core` writes before it starts a core and which is
-    removed here alone, once a list through an owned core has answered empty. With no marker the store was read
-    empty, and nothing is asked of it: a recorded core is ended as a recorded pid is. With the marker, every twin
-    the store holds is destroyed through a core:
+    **The core**, by the marker `unsettled` (M), which `start_core` writes before it starts a core and which is
+    removed here alone, and by what `core.pid` names. Each Stop is exit 1, says why and leaves M standing:
 
-    - the recorded core where it is up, asked at its own listen address, and only where it owns the listener there:
-      where it does not, or its address is none a port is read from, what answers may be another's, and the run
-      stops, exit 1, no twin read and the core left up;
-    - where that core does not list its twins, why is said, it is ended, its port waited for where a core is to be
-      started at the same one (`port_freed`), and it is replaced;
-    - else, and where no core is recorded up, one started for the purpose at `listen` (`start_core`), since a twin
-      outlives the core that made it and is listed by the next over the same store.
+    - M absent, `core.pid` absent: nothing.
+    - M absent, `core.pid` naming no pid, a pid that is gone or another process: the file removed and said; nothing
+      signalled, started or read.
+    - M absent, the core up: ended as a recorded pid is, the file removed; no list, M absent saying the store was
+      read empty.
+    - M there, the core up, given a `FYLGJA_LISTEN` that is not `127.0.0.1:<port>`: Stop, no twin read through it,
+      `ss` not run, the core left up.
+    - M there, the core up and not shown by `ss -Hltnp` to own the listener at its address: Stop, no twin read,
+      since what answers there may be another's; the core left up and `core.pid` kept.
+    - M there, the core owning its listener: its list, as **the list** below.
+    - M there, the core owning its listener, its list failing: why is said; the core ended (still standing: Stop);
+      where a core is to be started at the same port, that port waited for (`port_freed`); then as the next case.
+    - M there, `core.pid` naming nothing, no pid, a pid that is gone or another process (the file removed and said):
+      a core started for the purpose at `listen` (`start_core`), since a twin outlives the core that made it and is
+      listed by the next over the same store; then its list, as **the list** below, but that a list through it
+      that fails is Stop, its reason and its pid said and the core left up. Where `start_core` stops (a listener at
+      the port, `ss` not read, the command not started, the child exiting, no answer it owns within its bound):
+      Stop, with no list and no destroy.
 
-    Each twin listed is asked destroyed by `fylgja-core twin destroy`, which waits for its verdict, within
-    `DESTROY_TIMEOUT_S`, and the list is read again. A twin still on it, or a list that is not read through the
-    core started or after the destroys, stops the run, exit 1, saying why and naming the core, which is left up and
-    recorded, the marker standing. An empty list removes the marker, and the core is then ended and `core.pid`
-    removed.
+    **The list.** Empty: `ss -Hltnp` read again, and the core still owning its listener: M removed, the core ended
+    and `core.pid` removed; no longer owning it: Stop, the store not read whole. Twins: before each destroy `ss
+    -Hltnp` read again, the core no longer owning its listener being Stop, with no further destroy and no list; each
+    asked destroyed by `fylgja-core twin destroy`, which waits for its verdict, within `DESTROY_TIMEOUT_S`; then,
+    since a destroy waits minutes at the longest and the list goes with the client's token to whatever is at the
+    address, ownership read again and the list read again: empty, as above; a twin still on it, Stop naming it and
+    the core left up; the list failing, Stop with its reason, the core left up.
 
-    Who owns the listener is read again immediately before each destroy; before the list that follows the destroys,
-    since a destroy waits minutes at the longest and that list goes, with the client's token, to whatever is at the
-    address; and after the list that answers empty, before the marker is removed: the core may have gone since the
-    last reading and another process be at its address. Where it no longer owns it the run stops, exit 1, the store
-    not read whole and the marker standing.
-
+    So no case removes M without an empty list and, after it, the core's own pid still shown at its address; and no
+    destroy and no first list goes through a core not shown to own its listener at the reading just before it.
     Nothing of Docker is read: a lab's container that no twin names is not this script's to find."""
     if port_of(listen) is None:
         raise Stop(1, [LISTEN_REFUSED])
@@ -1742,9 +1777,10 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
 
     core = held(records.core_pid, "core", the_core, host)
     if host.text(records.unsettled) is None:
-        if core is not None:
-            ended("core", core[0], the_core, records.core_pid, host)
-        return
+        if core is None:
+            return None
+        ended("core", core[0], the_core, records.core_pid, host)
+        return core[1].environ.get(LISTEN) or DEFAULT_LISTEN
 
     pid, address = 0, listen
     left: list[str] | None = None
@@ -1803,6 +1839,7 @@ def settle(env: Mapping[str, str], records: Records, local: Path, listen: str, h
     still_owned(pid, address)
     records.unsettled.unlink(missing_ok=True)
     ended("core", pid, the_core, records.core_pid, host)
+    return address
 
 
 def make_words(target: str, local: Path, *variables: str) -> list[str]:
@@ -1923,15 +1960,24 @@ def alone(source: str, env: Mapping[str, str], records: Records, local: Path, li
     `stage-plan/main` and `twin-rehearse/main` by name, Infrahub's task workers and NetBox's webhook. Where any
     container of the other's Compose project runs, that is said in one line and its own `down` target is run, by
     `stop_words`, whose `PURGE=` no environment can undo, under a make child's environment (`make_env`): its volumes
-    are kept. A `down` that exits other than 0 stops the run, exit 1, with nothing else started. Where `docker` is
-    not on PATH, or its read exits other than 0, nothing is stopped: the checks say what is wrong with Docker."""
+    are kept. A `down` that exits other than 0 stops the run, exit 1, with nothing else started; so does a read of
+    the other's containers that exits other than 0, naming the command and its status, since whether it is up is
+    then not known. Where `docker` is not on PATH nothing is read or stopped: the checks have said so already."""
     if host.which("docker") is None:
         return
     for other in SOURCES:
         if other == source:
             continue
         listed = host.run(up_argv(other), env=env, capture=True, timeout=DOCKER_TIMEOUT_S)
-        if listed.status != 0 or not listed.out.split():
+        if listed.status != 0:
+            raise Stop(
+                1,
+                [
+                    f"`{' '.join(up_argv(other))}` exited {listed.status}: whether {other} is up was not read, and "
+                    "nothing was started"
+                ],
+            )
+        if not listed.out.split():
             continue
         say(f"{other} is up: stopping it, its volumes kept, since it starts the same deployments")
         stopped = host.run(stop_words(other, local), env=make_env(env, records, listen), cwd=ROOT)
@@ -1957,7 +2003,12 @@ def unanswered(answer: Answer, what: str) -> Unanswered:
 
 
 class NoRun(Stop):
-    """No run of the change's was listed within `APPEAR_WAIT_S`: `up` says where its source shows why."""
+    """No run of the change's was listed within `APPEAR_WAIT_S`: `up` says where its source shows why, or, where
+    runs of another branch were started since and passed over (`passed_over`, how many), that."""
+
+    def __init__(self, status: int, lines: Sequence[str], passed_over: int = 0) -> None:
+        super().__init__(status, lines)
+        self.passed_over = passed_over
 
 
 class NotEnded(Stop):
@@ -2117,18 +2168,20 @@ def follow(
     """The change's flow run of the deployment, once it has ended: of the runs listed whose ids are not in `known`,
     the ids listed just before the change was opened, and that were made after `after`, the newest of those, the
     first made whose branch is `branch`, any where `branch` is `""`. So no run of an earlier change, ended or left
-    running, is taken for it, nor one that was past the page `known` was read from; and a new run of another
-    branch is said once and not followed.
+    running, is taken for it, nor one that was past the page `known` was read from, which is said once; and a new
+    run of another branch is said once and not followed.
 
     Asked every `POLL_S` (`listed`) from the moment it is called, the last step's return: until `APPEAR_WAIT_S` after
     that for the change's run, saying how many where there are several, and then until `RUN_WAIT_S` after its listing
     for its state to be one of `ENDED`, saying each state it is listed in once. By the host's clock, and no ask at or
     after a bound. A list unanswered (`Unanswered`) is asked again at the next poll and ends nothing by itself; a 401
-    stops the run at once (`Prefect`). No run in time is `NoRun`, and no end in time `NotEnded`, each exit 1, each
-    saying in a line of its own what the last list answered where it was not read."""
+    stops the run at once (`Prefect`). No run in time is `NoRun`, with the count of new runs of another branch passed
+    over, and no end in time `NotEnded`, each exit 1, each saying in a line of its own what the last list answered
+    where it was not read."""
     begun = host.clock()
     failed: str | None = None
     passed_over: set[str] = set()
+    set_aside: set[str] = set()
 
     def last_failure() -> list[str]:
         if failed is None:
@@ -2136,11 +2189,19 @@ def follow(
         return [f"the last list of the runs of {FLOW}/{DEPLOYMENT} was not read: {failed}"]
 
     def new(runs: Sequence[Run]) -> list[Run]:
-        fresh = [
-            each
-            for each in runs
-            if each.id not in known and (after is None or each.created is None or each.created > after)
-        ]
+        fresh = []
+        for each in runs:
+            if each.id in known:
+                continue
+            if after is not None and each.created is not None and each.created <= after:
+                if each.id not in set_aside:
+                    set_aside.add(each.id)
+                    say(
+                        f"flow run {each.id} of {FLOW}/{DEPLOYMENT} was made before the newest run listed before the "
+                        "change: not followed"
+                    )
+                continue
+            fresh.append(each)
         for each in fresh:
             if branch and each.branch != branch and each.id not in passed_over:
                 passed_over.add(each.id)
@@ -2156,6 +2217,7 @@ def follow(
             raise NoRun(
                 1,
                 [f"no run of {FLOW}/{DEPLOYMENT} was started within {APPEAR_WAIT_S} s of the change", *last_failure()],
+                len(passed_over),
             )
         try:
             ours = new(listed(prefect, deployment_id))
@@ -2220,12 +2282,8 @@ def filed(prefect: Prefect, run: Run, log: Path, host: Host) -> tuple[dict[str, 
 
 
 def keep(path: Path, text: str) -> None:
-    """The document's text (`artifact`) written to `path`, at mode 0600 from its creation, as the token file is; one
-    there already is replaced, and its mode made 0600."""
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as out:
-        os.fchmod(out.fileno(), 0o600)
-        out.write(text)
+    """The document's text (`artifact`) kept at `path`, as every file of the script's own is (`written`)."""
+    written(path, text)
 
 
 def not_a_rehearsal(document: Mapping[str, Any]) -> str | None:
@@ -2247,10 +2305,11 @@ def readout(
 ) -> tuple[int, list[str]]:
     """The exit status and the last lines of an `up` that read its verdict: 0 for a rehearsal 1 document whose
     `status` is `PASSED`, and 1 for any other, for one that is no rehearsal 1 document (`not_a_rehearsal`) and for
-    none. First what the run concluded; then, for a rehearsal 1 document, where a person reads its report, in the
-    source, at its address as `env`, the loaded environment, gives it, the change named by the run's own branch,
-    signing in as admin with the password named by its variable and never given; last, always, `left`, what
-    `left_up` reads is left up, after where the document is kept where one was."""
+    none. First what the run concluded, a passed one's time to a tenth of a second; then, for a rehearsal 1 document,
+    where a person reads its report, in the source, at its address as `env`, the loaded environment, gives it where
+    that may be printed (`shown_address`), the change named by the run's own branch, signing in as admin with the
+    password named by its variable and never given; last, always, `left`, what `left_up` reads is left up, after where
+    the document is kept where one was."""
     kept = records(local)
     if document is None:
         said = f"flow run {run.id} ended {run.name or run.state} and filed no rehearsal: read {kept.runner_log}"
@@ -2264,27 +2323,39 @@ def readout(
     status = document.get("status")
     if status == PASSED:
         stages = document.get("stages")
+        took = document.get("took_s")
+        timed = f"{took:.1f} s, " if isinstance(took, int | float) and not isinstance(took, bool) else ""
         first = (
-            f"the rehearsal passed: {len(stages) if isinstance(stages, list) else 0} stages, "
-            f"{document.get('took_s')} s, flow run {run.id}"
+            f"the rehearsal passed: {len(stages) if isinstance(stages, list) else 0} stages, {timed}flow run {run.id}"
         )
     else:
         first = f"the rehearsal ended {status}, not passed: flow run {run.id}"
     if source == "infrahub":
         change = proposed_change(local)
         named = f' "{change}"' if change else ""
+        at = shown_address(env, "FYLGJA_INFRAHUB_ADDRESS")
         where = (
-            f"the report is in Infrahub at {env.get('FYLGJA_INFRAHUB_ADDRESS', '')}: the proposed change{named} of the "
-            f'branch {run.branch}, its thread "{THREAD}"; sign in as admin with the password local/.env holds as '
-            "INFRAHUB_INITIAL_ADMIN_PASSWORD"
+            f"the report is in Infrahub at {at}: the proposed change{named} of the branch {run.branch}, its thread "
+            f'"{THREAD}"; sign in as admin with the password local/.env holds as INFRAHUB_INITIAL_ADMIN_PASSWORD'
         )
     else:
+        at = shown_address(env, "FYLGJA_NETBOX_ADDRESS")
         where = (
-            f"the report is in NetBox at {env.get('FYLGJA_NETBOX_ADDRESS', '')}: the branch {run.branch}, its Journal "
-            "tab, the newest entry; sign in as admin with the password local/.env holds as "
-            "FYLGJA_NETBOX_SUPERUSER_PASSWORD"
+            f"the report is in NetBox at {at}: the branch {run.branch}, its Journal tab, the newest entry; sign in as "
+            "admin with the password local/.env holds as FYLGJA_NETBOX_SUPERUSER_PASSWORD"
         )
     return 0 if status == PASSED else 1, [first, where, last]
+
+
+def shown_address(env: Mapping[str, str], name: str) -> str:
+    """The source's address as the readout prints it: `env`'s value of `name` where it is an http or https address
+    alone, a host with its port and a path, as `AFTER_THE_SCHEME` holds Prefect's; else the variable named in its
+    place, so that a login, a query or a fragment in it is never printed."""
+    address = env.get(name, "")
+    scheme, _, rest = address.partition("://")
+    if scheme in ("http", "https") and AFTER_THE_SCHEME.fullmatch(rest):
+        return address
+    return f"the address local/.env holds as {name}, which is not printed, being no http address alone"
 
 
 def seeded(local: Path) -> dict[str, Any]:
@@ -2363,7 +2434,10 @@ def left_up(source: str, env: Mapping[str, str], records: Records, local: Path, 
     return f"left up: {', '.join(standing)}; {ends}"
 
 
-LEFT_UNREAD = "what is left up was not read: make demo-down ends what the demonstration started"
+ENDS = "make demo-down ends what the demonstration started"
+"""What every last line of `up` but one with nothing left up ends with."""
+
+LEFT_UNREAD = f"what is left up was not read: {ENDS}"
 """The last line where a Ctrl-C cut the read of what is left up (`left_up`) short."""
 
 
@@ -2371,54 +2445,24 @@ def last_lines(
     source: str, env: Mapping[str, str], records: Records, local: Path, host: Host
 ) -> tuple[list[str], bool]:
     """The last lines of a way out of `up`: `left_up`'s, and False; or, where a Ctrl-C cuts that read short, that `up`
-    was interrupted and `LEFT_UNREAD`, and True, so that the lines said before it are not lost."""
+    was interrupted and `LEFT_UNREAD`, and True; or, where an error of the host's does, a record no longer this user's
+    to read, that line in its own word, and False: so that the lines said before it, a verdict among them, are not
+    lost."""
     try:
         return [left_up(source, env, records, local, host)], False
     except KeyboardInterrupt:
         return ["up was interrupted", LEFT_UNREAD], True
+    except OSError as refused:
+        where = f": {refused.filename}" if refused.filename else ""
+        return [f"what is left up was not read, {word_of(refused)}{where}: {ENDS}"], False
 
 
 def up(source: str, local: Path, main: Path, ref: str, environ: Mapping[str, str], host: Host) -> int:
-    """A demonstration of `source`, to its rehearsal's verdict. In order:
-
-    - the lock, and the environment, `<local>/.env` laid over `environ`;
-    - `refuse_runners`: beside a runner it may not end, nothing is started or stopped, exit 2;
-    - the checks no stop can cure (`checks`, `room=False`), with `notices` said first: exit 2 with every one not
-      met, and nothing settled, stopped or started, so that nothing is stopped for a run that could never start;
-    - once, the make variables the caller set that no target is given, by their names (`say_not_passed_on`);
-    - `settle`, so that an earlier run's runner, core and twins hold no port or memory; the listen address reads,
-      the checks having said so;
-    - `alone`: the other source stopped where it is up;
-    - the checks of the host's room (`checks`, `room=True`), its memory and its ports, judged with the earlier run
-      settled and the other source stopped: exit 2 with each not met;
-    - `prepare`, then the record of `source`, then `pull`;
-    - the steps of `STEPS[source]`, each said first, `<local>/.env` read again before each: a make step run as a
-      child under `make_env`, its variables its command line's alone, printing as it will, with no bound of the
-      script's, and asked again while it has asks left, each further ask said; the core and the runner started
-      (`start_core`, `start_runner`). After the first, the pool (`pool_checked`). After `make orchestrator-env`, the
-      token file is given the lines it lacks (`token_lines`), so the core is started over a file that lists both
-      its tokens. Before `make prefect-up` whether this `local`'s server is recorded is read, and after it
-      `prefect.pid` is written where none was and one is, whatever the step's status: only a server the step
-      started is the demonstration's to end.
-
-    - before the last step, the one that opens the change, Prefect's API read again under a step's environment, the
-      id of `twin-rehearse/main`, the ids of its runs listed then (`known`) and the newest's time of creation; after
-      it, the change's run waited for (`follow`), from the step's return, the first made after every known one whose
-      branch is the change's (`change_branch`), and once it has ended the document it filed read (`filed`), asked
-      at once and within `DOCUMENT_WAIT_S` of the end, kept in `rehearsal.json` as Prefect gave it (`keep`), and the
-      readout said (`readout`): its status is `up`'s, 0 for `passed` alone, its lines on stdout for 0 and on stderr
-      for 1.
-
-    From `settle` on, every way out, the readout's among them, says last what is left up, with `make demo-down`
-    (`left_up`), or, where a Ctrl-C cuts that read short, that it was not read (`last_lines`), the lines before it
-    kept: a
-    step that fails, exit 1, `step <i>, make <target>, exited <n>`, or the core's or the runner's own lines after its
-    step, no later step being run; the pool's refusal and a check of the room, exit 2; a line a step wrote into
-    `<local>/.env` that is not read, exit 2 at the next read; Prefect not read before the change, its run not started
-    or not ended in time, its document not read, or the edge's credential refused, exit 1; and an error of the
-    host's, exit 1, in its own word. A Ctrl-C anywhere once the lock is held is exit 130, said, with the same last
-    line. `main`, the main checkout, is what the runner's words and the read of Prefect's API are given (`serve_argv`,
-    `api_argv`); each target finds the main checkout itself."""
+    """A demonstration of `source`, to its rehearsal's verdict: the lock taken, the environment loaded, `<local>/.env`
+    laid over `environ`, and then everything else in the order `verdict_of` states. A Ctrl-C anywhere once the lock
+    is held is exit 130, said, with the last line every way out from `settle` on says (`last_lines`). `main`, the
+    main checkout, is what the runner's words and the read of Prefect's API are given (`serve_argv`, `api_argv`);
+    each target finds the main checkout itself."""
     locked(local, host)
     env: Mapping[str, str] = environ
     kept = records(local)
@@ -2440,7 +2484,38 @@ def verdict_of(
     kept: Records,
     host: Host,
 ) -> int:
-    """`up` once its lock is held and the environment loaded: everything from the runners refused to the readout."""
+    """`up` once its lock is held and `env` loaded, to the readout's status. In order:
+
+    - `refuse_runners`: beside a runner it may not end, nothing is started or stopped, exit 2;
+    - `notices`, then the checks no stop can cure (`checks`, `room=False`): exit 2 with every one not met, and
+      nothing settled, stopped or started, so that nothing is stopped for a run that could never start;
+    - once, the make variables the caller set that no target is given, by their names (`say_not_passed_on`);
+    - `settle`, so that an earlier run's runner, core and twins hold no port or memory, and the port of a core it
+      ended at the listen address waited for (`port_freed`); the listen address reads, the checks having said so;
+    - `alone`: the other source stopped where it is up;
+    - the checks of the host's room (`checks`, `room=True`), its memory and its ports, judged with the earlier run
+      settled and the other source stopped: exit 2 with each not met;
+    - `prepare`, then the record of `source`, then `pull`;
+    - the steps of `STEPS[source]`, each said first, `<local>/.env` read again before each: a make step run as a
+      child under `make_env`, its variables its command line's alone, printing as it will, with no bound of the
+      script's, and asked again while it has asks left, each further ask said; the core and the runner started
+      (`start_core`, `start_runner`). After the first, the pool (`pool_checked`). After `make orchestrator-env`, the
+      token file given the lines it lacks (`token_lines`), so the core is started over a file that lists both its
+      tokens. Around `make prefect-up`, `prefect.pid` written where this `local`'s server is recorded after the step
+      and was not before it, however the step ended: only a server the step started is the demonstration's to end;
+    - before the last step, the one that opens the change, Prefect's API read again under a step's environment, the
+      id of `twin-rehearse/main`, the ids of its runs listed then (`known`) and the newest's time of creation; after
+      it, the change's run waited for (`follow`), from the step's return, the first made after every known one whose
+      branch is the change's (`change_branch`), and once it has ended the document it filed read (`filed`), asked at
+      once and within `DOCUMENT_WAIT_S` of the end, kept in `rehearsal.json` as Prefect gave it (`keep`), and the
+      readout said (`readout`): 0 for `passed` alone, its lines on stdout for 0 and on stderr for 1.
+
+    From `settle` on, every way out, the readout's among them, says last what is left up, with `make demo-down`
+    (`last_lines`): a step that fails, exit 1, `step <i>, make <target>, exited <n>`, or the core's or the runner's
+    own lines after its step, no later step being run; the pool's refusal and a check of the room, exit 2; a line a
+    step wrote into `<local>/.env` that is not read, exit 2 at the next read; Prefect not read before the change, its
+    run not started or not ended in time, its document not read, or the edge's credential refused, exit 1; and an
+    error of the host's, exit 1, in its own word."""
     listen = listen_of(env)
     refuse_runners(source, kept, local, host)
     for line in notices(host):
@@ -2452,17 +2527,23 @@ def verdict_of(
     say_not_passed_on(env, ["PURGE=", *(word for step in steps for word in variables_of(step, ref))])
 
     def made(number: int, step: Step) -> None:
-        """A make step, asked until it exits 0 or has no ask left, `<local>/.env` read again before each ask."""
+        """A make step, asked until it exits 0 or has no ask left, `<local>/.env` read again before each ask.
+        `make prefect-up` records its server in `server.pid` straight after it starts it, and then waits for it: so
+        the server is recorded as the demonstration's however the step ends, a Ctrl-C or an error of the host's in
+        that wait among the ways, wherever one of this `local`'s stands after it that did not before."""
         argv = make_argv(step, local, ref)
-        served_before = step.target == "prefect-up" and prefect_recorded(local, host)
+        serves = step.target == "prefect-up"
+        served_before = serves and prefect_recorded(local, host)
         exited = 0
-        for ask in range(1, step.asks + 1):
-            exited = host.run(argv, env=make_env(loaded(local, environ, host), kept, listen), cwd=ROOT).status
-            if exited == 0 or ask == step.asks:
-                break
-            say(f"step {number}, make {step.target}, exited {exited}: asking it again, {ask + 1} of {step.asks}")
-        if step.target == "prefect-up" and not served_before and prefect_recorded(local, host):
-            kept.prefect_pid.write_text(f"{recorded(prefect_home(local) / 'server.pid', host)}\n")
+        try:
+            for ask in range(1, step.asks + 1):
+                exited = host.run(argv, env=make_env(loaded(local, environ, host), kept, listen), cwd=ROOT).status
+                if exited == 0 or ask == step.asks:
+                    break
+                say(f"step {number}, make {step.target}, exited {exited}: asking it again, {ask + 1} of {step.asks}")
+        finally:
+            if serves and not served_before and prefect_recorded(local, host):
+                written(kept.prefect_pid, f"{recorded(prefect_home(local) / 'server.pid', host)}\n")
         if exited != 0:
             raise Stop(1, [f"step {number}, make {step.target}, exited {exited}"])
         if step.target == "orchestrator-env":
@@ -2473,7 +2554,9 @@ def verdict_of(
                 say(f"{kept.tokens}: listed the principal {line.split()[1]} by its token's hash")
 
     try:
-        settle(env, kept, local, listen, host)
+        settled = settle(env, kept, local, listen, host)
+        if settled is not None and port_of(settled) == port_of(listen):
+            port_freed(listen, host)  # the core just ended may hold its port a moment after its process is gone
         alone(source, env, kept, local, listen, host)
         short = checks(source, env, local=local, ref=ref, host=host, room=True)
         if short:
@@ -2481,7 +2564,7 @@ def verdict_of(
         say("the host's checks passed")
         pool = pool_of(env)
         prepare(local, env, listen, host)
-        kept.source.write_text(f"{source}\n")
+        written(kept.source, f"{source}\n")
         pull(env, host)
         prefect: Prefect | None = None
         rehearse, known, after = "", frozenset[str](), None
@@ -2514,10 +2597,15 @@ def verdict_of(
             if number == 1:
                 pool_checked(source, pool, loaded(local, environ, host), host)
         assert prefect is not None  # the last step is the change's, and the list was read before it
+        branch = change_branch(source, local)
         try:
-            run = follow(prefect, rehearse, known, host, branch=change_branch(source, local), after=after)
+            run = follow(prefect, rehearse, known, host, branch=branch, after=after)
         except NoRun as late:
-            raise Stop(1, [f"{late.lines[0]}: {WHERE_TO_LOOK[source]}", *late.lines[1:]]) from None
+            # The trigger's remedy is untrue where it did start runs, each of another branch.
+            why = WHERE_TO_LOOK[source]
+            if late.passed_over:
+                why = f"only runs of another branch than {branch} were started since, each said above and not followed"
+            raise Stop(1, [f"{late.lines[0]}: {why}", *late.lines[1:]]) from None
         except NotEnded as late:
             raise Stop(1, [f"{late.lines[0]}: read {kept.runner_log}", *late.lines[1:]]) from None
         held = filed(prefect, run, kept.runner_log, host)
@@ -2556,11 +2644,14 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
     the demonstration, the record then removed, and a record that names any other removed with nothing stopped; and
     `make <source>-down`, with `PURGE=1` where `purge` and `PURGE=` where not (`stop_words`). Each target is run
     under a make child's environment (`make_env`), so no variable of the caller's reaches it; those the caller set
-    are said first, once, by their names (`say_not_passed_on`). The exit is 1 too wherever the marker `unsettled` still
-    stands at the end: a `down` that could not read the store never passes for one that found it empty. `source` is
-    kept, so that a later `down` with `purge` knows whose volumes to remove. `main` is taken as `up` takes it and is
-    not read: each target finds the main checkout itself. A Ctrl-C once the lock is held is exit 130: the failures
-    met so far are said, then that it was interrupted, then the line that says not everything was ended."""
+    are said first, once, by their names (`say_not_passed_on`). Where `source` names a source, nothing recorded still
+    runs or stands unsettled (`running`) and Docker says no container of the source's project runs (`is_up`), a
+    `down` without `purge` says so, exit 0, and runs nothing more: there is nothing to end. The exit is 1 too
+    wherever the marker `unsettled` still stands at the end: a `down` that could not read the store never passes for
+    one that found it empty. `source` is kept, so that a later `down` with `purge` knows whose volumes to remove.
+    `main` is taken as `up` takes it and is not read: each target finds the main checkout itself. A Ctrl-C once the
+    lock is held is exit 130: the failures met so far are said, then that it was interrupted, then the line that
+    says not everything was ended."""
     locked(local, host)
     failed: list[str] = []
     try:
@@ -2570,6 +2661,31 @@ def down(local: Path, main: Path, purge: bool, environ: Mapping[str, str], host:
             fail(line)
         fail("down was interrupted")
         return fail("down: not everything was ended: read the lines above, then run make demo-down again", 130)
+
+
+def running(records: Records, local: Path, host: Host) -> bool:
+    """Whether anything the demonstration recorded under `local` may still stand: the marker `unsettled`, or a
+    recorded pid that reads as the core, the runner, as it is or before its `execve`, or this `local`'s Prefect
+    server."""
+    if host.text(records.unsettled) is not None:
+        return True
+    core, runner, server = (recorded(at, host) for at in (records.core_pid, records.runner_pid, records.prefect_pid))
+    serving = None if runner is None else host.process(runner)
+    return (
+        (core is not None and is_core(host.process(core), records))
+        or is_runner(serving, local)
+        or is_becoming_runner(serving, local)
+        or (server is not None and is_prefect(host.process(server), local))
+    )
+
+
+def is_up(source: str, env: Mapping[str, str], host: Host) -> bool | None:
+    """Whether a container of `source`'s Compose project runs (`up_argv`), under `env`; None where Docker does not
+    say, `docker` not being on PATH or its read exiting other than 0."""
+    if host.which("docker") is None:
+        return None
+    listed = host.run(up_argv(source), env=env, capture=True, timeout=DOCKER_TIMEOUT_S)
+    return None if listed.status != 0 else bool(listed.out.split())
 
 
 def ended_all(local: Path, purge: bool, environ: Mapping[str, str], failed: list[str], host: Host) -> int:
@@ -2583,8 +2699,14 @@ def ended_all(local: Path, purge: bool, environ: Mapping[str, str], failed: list
     source = "" if named is None else named.strip()
     env = loaded(local, environ, host)
     listen = listen_of(env)
+    if source in SOURCES and not purge and not running(kept, local, host) and is_up(source, env, host) is False:
+        say(
+            f"nothing the {source} demonstration started is running, and {source} is not up: nothing to end; its "
+            f"records stay under {home}"
+        )
+        return 0
 
-    def tried(what: str, act: Callable[[], None]) -> None:
+    def tried(what: str, act: Callable[[], object]) -> None:
         try:
             act()
         except Stop as stop:
@@ -2653,7 +2775,7 @@ def parser() -> argparse.ArgumentParser:
                 "--ref", required=True, help="the branch Infrahub registers this repository at; empty where none is"
             )
         else:
-            each.add_argument("--purge", action="store_true", help="remove the sources' volumes too")
+            each.add_argument("--purge", action="store_true", help="remove the recorded source's volumes too")
         each.add_argument("--local", type=Path, required=True, help="the main checkout's local/")
         each.add_argument("--main", type=Path, required=True, help="the main checkout")
     return made
@@ -2664,7 +2786,9 @@ def main(argv: Sequence[str], *, environ: Mapping[str, str] = os.environ, host: 
         args = parser().parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else 2
-    local, main_checkout = args.local.absolute(), args.main.absolute()
+    # `local` is resolved once, here: every record, the Prefect home, the runner's words and every target's `LOCAL`
+    # then have one spelling, whatever spelling of it each command was given.
+    local, main_checkout = args.local.resolve(), args.main.absolute()
     on: Host = Real() if host is None else host
     try:
         if args.verb == "up":

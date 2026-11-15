@@ -140,6 +140,17 @@ def test_uv_comes_from_its_image_pinned_by_digest_into_the_build_stage_alone() -
     assert set(stage_sources(found[last + 1 :])) == {"build"}
 
 
+def test_the_final_stage_copies_from_build_the_venv_alone() -> None:
+    """So a uv (or a pip) copied there, from the build stage, fails."""
+    from_build = [
+        source
+        for keyword, args in _final_stage()
+        if keyword == "COPY" and "--from=build" in _copy(args)[0]
+        for source in _copy(args)[1]
+    ]
+    assert from_build == ["/opt/fylgja/venv"]
+
+
 def test_the_image_runs_as_a_user_that_is_not_root() -> None:
     users = [args for keyword, args in _final_stage() if keyword == "USER"]
     assert users, "the final stage sets no USER"

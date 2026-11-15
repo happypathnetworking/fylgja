@@ -50,7 +50,7 @@ all: lint test
 # extra, at the versions uv.lock holds, which a pin moved in a pyproject.toml without `uv lock` refuses. The
 # interpreter is the PATH's python3, never one uv fetches.
 venv:
-	UV_PROJECT_ENVIRONMENT=$(CURDIR)/$(VENV) uv sync --locked --all-packages --all-extras --python python3
+	UV_PROJECT_ENVIRONMENT=$(abspath $(VENV)) uv sync --locked --all-packages --all-extras --python python3
 	printf '*\n' > $(VENV)/.gitignore
 
 # The pure tier: no infrastructure (Constitution, Development).

@@ -43,9 +43,10 @@ def test_the_root_is_a_workspace_of_the_four_and_no_distribution() -> None:
     uv = root["tool"]["uv"]
     assert re.fullmatch(r"==\d+\.\d+\.\d+", uv["required-version"])
     assert uv["python-downloads"] == "never"
+    assert uv["python-preference"] == "only-system"
     assert uv["workspace"] == {"members": MEMBERS}
     assert uv["sources"] == {name: {"workspace": True} for name in ("fylgja-core", "fylgja-infrahub", "fylgja-netbox")}
-    assert set(uv) == {"required-version", "python-downloads", "workspace", "sources"}
+    assert set(uv) == {"required-version", "python-downloads", "python-preference", "workspace", "sources"}
     for member in MEMBERS:
         assert load(f"{member}/pyproject.toml")["project"]["name"] == NAMES[member]
     for tests in ("infrahub", "netbox"):
@@ -92,7 +93,7 @@ def test_venv_is_a_locked_sync_into_core_venv() -> None:
     assert len(sync) == 1
     assert f"UV_PROJECT_ENVIRONMENT={ROOT}/core/.venv" in sync[0]
     assert "uv sync --locked --all-packages --all-extras --python python3" in sync[0]
-    assert not [line for line in lines if "pip" in line]
+    assert not [line for line in lines if any(pattern.search(line) for pattern in PIP_OR_VENV.values())]
 
 
 def test_ci_installs_the_trees_uv_before_make_venv() -> None:
@@ -113,40 +114,63 @@ def test_ci_installs_the_trees_uv_before_make_venv() -> None:
     assert not [step for step in jobs["image"]["steps"] if "setup-uv" in step.get("uses", "")]
 
 
-# What calls pip or makes a venv by anything but uv: `pip install` and its kin not led by `uv `, `python -m pip`,
-# `-m venv`, a call of an environment's `bin/pip`, and the same two as the words of an argument list.
+# What calls pip or makes a venv by anything but uv: `pip` (or `pip3`) and its verbs not led by `uv `, options between
+# them allowed, `python -m pip`, `-m venv`, a call of an environment's `bin/pip`, the same two as the words of an
+# argument list, `virtualenv`, `ensurepip`, the `venv` module's API; and what runs a project's or a tool's environment
+# in place of the one `make venv` makes: `uv run`, `uvx`, `uv tool`.
 PIP_OR_VENV = {
-    "pip as a command": re.compile(r"(?<!uv )\bpip (install|wheel|download|freeze)\b"),
-    "-m pip": re.compile(r"-m pip\b"),
-    "bin/pip": re.compile(r"/bin/pip\b"),
+    "pip as a command": re.compile(r"(?<!uv )\bpip3?\b(?:\s+-\S+)*\s+(install|wheel|download|freeze|uninstall)\b"),
+    "-m pip": re.compile(r"-m pip3?\b"),
+    "bin/pip": re.compile(r"/bin/pip3?\b"),
     "-m venv": re.compile(r"-m venv\b"),
-    "an argument list's pip or venv": re.compile(r'"-m",\s*"(pip|venv)"'),
+    "an argument list's pip or venv": re.compile(r'"-m",\s*"(pip3?|venv|virtualenv|ensurepip)"'),
+    "virtualenv": re.compile(r"\bvirtualenv\b"),
+    "ensurepip": re.compile(r"\bensurepip\b"),
+    "the venv module's API": re.compile(r"\bvenv\.create\b|\bEnvBuilder\b|^\s*(import venv|from venv import)\b"),
+    "uv run, uvx or uv tool": re.compile(r"\buv (run|tool)\b|\buvx\b"),
 }
 PIP_OR_VENV_EXAMPLES = {
-    "pip as a command": "\t$(VENV)/bin/pip install -q thing",
-    "-m pip": "    python3 -m pip install thing",
-    "bin/pip": "ENV=/opt/venv/bin/pip",
+    "pip as a command": "\t$(VENV)/bin/pip --quiet install -q thing",
+    "-m pip": "    python3 -m pip3 install thing",
+    "bin/pip": "ENV=/opt/venv/bin/pip3",
     "-m venv": "\tpython3 -m venv $(LOCAL)/x",
-    "an argument list's pip or venv": 'run(["python3", "-m", "venv", "x"])',
+    "an argument list's pip or venv": 'run(["python3", "-m", "ensurepip"])',
+    "virtualenv": "\tvirtualenv $(LOCAL)/x",
+    "ensurepip": "\tpython3 -m ensurepip",
+    "the venv module's API": "    venv.create(path, with_pip=True)",
+    "uv run, uvx or uv tool": "\tuv tool install infrahub-sdk",
 }
+# Lines that hold no call, among them a checkout's path with `pip` in it, as `make -n venv` prints.
+INNOCENT = [
+    "UV_PROJECT_ENVIRONMENT=/home/pipeline/pip-tools/core/.venv uv sync --locked --all-packages",
+    "\tuv pip install -q --python x/bin/python 'infrahub-sdk[ctl]==1.0'",
+    "\tuv venv --no-project --clear --python python3 x",
+]
 
 
 def test_the_patterns_that_find_pip_and_venvs_are_not_blind() -> None:
     assert PIP_OR_VENV.keys() == PIP_OR_VENV_EXAMPLES.keys()
     for kind, example in PIP_OR_VENV_EXAMPLES.items():
         assert PIP_OR_VENV[kind].search(example), kind
-    assert not PIP_OR_VENV["pip as a command"].search("RUN uv pip install --python /v/bin/python x")
+    assert PIP_OR_VENV["uv run, uvx or uv tool"].search("\tuvx ruff")
+    assert PIP_OR_VENV["uv run, uvx or uv tool"].search("\tuv run pytest")
+    assert PIP_OR_VENV["the venv module's API"].search("import venv")
+    assert PIP_OR_VENV["pip as a command"].search("pip3 install x")
+    for line in INNOCENT:
+        assert not [kind for kind, pattern in PIP_OR_VENV.items() if pattern.search(line)], line
 
 
 def test_what_the_tree_runs_calls_pip_and_makes_venvs_by_uv_alone() -> None:
     tracked = subprocess.run(
-        ["git", "ls-files", "-z", "--", "Makefile", "Dockerfile", "netbox/dev/Dockerfile", ".github/workflows/*.yml",
-         "scripts/*.py", "testdata/s3/generate.py"],
+        ["git", "ls-files", "-z", "--", "*Makefile", "*Dockerfile", "*compose.override.yml", ".github/workflows/*.yml",
+         ".github/workflows/*.yaml", "scripts/*.py", "infrahub/seed/*.py", "netbox/seed/*.py",
+         "testdata/s3/generate.py"],
         cwd=ROOT, capture_output=True, text=True, check=True,
     ).stdout.split("\0")
     files = [name for name in tracked if name]
-    assert {"Makefile", "Dockerfile", "netbox/dev/Dockerfile", ".github/workflows/ci.yml", "scripts/wheelcheck.py",
-            "testdata/s3/generate.py"} <= set(files)
+    assert {"Makefile", "Dockerfile", "netbox/dev/Dockerfile", "netbox/dev/compose.override.yml",
+            "infrahub/dev/compose.override.yml", ".github/workflows/ci.yml", "scripts/wheelcheck.py",
+            "infrahub/seed/seed.py", "netbox/seed/seed.py", "testdata/s3/generate.py"} <= set(files)
     found = [
         f"{name}:{number}: {line.strip()}"
         for name in files

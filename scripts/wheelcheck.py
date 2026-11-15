@@ -552,10 +552,20 @@ def exits(
 
 
 def uv() -> str:
-    """The `uv` on the PATH; `Failure` in one line where there is none, before anything is made."""
+    """The `uv` on the PATH, which must be the version the root `pyproject.toml` requires: every call of this check runs
+    outside the tree, where uv never reads that. `Failure` in one line where there is none or it is another, before
+    anything is made."""
     found = shutil.which("uv")
     if found is None:
         raise Failure('uv is not on the PATH: the wheel check builds and installs by it (CONTRIBUTING.md, "Tooling")')
+    required = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["required-version"].removeprefix("==")
+    try:
+        said = subprocess.run([found, "--version"], capture_output=True, text=True, check=False).stdout.split()
+    except OSError as e:
+        raise Failure(f"{found} cannot be run: {e}") from e
+    version = said[1] if len(said) > 1 else "unreadable"
+    if version != required:
+        raise Failure(f"uv {version} is on the PATH, and the root pyproject.toml requires uv {required}")
     return found
 
 
@@ -771,8 +781,8 @@ def refused_without_token(command: Path, tmp: Path) -> None:
 
 def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
     """The NetBox reader's check, under `tmp/netbox-reader`: its wheel, from `build_netbox_reader`, and what it carries;
-    then the wheel installed beside `core_wheel`, the core with no extra, in the venv it was built in, which the build
-    left empty, where `PROBE_NETBOX_READER` runs outside the tree over a copy of the seed's reader document,
+    then the wheel installed beside `core_wheel`, the core with no extra, in an empty venv of its own,
+    where `PROBE_NETBOX_READER` runs outside the tree over a copy of the seed's reader document,
     `fylgja-netbox --help` exits 0 and `fylgja-netbox check` with no token is refused, naming the variable."""
     wheel = build_netbox_reader(tmp)
     carried_by_netbox_reader(wheel)

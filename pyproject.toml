@@ -4,6 +4,7 @@
 [tool.uv]
 required-version = "==0.12.23"
 python-downloads = "never"
+python-preference = "only-system"
 
 [tool.uv.workspace]
 members = ["core", "readers/infrahub", "readers/netbox", "orchestrator"]

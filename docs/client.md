@@ -89,8 +89,8 @@ reads it. It answers a `Followed`, whose fields are:
 - `gone`: whether the twin no longer exists.
 
 A record whose generation the loop has acted on already is answered at once, with no watch, and
-its run is the one the record names, or else the twin's newest of those operations. A script that must know whether its write started a
-run compares the record's `generation` with its `status`'s `observed_generation` before it calls
+its run is the one the record names, or else the twin's newest of those operations. A script that
+must know whether its write started a run compares the record's `generation` with its `status`'s `observed_generation` before it calls
 `follow`.
 
 `progress`, when given, is a function of one string. It is called with `"<twin>: <phase>"` each
@@ -109,19 +109,20 @@ no run of the operations given, and where the run has ended with no verdict.
 of the server. Where its stream ends before its proper end, is cut off, or is answered with a
 proxy's `5xx` while the server is away, the client opens the watch again after the last revision or
 event it saw, which the server resumes from. The waits between tries double from half a second to
-ten seconds, and each try is given five seconds to connect. After fifteen early ends in a row with
-no event between them, about three minutes, the watch raises `TransportError`. The first early end
-of a run of them is told to `notice`, if the client has one.
+ten seconds, and each try is given five seconds to connect. The watch is opened again after each of
+fifteen early ends in a row with no event between them, about three minutes in all; the sixteenth
+raises `TransportError`. The first early end of a run of them is told to `notice`, if the client
+has one.
 
-A refusal, an answer that is no event stream, an event the client cannot read and a certificate it
-does not trust end a watch at once. A twin's watch ends after the event `DELETED`; a run's ends
+A refusal, an answer that is no event stream, an event the client cannot read, a certificate it
+does not trust and a `4xx` answer with no problem document end a watch at once. A twin's watch ends after the event `DELETED`; a run's ends
 once the server says the run has.
 
 ## Errors
 
 | Error | Raised when |
 |---|---|
-| `ProblemError` | The server refused a request with a problem document. `status` is the HTTP status and `problem` the document, whose `rule` names the rule the request broke. |
+| `ProblemError` | The server refused a request with a problem document. `status` is the HTTP status. `problem` is the problem document, not a dictionary, read by attribute: `rule` names the rule the request broke, and `title`, `status` and `detail` say the rest. |
 | `TransportError` | The request did not reach the server, or the answer is no API 1 document: a connection that failed or timed out, an answer that is no JSON object, a watch that gave up reconnecting. |
 | `Untrusted` | A kind of `TransportError`: the server's certificate failed verification against the client's trust. |
 | `FollowError` | `follow` could not bring a write to a verdict, as [above](#following-a-write). |

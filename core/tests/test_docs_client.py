@@ -6,6 +6,7 @@ and calls nothing the client lacks."""
 from __future__ import annotations
 
 import ast
+import builtins
 import dataclasses
 import importlib
 import inspect
@@ -15,6 +16,8 @@ from pages import blocks, rows, section, text, ticked
 
 from fylgja_core import client
 from fylgja_core.client import Client, Followed
+from fylgja_core.documents import Problem, Rejected
+from fylgja_core.problem import ProblemDocument
 
 PAGE = "docs/client.md"
 
@@ -153,3 +156,34 @@ def test_the_example_calls_only_what_the_client_has() -> None:
     read = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
             and n.value.id in followed}
     assert read and read <= fields, read
+
+
+def test_the_fields_of_followed_are_the_ones_the_page_lists() -> None:
+    lines = section(text(PAGE), "## Following a write")
+    listed = [m.group(1) for line in lines if (m := re.match(r"- `([a-z_]+)`:", line))]
+    assert listed, "the parse is blind"
+    assert len(listed) == len(set(listed))
+    assert set(listed) == {f.name for f in dataclasses.fields(Followed)}
+
+
+def test_what_the_page_shows_of_the_errors_is_in_the_code() -> None:
+    page = text(PAGE)
+    problem_doc = ProblemDocument(type="about:blank", title="t", status=404, rule="r.x")
+    refused = client.ProblemError(404, problem_doc)
+    assert refused.status == 404 and refused.problem is problem_doc
+    fields = {f.name for f in dataclasses.fields(ProblemDocument)}
+    shown = re.search(r"read by attribute: ((?:`\w+`(?:, | and )?)+)", page)
+    assert shown, "the parse is blind"
+    assert set(ticked(shown.group(1))) <= fields
+    one = Problem(pointer="/a", rule="r.y", detail="d")
+    rejected = Rejected([one], "s")
+    assert rejected.problems == (one,)
+    assert {f.name for f in dataclasses.fields(Problem)} == {"pointer", "rule", "detail"}
+    for row in rows(section(page, "## Errors"), "Error"):
+        cls = getattr(client, ticked(row[0])[0])
+        claim = re.search(r"\bA (?:kind of )?`(\w+)`", row[1])
+        claimed = (getattr(client, claim.group(1), None) or getattr(builtins, claim.group(1))) if claim else None
+        if claimed is None:
+            assert cls.__bases__ == (Exception,), cls
+        else:
+            assert cls.__bases__ == (claimed,), cls

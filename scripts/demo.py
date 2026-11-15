@@ -41,10 +41,11 @@ other core.
 
 What the script keeps is under `<local>/demo/` (`records`). What it writes that can be generated, `prepare`: that
 directory, the token file its core reads, and in `<local>/.env`, where the loaded environment gives the name no
-value, the core's address and a client's token. What is printed of `<local>/.env` is two addresses, the core's
-listen address, which is `127.0.0.1:<port>` or refused, and the source's, which the readout prints only where it is
-an http address with no login, query or fragment; no credential is ever printed: a refusal names a variable by its
-name and a line by its number.
+value, the core's address and a client's token. What it prints of the environment and the host is addresses and
+networks, and never a credential: the core's listen address, which is `127.0.0.1:<port>` or refused; Prefect's API,
+which may come of `PREFECT_BIND`, and the source's, each printed only where it is an http address with no login,
+query or fragment; and the lab pool with the Docker networks that hold part of it, in the driver's refusal. A
+refusal names a variable by its name and a line by its number.
 
 Every process, socket, file of the host's and clock the script touches goes through one seam, `Host`, and `Real` is
 its one implementation.
@@ -288,9 +289,10 @@ RUN_WAIT_S = 4200
 
 DOCUMENT_WAIT_S = 60
 """Seconds from the run's end read to its document read, a read unanswered being asked again. The run files its
-document before it ends, and under the two demonstrations the document was read at the first ask, four times, its
-verdict said 0.20 to 0.26 s after the listing that gave the run `COMPLETED` (design/verified-facts.md, "Prefect
-3.9.2", 2026-11-14), of which this is 231 times the slowest."""
+document before it ends, and under the two demonstrations the verdict was said 0.20 to 0.26 s after the listing that
+gave the run `COMPLETED`, four times: under NetBox's the document was read at the first ask, and under Infrahub's,
+within one `POLL_S`, it is inferred to have been (design/verified-facts.md, "Prefect 3.9.2", 2026-11-14), of which
+this is 231 times the slowest."""
 
 DESTROY_TIMEOUT_S = 300
 """Seconds one `fylgja-core twin destroy` is given: one was read to take 2.3 s (the same facts), and
@@ -1173,6 +1175,20 @@ def prefect_home(local: Path) -> Path:
     return local / "prefect"
 
 
+def is_home(read: str | None, local: Path) -> bool:
+    """Whether `read`, a `PREFECT_HOME` read from a process, is `prefect_home(local)`, compared by their resolved
+    paths: `main` resolves `local`, while a target run by a person is given `LOCAL` as it is spelled, through a
+    symlink perhaps, and `edge_dev.py` writes that spelling into the process's environment. A path that cannot be
+    resolved compares as it was read."""
+    if not read:
+        return False
+    home = prefect_home(local)
+    try:
+        return Path(read).resolve() == home.resolve()
+    except (OSError, RuntimeError, ValueError):
+        return read == str(home)
+
+
 def recorded(path: Path, host: Host) -> int | None:
     """The pid the file `path` names; None where there is no such file or it names none."""
     try:
@@ -1184,13 +1200,14 @@ def recorded(path: Path, host: Host) -> int | None:
 def is_prefect(process: Process | None, local: Path) -> bool:
     """Whether a process is the Prefect server of `local`, as `make prefect-up` itself reads one up already
     (`edge_dev.is_ours`, reproduced and held to it by a test): a word of its command line is named `prefect`,
-    `server` is among them, and its `PREFECT_HOME` is `prefect_home(local)`. A pid another process has since taken,
-    another home's server and a worker are none."""
+    `server` is among them, and its `PREFECT_HOME` is `prefect_home(local)`, by their resolved paths where `is_ours`
+    compares them as spelled (`is_home`). A pid another process has since taken, another home's server and a worker
+    are none."""
     return (
         process is not None
         and any(Path(word).name == "prefect" for word in process.argv)
         and "server" in process.argv
-        and process.environ.get(PREFECT_HOME) == str(prefect_home(local))
+        and is_home(process.environ.get(PREFECT_HOME), local)
     )
 
 
@@ -1381,12 +1398,12 @@ def is_core(process: Process | None, records: Records) -> bool:
 def is_runner(process: Process | None, local: Path) -> bool:
     """Whether a process is a runner that serves the Prefect of `local`, whatever checkout it runs from: a word of
     its command line is named `fylgja-orchestrator`, `serve` is among them, and its `PREFECT_HOME` is
-    `prefect_home(local)`. `edge_dev.py serve` is none until it has become the runner."""
+    `prefect_home(local)` (`is_home`). `edge_dev.py serve` is none until it has become the runner."""
     return (
         process is not None
         and any(Path(word).name == RUNNER_COMMAND for word in process.argv)
         and "serve" in process.argv
-        and process.environ.get(PREFECT_HOME) == str(prefect_home(local))
+        and is_home(process.environ.get(PREFECT_HOME), local)
     )
 
 

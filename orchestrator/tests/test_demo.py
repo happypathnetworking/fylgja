@@ -2984,6 +2984,48 @@ def test_a_local_given_through_a_symlink_is_one_local(tmp_path: Path, capsys: py
         capsys.readouterr()
 
 
+def test_a_prefect_home_read_from_a_process_compares_by_its_resolved_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`main` resolves `local`, while `make` gives `LOCAL` as it is spelled and `edge_dev.py` writes that spelling into
+    a process's `PREFECT_HOME`: a runner or a Prefect server a person started by its target through a symlink to
+    `local/`, or by the path itself, is this home's whatever spelling the demonstration was given."""
+    cases = (
+        "runner by the link, demo by the link",
+        "runner by the path, demo by the link",
+        "runner by the link, demo by the path",
+    )
+    for case in cases:
+        local, _, host, _ = first(tmp_path / case.replace(" ", "-").replace(",", ""))
+        link = local.parent / "link"
+        link.symlink_to(local)
+        started_by = link if "runner by the link" in case else local
+        given = link if "demo by the link" in case else local
+        host.processes[4601] = runner_process(started_by, "netbox")
+        assert status(host, up_of(given, "netbox", "")) == 2, case
+        assert capsys.readouterr().err.splitlines() == [
+            f"demo: a runner this demonstration did not start serves {local / 'prefect'}, pid 4601: stop it by its pid"
+        ], case
+        assert (host.started, host.signalled) == ([], []), case
+
+    # A Prefect server `make prefect-up` started under either spelling is this home's, up already: port 4200 is its
+    # own, and the room does not refuse it.
+    for spelling in ("link", "path"):
+        local, _, host, _ = first(tmp_path / f"prefect-by-the-{spelling}")
+        link = local.parent / "link"
+        link.symlink_to(local)
+        by = link if spelling == "link" else local
+        EDGE_DEV.home_of(by).mkdir()
+        host.processes[4602] = demo.Process(
+            [PYTHON, str(EDGE_DEV.PREFECT), "server", "start", "--host", BIND, "--port", "4200", "--no-ui"],
+            {"PREFECT_HOME": str(EDGE_DEV.home_of(by))},
+        )
+        EDGE_DEV.pid_file(by).write_text("4602\n")
+        host.listening.append((f"{BIND}:4200", 4602, "prefect"))
+        assert demo.prefect_recorded(local.resolve(), host), spelling
+        assert demo.checks("netbox", ENV, local=local.resolve(), ref="", host=host, room=True) == [], spelling
+
+
 def test_down_purges_only_by_the_flag(tmp_path: Path) -> None:
     for source in demo.SOURCES:
         local, kept, host = after_a_netbox_run(tmp_path / source)

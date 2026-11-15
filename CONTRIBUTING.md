@@ -913,8 +913,8 @@ label=containerlab` listed none, the source's containers were stopped and its vo
 the core's port or on 4200, 8000 or 8800, and none of the recorded pids was a process.
 
 A second `make demo-down`, with nothing recorded still running and no container of the source's project running,
-runs nothing and says `nothing the <source> demonstration started is running, and <source> is not up: nothing to end;
-its records stay under <local>/demo`, exit 0; where the source's project is up again, it stops it as the first did.
+makes that one `docker ps` read, runs nothing else, and says `nothing the <source> demonstration started is running,
+and <source> is not up: nothing to end; its records stay under <local>/demo`, exit 0; where the source's project is up again, it stops it as the first did.
 `make demo-down PURGE=1` always runs the source's `down` with `PURGE=1`, its volumes being what it asks for, which is
 why `source` is kept. With nothing recorded under `local/demo/`, no `source`, no `unsettled` and no pid of a core or a
 runner, it says `no demonstration is recorded under <local>/demo: nothing to end`, exit 0, and reads nothing more.

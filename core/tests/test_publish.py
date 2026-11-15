@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import tomllib
 import zipfile
 from functools import cache
 from pathlib import Path
@@ -23,6 +24,8 @@ COMMIT = "a" * 40
 OTHER = "b" * 40
 WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PACKAGES = {"fylgja_core": "fylgja-core", "fylgja_infrahub": "fylgja-infrahub", "fylgja_netbox": "fylgja-netbox"}
+# The upload jobs, one an index and a distribution, each named as its environment is (`<index>-<distribution>`).
+UPLOADS = {f"{index}-{name}": (index, name) for index in ("testpypi", "pypi") for name in PACKAGES.values()}
 
 
 @cache
@@ -174,8 +177,7 @@ def test_only_the_upload_jobs_may_ask_for_an_identity_token() -> None:
     assert workflow["permissions"] == {"contents": "read"}
     assert {job: spec["permissions"] for job, spec in workflow["jobs"].items()} == {
         "build": {"contents": "read"},
-        "testpypi": {"id-token": "write"},
-        "pypi": {"id-token": "write"},
+        **{job: {"id-token": "write"} for job in UPLOADS},
         "release": {"contents": "write"},
     }
 
@@ -183,25 +185,45 @@ def test_only_the_upload_jobs_may_ask_for_an_identity_token() -> None:
 def test_each_upload_waits_for_its_own_environment_and_index() -> None:
     jobs = _workflow()["jobs"]
     assert jobs["build"]["outputs"] == {"index": "${{ steps.check.outputs.index }}"}
-    assert "environment" not in jobs["build"] and "environment" not in jobs["release"]
-    for index in ("testpypi", "pypi"):
-        assert jobs[index]["needs"] == "build"
-        assert jobs[index]["if"] == f"needs.build.outputs.index == '{index}'"
-        assert jobs[index]["environment"] == {"name": index}
-    assert jobs["release"]["needs"] == ["build", "pypi"]
+    # Six environments and no other, one an upload job's alone: a pending publisher is unique on its repository, owner,
+    # workflow file and environment, not its project (design/verified-facts.md, "PyPI and TestPyPI").
+    assert {job: spec.get("environment") for job, spec in jobs.items() if "environment" in spec} == {
+        job: {"name": job} for job in UPLOADS}
+    for job, (index, _) in UPLOADS.items():
+        assert jobs[job]["needs"] == "build"
+        assert jobs[job]["if"] == f"needs.build.outputs.index == '{index}'"
+        assert jobs[job]["runs-on"] == "ubuntu-26.04"
+    assert jobs["release"]["needs"] == ["build", "pypi-fylgja-core", "pypi-fylgja-infrahub", "pypi-fylgja-netbox"]
     assert jobs["release"]["if"] == "needs.build.outputs.index == 'pypi'"
 
 
+def test_each_upload_job_downloads_then_publishes_its_one_wheel() -> None:
+    jobs = _workflow()["jobs"]
+    # The build job puts each wheel in an artifact of its own, named as its distribution; the check before it has held
+    # dist/ to the three wheels at the version, so each pattern finds one wheel.
+    artifacts = {step["with"]["name"]: step["with"] for step in _uses("build", "actions/upload-artifact")}
+    assert artifacts == {name: {"name": name, "path": f"dist/{package}-*.whl", "if-no-files-found": "error"}
+                         for package, name in PACKAGES.items()}
+    (pin,) = {step["uses"] for step in _uses("release", "actions/download-artifact")}
+    publishers = {step["uses"] for job in UPLOADS for step in _uses(job, "pypa/gh-action-pypi-publish")}
+    assert len(publishers) == 1
+    for job, (index, name) in UPLOADS.items():
+        upload: dict[str, Any] = {"uses": next(iter(publishers))}
+        if index == "testpypi":
+            upload["with"] = {"repository-url": "https://test.pypi.org/legacy/"}
+        assert _steps(job) == [{"uses": pin, "with": {"name": name, "path": "dist/"}}, upload], job
+    # No job but these six uploads.
+    assert {job for job in jobs if _uses(job, "pypa/gh-action-pypi-publish")} == set(UPLOADS)
+
+
 def test_the_upload_is_trusted_publishing_with_no_stored_token() -> None:
-    for index, url in (("testpypi", {"repository-url": "https://test.pypi.org/legacy/"}), ("pypi", None)):
-        (download,) = _uses(index, "actions/download-artifact")
-        assert download["with"] == {"name": "wheels", "path": "dist/"}
-        (upload,) = _uses(index, "pypa/gh-action-pypi-publish")
-        assert upload.get("with") == url
-        assert _steps(index).index(download) < _steps(index).index(upload)
     text = WORKFLOW.read_text()
-    assert "secrets." not in text
+    assert not re.search(r"\bsecrets\b", text)
     assert not re.search(r"password|(?<![\w-])token:|workflow_dispatch|pull_request", text)
+    # No environment variable or default is given to every job or every step of one.
+    assert "env" not in _workflow() and "defaults" not in _workflow()
+    for job, spec in _workflow()["jobs"].items():
+        assert "env" not in spec and "defaults" not in spec, job
     # GitHub's own token, `github.token`, is given to the release job's `gh` alone, never to an upload job.
     given = [(job, step.get("env")) for job in _workflow()["jobs"] for step in _steps(job)
              if "github.token" in str(step)]
@@ -228,11 +250,13 @@ def test_the_build_gates_and_checks_before_anything_is_uploaded() -> None:
     (python,) = [step for step in steps if step.get("uses", "").startswith("actions/setup-python@")]
     assert python["with"] == {"python-version": "3.14"}
     (setup,) = _uses("build", "astral-sh/setup-uv")
-    ci = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    (ci_setup,) = [step for step in ci["jobs"]["lint-and-test"]["steps"] if "setup-uv" in step.get("uses", "")]
-    assert setup["with"] == ci_setup["with"]
+    # uv at the root's version, as CI's step has it, and no cache restored into a build that publishes.
+    with (ROOT / "pyproject.toml").open("rb") as f:
+        uv_version = tomllib.load(f)["tool"]["uv"]["required-version"].removeprefix("==")
+    assert setup["with"] == {"version": uv_version, "enable-cache": False}
     order = ["actions/checkout", "actions/setup-python", "astral-sh/setup-uv", "make venv", "make lint", "make test",
-             "make wheelcheck", "make wheels", "check", "ancestry", "actions/upload-artifact"]
+             "make wheelcheck", "make wheels", "check", "ancestry", "actions/upload-artifact",
+             "actions/upload-artifact", "actions/upload-artifact"]
     found = []
     for i, step in enumerate(steps):
         if step.get("id") == "check":
@@ -248,13 +272,11 @@ def test_the_build_gates_and_checks_before_anything_is_uploaded() -> None:
     ancestry = steps[found.index("ancestry")]
     assert ancestry["if"] == "steps.check.outputs.index == 'pypi'"
     assert ancestry["run"] == 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main'
-    upload = steps[found.index("actions/upload-artifact")]
-    assert upload["with"] == {"name": "wheels", "path": "dist/*.whl", "if-no-files-found": "error"}
     # The example's wheel is never built here, so never uploaded; the check refuses a fourth wheel besides.
     assert "orchestrator" not in WORKFLOW.read_text()
     # Nothing but the build job builds: the upload jobs run no command of the tree's.
-    for index in ("testpypi", "pypi"):
-        assert [step for step in _steps(index) if "run" in step] == []
+    for job in UPLOADS:
+        assert [step for step in _steps(job) if "run" in step] == []
 
 
 def test_no_checkout_keeps_credentials() -> None:
@@ -270,7 +292,7 @@ def test_no_checkout_keeps_credentials() -> None:
 def test_the_release_is_the_wheels_and_the_changelogs_notes() -> None:
     steps = _steps("release")
     (download,) = _uses("release", "actions/download-artifact")
-    assert download["with"] == {"name": "wheels", "path": "dist/"}
+    assert download["with"] == {"pattern": "fylgja-*", "merge-multiple": True, "path": "dist/"}
     runs = [step["run"] for step in steps if "run" in step]
     assert runs == ["python3 -I scripts/publish.py notes > notes.md",
                     'gh release create "$GITHUB_REF_NAME" dist/*.whl --verify-tag --title "$GITHUB_REF_NAME" '

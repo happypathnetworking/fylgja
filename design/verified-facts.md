@@ -9206,6 +9206,25 @@ considerations", "Troubleshooting"), read as their source in `pypi/warehouse`'s
   `twine check` before upload), `skip-existing` (`false`), `attestations` (`true`), `user`,
   `password`, `verbose` and `print-hash`. Its README advises the build in a separate job with
   restricted privileges and `id-token: write` on the publishing job alone; it builds nothing.
+- **A pending publisher is unique without its project.** Read in `pypi/warehouse`'s source at
+  `main` `748d628` (`warehouse/oidc/models/github.py`, `warehouse/oidc/views.py`,
+  `warehouse/accounts/views.py`), by the plan's whole-branch review on 2026-11-15 and again from
+  its saved copies the same day; not exercised. `PendingGitHubPublisher`'s one unique constraint,
+  `_pending_github_oidc_publisher_uc`, is on `repository_name`, `repository_owner`,
+  `workflow_filename` and `environment`, not the project's name; the account's form refuses a
+  second with the same four ("This trusted publisher has already been registered"), and a
+  comment beside it says the constraint fires "when another pending publisher already targets
+  the same external identity under a different project name". A token's first upload finds one
+  pending publisher by its claims, creates that publisher's project and reifies it. So three new
+  projects from one workflow need three environments, one a project's, on each index.
+  *(2026-11-15)*
+- **The action uploads a directory, never one named file.** Read in `twine-upload.sh` and
+  `action.yml` at the commit of `v1.14.3`, anonymously, 2026-11-15: no input names a file;
+  `packages-dir` (default `dist`) is checked by `twine check <dir>/*` and uploaded by
+  `twine upload <dir>/*`, so a job uploads one wheel by downloading it alone into that
+  directory. `actions/download-artifact`'s `README.md` at `v8.0.2`: `pattern` matches artifacts'
+  names ("Ignored if name is specified"), and `merge-multiple: true` extracts every matched
+  artifact into `path` itself. *(2026-11-15)*
 
 ---
 

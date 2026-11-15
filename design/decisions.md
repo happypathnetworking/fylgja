@@ -132,6 +132,7 @@ already have been weighed.
 | [D-105](#d-105) | What 1.0 promises: semantic versions, and version 1 of the API and the formats held within major 1 | The project and its shape |
 | [D-106](#d-106) | The first release: one version, three wheels on PyPI, the packages in the core's wheel | Process and repository |
 | [D-107](#d-107) | User documentation is reference in `docs/`, held to the code by tests | Process and repository |
+| [D-108](#d-108) | uv manages the Python environment: one workspace, one committed lock, and `make venv` a locked sync | Process and repository |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -5019,6 +5020,7 @@ Superseded in part by [D-090](#d-090) on 2026-11-12: the base install is four li
 `referencing` among them.
 Superseded in part by [D-106](#d-106) on 2026-11-13 (phase 10): three distributions are published to PyPI,
 and each reader names the core with a range.
+Added to by [D-108](#d-108) on 2026-11-14 (phase 10): the image and the wheel check build and install with uv, and the `server` extra's pins are the statement `uv.lock` is checked against.
 
 #### Context
 
@@ -5328,6 +5330,7 @@ most 4,092 bytes on Infrahub 1.11.11, and a thread takes more than one comment
 **Status:** Accepted 2026-11-12 (phase 8's landing). Supersedes [D-084](#d-084) in one part:
 the base install is four libraries, not three. Details it in how the client follows a run and
 in where a distribution finds its formats. The rest stands.
+Superseded in part by [D-108](#d-108) on 2026-11-14 (phase 10): `core/.venv` is made by a locked `uv sync` of one workspace, not by pip.
 
 #### Context
 
@@ -7519,6 +7522,43 @@ compares the server's routes with the OpenAPI's paths as sets.
 - A command, an option or a route added without its line in a page fails the pure tier.
 - The architecture's table of routes and its line of commands stay, as design.
 - The example orchestrator's commands stay in `docs/integrating.md`, with the example.
+
+<a id="d-108"></a>
+### D-108 — uv manages the Python environment: one workspace, one committed lock, and `make venv` a locked sync
+
+**Status:** Accepted 2026-11-14 (phase 10), provisionally: its number is taken on the phase's integration branch and confirmed at the phase's landing. Supersedes [D-090](#d-090) in one part: `core/.venv` is a locked sync of one uv workspace, not pip's install of each distribution in turn. Adds to [D-084](#d-084): the image and the wheel check build and install with uv, and the `server` extra's exact pins stay the statement a lock is checked against. Details [D-083](#d-083): `infrahubctl`'s own environment is made by uv.
+
+#### Context
+
+`make venv` makes `core/.venv` by `python3 -m venv` and four `pip install -e` in turn. Nothing records the hundred and more versions beside the exact pins, so two venvs made days apart can differ, and nothing says which were tested. The image, `scripts/wheelcheck.py` and `infrahubctl`'s environment use pip too. Read on 2026-11-13 with uv 0.12.23 ([verified-facts.md](verified-facts.md), "uv 0.12.23"): one workspace over the four distributions resolves them at their pins; a locked sync into `core/.venv` makes the environment pip makes, the same versions and no pip; `uv build` runs each `setup.py`'s step, each wheel carrying its formats; lint and the pure tier pass on it, but for the tree's address test, since the lock names PyPI's two hosts 1,282 times.
+
+#### Options considered
+
+- **pip with a constraints file** from `pip freeze`. Rejected: a second file kept by hand, and nothing checks it against the pins it repeats.
+- **A lock for each distribution.** Rejected: the four share one environment ([D-090](#d-090)), and four locks would have to agree with nothing to check them.
+- **The lock the statement, the extras turned to ranges.** Rejected: the image, the wheel check and every integrator install from the wheel's metadata, which a lock never reaches ([D-084](#d-084)).
+- **The image installed from the lock.** Not taken: its context would need the lock and every member's `pyproject.toml`, and the image would stop being what `fylgja-core[server]` installs.
+- **One uv workspace and one committed lock, the members' pins the statement.** Chosen.
+
+#### Decision
+
+- **The workspace.** A root `pyproject.toml`, no distribution, holds uv's tables alone: the members `core`, `readers/infrahub`, `readers/netbox` and `orchestrator`; the three the others depend on as workspace sources; `required-version = "==0.12.23"`; and `python-downloads = "never"`. `uv.lock` at the root is committed. `infrahub/` and `netbox/` keep their `pyproject.toml`, pytest's settings alone, and are no members.
+- **`make venv` is `uv sync --locked --all-packages --all-extras --python python3`** into `core/.venv`, which `UV_PROJECT_ENVIRONMENT` names: every member editable, with every extra, at the lock's versions, on the host's Python. A lock that disagrees with a member's `pyproject.toml` is refused, and nothing not in the lock is kept. A pin moves in its `pyproject.toml` and in `uv.lock` (`uv lock`) in one commit.
+- **The pins.** Each member's exact pins stay the statement, and the lock is checked against them by `--locked` and by a pure test. The lock adds the versions nothing pins, for development and the tiers. The two-week rule binds the pins and floors, as before.
+- **The image's build stage** copies uv from its image, pinned by digest, builds the wheel by `uv build` and installs it with its `server` extra by `uv pip install --compile-bytecode`, resolved as an integrator's install is. The final stage holds no uv.
+- **The wheel check** makes each empty environment by `uv venv`, builds each wheel by `uv build` and installs by `uv pip install`, the base alone at its floors by a constraints file.
+- **`infrahubctl`** keeps its environment under `local/infrahub/` ([D-083](#d-083)), made by `uv venv` and `uv pip install` at the SDK's pin.
+- **CI** installs uv by Astral's `setup-uv` action at the tree's version. The root's `required-version`, the `Dockerfile`'s uv and CI's are one version, held by tests.
+- **PyPI is named in `uv.lock` alone**, the public reference a lock is.
+
+#### Consequences
+
+- A contributor needs uv 0.12.23 on the PATH beside Python 3.14 ([CONTRIBUTING.md](../CONTRIBUTING.md#tooling)); another uv refuses to run in the tree. Moving uv is a change of its own, in three places.
+- A fact stored twice ([Constitution](constitution.md#gates)): each pin, in its `pyproject.toml` and in the lock; uv's version, in three files. Each pair is checked, by uv or by a test.
+- The dev pins, written in four `pyproject.toml`s, must agree, or `uv lock` cannot resolve.
+- `core/.venv` holds no pip, and a library installed into it by hand goes at the next `make venv`.
+- A lock written through another index than PyPI names its host, and fails the pure tier.
+- The image and a user's install still resolve the versions nothing pins as they install. Nothing the tree runs calls pip; a user installs the published wheels with the installer of their choice.
 
 ## Parked
 

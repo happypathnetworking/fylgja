@@ -1724,9 +1724,9 @@ is read when its publisher is registered.
 Plan 2 follows 1, for the pool's setting; 3 may be written beside 1 and 2; 4 follows 2 and
 3; 5 follows all. Live and demonstration runs are one at a time on the development host,
 each source stopped for the live tier and the suite as now. Plans 1 and 2 are built once
-phase 9 has landed (the maintainer, 2026-11-13). The environment becomes `uv`'s by a change
-of its own, with an entry of its own, before plan 3, which edits the files that change
-rewrites.
+phase 9 has landed (the maintainer, 2026-11-13). The environment becomes `uv`'s by a plan
+of its own with its own entry, D-108, built after plan 2 and before plan 3, which edits the files
+that plan rewrites.
 
 **The phase is done** when the maintainer has done this, at the release candidate: from a
 fresh clone of the candidate's branch, on the development host with its preconditions met,

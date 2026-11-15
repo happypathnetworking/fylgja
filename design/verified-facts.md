@@ -9173,6 +9173,40 @@ interpolates `${A:-unset}`, `${B:-unset}` and `${C:-unset}`; no container starte
   take it when a publisher is registered, its rule against names like another's among the
   reasons it may not, was not read. *(2026-11-13)*
 
+Read on 2026-11-15, as documented and not exercised, by anonymous requests and no account: PyPI's
+trusted-publisher pages ("Adding a Trusted Publisher to an Existing PyPI Project", "Creating a PyPI
+Project with a Trusted Publisher", "Publishing with a Trusted Publisher", "Security model and
+considerations", "Troubleshooting"), read as their source in `pypi/warehouse`'s
+`docs/user/trusted-publishers/` on its `main`; and `pypa/gh-action-pypi-publish`'s `README.md` and
+`action.yml` at the commit of `v1.14.3` (below). Nothing was registered, uploaded or run.
+*(2026-11-15)*
+
+- **A GitHub publisher's fields.** The repository's owner, the repository's name and the file
+  name of the workflow allowed to upload are required; a GitHub environment's name is optional
+  and "strongly recommended", for its "manual approval on each run". A **pending** publisher, made
+  from the account's "Publishing" page since the project does not exist, takes the same fields
+  and the PyPI project's name; it creates the project on its first use and becomes an ordinary
+  publisher. It reserves no name until used, and is invalidated if another user registers the
+  name first. TestPyPI is named as an index the action publishes to by trusted publishing once a
+  publisher is configured there (`repository-url: https://test.pypi.org/legacy/`, an OIDC
+  audience `testpypi` where PyPI's is `pypi`); TestPyPI's own form was not read apart.
+- **What it asks of the workflow.** `id-token: write` on the uploading job, "mandatory for
+  Trusted Publishing", at the job level "strongly recommended" over the workflow's; no username,
+  password or token. A reusable workflow cannot be the trusted workflow, so the job that uploads
+  is in the workflow the publisher names. The triggers `pull_request_target` and `issue_comment`
+  are refused. A token whose environment, owner, repository or workflow file differs from the
+  publisher's is refused (`invalid-publisher`); an upload whose metadata names another project
+  than a pending publisher's is refused with "Non-user identities cannot create new projects".
+- **Attestations** are made and uploaded by default when the action publishes by trusted
+  publishing (`attestations: true`), signed by Sigstore with the same OIDC identity; the pages
+  ask nothing more of the workflow for them.
+- **The action at `v1.14.3`** is a composite action over a Docker image, usable "only from
+  within GNU/Linux based jobs". Its inputs: `repository-url` (PyPI's `upload.pypi.org/legacy/` over
+  HTTPS, the default its older alias gives), `packages-dir` (`dist`), `verify-metadata` (`true`, a
+  `twine check` before upload), `skip-existing` (`false`), `attestations` (`true`), `user`,
+  `password`, `verbose` and `print-hash`. Its README advises the build in a separate job with
+  restricted privileges and `id-token: write` on the publishing job alone; it builds nothing.
+
 ---
 
 ## GitHub Actions, `ubuntu-26.04`
@@ -9184,6 +9218,52 @@ interpolates `${A:-unset}`, `${B:-unset}` and `${C:-unset}`; no container starte
   private one the API answers `Upgrade to GitHub Pro or make this repository public`. No
   setting disables pull requests; interaction limits last at most six months and cover
   issues too. *(2026-10-07)*
+
+Read on 2026-11-15, as documented and not exercised, by anonymous requests: GitHub's pages
+"Managing environments for deployment", "Deployments and environments", "Workflow syntax for
+GitHub Actions" and "Using GitHub CLI in workflows" on docs.github.com; each action's `action.yml`
+and `README.md` at the commit named below; its releases from the API's `releases` list, and the
+commit each tag names by `git ls-remote`; and `gh release create --help` of the development host's
+gh 2.46.0, the runner's gh not read. No environment, setting or run was made. *(2026-11-15)*
+
+- **Environments and the plan.** On GitHub Free an environment can be configured for a public
+  repository alone; Pro and Team configure them for private ones. On Free, Pro and Team, required
+  reviewers and wait timers are for public repositories alone; deployment branches and tags are
+  for every public repository, and for private ones on Pro or Team. Up to six people or teams may
+  be required reviewers, and one approval lets the job proceed. "Prevent self-review" stops the
+  user who started a run approving it; off, the pages do not say outright that that user may.
+  Deployment rules are name patterns for branches or for tags, matched against the run's
+  `GITHUB_REF`, `*` not matching `/`. Every protection rule passes before a job naming the
+  environment is sent to a runner. Running a workflow that names an environment that does not
+  exist makes one by that name, with no protection rule and no secret. Secrets are optional.
+- **Workflow syntax.** Where `permissions` names any scope, every scope it does not name is
+  `none`; `id-token` takes `write` or `none` and lets an action fetch an OIDC token; `contents:
+  write` lets one make a release. A `push` filter that names tags alone runs on no branch's push.
+  A job's `outputs` map its steps' outputs for jobs that `needs` it. The GitHub CLI is
+  preinstalled on GitHub-hosted runners and reads its token from `GH_TOKEN` (the page's example
+  gives it `secrets.GITHUB_TOKEN`); `gh release create --verify-tag` aborts where the tag is not
+  already in the remote repository, `--notes-file` reads the notes from a file.
+- **Artifacts.** `actions/upload-artifact` at `v7.0.2` (`node24`) takes `name` (`artifact`),
+  `path` (required) and `if-no-files-found` (`warn`), among others; past a path's first wildcard
+  the hierarchy is kept, so `dist/*.whl` holds the wheels at the artifact's root.
+  `actions/download-artifact` at `v8.0.2` (`node24`), given `name`, extracts that artifact into
+  `path` with no subdirectory.
+- **The commits the publish workflow pins**, each its release's tag at least two weeks before
+  2026-11-14, the date the plan's two weeks are counted from; the lightweight tags name the
+  commit, and `v1.14.3`, annotated, names `aef6c9b6…` and the commit by `^{}`:
+
+  | Action | Release | Published | Commit |
+  | --- | --- | --- | --- |
+  | `actions/checkout` | `v5.1.0` | 2026-07-20 | `fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09` |
+  | `actions/setup-python` | `v6.3.0` | 2026-06-24 | `ece7cb06caefa5fff74198d8649806c4678c61a1` |
+  | `astral-sh/setup-uv` | `v10.3.3` | 2026-10-28 | `68559e99cc807c1eb7e9238fd43a15bba460eec2` |
+  | `actions/upload-artifact` | `v7.0.2` | 2026-10-07 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
+  | `actions/download-artifact` | `v8.0.2` | 2026-10-07 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` |
+  | `pypa/gh-action-pypi-publish` | `v1.14.3` | 2026-10-20 | `7245906fb61fa33a13554f9d5fb856fe61758086` |
+
+  `checkout` and `setup-python` are the latest releases of the majors `ci.yml` names (`v5`, `v6`);
+  later majors were released (`checkout` `v7.0.1` and `setup-python` `v7.1.0`, both more than two
+  weeks old) and not read.
 
 ---
 

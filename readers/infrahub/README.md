@@ -38,11 +38,15 @@ does not own, and an Infrahub upgrade is a procedure, below, not a rewrite.
 
 It needs Python 3.14, `fylgja-core`'s base install, the model package and the client library
 ([D-084](../../design/decisions.md#d-084)), and httpx at the core's range; never the core's
-`server` extra. Nothing is published: each wheel is built from this repository, the reader's
-from `readers/infrahub/` with `formats/` beside it, since its `setup.py` copies the reader's
-format into the wheel, and the core's from `core/`. Install the two together into the
-platform's environment. In the tree, `make venv` installs it editable into `core/.venv`, with
-its console script `core/.venv/bin/fylgja-infrahub`.
+`server` extra. From 1.0.0 the reader is published to PyPI as the wheel `fylgja-infrahub`, at the
+core's version and requiring `fylgja-core` at that version or later within its major
+([D-106](../../design/decisions.md#d-106)), so that installing it into the platform's environment
+brings the core's base install with it. `make wheels` builds the published wheels from this
+repository: the reader's from `readers/infrahub/` with `formats/` beside it, since its
+`setup.py` copies the reader's format into the wheel, and the core's from `core/`; install the
+two together. `fylgja-infrahub --version` prints the version and the commit it was built at. In
+the tree, `make venv` installs it editable into `core/.venv`, with its console script
+`core/.venv/bin/fylgja-infrahub`.
 
 The kind `FylgjaProbe`, [`schema/fylgja-probe.yml`](schema/fylgja-probe.yml), is loaded into
 Infrahub by whoever runs it, and only a reader document that asks for probes needs it

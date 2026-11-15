@@ -2098,6 +2098,53 @@ build.
   namespaces`, and the deployed core left as it runs, at one replica, no core started on the host; its scale is the
   maintainer's word.
 
+## Releasing
+
+A release publishes the three wheels, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, at
+one version, never the example's ([D-106](design/decisions.md#d-106)). Every act below but the
+workflow's own is the maintainer's alone, each on the maintainer's word: no one else makes an
+environment, registers a publisher, tags, pushes a tag or approves an upload.
+
+**Before the first upload to an index**, once for each:
+
+- **Two GitHub environments**, `testpypi` and `pypi`, made by hand before the first tag is
+  pushed, since a workflow that names an environment that does not exist makes it with no
+  protection rule. Each has the maintainer as its required reviewer, "Prevent self-review" off
+  (the maintainer pushes the tag and approves its upload), deployment tags `v*` alone, and no
+  secret. On GitHub's Free plan an environment and its required reviewers need the repository
+  public (design/verified-facts.md, "GitHub Actions, `ubuntu-26.04`").
+- **Three pending publishers** on TestPyPI, before a candidate, and three on PyPI, before a
+  release, each from an account with two-factor authentication: PyPI Project Name
+  `fylgja-core`, `fylgja-infrahub` or `fylgja-netbox`; Owner `happypathnetworking`; Repository
+  name `fylgja`; Workflow name `publish.yml`; Environment name `testpypi` on TestPyPI and `pypi`
+  on PyPI. A pending publisher reserves no name until it is used.
+
+**A release** is then:
+
+1. **One commit** sets `VERSION` and dates `CHANGELOG.md`'s head: `VERSION` the version,
+   `X.Y.ZrcN` for a candidate or `X.Y.Z` for a release, the readers' `fylgja-core` floor the same
+   version, and the head `## <version> - <YYYY-MM-DD>`, with its known limits. A release's commit
+   is on `main`.
+2. **The tag** `v<version>` on that commit, pushed. Nothing else starts the workflow: a branch's
+   push and a pull request do not.
+3. **`.github/workflows/publish.yml`** runs. Its job `build` runs `make venv`, `make lint`,
+   `make test` and `make wheelcheck`, builds the wheels by `make wheels`, and runs
+   `scripts/publish.py check` against the tag and its commit, which refuses a tag that is not
+   `v` + `VERSION`, a changelog's head that is another version or undated, and any wheel but the
+   three at the tag's commit, and names the index by the version's form; a release's commit must
+   be an ancestor of `main`. Its job `testpypi` (a candidate) or `pypi` (a release) then waits on
+   its environment.
+4. **The approval.** The maintainer approves the waiting job, which uploads the wheels by trusted
+   publishing: no token is stored anywhere, and only the two upload jobs may ask GitHub for an
+   identity token. A version uploaded to an index can never be uploaded again.
+5. **For a release**, the job `release` makes the GitHub release, titled by the tag, carrying the
+   same wheels and the changelog's head section. A candidate has none.
+
+Each action the workflow uses is pinned by the commit of a release at least two weeks old, the
+release named beside it, as CI's `setup-uv` is. What PyPI and GitHub require of the workflow was
+read from their documentation (design/verified-facts.md, "PyPI and TestPyPI", "GitHub Actions,
+`ubuntu-26.04`") and is first exercised by a candidate's tag.
+
 ## Conventions
 
 - **Platforms are data.** A platform is added by writing a platform package under `psp/`,

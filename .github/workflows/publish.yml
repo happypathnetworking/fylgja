@@ -1,0 +1,109 @@
+name: publish
+
+# A version's tag publishes the three wheels (D-106): `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, never the
+# example's. A tag `vX.Y.ZrcN` uploads to TestPyPI and `vX.Y.Z` to PyPI, each by trusted publishing, so no token is
+# stored anywhere, and each upload waits on its GitHub environment, whose approval is the maintainer's; a release's
+# GitHub release follows its upload. Nothing is uploaded before the gates, the wheel check and
+# `scripts/publish.py check`, which refuses a tag that is not `v` + VERSION, have passed. Each action is pinned by the
+# commit of its release, named beside it (CONTRIBUTING.md, "Releasing").
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      index: ${{ steps.check.outputs.index }}
+    steps:
+      # The whole history, so that a release's commit can be found on main; no credential is left in the checkout.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.14'
+      # CI's own step, at the same commit and uv's version (ci.yml).
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.12.23'
+      - run: make venv
+      - run: make lint
+      - run: make test
+      - run: make wheelcheck
+      # Each wheel holds the commit make reads from git, the tag's on this checkout, `-dirty` where the gates left the
+      # tree changed; the check below refuses any but the tag's.
+      - run: make wheels
+      # The tag, VERSION, CHANGELOG.md's head and the three wheels held to one another; it names the index.
+      - id: check
+        run: python3 -I scripts/publish.py check --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" --dist dist --output "$GITHUB_OUTPUT"
+      # A release's tag sits on main.
+      - if: steps.check.outputs.index == 'pypi'
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels
+          path: dist/*.whl
+          if-no-files-found: error
+
+  # A candidate's wheels to TestPyPI, once the maintainer approves the environment `testpypi`.
+  testpypi:
+    needs: build
+    if: needs.build.outputs.index == 'testpypi'
+    runs-on: ubuntu-26.04
+    environment:
+      name: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  # A release's wheels to PyPI, once the maintainer approves the environment `pypi`.
+  pypi:
+    needs: build
+    if: needs.build.outputs.index == 'pypi'
+    runs-on: ubuntu-26.04
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  # A release's GitHub release, carrying the same wheels and the changelog's head section, after its upload to PyPI. A
+  # candidate has none.
+  release:
+    needs: [build, pypi]
+    if: needs.build.outputs.index == 'pypi'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels
+          path: dist/
+      - run: python3 -I scripts/publish.py notes > notes.md
+      # GitHub's own token for this run, which `contents: write` lets make the release; no other token is given.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.whl --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md

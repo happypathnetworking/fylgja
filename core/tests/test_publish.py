@@ -1,22 +1,27 @@
 """The publish check (D-106): `scripts/publish.py` holds the tag, `VERSION`, the changelog's head and `dist/`'s three
 wheels to one another before anything is uploaded, naming every fault in one pass, and performs no upload itself. The
 script is loaded by path, as `test_wheelcheck.py` loads its own; the wheels are zip files made under `tmp_path` holding
-a `METADATA` and a `COMMIT`."""
+a `METADATA` and a `COMMIT`. The publish workflow, `.github/workflows/publish.yml`, is read as a file: it is never run
+here, and its first run is a candidate's tag."""
 
 from __future__ import annotations
 
 import importlib.util
+import re
 import zipfile
 from functools import cache
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "publish.py"
 COMMIT = "a" * 40
 OTHER = "b" * 40
+WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PACKAGES = {"fylgja_core": "fylgja-core", "fylgja_infrahub": "fylgja-infrahub", "fylgja_netbox": "fylgja-netbox"}
 
 
@@ -135,3 +140,137 @@ def test_the_index_is_written_for_the_workflow(tmp_path: Path, capsys: pytest.Ca
     assert status == 0
     assert capsys.readouterr().out == "index=testpypi\n"
     assert out.read_text() == "earlier=1\nindex=testpypi\n"
+
+
+@cache
+def _workflow() -> dict[Any, Any]:
+    loaded: dict[Any, Any] = yaml.safe_load(WORKFLOW.read_text())
+    return loaded
+
+
+def _trigger() -> Any:
+    """The workflow's `on`, which PyYAML reads as the key `True`."""
+    workflow = _workflow()
+    return workflow["on"] if "on" in workflow else workflow[True]
+
+
+def _steps(job: str) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = _workflow()["jobs"][job]["steps"]
+    return steps
+
+
+def _uses(job: str, action: str) -> list[dict[str, Any]]:
+    return [step for step in _steps(job) if step.get("uses", "").startswith(action + "@")]
+
+
+def test_the_workflow_runs_on_a_version_tag_alone() -> None:
+    assert _workflow()["name"] == "publish"
+    assert _trigger() == {"push": {"tags": ["v*"]}}
+
+
+def test_only_the_upload_jobs_may_ask_for_an_identity_token() -> None:
+    workflow = _workflow()
+    assert workflow["permissions"] == {"contents": "read"}
+    assert {job: spec["permissions"] for job, spec in workflow["jobs"].items()} == {
+        "build": {"contents": "read"},
+        "testpypi": {"id-token": "write"},
+        "pypi": {"id-token": "write"},
+        "release": {"contents": "write"},
+    }
+
+
+def test_each_upload_waits_for_its_own_environment_and_index() -> None:
+    jobs = _workflow()["jobs"]
+    assert jobs["build"]["outputs"] == {"index": "${{ steps.check.outputs.index }}"}
+    assert "environment" not in jobs["build"] and "environment" not in jobs["release"]
+    for index in ("testpypi", "pypi"):
+        assert jobs[index]["needs"] == "build"
+        assert jobs[index]["if"] == f"needs.build.outputs.index == '{index}'"
+        assert jobs[index]["environment"] == {"name": index}
+    assert jobs["release"]["needs"] == ["build", "pypi"]
+    assert jobs["release"]["if"] == "needs.build.outputs.index == 'pypi'"
+
+
+def test_the_upload_is_trusted_publishing_with_no_stored_token() -> None:
+    for index, url in (("testpypi", {"repository-url": "https://test.pypi.org/legacy/"}), ("pypi", None)):
+        (download,) = _uses(index, "actions/download-artifact")
+        assert download["with"] == {"name": "wheels", "path": "dist/"}
+        (upload,) = _uses(index, "pypa/gh-action-pypi-publish")
+        assert upload.get("with") == url
+        assert _steps(index).index(download) < _steps(index).index(upload)
+    text = WORKFLOW.read_text()
+    assert "secrets." not in text
+    assert not re.search(r"password|(?<![\w-])token:|workflow_dispatch|pull_request", text)
+    # GitHub's own token, `github.token`, is given to the release job's `gh` alone, never to an upload job.
+    given = [(job, step.get("env")) for job in _workflow()["jobs"] for step in _steps(job)
+             if "github.token" in str(step)]
+    assert given == [("release", {"GH_TOKEN": "${{ github.token }}"})]
+
+
+def test_every_action_is_pinned_by_a_commit() -> None:
+    text = WORKFLOW.read_text()
+    lines = [line.strip() for line in text.splitlines() if re.match(r"\s*(- )?uses:", line)]
+    assert len(lines) == sum(1 for job in _workflow()["jobs"] for step in _steps(job) if "uses" in step) >= 9
+    for line in lines:
+        assert re.fullmatch(r"(- )?uses: [\w.-]+/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+", line), line
+    # The tooling is the step CI's own runs, at the same commit.
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    (setup,) = _uses("build", "astral-sh/setup-uv")
+    assert f"uses: {setup['uses']} #" in ci
+
+
+def test_the_build_gates_and_checks_before_anything_is_uploaded() -> None:
+    steps = _steps("build")
+    assert _workflow()["jobs"]["build"]["runs-on"] == "ubuntu-26.04"
+    uses = [step.get("uses", "").split("@")[0] for step in steps]
+    runs = [step.get("run", "") for step in steps]
+    (python,) = [step for step in steps if step.get("uses", "").startswith("actions/setup-python@")]
+    assert python["with"] == {"python-version": "3.14"}
+    (setup,) = _uses("build", "astral-sh/setup-uv")
+    ci = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
+    (ci_setup,) = [step for step in ci["jobs"]["lint-and-test"]["steps"] if "setup-uv" in step.get("uses", "")]
+    assert setup["with"] == ci_setup["with"]
+    order = ["actions/checkout", "actions/setup-python", "astral-sh/setup-uv", "make venv", "make lint", "make test",
+             "make wheelcheck", "make wheels", "check", "ancestry", "actions/upload-artifact"]
+    found = []
+    for i, step in enumerate(steps):
+        if step.get("id") == "check":
+            found.append("check")
+        elif "merge-base" in runs[i]:
+            found.append("ancestry")
+        else:
+            found.append(uses[i] or runs[i])
+    assert found == order
+    check = steps[found.index("check")]
+    assert check["run"] == ('python3 -I scripts/publish.py check --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" '
+                            '--dist dist --output "$GITHUB_OUTPUT"')
+    ancestry = steps[found.index("ancestry")]
+    assert ancestry["if"] == "steps.check.outputs.index == 'pypi'"
+    assert ancestry["run"] == 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main'
+    upload = steps[found.index("actions/upload-artifact")]
+    assert upload["with"] == {"name": "wheels", "path": "dist/*.whl", "if-no-files-found": "error"}
+    # The example's wheel is never built here, so never uploaded; the check refuses a fourth wheel besides.
+    assert "orchestrator" not in WORKFLOW.read_text()
+    # Nothing but the build job builds: the upload jobs run no command of the tree's.
+    for index in ("testpypi", "pypi"):
+        assert [step for step in _steps(index) if "run" in step] == []
+
+
+def test_no_checkout_keeps_credentials() -> None:
+    checkouts = [(job, step) for job in _workflow()["jobs"] for step in _steps(job)
+                 if step.get("uses", "").startswith("actions/checkout@")]
+    assert {job for job, _ in checkouts} == {"build", "release"}
+    for job, step in checkouts:
+        assert step["with"]["persist-credentials"] is False, job
+    build = [step for job, step in checkouts if job == "build"]
+    assert build[0]["with"] == {"fetch-depth": 0, "persist-credentials": False}
+
+
+def test_the_release_is_the_wheels_and_the_changelogs_notes() -> None:
+    steps = _steps("release")
+    (download,) = _uses("release", "actions/download-artifact")
+    assert download["with"] == {"name": "wheels", "path": "dist/"}
+    runs = [step["run"] for step in steps if "run" in step]
+    assert runs == ["python3 -I scripts/publish.py notes > notes.md",
+                    'gh release create "$GITHUB_REF_NAME" dist/*.whl --verify-tag --title "$GITHUB_REF_NAME" '
+                    "--notes-file notes.md"]

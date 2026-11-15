@@ -310,24 +310,9 @@ holds is not an exit: one INFO line a holder, and no socket bound. Its exit stat
 | 1 | the store is held by another core, an object store cannot be opened (its endpoint unreachable, or refusing), the Lease is lost (`lease.lost`), or the application failed to start |
 | 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, or set to what another rules out (an `s3://` store without `FYLGJA_LEASE` or with the `containerlab` driver, one of the TLS pair without the other); a certificate or key that does not load (`FYLGJA_TLS_CERT`); a key that is encrypted (`FYLGJA_TLS_KEY`); `FYLGJA_LEASE` set with no cluster to reach, or a Lease the service account may not read or write; a CA bundle that does not load (`FYLGJA_S3_CA`); an endpoint that fails the store's proof (`FYLGJA_S3_ENDPOINT`, `store.unconditional`); Python run optimised (`-O` or `PYTHONOPTIMIZE`, `server.optimised`); a package refused, a token file it cannot read, a cluster the clabernetes driver cannot reach (`KUBECONFIG` not set, or not a kubeconfig, off the cluster), an address it cannot listen on (`FYLGJA_LISTEN`), or the server's libraries not installed (`server.extra.missing`) |
 
-**The thin CLI** reads `FYLGJA_API_ADDRESS` (the server's `host:port` or URL) and
-`FYLGJA_API_TOKEN`, and `FYLGJA_API_CA` where it is set: the CA file an `https://` address is
-verified against, the system's trust when it is not ([D-063](design/decisions.md#d-063)). A
-certificate not trusted is one line saying so and one naming `FYLGJA_API_CA`, and exits 2. In a
-shell of its own, load the environment and point the CLI at the server's listen address:
-
-```sh
-set -a; . local/.env; set +a
-export FYLGJA_API_ADDRESS=127.0.0.1:7650   # FYLGJA_LISTEN's value
-core/.venv/bin/fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json
-core/.venv/bin/fylgja-core twin show demo
-core/.venv/bin/fylgja-core twin destroy demo
-```
-
-A command that waits rides through a restart of the server: its watch reconnects for up to about
-three minutes, each try given 5 s to connect, saying so once on stderr, and then exits 2. A
-`twin create` already waiting rides through; a `run watch` begun while the server is away exits 2
-at once, since its version read is made once, before any stream.
+**The thin CLI**, `fylgja-core`, is described in [`docs/cli.md`](docs/cli.md); on the development
+host it is `core/.venv/bin/fylgja-core`, run in a shell that has loaded `local/.env` and set
+`FYLGJA_API_ADDRESS` to the server's listen address.
 
 ## Running the core on a cluster
 

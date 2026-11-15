@@ -8,7 +8,7 @@ import re
 import shlex
 
 import pytest
-from pages import USER_PAGES, blocks, flags, options, rows, section, targets, text
+from pages import DOCS, ROOT, USER_PAGES, blocks, flags, options, rows, section, targets, text
 
 from fylgja_core import cli
 
@@ -96,3 +96,32 @@ def test_a_fence_is_found_indented_and_longer_and_closed_only_by_one_as_long() -
     assert blocks(page) == [("sh", ["```", "# not a heading"]), ("console", ["$ x"])]
     assert section(page, "# T") == page.splitlines()[1:]
     assert section(page, "## Next") == ["text"]
+
+
+def _relative_links(page: str) -> set[str]:
+    """The relative link targets of a page, an anchor and a query cut off, a link inside code left out."""
+    body = text(page)
+    body = re.sub(r"^(```|~~~).*?^\1[^\n]*$", "", body, flags=re.M | re.S)
+    body = re.sub(r"`[^`\n]*`", "", body)
+    targets_ = re.findall(r"\]\(([^)\s]+)", body)
+    return {t.split("#")[0] for t in targets_ if not re.match(r"[a-z][a-z0-9+.-]*:", t) and t.split("#")[0]}
+
+
+def test_the_index_links_every_page_under_docs() -> None:
+    pages = {path.name for path in DOCS.glob("*.md")} - {"README.md"}
+    assert pages, "the parse is blind"
+    assert pages <= _relative_links("docs/README.md")
+
+
+def test_the_index_links_what_it_lists_that_exists() -> None:
+    links = _relative_links("docs/README.md")
+    assert links, "the parse is blind"
+    for link in links:
+        assert (DOCS / link).resolve().exists(), link
+        assert (DOCS / link).resolve().is_relative_to(ROOT)
+
+
+def test_the_readme_links_the_index_and_each_page_a_user_starts_from() -> None:
+    links = _relative_links("README.md")
+    assert links, "the parse is blind"
+    assert {"docs/README.md", "docs/installing.md", "docs/demonstrations.md"} <= links

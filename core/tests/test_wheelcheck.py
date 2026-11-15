@@ -372,7 +372,8 @@ def _published_fields(module: ModuleType, core: bool) -> list[str]:
 
 def test_a_published_wheel_states_the_projects_metadata_and_any_other_is_named(tmp_path: Path) -> None:
     module = _script()
-    readme = (ROOT / "README.md").read_text()
+    readme = module.rewritten_readme()
+    assert readme != (ROOT / "README.md").read_text(), "the parse is blind"
     good = _published_fields(module, True)
     module.published_metadata(_described(tmp_path, good, readme), "tree/main/docs", core=True)
     module.published_metadata(_described(tmp_path, _published_fields(module, False)), "tree/main/readers/netbox")

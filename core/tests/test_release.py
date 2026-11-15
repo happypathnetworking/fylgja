@@ -291,6 +291,37 @@ def test_each_published_distribution_states_its_metadata(member: str) -> None:
         assert found["readme"] == "README.md"
 
 
+def test_the_long_description_links_into_the_tagged_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module, _ = load_setup("core", monkeypatch)
+    base = "https://github.com/happypathnetworking/fylgja/blob/v1.0.0rc1/"
+    assert module.README_BASE.format(version="1.0.0rc1") == base
+    (tmp_path / "README.md").write_text(
+        "# T\n\n[a](docs/x.md#y) and [b](#y) and [c](https://example.org/z) and [d](docs/w.md)\n\n"
+        "```sh\n[e](docs/in-fence.md)\n```\n\nand `[f](docs/in-code.md)` and ![i](docs/i.png)\n"
+    )
+    made = module.readme(tmp_path, "1.0.0rc1")
+    assert made == (
+        "# T\n\n"
+        f"[a]({base}docs/x.md#y) and [b]({base}README.md#y) and [c](https://example.org/z) and "
+        f"[d]({base}docs/w.md)\n\n"
+        "```sh\n[e](docs/in-fence.md)\n```\n\n"
+        f"and `[f](docs/in-code.md)` and ![i]({base}docs/i.png)\n"
+    )
+    # the repository's own README: no relative link is left, and each rewritten path is a file of the tree
+    real = module.readme(ROOT, VERSION)
+    body = re.sub(r"^(```|~~~).*?^\1[^\n]*$", "", real, flags=re.M | re.S)
+    body = re.sub(r"`[^`\n]*`", "", body)
+    found = re.findall(r"\]\(([^)\s]+)", body)
+    assert found, "the parse is blind"
+    prefix = module.README_BASE.format(version=VERSION)
+    for target in found:
+        assert re.match(r"[a-z][a-z0-9+.-]*:", target), target
+        if target.startswith(prefix):
+            assert (ROOT / target.removeprefix(prefix).split("#")[0]).is_file(), target
+
+
 def test_the_example_is_marked_never_to_be_uploaded() -> None:
     found = project("orchestrator")
     assert found["classifiers"] == ["Private :: Do Not Upload"]
@@ -308,7 +339,7 @@ def test_each_published_build_carries_the_licence(
     step.run()
     assert (tmp_path / "lib" / PACKAGES[member] / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
     if member == "core":
-        assert given[0]["long_description"] == (ROOT / "README.md").read_text()
+        assert given[0]["long_description"] == module.readme(ROOT, VERSION)
         assert given[0]["long_description_content_type"] == "text/markdown"
     else:
         assert "long_description" not in given[0]

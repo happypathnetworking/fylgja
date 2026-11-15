@@ -10,7 +10,36 @@
 How to set up, build, test and change fylgja-core. The project's governance and design live
 in [`design/`](design/): the system in [architecture.md](design/architecture.md), the rules
 every change keeps in the [constitution](design/constitution.md), and the reasons in the
-[decision log](design/decisions.md). User-facing documentation lives in [`docs/`](docs/).
+[decision log](design/decisions.md). User documentation lives in [`docs/`](docs/README.md).
+Read in this order: architecture, constitution and decisions, where rejected alternatives live
+and are to be checked before one is proposed; then this page; then the
+[glossary](docs/glossary.md) when a term is new, and [verified-facts.md](design/verified-facts.md),
+which records what has been verified against containerlab, clabernetes, Infrahub, NetBox, Prefect
+and the network operating systems, with versions and dates. [integrating.md](docs/integrating.md)
+shows how to join Fylgja to a source of truth and a platform of your own, walked through the
+example orchestrator.
+
+This repository, **fylgja-core**, holds three pieces: the core, which turns a blueprint into a
+twin and knows no source of truth ([D-003](design/decisions.md#d-003)); a reader for each source
+of truth, [Infrahub](readers/infrahub/README.md) and [NetBox](readers/netbox/README.md); and the
+example orchestrator under `orchestrator/` ([D-081](design/decisions.md#d-081)). It is a rebuild,
+in Python, of a prototype with a Go core
+([happypathnetworking/fylgja-prototype](https://github.com/happypathnetworking/fylgja-prototype)),
+on a clean break in formats ([D-001](design/decisions.md#d-001),
+[D-002](design/decisions.md#d-002)); the prototype is archived, and the design documents cite it
+as history. [design/core.md](design/core.md) says which phases are done, and its "Sequence" what
+each built and what it left. The core's drivers are local containerlab, for development, and
+[clabernetes](https://github.com/clabernetes/clabernetes) on Kubernetes, for production.
+
+## Setting up
+
+You need Python 3.14 and uv 0.12.23.
+
+```sh
+make venv     # core/.venv, synced from uv.lock
+make lint     # ruff and mypy (strict)
+make test     # the pure tier: no infrastructure
+```
 
 ## How a change is made
 

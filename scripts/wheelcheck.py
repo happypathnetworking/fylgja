@@ -709,12 +709,41 @@ def held_commit(wheel: Path, package: str, commit: str) -> None:
         raise Failure(f"{wheel.name}'s {package}/COMMIT says {said.strip()!r}, and the tree is at {commit}")
 
 
+def rewritten_readme() -> str:
+    """The root `README.md` as the core's build gives it as the description: `readme` of `core/setup.py`, loaded over
+    a stand-in for the two names it takes from setuptools, at the tree's version."""
+    import importlib.util
+    import types
+
+    setuptools = types.ModuleType("setuptools")
+    vars(setuptools)["setup"] = lambda **kw: None
+    command = types.ModuleType("setuptools.command.build_py")
+    vars(command)["build_py"] = object
+    names = ("setuptools", "setuptools.command", "setuptools.command.build_py")
+    saved = {name: sys.modules.get(name) for name in names}
+    sys.modules.update({"setuptools": setuptools, "setuptools.command": types.ModuleType("setuptools.command"),
+                        "setuptools.command.build_py": command})
+    try:
+        spec = importlib.util.spec_from_file_location("core_setup_for_readme", ROOT / "core" / "setup.py")
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        found: str = module.readme(ROOT, tree_version())
+    finally:
+        for name, old in saved.items():
+            if old is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = old
+    return found
+
+
 def published_metadata(wheel: Path, documentation: str, core: bool = False) -> None:
     """Nothing, once the published wheel's `METADATA` says `License-Expression: Apache-2.0`, no `License-File` and no
     licence classifier, the three `Project-URL`s with `documentation` as the documentation's, exactly `CLASSIFIERS`
     (and the core's operating system where `core`), and no author, maintainer or contact; where `core`, also
-    `Description-Content-Type: text/markdown` and a description that is the root `README.md`; `Failure` naming the
-    wheel and each difference otherwise."""
+    `Description-Content-Type: text/markdown` and a description that is the root `README.md` with its relative
+    links written absolute under the release's tree; `Failure` naming the wheel and each difference otherwise."""
     found = metadata(wheel)
     problems: list[str] = []
     if found.get_all("License-Expression") != ["Apache-2.0"]:
@@ -735,8 +764,8 @@ def published_metadata(wheel: Path, documentation: str, core: bool = False) -> N
         if found.get_all("Description-Content-Type") != ["text/markdown"]:
             problems.append(f"Description-Content-Type is {found.get_all('Description-Content-Type')}, "
                             "not ['text/markdown']")
-        if str(found.get_payload()).strip() != (ROOT / "README.md").read_text().strip():
-            problems.append("the description is not the root README.md")
+        if str(found.get_payload()).strip() != rewritten_readme().strip():
+            problems.append("the description is not the root README.md, its links written absolute")
     if problems:
         raise Failure(f"{wheel.name}'s METADATA differs from the metadata of D-106:\n" + "\n".join(problems))
 

@@ -96,7 +96,8 @@ def test_venv_is_a_locked_sync_into_core_venv() -> None:
 
 
 def test_ci_installs_the_trees_uv_before_make_venv() -> None:
-    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    workflow_text = (ROOT / ".github/workflows/ci.yml").read_text()
+    workflow = yaml.safe_load(workflow_text)
     jobs = workflow["jobs"]
     assert set(jobs) == {"lint-and-test", "image"}
     steps = jobs["lint-and-test"]["steps"]
@@ -106,7 +107,8 @@ def test_ci_installs_the_trees_uv_before_make_venv() -> None:
     (venv,) = [i for i, step in enumerate(steps) if step.get("run") == "make venv"]
     assert python < setup < venv
     assert steps[python]["with"] == {"python-version": "3.14"}
-    assert re.fullmatch(r"astral-sh/setup-uv@v\d+", steps[setup]["uses"])
+    assert re.fullmatch(r"astral-sh/setup-uv@[0-9a-f]{40}", steps[setup]["uses"])
+    assert re.search(rf"uses: {re.escape(steps[setup]['uses'])} # v\d+\.\d+\.\d+$", workflow_text, re.MULTILINE)
     assert steps[setup]["with"] == {"version": UV_VERSION}
     assert not [step for step in jobs["image"]["steps"] if "setup-uv" in step.get("uses", "")]
 

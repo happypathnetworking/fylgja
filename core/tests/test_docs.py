@@ -21,6 +21,8 @@ def _command_lines(page: str) -> list[str]:
     for info, lines in blocks(text(page)):
         if info in ("sh", "console"):
             for line in lines:
+                if info == "console" and not line.startswith("$ "):
+                    continue  # a console block's other lines are the command's output
                 line = line.removeprefix("$ ")
                 if line.startswith(PROG + " "):
                     found.append(line)

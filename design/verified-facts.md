@@ -8903,6 +8903,48 @@ The timing is one run. *(2026-11-09)*
   sniffio, which the core's venv does not.
 - **Not read:** a release below any of the four; the sixteen files with the extra's nine
   libraries not installed.
+
+## uv 0.12.23
+
+Read on 2026-11-13 on the development host, with Python 3.14.4, uv 0.12.23 and
+`UV_PYTHON_DOWNLOADS=never`, a cache of uv's own, in a scratch copy of `phase-9-integration`
+(a `git archive`) outside every checkout. Nothing tracked was changed. Each reading was run
+once. *(2026-11-13)*
+
+- **One workspace resolves all four distributions at their pins.** A root `pyproject.toml`
+  holding only `[tool.uv.workspace] members = ["core", "readers/infrahub", "readers/netbox",
+  "orchestrator"]` and `[tool.uv.sources]` naming `fylgja-core`, `fylgja-infrahub` and
+  `fylgja-netbox` as `{ workspace = true }`; `uv lock --python 3.14` resolved 130 packages in
+  1.9 s. The lock holds the exact pins of the extras: prefect 3.9.2, uvicorn 0.54.0,
+  starlette 1.9.0, httpx 0.28.1, mypy 2.4.0, ruff 0.17.3, pytest 9.2.0.
+- **`uv sync --locked --all-packages --all-extras`** with
+  `UV_PROJECT_ENVIRONMENT=<tree>/core/.venv` made the environment in 3.2 s; a second sync,
+  nothing to do, 0.1 s. All four packages are editable from their `src/`; the console
+  scripts are there (`fylgja-core`, `fylgja-core-server`, `fylgja-infrahub`,
+  `fylgja-netbox`, `fylgja-orchestrator`, `prefect`, `pytest`, `ruff`, `mypy`).
+- **It is the environment pip makes today.** 123 packages beside the four, the same
+  versions as `make venv`'s on `phase-10-design` the same day: after normalising names the
+  two freezes differ in no version (one line differs in spelling, `ruamel.yaml`).
+- **It holds no pip.** `python -m pip` answers "No module named pip". Nothing but the
+  Makefile's `venv` target calls `core/.venv/bin/pip`.
+- **`uv build --wheel` runs each `setup.py`'s `BuildPy`.** `--package <name>` from the root,
+  and `uv build --wheel core` by path, each wrote the wheel with its formats inside: the
+  core's ten, the Infrahub reader's ten format and query files, the NetBox reader's one, the
+  orchestrator's eight.
+- **`make lint` passes on that environment, and the pure tier but for one test.** Core 2,341
+  passed; `netbox/` 202; `readers/infrahub` 319; `readers/netbox` 340; `orchestrator` 449.
+  `infrahub/tests/test_tree.py::test_the_tree_names_no_address` fails: `uv.lock`, once
+  tracked, holds 1,282 URLs on `pypi.org` and `files.pythonhosted.org`, hosts the test does
+  not list as public references.
+- **uv 0.12.23's files were uploaded to PyPI on 2026-10-03.** `GET /pypi/uv/0.12.23/json` on
+  `pypi.org`, asked with no account on 2026-11-15: the first three of `urls[]` carried
+  `upload_time_iso_8601` of 2026-10-03T17:31:15Z, 17:31:18Z and 17:31:21Z. That is 42 days
+  before 2026-11-14, so the version is past the two weeks every pin keeps. *(2026-11-15)*
+- **Not read:** `uv sync` from a worktree against the main checkout's cache; the
+  `Dockerfile`'s two stages built with uv; `scripts/wheelcheck.py`'s empty-environment
+  installs under uv, the base at its floors among them; CI's `setup-uv`; what `uv lock` does
+  when a pin moves.
+
 ## Docker Compose v5.6.0
 
 Read by the controller on 2026-11-10 with `docker compose config` over a scratch env file

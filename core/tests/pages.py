@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 
-USER_PAGES: tuple[str, ...] = ("docs/cli.md", "docs/server.md", "docs/api.md")
+USER_PAGES: tuple[str, ...] = ("docs/cli.md", "docs/server.md", "docs/api.md", "docs/client.md")
 """The pages a user reads, as paths from the repository's root, grown by the task that writes each."""
 
 

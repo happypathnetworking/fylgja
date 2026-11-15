@@ -1,6 +1,6 @@
 # fylgja-core (CONTRIBUTING.md).
 
-.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck image imagecheck infrahub-up infrahub-down \
+.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck infrahub-up infrahub-down \
 	infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down orchestrator-serve netbox-up \
 	netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo netbox-demo demo-down
 
@@ -104,6 +104,18 @@ linkcheck:
 # tree's commit and holds it, and each installed command's --version names the tree's version and that commit.
 wheelcheck:
 	python3 -I scripts/wheelcheck.py
+
+# The three published wheels (D-106), core, readers/infrahub and readers/netbox, and no other, built by uv into dist/
+# (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. scripts/publish.py check holds
+# them, the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check
+# refuses any file but the three wheels. Needs the network.
+wheels:
+	rm -rf dist
+	mkdir dist
+	for member in core readers/infrahub readers/netbox; do \
+		FYLGJA_BUILD_COMMIT=$(COMMIT) uv build --wheel --no-python-downloads --python python3 --out-dir dist $$member || exit 1; \
+	done
+	rm -f dist/.gitignore
 
 # The core's image from the Dockerfile; its build context is .dockerignore's allow-list. The commit it is built at,
 # COMMIT, is given as the build stage's one argument. Needs Docker and the network.

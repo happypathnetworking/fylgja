@@ -332,3 +332,18 @@ def test_the_example_build_is_not_given_the_licence(monkeypatch: pytest.MonkeyPa
     step.build_lib = str(tmp_path / "lib")
     step.run()
     assert not (tmp_path / "lib" / "fylgja_orchestrator" / "LICENSE").exists()
+
+
+def test_the_changelogs_head_is_the_version() -> None:
+    """`CHANGELOG.md` opens with the release the tree is at, `unreleased` or dated, every section of the form."""
+    spec = importlib.util.spec_from_file_location("script_publish", ROOT / "scripts" / "publish.py")
+    assert spec is not None and spec.loader is not None
+    publish = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(publish)
+    text = (ROOT / "CHANGELOG.md").read_text()
+    version, date = publish.head(text)
+    assert version == VERSION
+    assert date == "unreleased" or re.fullmatch(r"\d{4}-\d{2}-\d{2}", date)
+    for line in text.splitlines():
+        if line.startswith("## "):
+            assert re.fullmatch(r"## \S+ - (unreleased|\d{4}-\d{2}-\d{2})", line), line

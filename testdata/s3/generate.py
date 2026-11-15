@@ -4,8 +4,8 @@ The core signs its own S3 requests (D-061) and botocore is never a dependency, s
 script runs once, in a throwaway virtual environment outside the tree, and its output is
 committed. `sigv4.json` is never edited by hand; regenerate it with:
 
-    python3 -m venv "$(mktemp -d)/venv"            # note the directory it prints or keep it
-    <venv>/bin/pip install botocore && <venv>/bin/python testdata/s3/generate.py > testdata/s3/sigv4.json
+    uv venv "$(mktemp -d)/venv"                    # note the directory it prints or keep it
+    uv pip install --python <venv>/bin/python botocore && <venv>/bin/python testdata/s3/generate.py > testdata/s3/sigv4.json
 
 It imports nothing of `fylgja_core`.
 """

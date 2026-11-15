@@ -660,3 +660,5 @@ library does so itself when a stream ends early.
 
 **Work queue** — The loop's queue of twin names waiting to be reconciled. A name is never
 queued twice, and each twin has at most one worker at a time ([D-023](../design/decisions.md#d-023)).
+
+**Workspace** — The uv workspace at the repository's root: its four members, `core/`, `readers/infrahub/`, `readers/netbox/` and `orchestrator/`, and its lock, `uv.lock`, which `make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).

@@ -400,7 +400,7 @@ def passing(local: Path = LOCAL, disk: Path | None = None) -> FakeHost:
     Compose and containerlab answering, the user in both groups, the AppArmor widening made, memory for a source and
     the twin, no listener on a port the demonstration needs but a core's own where one runs (`FakeHost.heard`),
     `local/.env` with the node login, and a commit for any ref. Each of the venv's commands is a `#!` script of the
-    venv's `python3`, as `pip` writes one. Docker holds what a host does where neither source has yet run: no
+    venv's `python3`, as uv writes one. Docker holds what a host does where neither source has yet run: no
     container, the three networks Docker makes itself, of which the bridge alone has a subnet, and both images the
     seeded twin runs."""
     host = FakeHost(disk)

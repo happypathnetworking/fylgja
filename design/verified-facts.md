@@ -3358,6 +3358,29 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
   1.0.1, lightkube-models 1.37.0.8, msgspec 0.22.0, pip 26.2.2, protobuf 7.36.2, pycparser 3.12,
   pygnmi 0.8.15, PyYAML 6.0.3, referencing 0.37.0, rpds-py 2026.9.1, starlette 1.9.0, truststore
   0.10.5, typing_extensions 4.16.0, uvicorn 0.54.0, wsproto 1.3.2.
+- **Built by uv 0.12.23** *(Docker 29.8.1, buildx v0.37.1, 2026-11-15)*. The build stage copies
+  `/uv` from `ghcr.io/astral-sh/uv:0.12.23`, whose index `docker buildx imagetools inspect` read as
+  `sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21` (linux/amd64 and
+  linux/arm64, each with an attestation manifest), the image built 2026-10-03 with entry point
+  `/uv`; the base's index was read again, the digest above unchanged. The build, `make image`,
+  took 29.5 s with the base's layers on the host and the uv image pulled by it, and 0.9 s cached.
+  The image is 266 MB on disk and 64.1 MB of content (284 MB and 68 MB built by pip), and
+  `make imagecheck` passed on it.
+  - **What it installed**, `importlib.metadata` in its venv: the 33 distributions of the bullet
+    "What it installed" at the same versions, `pip` 26.2.2 not among them and PyYAML 6.0.3 and
+    fylgja-core 0.0.0 as before; no other difference. `readlink /opt/fylgja/venv/bin/python` is
+    `/usr/local/bin/python3`; the venv's `bin` holds no `pip`, and `command -v uv` in
+    the final stage found nothing (next bullet).
+  - **The base holds pip.** In the final stage `command -v uv` found nothing, but `command -v pip`
+    found `/usr/local/bin/pip`, and `/usr/local/bin/python3 -m pip --version` answered pip 26.2.2
+    from `/usr/local/lib/python3.14/site-packages/pip`: the base image's own, which the
+    `Dockerfile` does not install or remove.
+  - **Bytecode.** The venv holds 835 `.pyc` files, 61 under `fylgja_core`; its directory is not
+    writable to 10001 (`touch` answered `Permission denied`), `id` printed `uid=10001 gid=10001`.
+  - **The entry point's refusal**, with `FYLGJA_STORE=/tmp/store` and
+    `FYLGJA_TOKENS=/nonexistent`, three runs by `docker run --rm`, each exited 2 with the token
+    file's refusal as one line: 3.10, 3.30 and 3.75 s, the container's start and removal included.
+
 - **The server is the container's PID 1, which ignores a signal it has no handler for.** In the
   image `python` as PID 1, its SIGTERM handler `SIG_DFL`, went on after
   `signal.raise_signal(SIGTERM)`. So the server installs its own: the console script's
@@ -8903,6 +8926,130 @@ The timing is one run. *(2026-11-09)*
   sniffio, which the core's venv does not.
 - **Not read:** a release below any of the four; the sixteen files with the extra's nine
   libraries not installed.
+- **Under uv 0.12.23's resolver** *(2026-11-15)*, with Python 3.14.4 on the development host:
+  `make wheelcheck` (the wheels built by `uv build --wheel`, each environment made by
+  `uv venv --no-project`, each install by `uv pip install`) passed in 26.7 s, one run. The
+  base alone at the four floors, `uv pip install --constraints` of the file `name==floor` a
+  library, installed httpx 0.27.0, jsonschema 4.18.0, PyYAML 6.0.3 and referencing 0.28.4 and
+  no library of the `server` extra. In a scratch environment outside the tree, the four
+  installed by `uv pip install` under the same constraints, `uv pip freeze` showed beside them
+  anyio 4.16.0, attrs 26.1.0, certifi 2026.10.23, h11 0.16.0, httpcore 1.0.9, idna 3.20,
+  jsonschema-specifications 2023.7.1, rpds-py 2026.9.1, sniffio 1.3.1 and typing-extensions
+  4.16.0: the 2026-11-09 list's transitive set for the base (jsonschema-specifications
+  2023.7.1 and sniffio as there), and no other version differed. No floor moved.
+
+## uv 0.12.23
+
+Read on 2026-11-13 on the development host, with Python 3.14.4, uv 0.12.23 and
+`UV_PYTHON_DOWNLOADS=never`, a cache of uv's own, in a scratch copy of `phase-9-integration`
+(a `git archive`) outside every checkout. Nothing tracked was changed. Each reading was run
+once. *(2026-11-13)*
+
+- **One workspace resolves all four distributions at their pins.** A root `pyproject.toml`
+  holding only `[tool.uv.workspace] members = ["core", "readers/infrahub", "readers/netbox",
+  "orchestrator"]` and `[tool.uv.sources]` naming `fylgja-core`, `fylgja-infrahub` and
+  `fylgja-netbox` as `{ workspace = true }`; `uv lock --python 3.14` resolved 130 packages in
+  1.9 s. The lock holds the exact pins of the extras: prefect 3.9.2, uvicorn 0.54.0,
+  starlette 1.9.0, httpx 0.28.1, mypy 2.4.0, ruff 0.17.3, pytest 9.2.0.
+- **`uv sync --locked --all-packages --all-extras`** with
+  `UV_PROJECT_ENVIRONMENT=<tree>/core/.venv` made the environment in 3.2 s; a second sync,
+  nothing to do, 0.1 s. All four packages are editable from their `src/`; the console
+  scripts are there (`fylgja-core`, `fylgja-core-server`, `fylgja-infrahub`,
+  `fylgja-netbox`, `fylgja-orchestrator`, `prefect`, `pytest`, `ruff`, `mypy`).
+- **It is the environment pip makes today.** 123 packages beside the four, the same
+  versions as `make venv`'s on `phase-10-design` the same day: after normalising names the
+  two freezes differ in no version (one line differs in spelling, `ruamel.yaml`).
+- **It holds no pip.** `python -m pip` answers "No module named pip". Nothing but the
+  Makefile's `venv` target calls `core/.venv/bin/pip`.
+- **`uv build --wheel` runs each `setup.py`'s `BuildPy`.** `--package <name>` from the root,
+  and `uv build --wheel core` by path, each wrote the wheel with its formats inside: the
+  core's ten, the Infrahub reader's ten format and query files, the NetBox reader's one, the
+  orchestrator's eight.
+- **`make lint` passes on that environment, and the pure tier but for one test.** Core 2,341
+  passed; `netbox/` 202; `readers/infrahub` 319; `readers/netbox` 340; `orchestrator` 449.
+  `infrahub/tests/test_tree.py::test_the_tree_names_no_address` fails: `uv.lock`, once
+  tracked, holds 1,282 URLs on `pypi.org` and `files.pythonhosted.org`, hosts the test does
+  not list as public references.
+- **uv 0.12.23's files were uploaded to PyPI on 2026-10-03.** `GET /pypi/uv/0.12.23/json` on
+  `pypi.org`, asked with no account on 2026-11-15: the first three of `urls[]` carried
+  `upload_time_iso_8601` of 2026-10-03T17:31:15Z, 17:31:18Z and 17:31:21Z. That is 42 days
+  before 2026-11-14, so the version is past the two weeks every pin keeps. *(2026-11-15)*
+- **The lock's form.** `uv lock` at the worktree's root with the root file written resolved 130
+  packages in 1.36 s (`version = 1`, `revision = 5`). Each of the four is a `[[package]]` with
+  `source = { editable = "<member>" }` and `version = "0.0.0"`; every other package is
+  `source = { registry = ... }`, the registry PyPI's `simple` index. With the lock tracked
+  (`git add -N uv.lock`) and before the tree test knew it, `test_the_tree_names_no_address` failed
+  on 1,282 URLs, 1,156 on `files.pythonhosted.org` and 126 on `pypi.org`, and on nothing else: no
+  github.com path and no dotted quad beyond what `NOT_A_SITES` already lists. *(2026-11-15)*
+- **A pin moved, read in a scratch copy.** `ruff==0.17.3` to `0.17.2` in `core/pyproject.toml`
+  alone: `uv sync --locked` and `uv lock` each exited 1 with "No solution found", the cause
+  "`fylgja-core[dev]` depends on `ruff==0.17.2` and `fylgja-infrahub[dev]` depends on
+  `ruff==0.17.3`". In all four, `uv lock` printed "Updated ruff v0.17.3 -> v0.17.2" and the lock
+  differed in the four `specifier = "==0.17.3"` lines and in ruff's `[[package]]` entry (its
+  version, sdist and 17 wheels) and nowhere else. `uvicorn==0.53.0` in `core/pyproject.toml`
+  alone, no other pin touched: `uv sync --locked` exited 1 with "The lockfile at `uv.lock` needs
+  to be updated, but `--locked` was provided." *(2026-11-15)*
+- **Another uv.** `required-version = "==0.0.1"` in the root: `uv sync`, `uv lock` and `uv venv`
+  each exited 2 with "Required uv version `==0.0.1` does not match the running version `0.12.23`."
+  *(2026-11-15)*
+- **`make venv` over the baseline's pip-made `core/.venv`**, in the worktree beside the main
+  checkout, the cache `~/.cache/uv` and the worktree on one filesystem (`/dev/sda2`). It exited 0
+  in 3 s: "Resolved 130 packages", the four packages built and reinstalled, 127 packages checked.
+  The venv was not remade: `core/.venv/bin/pip` and `pyvenv.cfg` (`command = ... python3 -m venv
+  ...`, no `uv =` line) stayed, `python -m pip --version` still answered pip 25.1.1, and
+  `fylgja_core` was imported from `core/src`. A second run, nothing to do, took 0 s
+  ("Checked 127 packages"). Neither run printed a warning. In a scratch copy with no venv on
+  `/tmp`, a tmpfs, a different filesystem from the cache, `make venv` took 6 s, printed "Failed to
+  hardlink files; falling back to full copy", installed 127 packages, made no `bin/pip`, and wrote
+  `uv = 0.12.23` into `pyvenv.cfg`. *(2026-11-15)*
+- **`astral-sh/setup-uv`, read and not run.** Read on 2026-11-15 from GitHub by anonymous
+  requests. Its tags carry a floating major tag up to `v7` and, from `v8.0.0`, a tag for each
+  release alone (`git/ref/tags/v10` answered 404). Release `v10.3.3`, published
+  2026-10-28T14:35:19Z (18 days before 2026-11-14), is the commit
+  `68559e99cc807c1eb7e9238fd43a15bba460eec2`. Its `action.yml` has the input `version` ("The
+  version of uv to install, e.g., `0.5.0`, `latest`, or `latest-known`. Defaults to the version in
+  pyproject.toml or `latest`"), as `v7`'s did, and runs on `node24`. Against `v7`'s: `enable-cache`
+  (`"auto"`) and `activate-environment` (`"false"`) have the same defaults; `save-cache` went from
+  `"true"` to `"auto"` and `prune-cache` from `"true"` to `"false"`; `python-arch`, `no-project`,
+  `download-from-astral-mirror` (default `"true"`), `quiet` and the output `python-runtime-id`
+  are new. Not run in this task; plan 5's run is its first with this step.
+- **`infrahubctl`'s environment by uv.** With `LOCAL` an empty scratch directory,
+  `uv venv --no-project --clear --python python3 <LOCAL>/infrahub/.venv`, the `.gitignore` of `*`
+  and `uv pip install -q --python <venv>/bin/python 'infrahub-sdk[ctl]==1.23.2'` ran in 4.8 s
+  and exited 0; `infrahubctl version` printed "Python: 3.14.4" and "Python SDK: v1.23.2", as
+  the pip-made environment did on 2026-11-09. `python -m pip` in it answered "No module named
+  pip"; its `pyvenv.cfg` holds `uv = 0.12.23`. The recipe run again over that environment
+  (`--clear`) made it anew and installed the same, exit 0. *(2026-11-15)*
+- **A fresh clone under uv alone.** A clone of branch `phase-10/uv` at bf698a8, made from the
+  local repository, with nothing but Python 3.14.4 and uv 0.12.23 (no `UV_*` variable set, no
+  index in the user's `uv.toml`), ran `make venv` (2.7 s, the second run 0.2 s), `make lint`,
+  `make test`, `make linkcheck`, `make wheelcheck` and `make imagecheck`; each exited 0.
+  `make test` passed in every root (core 2424, infrahub 132, netbox 202, readers/infrahub 319,
+  orchestrator 832, readers/netbox 340). `git status --porcelain` then printed nothing and
+  `uv.lock` was byte-identical. The first `make venv` ran with uv's wheel cache warm, so a
+  download from PyPI was not timed. *(2026-11-15)*
+- **`python-preference`** *(2026-11-15, uv 0.12.23)*. With `python-preference = "only-system"`
+  added to the root's `[tool.uv]`, `make venv` over the worktree's `core/.venv` exited 0
+  ("Resolved 130 packages", "Checked 127 packages"), `uv.lock` unchanged; `uv python list
+  --only-installed` showed `/usr/bin/python3.14` and `/usr/bin/python3` (cpython 3.14.4) and no
+  uv-managed Python.
+- **Not read:**
+  - `uv sync` against a venv of another Python minor.
+  - the uv'd CI: it has not run, and plan 5's run is its first.
+  - `make venv` on a host with no uv on the PATH (the shell's `uv: not found` is what is expected,
+    not read).
+  - a host with a uv-managed Python installed: none is on the development host, and installing one
+    is a download the root forbids; so `python-preference = "only-system"` was not read to refuse one.
+  - `uv lock` and `make venv` with an index configured (`UV_INDEX*`, a `uv.toml` index): none was
+    set in any reading above.
+  - whether `uv venv --no-project` and `uv pip install` refuse under a `required-version`
+    mismatch (`uv sync`, `uv lock` and `uv venv` were read to; the wheel check therefore compares
+    the version itself).
+  - a hand-installed library removed at the next `make venv`: D-108's consequence, taken from uv's
+    help, not run.
+  - a cold download from PyPI: every sync above ran with uv's wheel cache warm.
+  - the image on linux/arm64.
+
 ## Docker Compose v5.6.0
 
 Read by the controller on 2026-11-10 with `docker compose config` over a scratch env file

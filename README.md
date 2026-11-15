@@ -78,10 +78,10 @@ on a cluster, the maintainer reading each report on the branch's journal
 
 ## Quick start
 
-You need Python 3.14.
+You need Python 3.14 and uv 0.12.23.
 
 ```sh
-make venv     # core/.venv at core/pyproject.toml's pins
+make venv     # core/.venv, synced from uv.lock
 make lint     # ruff and mypy (strict)
 make test     # the pure tier: no infrastructure
 ```

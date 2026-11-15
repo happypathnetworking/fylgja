@@ -3810,7 +3810,9 @@ def test_the_three_targets_run_the_script(tmp_path: Path) -> None:
     assert "pip" not in printed and "venv" not in printed
     absent = make_n(tmp_path, "netbox-demo", "REF=b", f"VENV={tmp_path / 'no-venv'}")
     assert absent[-1] == f"{script} up netbox {where} --ref='b'"
-    assert absent[0] == "make venv" and any("pip install" in line for line in absent[1:-1])
+    assert absent[0] == "make venv"
+    (sync,) = [line for line in absent[1:-1] if "uv sync" in line]
+    assert sync.startswith(f"UV_PROJECT_ENVIRONMENT={tmp_path / 'no-venv'} uv sync ")
     assert make_n(tmp_path, "demo-down", f"VENV={tmp_path / 'no-venv'}") == make_n(tmp_path, "demo-down")
     # The rule that makes it is the server's command's own, the one the script starts.
     assert demo.CORE == ROOT / "core" / ".venv" / "bin" / "fylgja-core-server"
@@ -4816,7 +4818,7 @@ def test_the_names_no_make_child_is_given_are_makes_own_and_the_makefiles() -> N
     assigned = set(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:\?=|:=|=)", makefile, re.MULTILINE))
     variables, functions = referred(makefile)
     assert variables - assigned == {"MAKE", "@"}
-    assert functions == {"shell", "if", "and", "filter", "filter-out", "origin", "words", "error"}
+    assert functions == {"shell", "if", "and", "filter", "filter-out", "origin", "words", "error", "abspath"}
     assert set(demo.MAKE_VARIABLES) <= assigned and {"VENV", "MAIN", "TAG", "SOURCES"} <= assigned
     # The reading itself, on lines of the test's own.
     sample = "a: $(NEW)\n\t$(if $(X),$(Y:.c=.o)) $$(sh) $(@)\n# $(NOT_READ)\n"

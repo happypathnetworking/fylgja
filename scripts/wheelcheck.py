@@ -3,18 +3,20 @@
 `server` extra, and alone at the floors of the base's ranges.
 
 Run from the repository root: `python3 -I scripts/wheelcheck.py`, or `make wheelcheck` (D-066,
-D-084). Everything happens in one temporary directory, so the tree is left as it was. Needs the
+D-084). Everything happens in one temporary directory, so the tree is left as it was; uv builds and installs
+from directories outside the tree, so no workspace or lock reaches what it checks (D-108), and a host
+with no `uv` on the PATH is told so before anything is made. Needs the
 network, for the build's requirements and the wheel's dependencies. The core's check, `check`:
 
 1. **The wheel.** It is built from a copy of `core/` and `formats/` whose `formats/` is first given
    `other-1.schema.json`, a schema no list names, as a format another distribution reads would be
    there; its `fylgja_core/formats/` holds the core's formats, `CORE_FORMATS` in `core/setup.py`,
    and no other.
-2. **With the extra**, `pip install "<wheel>[server]"` in an empty venv: the formats the package
+2. **With the extra**, `uv pip install "<wheel>[server]"` in an empty environment: the formats the package
    reads are its own, outside the tree; `three-node.json` validates and `{}` does not; API 1's
    `Created` reads; and `fylgja-core --help` and `fylgja-core-server --help` exit 0, the second
    once the server's modules have imported, since the server's own parser answers it.
-3. **Alone, at its floors**, in a second empty venv: `pip install --constraint <file> <wheel>`,
+3. **Alone, at its floors**, in a second empty environment: `uv pip install --constraints <file> <wheel>`,
    the file one `name==floor` line a base library, the floors of `core/pyproject.toml`'s ranges.
    There each of the four is installed at its floor; no other library the wheel names for the
    `server` extra is installed; the base's sixteen modules import (`BASE_MODULES`); the fixture
@@ -26,12 +28,12 @@ network, for the build's requirements and the wheel's dependencies. The core's c
 The reader's check, `check_reader`, follows it in directories of its own, under `reader/` in the
 same temporary directory:
 
-1. **Its wheel.** It is built once, by `build_reader`, with `pip wheel --no-deps` from a copy of
+1. **Its wheel.** It is built once, by `build_reader`, with `uv build --wheel` from a copy of
    `readers/infrahub/` and `formats/` at their places, as `readers/infrahub/setup.py` finds
    `formats/` two directories up; its `fylgja_infrahub/formats/` holds the format of the reader's
    document, `READER_FORMATS`, and no other, its `fylgja_infrahub/queries/` the tree's GraphQL
    documents, of which there is at least one, and no other, and the package carries `py.typed`.
-2. **Beside the base alone**, `pip install <the core's wheel> <its wheel>` in an empty venv, the
+2. **Beside the base alone**, `uv pip install <the core's wheel> <its wheel>` in an empty environment, the
    core with no extra: `PROBE_READER`, run outside the tree, finds the format the package reads
    beside it and not in the tree; the seed's `reader.yaml` decodes; `schema.COMMIT` is the tree's
    `infrahub/schema/dcim/COMMIT`; and once the command's module has imported, no module of the
@@ -42,12 +44,12 @@ same temporary directory:
 The NetBox reader's check, `check_netbox_reader`, follows it in directories of its own, under
 `netbox-reader/` in the same temporary directory:
 
-1. **Its wheel.** It is built once, by `build_netbox_reader`, with `pip wheel --no-deps` from a
+1. **Its wheel.** It is built once, by `build_netbox_reader`, with `uv build --wheel` from a
    copy of `readers/netbox/` and `formats/` at their places, as `readers/netbox/setup.py` finds
    `formats/` two directories up; its `fylgja_netbox/formats/` holds the format of the reader's
    document, `NETBOX_READER_FORMATS`, and no other, and the package carries `py.typed`.
-2. **Beside the base alone**, `pip install <the core's wheel> <its wheel>` in the empty venv the
-   build was made in, the core with no extra: `PROBE_NETBOX_READER`, run outside the tree, finds
+2. **Beside the base alone**, `uv pip install <the core's wheel> <its wheel>` in an empty environment
+   of its own, the core with no extra: `PROBE_NETBOX_READER`, run outside the tree, finds
    the format the package reads beside it and not in the tree; a copy of the seed's
    `netbox/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the mapping is
    `netbox-dcim`; and once the command's module has imported, no module of the server's
@@ -59,14 +61,14 @@ The NetBox reader's check, `check_netbox_reader`, follows it in directories of i
 The example orchestrator's check, `check_orchestrator`, follows them in directories of its own,
 under `orchestrator/` in the same temporary directory:
 
-1. **Its wheel.** It is built by `pip wheel --no-deps` from a copy of `orchestrator/` and
+1. **Its wheel.** It is built by `uv build --wheel` from a copy of `orchestrator/` and
    `formats/` side by side, as `orchestrator/setup.py` finds `formats/`; its
    `fylgja_orchestrator/formats/` holds the formats of the example's two documents,
    `ORCHESTRATOR_FORMATS`, and no other, its `fylgja_orchestrator/infrahub/queries/` the tree's
    GraphQL documents of the change source, of which there is at least one, and no other, and the
    package carries `py.typed`.
-2. **Beside the base and the two readers**, `pip install <the core's wheel> <the reader's wheel>
-   <the NetBox reader's wheel> <its wheel>` in an empty venv, the core with no extra and the
+2. **Beside the base and the two readers**, `uv pip install <the core's wheel> <the reader's wheel>
+   <the NetBox reader's wheel> <its wheel>` in an empty environment, the core with no extra and the
    readers' wheels `build_reader`'s and `build_netbox_reader`'s, since the example's two change
    sources read through them: `PROBE_ORCHESTRATOR`, run outside the tree, finds the formats the
    package reads beside it and not in the tree; a plan 1 and a rehearsal 1 document validate,
@@ -549,14 +551,45 @@ def exits(
     return done
 
 
+def uv() -> str:
+    """The `uv` on the PATH, which must be the version the root `pyproject.toml` requires: every call of this check runs
+    outside the tree, where uv never reads that. `Failure` in one line where there is none or it is another, before
+    anything is made."""
+    found = shutil.which("uv")
+    if found is None:
+        raise Failure('uv is not on the PATH: the wheel check builds and installs by it (CONTRIBUTING.md, "Tooling")')
+    required = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["required-version"].removeprefix("==")
+    try:
+        said = subprocess.run([found, "--version"], capture_output=True, text=True, check=False).stdout.split()
+    except OSError as e:
+        raise Failure(f"{found} cannot be run: {e}") from e
+    version = said[1] if len(said) > 1 else "unreadable"
+    if version != required:
+        raise Failure(f"uv {version} is on the PATH, and the root pyproject.toml requires uv {required}")
+    return found
+
+
 def venv(path: Path) -> Path:
-    """An empty venv made at `path`: its `bin/`."""
-    run([sys.executable, "-m", "venv", str(path)], path.parent)
+    """An empty environment made at `path` by uv, over this interpreter, outside any project: its `bin/`."""
+    run([uv(), "venv", "--no-project", "--no-python-downloads", "--python", sys.executable, str(path)], path.parent)
     return path / "bin"
 
 
+def wheel(source: Path, dist: Path) -> None:
+    """The one wheel of the distribution at `source`, built by `uv build` into `dist`, from `dist`'s parent."""
+    run([uv(), "build", "--wheel", "--no-python-downloads", "--python", sys.executable, "--out-dir", str(dist),
+         str(source)], dist.parent)
+
+
+def install(env: Path, *requirements: str, constraints: Path | None = None) -> None:
+    """`requirements` installed by `uv pip` into the environment whose `bin/` is `env`, held to the `name==version`
+    lines of `constraints` where it is given, from `env`'s grandparent."""
+    run([uv(), "pip", "install", "--python", str(env / "python"),
+         *(["--constraints", str(constraints)] if constraints else []), *requirements], env.parent.parent)
+
+
 def build(tmp: Path) -> Path:
-    """The core's one wheel, built by `pip wheel --no-deps` from a copy of `core/` and `formats/`
+    """The core's one wheel, built by `uv build --wheel` from a copy of `core/` and `formats/`
     under `tmp`, the copy of `formats/` given `PLANTED` first. Built once: called again with the
     same `tmp`, it answers the wheel already there."""
     dist = tmp / "dist"
@@ -570,8 +603,7 @@ def build(tmp: Path) -> Path:
         shutil.copytree(ROOT / "formats", src / "formats")
         planted = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
         (src / "formats" / PLANTED).write_text(json.dumps(planted) + "\n")
-        env = venv(tmp / "venv-build")
-        run([str(env / "python"), "-m", "pip", "wheel", "--no-deps", "--wheel-dir", str(dist), str(src / "core")], tmp)
+        wheel(src / "core", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
@@ -593,7 +625,7 @@ def carried(wheel: Path) -> int:
 def with_server(tmp: Path, wheel: Path) -> None:
     """The wheel with its `server` extra, in an empty venv: `PROBE`, and each console script's `--help`."""
     env = venv(tmp / "venv-server")
-    run([str(env / "python"), "-m", "pip", "install", f"{wheel}[server]"], tmp)
+    install(env, f"{wheel}[server]")
     run([str(env / "python"), "-I", "-c", PROBE, str(FIXTURE), str(ROOT)], tmp)
     run([str(env / "fylgja-core"), "--help"], tmp)
     run([str(env / "fylgja-core-server"), "--help"], tmp)
@@ -605,7 +637,7 @@ def alone(tmp: Path, wheel: Path, found: dict[str, str]) -> None:
     constraints = tmp / "floors.txt"
     constraints.write_text("".join(f"{name}=={floor}\n" for name, floor in found.items()))
     env = venv(tmp / "venv-alone")
-    run([str(env / "python"), "-m", "pip", "install", "--constraint", str(constraints), str(wheel)], tmp)
+    install(env, str(wheel), constraints=constraints)
     given = {"floors": found, "modules": list(BASE_MODULES), "fixture": str(FIXTURE)}
     run([str(env / "python"), "-I", "-c", PROBE_ALONE, json.dumps(given)], tmp)
     run([str(env / "fylgja-core"), "--help"], tmp)
@@ -634,7 +666,7 @@ def check(tmp: Path) -> str:
 
 
 def build_reader(tmp: Path) -> Path:
-    """The reader's one wheel, built by `pip wheel --no-deps` from a copy of `readers/infrahub/` and `formats/` at their
+    """The reader's one wheel, built by `uv build --wheel` from a copy of `readers/infrahub/` and `formats/` at their
     places under `tmp/reader/src`, as `readers/infrahub/setup.py` finds `formats/` two directories up. Built once:
     called again with the same `tmp`, it answers the wheel already there."""
     here = tmp / "reader"
@@ -646,9 +678,7 @@ def build_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
-        env = venv(here / "venv")
-        run([str(env / "python"), "-m", "pip", "wheel", "--no-deps", "--wheel-dir", str(dist),
-             str(src / "readers" / "infrahub")], tmp)
+        wheel(src / "readers" / "infrahub", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
@@ -682,13 +712,13 @@ def carried_by_reader(wheel: Path) -> int:
 
 def check_reader(tmp: Path, core_wheel: Path) -> str:
     """The reader's check, under `tmp/reader`: its wheel, from `build_reader`, and what it carries; then the wheel
-    installed beside `core_wheel`, the core with no extra, in the venv it was built in, which the build left empty,
+    installed beside `core_wheel`, the core with no extra, in an empty environment of its own,
     where `PROBE_READER` runs outside the tree and `fylgja-infrahub --help` exits 0."""
     wheel = build_reader(tmp)
     queries = carried_by_reader(wheel)
     commit = DCIM_COMMIT.read_text().strip()
-    env = tmp / "reader" / "venv" / "bin"
-    run([str(env / "python"), "-m", "pip", "install", str(core_wheel), str(wheel)], tmp)
+    env = venv(tmp / "reader" / "venv")
+    install(env, str(core_wheel), str(wheel))
     run([str(env / "python"), "-I", "-c", PROBE_READER, str(ROOT), str(READER_DOCUMENT), commit, *NOT_BESIDE_READER],
         tmp)
     run([str(env / "fylgja-infrahub"), "--help"], tmp)
@@ -699,10 +729,9 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
 
 
 def build_netbox_reader(tmp: Path) -> Path:
-    """The NetBox reader's one wheel, built by `pip wheel --no-deps` from a copy of `readers/netbox/` and `formats/` at
-    their places under `tmp/netbox-reader/src`, as `readers/netbox/setup.py` finds `formats/` two directories up, in a
-    venv of its own, which the build leaves empty. Built once: called again with the same `tmp`, it answers the wheel
-    already there."""
+    """The NetBox reader's one wheel, built by `uv build --wheel` from a copy of `readers/netbox/` and `formats/` at
+    their places under `tmp/netbox-reader/src`, as `readers/netbox/setup.py` finds `formats/` two directories up. Built
+    once: called again with the same `tmp`, it answers the wheel already there."""
     here = tmp / "netbox-reader"
     src, dist = here / "src", here / "dist"
     if not dist.is_dir():
@@ -712,9 +741,7 @@ def build_netbox_reader(tmp: Path) -> Path:
             ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
         )
         shutil.copytree(ROOT / "formats", src / "formats")
-        env = venv(here / "venv")
-        run([str(env / "python"), "-m", "pip", "wheel", "--no-deps", "--wheel-dir", str(dist),
-             str(src / "readers" / "netbox")], tmp)
+        wheel(src / "readers" / "netbox", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
@@ -754,16 +781,16 @@ def refused_without_token(command: Path, tmp: Path) -> None:
 
 def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
     """The NetBox reader's check, under `tmp/netbox-reader`: its wheel, from `build_netbox_reader`, and what it carries;
-    then the wheel installed beside `core_wheel`, the core with no extra, in the venv it was built in, which the build
-    left empty, where `PROBE_NETBOX_READER` runs outside the tree over a copy of the seed's reader document,
+    then the wheel installed beside `core_wheel`, the core with no extra, in an empty venv of its own,
+    where `PROBE_NETBOX_READER` runs outside the tree over a copy of the seed's reader document,
     `fylgja-netbox --help` exits 0 and `fylgja-netbox check` with no token is refused, naming the variable."""
     wheel = build_netbox_reader(tmp)
     carried_by_netbox_reader(wheel)
     here = tmp / "netbox-reader"
     reader = here / NETBOX_READER_DOCUMENT.name
     shutil.copyfile(NETBOX_READER_DOCUMENT, reader)
-    env = here / "venv" / "bin"
-    run([str(env / "python"), "-m", "pip", "install", str(core_wheel), str(wheel)], tmp)
+    env = venv(here / "venv")
+    install(env, str(core_wheel), str(wheel))
     run([str(env / "python"), "-I", "-c", PROBE_NETBOX_READER, str(ROOT), str(reader), NETBOX_PROBES, NETBOX_MAPPING,
          *NOT_BESIDE_NETBOX_READER], tmp)
     run([str(env / "fylgja-netbox"), "--help"], tmp)
@@ -814,23 +841,21 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
         ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
     )
     shutil.copytree(ROOT / "formats", src / "formats")
-    env = venv(here / "venv")
-    run([str(env / "python"), "-m", "pip", "wheel", "--no-deps", "--wheel-dir", str(dist), str(src / "orchestrator")],
-        tmp)
+    wheel(src / "orchestrator", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
-    wheel = wheels[0]
-    queries = carried_by_example(wheel)
+    built = wheels[0]
+    queries = carried_by_example(built)
     reader, netbox_reader = build_reader(tmp), build_netbox_reader(tmp)
-    run([str(env / "python"), "-m", "pip", "install", str(core_wheel), str(reader), str(netbox_reader), str(wheel)],
-        tmp)
+    env = venv(here / "venv")
+    install(env, str(core_wheel), str(reader), str(netbox_reader), str(built))
     given = {"not_loaded": list(NOT_BESIDE), "not_installed": list(NOT_INSTALLED), "crossed": list(CROSSED)}
     run([str(env / "python"), "-I", "-c", PROBE_ORCHESTRATOR, str(ROOT), json.dumps(given)], tmp)
     run([str(env / "python"), "-I", "-c", PROBE_EDGE, json.dumps(list(NOT_BESIDE_EDGE))], tmp)
     run([str(env / "fylgja-orchestrator"), "--help"], tmp)
     run([str(env / "fylgja-orchestrator"), "stage", "mark", "--help"], tmp)
-    return (f"wheelcheck: {wheel.name} carries the example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
+    return (f"wheelcheck: {built.name} carries the example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
             f"its {queries} GraphQL documents; beside {core_wheel.name}, {reader.name} and {netbox_reader.name} alone "
             "it validates a plan and a rehearsal outside the tree, its rehearsal library imports with nothing of the "
             "server, either reader or Prefect, both change sources import, each with nothing of the other or its "
@@ -839,6 +864,11 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
 
 
 def main() -> int:
+    try:
+        uv()
+    except Failure as failure:
+        print(f"wheelcheck: {failure}", file=sys.stderr)
+        return 1
     with tempfile.TemporaryDirectory(prefix="fylgja-wheelcheck-") as name:
         tmp = Path(name)
         try:

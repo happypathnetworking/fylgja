@@ -182,13 +182,14 @@ LATER = {"member": 1}
 
 class Widening(httpx.BaseTransport):
     """An `httpx` transport over the network that answers as a later minor release of the core may (D-105): `later`
-    added to every verdict a JSON answer carries (a run's, a plan's, a verify's own) and to each of its findings, and
-    to every problem document and each of its findings. A stream passes as it is. `widened` counts the verdicts and
-    the problems it widened."""
+    added to every verdict a JSON answer carries (a run's, a plan's, a verify's own) and to each of its findings; to a
+    compile's result, its fidelity, each row of its fidelity and each of its findings; and to every problem document
+    and each of its findings. A stream passes as it is. `widened` counts the verdicts, the compiles and the problems
+    it widened."""
 
     def __init__(self) -> None:
         self.inner = httpx.HTTPTransport()
-        self.widened = {"verdicts": 0, "problems": 0}
+        self.widened = {"verdicts": 0, "compiles": 0, "problems": 0}
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         response = self.inner.handle_request(request)
@@ -203,6 +204,8 @@ class Widening(httpx.BaseTransport):
             self._widen(doc, "problems")
         else:
             self._verdicts(doc)
+            if isinstance(doc, dict) and "fidelity" in doc and "manifest" in doc:
+                self._compile(doc)
         headers = [(k, v) for k, v in response.headers.multi_items()
                    if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")]
         return httpx.Response(response.status_code, headers=headers, content=json.dumps(doc).encode(), request=request)
@@ -220,6 +223,14 @@ class Widening(httpx.BaseTransport):
         elif isinstance(value, list):
             for member in value:
                 self._verdicts(member)
+
+    def _compile(self, doc: dict[str, Any]) -> None:
+        """A compile's result, its fidelity and each of its rows, given `later`; its findings with them."""
+        fidelity = doc["fidelity"]
+        for row in fidelity["approximations"] + fidelity["omitted"]:
+            row["later"] = LATER
+        fidelity["later"] = LATER
+        self._widen(doc, "compiles")
 
     def _widen(self, doc: dict[str, Any], kind: str) -> None:
         """A verdict or a problem, and each of its findings, given `later`."""

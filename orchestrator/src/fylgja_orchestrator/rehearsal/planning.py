@@ -140,10 +140,13 @@ def _staged(
             raise _Stopped(e) from e
         changed, unchanged = changed_words(diff), bool(diff["unchanged"])
     fidelity = built["fidelity"]
+    # The core's rows are copied by the members the plan names, so a member a later core answers is passed over.
     entry = _entry(stage, "built", blueprint_id=blueprint_id, bundle_id=bundle_id, changed=changed,
-                   unchanged=unchanged, findings=found + [dict(f) for f in built["findings"]],
-                   omitted=[dict(o) for o in fidelity["omitted"]],
-                   approximations=[dict(a) for a in fidelity["approximations"]])
+                   unchanged=unchanged,
+                   findings=found + [finding(f["rule"], f["severity"], f["message"], f.get("object"))
+                                     for f in built["findings"]],
+                   omitted=[_named(o, OMITTED) for o in fidelity["omitted"]],
+                   approximations=[_named(a, APPROXIMATION) for a in fidelity["approximations"]])
     return entry, bundle_id
 
 
@@ -183,6 +186,16 @@ def _problem(e: ProblemError) -> list[dict[str, Any]]:
 
 def _finding(f: Finding) -> dict[str, Any]:
     return finding(f.rule, f.severity, f.message, f.object)
+
+
+# The members of a fidelity row that the plan's own rows name.
+OMITTED = ("device", "interface", "omission")
+APPROXIMATION = ("package", "text")
+
+
+def _named(row: Mapping[str, Any], names: Sequence[str]) -> dict[str, Any]:
+    """A row of the core's answer as the plan holds it: the members `names` gives, in that order."""
+    return {name: row[name] for name in names if name in row}
 
 
 def _entry(stage: Stage, outcome: str, **members: Any) -> dict[str, Any]:

@@ -914,5 +914,6 @@ def test_a_rehearsal_through_a_core_whose_answers_gain_a_member_ends_as_before(s
     assert _as_said(wide) == _as_said(plain)
     (posted,) = source.posted
     assert posted.status == "passed"
-    # A run's verdict, a verify's and a refusal's problem (the twin's deletion read until it is gone) were widened.
-    assert widening.widened["verdicts"] > 0 and widening.widened["problems"] > 0
+    # A run's verdict, a verify's, a compile's result and a refusal's problem (the twin's deletion read until it is
+    # gone) were widened.
+    assert all(widening.widened[kind] > 0 for kind in ("verdicts", "compiles", "problems")), widening.widened

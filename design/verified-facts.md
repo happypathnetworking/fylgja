@@ -6003,11 +6003,10 @@ read `phase-10/2-demonstrations`, and the second proposed change below stood ope
 - **`make infrahub-up` failed once on the kept volumes, and passed when run again.** The first exited non-zero in 47.1
   s: each of the target's two asks of Compose ended `dependency failed to start: container
   fylgja-core-infrahub-database-1 is unhealthy`, then `the second start of fylgja-core-infrahub exited 1`. The
-  database's container had started 1.2 s into the target. `docker inspect` read the database `healthy` 62.0 s after
-  that container's start, by the stamp of that read's block; the target, run again 0.3 s after that stamp, started the
-  server and the two task workers, recreating none, said `Infrahub 1.11.11 answered at … 76 s after Compose's start
-  returned`, and exited 0 in 79.4 s. It is what the controller read on 2026-11-13, above, where the third run passed.
-  *(2026-11-14)*
+  database's container had started 1.2 s into the target. The database read `healthy` 62.0 s after that container's
+  start, by the stamp of that read's block; the target, run again 0.3 s after that stamp, started the server and the two
+  task workers, recreating none, said `Infrahub 1.11.11 answered at … 76 s after Compose's start returned`, and exited 0
+  in 79.4 s. It is what the controller read on 2026-11-13, above, where the third run passed. *(2026-11-14)*
 - **The other steps.** `make orchestrator-env`, 29.1 s: `holds every name already; nothing written`, and the
   example's token `is accepted by Infrahub: nothing more to do`. `make infrahub-up` again, 1.9 s, `0 s after
   Compose's start returned`, no container recreated. `make infrahub-register`, 233.3 s: `moved fylgja from
@@ -6070,11 +6069,12 @@ read `phase-10/2-demonstrations`, and the second proposed change below stood ope
   rehearsal`, of two comments, 811 and 1,404 bytes. Afterwards the core listed no twin. *(2026-11-14)*
 - **Not read:** the first start on new volumes, which no purge was made for (above: answering 155 and 158 s after
   Compose's start); how long after its start the database first reads `healthy`: it read so at the one read above,
-  62.0 s after its start, and on 2026-11-13 its log said `Started.` 51.6 s after its start, which is no reading of its
-  health; a runner cut while the check's flow run is `SCHEDULED` or `PENDING`, while `stage-plan/main` still runs, or
-  later in the rehearsal; a runner cut so with no runner started again before the check's deadline; a check whose
-  runner is ended by SIGKILL; a seed run again while the old check still waits, which this run did not meet, the check
-  having concluded 8.3 s after the signal; why the stages' reads took as long as they did.
+  62.0 s after its start, and on 2026-11-13, by the controller's reading of its log, which was not saved, it said
+  `Started.` 51.6 s after its start, which is no reading of its health; a runner cut while the check's flow run is
+  `SCHEDULED` or `PENDING`, while `stage-plan/main` still runs, or later in the rehearsal; a runner cut so with no
+  runner started again before the check's deadline; a check whose runner is ended by SIGKILL; a seed run again while the
+  old check still waits, which this run did not meet, the check having concluded 8.3 s after the signal; why the stages'
+  reads took as long as they did.
 
 **`make infrahub-demo` end to end on the local driver, again over the proposed change it left open, its refusals, and
 `make demo-down`** *(Infrahub 1.11.11, Prefect 3.9.2, containerlab 0.81.0, Docker 29.8.1, `scripts/demo.py` at
@@ -6087,9 +6087,10 @@ netbox-demo` the same day, so every step's time below is a derivation, from its 
 script printed. Prefect's runs and documents and the proposed change's validators, checks and thread were read by hand
 after each run, with the credentials read from the environment and sent in a header the reading built. Every output was
 saved. A count of each credential of `local/.env` in every log of the reading, taken after the runs, found none in any;
-the files of `local/demo/` were scanned once, 11 s into the second run, `tokens` aside, and held none; what the second
-run and `make demo-down` wrote there after that was not scanned. No purge was made, so the time from new volumes was not
-read. *(2026-11-14)*
+ten files of `local/demo/` were scanned once, 11 s into the second run, `core.pid`, `prefect.pid`, `source`,
+`unsettled`, `lock`, `rehearsal.json`, `core.log`, `core.log.1`, `runner.log` and `runner.log.1`, not `tokens`,
+`runner.pid` or `store/`, and held none; what the second run and `make demo-down` wrote there after that was not
+scanned. No purge was made, so the time from new volumes was not read. *(2026-11-14)*
 
 - **From Infrahub stopped on kept volumes, NetBox up: exit 0 in 1536.4 s, `the rehearsal passed`.** The script said
   `netbox is up: stopping it, its volumes kept, since it starts the same deployments` and ran `make netbox-down` with
@@ -6104,20 +6105,21 @@ read. *(2026-11-14)*
   the import of phase-10/2-demonstrations's last commit` and, 300.2 s later by the stamps (a derivation), `the
   repository fylgja in sync at phase-10/2-demonstrations's e4212a9 not within 300 s: commit b2abb81, not e4212a9`, the
   recipe exiting 1 and make 2, and the script said `asking it again, 2 of 2`; the second asked the import again and said
-  `in-sync and online, 56 s on` and `each of the 2 task workers holds the tree of fylgja at e4212a9, 5 s on`, 62.3 s
-  after the script's line of the second ask by the stamps (a derivation); `make prefect-up` 8.6 s; the runner serving
-  both deployments 5.65 s after its step began; `make infrahub-seed PROPOSED_CHANGE=1` 255.2 s to its last line, which
-  removed the earlier seed's open proposed change, deleted `third-link` in 37 s, made it from `main` in 28 s and made
-  the proposed change `Rehearse third-link` 1.8 s before that line by the two clocks (a derivation). The run of
-  `twin-rehearse/main` was listed `SCHEDULED` 141.0 s after the seed's last line, `RUNNING` 5.0 s later and `COMPLETED`
-  614.9 s after it was listed, and the verdict said 0.26 s after that (each a derivation from the stamps); Prefect's row
-  for it was `created` 140.0 s after the seed's last line (a derivation). A run of `stage-plan/main` was `created` 0.45
-  s after it; the script printed no line of it, and followed the one run of `twin-rehearse/main`. The document read
-  `passed`, 4 stages, `took_s` 604.7. While the rehearsal ran, `docker ps -a` listed `clab-rh-380d0790-c0e81e3a-n1`,
-  `-n2`, `-n3`, `-n1-loop-a` and `-n1-loop-b`, each `Up 4 seconds`, and listeners stood on the core's port, on 4200 and
-  on 8000; after it, no container labelled `containerlab`. The proposed change's five validators read `completed`
-  `success`, `fylgja-twin`'s check `Rehearsal passed: 4 stages`, and it held one thread, labelled `Fylgja rehearsal`, of
-  two comments, 812 and 1,404 bytes, the first beginning `## Rehearsal passed: 4 stages`. *(2026-11-14)*
+  `in-sync and online, 56 s on` and `each of the 2 task workers holds the tree of fylgja at e4212a9, 5 s on`, and the
+  script's next line, `step 6 of 8: make prefect-up`, came 62.3 s after its line of the second ask by the stamps (a
+  derivation); `make prefect-up` 8.6 s; the runner serving both deployments 5.65 s after its step began; `make
+  infrahub-seed PROPOSED_CHANGE=1` 255.2 s to its last line, which removed the earlier seed's open proposed change,
+  deleted `third-link` in 37 s, made it from `main` in 28 s and made the proposed change `Rehearse third-link` 1.8 s
+  before that line by the two clocks (a derivation). The run of `twin-rehearse/main` was listed `SCHEDULED` 141.0 s
+  after the seed's last line, `RUNNING` 5.0 s later and `COMPLETED` 614.9 s after it was listed, and the verdict said
+  0.26 s after that (each a derivation from the stamps); Prefect's row for it was `created` 140.0 s after the seed's
+  last line (a derivation). A run of `stage-plan/main` was `created` 0.45 s after it; the script printed no line of it,
+  and followed the one run of `twin-rehearse/main`. The document read `passed`, 4 stages, `took_s` 604.7. While the
+  rehearsal ran, `docker ps -a` listed `clab-rh-380d0790-c0e81e3a-n1`, `-n2`, `-n3`, `-n1-loop-a` and `-n1-loop-b`, each
+  `Up 4 seconds`, and listeners stood on the core's port, on 4200 and on 8000; after it, no container labelled
+  `containerlab`. The proposed change's five validators read `completed` `success`, `fylgja-twin`'s check `Rehearsal
+  passed: 4 stages`, and it held one thread, labelled `Fylgja rehearsal`, of two comments, 812 and 1,404 bytes, the
+  first beginning `## Rehearsal passed: 4 stages`. *(2026-11-14)*
 - **What it left under `local/demo/`**, as under "NetBox 4.7.5 with netbox-branching 1.2.3" the same day: the directory
   `0700`; `tokens` `0600`, two lines, the principals `demo` and `orchestrator`; `rehearsal.json` and `lock` `0600`;
   `core.pid`, `runner.pid`, `prefect.pid`, `source`, `unsettled`, `core.log`, `core.log.1`, `runner.log` and
@@ -6133,8 +6135,8 @@ read. *(2026-11-14)*
   `fylgja reads phase-10/2-demonstrations at e4212a9 already`; `make prefect-up` 0.4 s, the server up already; the
   runner 5.47 s; `make infrahub-seed PROPOSED_CHANGE=1` 214.8 s, saying `removed the open proposed change <the first
   run's id> of third-link, an earlier seed's`. The run was listed `PENDING` 106.2 s after the seed's last line
-  (`created` 101.0 s after it), `RUNNING` 5.1 s later and `COMPLETED` 600.5 s after it was listed (each a derivation);
-  the document `passed`, `took_s` 596.4. Prefect then listed one run of `twin-rehearse/main` and one of
+  (`created` 101.0 s after it, a derivation), `RUNNING` 5.1 s later and `COMPLETED` 600.5 s after it was listed (each a
+  derivation); the document `passed`, `took_s` 596.4. Prefect then listed one run of `twin-rehearse/main` and one of
   `stage-plan/main` more than after the first run, 20 where there had been 19 and 9 where there had been 8, the new
   `stage-plan/main` run `created` 2.0 s before the rehearsal's; the script followed the one new rehearsal and printed no
   line of more than one new run and none of a run not followed. Read again 3.8 min after the run passed, the listings
@@ -8662,20 +8664,21 @@ stood untagged with its two marks and one report. *(2026-11-14)*
   naming the deployment's id Prefect answered; and 1.8 s and 1.5 s when run again after each later start of the
   runner, the same words and the same id. `make netbox-change NETBOX_TAG=1`, 29.1 s where no branch of the name
   stood, and 29.6, 31.8 and 29.3 s where one stood. `make netbox-down`, 11.3 s. *(2026-11-14)*
-- **The core's start, five times.** `GET /v1/version` was asked with no token every 20 ms from its process's start:
-  the first ask answered 200 was sent 1.30, 1.31, 1.28, 1.20 and 1.24 s after the start and answered 1.32, 1.32, 1.29,
-  1.23 and 1.26 s after it, the first over a store not yet made and the others over the store the one before had left,
-  with and without a twin in it; every ask before it was refused the connection. `ss -Hltn` then listed `LISTEN 0 2048
+- **The core's start, five times.** `GET /v1/version` was asked with no token, the first ask 0.12 to 0.16 s after
+  its process's start, refused the connection each time; the first ask answered 200, the 53rd to the 58th, was sent
+  1.30, 1.31, 1.28, 1.20 and 1.24 s after the start and answered 1.32, 1.32, 1.29, 1.23 and 1.26 s after it, the first
+  over a store not yet made and the others over the store the one before had left, with and without a twin in it.
+  The log prints those two asks of each start and none between them. `ss -Hltn` then listed `LISTEN 0 2048
   127.0.0.1:7651 0.0.0.0:*`, and `ss -Hltnp` the same line with that process's pid. *(2026-11-14)*
 - **From the tag to the report.** After `make netbox-change NETBOX_TAG=1` returned, by the host's clock: Prefect's run
   of `twin-rehearse/main`, `parameters` `{"branch": "third-link"}`, had a `created` 0.70 s after the return (0.72,
   0.63 and 0.75 s in the three later runs; derivations), and the watch's first read after the return, 1.1 to 1.5 s
   after it, listed it, where its listing before the change did not hold it; at each listing asked for by hand after,
-  it was the first row. In the first run it read `Pending` 6.0 s and `Running` 8.8 s after `Scheduled`; the branch
-  read untagged, its `last_updated` 9.2 s after `Scheduled`; the core listed one `rh-` twin, and `docker ps` its three
-  SR Linux 24.7.1 containers and its two hosts', `alpine`; and the run read `Completed` 123.2 s after the return, its
-  document `passed`, `took_s` 112.8, its stages `created` (77.5 s), `passed` (12.3 s), `passed` (9.5 s) and `skipped`,
-  the branch's third journal entry of kind `success`, and the core listing no twin. *(2026-11-14)*
+  the newest run was the first row. In the first run it read `Pending` 6.0 s and `Running` 8.8 s after `Scheduled`; the
+  branch read untagged, its `last_updated` 9.2 s after `Scheduled`; the core listed one `rh-` twin, and `docker ps` its
+  three SR Linux 24.7.1 containers and its two hosts', `alpine`; and the run read `Completed` 123.2 s after the return,
+  its document `passed`, `took_s` 112.8, its stages `created` (77.5 s), `passed` (12.3 s), `passed` (9.5 s) and
+  `skipped`, the branch's third journal entry of kind `success`, and the core listing no twin. *(2026-11-14)*
 - **The runner given SIGTERM as the twin was being created: the twin is deleted, by the principal `orchestrator`.**
   That the ask is the flow's own clean-up rests on that principal in the core's audit log and on the flow's code,
   where a cancel reaches the rehearsal library's handler, which asks the twin's deletion
@@ -8742,10 +8745,10 @@ from one pipe and stamped each line with the seconds since the command's start b
 the command's own; the script under test prints no times, so every step's time below is a derivation, from its
 `step <n>` line to the next line the script printed. Prefect's runs and documents and NetBox's branch and journal were
 read by hand after each run, with the credentials read from the environment and sent in a header the reading built.
-Every output was saved. The first run's output was searched for ten credentials of `local/.env` and `local/demo/`'s
-files for all twenty, every count 0, and those searches' results were saved; every other saved output was searched for
-the twenty by hand, every count 0, and those results were not saved. No purge was made, so the time from new volumes
-was not read. *(2026-11-14)*
+Every output was saved. The first run's output was searched for ten credentials of `local/.env`, and five of
+`local/demo/`'s files, `tokens`, `rehearsal.json`, `core.log`, `runner.log` and `source`, for all twenty, every count
+0, and those searches' results were saved; every other saved output was searched for the twenty by hand, every count
+0, and those results were not saved. No purge was made, so the time from new volumes was not read. *(2026-11-14)*
 
 - **From NetBox stopped on kept volumes, Infrahub up: exit 0 in 329.5 s, `the rehearsal passed`.** The script said
   `infrahub is up: stopping it, its volumes kept, since it starts the same deployments`, ran `make infrahub-down`

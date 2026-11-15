@@ -22,7 +22,7 @@ from fake_netbox import ADDRESS as NETBOX_URL
 from fake_netbox import TOKEN as NETBOX_TOKEN
 from fake_netbox import FakeNetBox
 from fylgja_core import documents as core_documents
-from fylgja_core import ulid
+from fylgja_core import release, ulid
 from fylgja_core.blueprint import blueprint_id
 from fylgja_core.client import ProblemError
 from fylgja_core.findings import Finding
@@ -455,6 +455,11 @@ def test_serves_start_line_names_both_deployments_and_no_credential(
         ("stage-plan", "main", "fylgja_orchestrator.edge.flows.stage_plan"),
         ("twin-rehearse", "main", "fylgja_orchestrator.edge.flows.twin_rehearse"),
     ]
+
+
+def test_version_names_the_version_and_the_commit(capsys: pytest.CaptureFixture[str]) -> None:
+    assert called(capsys, ["--version"], {}) == (
+        0, f"fylgja-orchestrator {release.build('fylgja-orchestrator', 'fylgja_orchestrator')}\n", "")
 
 
 def test_the_help_of_each_command_exits_0(capsys: pytest.CaptureFixture[str]) -> None:

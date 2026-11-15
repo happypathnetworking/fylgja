@@ -20,6 +20,10 @@ COPY core/pyproject.toml core/setup.py /src/core/
 COPY core/src /src/core/src
 COPY formats /src/formats
 COPY VERSION /src/VERSION
+# The commit the image is built at, which the wheel's build writes into the package (core/setup.py): an argument, since
+# the context holds no .git. `make image` gives it; with none the build says unknown. In this stage alone, so the final
+# image's environment never holds it.
+ARG FYLGJA_BUILD_COMMIT
 # The wheel built, then installed with its server extra, the server's libraries at their pins
 # (D-084): resolved as an integrator's install is, not from the lock. The interpreter is the
 # image's, never a uv-managed one. Bytecode is compiled at install: uv compiles none by default,

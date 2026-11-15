@@ -84,16 +84,18 @@ def test_the_build_copies_the_listed_formats_and_stops_at_one_missing(
     setup_py: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     listed = _listed(SETUP, "ORCHESTRATOR_FORMATS")
-    assert _build(setup_py, tmp_path / "shipped") == [f"fylgja_orchestrator/formats/{n}" for n in listed]
+    commit = "fylgja_orchestrator/COMMIT"  # the commit the build was made at, beside the formats
+    assert _build(setup_py, tmp_path / "shipped") == [commit, *(f"fylgja_orchestrator/formats/{n}" for n in listed)]
+    assert (tmp_path / "shipped" / commit).read_text().count("\n") == 1
 
     formats = tmp_path / "formats"
     formats.mkdir()
     (formats / "a-1.schema.json").write_text("{}\n")
     monkeypatch.setattr(setup_py, "FORMATS", formats)
     monkeypatch.setattr(setup_py, "ORCHESTRATOR_FORMATS", ())
-    assert _build(setup_py, tmp_path / "none") == []
+    assert _build(setup_py, tmp_path / "none") == [commit]
     monkeypatch.setattr(setup_py, "ORCHESTRATOR_FORMATS", ("a-1.schema.json",))
-    assert _build(setup_py, tmp_path / "one") == ["fylgja_orchestrator/formats/a-1.schema.json"]
+    assert _build(setup_py, tmp_path / "one") == [commit, "fylgja_orchestrator/formats/a-1.schema.json"]
     monkeypatch.setattr(setup_py, "ORCHESTRATOR_FORMATS", ("a-1.schema.json", "b-1.schema.json"))
     with pytest.raises(SystemExit, match=r"^no b-1\.schema\.json under "):
         _build(setup_py, tmp_path / "missing")

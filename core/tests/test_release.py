@@ -1,20 +1,29 @@
-"""The release's one version (D-106): written once, in `VERSION` at the root, as `formats/` is the one place a format
-lives (D-066), and read by every distribution's build, each `setup.py` passing it to `setup(version=...)` and each
-`pyproject.toml` listing `version` as dynamic; and each reader requiring the core at that version or later within the
-major. setuptools is no library of the development venv, so each `setup.py` is loaded here over a stand-in for the two
-names it takes from it, `setup` recording what it is given."""
+"""The release's one version and the commit each build was made at (D-106). The version is written once, in `VERSION`
+at the root, as `formats/` is the one place a format lives (D-066), and read by every distribution's build, each
+`setup.py` passing it to `setup(version=...)` and each `pyproject.toml` listing `version` as dynamic; and each reader
+requiring the core at that version or later within the major. setuptools is no library of the development venv, so
+each `setup.py` is loaded here over a stand-in for the two names it takes from it, `setup` recording what it is given.
+`fylgja_core.release` answers a distribution's build, `<version> (commit <hash>)`, which each command's `--version` and
+`GET /v1/version`'s `build` show; each build writes the commit it was made at into its package as `COMMIT`."""
 
 from __future__ import annotations
 
+import argparse
+import importlib
 import importlib.util
 import re
+import shutil
+import subprocess
 import sys
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
+
+from fylgja_core import release
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMBERS = ["core", "readers/infrahub", "readers/netbox", "orchestrator"]
@@ -31,7 +40,18 @@ def project(member: str) -> dict[str, Any]:
 
 
 class _BuildPy:
-    """Stands in for setuptools' `build_py`; nothing here runs it."""
+    """Stands in for setuptools' `build_py`: its own run builds nothing, and its helpers do what setuptools' do."""
+
+    build_lib = ""
+
+    def run(self) -> None:
+        pass
+
+    def mkpath(self, name: str) -> None:
+        Path(name).mkdir(parents=True, exist_ok=True)
+
+    def copy_file(self, infile: str, outfile: str) -> None:
+        shutil.copyfile(infile, outfile)
 
 
 def load_setup(member: str, monkeypatch: pytest.MonkeyPatch) -> tuple[ModuleType, list[dict[str, Any]]]:
@@ -92,3 +112,107 @@ def test_the_example_names_the_core_and_the_readers_without_a_range() -> None:
     dependencies = project("orchestrator")["dependencies"]
     ours = [entry for entry in dependencies if entry.startswith("fylgja-")]
     assert ours == ["fylgja-core", "fylgja-infrahub", "fylgja-netbox"]
+
+
+PACKAGES = {
+    "core": "fylgja_core",
+    "readers/infrahub": "fylgja_infrahub",
+    "readers/netbox": "fylgja_netbox",
+    "orchestrator": "fylgja_orchestrator",
+}
+VARIABLE = "FYLGJA_BUILD_COMMIT"
+HEX = "0" * 40
+
+
+def git(*argv: str) -> str:
+    return subprocess.run(["git", "-C", str(ROOT), *argv], capture_output=True, text=True, check=True).stdout
+
+
+def head() -> str:
+    """The tree's commit as the build reads it: HEAD, and `-dirty` where git has anything to say of the tree."""
+    return git("rev-parse", "HEAD").strip() + ("-dirty" if git("status", "--porcelain").strip() else "")
+
+
+@pytest.fixture(autouse=True)
+def _fresh_build(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """`build` is cached, so each test starts and ends with it empty; asking for `monkeypatch` makes this fixture's
+    teardown run after the monkeypatch's undo, with the real `build` back."""
+    release.build.cache_clear()
+    yield
+    monkeypatch.undo()
+    release.build.cache_clear()
+
+
+def test_a_checkouts_build_is_its_version_file_and_its_head() -> None:
+    assert release.build("fylgja-core", "fylgja_core") == f"{VERSION} (commit {head()})"
+    assert release.version("fylgja-core", "fylgja_core") == VERSION
+    assert release.commit("fylgja_core") == head()
+
+
+def test_a_checkout_with_no_git_says_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PATH", "")
+    assert release.build("fylgja-core", "fylgja_core") == f"{VERSION} (commit unknown)"
+
+
+def write_installed(root: Path, *, commit: str | None) -> None:
+    package = root / "installed_pkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    if commit is not None:
+        (package / "COMMIT").write_text(commit + "\n")
+    info = root / "installed_pkg-1.2.3.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: installed-pkg\nVersion: 1.2.3\n")
+
+
+def test_an_installed_package_reads_its_metadata_and_its_commit_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_installed(tmp_path, commit="ab" * 20)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    assert release.build("installed-pkg", "installed_pkg") == f"1.2.3 (commit {'ab' * 20})"
+    (tmp_path / "installed_pkg" / "COMMIT").unlink()
+    release.build.cache_clear()
+    assert release.build("installed-pkg", "installed_pkg") == "1.2.3 (commit unknown)"
+
+
+def test_version_prints_the_program_and_the_build_and_exits_0(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parser = argparse.ArgumentParser(prog="prog")
+    release.add_version(parser, "fylgja-core", "fylgja_core")
+    with pytest.raises(SystemExit) as stopped:
+        parser.parse_args(["--version"])
+    assert stopped.value.code == 0
+    out, err = capsys.readouterr()
+    assert re.fullmatch(rf"prog {re.escape(VERSION)} \(commit ([0-9a-f]{{40}}(-dirty)?|unknown)\)\n", out), out
+    assert err == ""
+
+    def refused(*_: str) -> str:
+        raise AssertionError("the build is computed only for --version")
+
+    monkeypatch.setattr(release, "build", refused)
+    assert parser.parse_args([]) == argparse.Namespace()
+
+
+@pytest.mark.parametrize("member", MEMBERS)
+def test_each_build_writes_the_commit_it_was_made_at(
+    member: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module, _ = load_setup(member, monkeypatch)
+    assert module.COMMIT_VARIABLE == VARIABLE
+    assert module.commit({VARIABLE: HEX}, tmp_path) == HEX
+    assert module.commit({VARIABLE: HEX + "-dirty"}, tmp_path) == HEX + "-dirty"
+    for bad in ("HEAD", HEX.upper().replace("0", "A"), HEX[:-1], HEX + "-clean", " " + HEX):
+        with pytest.raises(SystemExit, match=VARIABLE):
+            module.commit({VARIABLE: bad}, tmp_path)
+    assert module.commit({}, tmp_path) == "unknown"
+    assert module.commit({VARIABLE: ""}, tmp_path) == "unknown"
+    assert module.commit({}, ROOT) == head()
+
+    monkeypatch.setenv(VARIABLE, HEX)
+    step = module.BuildPy()
+    step.build_lib = str(tmp_path / "lib")
+    step.run()
+    assert (tmp_path / "lib" / PACKAGES[member] / "COMMIT").read_text() == HEX + "\n"

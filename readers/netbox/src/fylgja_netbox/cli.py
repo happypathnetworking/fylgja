@@ -32,7 +32,7 @@ import tempfile
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
-from fylgja_core import blueprint
+from fylgja_core import blueprint, release
 from fylgja_core.client import InvalidAddress, InvalidCA, InvalidToken, base_url, bearer, trust
 from fylgja_core.documents import Rejected
 from fylgja_core.findings import Finding, order
@@ -146,6 +146,7 @@ def _parser() -> argparse.ArgumentParser:
             "where it is set."
         ),
     )
+    release.add_version(parser, "fylgja-netbox", "fylgja_netbox")
     commands = parser.add_subparsers(dest="name", required=True, metavar="COMMAND")
 
     def command(name: str, about: str, call: Command) -> argparse.ArgumentParser:

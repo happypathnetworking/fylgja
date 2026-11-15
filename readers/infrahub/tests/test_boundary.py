@@ -20,7 +20,8 @@ TRANSPORT = READER / "transport.py"
 
 # The core's modules the reader may load: the model it builds and checks, and the client's TLS and token rules.
 ALLOWED_CORE = {"fylgja_core"} | {
-    f"fylgja_core.{m}" for m in ("blueprint", "probes", "findings", "documents", "schemas", "problem", "client")
+    f"fylgja_core.{m}"
+    for m in ("blueprint", "probes", "findings", "documents", "schemas", "problem", "client", "release")
 }
 # What the reader may never load, by module or package prefix: the example, Prefect, Infrahub's SDK and the libraries
 # of the core's `server` extra.

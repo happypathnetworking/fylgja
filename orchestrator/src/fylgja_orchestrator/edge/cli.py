@@ -41,7 +41,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from fylgja_core import documents, ulid
+from fylgja_core import documents, release, ulid
 from fylgja_core.client import Client, FollowError, ProblemError, TransportError, UnsupportedVersion
 from fylgja_core.documents import Rejected
 from fylgja_infrahub import InfrahubError
@@ -173,6 +173,7 @@ def _parser() -> argparse.ArgumentParser:
             f"${settings.NETBOX_ADDRESS} with the token in ${settings.NETBOX_TOKEN}."
         ),
     )
+    release.add_version(parser, "fylgja-orchestrator", "fylgja_orchestrator")
     nouns = parser.add_subparsers(dest="name", required=True, metavar="COMMAND")
 
     def noun(name: str, about: str) -> Any:

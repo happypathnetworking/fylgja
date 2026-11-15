@@ -21,6 +21,10 @@ read directly. The image:
   `local/`) reaches the context with no `-dirty` tag to say so, and fails here. The tree's other
   allowed paths reach the image only through the wheel, whose formats are the bullet above's.
 
+- answers `fylgja-core --version` and `fylgja-core-server --version` with the tree's version, `VERSION`, and a commit
+  that begins with the tag's twelve characters and has `-dirty` exactly where the tag has it: the image's build stage
+  was given the commit as `FYLGJA_BUILD_COMMIT` (D-106), since its context holds no `.git`;
+
 Exit 0, the tag checked the last line printed; 1 with the reason on stderr otherwise.
 """
 
@@ -29,6 +33,7 @@ from __future__ import annotations
 import ast
 import base64
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -173,6 +178,31 @@ def check_copies(image: str) -> int:
     return len(carried)
 
 
+def check_build(image: str) -> str:
+    """The commit both commands of the image answer `--version` with, once each prints `<program> <VERSION> (commit
+    <commit>)` and the commit is the tag's: its first twelve characters are the tag's, and `-dirty` ends both or
+    neither."""
+    tag = image.rpartition(":")[2]
+    wanted = re.fullmatch(r"([0-9a-f]{12})(-dirty)?", tag)
+    if wanted is None:
+        raise Failure(f"the tag {tag!r} is not twelve hexadecimal digits and `-dirty` or nothing")
+    try:
+        version = (ROOT / "VERSION").read_text().strip()
+    except OSError as e:
+        raise Failure(f"VERSION cannot be read: {e}") from e
+    found = ""
+    for program in ("fylgja-core", "fylgja-core-server"):
+        said = docker([*RUN, "--entrypoint", program, image, "--version"]).stdout
+        read = re.fullmatch(rf"{program} {re.escape(version)} \(commit ([0-9a-f]{{40}})(-dirty)?\)\n", said)
+        if read is None:
+            raise Failure(f"{program} --version printed {said!r}, not '{program} {version} (commit <40 hex>[-dirty])'")
+        if read.group(1)[:12] != wanted.group(1) or read.group(2) != wanted.group(2):
+            raise Failure(f"{program} --version names the commit {read.group(1)}{read.group(2) or ''}, and the tag "
+                          f"{tag} is another")
+        found = read.group(1) + (read.group(2) or "")
+    return found
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2 or ":" not in argv[1]:
         print("usage: imagecheck.py <image>:<tag>", file=sys.stderr)
@@ -183,6 +213,7 @@ def main(argv: list[str]) -> int:
         refusal = check_start(image)
         count = check_formats(image)
         copied = check_copies(image)
+        built = check_build(image)
     except Failure as failure:
         print(f"imagecheck: {failure}", file=sys.stderr)
         return 1
@@ -191,6 +222,8 @@ def main(argv: list[str]) -> int:
     print(f"imagecheck: it carries the core's {count} formats, formats/'s byte for byte, and reads them there")
     print(f"imagecheck: its copies of {' and '.join(f'{tree}/' for tree in COPIES)} hold git's {copied} tracked "
           "files there, and no other")
+    print(f"imagecheck: fylgja-core and fylgja-core-server answer --version with the tree's version and the commit "
+          f"{built}, the tag's")
     print(image.rpartition(":")[2])
     return 0
 

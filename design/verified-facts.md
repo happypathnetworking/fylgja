@@ -3432,6 +3432,19 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
     Python 3.14.9, and its asyncio still holds the line the cut rests on: `Server._attach`'s
     `assert self._sockets is not None`, at `base_events.py` line 297, the line it holds in the
     host's 3.14.4.
+- **The commit the image is built at** *(Docker 29.8.1, uv 0.12.23, 2026-11-15)*. The Dockerfile's
+  build stage takes `ARG FYLGJA_BUILD_COMMIT`, with no default, before the wheel's build; `make image`
+  passes `--build-arg FYLGJA_BUILD_COMMIT=$(COMMIT)`, the full HEAD with `-dirty` where `git status
+  --porcelain` prints anything. Read once, at `5949003` with the change uncommitted:
+  - `docker image inspect` of `fylgja-core:5949003a641a-dirty`: `Config.Env` is `PATH`,
+    `PYTHON_VERSION`, `PYTHON_SHA256` and `FYLGJA_PACKAGES` and no `FYLGJA_BUILD_COMMIT`: the final
+    stage never saw the argument, and an `ARG` leaves nothing in the image's environment.
+  - the build stage's `RUN` did see it: `fylgja-core --version` and `fylgja-core-server --version`
+    in that image each printed `<program> 1.0.0rc1 (commit 5949003a641aba277c092e2a0c23549b31f52254-dirty)`,
+    the tag's twelve characters and `-dirty` where the tag has it (`make imagecheck`'s `check_build`
+    holds this).
+  - built with no argument (`docker build` alone), `fylgja-core-server --version` printed `1.0.0rc1
+    (commit unknown)`: the context holds no `.git`, so the build's git finds none.
 - **Pushed, by CONTRIBUTING.md's recipe as written** *(crane 0.22.1, Docker 29.8.1, 2026-11-07)*.
   Its first run, the image `fylgja-core:73c2f149ef62` to the cluster's registry, `<registry>`:
   - `crane auth login` with `--password-stdin`, `DOCKER_CONFIG` a new directory and the registry's
@@ -9065,6 +9078,21 @@ once. *(2026-11-13)*
     `uv build --wheel`, exited 2, the backend's `get_requires_for_build_wheel` failing on
     "`<copy>/VERSION` cannot be read"; with `VERSION` copied to the copy's root, beside `formats/`,
     it built `fylgja_core-1.0.0rc1-py3-none-any.whl`.
+- **A build reads the commit it is made at** *(2026-11-15, uv 0.12.23, setuptools 84.2.1)*. Each
+  `setup.py`'s `BuildPy` writes `<package>/COMMIT`, from `FYLGJA_BUILD_COMMIT` where it is given and
+  from `git -C <root> rev-parse HEAD` otherwise. Read in the worktree of `phase-10/3-release`
+  (`5949003`, the change uncommitted), by `uv build --wheel` of `core` from a directory outside the
+  tree, the variable unset and then `0000000000000000000000000000000000000007`:
+  - **the build runs in place.** With the variable unset `fylgja_core/COMMIT` in the wheel read
+    `5949003a641aba277c092e2a0c23549b31f52254-dirty`: `setup.py` ran in `core/`, inside the checkout,
+    so git answered, and the tree was dirty. Given the variable, the file read the variable's value.
+    A build of a copy outside any checkout (the wheel check's, the image's) has no git, so it says
+    `unknown` unless it is given the commit: `make wheelcheck` and `make image` pass it, and a build in
+    place needs none.
+  - **`make wheelcheck` held it** in all four wheels (`<package>/COMMIT` the tree's commit, `-dirty`
+    included) and in each installed command's `--version`: `fylgja-core` and `fylgja-core-server` with
+    the extra, `fylgja-core` at the base's floors, `fylgja-infrahub`, `fylgja-netbox` and
+    `fylgja-orchestrator`, each `<program> 1.0.0rc1 (commit <40 hex>-dirty)`.
 - **Not read:**
   - `uv sync` against a venv of another Python minor.
   - the uv'd CI: it has not run, and plan 5's run is its first.

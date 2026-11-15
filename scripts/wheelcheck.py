@@ -8,7 +8,9 @@ from directories outside the tree, so no workspace or lock reaches what it check
 with no `uv` on the PATH is told so before anything is made. Needs the
 network, for the build's requirements and the wheel's dependencies. Each build's copy of the tree holds
 `VERSION` at its root beside `formats/`, as each `setup.py` reads it, and each wheel's `METADATA` says
-`VERSION`'s version (D-106). The core's check, `check`:
+`VERSION`'s version (D-106). Each wheel is built at the tree's commit, `tree_commit`, which the build is given as
+`FYLGJA_BUILD_COMMIT` (the copy holds no `.git`), and holds it as `<package>/COMMIT`; and each installed command's
+`--version` is `<program> <version> (commit <commit>)`, one line. The core's check, `check`:
 
 1. **The wheel.** It is built from a copy of `core/` and `formats/` whose `formats/` is first given
    `other-1.schema.json`, a schema no list names, as a format another distribution reads would be
@@ -21,7 +23,7 @@ network, for the build's requirements and the wheel's dependencies. Each build's
 3. **Alone, at its floors**, in a second empty environment: `uv pip install --constraints <file> <wheel>`,
    the file one `name==floor` line a base library, the floors of `core/pyproject.toml`'s ranges.
    There each of the four is installed at its floor; no other library the wheel names for the
-   `server` extra is installed; the base's sixteen modules import (`BASE_MODULES`); the fixture
+   `server` extra is installed; the base's seventeen modules import (`BASE_MODULES`); the fixture
    validates; the client follows a create, over a fake transport answering the version, one
    watch stream of a settling record and an ended run, to that run, the twin not gone; then
    `fylgja-core --help` exits 0, and `fylgja-core-server` exits 2 with one line on stderr whose
@@ -97,6 +99,7 @@ under `orchestrator/` in the same temporary directory:
 import ast
 import email.message
 import email.parser
+import functools
 import json
 import os
 import re
@@ -111,6 +114,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # The one version every distribution is built at (D-106), copied beside each build's copy of the tree, as `formats/` is.
 VERSION = ROOT / "VERSION"
+# The variable the builds read the commit they are made at from (each `setup.py`).
+COMMIT_VARIABLE = "FYLGJA_BUILD_COMMIT"
 PREFIX = "fylgja_core/formats/"
 FIXTURE = ROOT / "testdata" / "blueprint" / "three-node.json"
 # Planted in the copy of `formats/` the wheel is built from: a format no distribution's list names.
@@ -131,6 +136,7 @@ BASE_MODULES = (
     "probe_package",
     "probes",
     "problem",
+    "release",
     "run",
     "schemas",
     "twin_record",
@@ -593,9 +599,49 @@ def requires_core(wheel: Path, version: str) -> None:
         raise Failure(f"{wheel.name} requires the core as {found}, not once as {','.join(sorted(expected))}")
 
 
-def run(argv: list[str], cwd: Path) -> None:
-    """`argv` run in `cwd`, which must exit 0; `Failure` with what it printed otherwise."""
-    exits(argv, cwd, 0)
+@functools.cache
+def tree_commit() -> str:
+    """The tree's commit as `Makefile`'s `COMMIT` and each `setup.py` read it: git's HEAD at `ROOT`, `-dirty` after it
+    where `git status --porcelain` prints anything; `unknown` where git cannot say. Worked out once, so the builds and
+    the checks of one run agree whatever changes in the tree meanwhile."""
+    outputs = []
+    for argv in (["rev-parse", "HEAD"], ["status", "--porcelain"]):
+        try:
+            done = subprocess.run(["git", "-C", str(ROOT), *argv], capture_output=True, text=True, check=False)
+        except OSError:
+            return "unknown"
+        if done.returncode != 0:
+            return "unknown"
+        outputs.append(done.stdout.strip())
+    head, status = outputs
+    return head + ("-dirty" if status else "") if re.fullmatch(r"[0-9a-f]{40}", head) else "unknown"
+
+
+def held_commit(wheel: Path, package: str, commit: str) -> None:
+    """Nothing, once the wheel holds `<package>/COMMIT` saying `commit` on one line; `Failure` naming the wheel and the
+    file otherwise."""
+    with zipfile.ZipFile(wheel) as archive:
+        try:
+            said = archive.read(f"{package}/COMMIT").decode()
+        except KeyError:
+            raise Failure(f"{wheel.name} holds no {package}/COMMIT") from None
+    if said != commit + "\n":
+        raise Failure(f"{wheel.name}'s {package}/COMMIT says {said.strip()!r}, and the tree is at {commit}")
+
+
+def answers_version(command: Path, program: str, version: str, commit: str, cwd: Path) -> None:
+    """Nothing, once `command --version` exits 0 printing exactly `<program> <version> (commit <commit>)` and a newline
+    on stdout; `Failure` with what it printed otherwise."""
+    done = exits([str(command), "--version"], cwd, 0)
+    expected = f"{program} {version} (commit {commit})\n"
+    if done.stdout != expected or done.stderr:
+        raise Failure(f"{command.name} --version printed {done.stdout!r} on stdout and {done.stderr!r} on stderr, "
+                      f"not {expected!r}")
+
+
+def run(argv: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+    """`argv` run in `cwd`, in `env` where it is given, which must exit 0; `Failure` with what it printed otherwise."""
+    exits(argv, cwd, 0, env)
 
 
 def exits(
@@ -637,9 +683,14 @@ def venv(path: Path) -> Path:
 
 
 def wheel(source: Path, dist: Path) -> None:
-    """The one wheel of the distribution at `source`, built by `uv build` into `dist`, from `dist`'s parent."""
+    """The one wheel of the distribution at `source`, built by `uv build` into `dist`, from `dist`'s parent, at the
+    tree's commit: the build is given `FYLGJA_BUILD_COMMIT`, whatever this process's environment holds, since the copy
+    it builds from holds no `.git`; where the tree's commit is `unknown` it is given none, and the build says so."""
+    env = {k: v for k, v in os.environ.items() if k != COMMIT_VARIABLE}
+    if tree_commit() != "unknown":
+        env[COMMIT_VARIABLE] = tree_commit()
     run([uv(), "build", "--wheel", "--no-python-downloads", "--python", sys.executable, "--out-dir", str(dist),
-         str(source)], dist.parent)
+         str(source)], dist.parent, env)
 
 
 def install(env: Path, *requirements: str, constraints: Path | None = None, find_links: Path | None = None) -> None:
@@ -693,6 +744,8 @@ def with_server(tmp: Path, wheel: Path) -> None:
     run([str(env / "python"), "-I", "-c", PROBE, str(FIXTURE), str(ROOT)], tmp)
     run([str(env / "fylgja-core"), "--help"], tmp)
     run([str(env / "fylgja-core-server"), "--help"], tmp)
+    for program in ("fylgja-core", "fylgja-core-server"):
+        answers_version(env / program, program, tree_version(), tree_commit(), tmp)
 
 
 def alone(tmp: Path, wheel: Path, found: dict[str, str]) -> None:
@@ -705,6 +758,7 @@ def alone(tmp: Path, wheel: Path, found: dict[str, str]) -> None:
     given = {"floors": found, "modules": list(BASE_MODULES), "fixture": str(FIXTURE)}
     run([str(env / "python"), "-I", "-c", PROBE_ALONE, json.dumps(given)], tmp)
     run([str(env / "fylgja-core"), "--help"], tmp)
+    answers_version(env / "fylgja-core", "fylgja-core", tree_version(), tree_commit(), tmp)
     done = exits([str(env / "fylgja-core-server")], tmp, 2)
     lines = done.stderr.splitlines()
     try:
@@ -721,11 +775,13 @@ def check(tmp: Path) -> str:
     found = floors()
     wheel = build(tmp)
     versioned(wheel, tree_version())
+    held_commit(wheel, "fylgja_core", tree_commit())
     count = carried(wheel)
     with_server(tmp, wheel)
     alone(tmp, wheel, found)
     at = ", ".join(f"{name} {floor}" for name, floor in found.items())
-    return (f"wheelcheck: {wheel.name} carries the core's {count} formats and no other; with [server] it validates "
+    return (f"wheelcheck: {wheel.name} is built at {tree_commit()} and carries the core's {count} formats and no "
+            "other; fylgja-core and fylgja-core-server answer --version with it; with [server] it validates "
             f"{FIXTURE.name} outside the tree and the server imports; alone at its floors ({at}) the base imports, "
             "follows a run and refuses to serve")
 
@@ -784,6 +840,7 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     version = tree_version()
     versioned(wheel, version)
     requires_core(wheel, version)
+    held_commit(wheel, "fylgja_infrahub", tree_commit())
     queries = carried_by_reader(wheel)
     commit = DCIM_COMMIT.read_text().strip()
     env = venv(tmp / "reader" / "venv")
@@ -791,11 +848,12 @@ def check_reader(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "python"), "-I", "-c", PROBE_READER, str(ROOT), str(READER_DOCUMENT), commit, *NOT_BESIDE_READER],
         tmp)
     run([str(env / "fylgja-infrahub"), "--help"], tmp)
+    answers_version(env / "fylgja-infrahub", "fylgja-infrahub", version, tree_commit(), tmp)
     return (f"wheelcheck: {wheel.name} requires the core at {version} within the major; it carries the reader's "
             f"{len(READER_FORMATS)} format and no other, and its "
             f"{queries} GraphQL documents; beside {core_wheel.name} alone it decodes {READER_DOCUMENT.name} outside "
             "the tree, its command imports with nothing of the server, Prefect, Infrahub's SDK or the example, and "
-            "answers --help")
+            "answers --help and --version")
 
 
 def build_netbox_reader(tmp: Path) -> Path:
@@ -861,6 +919,7 @@ def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
     version = tree_version()
     versioned(wheel, version)
     requires_core(wheel, version)
+    held_commit(wheel, "fylgja_netbox", tree_commit())
     carried_by_netbox_reader(wheel)
     here = tmp / "netbox-reader"
     reader = here / NETBOX_READER_DOCUMENT.name
@@ -875,13 +934,15 @@ def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "python"), "-I", "-c", PROBE_NETBOX_READER, str(ROOT), str(reader), NETBOX_PROBES, NETBOX_MAPPING,
          *NOT_BESIDE_NETBOX_READER], tmp)
     run([str(env / "fylgja-netbox"), "--help"], tmp)
+    answers_version(env / "fylgja-netbox", "fylgja-netbox", version, tree_commit(), tmp)
     refused_without_token(env / "fylgja-netbox", tmp)
     return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, and fylgja-netbox=={version} "
             "installs by name from a directory of the two wheels and no index, with no pre-release flag; it carries "
             f"the NetBox reader's {len(NETBOX_READER_FORMATS)} format and no other; beside {core_wheel.name} alone it "
             f"decodes {NETBOX_READER_DOCUMENT.name} outside the tree, its command "
             "imports with nothing of the server, Prefect, a client library of Infrahub's or NetBox's, the Infrahub "
-            "reader or the example, answers --help, and refuses a check without a token, naming the variable")
+            "reader or the example, answers --help and --version, and refuses a check without a token, naming the "
+            "variable")
 
 
 def carried_by_example(wheel: Path) -> int:
@@ -931,6 +992,7 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
     built = wheels[0]
     versioned(built, tree_version())
+    held_commit(built, "fylgja_orchestrator", tree_commit())
     queries = carried_by_example(built)
     reader, netbox_reader = build_reader(tmp), build_netbox_reader(tmp)
     env = venv(here / "venv")
@@ -939,13 +1001,14 @@ def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
     run([str(env / "python"), "-I", "-c", PROBE_ORCHESTRATOR, str(ROOT), json.dumps(given)], tmp)
     run([str(env / "python"), "-I", "-c", PROBE_EDGE, json.dumps(list(NOT_BESIDE_EDGE))], tmp)
     run([str(env / "fylgja-orchestrator"), "--help"], tmp)
+    answers_version(env / "fylgja-orchestrator", "fylgja-orchestrator", tree_version(), tree_commit(), tmp)
     run([str(env / "fylgja-orchestrator"), "stage", "mark", "--help"], tmp)
     return (f"wheelcheck: {built.name} carries the example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
             f"its {queries} GraphQL documents; beside {core_wheel.name}, {reader.name} and {netbox_reader.name} alone "
             "it validates a plan and a rehearsal outside the tree, its rehearsal library imports with nothing of the "
             "server, either reader or Prefect, both change sources import, each with nothing of the other or its "
             "reader, its command's module with nothing of the server or Prefect, and fylgja-orchestrator answers "
-            "--help, and stage mark --help")
+            "--help, stage mark --help and --version")
 
 
 def main() -> int:

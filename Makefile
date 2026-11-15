@@ -43,6 +43,9 @@ SOURCE_REFUSED = $(filter-out 1,$(words $(SOURCE)))$(filter-out $(SOURCES),$(SOU
 # `image` and `imagecheck` build and check one tag, whatever changes in the tree meanwhile.
 IMAGE ?= fylgja-core
 TAG := $(shell git rev-parse HEAD 2>/dev/null | cut -c1-12)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
+# The same commit in full, which the image's build stage writes into the core's package as the build it answers
+# --version with (D-106): `image` passes it, and `imagecheck` holds the image's --version to TAG's twelve characters.
+COMMIT := $(shell git rev-parse HEAD 2>/dev/null)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
 
 all: lint test
 
@@ -97,16 +100,19 @@ linkcheck:
 # the base alone, where its command answers --help; then the NetBox reader's, with its one format, beside the base
 # alone, where it answers --help and refuses a missing token; then the example's, built from orchestrator/ and
 # formats/ with its two formats and its Infrahub change source's queries, installed beside the base and the two
-# readers alone, where both its change sources import and its command answers --help.
+# readers alone, where both its change sources import and its command answers --help. Each wheel is built at the
+# tree's commit and holds it, and each installed command's --version names the tree's version and that commit.
 wheelcheck:
 	python3 -I scripts/wheelcheck.py
 
-# The core's image from the Dockerfile; its build context is .dockerignore's allow-list. Needs Docker and the network.
+# The core's image from the Dockerfile; its build context is .dockerignore's allow-list. The commit it is built at,
+# COMMIT, is given as the build stage's one argument. Needs Docker and the network.
 image:
-	docker build -t $(IMAGE):$(TAG) .
+	docker build --build-arg FYLGJA_BUILD_COMMIT=$(COMMIT) -t $(IMAGE):$(TAG) .
 
 # The image built, then run: its user, its entry point's refusal, its formats (those CORE_FORMATS in core/setup.py
-# names, each byte for byte its file in formats/), its packages' files against git's; the tag printed last.
+# names, each byte for byte its file in formats/), its packages' files against git's, and the build its two commands
+# answer --version with, which names the commit in TAG; the tag printed last.
 imagecheck: image
 	python3 -I scripts/imagecheck.py $(IMAGE):$(TAG)
 

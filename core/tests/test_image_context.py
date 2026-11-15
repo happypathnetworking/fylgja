@@ -2,9 +2,9 @@
 under `local/` can reach a layer, and the `Dockerfile` copies from the context nothing else; both
 stages are one base pinned by digest; uv comes into the build stage alone, from its image pinned by
 digest, and the image installs the wheel with its `server` extra (D-084) by uv, so the image holds no uv and
-its venv no pip; it runs as a user that is not root, takes no build argument, and never runs Python optimised, which
-strips the `assert` inside asyncio that a lost Lease's cut rests on (verified-facts.md, uvicorn
-0.54.0). `make imagecheck` builds and runs it."""
+its venv no pip; it runs as a user that is not root, takes one build argument, the commit it is built at, in its
+build stage alone (D-106), and never runs Python optimised, which strips the `assert` inside asyncio that a lost
+Lease's cut rests on (verified-facts.md, uvicorn 0.54.0). `make imagecheck` builds and runs it."""
 
 from __future__ import annotations
 
@@ -157,8 +157,14 @@ def test_the_image_runs_as_a_user_that_is_not_root() -> None:
     assert users[-1].partition(":")[0] not in ("0", "root")
 
 
-def test_the_image_takes_no_build_argument() -> None:
-    assert [args for keyword, args in _instructions() if keyword == "ARG"] == []
+def test_the_build_stage_alone_takes_the_commit() -> None:
+    """The image's context holds no .git, so the commit its `--version` names arrives as a build argument (D-106):
+    one, in the build stage, before its first `RUN` (the wheel's build reads it), and none in the final stage."""
+    found = _instructions()
+    assert [args for keyword, args in found if keyword == "ARG"] == ["FYLGJA_BUILD_COMMIT"]
+    keywords = [keyword for keyword, _ in found]
+    assert keywords.index("ARG") < keywords.index("RUN")
+    assert [args for keyword, args in _final_stage() if keyword == "ARG"] == []
 
 
 def test_the_image_never_runs_python_optimised() -> None:

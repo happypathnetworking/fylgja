@@ -1,7 +1,7 @@
 """The wheel check's parts that need no network (D-066, D-084): the floors it installs the base
 alone at are the lower bounds of the base's ranges in `core/pyproject.toml`, read from there and
 stated by no test, and an entry that is no range is refused; and the base modules it imports
-there are the sixteen `test_boundary_base.py` holds, read from the script by `ast`, so the two
+there are the seventeen `test_boundary_base.py` holds, read from the script by `ast`, so the two
 lists cannot drift. What it holds each reader's command never to load beside the base is that
 reader's import test's `FORBIDDEN`, the script's tuple read from the loaded module and the test's
 by `ast`, so those cannot drift either; nor can what it holds each change source never to load
@@ -155,7 +155,7 @@ def test_main_with_no_uv_or_another_uv_makes_no_directory(
 def test_each_environment_wheel_and_install_is_uv(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _script()
     ran: list[tuple[list[str], Path]] = []
-    monkeypatch.setattr(module, "run", lambda argv, cwd: ran.append((argv, cwd)))
+    monkeypatch.setattr(module, "run", lambda argv, cwd, env=None: ran.append((argv, cwd)))
     monkeypatch.setattr(module, "uv", lambda: "uv")
     python = module.sys.executable
     assert module.venv(Path("/t/e")) == Path("/t/e/bin")
@@ -236,3 +236,62 @@ def test_the_base_requirements_are_the_cores_unmarked_entries(tmp_path: Path) ->
     wheel = _wheel(tmp_path, "fylgja-core", "1.0.0rc1",
                    ["httpx<1,>=0.27.0", "PyYAML<7,>=6.0.3", "uvicorn==0.54.0; extra == \"server\""])
     assert _script().base_requirements(wheel) == ["httpx<1,>=0.27.0", "PyYAML<7,>=6.0.3"]
+
+
+def _tree_commit() -> str:
+    """The tree's commit as `Makefile`'s `COMMIT` and each `setup.py` read it: HEAD, and `-dirty` where git has
+    anything to say of the tree."""
+    def git(*argv: str) -> str:
+        return subprocess.run(["git", "-C", str(ROOT), *argv], capture_output=True, text=True, check=True).stdout
+
+    return git("rev-parse", "HEAD").strip() + ("-dirty" if git("status", "--porcelain").strip() else "")
+
+
+def test_the_trees_commit_is_read_as_the_build_reads_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    module.tree_commit.cache_clear()
+    assert module.tree_commit() == _tree_commit()
+    module.tree_commit.cache_clear()
+    monkeypatch.setenv("PATH", "")
+    assert module.tree_commit() == "unknown"
+    module.tree_commit.cache_clear()
+
+
+def test_each_wheel_is_built_at_the_trees_commit_whatever_the_environment_says(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    given: list[dict[str, str] | None] = []
+    monkeypatch.setattr(module, "run", lambda argv, cwd, env=None: given.append(env))
+    monkeypatch.setattr(module, "uv", lambda: "uv")
+    monkeypatch.setenv("FYLGJA_BUILD_COMMIT", "f" * 40)
+    monkeypatch.setattr(module, "tree_commit", lambda: "0" * 40 + "-dirty")
+    module.wheel(Path("/t/src/core"), Path("/t/dist"))
+    monkeypatch.setattr(module, "tree_commit", lambda: "unknown")
+    module.wheel(Path("/t/src/core"), Path("/t/dist"))
+    assert given[0] is not None and given[0]["FYLGJA_BUILD_COMMIT"] == "0" * 40 + "-dirty"
+    assert given[1] is not None and "FYLGJA_BUILD_COMMIT" not in given[1]  # no git: the build says unknown itself
+
+
+def test_a_wheel_holding_another_commit_or_none_is_named(tmp_path: Path) -> None:
+    module = _script()
+    wheel = tmp_path / "w-1-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("fylgja_core/COMMIT", "a" * 40 + "\n")
+    module.held_commit(wheel, "fylgja_core", "a" * 40)
+    for package, commit in (("fylgja_core", "b" * 40), ("fylgja_netbox", "a" * 40)):
+        with pytest.raises(module.Failure) as raised:
+            module.held_commit(wheel, package, commit)
+        assert wheel.name in str(raised.value) and f"{package}/COMMIT" in str(raised.value)
+
+
+def test_a_command_answers_version_with_its_program_the_version_and_the_commit(tmp_path: Path) -> None:
+    module = _script()
+    for said, passes in (("prog 1.0.0rc1 (commit abc)\n", True), ("prog 1.0.0rc1\n", False),
+                         ("other 1.0.0rc1 (commit abc)\n", False), ("prog 1.0.0rc1 (commit abd)\n", False)):
+        command = tmp_path / "prog"
+        command.write_text("#!/bin/sh\nprintf '%s\\n' '" + said.rstrip("\n") + "'\n")
+        command.chmod(0o755)
+        if passes:
+            module.answers_version(command, "prog", "1.0.0rc1", "abc", tmp_path)
+        else:
+            with pytest.raises(module.Failure, match="--version"):
+                module.answers_version(command, "prog", "1.0.0rc1", "abc", tmp_path)

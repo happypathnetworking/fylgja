@@ -55,7 +55,7 @@ from fake_api import (
     watch,
 )
 
-from fylgja_core import cli, schemas
+from fylgja_core import cli, release, schemas
 from fylgja_core.findings import Finding
 
 TWIN_PATH = f"/v1/twins/{TWIN}"
@@ -253,6 +253,11 @@ def test_a_usage_error_exits_2_with_the_usage(capsys: pytest.CaptureFixture[str]
     assert (r.code, r.out) == (2, "")
     assert "usage: fylgja-core" in r.err
     assert api.requests == []
+
+
+def test_version_names_the_version_and_the_commit(capsys: pytest.CaptureFixture[str]) -> None:
+    r = fylgja(capsys, None, "--version")
+    assert (r.code, r.out, r.err) == (0, f"fylgja-core {release.build('fylgja-core', 'fylgja_core')}\n", "")
 
 
 def test_help_exits_0(capsys: pytest.CaptureFixture[str]) -> None:

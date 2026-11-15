@@ -544,8 +544,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="fylgja-core-server",
         description="Serve API 1 and run the reconcile loop over one store. Every setting is a FYLGJA_* "
-                    "variable: FYLGJA_STORE, FYLGJA_PACKAGES and FYLGJA_TOKENS; FYLGJA_LISTEN, FYLGJA_DRIVER, "
-                    "FYLGJA_WORKERS, FYLGJA_STEP_WAIT_S and FYLGJA_RESYNC_S with their defaults; "
+                    "variable: FYLGJA_STORE and FYLGJA_TOKENS, which are required; FYLGJA_PACKAGES, the directories of "
+                    "platform and probe packages, unset or empty the packages this install carries; FYLGJA_LISTEN, "
+                    "FYLGJA_DRIVER, FYLGJA_WORKERS, FYLGJA_STEP_WAIT_S and FYLGJA_RESYNC_S with their defaults; "
                     "FYLGJA_CLABERNETES_NAMESPACE and FYLGJA_POD_CIDR, required by the clabernetes driver, which "
                     "reaches the cluster through KUBECONFIG off it; FYLGJA_LAB_POOL, an IPv4 network the local driver "
                     "takes each lab's /24 from in place of its default; FYLGJA_S3_ENDPOINT, FYLGJA_S3_ACCESS_KEY, "

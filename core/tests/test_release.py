@@ -216,3 +216,34 @@ def test_each_build_writes_the_commit_it_was_made_at(
     step.build_lib = str(tmp_path / "lib")
     step.run()
     assert (tmp_path / "lib" / PACKAGES[member] / "COMMIT").read_text() == HEX + "\n"
+
+
+def build_core(module: ModuleType, lib: Path) -> None:
+    step = module.BuildPy()
+    step.build_lib = str(lib)
+    step.run()
+
+
+def test_the_cores_build_ships_each_packages_yaml_and_nothing_else(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module, _ = load_setup("core", monkeypatch)
+    assert module.CORE_PACKAGES == ("psp", "probes")
+    monkeypatch.setenv(VARIABLE, HEX)
+    build_core(module, tmp_path / "lib")
+    tracked = git("ls-files", "-z", "psp/*.yaml", "probes/*.yaml").split("\0")[:-1]
+    assert tracked
+    shipped = tmp_path / "lib" / "fylgja_core" / "shipped"
+    carried = sorted(p.relative_to(shipped).as_posix() for p in shipped.rglob("*") if p.is_file())
+    assert carried == sorted(tracked)
+    for name in tracked:
+        assert (shipped / name).read_bytes() == (ROOT / name).read_bytes()
+
+    # a copy with an empty probes/ stops the build, naming the directory
+    copy = tmp_path / "copy"
+    shutil.copytree(ROOT / "psp", copy / "psp")
+    (copy / "probes").mkdir()
+    (copy / "probes" / "README.md").write_text("no package here\n")
+    monkeypatch.setattr(module, "ROOT", copy)
+    with pytest.raises(SystemExit, match=re.escape(str(copy / "probes"))):
+        build_core(module, tmp_path / "lib2")

@@ -1,5 +1,5 @@
 """The build steps `pyproject.toml` cannot state: the distribution's version and commit, and the wheel carries the
-core's formats as package data.
+core's formats and packages as package data.
 
 `VERSION` at the root is the one place the version is written, read by every distribution's build (D-106):
 setuptools reads no file outside a project, so `version()` reads it and passes it to `setup()`.
@@ -11,6 +11,10 @@ setuptools reads no file outside a project, so `version()` reads it and passes i
 `CORE_FORMATS`, into the build directory, never into `src/`, so a checkout keeps reading the
 repository's. A format another distribution reads is that distribution's to carry (D-084), so a
 format added to `formats/` ships in this wheel only once it is listed here.
+
+The wheel carries the platform and probe packages too (D-106): every `*.yaml` of each directory `CORE_PACKAGES` names,
+at the root, is copied to `fylgja_core/shipped/<name>/`, which `packages.shipped()` finds and `FYLGJA_PACKAGES`, unset,
+means. A directory holding none stops the build naming it, and a README stays in the tree.
 """
 
 import os
@@ -36,6 +40,9 @@ CORE_FORMATS = (
     "problem-1.schema.json",
     "twin-record-1.schema.json",
 )
+
+
+CORE_PACKAGES = ("psp", "probes")
 
 
 def version(root: Path = ROOT) -> str:
@@ -88,6 +95,14 @@ class BuildPy(build_py):
         self.mkpath(str(target))
         for name in CORE_FORMATS:
             self.copy_file(str(FORMATS / name), str(target / name))
+        shipped = Path(self.build_lib) / "fylgja_core" / "shipped"
+        for name in CORE_PACKAGES:
+            found = sorted((ROOT / name).glob("*.yaml"))
+            if not found:
+                raise SystemExit(f"no *.yaml under {ROOT / name}: the wheel carries each package directory's YAML")
+            self.mkpath(str(shipped / name))
+            for path in found:
+                self.copy_file(str(path), str(shipped / name / path.name))
         # The commit this build is made at, which the package answers `--version` with (fylgja_core.release).
         package = Path(self.build_lib) / "fylgja_core"
         self.mkpath(str(package))

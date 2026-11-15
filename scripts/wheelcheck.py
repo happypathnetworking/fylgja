@@ -12,14 +12,20 @@ network, for the build's requirements and the wheel's dependencies. Each build's
 `FYLGJA_BUILD_COMMIT` (the copy holds no `.git`), and holds it as `<package>/COMMIT`; and each installed command's
 `--version` is `<program> <version> (commit <commit>)`, one line. The core's check, `check`:
 
-1. **The wheel.** It is built from a copy of `core/` and `formats/` whose `formats/` is first given
-   `other-1.schema.json`, a schema no list names, as a format another distribution reads would be
-   there; its `fylgja_core/formats/` holds the core's formats, `CORE_FORMATS` in `core/setup.py`,
-   and no other.
+1. **The wheel.** It is built from a copy of `core/`, `formats/`, `psp/` and `probes/` (their READMEs among them)
+   whose `formats/` is first given `other-1.schema.json`, a schema no list names, as a format another distribution
+   reads would be there; its `fylgja_core/formats/` holds the core's formats, `CORE_FORMATS` in `core/setup.py`,
+   and no other, and its `fylgja_core/shipped/` holds, under `CORE_PACKAGES`' names, exactly the YAML git tracks in
+   the tree's `psp/` and `probes/`, byte for byte, and no README (D-106).
 2. **With the extra**, `uv pip install "<wheel>[server]"` in an empty environment: the formats the package
    reads are its own, outside the tree; `three-node.json` validates and `{}` does not; API 1's
    `Created` reads; and `fylgja-core --help` and `fylgja-core-server --help` exit 0, the second
-   once the server's modules have imported, since the server's own parser answers it.
+   once the server's modules have imported, since the server's own parser answers it. Then `fylgja-core-server`
+   is started from that environment with `FYLGJA_STORE`, `FYLGJA_TOKENS` (a token this script makes, never prints and
+   hashes by the installed `auth.hash_token`), `FYLGJA_LISTEN` on a free loopback port and no `FYLGJA_PACKAGES`, a stub
+   `docker` that prints nothing and exits 0 first on `PATH`, so no Docker is needed: `GET /v1/version` answers within
+   `START_S` seconds with the build the wheel holds, `three-node.json` is filed and its bundle built, 201, which only
+   the shipped `nokia_srlinux` and `ping` make possible, and SIGTERM ends it with 143 within `STOP_S` seconds.
 3. **Alone, at its floors**, in a second empty environment: `uv pip install --constraints <file> <wheel>`,
    the file one `name==floor` line a base library, the floors of `core/pyproject.toml`'s ranges.
    There each of the four is installed at its floor; no other library the wheel names for the
@@ -103,11 +109,17 @@ import functools
 import json
 import os
 import re
+import secrets
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -117,6 +129,10 @@ VERSION = ROOT / "VERSION"
 # The variable the builds read the commit they are made at from (each `setup.py`).
 COMMIT_VARIABLE = "FYLGJA_BUILD_COMMIT"
 PREFIX = "fylgja_core/formats/"
+SHIPPED_PREFIX = "fylgja_core/shipped/"
+# The server's start, and its stop on SIGTERM: the seconds each may take (D-106, D-062).
+START_S = 30
+STOP_S = 10
 FIXTURE = ROOT / "testdata" / "blueprint" / "three-node.json"
 # Planted in the copy of `formats/` the wheel is built from: a format no distribution's list names.
 PLANTED = "other-1.schema.json"
@@ -158,6 +174,11 @@ here = Path(fylgja_core.__file__).resolve().parent / "formats"
 found = schemas.formats_dir()
 assert found == here, f"formats_dir() is {found}, not {here}"
 assert root not in found.parents, f"formats_dir() {found} is under the tree {root}"
+from fylgja_core import packages
+shipped = packages.shipped()
+want = (here.parent / "shipped" / "psp", here.parent / "shipped" / "probes")
+assert shipped == want, f"packages.shipped() is {shipped}, not {want}"
+assert not any(root in d.parents for d in shipped), f"shipped() {shipped} is under the tree {root}"
 blueprint = schemas.validator("blueprint-1")
 import json
 assert blueprint.is_valid(json.loads(fixture.read_text())), f"{fixture.name} does not validate"
@@ -532,6 +553,46 @@ def core_formats(setup: Path = ROOT / "core" / "setup.py") -> tuple[str, ...]:
     return found
 
 
+def core_packages(setup: Path = ROOT / "core" / "setup.py") -> tuple[str, ...]:
+    """The directories whose YAML the core's wheel carries, `CORE_PACKAGES` in `setup`, read by `ast` as
+    `core_formats` reads its list."""
+    try:
+        module = ast.parse(setup.read_text(), str(setup))
+    except (OSError, SyntaxError) as e:
+        raise Failure(f"{setup} cannot be read: {e}") from e
+    assigned = [
+        statement.value
+        for statement in module.body
+        if isinstance(statement, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "CORE_PACKAGES" for target in statement.targets)
+    ]
+    if not assigned:
+        raise Failure(f"{setup} assigns no CORE_PACKAGES")
+    try:
+        found = ast.literal_eval(assigned[-1])
+    except (ValueError, TypeError) as e:
+        raise Failure(f"{setup}'s CORE_PACKAGES is no literal: {e}") from e
+    if not isinstance(found, tuple) or not all(isinstance(name, str) for name in found):
+        raise Failure(f"{setup}'s CORE_PACKAGES is no tuple of strings: {found!r}")
+    return found
+
+
+def tracked_packages(names: tuple[str, ...], root: Path = ROOT) -> dict[str, bytes]:
+    """The YAML git tracks directly under each of `names` in `root`, by its path from `root`, and its bytes."""
+    try:
+        done = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", *(f"{n}/*.yaml" for n in names)],
+                              capture_output=True, text=True, check=False)
+    except OSError as e:
+        raise Failure(f"git cannot be run: {e}") from e
+    if done.returncode != 0:
+        raise Failure(f"git ls-files exited {done.returncode}:\n{done.stderr}")
+    found = {path: (root / path).read_bytes() for path in filter(None, done.stdout.split("\0"))
+             if path.count("/") == 1}
+    if not found:
+        raise Failure(f"git tracks no YAML under {', '.join(names)}: the comparison would pass vacuously")
+    return found
+
+
 def floors(pyproject: Path = ROOT / "core" / "pyproject.toml") -> dict[str, str]:
     """Each base library's floor, the lower bound of its entry in `pyproject`'s `dependencies`, read
     by `tomllib`; `Failure` naming an entry that is no `name>=floor,<ceiling`."""
@@ -716,6 +777,8 @@ def build(tmp: Path) -> Path:
         )
         shutil.copytree(ROOT / "formats", src / "formats")
         shutil.copyfile(VERSION, src / "VERSION")
+        for name in core_packages():
+            shutil.copytree(ROOT / name, src / name)
         planted = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
         (src / "formats" / PLANTED).write_text(json.dumps(planted) + "\n")
         wheel(src / "core", dist)
@@ -737,8 +800,116 @@ def carried(wheel: Path) -> int:
     return len(found)
 
 
-def with_server(tmp: Path, wheel: Path) -> None:
-    """The wheel with its `server` extra, in an empty venv: `PROBE`, and each console script's `--help`."""
+def shipped(wheel: Path) -> int:
+    """How many package files the wheel carries under `fylgja_core/shipped/`, once they are the YAML git tracks in the
+    tree's `CORE_PACKAGES` directories, byte for byte, and no other file: no README."""
+    with zipfile.ZipFile(wheel) as archive:
+        carried = {n[len(SHIPPED_PREFIX):]: archive.read(n) for n in archive.namelist()
+                   if n.startswith(SHIPPED_PREFIX) and not n.endswith("/")}
+    tree = tracked_packages(core_packages())
+    problems = [f"missing from the wheel: {n}" for n in sorted(tree.keys() - carried.keys())]
+    problems += [f"extra in the wheel: {n}" for n in sorted(carried.keys() - tree.keys())]
+    problems += [f"differs from the tree's: {n}" for n in sorted(tree.keys() & carried.keys()) if tree[n] != carried[n]]
+    if problems:
+        raise Failure("the wheel's shipped packages differ from the YAML git tracks in " + ", ".join(core_packages())
+                      + ":\n" + "\n".join(problems))
+    return len(carried)
+
+
+def stub_docker(directory: Path) -> Path:
+    """A `docker` that prints nothing and exits 0, in `directory`, which goes first on the server's `PATH`: the local
+    driver asks the host's docker at start, and this check needs none."""
+    stub = directory / "docker"
+    stub.write_text("#!/bin/sh\nexit 0\n")
+    stub.chmod(0o755)
+    return directory
+
+
+def answers(url: str, token: str, body: bytes | None = None) -> tuple[int, bytes]:
+    """The status and body of `url`, a GET or, given `body`, a JSON POST, with the bearer token."""
+    request = urllib.request.Request(url, data=body, headers={"Authorization": f"Bearer {token}",
+                                                              "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as reply:
+            return reply.status, reply.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def serve(tmp: Path, env: Path, build: str) -> float:
+    """`fylgja-core-server`, started from the environment `env` with no `FYLGJA_PACKAGES`: the seconds to its first
+    answer of `GET /v1/version`, which must come within `START_S` and say `build`; `three-node.json` filed and its
+    bundle built, 201; and SIGTERM ending it with 143 within `STOP_S`. The token is made here, hashed by the installed
+    `auth.hash_token`, handed to it by stdin, written as its hash alone and printed nowhere."""
+    token = secrets.token_urlsafe(24)
+    hashing = "import sys; from fylgja_core.server import auth; print(auth.hash_token(sys.stdin.read()))"
+    hashed = subprocess.run([str(env / "python"), "-I", "-c", hashing], input=token, capture_output=True, text=True,
+                            check=False)
+    if hashed.returncode != 0 or not re.fullmatch(r"[0-9a-f]{64}\n", hashed.stdout):
+        raise Failure("the installed fylgja_core.server.auth.hash_token did not hash a token: "
+                      + hashed.stderr.replace(token, "<token>"))
+    root = tmp / "serve"
+    root.mkdir()
+    tokens = root / "tokens"
+    tokens.write_text(f"{hashed.stdout.strip()} wheelcheck\n")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    environment = {k: v for k, v in os.environ.items() if not k.startswith("FYLGJA_")}
+    (root / "bin").mkdir()
+    environment["PATH"] = f"{stub_docker(root / 'bin')}:{os.environ.get('PATH', os.defpath)}"
+    environment.update(FYLGJA_STORE=str(root / "store"), FYLGJA_TOKENS=str(tokens),
+                       FYLGJA_LISTEN=f"127.0.0.1:{port}")
+    base = f"http://127.0.0.1:{port}"
+    started = time.monotonic()
+    log = root / "server.log"
+    with log.open("w") as sink:
+        server = subprocess.Popen([str(env / "fylgja-core-server")], cwd=root, env=environment,
+                                  stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.STDOUT, text=True)
+    try:
+        took = -1.0
+        while True:
+            if server.poll() is not None:
+                raise Failure(f"fylgja-core-server with no FYLGJA_PACKAGES exited {server.returncode} before it "
+                              f"answered:\n{log.read_text()}".replace(token, "<token>"))
+            try:
+                status, body = answers(f"{base}/v1/version", token)
+                if status == 200:
+                    took = time.monotonic() - started
+                    break
+            except OSError:
+                pass
+            if time.monotonic() - started > START_S:
+                raise Failure(f"fylgja-core-server gave no answer to GET /v1/version within {START_S} s")
+            time.sleep(0.1)
+        said = json.loads(body).get("build")
+        if said != build:
+            raise Failure(f"GET /v1/version says the build {said!r}, and the wheel holds {build!r}")
+        status, body = answers(f"{base}/v1/blueprints", token, FIXTURE.read_bytes())
+        if status not in (200, 201):
+            raise Failure(f"filing {FIXTURE.name} answered {status}, not 201:\n{body.decode(errors='replace')}")
+        blueprint_id = json.loads(body)["id"]
+        status, body = answers(f"{base}/v1/bundles", token, json.dumps({"blueprint_id": blueprint_id}).encode())
+        if status != 201:
+            raise Failure(f"building {FIXTURE.name}'s bundle answered {status}, not 201: the shipped packages did "
+                          f"not load\n{body.decode(errors='replace')}")
+        server.send_signal(signal.SIGTERM)
+        try:
+            server.wait(timeout=STOP_S)
+        except subprocess.TimeoutExpired:
+            raise Failure(f"fylgja-core-server did not end within {STOP_S} s of SIGTERM") from None
+        if server.returncode != 143:
+            raise Failure(f"fylgja-core-server ended {server.returncode} on SIGTERM, not 143")
+        return took
+    finally:
+        if server.poll() is None:
+            server.kill()
+            server.wait()
+
+
+def with_server(tmp: Path, wheel: Path) -> float:
+    """The wheel with its `server` extra, in an empty venv: `PROBE`, each console script's `--help` and `--version`,
+    and the server started there with no `FYLGJA_PACKAGES` (`serve`): the seconds it took to answer."""
     env = venv(tmp / "venv-server")
     install(env, f"{wheel}[server]")
     run([str(env / "python"), "-I", "-c", PROBE, str(FIXTURE), str(ROOT)], tmp)
@@ -746,6 +917,7 @@ def with_server(tmp: Path, wheel: Path) -> None:
     run([str(env / "fylgja-core-server"), "--help"], tmp)
     for program in ("fylgja-core", "fylgja-core-server"):
         answers_version(env / program, program, tree_version(), tree_commit(), tmp)
+    return serve(tmp, env, f"{tree_version()} (commit {tree_commit()})")
 
 
 def alone(tmp: Path, wheel: Path, found: dict[str, str]) -> None:
@@ -777,13 +949,16 @@ def check(tmp: Path) -> str:
     versioned(wheel, tree_version())
     held_commit(wheel, "fylgja_core", tree_commit())
     count = carried(wheel)
-    with_server(tmp, wheel)
+    kept = shipped(wheel)
+    took = with_server(tmp, wheel)
     alone(tmp, wheel, found)
     at = ", ".join(f"{name} {floor}" for name, floor in found.items())
     return (f"wheelcheck: {wheel.name} is built at {tree_commit()} and carries the core's {count} formats and no "
-            "other; fylgja-core and fylgja-core-server answer --version with it; with [server] it validates "
-            f"{FIXTURE.name} outside the tree and the server imports; alone at its floors ({at}) the base imports, "
-            "follows a run and refuses to serve")
+            f"other, and {kept} package files, the tracked YAML of {' and '.join(f'{n}/' for n in core_packages())} "
+            f"and no other; started with no FYLGJA_PACKAGES it answered in {took:.1f} s, built {FIXTURE.name}'s "
+            "bundle and ended 143 on SIGTERM; fylgja-core and fylgja-core-server answer --version with it; with "
+            f"[server] it validates {FIXTURE.name} outside the tree and the server imports; alone at its floors "
+            f"({at}) the base imports, follows a run and refuses to serve")
 
 
 def build_reader(tmp: Path) -> Path:

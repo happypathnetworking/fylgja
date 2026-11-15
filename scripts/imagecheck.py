@@ -9,17 +9,18 @@ read directly. The image:
 - runs as the user 10001 (`id -u`);
 - given only `FYLGJA_STORE=/tmp/store` and `FYLGJA_TOKENS=/nonexistent`, exits 2 with one ERROR
   line on stderr, JSON, whose `variable` is `FYLGJA_TOKENS`: its entry point is
-  `fylgja-core-server`, which opened its store under `/tmp` as that user and loaded the packages
-  inside against the wheel's formats before the token file stopped it;
+  `fylgja-core-server`, which opened its store under `/tmp` as that user and loaded the shipped packages, with
+  `FYLGJA_PACKAGES` unset, against the wheel's formats before the token file stopped it;
 - carries the core's formats, those `core/setup.py` copies by its list `CORE_FORMATS`, equal to
   the tree's by name and by bytes, and `schemas.formats_dir()` reads them there, so no stale
   build directory shipped one since removed and no other distribution's format in `formats/`
   shipped;
-- holds, in its copies of the tree's `psp/` and `probes/` (the `Dockerfile` copies each whole),
-  the files git tracks there and no other, by path (`find -type f` against `git ls-files`): a
-  file git ignores under a directory the context allows (an editor's `*.swp` or `*~`, a nested
-  `local/`) reaches the context with no `-dirty` tag to say so, and fails here. The tree's other
-  allowed paths reach the image only through the wheel, whose formats are the bullet above's.
+- carries the platform and probe packages in its wheel (D-106), not in copies of its own: it has no `/opt/fylgja/psp`
+  or `/opt/fylgja/probes`, `FYLGJA_PACKAGES` is in no `Config.Env`, and `packages.shipped()` answers
+  `fylgja_core/shipped/psp` and `fylgja_core/shipped/probes` under the installed package, holding the YAML git tracks
+  in the tree's `psp/` and `probes/`, by name and by bytes, and no other file (`git ls-files`): a file git ignores
+  under a directory the context allows (an editor's `*.swp` or `*~`) reaches the context with no `-dirty` tag to say
+  so, and fails here;
 
 - answers `fylgja-core --version` and `fylgja-core-server --version` with the tree's version, `VERSION`, and a commit
   that begins with the tag's twelve characters and has `-dirty` exactly where the tag has it: the image's build stage
@@ -39,7 +40,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-COPIES = {"psp": "/opt/fylgja/psp", "probes": "/opt/fylgja/probes"}  # the Dockerfile's whole copies of the tree's
+PACKAGE_DIRS = ("psp", "probes")  # the tree's directories of packages, each the wheel's `shipped/<name>`
+GONE = ("/opt/fylgja/psp", "/opt/fylgja/probes")  # the image's own copies, which it no longer has
+VARIABLE = "FYLGJA_PACKAGES"
 USER = "10001"
 REFUSED = "FYLGJA_TOKENS"
 RUN = ["run", "--rm", "--pull", "never"]
@@ -53,6 +56,20 @@ from fylgja_core import schemas
 here = Path(fylgja_core.__file__).resolve().parent / "formats"
 files = {p.name: base64.b64encode(p.read_bytes()).decode() for p in sorted(here.iterdir()) if p.is_file()}
 print(json.dumps({"here": str(here), "read": str(schemas.formats_dir()), "files": files}))
+"""
+
+
+# Run inside the image: where `packages.shipped()` answers, and the files under each directory, by path and bytes.
+PROBE_PACKAGES = """
+import base64, json
+from pathlib import Path
+import fylgja_core
+from fylgja_core import packages
+here = Path(fylgja_core.__file__).resolve().parent / "shipped"
+found = packages.shipped()
+files = {f"{d.name}/{p.name}": base64.b64encode(p.read_bytes()).decode()
+         for d in found for p in sorted(d.rglob("*")) if p.is_file()}
+print(json.dumps({"here": str(here), "found": [str(d) for d in found], "files": files}))
 """
 
 
@@ -85,13 +102,13 @@ def core_formats(setup: Path = ROOT / "core" / "setup.py") -> tuple[str, ...]:
     return found
 
 
-def docker(argv: list[str], status: int = 0) -> subprocess.CompletedProcess[str]:
-    """`docker` with `argv`, which must exit `status`."""
+def docker(argv: list[str], status: int | None = 0) -> subprocess.CompletedProcess[str]:
+    """`docker` with `argv`, which must exit `status`; any status where that is `None`."""
     try:
         done = subprocess.run(["docker", *argv], capture_output=True, text=True, check=False)
     except OSError as e:
         raise Failure(f"docker cannot be run: {e}") from e
-    if done.returncode != status:
+    if status is not None and done.returncode != status:
         command = " ".join(argv[:6])
         raise Failure(f"docker {command} ... exited {done.returncode}, not {status}:\n{done.stdout}{done.stderr}")
     return done
@@ -156,25 +173,43 @@ def tracked(paths: list[str]) -> set[str]:
     return set(filter(None, done.stdout.split("\0")))
 
 
-def differ(carried: set[str], tracked: set[str]) -> list[str]:
-    """Each path the image's copies and git's tracked files do not share, named by where it is."""
-    return ([f"in the image, not tracked by git: {path}" for path in sorted(carried - tracked)]
-            + [f"tracked by git, not in the image: {path}" for path in sorted(tracked - carried)])
-
-
-def check_copies(image: str) -> int:
-    """How many files the image's copies of the tree's directories hold, once they are the ones
-    git tracks there."""
-    done = docker([*RUN, "--entrypoint", "find", image, *COPIES.values(), "-type", "f", "-print0"])
-    carried: set[str] = set()
-    for path in filter(None, done.stdout.split("\0")):
-        named = [f"{tree}{path[len(inside):]}" for tree, inside in COPIES.items() if path.startswith(f"{inside}/")]
-        if not named:
-            raise Failure(f"find printed a path outside the image's copies: {path}")
-        carried.add(named[0])
-    problems = differ(carried, tracked(list(COPIES)))
+def check_packages(image: str) -> int:
+    """How many package files the image carries, once it has no copies of its own, sets no `FYLGJA_PACKAGES`, and its
+    `packages.shipped()` holds the tree's tracked YAML of `psp/` and `probes/`, by name and by bytes, and no other."""
+    inspected = docker(["image", "inspect", "--format", "{{json .Config.Env}}", image]).stdout
+    try:
+        environment = json.loads(inspected)
+    except ValueError as e:
+        raise Failure(f"docker image inspect printed no JSON for Config.Env:\n{inspected}") from e
+    if not isinstance(environment, list):
+        environment = []
+    if any(str(entry).split("=", 1)[0] == VARIABLE for entry in environment):
+        raise Failure(f"the image sets {VARIABLE}: its packages are the wheel's, with the variable unset")
+    for path in GONE:
+        if docker([*RUN, "--entrypoint", "test", image, "-e", path], status=None).returncode == 0:
+            raise Failure(f"the image still holds its own copy, {path}")
+    done = docker([*RUN, "--entrypoint", "python", image, "-I", "-c", PROBE_PACKAGES])
+    try:
+        found = json.loads(done.stdout)
+    except ValueError as e:
+        raise Failure(f"the probe of the image's packages printed no JSON:\n{done.stdout}{done.stderr}") from e
+    expected = [f"{found['here']}/{name}" for name in PACKAGE_DIRS]
+    if found["found"] != expected:
+        raise Failure(f"packages.shipped() is {found['found']}, not {expected}")
+    carried = {name: base64.b64decode(data) for name, data in found["files"].items()}
+    names = tracked([f"{name}/*.yaml" for name in PACKAGE_DIRS])
+    try:
+        tree = {name: (ROOT / name).read_bytes() for name in names}
+    except OSError as e:
+        raise Failure(f"a tracked package cannot be read: {e}") from e
+    if not tree:
+        raise Failure("git tracks no YAML under psp/ or probes/: the comparison would pass vacuously")
+    problems = [f"missing from the image: {n}" for n in sorted(tree.keys() - carried.keys())]
+    problems += [f"extra in the image: {n}" for n in sorted(carried.keys() - tree.keys())]
+    problems += [f"differs from the tree's: {n}" for n in sorted(tree.keys() & carried.keys()) if tree[n] != carried[n]]
     if problems:
-        raise Failure("the image's copies of the tree differ from git's tracked files:\n" + "\n".join(problems))
+        raise Failure("the image's packages differ from git's tracked YAML of psp/ and probes/:\n"
+                      + "\n".join(problems))
     return len(carried)
 
 
@@ -212,7 +247,7 @@ def main(argv: list[str]) -> int:
         check_user(image)
         refusal = check_start(image)
         count = check_formats(image)
-        copied = check_copies(image)
+        carried = check_packages(image)
         built = check_build(image)
     except Failure as failure:
         print(f"imagecheck: {failure}", file=sys.stderr)
@@ -220,8 +255,8 @@ def main(argv: list[str]) -> int:
     print(f"imagecheck: {image} runs as {USER}")
     print(f"imagecheck: given no token file it exits 2 naming {REFUSED}: {refusal}")
     print(f"imagecheck: it carries the core's {count} formats, formats/'s byte for byte, and reads them there")
-    print(f"imagecheck: its copies of {' and '.join(f'{tree}/' for tree in COPIES)} hold git's {copied} tracked "
-          "files there, and no other")
+    print(f"imagecheck: it has no copies of psp/ or probes/ and sets no {VARIABLE}; its wheel's shipped packages "
+          f"are git's {carried} tracked YAML files there, byte for byte, and no other")
     print(f"imagecheck: fylgja-core and fylgja-core-server answer --version with the tree's version and the commit "
           f"{built}, the tag's")
     print(image.rpartition(":")[2])

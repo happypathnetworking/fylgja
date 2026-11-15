@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from typing import Any
 import pytest
 import yaml
 
-from fylgja_core import schemas
+from fylgja_core import packages, schemas
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = [*sorted((ROOT / "psp").glob("*.yaml")), ROOT / "testdata" / "packages" / "chassisos.yaml"]
@@ -47,3 +48,31 @@ INVALID = sorted((ROOT / "testdata" / "probes" / "invalid").glob("*.json"))
 def test_each_invalid_declaration_fails_its_schema_unless_its_fault_is_beyond_it(path: Path) -> None:
     found = errors("probes-1", json.loads(path.read_text()))
     assert (found == []) == (path.name in BEYOND_SCHEMA), found
+
+
+def test_the_shipped_packages_of_a_checkout_are_the_trees() -> None:
+    assert packages.shipped() == (ROOT / "psp", ROOT / "probes")
+
+
+def test_the_shipped_packages_of_an_install_are_beside_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "site" / "shipped_pkg"
+    for directory in (package, package / "shipped" / "psp", package / "shipped" / "probes"):
+        directory.mkdir(parents=True, exist_ok=True)
+    (package / "__init__.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path / "site"))
+    importlib.invalidate_caches()
+    assert packages.shipped("shipped_pkg") == (package / "shipped" / "psp", package / "shipped" / "probes")
+
+
+def test_an_install_with_neither_has_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = tmp_path / "site" / "bare_pkg"
+    (package / "shipped" / "psp").mkdir(parents=True)  # one of the two is not a package pair
+    (package / "__init__.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path / "site"))
+    importlib.invalidate_caches()
+    with pytest.raises(FileNotFoundError):
+        packages.shipped("bare_pkg")
+    with pytest.raises(ModuleNotFoundError):
+        packages.shipped("no_such_package_anywhere")

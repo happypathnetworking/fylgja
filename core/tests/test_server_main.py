@@ -202,6 +202,36 @@ def test_the_help_names_the_lab_pool(capsys: pytest.CaptureFixture[str]) -> None
     assert "FYLGJA_LAB_POOL" in capsys.readouterr().out
 
 
+def test_the_help_says_the_packages_default_to_the_installs(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--help"])
+    assert stopped.value.code == 0
+    text = " ".join(capsys.readouterr().out.split())
+    assert "the packages this install carries" in text
+    assert "FYLGJA_STORE and FYLGJA_TOKENS, which are required" in text
+
+
+def test_a_server_given_no_packages_loads_the_shipped_ones(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("FYLGJA_PACKAGES")
+    made_drivers(monkeypatch)
+    results: list[packages.Loaded] = []
+    real = packages.load
+
+    def recording(dirs: Sequence[Path]) -> packages.Loaded:
+        results.append(real(dirs))
+        return results[-1]
+
+    monkeypatch.setattr(packages, "load", recording)
+    app, store = server.build_app(config.from_environ(os.environ))
+    store.close()
+    del app
+    (loaded,) = results
+    assert {"nokia_srlinux", "arista_eos"} <= set(loaded.platforms)
+    assert "ping" in loaded.probes
+
+
 def test_version_names_the_build_before_anything_is_read(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

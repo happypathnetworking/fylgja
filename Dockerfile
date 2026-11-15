@@ -1,5 +1,5 @@
-# The core's image (D-062): fylgja-core-server, with the platform and probe packages inside, run as
-# a user that is not root. `make image` builds it, tagged by its commit, and `make imagecheck` runs
+# The core's image (D-062): fylgja-core-server, with the platform and probe packages its wheel carries
+# (D-106), run as a user that is not root. `make image` builds it, tagged by its commit, and `make imagecheck` runs
 # it. The build context is .dockerignore's allow-list. No containerlab: a core in a pod serves the
 # clabernetes driver alone.
 
@@ -15,10 +15,14 @@ FROM python:3.14.9-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a0
 COPY --from=ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 /uv /usr/local/bin/uv
 
 # The tree's layout: core/setup.py copies into the wheel the formats its CORE_FORMATS names, each
-# byte for byte its file in ../formats (D-066, D-084), and reads the version from ../VERSION (D-106).
+# byte for byte its file in ../formats (D-066, D-084), the YAML of the packages its CORE_PACKAGES names,
+# each byte for byte its file in ../psp and ../probes, and reads the version from ../VERSION (D-106).
+# The final stage has no copy of the packages: the server finds the wheel's with FYLGJA_PACKAGES unset.
 COPY core/pyproject.toml core/setup.py /src/core/
 COPY core/src /src/core/src
 COPY formats /src/formats
+COPY psp /src/psp
+COPY probes /src/probes
 COPY VERSION /src/VERSION
 # The commit the image is built at, which the wheel's build writes into the package (core/setup.py): an argument, since
 # the context holds no .git. `make image` gives it; with none the build says unknown. In this stage alone, so the final
@@ -38,10 +42,7 @@ RUN uv venv --no-python-downloads --python /usr/local/bin/python3 /opt/fylgja/ve
 FROM python:3.14.9-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8
 
 COPY --from=build /opt/fylgja/venv /opt/fylgja/venv
-COPY psp /opt/fylgja/psp
-COPY probes /opt/fylgja/probes
-ENV FYLGJA_PACKAGES=/opt/fylgja/psp:/opt/fylgja/probes \
-    PATH=/opt/fylgja/venv/bin:$PATH
+ENV PATH=/opt/fylgja/venv/bin:$PATH
 USER 10001:10001
 # Never optimised, no -O and no PYTHONOPTIMIZE: the server refuses to start so (server.optimised).
 ENTRYPOINT ["fylgja-core-server"]

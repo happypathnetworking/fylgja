@@ -3445,6 +3445,23 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
     holds this).
   - built with no argument (`docker build` alone), `fylgja-core-server --version` printed `1.0.0rc1
     (commit unknown)`: the context holds no `.git`, so the build's git finds none.
+- **The packages in the core's wheel, in an image and outside the tree** *(Docker 29.8.1, uv 0.12.23, 2026-11-15)*.
+  `core/setup.py`'s `CORE_PACKAGES = ("psp", "probes")` copies each directory's `*.yaml` to
+  `fylgja_core/shipped/<name>/`; the Dockerfile's build stage copies `psp` and `probes` to `/src/` and its final stage
+  has no copy of either and no `ENV FYLGJA_PACKAGES`. Read once each, at `8129a6a` with the change uncommitted:
+  - `make wheelcheck`, in a copy of `core/`, `formats/`, `psp/` and `probes/` (READMEs among them) built by
+    `uv build --wheel`: the wheel's `fylgja_core/shipped/` held 3 files, the tracked YAML of `psp/` and `probes/`
+    byte for byte and no README; in the extra's environment, outside the tree, `packages.shipped()` answered
+    `<site-packages>/fylgja_core/shipped/psp` and `.../probes`, the same `find_spec` `schemas.formats_dir` rests on.
+  - `fylgja-core-server` of that environment, started with `FYLGJA_STORE`, `FYLGJA_TOKENS`, `FYLGJA_LISTEN` on a free
+    loopback port, no `FYLGJA_PACKAGES` and a stub `docker` that prints nothing and exits 0 first on `PATH`: its first
+    answer of `GET /v1/version` came 1.4 s after the process began (one run), with the build the wheel holds;
+    `three-node.json` was filed and its bundle built, 201; SIGTERM ended it with 143, inside 10 s.
+  - `make imagecheck` of `fylgja-core:8129a6aac989-dirty`: `/opt/fylgja/psp` and `/opt/fylgja/probes` were absent,
+    `FYLGJA_PACKAGES` was in no entry of `Config.Env`, and `packages.shipped()` in the image answered
+    `fylgja_core/shipped/psp` and `.../probes` under the installed package, holding 3 files, the tracked YAML by name
+    and bytes; with only `FYLGJA_STORE` and an unreadable `FYLGJA_TOKENS` the server exited 2 naming `FYLGJA_TOKENS`,
+    so it had loaded the shipped packages first.
 - **Pushed, by CONTRIBUTING.md's recipe as written** *(crane 0.22.1, Docker 29.8.1, 2026-11-07)*.
   Its first run, the image `fylgja-core:73c2f149ef62` to the cluster's registry, `<registry>`:
   - `crane auth login` with `--password-stdin`, `DOCKER_CONFIG` a new directory and the registry's

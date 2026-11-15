@@ -111,7 +111,8 @@ image:
 	docker build --build-arg FYLGJA_BUILD_COMMIT=$(COMMIT) -t $(IMAGE):$(TAG) .
 
 # The image built, then run: its user, its entry point's refusal, its formats (those CORE_FORMATS in core/setup.py
-# names, each byte for byte its file in formats/), its packages' files against git's, and the build its two commands
+# names, each byte for byte its file in formats/), its wheel's packages (the YAML git tracks in psp/ and probes/, no
+# copy of its own and no FYLGJA_PACKAGES), and the build its two commands
 # answer --version with, which names the commit in TAG; the tag printed last.
 imagecheck: image
 	python3 -I scripts/imagecheck.py $(IMAGE):$(TAG)

@@ -295,3 +295,51 @@ def test_a_command_answers_version_with_its_program_the_version_and_the_commit(t
         else:
             with pytest.raises(module.Failure, match="--version"):
                 module.answers_version(command, "prog", "1.0.0rc1", "abc", tmp_path)
+
+
+def test_the_core_packages_are_the_directories_setup_py_names() -> None:
+    assert _script().core_packages() == ("psp", "probes")
+
+
+def test_a_core_packages_list_that_is_none_is_refused(tmp_path: Path) -> None:
+    module = _script()
+    setup = tmp_path / "setup.py"
+    setup.write_text("OTHER = ('psp',)\n")
+    with pytest.raises(module.Failure, match="CORE_PACKAGES"):
+        module.core_packages(setup)
+    setup.write_text("CORE_PACKAGES = ['psp']\n")
+    with pytest.raises(module.Failure, match="tuple of strings"):
+        module.core_packages(setup)
+
+
+def _shipped_wheel(tmp_path: Path, members: dict[str, bytes]) -> Path:
+    path = tmp_path / "w.whl"
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in members.items():
+            archive.writestr(name, data)
+    return path
+
+
+def _tracked() -> dict[str, bytes]:
+    return {f"fylgja_core/shipped/{n}": d for n, d in _script().tracked_packages(("psp", "probes")).items()}
+
+
+def test_a_wheel_carrying_the_tracked_yaml_of_each_package_and_nothing_else_passes(tmp_path: Path) -> None:
+    carried = _tracked()
+    assert {"fylgja_core/shipped/psp/nokia_srlinux.yaml", "fylgja_core/shipped/probes/ping.yaml"} <= carried.keys()
+    assert _script().shipped(_shipped_wheel(tmp_path, carried)) == len(carried)
+
+
+def test_a_wheel_whose_shipped_packages_differ_from_the_trees_is_named(tmp_path: Path) -> None:
+    module = _script()
+    carried = _tracked()
+    missing = dict(carried)
+    del missing["fylgja_core/shipped/probes/ping.yaml"]
+    with pytest.raises(module.Failure, match=r"missing from the wheel: probes/ping\.yaml"):
+        module.shipped(_shipped_wheel(tmp_path, missing))
+    extra = {**carried, "fylgja_core/shipped/psp/README.md": b"a readme\n"}
+    with pytest.raises(module.Failure, match=r"extra in the wheel: psp/README\.md"):
+        module.shipped(_shipped_wheel(tmp_path, extra))
+    changed = {**carried, "fylgja_core/shipped/psp/arista_eos.yaml": b"changed\n"}
+    with pytest.raises(module.Failure, match=r"differs from the tree's: psp/arista_eos\.yaml"):
+        module.shipped(_shipped_wheel(tmp_path, changed))

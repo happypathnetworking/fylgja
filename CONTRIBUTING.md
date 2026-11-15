@@ -616,251 +616,78 @@ What the demonstration meets:
 
 `make infrahub-demo` and `make netbox-demo` each take one source's runbook above with no step by hand, on a host that
 meets their preconditions, and `make demo-down` ends what they started ([D-104](design/decisions.md#d-104)).
-
-```sh
-make netbox-demo      # NetBox's runbook, from nothing running to the rehearsal's verdict
-make demo-down        # what it started, ended; NetBox's volumes kept
-make infrahub-demo    # Infrahub's, this repository registered at REF, the branch checked out
-make demo-down
-```
+[docs/demonstrations.md](docs/demonstrations.md) is their page for a user: the host's preconditions, each named as the
+script checks it and held to the script's own constants, the targets, the order of the steps, where the report is
+read, the times, what a run writes and leaves, and what each refusal says.
 
 Each is `scripts/demo.py`, the standard library alone, run from the checkout the target runs in with the main
 checkout's `local/`, as every target's is. It is a second statement of each runbook's order, held to the blocks above
 by a test, and decides nothing of a rehearsal's. The runbooks stay as the account of each step, for whoever must take
 a run apart.
 
-### What each does
+What the page does not say, because only a contributor needs it:
 
-In this order. The items are numbered here alone; the script numbers only the runbook's steps of item 9, each said
-before it is run as `step <n> of <m>: <its words>`:
-
-1. `local/demo/lock` taken, and `local/.env` read over the shell's environment as a shell reads its lines. A line it
-   does not read so, a value holding `$`, a backquote or a backslash outside single quotes among them, is exit 2,
-   naming the name and the line and never the value.
-2. A runner serving `local/prefect/` that this demonstration did not start, or the other demonstration's runner, is
-   refused, nothing started or stopped.
-3. The host's preconditions that no stop can cure ([below](#the-hosts-preconditions)): every one not met is said in a
-   line of its own, exit 2, and nothing is settled, stopped or started.
-4. The make variables the caller set that no target is given, said once by their names
-   ([below](#what-it-writes-and-what-it-gives-the-targets)).
-5. What an earlier run left, ended: its runner and its core by their recorded pids, each only where the pid still
-   reads as that process, and every twin the demonstration's store may hold, destroyed through a core of its own,
-   one started for the purpose where none is up.
-6. The other source stopped where any container of its Compose project runs, by its own `down` target with `PURGE=`,
-   since either source, up, starts the same two deployments: `<other> is up: stopping it, its volumes kept, since it
-   starts the same deployments`.
-7. The host's room, its memory and its ports, judged with the earlier run ended and the other source stopped; then
-   `the host's checks passed`.
-8. `local/demo/` and its token file made, `local/.env` given whichever of its two lines it lacks, the source
-   recorded, and the twin's images, `ghcr.io/nokia/srlinux:24.7.1` and `alpine:3.24.2`, pulled where Docker holds none.
-9. The source's runbook, through its own targets, `local/.env` read again before each step:
-   - `make infrahub-demo`: `make infrahub-up`, asked up to three times; `make orchestrator-env`; the core; `make
-     infrahub-up`; `make infrahub-register REF=<the branch>`, asked twice; `make prefect-up`; the runner; `make
-     infrahub-seed PROPOSED_CHANGE=1`, which opens the proposed change `Rehearse third-link`.
-   - `make netbox-demo`: `make netbox-up`; `make netbox-seed`; `make orchestrator-env SOURCE=netbox`; the core; `make
-     prefect-up`; the runner; `make netbox-hook`; `make netbox-change NETBOX_TAG=1`, which sets the tag on the branch
-     `third-link`.
-
-   After the first step, the source being up, Docker's networks are read as the local driver reads them. Where they
-   leave the lab pool no /24 the run stops, exit 2, the source left up, with the driver's own refusal and `<source>
-   is left up: set FYLGJA_LAB_POOL in local/.env, then run make <source>-demo again`. A step that fails stops the
-   run, exit 1, `step <n>, make <target>, exited <status>`, and no later step is run.
-10. The change's flow run of `twin-rehearse/main` found on the edge's Prefect, one whose id Prefect did not list
-    before the last step and whose branch is the change's; waited for to its end, its document read as Infrahub's
-    check reads it and kept, and the verdict said with where the report is read: in Infrahub the proposed change's
-    thread `Fylgja rehearsal`, in NetBox the branch's Journal tab, its newest entry, each signed in as admin with the
-    password `local/.env` holds as `INFRAHUB_INITIAL_ADMIN_PASSWORD` or `FYLGJA_NETBOX_SUPERUSER_PASSWORD`, never
-    printed.
-
-From item 5 on, every way out says last what is left up and that `make demo-down` ends it.
-
-The core is started once, where each runbook says to restart it: `make orchestrator-env` has then written the
-runner's token, and the script lists the client's and the runner's in its own token file before the start. The core
-runs from this checkout on the local driver and the runner by the words `make orchestrator-serve` runs, each in a
-session of its own in the background, its pid recorded and its log under `local/demo/`, and each waited for until it
-answers: the core its version, the runner both deployments `READY`. Infrahub's seed is taken once and last, with
-`PROPOSED_CHANGE=1`, where its runbook seeds before Prefect is up: a proposed change opened before the runner serves
-fails its check. NetBox's change is its runbook's last step, with the tag.
-
-### The host's preconditions
-
-What only the host's owner can give, each with what the script says where it is not met:
-
-- **A Linux host with Python 3.14, uv 0.12.23, GNU make, git, `ss` and the network.** Each of `docker`, `containerlab`, `git`,
-  `make` and `ss` not on `PATH` is `<name> is not on PATH`. Python's and uv's versions and the network are not checked: `make
-  venv` needs Python 3.14 and uv 0.12.23, and a fetch, a build and a pull need the network.
-- **The venv**, `core/.venv`: `<checkout>/core/.venv lacks <commands>: run make venv`. Through make the target runs
-  `make venv` first where the core's server command is missing.
-- **Docker with its Compose plugin, and containerlab**, each answering: `` `docker info` exited <n>: the Docker
-  daemon does not answer this user ``, `` `docker compose version` exited <n>: Docker's Compose plugin is needed ``
-  and `` `containerlab version` exited <n> ``.
-- **The user in `docker` and `clab_admins`, in a login begun after they were added**, since a group added reaches no
-  process begun before it ([verified-facts.md](design/verified-facts.md), "Ubuntu hosts"): `this process is not in
-  the group <group>: add the user to it and log in again, …`, or `the host has no group <group>`. Root is asked for
-  neither.
-- **On Ubuntu, the AppArmor widening**: `/opt/srlinux/** mr,` and `/run/srlinux/** rw,` in
-  `/etc/apparmor.d/local/usr.sbin.rsyslogd`, the profile reloaded with `apparmor_parser -r
-  /etc/apparmor.d/usr.sbin.rsyslogd`: `<the local file> lacks <the lines>: SR Linux's rsyslogd needs them on Ubuntu;
-  …`. Where `/etc/apparmor.d/usr.sbin.rsyslogd` is no file nothing is asked. The script reads the local file and not
-  the loaded profile, which AppArmor does not show a user, as read
-  ([verified-facts.md](design/verified-facts.md), "Ubuntu hosts"): that the profile was reloaded is not checked.
-  Where the local file is not the user's to read, it says `cannot read <the file>: check that it holds …` and goes
-  on.
-- **Memory available** (`MemAvailable`): 11776 MiB for Infrahub's and 8704 MiB for NetBox's with the source stopped,
-  7168 MiB with it up: 7168 for the twin and the edge, and 4608 or 1536 more for the source's stack where it is not
-  up: `<have> MiB of memory is available and the <source> demonstration needs <need>: …`.
-- **The room's reads.** Where one fails, its sentence says what was not judged: `` `docker ps` exited <n>: whether
-  <source> is up was not read ``, which leaves the memory and the source's port unjudged; `/proc/meminfo names no
-  MemAvailable: the memory available was not read`; and `` `ss -Hltn` exited <n>: the listeners were not read ``.
-  Where `docker info` fails, the run stops with the checks no stop can cure, and the memory and the ports are not
-  judged at all.
-- **The ports free**, a listener at the port on any address counting: the core's, `127.0.0.1:7650` or
-  `FYLGJA_LISTEN`'s; 4200, where the edge's Prefect serves on the Docker bridge's gateway, but where the Prefect of
-  `local/prefect/` is up already; and 8000 for Infrahub or 8800 for NetBox, but where the source is up: `port <port>
-  is listened on at <address> by a process the demonstration did not start, and <the core, the edge's Prefect or the
-  source> needs it`. `FYLGJA_LISTEN`, where it is set, is `127.0.0.1:<port>`, since the demonstration's core serves
-  HTTP on loopback: `FYLGJA_LISTEN is not 127.0.0.1:<port>: …`. Infrahub's Compose file publishes other ports too,
-  15692, 2004 and 6362 among them ([verified-facts.md](design/verified-facts.md), "Infrahub 1.11.11"), which are not
-  checked: they are Infrahub's own start's to refuse.
-- **`local/.env`, mode `0600`, with the node login's two lines**, `FYLGJA_CREDENTIAL_SRLINUX_USERNAME` and
-  `FYLGJA_CREDENTIAL_SRLINUX_PASSWORD`: `<the file> is not there: make it, mode 0600, with …`, or `local/.env gives
-  <names> no value: add the lines; the image's documented default login is enough (.env.example)`. Its mode is not
-  checked.
-- **For Infrahub, a branch checked out, its work committed, or `REF=<branch>`**: Infrahub registers the branch's last
-  commit, and its checks run that: `no branch is checked out and REF names none: …`, or `REF names <ref>, which is no
-  commit of this repository`.
-- **A lab pool no Docker network holds whole**, else `FYLGJA_LAB_POOL` in `local/.env`
-  ([D-103](design/decisions.md#d-103)). A value set is read among the first checks as the server reads it:
-  `FYLGJA_LAB_POOL is not an IPv4 network in CIDR form that holds a /24`. Docker's networks are read once the source
-  is up, since a source's own network may take the pool, and stop the run only where they leave it no /24 free.
-
-The checks no stop can cure are judged before anything is ended or stopped, so that nothing is stopped for a run that
-could never start; the memory and the ports after, since an earlier run and the other source each hold some of them.
-
-### What it writes, and what it gives the targets
-
-Under `local/demo/`, mode `0700`, never printed:
-
-- `source`, the word of the last `up` that passed its checks, which `make demo-down` keeps;
-- `core.pid` and `runner.pid`, and `prefect.pid` only where its `make prefect-up` started a server;
-- `core.log` and `runner.log`, each start's own, the one before kept as `<name>.1`;
-- `store/`, the core's store, made by the core;
-- `unsettled`, empty: written before a core is started over the store and removed only once a core of the
-  demonstration's own has listed no twin, so that a run or a `down` that could not read the store never passes for
-  one that found it empty;
-- `tokens`, mode `0600`, the core's token file: the client's token's hash under the principal `demo` and the runner's
-  under `orchestrator`, one line where the two tokens are one;
-- `lock`; and `rehearsal.json`, mode `0600`, the last document read, as Prefect gave it.
-
-Every file the script writes there is made at mode `0600` whatever the process's umask, and one there already at
-another mode is made `0600` when it is written again: the pid files, `source`, `unsettled`, the logs, `tokens`,
-`rehearsal.json` and `lock`. `store/` is the core's own, and was read `0775` on the development host.
-
-Into `local/.env`, appended where the loaded environment gives the name no value, every byte there kept, its names
-said and its values never: `FYLGJA_API_ADDRESS`, the listen address, and `FYLGJA_API_TOKEN`, a client's token made
-anew. The targets write their own lines, as their rows say.
-
-The demonstration's core never reads `local/.env`'s `FYLGJA_TOKENS` or `FYLGJA_STORE`. It is given `local/demo/tokens`
-and `local/demo/store`, the local driver, this checkout's `psp` and `probes` and the listen address, and no
-certificate, key or Lease; every step is given the same token file and address and no `FYLGJA_API_CA`. So every twin
-its core lists is the demonstration's.
-
-A make variable the user sets is not passed on. Every target is run at the `Makefile`'s own values: its environment
-holds none of make's own names and no name the `Makefile` assigns by `?=`, and its variables are those of its command
-line alone. The demonstration says once which names it did not pass on, `not passed on to the make targets: <names>;
-the demonstration runs each at the Makefile's own value`, and never a value. So `make netbox-demo PURGE=1`, or a
-`PURGE=1` in the shell or in `local/.env`, removes no volume: the other source's stop says `PURGE=` on its command
-line. `LOCAL`, and for Infrahub `REF`, are the exceptions: the targets hand them to the script itself.
-
-### Its exit status
-
-| Status | Means |
-|---|---|
-| 0 | the rehearsal `passed`; for `make demo-down`, everything it had to end is ended |
-| 1 | any other verdict, no document, a step that failed or a wait that ran out, each naming the step, what is left up and `make demo-down` |
-| 2 | a command line not understood, a precondition not met, or a refusal: another demonstration command running, a runner it may not end, a line of `local/.env` it does not read |
-| 130 | Ctrl-C, with the same last line |
-
-Those are the script's. GNU make exits 2 for any recipe that fails, so `make infrahub-demo` and `make netbox-demo`
-exit 0 for a rehearsal passed and 2 for anything else, and `make demo-down` 0 or 2; the script's own status shows in
-make's last line, `make: *** [Makefile:<line>: <target>] Error <status>`.
-
-### How long it took
-
-Each read once on the development host on 2026-11-14, on the local driver, the source's volumes kept; each step's
-time is a derivation from the stamps of the script's lines:
-
-- **`make netbox-demo`**, from NetBox stopped and Infrahub up, exited 0 in 329.5 s, about 5.5 minutes: Infrahub's stop
-  60.4 s, `make netbox-up` 79.6 s, `make netbox-seed` 17.7 s, `make orchestrator-env SOURCE=netbox` 0.2 s, the core
-  1.05 s, `make prefect-up` 16.3 s, the runner 7.47 s, `make netbox-hook` 1.36 s, `make netbox-change NETBOX_TAG=1`
-  32.9 s, and from its tag's line to the run `COMPLETED` 110.8 s. Again at
-  once, over the change it left open, 179.3 s, about 3 minutes ([verified-facts.md](design/verified-facts.md),
-  "NetBox 4.7.5 with netbox-branching 1.2.3").
-- **`make infrahub-demo`**, from Infrahub stopped and NetBox up, exited 0 in 1536.4 s, about 25.6 minutes: NetBox's
-  stop 9.8 s, `make infrahub-up` 94.3 s, `make orchestrator-env` 27.8 s, the core 1.06 s, `make infrahub-up` again
-  2.0 s, `make infrahub-register` 373.9 s over its two asks, `make prefect-up` 8.6 s, the runner 5.65 s, `make
-  infrahub-seed PROPOSED_CHANGE=1` 255.2 s, the change's run listed 141.0 s after the seed's last line and
-  `COMPLETED` 614.9 s after that. The registration's first ask can run out its own 300 s, as it did, and the
-  second pass. Again at once, 942.8 s, about 15.7 minutes ([verified-facts.md](design/verified-facts.md), "Infrahub
-  1.11.11").
-- **`make demo-down`** exited 0 in 14.9 s after NetBox's and 24.7 s after Infrahub's.
-
-The time from new volumes was not read, no purge being given; the first starts recorded are NetBox healthy 748.9 s,
-764.4 s and 749.6 s after its start, and Infrahub answering 155 and 158 s after Compose's start. Plan 5's run from a
-fresh clone reads it. Nor was a demonstration read that fails at a step or ends with a verdict other than `passed`,
-nor an image pulled.
-
-### A second run, and the refusals
-
-A demonstration run again first ends what the one before left, its runner, its core and any twin of its store, then
-takes every step again. The change is built anew by its own target: `make infrahub-seed` removes the earlier seed's
-open proposed change and makes the branch and a new one, and `make netbox-change` deletes the branch, its journal with
-it, and builds it again. The change's run is one whose id Prefect did not list before the last step, so a run of an
-earlier change, ended or left running, is never taken for it. Each source's second run, read so, exited 0.
-
-The two never run together:
-
-- One demonstration command runs at a time: a second, `make demo-down` among them, while one holds `local/demo/lock`
-  is exit 2, `another demonstration command holds <local>/demo/lock: one runs at a time`.
-- With one demonstration up, the other's is exit 2, nothing started or stopped: `the <source> demonstration's runner
-  is up, pid <pid>: one Prefect serves one source's runner; run make demo-down first`. One Prefect serves one
-  source's runner, both serving the same two deployments.
-- A runner serving `local/prefect/` that the demonstration did not start, one of `make orchestrator-serve` among them,
-  is refused the same way: `a runner this demonstration did not start serves <local>/prefect, pid <pid>: stop it by
-  its pid`.
-- The other source up with no demonstration's runner is not refused: it is stopped, its volumes kept (item 6 of
-  [What each does](#what-each-does)). Where the read of its containers fails, the run stops there, exit 1: ``
-  `docker ps -q --filter label=com.docker.compose.project=<its project>` exited <n>: whether <other> is up was not
-  read, and nothing was started ``.
-
-### Ending it
-
-`make demo-down` ends, in order: the runner and the core by their recorded pids, each only where the pid still reads
-as that process, and every twin the store holds, through a core of the demonstration's own, one started for it where
-none is up; `make prefect-down`, only where the demonstration's own `make prefect-up` started that server; and `make
-<source>-down`, its volumes kept. `make demo-down PURGE=1` removes the source's volumes too, as `make <source>-down
-PURGE=1` does, only where `PURGE=1` is on that make command line; a `PURGE` exported by the shell or held in
-`local/.env` removes nothing. It exits 0 where everything is ended and the store was read empty through a core of its
-own; otherwise it names what failed and ends `down: not everything was ended: read the lines above, then run make
-demo-down again`, exit 1, and through make 2.
-
-What stays: `local/demo/` with `source`, `tokens`, `rehearsal.json`, `lock`, the logs and `store/`; `local/.env`; the
-source's containers, stopped, and its volumes; and the change in the source, the proposed change open, or the branch
-with its marks and its report. A Prefect server the demonstration did not start, one up before it, is left running.
-A lab's container that no twin names is not looked for. After each run's `make demo-down`, `docker ps -a --filter
-label=containerlab` listed none, the source's containers were stopped and its volumes listed, nothing listened on
-the core's port or on 4200, 8000 or 8800, and none of the recorded pids was a process.
-
-A second `make demo-down`, with nothing recorded still running and no container of the source's project running,
-makes that one `docker ps` read, runs nothing else, and says `nothing the <source> demonstration started is running,
-and <source> is not up: nothing to end; its records stay under <local>/demo`, exit 0; where the source's project is up again, it stops it as the first did.
-`make demo-down PURGE=1` always runs the source's `down` with `PURGE=1`, its volumes being what it asks for, which is
-why `source` is kept. With nothing recorded under `local/demo/`, no `source`, no `unsettled` and no pid of a core or a
-runner, it says `no demonstration is recorded under <local>/demo: nothing to end`, exit 0, and reads nothing more.
-
-A Ctrl-C while a demonstration or `make demo-down` runs reaches the script with make: `up` says `up was interrupted`
-and what is left up, and `down` what failed before it, that it was interrupted and that not everything was ended;
-each exits 130. Whatever make then prints of the interrupt, `make demo-down` is what ends what the run started.
+- The items of the page's order are numbered there alone; the script numbers only the runbook's steps, each said
+  before it is run as `step <n> of <m>: <its words>`.
+- The checks no stop can cure are judged before anything is ended or stopped, so that nothing is stopped for a run
+  that could never start; the memory and the ports after, since an earlier run and the other source each hold some of
+  them. What an earlier run left is ended by its runner and its core by their recorded pids, each only where the pid
+  still reads as that process, and every twin the demonstration's store may hold is destroyed through a core of its
+  own, one started for the purpose where none is up.
+- The core is started once, where each runbook says to restart it: `make orchestrator-env` has then written the
+  runner's token, and the script lists the client's and the runner's in its own token file before the start. The core
+  runs from this checkout on the local driver and the runner by the words `make orchestrator-serve` runs, each in a
+  session of its own in the background, its pid recorded and its log under `local/demo/`, and each waited for until it
+  answers: the core its version, the runner both deployments `READY`. Infrahub's seed is taken once and last, with
+  `PROPOSED_CHANGE=1`, where its runbook seeds before Prefect is up: a proposed change opened before the runner serves
+  fails its check. NetBox's change is its runbook's last step, with the tag. `make infrahub-up` is asked up to three
+  times and `make infrahub-register` twice, as `STEPS` has them.
+- The change's flow run is the one whose id Prefect did not list before the last step and whose branch is the
+  change's; its document is read as Infrahub's check reads it.
+- Every file the script writes under `local/demo/` is made at mode `0600` whatever the process's umask, and one there
+  already at another mode is made `0600` when it is written again: the pid files, `source`, `unsettled`, the logs,
+  `tokens`, `rehearsal.json` and `lock`. `store/` is the core's own, and was read `0775` on the development host.
+- `unsettled` is written before a core is started over the store and removed only once a core of the demonstration's
+  own has listed no twin, so that a run or a `down` that could not read the store never passes for one that found it
+  empty.
+- The core is given `local/demo/tokens` and `local/demo/store`, the local driver, this checkout's `psp` and `probes`
+  and the listen address, and no certificate, key or Lease; every step is given the same token file and address and no
+  `FYLGJA_API_CA`.
+- A make target is given no variable but its own: its environment holds none of make's own names and no name the
+  `Makefile` assigns by `?=`, and its variables are those of its command line alone, so `make netbox-demo PURGE=1`,
+  or a `PURGE=1` in the shell or in `local/.env`, removes no volume, the other source's stop saying `PURGE=` on its
+  command line.
+- `make demo-down` runs the source's `down` with `PURGE=1` only where `PURGE=1` is on that make command line, one a
+  make above hands down in `MAKEFLAGS` counting as a command line's; a second `make demo-down` with nothing recorded
+  running makes one `docker ps` read and runs nothing else, and with `PURGE=1` always runs the source's `down`, which
+  is why `source` is kept.
+- The room's reads and their sentences: `` `docker ps` exited <n>: whether <source> is up was not read `` leaves the
+  memory and the source's port unjudged; `/proc/meminfo names no MemAvailable: the memory available was not read`;
+  `` `ss -Hltn` exited <n>: the listeners were not read ``; where the AppArmor local file is not the user's to read,
+  `cannot read <the file>: check that it holds …` and the run goes on; and where the read of the other source's
+  containers fails, the run stops there, exit 1, with `whether <other> is up was not read, and nothing was started`.
+  Where the lab pool is left no /24, the run stops, exit 2, the source left up, `<source> is left up: set
+  FYLGJA_LAB_POOL in local/.env, then run make <source>-demo again`.
+- The exit statuses, as the script has them: 0, 1, 2 and 130, and through make 0 or 2, the script's status in make's
+  `Error <status>` line. The page says them in prose and promises none.
+- After each run's `make demo-down`, `docker ps -a --filter label=containerlab` listed none, the source's containers
+  were stopped and its volumes listed, nothing listened on the core's port or on 4200, 8000 or 8800, and none of the
+  recorded pids was a process. A lab's container that no twin names is not looked for.
+- The readings of the times were taken on 2026-11-14, each step's time a derivation from the stamps of the script's
+  lines: `make netbox-demo` 329.5 s (Infrahub's stop 60.4 s, `make netbox-up` 79.6 s, `make netbox-seed` 17.7 s, the
+  core 1.05 s, `make prefect-up` 16.3 s, the runner 7.47 s, `make netbox-hook` 1.36 s, `make netbox-change
+  NETBOX_TAG=1` 32.9 s, its tag's line to the run `COMPLETED` 110.8 s; 179.3 s run again at once) and `make
+  infrahub-demo` 1536.4 s (NetBox's stop 9.8 s, `make infrahub-up` 94.3 s, `make orchestrator-env` 27.8 s, the core
+  1.06 s, `make infrahub-register` 373.9 s over its two asks, `make prefect-up` 8.6 s, the runner 5.65 s, `make
+  infrahub-seed PROPOSED_CHANGE=1` 255.2 s, the run listed 141.0 s after the seed's last line and `COMPLETED` 614.9 s
+  after that; 942.8 s run again at once); `make demo-down` 14.9 s after NetBox's and 24.7 s after Infrahub's. The
+  time from new volumes was not read: the first starts recorded are NetBox healthy 748.9 s, 764.4 s and 749.6 s after
+  its start, and Infrahub answering 155 and 158 s after Compose's start. Nor was a demonstration read that fails at
+  a step or ends with a verdict other than `passed`, nor an image pulled ([verified-facts.md](design/verified-facts.md),
+  "NetBox 4.7.5 with netbox-branching 1.2.3" and "Infrahub 1.11.11").
+- The facts behind the preconditions are in [verified-facts.md](design/verified-facts.md), "Ubuntu hosts" (the groups
+  and the AppArmor widening) and "Infrahub 1.11.11" (the ports Compose publishes: 15692, 2004 and 6362 among them).
+  The lab pool's variable is [D-103](design/decisions.md#d-103).
 
 ## The acceptance run
 

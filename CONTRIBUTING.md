@@ -233,86 +233,31 @@ On Ubuntu, SR Linux's `rsyslogd` needs an AppArmor widening ([verified-facts.md]
 
 ## Running the core
 
-`fylgja-core-server` is one process: API 1 on uvicorn and the reconcile loop, over one store
-held for one core, a directory by its lock and an object store by a Lease
-([D-023](design/decisions.md#d-023), [D-039](design/decisions.md#d-039), [D-062](design/decisions.md#d-062)).
-Everything it runs with is a `FYLGJA_*` variable ([D-042](design/decisions.md#d-042)), listed
-in [`.env.example`](.env.example):
+How to run the server, its settings, its token file and its exit statuses are in
+[`docs/server.md`](docs/server.md), and the `fylgja-core` command that talks to it is in
+[`docs/cli.md`](docs/cli.md). What is a contributor's alone is here. Every setting is a variable
+of the process's environment, listed also in [`.env.example`](.env.example), and a change that adds
+one adds its row to the settings table in `docs/server.md`, which a test holds to every variable
+`config.from_environ` reads.
 
-| Variable | Default | Holds |
-|---|---|---|
-| `FYLGJA_STORE` | required | The store's directory, created on first start (the driver's working files live under it), or `s3://<bucket>[/<prefix>]`, an object store ([D-061](design/decisions.md#d-061)), which needs `FYLGJA_LEASE` and a driver that keeps no files in the store's directory (`clabernetes`) |
-| `FYLGJA_S3_ENDPOINT` | required for `s3://` | The object store's endpoint, an `http://` or `https://` URL of a host and an optional port |
-| `FYLGJA_S3_ACCESS_KEY` | required for `s3://` | The endpoint's access key |
-| `FYLGJA_S3_SECRET_KEY` | required for `s3://` | The endpoint's secret key |
-| `FYLGJA_S3_REGION` | `us-east-1` | The region its requests are signed for |
-| `FYLGJA_S3_CA` | the system's | A CA bundle for an `https://` endpoint a private CA signed |
-| `FYLGJA_LEASE` | none; required by `s3://` | The Lease that holds the store for one core ([D-062](design/decisions.md#d-062)), in the core's namespace (the service account's in a pod, the kubeconfig context's off the cluster), taken before the store is opened: a core that finds it held waits, saying once whom for, and one that loses it stops at once (`lease.lost`): its loop's stop begun, given 2 s, every connection dropped, one still in its TLS handshake among them, and each request in flight cancelled, none answered and none given grace, nothing released, exit status 1 |
-| `FYLGJA_PACKAGES` | the packages the install carries: `psp/` and `probes/`, in a checkout the tree's | Colon-separated directories of platform and probe packages, every one of them loaded once at start and no other: set, it names them all, so a site that wants its own beside the shipped lists the shipped ones' paths too (`packages.shipped()` answers them; [D-106](design/decisions.md#d-106)) |
-| `FYLGJA_TOKENS` | required | The token file (below) |
-| `FYLGJA_LISTEN` | `127.0.0.1:7650` | The address it serves on, `host:port` |
-| `FYLGJA_TLS_CERT` | none | The certificate the server ends TLS with, set with `FYLGJA_TLS_KEY` ([D-063](design/decisions.md#d-063)); without the two it serves HTTP, which is for loopback, and a listen address off loopback is one warning at start |
-| `FYLGJA_TLS_KEY` | none | The certificate's key, unencrypted, set with `FYLGJA_TLS_CERT`: an encrypted key is refused at start, never prompted for |
-| `FYLGJA_DRIVER` | `containerlab` | The driver twins run on: `containerlab`, the local driver, or `clabernetes`, which reaches the cluster from its service account in a pod and from the kubeconfig `KUBECONFIG` names off the cluster |
-| `FYLGJA_LAB_POOL` | `172.20.0.0/16` | The local driver's pool, which each lab's management subnet, a /24, is taken from ([D-043](design/decisions.md#d-043), [D-103](design/decisions.md#d-103)): an IPv4 network in CIDR form, no host bit set, that holds at least one /24. A create that finds no /24 of it free, a Docker network or another twin holding each, is refused (`admission.capacity`) naming the Docker networks that hold part of it and this variable; a twin already made keeps its subnet when the value changes. It is read and checked whichever the driver, and given to the local driver alone |
-| `FYLGJA_CLABERNETES_NAMESPACE` | none; required by `clabernetes` | clabernetes' namespace, a DNS-1123 label (`c9s`), which each twin's policy admits |
-| `FYLGJA_POD_CIDR` | none; required by `clabernetes` | The cluster's pod network, an IPv4 network in CIDR form (`10.244.0.0/16`); each twin's policy admits any source outside it |
-| `FYLGJA_WORKERS` | `8` | How many twins the loop works on at once: five twins created together each hold a worker through an apply, with room beside ([D-075](design/decisions.md#d-075)) |
-| `FYLGJA_STEP_WAIT_S` | `180` | Seconds a step waits for verify to hold before it ends anyway (an integer of 1 or more) |
-| `FYLGJA_RESYNC_S` | `300` | Seconds between the loop's resyncs, each of which queues every twin again, so a runtime event missed is only late (an integer of 1 or more) |
-| `FYLGJA_CREDENTIAL_<NAME>_USERNAME`, `_PASSWORD` | none | Each package's node login, `<NAME>` its `credentials` value upper-cased; a run needing one not set fails with `credential.missing` |
-| `FYLGJA_CREDENTIAL_<NAME>_REGISTRY`, `_USERNAME`, `_PASSWORD` | none | A package's pull secret on the clabernetes driver: the image prefix a gated image is pulled under, and the registry's login; a twin's allocation holds the prefixes set when it was admitted |
-
-**The token file** holds one `<sha256 hex of the token> <principal>` per line, `#` comments
-and blank lines skipped. It never holds a token itself, and several tokens may be valid at
-once, one per client. Make a client's token and add its line:
-
-```sh
-token=$(head -c 24 /dev/urandom | base64)
-printf '%s %s\n' "$(printf %s "$token" | sha256sum | cut -d' ' -f1)" alice >> local/tokens
-printf 'FYLGJA_API_TOKEN=%s\n' "$token" >> local/.env   # the client's token, never echoed
-unset token
-```
-
-`printf %s "$FYLGJA_API_TOKEN" | sha256sum` gives the hash of a token already set.
-
-The commands the local driver runs, `containerlab` and `docker`, get `DOCKER_HOST` and `PATH`
-from the server's environment and nothing else ([D-065](design/decisions.md#d-065)); a
-variable containerlab should see is added to `ALLOWED_ENV` by a change, with its reason.
-
-**Start it** with the environment loaded:
+On the development host the environment is `local/.env`, loaded in the shell that starts the
+server, and the commands are the ones in `core/.venv/bin/`:
 
 ```sh
 set -a; . local/.env; set +a
 core/.venv/bin/fylgja-core-server
 ```
 
-It logs one JSON object per line on stderr, the principal on every write, never a token or a
-password. A start refused is one line naming the variable or the file at fault. SIGTERM or
-Ctrl-C ends open watches, stops the loop and then releases the Lease. A second Ctrl-C, landing
-before uvicorn has begun the loop's stop, gives the loop 2 s to stop; landing after, it leaves
-uvicorn's own stop running, unbounded; either way the Lease is released only once the loop has
-stopped. SIGTERM anywhere in the start, while it waits for the Lease or opens the store among
-it, ends the start as Ctrl-C does, and while the console script imports the server, before
-anything is opened, it exits 143: the server handles SIGTERM itself, since in a container it is
-PID 1, which ignores a signal it has no handler for. Three windows are left, each leaving the
-Lease to its duration (the server's module docstring): the interpreter's first 0.14-0.16 s in the
-image, and two in the start, each read at under a millisecond on the development host, where the
-Lease's client had no connection to close; against the API the one that closes it takes longer,
-by how much not read. A create cut short resumes at the next start. Waiting for a Lease another
-holds is not an exit: one INFO line a holder, and no socket bound. Its exit status:
-
-| Status | Means |
-|---|---|
-| 0 | stopped cleanly, the Lease released first when one is held |
-| 130 | stopped by Ctrl-C (SIGINT), the Lease released first when one is held; or Ctrl-C anywhere in the start, while it waits for the Lease, while the store is opened or before uvicorn runs, what was opened closed again and the Lease released first, but in the two windows in the start above, where the status is the same and the Lease is left to its duration |
-| 143 | stopped by SIGTERM, as by Ctrl-C, in a container as PID 1 too: after uvicorn's graceful shutdown, which releases the Lease; or anywhere in the start, as Ctrl-C, what was opened closed again and the Lease released first, the two windows in the start above as for 130; or while `fylgja-core-server` imports the server, nothing yet opened |
-| 1 | the store is held by another core, an object store cannot be opened (its endpoint unreachable, or refusing), the Lease is lost (`lease.lost`), or the application failed to start |
-| 2 | a misconfiguration: a `FYLGJA_*` variable not set, empty or malformed, or set to what another rules out (an `s3://` store without `FYLGJA_LEASE` or with the `containerlab` driver, one of the TLS pair without the other); a certificate or key that does not load (`FYLGJA_TLS_CERT`); a key that is encrypted (`FYLGJA_TLS_KEY`); `FYLGJA_LEASE` set with no cluster to reach, or a Lease the service account may not read or write; a CA bundle that does not load (`FYLGJA_S3_CA`); an endpoint that fails the store's proof (`FYLGJA_S3_ENDPOINT`, `store.unconditional`); Python run optimised (`-O` or `PYTHONOPTIMIZE`, `server.optimised`); a package refused, a token file it cannot read, a cluster the clabernetes driver cannot reach (`KUBECONFIG` not set, or not a kubeconfig, off the cluster), an address it cannot listen on (`FYLGJA_LISTEN`), or the server's libraries not installed (`server.extra.missing`) |
-
-**The thin CLI**, `fylgja-core`, is described in [`docs/cli.md`](docs/cli.md); on the development
-host it is `core/.venv/bin/fylgja-core`, run in a shell that has loaded `local/.env` and set
+`python -m fylgja_core.server` runs the same `main` beside the console script. It has no SIGTERM
+handler until `main` installs its own, so it is for the development host, where the server is not
+PID 1; the console script has one within 0.2 s of the process's start, and the server's module
+docstring says why and names the three windows that are left. The CLI is
+`core/.venv/bin/fylgja-core`, run in a shell that has loaded `local/.env` and set
 `FYLGJA_API_ADDRESS` to the server's listen address.
+
+The commands the local driver runs, `containerlab` and `docker`, get `DOCKER_HOST` and `PATH`
+from the server's environment and nothing else ([D-065](design/decisions.md#d-065)); a variable
+containerlab should see is added to `ALLOWED_ENV` by a change, with its reason.
 
 ## Running the core on a cluster
 

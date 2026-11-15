@@ -17,9 +17,8 @@ would write in their place. The terms are in the [glossary](glossary.md).
 **The core and its API.** `fylgja-core` installed alone is the model package and the client
 library: PyYAML, jsonschema, httpx and referencing, as ranges, and nothing of the server
 ([D-084](../design/decisions.md#d-084)). The server, `fylgja-core-server`, is the extra
-`fylgja-core[server]`, pinned exactly, and runs as CONTRIBUTING's
-[Running the core](../CONTRIBUTING.md#running-the-core) says. Every client reaches it through
-API 1 alone ([`api-1.openapi.yaml`](../formats/api-1.openapi.yaml),
+`fylgja-core[server]`, pinned exactly, and runs as [the server page](server.md)
+says. Every client reaches it through API 1 alone ([`api-1.openapi.yaml`](../formats/api-1.openapi.yaml),
 [D-025](../design/decisions.md#d-025)): it knows no source, branch or stage, and takes the
 blueprint as its one input ([blueprint 1](../formats/blueprint-1.schema.json)). Read
 `core/src/fylgja_core/client.py` for the client.

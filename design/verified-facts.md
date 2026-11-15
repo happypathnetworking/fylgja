@@ -9020,6 +9020,14 @@ once. *(2026-11-13)*
   the pip-made environment did on 2026-11-09. `python -m pip` in it answered "No module named
   pip"; its `pyvenv.cfg` holds `uv = 0.12.23`. The recipe run again over that environment
   (`--clear`) made it anew and installed the same, exit 0. *(2026-11-15)*
+- **A fresh clone under uv alone.** A clone of branch `phase-10/uv` at bf698a8, made from the
+  local repository, with nothing but Python 3.14.4 and uv 0.12.23 (no `UV_*` variable set, no
+  index in the user's `uv.toml`), ran `make venv` (2.7 s, the second run 0.2 s), `make lint`,
+  `make test`, `make linkcheck`, `make wheelcheck` and `make imagecheck`; each exited 0.
+  `make test` passed in every root (core 2424, infrahub 132, netbox 202, readers/infrahub 319,
+  orchestrator 832, readers/netbox 340). `git status --porcelain` then printed nothing and
+  `uv.lock` was byte-identical. The first `make venv` ran with uv's wheel cache warm, so a
+  download from PyPI was not timed. *(2026-11-15)*
 - **Not read:** `uv sync` against a venv of another Python minor.
 
 ## Docker Compose v5.6.0

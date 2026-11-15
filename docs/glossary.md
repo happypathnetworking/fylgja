@@ -235,8 +235,10 @@ left out, with its reason.
 **Finding** — One thing an operation found: a stable rule id, a severity and a message.
 Findings make up a *verdict* or a problem document's `findings`.
 
-**Flow** — Traffic a step runs between a probe's two hosts while it changes the twin. Its
-*transient loss* (packets lost, the longest gap) is reported, never asserted.
+**Flow** — Traffic a step is to run between a probe's two hosts while it changes the twin,
+declared by the probe package and not yet run: a step records each probe's flow from each host
+as not started. Its *transient loss* (packets lost, the longest gap) is to be reported, never
+asserted.
 
 **Frozen Go core** — The core as built in Go, in the *archived repository*, which also holds
 the prototype orchestrator and the earlier formats ([D-005](../design/decisions.md#d-005)). It was
@@ -422,7 +424,7 @@ producer, never the core ([D-008](../design/decisions.md#d-008)).
 cabled to its device's port with an IPv4 address and a gateway.
 
 **Probe package** — The data for one probe format, such as `ping`: the host's image and
-set-up commands, its readiness, and the flow and burst commands
+set-up commands, its readiness, and the burst command and the flow it declares
 ([`probe-package-1.schema.json`](../formats/probe-package-1.schema.json)).
 
 **Problem document** — An RFC 9457 answer for a request that is malformed, unauthorised,

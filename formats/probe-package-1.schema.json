@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/probe-package-1.schema.json",
   "title": "Fylgja probe package 1",
-  "description": "How one probe format's hosts are run: written as YAML (probes/<format>.yaml), read by the compiler (the format exists), the drivers' plan (the host's image and set-up commands), the reconcile loop (readiness), flows and verify's burst.",
+  "description": "How one probe format's hosts are run: written as YAML (probes/<format>.yaml), read by the compiler (the format exists), the drivers' plan (the host's image and set-up commands), the reconcile loop (readiness) and verify's burst. The flow section is declared for a later release: this build starts no flow.",
   "$comment": "Commands are argument vectors, never shell lines; placeholders: {interface} the host's data port, {address} its address with prefix, {far_address} the far host's address without prefix, {gateway}, {interval}, {count}, {wait}. Format 1 is IPv4 only: the declaration accepts IPv4 addresses alone, so no family field is needed. Runtime-specific parts live under runtime.containerlab, as a platform package's do. RULES the core holds when it loads a package (POST /v1/packages:validate reports all of them in one pass): the format names a mechanism this build runs, since a value with no mechanism is refused at load, naming the values there are (package.format.unsupported, D-014); every command, and readiness.expect, uses only the placeholders above, and host.address and host.route only {interface}, {address}, {far_address} and {gateway}, the four the plan renders into a host's start-up commands (package.patterns.placeholders).",
   "type": "object",
   "additionalProperties": false,
@@ -68,11 +68,11 @@
         "interval_s": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Seconds between packets; flows render {interval} with it and the step's loss report states it."
+          "description": "Seconds between packets. Read by the burst alone, which renders {interval} with it and counts it into the burst's budget; no flow is started in this build."
         },
         "command": {
           "$ref": "#/$defs/command",
-          "description": "The long-running flow, started in each host after a step's stage and interrupted after its wait; flows read its counters as the step's loss."
+          "description": "The long-running flow a later release will start in each host after a step's stage and interrupt after its wait. No code reads it yet: this build starts no flow and records each probe's flow from each host as not_started."
         },
         "start_timeout_s": {
           "type": "integer",
@@ -85,7 +85,7 @@
           "description": "No code reads it yet: a step's flows phase records each flow as not started and reads none, so no bound is applied and no rule is filed."
         }
       },
-      "description": "The continuous flow a step measures loss with; read by flows."
+      "description": "The continuous flow a step will measure loss with, declared for a later release. This build starts none: a step records each probe's flow from each host as not_started, and only interval_s is read, by the burst."
     },
     "burst": {
       "type": "object",

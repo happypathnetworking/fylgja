@@ -43,11 +43,12 @@ and changes nothing until all are met. Only the host's owner can give them.
   other source is stopped.
 - **The ports free.** A listener at the port on any address counts. The ports are 7650, the core's
   (`127.0.0.1:7650` or the address in `FYLGJA_LISTEN`); 4200, the edge's Prefect, unless the Prefect
-  of the demonstration is up already; and 8000 for Infrahub or 8800 for NetBox, unless that source
-  is up. A busy port is said as `port <port> is listened on at <address> by a process the
-  demonstration did not start`. Where `FYLGJA_LISTEN` is set, it must be `127.0.0.1:<port>`, since
-  the demonstration's core serves HTTP on loopback. Infrahub's Compose file also publishes other
-  ports, which are not checked: Infrahub's own start refuses them.
+  server that `local/prefect/server.pid` names is up, which is the one case in which `make
+  prefect-up` starts none; and 8000 for Infrahub or 8800 for NetBox, unless that source is up. A
+  busy port is said as `port <port> is listened on at <address> by a process the demonstration did
+  not start`. Where `FYLGJA_LISTEN` is set, it must be `127.0.0.1:<port>`, since the demonstration's
+  core serves HTTP on loopback. Infrahub's Compose file also publishes 15692, 2004 and 6362, which
+  are not checked: Infrahub's own start refuses them.
 - **`local/.env`, mode `0600`, with the node login's two lines,**
   `FYLGJA_CREDENTIAL_SRLINUX_USERNAME` and `FYLGJA_CREDENTIAL_SRLINUX_PASSWORD`. The image's
   published default login is enough. The script says `<the file> is not there` or `local/.env gives
@@ -126,11 +127,14 @@ Each was read once, on the local driver, with the source's volumes kept.
 - `make netbox-demo` from NetBox stopped took about 5.5 minutes, and about 3 minutes run again at
   once.
 - `make infrahub-demo` from Infrahub stopped took about 25.6 minutes, and about 15.7 minutes run
-  again at once. Registering the repository in Infrahub is the longest step, and its first ask can
-  run out its time and pass on the second.
+  again at once. Registering the repository in Infrahub is the longest of the steps, though the wait
+  for the rehearsal's run is longer, and the registration's first ask can run out its time and pass
+  on the second.
 - `make demo-down` took about 15 to 25 seconds.
 
-The time from new volumes was not read: NetBox's and Infrahub's first starts take minutes.
+The time of a whole demonstration from new volumes was not read. The first starts from new volumes
+were read: NetBox healthy about 750 seconds after its start, in three readings of 749 to 764
+seconds, and Infrahub answering about 155 seconds after Compose's start, in two readings.
 
 Why it is so: the readings are in [verified-facts.md](../design/verified-facts.md).
 
@@ -149,10 +153,10 @@ Under `local/demo/`, mode `0700`, never printed:
   principal `demo` and the runner's under `orchestrator`;
 - `lock`; and `rehearsal.json`, mode `0600`, the last document read, as Prefect gave it.
 
-Into `local/.env` it appends, where the file gives the name no value, two lines:
-`FYLGJA_API_ADDRESS`, the core's listen address, and `FYLGJA_API_TOKEN`, a client's token made anew.
-It keeps every byte already there and says the names, never the values. The targets it runs write
-their own lines.
+Into `local/.env` it appends, where the loaded environment, the shell's and the file's, gives the
+name no value, two lines: `FYLGJA_API_ADDRESS`, the core's listen address, and `FYLGJA_API_TOKEN`, a
+client's token made anew. It keeps every byte already there and says the names, never the values.
+The targets it runs write their own lines.
 
 The demonstration's core never reads `FYLGJA_TOKENS` or `FYLGJA_STORE` from `local/.env`. It is
 given `local/demo/tokens` and `local/demo/store`, so every twin its core lists is the
@@ -162,8 +166,10 @@ demonstration's.
 
 The demonstration script exits 0 where the rehearsal passed, and for `make demo-down` where
 everything it had to end is ended. It exits 1 for any other verdict, no document, a step that failed
-or a wait that ran out, 2 for a command line it does not understand, a precondition not met or a
-refusal, and 130 for Ctrl-C. Each but the passed verdict is said on stderr.
+or a wait that ran out, and for a `make demo-down` that did not end everything, which says `down:
+not everything was ended: read the lines above, then run make demo-down again`, 2 for a command line
+it does not understand, a precondition not met or a refusal, and 130 for Ctrl-C. Each but the passed
+verdict is said on stderr.
 
 Run through make, a failing recipe is make's own status 2 for every one of these, and the script's
 status shows in make's last line, `make: *** [Makefile:<line>: <target>] Error <status>`. The

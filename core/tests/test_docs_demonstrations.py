@@ -10,7 +10,7 @@ import sys
 from functools import cache
 from types import ModuleType
 
-from pages import ROOT, rows, section, targets, text
+from pages import ROOT, rows, section, targets, text, ticked
 
 PAGE = "docs/demonstrations.md"
 SCRIPT = ROOT / "scripts" / "demo.py"
@@ -45,14 +45,15 @@ def test_the_preconditions_name_everything_the_script_checks() -> None:
     demo = _script()
     body = _preconditions()
     assert body.strip(), "the parse is blind"
-    wanted = [*demo.TOOLS, *demo.GROUPS, *demo.LOGIN, *demo.APPARMOR_LINES, *demo.IMAGES, demo.DEFAULT_LISTEN,
-              "Python 3.14"]
-    wanted += [str(port) for port in demo.PORTS.values()]
-    wanted += [str(demo.PREFECT_PORT), str(demo.TWIN_MB)]
-    wanted += [str(demo.SOURCE_MB[source] + demo.TWIN_MB) for source in demo.SOURCE_MB]
-    wanted += [str(demo.SOURCE_MB[source]) for source in demo.SOURCE_MB]
-    missing = [name for name in wanted if name not in body]
-    assert not missing, f"the preconditions lack: {missing}"
+    spans = {span for line in body.splitlines() for span in ticked(line)}
+    names = [*demo.TOOLS, *demo.GROUPS, *demo.LOGIN, *demo.APPARMOR_LINES, *demo.IMAGES, demo.DEFAULT_LISTEN]
+    numbers = [*demo.PORTS.values(), demo.PREFECT_PORT, demo.TWIN_MB, *demo.SOURCE_MB.values(),
+               *(demo.SOURCE_MB[source] + demo.TWIN_MB for source in demo.SOURCE_MB)]
+    missing = [name for name in names if name not in spans]
+    missing += [str(n) for n in numbers if not re.search(rf"(?<![\d.]){n}(?![\d.])", body)]
+    if "Python 3.14" not in body:
+        missing.append("Python 3.14")
+    assert not missing, f"the preconditions lack (a name as a `ticked` span): {missing}"
     assert demo.APPARMOR_LOCAL in body
 
 
@@ -68,3 +69,15 @@ def test_contributing_points_to_the_page_and_no_longer_lists_them() -> None:
     assert "docs/demonstrations.md" in body
     assert not any(line in body for line in demo.APPARMOR_LINES)
     assert "### The host's preconditions" not in body
+
+
+COMPOSE_PORTS = (15692, 2004, 6362)
+
+
+def test_the_compose_ports_the_script_does_not_check_are_named_as_stated() -> None:
+    """The script holds no list of them: they are Infrahub's Compose file's, read in `design/verified-facts.md`."""
+    facts = text("design/verified-facts.md")
+    body = _preconditions()
+    for port in COMPOSE_PORTS:
+        assert re.search(rf"(?<!\d){port}(?!\d)", facts), f"verified-facts.md no longer states {port}"
+        assert re.search(rf"(?<!\d){port}(?!\d)", body), f"the preconditions lack {port}"

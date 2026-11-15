@@ -104,6 +104,7 @@ flag ([D-042](../../design/decisions.md#d-042)); the CA may be left unset, an `h
 address then verified against the system's trust.
 
 ```sh
+fylgja-infrahub --version
 fylgja-infrahub read --branch B --scope tag:N --reader FILE --out FILE [--at T] [--generated-since T]
 fylgja-infrahub head --branch B --scope tag:N
 fylgja-infrahub schema-check --branch B
@@ -114,6 +115,9 @@ fylgja-infrahub schema-check --branch B
   at `head`'s answer, and says which time on stderr.
 - `head` prints the time.
 - `schema-check` prints `ok: opsmill/schema-library@<commit>`.
+
+`--version` prints the command's version and the build it came from, and `--help`, given alone
+or after a command, lists its options.
 
 Each finding is one line on stderr, `<severity> <rule> <object>: <message>`, in a result's order.
 A blueprint holds every device's configuration, so it is written to `--out` and never printed,

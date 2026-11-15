@@ -126,6 +126,7 @@ verified against the system's trust. The reader document's path and `--out`'s ar
 given, a relative one from the working directory, and `--out` names a file.
 
 ```sh
+fylgja-netbox --version
 fylgja-netbox read [--branch B] --scope tag:N --reader FILE --out FILE
 fylgja-netbox check [--branch B]
 ```
@@ -136,6 +137,9 @@ fylgja-netbox check [--branch B]
 - `check` prints `ok: NetBox <version>, netbox-branching <version, or none>`, and for a branch
   `, branch B ready`. For `main` it sends nothing beyond `connect`'s `GET /api/status/`, which a
   token of no grant may read, so it checks none of the grants below.
+
+`--version` prints the command's version and the build it came from, and `--help`, given alone
+or after a command, lists its options.
 
 Each finding is one line on stderr, `<severity> <rule> <object>: <message>`, in a result's order.
 A blueprint holds every device's configuration, so it is written to `--out` and never printed,

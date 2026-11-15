@@ -8925,6 +8925,17 @@ The timing is one run. *(2026-11-09)*
   sniffio, which the core's venv does not.
 - **Not read:** a release below any of the four; the sixteen files with the extra's nine
   libraries not installed.
+- **Under uv 0.12.23's resolver** *(2026-11-15)*, with Python 3.14.4 on the development host:
+  `make wheelcheck` (the wheels built by `uv build --wheel`, each environment made by
+  `uv venv --no-project`, each install by `uv pip install`) passed in 26.7 s, one run. The
+  base alone at the four floors, `uv pip install --constraints` of the file `name==floor` a
+  library, installed httpx 0.27.0, jsonschema 4.18.0, PyYAML 6.0.3 and referencing 0.28.4 and
+  no library of the `server` extra. In a scratch environment outside the tree, the four
+  installed by `uv pip install` under the same constraints, `uv pip freeze` showed beside them
+  anyio 4.16.0, attrs 26.1.0, certifi 2026.10.23, h11 0.16.0, httpcore 1.0.9, idna 3.20,
+  jsonschema-specifications 2023.7.1, rpds-py 2026.9.1, sniffio 1.3.1 and typing-extensions
+  4.16.0: the 2026-11-09 list's transitive set for the base (jsonschema-specifications
+  2023.7.1 and sniffio as there), by a resolver that put no other version. No floor moved.
 
 ## uv 0.12.23
 

@@ -99,3 +99,32 @@ def test_what_each_change_source_never_loads_is_the_example_scans() -> None:
     held = _assigned(SCRIPT, "CROSSED")
     assert held == _assigned(ROOT / "orchestrator" / "tests" / "test_boundary_edge.py", "CROSSED")
     assert sorted(str(pair[0]) for pair in held if isinstance(pair, tuple)) == ["infrahub", "netbox"]
+
+
+def test_the_check_needs_uv_on_the_path_and_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    monkeypatch.setattr(module.shutil, "which", lambda name: None)
+    with pytest.raises(module.Failure) as raised:
+        module.uv()
+    assert "uv" in str(raised.value) and "PATH" in str(raised.value)
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/opt/uv")
+    assert module.uv() == "/opt/uv"
+
+
+def test_each_environment_wheel_and_install_is_uv(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    ran: list[tuple[list[str], Path]] = []
+    monkeypatch.setattr(module, "run", lambda argv, cwd: ran.append((argv, cwd)))
+    monkeypatch.setattr(module, "uv", lambda: "uv")
+    python = module.sys.executable
+    assert module.venv(Path("/t/e")) == Path("/t/e/bin")
+    module.wheel(Path("/t/src/core"), Path("/t/dist"))
+    module.install(Path("/t/e/bin"), "w.whl", constraints=Path("/t/c.txt"))
+    module.install(Path("/t/e/bin"), "a.whl", "b.whl")
+    assert ran == [
+        (["uv", "venv", "--no-project", "--no-python-downloads", "--python", python, "/t/e"], Path("/t")),
+        (["uv", "build", "--wheel", "--no-python-downloads", "--python", python, "--out-dir", "/t/dist",
+          "/t/src/core"], Path("/t")),
+        (["uv", "pip", "install", "--python", "/t/e/bin/python", "--constraints", "/t/c.txt", "w.whl"], Path("/t")),
+        (["uv", "pip", "install", "--python", "/t/e/bin/python", "a.whl", "b.whl"], Path("/t")),
+    ]

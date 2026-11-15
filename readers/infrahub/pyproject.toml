@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fylgja-infrahub"
 # The version is VERSION's at the root, which setup.py reads (D-106).
-dynamic = ["version"]
+dynamic = ["version", "readme"]
 description = "Fylgja's Infrahub reader: a branch of Infrahub read into a blueprint, or the findings that refused it."
 license = "Apache-2.0"
 # No licence classifier: setuptools refuses one beside the expression. No author or contact (D-106).
@@ -19,7 +19,6 @@ classifiers = [
     "Topic :: System :: Networking",
     "Typing :: Typed",
 ]
-readme = "README.md"
 requires-python = ">=3.14"
 # The core's base install, the model package and the client library, at the reader's own version or later within the
 # major, so a candidate's reader takes the candidate's core and a later reader never an earlier core (D-106); the

@@ -24,7 +24,7 @@ COPY core/src /src/core/src
 COPY formats /src/formats
 COPY psp /src/psp
 COPY probes /src/probes
-COPY VERSION LICENSE README.md /src/
+COPY VERSION LICENSE README.md readme_links.py /src/
 # The commit the image is built at, which the wheel's build writes into the package (core/setup.py): an argument, since
 # the context holds no .git. `make image` gives it; with none the build says unknown. In this stage alone, so the final
 # image's environment never holds it.

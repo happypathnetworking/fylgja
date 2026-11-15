@@ -539,8 +539,10 @@ async def _released(held: lease.Lease) -> None:
         await _aclosed_anyway(held.close, "the Lease's client")
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Serve API 1 until uvicorn is stopped; the exit status (the module's docstring lists them)."""
+def _parser() -> argparse.ArgumentParser:
+    """The server's command line: `--version` and `--help`, the settings being variables."""
+    tag = release.version("fylgja-core", "fylgja_core")
+    page = f"https://github.com/happypathnetworking/fylgja/blob/v{tag}/docs/server.md"
     parser = argparse.ArgumentParser(
         prog="fylgja-core-server",
         description="Serve API 1 and run the reconcile loop over one store. Every setting is a FYLGJA_* "
@@ -552,13 +554,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "takes each lab's /24 from in place of its default; FYLGJA_S3_ENDPOINT, FYLGJA_S3_ACCESS_KEY, "
                     "FYLGJA_S3_SECRET_KEY, FYLGJA_S3_REGION and FYLGJA_S3_CA for an s3:// store, which needs "
                     "FYLGJA_LEASE, the Lease taken before the store is opened; and FYLGJA_TLS_CERT and "
-                    "FYLGJA_TLS_KEY, set together, the key unencrypted, for TLS (CONTRIBUTING.md, \"Running the "
-                    "core\"). It exits 0 when stopped, 130 on SIGINT, 143 on SIGTERM, 1 when the store is held or "
-                    "cannot be opened, the Lease is lost or the application does not start, and 2 on a "
-                    "misconfiguration.",
+                    "FYLGJA_TLS_KEY, set together, the key unencrypted, for TLS. The settings, the token file and "
+                    f"the exit statuses are described at {page}. It exits 0 when stopped, 130 on SIGINT, "
+                    "143 on SIGTERM, 1 when the store is held or cannot be opened, the Lease is lost or the "
+                    "application does not start, and 2 on a misconfiguration.",
     )
     release.add_version(parser, "fylgja-core", "fylgja_core")
-    parser.parse_args(argv)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Serve API 1 until uvicorn is stopped; the exit status (the module's docstring lists them)."""
+    _parser().parse_args(argv)
     logs.configure()
     terminated = threading.Event()
     before = signal.signal(signal.SIGTERM, functools.partial(_on_sigterm, terminated))

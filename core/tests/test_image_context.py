@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # reads ../VERSION, ../LICENSE and ../README.md).
 ALLOWED = [
     "core/pyproject.toml", "core/setup.py", "core/src", "formats", "psp", "probes", "VERSION", "LICENSE", "README.md",
+    "readme_links.py",
 ]
 
 _DIGEST = re.compile(r"@sha256:([0-9a-f]{64})(?:\s|$)")

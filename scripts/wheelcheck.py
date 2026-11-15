@@ -129,7 +129,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION = ROOT / "VERSION"
 # What the builds read at the root: the version, the licence the three published wheels carry, and the core's long
 # description.
-ROOT_FILES = ("VERSION", "LICENSE", "README.md")
+ROOT_FILES = ("VERSION", "LICENSE", "README.md", "readme_links.py")
 # The metadata every published wheel states (D-106): the project's repository and what hangs off it, the classifiers
 # (the core's alone adds its operating system), and the expression setuptools writes for `license = "Apache-2.0"`.
 REPOSITORY = "https://github.com/happypathnetworking/fylgja"
@@ -709,12 +709,26 @@ def held_commit(wheel: Path, package: str, commit: str) -> None:
         raise Failure(f"{wheel.name}'s {package}/COMMIT says {said.strip()!r}, and the tree is at {commit}")
 
 
+def rewritten_readme(directory: str = "") -> str:
+    """The `README.md` of `directory` (from the root, "" for the root's own) as a build gives it as the description:
+    `readme_links.py` at the root, the file every published `setup.py` loads, at the tree's version."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("readme_links_for_check", ROOT / "readme_links.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    found: str = module.readme(ROOT, directory, tree_version())
+    return found
+
+
 def published_metadata(wheel: Path, documentation: str, core: bool = False) -> None:
     """Nothing, once the published wheel's `METADATA` says `License-Expression: Apache-2.0`, no `License-File` and no
     licence classifier, the three `Project-URL`s with `documentation` as the documentation's, exactly `CLASSIFIERS`
-    (and the core's operating system where `core`), and no author, maintainer or contact; where `core`, also
-    `Description-Content-Type: text/markdown` and a description that is the root `README.md`; `Failure` naming the
-    wheel and each difference otherwise."""
+    (and the core's operating system where `core`), and no author, maintainer or contact, and
+    `Description-Content-Type: text/markdown` and a description that is the distribution's `README.md` (the root's
+    for the core, that of `documentation`'s directory for a reader) with its relative links written absolute under
+    the release's tree; `Failure` naming the wheel and each difference otherwise."""
     found = metadata(wheel)
     problems: list[str] = []
     if found.get_all("License-Expression") != ["Apache-2.0"]:
@@ -731,12 +745,13 @@ def published_metadata(wheel: Path, documentation: str, core: bool = False) -> N
     for field in ("Author", "Author-email", "Maintainer", "Maintainer-email", "License-File", "License"):
         if found.get_all(field):
             problems.append(f"{field} is {found.get_all(field)}, and the wheel states none")
-    if core:
-        if found.get_all("Description-Content-Type") != ["text/markdown"]:
-            problems.append(f"Description-Content-Type is {found.get_all('Description-Content-Type')}, "
-                            "not ['text/markdown']")
-        if str(found.get_payload()).strip() != (ROOT / "README.md").read_text().strip():
-            problems.append("the description is not the root README.md")
+    if found.get_all("Description-Content-Type") != ["text/markdown"]:
+        problems.append(f"Description-Content-Type is {found.get_all('Description-Content-Type')}, "
+                        "not ['text/markdown']")
+    directory = "" if core else documentation.removeprefix("tree/main/")
+    if str(found.get_payload()).strip() != rewritten_readme(directory).strip():
+        problems.append(f"the description is not {directory or 'the root'}/README.md, its links written absolute"
+                        if directory else "the description is not the root README.md, its links written absolute")
     if problems:
         raise Failure(f"{wheel.name}'s METADATA differs from the metadata of D-106:\n" + "\n".join(problems))
 

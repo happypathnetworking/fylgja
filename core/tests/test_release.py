@@ -189,11 +189,17 @@ def test_version_prints_the_program_and_the_build_and_exits_0(
     assert re.fullmatch(rf"prog {re.escape(VERSION)} \(commit ([0-9a-f]{{40}}(-dirty)?|unknown)\)\n", out), out
     assert err == ""
 
+
+def test_the_build_is_computed_only_for_version(monkeypatch: pytest.MonkeyPatch) -> None:
     def refused(*_: str) -> str:
         raise AssertionError("the build is computed only for --version")
 
     monkeypatch.setattr(release, "build", refused)
+    parser = argparse.ArgumentParser(prog="prog")
+    release.add_version(parser, "fylgja-core", "fylgja_core")
     assert parser.parse_args([]) == argparse.Namespace()
+    with pytest.raises(AssertionError, match="only for --version"):
+        parser.parse_args(["--version"])  # the probe is not blind: the build is asked for here
 
 
 @pytest.mark.parametrize("member", MEMBERS)
@@ -205,8 +211,9 @@ def test_each_build_writes_the_commit_it_was_made_at(
     assert module.commit({VARIABLE: HEX}, tmp_path) == HEX
     assert module.commit({VARIABLE: HEX + "-dirty"}, tmp_path) == HEX + "-dirty"
     for bad in ("HEAD", HEX.upper().replace("0", "A"), HEX[:-1], HEX + "-clean", " " + HEX):
-        with pytest.raises(SystemExit, match=VARIABLE):
+        with pytest.raises(SystemExit, match=VARIABLE) as refused:
             module.commit({VARIABLE: bad}, tmp_path)
+        assert bad.strip() not in str(refused.value), "the value a caller gave reaches the build's log"
     assert module.commit({}, tmp_path) == "unknown"
     assert module.commit({VARIABLE: ""}, tmp_path) == "unknown"
     assert module.commit({}, ROOT) == head()

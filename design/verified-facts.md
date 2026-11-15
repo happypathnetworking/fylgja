@@ -3438,13 +3438,14 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
   --porcelain` prints anything. Read once, at `5949003` with the change uncommitted:
   - `docker image inspect` of `fylgja-core:5949003a641a-dirty`: `Config.Env` is `PATH`,
     `PYTHON_VERSION`, `PYTHON_SHA256` and `FYLGJA_PACKAGES` and no `FYLGJA_BUILD_COMMIT`: the final
-    stage never saw the argument, and an `ARG` leaves nothing in the image's environment.
+    stage's `Config.Env` does not hold it.
   - the build stage's `RUN` did see it: `fylgja-core --version` and `fylgja-core-server --version`
     in that image each printed `<program> 1.0.0rc1 (commit 5949003a641aba277c092e2a0c23549b31f52254-dirty)`,
     the tag's twelve characters and `-dirty` where the tag has it (`make imagecheck`'s `check_build`
     holds this).
   - built with no argument (`docker build` alone), `fylgja-core-server --version` printed `1.0.0rc1
-    (commit unknown)`: the context holds no `.git`, so the build's git finds none.
+    (commit unknown)`. The reason is inferred, not read: `.dockerignore`'s allow-list names no `.git`, so
+    the build's git is taken to find no repository (whether the image has a `git` was not looked for).
 - **The packages in the core's wheel, in an image and outside the tree** *(Docker 29.8.1, uv 0.12.23, 2026-11-15)*.
   `core/setup.py`'s `CORE_PACKAGES = ("psp", "probes")` copies each directory's `*.yaml` to
   `fylgja_core/shipped/<name>/`; the Dockerfile's build stage copies `psp` and `probes` to `/src/` and its final stage

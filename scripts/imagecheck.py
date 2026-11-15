@@ -213,28 +213,33 @@ def check_packages(image: str) -> int:
     return len(carried)
 
 
-def check_build(image: str) -> str:
-    """The commit both commands of the image answer `--version` with, once each prints `<program> <VERSION> (commit
-    <commit>)` and the commit is the tag's: its first twelve characters are the tag's, and `-dirty` ends both or
-    neither."""
-    tag = image.rpartition(":")[2]
+def parse_build(program: str, said: str, version: str, tag: str) -> str:
+    """The commit `said`, the stdout of `<program> --version`, names, once it is exactly `<program> <version> (commit
+    <40 hex>[-dirty])` and a newline and is the tag's: its first twelve characters are the tag's, and `-dirty` ends
+    both or neither. `Failure` otherwise."""
     wanted = re.fullmatch(r"([0-9a-f]{12})(-dirty)?", tag)
     if wanted is None:
         raise Failure(f"the tag {tag!r} is not twelve hexadecimal digits and `-dirty` or nothing")
+    read = re.fullmatch(rf"{re.escape(program)} {re.escape(version)} \(commit ([0-9a-f]{{40}})(-dirty)?\)\n", said)
+    if read is None:
+        raise Failure(f"{program} --version printed {said!r}, not '{program} {version} (commit <40 hex>[-dirty])'")
+    if read.group(1)[:12] != wanted.group(1) or read.group(2) != wanted.group(2):
+        raise Failure(f"{program} --version names the commit {read.group(1)}{read.group(2) or ''}, and the tag "
+                      f"{tag} is another")
+    return read.group(1) + (read.group(2) or "")
+
+
+def check_build(image: str) -> str:
+    """The commit both commands of the image answer `--version` with, once each prints the tree's version and the
+    commit `parse_build` holds to the tag."""
+    tag = image.rpartition(":")[2]
     try:
         version = (ROOT / "VERSION").read_text().strip()
     except OSError as e:
         raise Failure(f"VERSION cannot be read: {e}") from e
     found = ""
     for program in ("fylgja-core", "fylgja-core-server"):
-        said = docker([*RUN, "--entrypoint", program, image, "--version"]).stdout
-        read = re.fullmatch(rf"{program} {re.escape(version)} \(commit ([0-9a-f]{{40}})(-dirty)?\)\n", said)
-        if read is None:
-            raise Failure(f"{program} --version printed {said!r}, not '{program} {version} (commit <40 hex>[-dirty])'")
-        if read.group(1)[:12] != wanted.group(1) or read.group(2) != wanted.group(2):
-            raise Failure(f"{program} --version names the commit {read.group(1)}{read.group(2) or ''}, and the tag "
-                          f"{tag} is another")
-        found = read.group(1) + (read.group(2) or "")
+        found = parse_build(program, docker([*RUN, "--entrypoint", program, image, "--version"]).stdout, version, tag)
     return found
 
 

@@ -8,11 +8,15 @@ Lease's cut rests on (verified-facts.md, uvicorn 0.54.0). `make imagecheck` buil
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shlex
 import tomllib
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -163,7 +167,8 @@ def test_the_build_stage_alone_takes_the_commit() -> None:
     found = _instructions()
     assert [args for keyword, args in found if keyword == "ARG"] == ["FYLGJA_BUILD_COMMIT"]
     keywords = [keyword for keyword, _ in found]
-    assert keywords.index("ARG") < keywords.index("RUN")
+    # After the build stage's FROM, else it is a global ARG, which no RUN of a stage sees; before the stage's first RUN.
+    assert keywords.index("FROM") < keywords.index("ARG") < keywords.index("RUN")
     assert [args for keyword, args in _final_stage() if keyword == "ARG"] == []
 
 
@@ -173,3 +178,33 @@ def test_the_image_never_runs_python_optimised() -> None:
     run = [w for keyword, args in found if keyword in ("ENTRYPOINT", "CMD") for w in _words(args)]
     assert run, "no ENTRYPOINT or CMD"
     assert [w for w in run if _OPTIMISED.fullmatch(w)] == []
+
+
+def _imagecheck() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("script_imagecheck", ROOT / "scripts" / "imagecheck.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_imagecheck_reads_a_build_against_the_tag() -> None:
+    check = _imagecheck()
+    head = "ab" * 20
+    said = f"fylgja-core 1.0.0rc1 (commit {head})\n"
+    assert check.parse_build("fylgja-core", said, "1.0.0rc1", "abababababab") == head
+    dirty = said.replace(")", "-dirty)")
+    assert check.parse_build("fylgja-core", dirty, "1.0.0rc1", "abababababab-dirty") == head + "-dirty"
+    for program, text, tag in (
+        ("fylgja-core", said, "abababababab-dirty"),  # the tag says dirty, the commit does not
+        ("fylgja-core", said.replace(")", "-dirty)"), "abababababab"),  # the reverse
+        ("fylgja-core", said, "cdcdcdcdcdcd"),  # another commit
+        ("fylgja-core", said, "abababababa"),  # eleven characters
+        ("fylgja-core", said, "ABABABABABAB"),  # upper case
+        ("fylgja-core-server", said, "abababababab"),  # another program
+        ("fylgja-core", said.replace("1.0.0rc1", "1.0.0"), "abababababab"),  # another version
+        ("fylgja-core", "fylgja-core 1.0.0rc1 (commit unknown)\n", "abababababab"),
+        ("fylgja-core", said.rstrip("\n"), "abababababab"),  # no newline
+    ):
+        with pytest.raises(check.Failure):
+            check.parse_build(program, text, "1.0.0rc1", tag)

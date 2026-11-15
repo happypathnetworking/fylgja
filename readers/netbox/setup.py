@@ -44,12 +44,13 @@ _COMMIT = re.compile(r"[0-9a-f]{40}(-dirty)?")
 
 def commit(environ: Mapping[str, str], where: Path) -> str:
     """The commit this build is made at: `FYLGJA_BUILD_COMMIT` where `make` or the workflow gives it (40 hex digits,
-    `-dirty` after them where the tree had changes; any other value stops the build naming it), else `where`'s HEAD by
-    git, `-dirty` where `git status --porcelain` prints anything, else `unknown` (no git, or no repository there)."""
+    `-dirty` after them where the tree had changes; any other value stops the build naming the variable alone, never
+    the value), else `where`'s HEAD by git, `-dirty` where `git status --porcelain` prints anything, else `unknown`
+    (no git, or no repository there)."""
     given = environ.get(COMMIT_VARIABLE)
     if given:
         if not _COMMIT.fullmatch(given):
-            raise SystemExit(f"{COMMIT_VARIABLE} is not 40 hexadecimal digits, then -dirty or nothing: {given!r}")
+            raise SystemExit(f"{COMMIT_VARIABLE} is not 40 hexadecimal digits, then -dirty or nothing")
         return given
     try:
         head, status = (

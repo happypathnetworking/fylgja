@@ -46,15 +46,12 @@ TAG := $(shell git rev-parse HEAD 2>/dev/null | cut -c1-12)$(if $(shell git stat
 
 all: lint test
 
-# The core's venv at core/pyproject.toml's pins: the package editable, with its extras server and dev (D-084), and
-# the two readers' and the example orchestrator's beside it, each editable, with its extra dev.
+# The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the four distributions editable with every
+# extra, at the versions uv.lock holds, which a pin moved in a pyproject.toml without `uv lock` refuses. The
+# interpreter is the PATH's python3, never one uv fetches.
 venv:
-	test -x $(VENV)/bin/python || python3 -m venv $(VENV)
+	UV_PROJECT_ENVIRONMENT=$(CURDIR)/$(VENV) uv sync --locked --all-packages --all-extras --python python3
 	printf '*\n' > $(VENV)/.gitignore
-	$(VENV)/bin/pip install -q -e 'core[server,dev]'
-	$(VENV)/bin/pip install -q -e 'readers/infrahub[dev]'
-	$(VENV)/bin/pip install -q -e 'readers/netbox[dev]'
-	$(VENV)/bin/pip install -q -e 'orchestrator[dev]'
 
 # The pure tier: no infrastructure (Constitution, Development).
 test:

@@ -8940,10 +8940,37 @@ once. *(2026-11-13)*
   `pypi.org`, asked with no account on 2026-11-15: the first three of `urls[]` carried
   `upload_time_iso_8601` of 2026-10-03T17:31:15Z, 17:31:18Z and 17:31:21Z. That is 42 days
   before 2026-11-14, so the version is past the two weeks every pin keeps. *(2026-11-15)*
-- **Not read:** `uv sync` from a worktree against the main checkout's cache; the
-  `Dockerfile`'s two stages built with uv; `scripts/wheelcheck.py`'s empty-environment
-  installs under uv, the base at its floors among them; CI's `setup-uv`; what `uv lock` does
-  when a pin moves.
+- **The lock's form.** `uv lock` at the worktree's root with the root file written resolved 130
+  packages in 1.36 s (`version = 1`, `revision = 5`). Each of the four is a `[[package]]` with
+  `source = { editable = "<member>" }` and `version = "0.0.0"`; every other package is
+  `source = { registry = ... }`, the registry PyPI's `simple` index. With the lock tracked
+  (`git add -N uv.lock`) and before the tree test knew it, `test_the_tree_names_no_address` failed
+  on 1,282 URLs, 1,156 on `files.pythonhosted.org` and 126 on `pypi.org`, and on nothing else: no
+  github.com path and no dotted quad beyond what `NOT_A_SITES` already lists. *(2026-11-15)*
+- **A pin moved, read in a scratch copy.** `ruff==0.17.3` to `0.17.2` in `core/pyproject.toml`
+  alone: `uv sync --locked` and `uv lock` each exited 1 with "No solution found", the cause
+  "`fylgja-core[dev]` depends on `ruff==0.17.2` and `fylgja-infrahub[dev]` depends on
+  `ruff==0.17.3`". In all four, `uv lock` printed "Updated ruff v0.17.3 -> v0.17.2" and the lock
+  differed in the four `specifier = "==0.17.3"` lines and in ruff's `[[package]]` entry (its
+  version, sdist and 17 wheels) and nowhere else. `uvicorn==0.53.0` in `core/pyproject.toml`
+  alone, no other pin touched: `uv sync --locked` exited 1 with "The lockfile at `uv.lock` needs
+  to be updated, but `--locked` was provided." *(2026-11-15)*
+- **Another uv.** `required-version = "==0.0.1"` in the root: `uv sync`, `uv lock` and `uv venv`
+  each exited 2 with "Required uv version `==0.0.1` does not match the running version `0.12.23`."
+  *(2026-11-15)*
+- **`make venv` over the baseline's pip-made `core/.venv`**, in the worktree beside the main
+  checkout, the cache `~/.cache/uv` and the worktree on one filesystem (`/dev/sda2`). It exited 0
+  in 3 s: "Resolved 130 packages", the four packages built and reinstalled, 127 packages checked.
+  The venv was not remade: `core/.venv/bin/pip` and `pyvenv.cfg` (`command = ... python3 -m venv
+  ...`, no `uv =` line) stayed, `python -m pip --version` still answered pip 25.1.1, and
+  `fylgja_core` was imported from `core/src`. A second run, nothing to do, took 0 s
+  ("Checked 127 packages"). Neither run printed a warning. In a scratch copy with no venv on
+  `/tmp`, a tmpfs, a different filesystem from the cache, `make venv` took 6 s, printed "Failed to
+  hardlink files; falling back to full copy", installed 127 packages, made no `bin/pip`, and wrote
+  `uv = 0.12.23` into `pyvenv.cfg`. *(2026-11-15)*
+- **Not read:** `uv sync` against a venv of another Python minor; the `Dockerfile`'s two stages
+  built with uv; `scripts/wheelcheck.py`'s empty-environment installs under uv, the base at its
+  floors among them; CI's `setup-uv`.
 
 ## Docker Compose v5.6.0
 

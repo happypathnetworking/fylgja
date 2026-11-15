@@ -52,6 +52,10 @@ CITED = {
 }
 """Repositories on github.com the tree cites outside the organisation the formats' ids name."""
 
+LOCKED = {"uv.lock": ("pypi.org", "files.pythonhosted.org")}
+"""The hosts a file alone may name, each file by its path: the lock's index and its files (D-108). A lock written
+through a site's mirror names that site's host, and fails."""
+
 NOT_HOSTS = {
     ("s3", "fylgja"): "the S3 bucket an `s3` URL names in the place of a host, its endpoint given apart",
     ("http", "versity"): "the deploy base's own Service, named in its namespace",
@@ -146,6 +150,19 @@ def urls(paths: list[str]) -> Iterator[tuple[str, int, Url]]:
                 yield path, number, Url(found["scheme"].lower(), host(found["authority"]), found["path"] or "")
 
 
+def public(path: str, found: Url) -> bool:
+    """Whether a URL of the file `path` names loopback, a `*.example` name, a documentation range, a public reference,
+    a name that is no host, or a host `LOCKED` lists for that path."""
+    return (
+        found.host == "localhost"
+        or found.host.endswith(".example")
+        or among(found.host, DOCUMENTATION + LOOPBACK)
+        or found.host in REFERENCES
+        or (found.scheme, found.host) in NOT_HOSTS
+        or found.host in LOCKED.get(path, ())
+    )
+
+
 def organisations() -> set[str]:
     """The github.com organisations the formats' ids name (each `formats/*.schema.json`'s `$id`)."""
     found = set()
@@ -191,6 +208,15 @@ def test_the_override_holds_no_value_and_no_host() -> None:
     }
 
 
+def test_pypi_is_a_public_reference_in_the_lock_alone() -> None:
+    """The lock names PyPI's index and its files' host (D-108); no other file may, and a lock written through another
+    index names that index's host and is no reference."""
+    assert public("uv.lock", Url("https", "files.pythonhosted.org", "/packages/a.whl"))
+    assert public("uv.lock", Url("https", "pypi.org", "/simple"))
+    assert not public("uv.lock", Url("https", "mirror.corp.invalid", "/simple"))
+    assert not public("README.md", Url("https", "pypi.org", "/simple"))
+
+
 def test_the_tree_names_no_address() -> None:
     """The tree holds no host name, address or value of a site (CONTRIBUTING.md): outside its test directories, a URL
     names loopback, a `*.example` name, a documentation range or a public reference, and a bare address is in loopback
@@ -208,13 +234,7 @@ def test_the_tree_names_no_address() -> None:
     named = [
         (path, number, found)
         for path, number, found in urls(held)
-        if not (
-            found.host == "localhost"
-            or found.host.endswith(".example")
-            or among(found.host, DOCUMENTATION + LOOPBACK)
-            or found.host in REFERENCES
-            or (found.scheme, found.host) in NOT_HOSTS
-        )
+        if not public(path, found)
     ]
     assert named == []
     ours = organisations()

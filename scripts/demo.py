@@ -50,7 +50,8 @@ its one implementation.
 Exit 0, for `up` a rehearsal `passed` and for `down` everything ended; 1 for a failure, a verdict other than `passed`
 or none; 2 for a command line not understood, a precondition of the host's not met, a line of `<local>/.env` that is
 not read as a shell would read it, a value that is not UTF-8 or that a child would not be given as the file has it,
-or another demonstration command running; 130 for a Ctrl-C. Each but the passed verdict is said on stderr.
+another demonstration command running, or a runner it may not end; 130 for a Ctrl-C. Each but the passed verdict is
+said on stderr. Run through make, every status but 0 is make's 2, the script's own in make's `Error` line.
 """
 
 from __future__ import annotations

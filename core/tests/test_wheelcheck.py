@@ -366,7 +366,7 @@ def _published_fields(module: ModuleType, core: bool) -> list[str]:
         f"Project-URL: Changelog, {module.REPOSITORY}/blob/main/CHANGELOG.md",
         f"Project-URL: Documentation, {module.REPOSITORY}/{docs}",
         *(f"Classifier: {c}" for c in classifiers),
-        *(["Description-Content-Type: text/markdown"] if core else []),
+        "Description-Content-Type: text/markdown",
     ]
 
 
@@ -376,7 +376,14 @@ def test_a_published_wheel_states_the_projects_metadata_and_any_other_is_named(t
     assert readme != (ROOT / "README.md").read_text(), "the parse is blind"
     good = _published_fields(module, True)
     module.published_metadata(_described(tmp_path, good, readme), "tree/main/docs", core=True)
-    module.published_metadata(_described(tmp_path, _published_fields(module, False)), "tree/main/readers/netbox")
+    reader = module.rewritten_readme("readers/netbox")
+    assert reader != (ROOT / "readers" / "netbox" / "README.md").read_text(), "the parse is blind"
+    module.published_metadata(
+        _described(tmp_path, _published_fields(module, False), reader), "tree/main/readers/netbox")
+    with pytest.raises(module.Failure, match="readers/netbox/README"):
+        module.published_metadata(
+            _described(tmp_path, _published_fields(module, False), (ROOT / "readers/netbox/README.md").read_text()),
+            "tree/main/readers/netbox")
     # Each fault, and the line of the failure that names it.
     bad = {
         "License-Expression is None": [f for f in good if not f.startswith("License-Expression")],

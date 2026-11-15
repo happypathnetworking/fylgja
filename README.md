@@ -3,8 +3,13 @@
 [![ci](https://github.com/happypathnetworking/fylgja/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/happypathnetworking/fylgja/actions/workflows/ci.yml)
 
 A blueprint is a network's intent: every device, link and configuration, as its source of truth
-renders it, addressed by its contents. A twin is that network running on real network operating
-system images, where a change is rehearsed before it reaches production.
+renders it, addressed by its contents, with optionally probes, small hosts that ping each other
+through the twin. A twin is that network running on real network operating system images, where a
+change is rehearsed before it reaches production: Fylgja compiles the blueprint to a bundle, runs
+the bundle and pushes each configuration, then steps the twin from one blueprint to another, and
+its verify and the probes' loss make the verdict. Vendors are data, not code: Nokia SR Linux and
+Arista EOS, alone or mixed in one twin. Anything that writes a blueprint can drive Fylgja, through
+its API or its command.
 
 ## Installing
 
@@ -15,7 +20,8 @@ fylgja-env/bin/pip install fylgja-infrahub fylgja-netbox
 ```
 
 The packages, the other ways to install them and what the server's host needs are in
-[installing](docs/installing.md).
+[installing](docs/installing.md). The commands are in `fylgja-env/bin/`: the commands below need the
+environment activated, or `fylgja-env/bin/` in front of each.
 
 ## A first twin
 

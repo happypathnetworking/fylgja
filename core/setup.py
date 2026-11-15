@@ -17,16 +17,19 @@ at the root, is copied to `fylgja_core/shipped/<name>/`, which `packages.shipped
 means. A directory holding none stops the build naming it, and a README stays in the tree.
 """
 
+import importlib.util
 import os
 import re
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
+from types import ModuleType
 
 from setuptools import setup
 from setuptools.command.build_py import build_py
 
 ROOT = Path(__file__).resolve().parent.parent
+README_DIRECTORY = ""
 FORMATS = ROOT / "formats"
 CORE_FORMATS = (
     "api-1.openapi.yaml",
@@ -57,33 +60,15 @@ def version(root: Path = ROOT) -> str:
     return lines[0].strip()
 
 
-README_BASE = "https://github.com/happypathnetworking/fylgja/blob/v{version}/"
-# A fenced block or an inline code span, which is left as it is, or an inline link or image, whose target is read:
-# `scripts/linkcheck.py`'s FENCE and INLINE rule, and its LINK.
-_README_PARTS = re.compile(
-    r"(?P<code>^(?:```|~~~).*?^(?:```|~~~)[^\n]*$|`[^`\n]*`)"
-    r"|(?P<head>!?\[[^\]]*\]\()(?P<target>[^)\s]+)(?P<tail>(?:\s+\"[^\"]*\")?\))",
-    re.M | re.S,
-)
-
-
-def readme(root: Path, version: str) -> str:
-    """`root`'s `README.md`, each inline link whose target has no scheme made absolute under the tree of the release's
-    tag, `README_BASE`: a target that is an anchor alone goes under the base's `README.md`; an absolute link and
-    anything inside fenced or inline code stay as they are."""
-    base = README_BASE.format(version=version)
-
-    def absolute(found: re.Match[str]) -> str:
-        if found.group("code") is not None:
-            return found.group(0)
-        target = found.group("target")
-        if re.match(r"[a-z][a-z0-9+.-]*:", target):
-            return found.group(0)
-        if target.startswith("#"):
-            target = "README.md" + target
-        return found.group("head") + base + target + found.group("tail")
-
-    return _README_PARTS.sub(absolute, (root / "README.md").read_text())
+def readme_links(root: Path = ROOT) -> ModuleType:
+    """`readme_links.py` at `root`, loaded by path: the one definition of how a README's links are written absolute,
+    which each published distribution's build uses for its description."""
+    spec = importlib.util.spec_from_file_location("readme_links", root / "readme_links.py")
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"{root / 'readme_links.py'} cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 COMMIT_VARIABLE = "FYLGJA_BUILD_COMMIT"
@@ -148,8 +133,9 @@ class BuildPy(build_py):
 setup(
     version=version(),
     # The core's page on the index is the repository's README, which `readme` lists as dynamic: setuptools reads no
-    # file outside a project (D-106). Its relative links resolve nowhere on an index, so `readme` writes each absolute.
-    long_description=readme(ROOT, version()),
+    # file outside a project (D-106). Its relative links resolve nowhere on an index, so `readme_links.py` at the root,
+    # which every published build loads, writes each absolute.
+    long_description=readme_links(ROOT).readme(ROOT, README_DIRECTORY, version()),
     long_description_content_type="text/markdown",
     cmdclass={"build_py": BuildPy},
 )

@@ -284,42 +284,61 @@ def test_each_published_distribution_states_its_metadata(member: str) -> None:
     assert found["license"] == "Apache-2.0"
     assert found["requires-python"] == ">=3.14"
     assert "authors" not in found and "maintainers" not in found
-    if member == "core":
-        assert "readme" in found["dynamic"]
-        assert "readme" not in found
-    else:
-        assert found["readme"] == "README.md"
+    assert "readme" in found["dynamic"]
+    assert "readme" not in found
 
 
-def test_the_long_description_links_into_the_tagged_tree(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    module, _ = load_setup("core", monkeypatch)
-    base = "https://github.com/happypathnetworking/fylgja/blob/v1.0.0rc1/"
-    assert module.README_BASE.format(version="1.0.0rc1") == base
-    (tmp_path / "README.md").write_text(
-        "# T\n\n[a](docs/x.md#y) and [b](#y) and [c](https://example.org/z) and [d](docs/w.md)\n\n"
-        "```sh\n[e](docs/in-fence.md)\n```\n\nand `[f](docs/in-code.md)` and ![i](docs/i.png)\n"
+def links_module() -> ModuleType:
+    """`readme_links.py` at the root, the one definition every published build's `setup.py` loads by path."""
+    spec = importlib.util.spec_from_file_location("readme_links_under_test", ROOT / "readme_links.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+TAG = "https://github.com/happypathnetworking/fylgja/blob/v1.0.0rc1/"
+RAW = "https://github.com/happypathnetworking/fylgja/raw/v1.0.0rc1/"
+
+
+def test_a_readmes_links_are_written_absolute_under_the_tagged_tree() -> None:
+    links = links_module()
+    text = (
+        "# T\n\n[a](x.md#y) and [b](#y) and [c](https://example.org/z) and [d](../../design/w.md#v)\n\n"
+        "[ref]: sub/r.md\n[abs]: https://example.org/r\n\n"
+        "```sh\n[e](in-fence.md)\n[g]: in-fence.md\n```\n\n"
+        "````sh\n~~~\n[h](after-tilde.md)\n````\n\n"
+        "and `[f](in-code.md)` and ![i](img/i.png) and [j](sub/)\n"
     )
-    made = module.readme(tmp_path, "1.0.0rc1")
-    assert made == (
+    assert links.readme_text(text, "readers/infrahub", "1.0.0rc1") == (
         "# T\n\n"
-        f"[a]({base}docs/x.md#y) and [b]({base}README.md#y) and [c](https://example.org/z) and "
-        f"[d]({base}docs/w.md)\n\n"
-        "```sh\n[e](docs/in-fence.md)\n```\n\n"
-        f"and `[f](docs/in-code.md)` and ![i]({base}docs/i.png)\n"
+        f"[a]({TAG}readers/infrahub/x.md#y) and [b]({TAG}readers/infrahub/README.md#y) and "
+        f"[c](https://example.org/z) and [d]({TAG}design/w.md#v)\n\n"
+        f"[ref]: {TAG}readers/infrahub/sub/r.md\n[abs]: https://example.org/r\n\n"
+        "```sh\n[e](in-fence.md)\n[g]: in-fence.md\n```\n\n"
+        "````sh\n~~~\n[h](after-tilde.md)\n````\n\n"
+        f"and `[f](in-code.md)` and ![i]({RAW}readers/infrahub/img/i.png) and [j]({TAG}readers/infrahub/sub)\n"
     )
-    # the repository's own README: no relative link is left, and each rewritten path is a file of the tree
-    real = module.readme(ROOT, VERSION)
-    body = re.sub(r"^(```|~~~).*?^\1[^\n]*$", "", real, flags=re.M | re.S)
+    root = links.readme_text("[a](docs/x.md) [b](#y)\n", "", "1.0.0rc1")
+    assert root == f"[a]({TAG}docs/x.md) [b]({TAG}README.md#y)\n"
+    with pytest.raises(ValueError, match="above the root"):
+        links.readme_text("[a](../../../x.md)\n", "readers/infrahub", "1.0.0rc1")
+
+
+@pytest.mark.parametrize("member", PUBLISHED)
+def test_every_published_readme_is_rewritten_and_each_target_is_a_file_of_the_tree(member: str) -> None:
+    links = links_module()
+    made = links.readme(ROOT, member if member != "core" else "", VERSION)
+    body = re.sub(r"^(?P<f>```|~~~).*?^(?P=f)[^\n]*$", "", made, flags=re.M | re.S)
     body = re.sub(r"`[^`\n]*`", "", body)
-    found = re.findall(r"\]\(([^)\s]+)", body)
-    assert found, "the parse is blind"
-    prefix = module.README_BASE.format(version=VERSION)
+    found = re.findall(r"\]\(([^)\s]+)", body) + re.findall(r"^\[[^\]]+\]:\s*(\S+)", body, re.M)
+    assert len(found) > 3, "the parse is blind"
     for target in found:
         assert re.match(r"[a-z][a-z0-9+.-]*:", target), target
-        if target.startswith(prefix):
-            assert (ROOT / target.removeprefix(prefix).split("#")[0]).is_file(), target
+        for kind in ("blob", "raw"):
+            prefix = f"https://github.com/happypathnetworking/fylgja/{kind}/v{VERSION}/"
+            if target.startswith(prefix):
+                assert (ROOT / target.removeprefix(prefix).split("#")[0]).is_file(), target
 
 
 def test_the_example_is_marked_never_to_be_uploaded() -> None:
@@ -338,11 +357,10 @@ def test_each_published_build_carries_the_licence(
     step.build_lib = str(tmp_path / "lib")
     step.run()
     assert (tmp_path / "lib" / PACKAGES[member] / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
-    if member == "core":
-        assert given[0]["long_description"] == module.readme(ROOT, VERSION)
-        assert given[0]["long_description_content_type"] == "text/markdown"
-    else:
-        assert "long_description" not in given[0]
+    directory = "" if member == "core" else member
+    assert given[0]["long_description"] == links_module().readme(ROOT, directory, VERSION)
+    assert given[0]["long_description"] != (ROOT / directory / "README.md").read_text()
+    assert given[0]["long_description_content_type"] == "text/markdown"
 
     # a build whose root holds the packages but no LICENSE stops, naming the file
     bare = tmp_path / "bare"

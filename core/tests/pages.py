@@ -29,6 +29,30 @@ def _level(line: str) -> int:
     return len(match.group(1)) if match else 0
 
 
+_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+
+
+class _Fences:
+    """Which lines of a page are inside a fenced code block: a fence of three or more backticks or tildes, indented
+    or not, closed by one of the same character at least as long with nothing after it."""
+
+    def __init__(self) -> None:
+        self.open: tuple[str, int] | None = None
+
+    def step(self, line: str) -> str | None:
+        """Feed a line; the info string when it opens a block, "" when it closes one, None for any other line."""
+        match = _FENCE.match(line)
+        if self.open is None:
+            if match and not (match.group(1)[0] == "`" and "`" in match.group(2)):
+                self.open = (match.group(1)[0], len(match.group(1)))
+                return match.group(2).strip()
+        elif match and match.group(1)[0] == self.open[0] and len(match.group(1)) >= self.open[1] \
+                and not match.group(2).strip():
+            self.open = None
+            return ""
+        return None
+
+
 def section(text: str, heading: str) -> list[str]:
     """The lines under `heading`, a whole heading line, to the next heading of its level or a higher one. A `#` inside
     a code block is no heading."""
@@ -36,19 +60,46 @@ def section(text: str, heading: str) -> list[str]:
     start = lines.index(heading) + 1
     level = _level(heading)
     found: list[str] = []
-    fenced = False
+    fences = _Fences()
     for line in lines[start:]:
-        if line.startswith("```"):
-            fenced = not fenced
-        elif not fenced and 0 < _level(line) <= level:
+        was_open = fences.open is not None
+        fences.step(line)
+        if not was_open and fences.open is None and 0 < _level(line) <= level:
             break
         found.append(line)
     return found
 
 
+def _cells(line: str) -> list[str]:
+    """A table row's cells: split on a `|` that is neither escaped nor inside backticks, `\\|` unescaped."""
+    cells: list[str] = []
+    current: list[str] = []
+    ticks = False
+    k = 0
+    body = line.strip()
+    body = body[1:] if body.startswith("|") else body
+    body = body[:-1] if body.endswith("|") and not body.endswith("\\|") else body
+    while k < len(body):
+        ch = body[k]
+        if ch == "\\" and body[k + 1:k + 2] == "|":
+            current.append("|")
+            k += 1
+        elif ch == "`":
+            ticks = not ticks
+            current.append(ch)
+        elif ch == "|" and not ticks:
+            cells.append("".join(current).strip())
+            current = []
+        else:
+            current.append(ch)
+        k += 1
+    cells.append("".join(current).strip())
+    return cells
+
+
 def rows(lines: list[str], first: str) -> list[list[str]]:
     """The cells of each row of the table among `lines` whose header's first cell is `first`, header and rule left
-    out."""
+    out. A pipe in backticks or escaped is part of its cell, and a row may have an empty first cell."""
     found: list[list[str]] = []
     inside = False
     for line in lines:
@@ -56,11 +107,11 @@ def rows(lines: list[str], first: str) -> list[list[str]]:
             if inside:
                 break
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        cells = _cells(line)
         if not inside:
-            inside = cells[0] == first
+            inside = bool(cells) and cells[0] == first
             continue
-        if not set(cells[0]) <= set("-: "):
+        if not all(re.fullmatch(r"[-: ]+", cell) for cell in cells):
             found.append(cells)
     return found
 
@@ -68,16 +119,16 @@ def rows(lines: list[str], first: str) -> list[list[str]]:
 def blocks(text: str) -> list[tuple[str, list[str]]]:
     """Each fenced code block of `text`: its info string and its lines."""
     found: list[tuple[str, list[str]]] = []
-    info: str | None = None
+    info = ""
     body: list[str] = []
+    fences = _Fences()
     for line in text.splitlines():
-        if line.startswith("```"):
-            if info is None:
-                info, body = line[3:].strip(), []
-            else:
-                found.append((info, body))
-                info = None
-        elif info is not None:
+        opened = fences.step(line)
+        if opened is not None and fences.open is not None:
+            info, body = opened, []
+        elif opened is not None:
+            found.append((info, body))
+        elif fences.open is not None:
             body.append(line)
     return found
 

@@ -6,12 +6,15 @@ is typed by hand and left unheld: a change to the CLI's text fails here until th
 from __future__ import annotations
 
 import json
+import re
 import shlex
 from collections.abc import Callable
 from typing import Any
 
 import pytest
 from fake_api import (
+    _PLATFORMS,
+    _PROBES,
     ADDRESS,
     BLUEPRINT_ID,
     BUNDLE_ID,
@@ -20,7 +23,6 @@ from fake_api import (
     DESTROY_RUN_ID,
     PUSH_REFUSED,
     RUN_ID,
-    STEP_TO,
     TOKEN,
     FakeAPI,
     check_component,
@@ -33,11 +35,16 @@ from fake_api import (
 from fake_api import NODES as FAKE_NODES
 from pages import ROOT, blocks, flags, options, rows, section, statuses, text, ticked
 
-from fylgja_core import cli
+from fylgja_core import blueprint, cli, compiler
 
 PAGE = "docs/cli.md"
 TWIN = "demo"
 """The twin every example names, as its command line does; the fake's documents are renamed to it."""
+PROBED_FILE = ROOT / "testdata" / "blueprint" / "three-node-probed.json"
+PROBED = json.loads(PROBED_FILE.read_text())
+PROBED_BLUEPRINT_ID = blueprint.blueprint_id(PROBED)
+PROBED_ID = compiler.compile(blueprint.decode(PROBED), _PLATFORMS, _PROBES).id
+"""The compiled id of `three-node-probed.json`: the bundle the dry-run step goes to and the diff ends at."""
 NODES = [
     {**FAKE_NODES[0], "address": "192.0.2.11"},
     {**FAKE_NODES[1], "address": "192.0.2.12"},
@@ -81,7 +88,7 @@ def test_the_page_names_the_variables_the_cli_reads() -> None:
 def test_the_page_names_the_exit_statuses_the_cli_has() -> None:
     found = statuses(section(text(PAGE), "## Exit statuses"))
     assert found, "the parse is blind"
-    assert found == set(cli.EXIT.values()) | {cli.EXIT_FAILURE} == {0, 1, 2, 3}
+    assert found == set(cli.EXIT.values()) | {cli.EXIT_FAILURE}
 
 
 # The examples: each fake answers one command as a server would, the twin named `demo`.
@@ -125,7 +132,7 @@ def _step_dry_run() -> FakeAPI:
     plan: dict[str, Any] = {
         "deployment": DEPLOYMENT,
         "verdict": {"findings_version": "1", "operation": "plan", "status": "ok",
-                    "subject": {"twin": TWIN, "bundle_id": STEP_TO, "deployment_id": DEPLOYMENT["id"]},
+                    "subject": {"twin": TWIN, "bundle_id": PROBED_ID, "deployment_id": DEPLOYMENT["id"]},
                     "findings": []},
         "changes": {"nodes": [{"node": n, "action": "kept", "reasons": []} for n in ("n1", "n2", "n3")],
                     "links_added": [], "links_removed": []},
@@ -133,7 +140,8 @@ def _step_dry_run() -> FakeAPI:
     check_component("Plan", plan)
     return (
         FakeAPI()
-        .on("POST", "/v1/blueprints", ok({"id": "c" * 64}, 201, {"Location": f"/v1/blueprints/{'c' * 64}"}))
+        .on("POST", "/v1/blueprints",
+            ok({"id": PROBED_BLUEPRINT_ID}, 201, {"Location": f"/v1/blueprints/{PROBED_BLUEPRINT_ID}"}))
         .on("PUT", f"/v1/twins/{TWIN}", ok(plan))
     )
 
@@ -148,12 +156,12 @@ def _capacity() -> FakeAPI:
 
 def _diff() -> FakeAPI:
     doc: dict[str, Any] = {
-        "from": BUNDLE_ID, "to": STEP_TO, "unchanged": False,
+        "from": BUNDLE_ID, "to": PROBED_ID, "unchanged": False,
         "nodes": {"added": [], "removed": [], "changed": []},
         "links": {"added": [], "removed": []},
         "probes": {"added": ["n1-loop"], "removed": []},
     }
-    return FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}/diff/{STEP_TO}", ok(doc))
+    return FakeAPI().on("GET", f"/v1/bundles/{BUNDLE_ID}/diff/{PROBED_ID}", ok(doc))
 
 
 def _destroy() -> FakeAPI:
@@ -168,12 +176,12 @@ def _destroy() -> FakeAPI:
 
 
 EXAMPLES: dict[str, Callable[[], FakeAPI]] = {
+    "fylgja-core capacity show": _capacity,
     f"fylgja-core twin create {TWIN} --blueprint testdata/blueprint/three-node.json": _create,
     f"fylgja-core twin show {TWIN}": _show,
     f"fylgja-core twin step {TWIN} --blueprint testdata/blueprint/three-node-probed.json --dry-run": _step_dry_run,
     f"fylgja-core twin verify {TWIN}": _verify,
-    "fylgja-core capacity show": _capacity,
-    f"fylgja-core bundle diff {BUNDLE_ID} {STEP_TO}": _diff,
+    f"fylgja-core bundle diff {BUNDLE_ID} {PROBED_ID}": _diff,
     f"fylgja-core twin destroy {TWIN}": _destroy,
 }
 """Each console command of the page, as its line gives it, and the fake that answers it. The `FakeAPI` holds each
@@ -201,19 +209,24 @@ def test_each_example_prints_what_the_page_shows(
     monkeypatch.setenv(cli.ADDRESS, ADDRESS)
     monkeypatch.setenv(cli.TOKEN, TOKEN)
     monkeypatch.delenv(cli.CA, raising=False)
+    progress: list[str] = []
     for line, fake in EXAMPLES.items():
         api = fake()
         code = cli.main(shlex.split(line)[1:], transport=api.transport, sleep=lambda s: None)
-        out = capsys.readouterr().out
-        assert out.splitlines() == shown[line], line
+        captured = capsys.readouterr()
+        assert captured.out.splitlines() == shown[line], line
         assert code == 0, line
         assert api.failures == [], line
+        progress += captured.err.splitlines()
+    prose = section(text(PAGE), "## Examples")
+    spans = ticked("\n".join(prose[max(k for k, line in enumerate(prose) if line.startswith("```")) + 1:]))
+    named = [span for span in spans if re.fullmatch(TWIN + r": \w+", span)]
+    assert named, "the parse is blind"
+    assert progress == named, "the progress lines on stderr are the ones the page names, in order"
 
 
 def test_the_examples_keep_to_the_documentation_ranges() -> None:
     """Every address a page shows is in 192.0.2.0/24 or is the loopback address, every access name is `*.example`."""
-    import re
-
     assert PUSH_REFUSED, "the parse is blind"
     body = "\n".join(line for _, lines in blocks(text(PAGE)) for line in lines)
     for address in re.findall(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", body):

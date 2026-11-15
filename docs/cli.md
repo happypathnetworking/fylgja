@@ -26,6 +26,18 @@ variable and never its value. All three variables are checked before any request
 refusal exits with status 2. The command never prints the token: not on success, not in an error,
 and not with `--json`.
 
+For a server running on the same host with its default listen address, set the two required
+variables in the shell that runs the command, with the token you made for this client in place of
+`TOKEN`:
+
+```sh
+export FYLGJA_API_ADDRESS=127.0.0.1:7650
+export FYLGJA_API_TOKEN=TOKEN
+```
+
+How a token is made and entered in the server's token file is described in
+[the token file](server.md#the-token-file).
+
 ## Commands
 
 Each command below is `fylgja-core`, then the words in its first column. Every command takes
@@ -92,8 +104,20 @@ the twin's record prints it, and the command exits by the destroy run's verdict,
 While a command waits it prints its progress on standard error, a line for each phase the twin
 reaches, such as `demo: pushed`. Standard output holds only the result, which is why the examples
 below show standard output alone. With `--json` no progress is printed and standard output holds
-one JSON value: the document the server answered, as it came. For `twin create`, `twin step` and
-`twin destroy` that document is the run; for `run watch` it is the list of the run's events.
+one JSON value: the document the server answered, as it came. Which document that is depends on
+the command:
+
+- `twin create`, `twin step` and `twin destroy` print the run they waited for.
+- With `--no-wait` they print the twin's record instead, and a `twin step` to the spec the twin
+  already has prints the record too, since no run started.
+- `twin step --dry-run` prints the plan: the deployment, the verdict and the changes.
+- `twin show` and `twin list` print the record and the list of records, `twin verify` the verdict,
+  `run get` and `run cancel` the run, `blueprint push` the blueprint's id, and `bundle build`,
+  `bundle get` and `bundle diff` the bundle's document.
+- `run watch` prints the list of the run's events, once the run has ended. A run that has ended with
+  no verdict prints nothing, and the command exits 2.
+- A command the server refuses prints the problem document it answered, and the one-line refusal
+  still goes to standard error.
 
 A command that waits rides through a restart of the server. Its watch reconnects for up to about
 three minutes, each try given 5 seconds to connect, says so once on standard error, and then exits
@@ -103,7 +127,17 @@ at once.
 ## Examples
 
 Each example is a command and its standard output. The twin is `demo`, and the address and token
-come from the variables above.
+come from the variables above. The two bundle ids in the last-but-one example are the compiled ids
+of `testdata/blueprint/three-node.json` and of `testdata/blueprint/three-node-probed.json`. A
+bundle's id comes from `bundle build`, which compiles a filed blueprint, from the `bundle:` line of
+`twin show`.
+
+```console
+$ fylgja-core capacity show
+host: cpu 10 of 10 free, memory 25907 of 31065 MiB free
+pending: 0 nodes, 0 CPU, 0 MiB
+twins: 0
+```
 
 ```console
 $ fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json
@@ -151,15 +185,8 @@ verdict: ok
 ```
 
 ```console
-$ fylgja-core capacity show
-host: cpu 10 of 10 free, memory 25907 of 31065 MiB free
-pending: 0 nodes, 0 CPU, 0 MiB
-twins: 0
-```
-
-```console
-$ fylgja-core bundle diff 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31 5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
-diff 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31 -> 5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
+$ fylgja-core bundle diff 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31 d45f6b7de1d7d90466cb31aeeb0197a0d2ab5f0beecb2ad69de6e480ebef2c31
+diff 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31 -> d45f6b7de1d7d90466cb31aeeb0197a0d2ab5f0beecb2ad69de6e480ebef2c31
 probes added: n1-loop
 ```
 
@@ -179,10 +206,14 @@ The ids, times and counts depend on the blueprint and the server.
 
 | Status | Means |
 |---|---|
-| 0 | The command succeeded, or the verdict it waited for is `ok`. |
+| 0 | The command succeeded, or the verdict it exits by is `ok`. |
 | 1 | The verdict is negative: `rejected`, `failed` or `nonconforming`. |
 | 2 | The server answered with a problem, the server could not be reached or its certificate is not trusted, or a write could not be followed to its verdict. The command itself failed: a variable is not set or cannot be used, a file cannot be read, a blueprint is not valid, or the command line is wrong. |
 | 3 | The twin is left dirty: the verdict is `unclean` or `diverged`. |
+
+A command exits by a verdict only where it waits for one: `twin create`, `twin step` and `twin destroy`
+without `--no-wait`, `twin step --dry-run`, `twin verify` and `run watch`. The others, `--no-wait`
+included, exit 0 whatever a run's verdict is. `run watch` on a run with no verdict exits 2, and so does Ctrl-C.
 
 A refusal prints one line on standard error with the server's status, rule and detail, and each
 finding under it. The terms are defined in [the glossary](glossary.md).

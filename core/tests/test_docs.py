@@ -8,7 +8,7 @@ import re
 import shlex
 
 import pytest
-from pages import USER_PAGES, blocks, flags, options, targets, text
+from pages import USER_PAGES, blocks, flags, options, rows, section, targets, text
 
 from fylgja_core import cli
 
@@ -80,3 +80,17 @@ def test_no_user_page_cites_a_decision_number_or_a_phase() -> None:
             if line.startswith("Why it is so"):
                 continue
             assert not re.search(r"D-\d{3}|[Pp]hase \d", line), f"{page}:{number}: {line}"
+
+
+def test_a_table_row_keeps_a_pipe_in_backticks_or_escaped_and_an_empty_first_cell() -> None:
+    lines = ["| Status | Means |", "|:--|---|", "| `a|b` | x \\| y |", "|  | empty first |", "| 2 | ` | ` and `c` |"]
+    assert rows(lines, "Status") == [["`a|b`", "x | y"], ["", "empty first"], ["2", "` | ` and `c`"]]
+    assert rows(lines, "Other") == []
+
+
+def test_a_fence_is_found_indented_and_longer_and_closed_only_by_one_as_long() -> None:
+    page = "\n".join(["# T", "", "  ````sh", "```", "# not a heading", "````", "", "~~~console", "$ x", "~~~", "",
+                      "## Next", "text"])
+    assert blocks(page) == [("sh", ["```", "# not a heading"]), ("console", ["$ x"])]
+    assert section(page, "# T") == page.splitlines()[1:]
+    assert section(page, "## Next") == ["text"]

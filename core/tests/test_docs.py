@@ -8,7 +8,7 @@ import re
 import shlex
 
 import pytest
-from pages import DOCS, ROOT, USER_PAGES, blocks, flags, options, rows, section, targets, text
+from pages import DOCS, ROOT, USER_PAGES, blocks, flags, options, prose, rows, section, targets, text
 
 from fylgja_core import cli
 
@@ -65,6 +65,7 @@ def test_every_command_line_a_page_gives_parses() -> None:
 
 def test_every_make_target_a_page_names_exists() -> None:
     assert {"venv", "test"} <= targets(), "the parse is blind"
+    union: set[str] = set()
     for page in USER_PAGES:
         body = text(page)
         named = {m.group(1) for span in re.findall(r"`([^`]+)`", body) if (m := re.match(r"make ([\w-]+)", span))}
@@ -72,6 +73,8 @@ def test_every_make_target_a_page_names_exists() -> None:
             if info in ("sh", "console"):
                 named |= {m.group(1) for line in lines if (m := re.match(r"(?:\$ )?make ([\w-]+)", line))}
         assert named <= targets(), f"{page}: no such make target: {sorted(named - targets())}"
+        union |= named
+    assert union, "the parse is blind"
 
 
 def test_no_user_page_cites_a_decision_number_or_a_phase() -> None:
@@ -96,12 +99,12 @@ def test_a_fence_is_found_indented_and_longer_and_closed_only_by_one_as_long() -
     assert blocks(page) == [("sh", ["```", "# not a heading"]), ("console", ["$ x"])]
     assert section(page, "# T") == page.splitlines()[1:]
     assert section(page, "## Next") == ["text"]
+    assert prose(page) == ["# T", "", "", "", "## Next", "text"]
 
 
 def _relative_links(page: str) -> set[str]:
     """The relative link targets of a page, an anchor and a query cut off, a link inside code left out."""
-    body = text(page)
-    body = re.sub(r"^(```|~~~).*?^\1[^\n]*$", "", body, flags=re.M | re.S)
+    body = "\n".join(prose(text(page)))
     body = re.sub(r"`[^`\n]*`", "", body)
     targets_ = re.findall(r"\]\(([^)\s]+)", body)
     return {t.split("#")[0] for t in targets_ if not re.match(r"[a-z][a-z0-9+.-]*:", t) and t.split("#")[0]}
@@ -125,3 +128,15 @@ def test_the_readme_links_the_index_and_each_page_a_user_starts_from() -> None:
     links = _relative_links("README.md")
     assert links, "the parse is blind"
     assert {"docs/README.md", "docs/installing.md", "docs/demonstrations.md"} <= links
+    assert {"readers/infrahub/README.md", "readers/netbox/README.md", "docs/integrating.md"} <= links
+
+
+def test_the_index_gives_the_six_pages_in_reading_order_and_then_the_rest() -> None:
+    lines = text("docs/README.md").splitlines()
+    numbered = [m.group(1) for line in lines if (m := re.match(r"\d+\. \[[^\]]+\]\(([^)#\s]+)", line))]
+    assert numbered == ["installing.md", "server.md", "cli.md", "api.md", "client.md", "demonstrations.md"]
+    beside = lines[lines.index("Beside them:"):]
+    rest = [t for t in re.findall(r"\]\(([^)#\s]+)", "\n".join(beside))]
+    assert {"rules.md", "glossary.md", "integrating.md", "../readers/infrahub/README.md",
+            "../readers/netbox/README.md", "../formats/README.md", "../psp/README.md"} <= set(rest)
+    assert not set(numbered) & set(rest)

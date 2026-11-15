@@ -8,6 +8,7 @@ import re
 import shlex
 import tomllib
 
+import yaml
 from pages import ROOT, blocks, rows, section, text
 
 from fylgja_core import release
@@ -31,19 +32,21 @@ def _extras() -> set[str]:
     return set(optional) - {"dev"}
 
 
-def _install_lines() -> list[list[str]]:
-    """The requirements of each `pip install` or `uv pip install` line of the page's `sh` blocks."""
+def _install_lines(*pages: str) -> list[list[str]]:
+    """The arguments of each `pip install` or `uv pip install` line of the `sh` blocks of the page and of `README.md`
+    (or of `pages`)."""
     found: list[list[str]] = []
-    for info, lines in blocks(text(PAGE)):
-        if info != "sh":
-            continue
-        for line in lines:
-            argv = shlex.split(line.split("#")[0])
-            if not argv:
+    for page in pages or (PAGE, "README.md"):
+        for info, lines in blocks(text(page)):
+            if info != "sh":
                 continue
-            pip = argv[0].rsplit("/", 1)[-1] == "pip" and argv[1:2] == ["install"]
-            if pip or argv[:3] == ["uv", "pip", "install"]:
-                found.append(argv)
+            for line in lines:
+                argv = shlex.split(line.split("#")[0])
+                if not argv:
+                    continue
+                pip = argv[0].rsplit("/", 1)[-1] == "pip" and argv[1:2] == ["install"]
+                if pip or argv[:3] == ["uv", "pip", "install"]:
+                    found.append(argv)
     return found
 
 
@@ -113,9 +116,11 @@ def test_the_version_line_is_the_builds_form() -> None:
     found = [lines for lines in consoles if lines[:1] == ["$ fylgja-core --version"]]
     assert len(found) == 1, "the parse is blind"
     assert len(found[0]) == 2
-    shown = found[0][1].replace("<version>", release.version("fylgja-core", "fylgja_core"))
-    shown = shown.replace("<commit>", release.commit("fylgja_core"))
-    assert shown == "fylgja-core " + release.build("fylgja-core", "fylgja_core")
+    build = release.build("fylgja-core", "fylgja_core")  # one call: the version and the commit are of one reading
+    parts = re.fullmatch(r"(\S+) \(commit (.+)\)", build)
+    assert parts, build
+    shown = found[0][1].replace("<version>", parts.group(1)).replace("<commit>", parts.group(2))
+    assert shown == "fylgja-core " + build
 
 
 def test_a_glob_or_an_unset_variable_is_no_requirement() -> None:
@@ -129,11 +134,14 @@ def test_a_glob_or_an_unset_variable_is_no_requirement() -> None:
         raise AssertionError(f"{token} was accepted")
 
 
-def test_the_readers_requirement_on_the_core_is_what_their_pyprojects_say() -> None:
-    wanted = {dep.removeprefix("fylgja-core") for member in PYPROJECTS[1:]
-              for dep in _project(member)["dependencies"] if dep.startswith("fylgja-core")}  # type: ignore[attr-defined]
-    assert len(wanted) == 1, "the readers state one requirement"
-    assert f"`fylgja-core{wanted.pop()}`" in text(PAGE)
+def test_the_readers_require_the_core_at_the_release_version_below_two_and_the_page_says_so() -> None:
+    """The pin is computed from `VERSION`, so a tagging commit that moves the version edits no page: the page says
+    "the reader's own version or a later one below 2", and each reader's `pyproject.toml` holds the pin."""
+    version = (ROOT / "VERSION").read_text().strip()
+    pin = f"fylgja-core>={version},<2"
+    for member in PYPROJECTS[1:]:
+        assert pin in _project(member)["dependencies"], f"{member} does not require {pin}"  # type: ignore[operator]
+    assert "the core at the reader's own version or a later one below 2" in " ".join(text(PAGE).split())
 
 
 def test_the_uv_the_page_names_is_the_pinned_one() -> None:
@@ -141,3 +149,31 @@ def test_the_uv_the_page_names_is_the_pinned_one() -> None:
     named = re.findall(r"uv (\d+\.\d+\.\d+)", text(PAGE))
     assert named, "the parse is blind"
     assert {f"=={v}" for v in named} == {pin}
+
+
+def test_the_pull_and_the_memory_are_the_srlinux_packages() -> None:
+    """The page says to pull the image the package names before the first deploy, and what three nodes want."""
+    runtime = yaml.safe_load((ROOT / "psp" / "nokia_srlinux.yaml").read_text())["runtime"]["containerlab"]
+    (image,) = [i["ref"] for i in runtime["images"].values()]
+    memory = runtime["resources"]["memory_mb"]
+    body = text(PAGE)
+    shell = [line.strip() for info, lines in blocks(body) if info == "sh" for line in lines]
+    assert [line for line in shell if line.startswith("docker pull")] == [f"docker pull {image}"]
+    flat = " ".join(body.split())
+    assert f"{memory} MiB a node" in flat
+    assert f"{3 * memory} MiB" in flat
+
+
+def test_each_wheel_variable_is_set_before_the_line_that_uses_it() -> None:
+    defined: set[str] = set()
+    used = 0
+    for info, lines in blocks(text(PAGE)):
+        if info != "sh":
+            continue
+        for line in lines:
+            defined |= set(_wheels([line]))
+            if "install" in line:
+                for variable in re.findall(r"\$(\w+)", line):
+                    used += 1
+                    assert variable in defined, f"${variable} is used before it is set: {line}"
+    assert used, "the parse is blind"

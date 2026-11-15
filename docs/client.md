@@ -73,7 +73,7 @@ A call's errors are those of [the table below](#errors). `get_twin` and `apply_t
 `ETag` of the revision they read or wrote, so a script can write only a twin it has seen
 (`if_match`) or only a twin that does not exist (`if_none_match="*"`), and the server refuses a
 write that meets another. `verify_twin` reads every node once and can take longer than another
-call, and the client allows it up to five minutes.
+call, and the client allows it a long read timeout.
 
 ## Following a write
 
@@ -90,8 +90,8 @@ reads it. It answers a `Followed`, whose fields are:
 
 A record whose generation the loop has acted on already is answered at once, with no watch, and
 its run is the one the record names, or else the twin's newest of those operations. A script that
-must know whether its write started a run compares the record's `generation` with its `status`'s `observed_generation` before it calls
-`follow`.
+must know whether its write started a run compares the record's `generation` with its `status`'s
+`observed_generation` before it calls `follow`.
 
 `progress`, when given, is a function of one string. It is called with `"<twin>: <phase>"` each
 time the phase of the twin's run moves. It is called at no other time, and it is not a deadline: a
@@ -108,15 +108,14 @@ no run of the operations given, and where the run has ended with no verdict.
 `watch_twin` and `watch_run` read a stream, and each event arrives once. A watch outlives a restart
 of the server. Where its stream ends before its proper end, is cut off, or is answered with a
 proxy's `5xx` while the server is away, the client opens the watch again after the last revision or
-event it saw, which the server resumes from. The waits between tries double from half a second to
-ten seconds, and each try is given five seconds to connect. The watch is opened again after each of
-fifteen early ends in a row with no event between them, about three minutes in all; the sixteenth
-raises `TransportError`. The first early end of a run of them is told to `notice`, if the client
-has one.
+event it saw, which the server resumes from. The waits between tries grow. The watch is opened again
+after each of a bounded number of early ends in a row with no event between them, about three
+minutes in all; the next raises `TransportError`. The first early end of a run of them is told to
+`notice`, if the client has one.
 
 A refusal, an answer that is no event stream, an event the client cannot read, a certificate it
-does not trust and a `4xx` answer with no problem document end a watch at once. A twin's watch ends after the event `DELETED`; a run's ends
-once the server says the run has.
+does not trust and a `4xx` answer with no problem document end a watch at once. A twin's watch ends
+after the event `DELETED`; a run's ends once the server says the run has.
 
 ## Errors
 

@@ -13,6 +13,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import get_args, get_type_hints
 
+import yaml
 from pages import ROOT, blocks, flags, options, rows, section, statuses, text, ticked
 from test_config import FULL, S3
 
@@ -155,3 +156,17 @@ def test_the_packages_line_prints_the_shipped_ones() -> None:
     run = subprocess.run([sys.executable, "-c", found.group(1)], capture_output=True, text=True, check=False)
     assert run.returncode == 0
     assert run.stdout.strip() == ":".join(map(str, packages.shipped()))
+
+
+def test_the_login_variables_the_page_names_are_the_shipped_packages_and_the_providers() -> None:
+    """The names under `## What it needs` are `credentials.variable`'s, for each shipped package's `credentials:`
+    value, a username and a password, and the page gives them in the minimal start too."""
+    names = {yaml.safe_load(path.read_text())["credentials"] for path in sorted((ROOT / "psp").glob("*.yaml"))}
+    assert len(names) >= 2, "the parse is blind"
+    expected = {credentials.variable(name, part) for name in names for part in ("USERNAME", "PASSWORD")}
+    needs = "\n".join(section(text(PAGE), "## What it needs"))
+    given = {span for span in ticked(needs) if span.startswith("FYLGJA_CREDENTIAL_")}
+    assert given == expected
+    start = [lines for info, lines in blocks(needs) if info == "sh" and any("FYLGJA_STORE" in x for x in lines)]
+    assert len(start) == 1, "the parse is blind"
+    assert {n for n in expected if "_SRLINUX_" in n} <= set(re.findall(r"FYLGJA_CREDENTIAL_\w+", "\n".join(start[0])))

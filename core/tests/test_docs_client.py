@@ -89,7 +89,6 @@ def test_the_error_table_is_every_error_the_module_defines() -> None:
         if not n.startswith("_") and inspect.isclass(v) and issubclass(v, Exception) and v.__module__ == client.__name__
     }
     assert set(listed) == defined
-    assert len(defined) == 8, "eight errors"
 
 
 def _names() -> set[str]:
@@ -152,6 +151,14 @@ def test_the_example_calls_only_what_the_client_has() -> None:
                 and isinstance(node.value.func, ast.Attribute) and node.value.func.attr == "follow":
             followed |= {t.id for t in node.targets if isinstance(t, ast.Name)}
     assert {"put_blueprint", "apply_twin", "follow"} <= called, "the parse is blind"
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in bound:
+            assert not node.attr.startswith("_") and node.attr in _methods(), f"client.{node.attr} is no public name"
+    imported = {(a.asname or a.name).split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import | ast.ImportFrom)
+                for a in n.names}
+    used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    assert imported, "the parse is blind"
+    assert imported <= used, f"an import the example never uses: {sorted(imported - used)}"
     assert followed, "the parse is blind"
     read = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
             and n.value.id in followed}
@@ -172,14 +179,18 @@ def test_what_the_page_shows_of_the_errors_is_in_the_code() -> None:
     refused = client.ProblemError(404, problem_doc)
     assert refused.status == 404 and refused.problem is problem_doc
     fields = {f.name for f in dataclasses.fields(ProblemDocument)}
-    shown = re.search(r"read by attribute: ((?:`\w+`(?:, | and )?)+)", page)
+    shown = re.search(r"read by attribute: (.*?)\.(?: |$)", page, re.M)
     assert shown, "the parse is blind"
-    assert set(ticked(shown.group(1))) <= fields
+    named = set(ticked(shown.group(1)))
+    assert named == {"rule", "title", "status", "detail"}, "every ticked name of the sentence"
+    assert named <= fields
     one = Problem(pointer="/a", rule="r.y", detail="d")
     rejected = Rejected([one], "s")
     assert rejected.problems == (one,)
     assert {f.name for f in dataclasses.fields(Problem)} == {"pointer", "rule", "detail"}
-    for row in rows(section(page, "## Errors"), "Error"):
+    errors = rows(section(page, "## Errors"), "Error")
+    assert errors, "the parse is blind"
+    for row in errors:
         cls = getattr(client, ticked(row[0])[0])
         claim = re.search(r"\bA (?:kind of )?`(\w+)`", row[1])
         claimed = (getattr(client, claim.group(1), None) or getattr(builtins, claim.group(1))) if claim else None

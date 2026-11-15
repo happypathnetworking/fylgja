@@ -13,10 +13,13 @@ A client is `fylgja-core`, described in [the command page](cli.md), or a program
 fylgja-core-server
 ```
 
+Run the commands of this page in the environment that [installing](installing.md) made, activated
+with `source fylgja-env/bin/activate`, or with `fylgja-env/bin/` in front of each.
+
 ## What it needs
 
 The server is given everything it runs with as `FYLGJA_*` environment variables, never as a file it
-reads for itself. It needs four things.
+reads for itself. It needs five things.
 
 - A store: a directory, which the server creates on its first start, or an object store.
 - A token file, which lists the clients that may call it.
@@ -25,18 +28,29 @@ reads for itself. It needs four things.
 - A driver, which runs the twins: `containerlab` on this host, or `clabernetes` on a cluster. The
   server does not install the driver's runtime. The local driver needs containerlab and Docker on
   the host; the cluster driver needs a cluster with clabernetes.
+- The login of each platform's nodes. The server reads it when it pushes a node's configuration or
+  reads a node, and a twin whose login is not set fails with `credential.missing`. The shipped SR
+  Linux package takes `FYLGJA_CREDENTIAL_SRLINUX_USERNAME` and `FYLGJA_CREDENTIAL_SRLINUX_PASSWORD`,
+  and the shipped EOS package `FYLGJA_CREDENTIAL_EOS_USERNAME` and `FYLGJA_CREDENTIAL_EOS_PASSWORD`.
+  For SR Linux the two carry the image's published default login, as
+  [the demonstrations](demonstrations.md#what-the-host-must-have) use it; for EOS they carry the
+  login the imported image accepts. A package of your own names its credential, and the
+  [settings](#settings) give the variables that name makes.
 
 Two variables are required, `FYLGJA_STORE` and `FYLGJA_TOKENS`. A start with the two set serves
-`127.0.0.1:7650`, with the local driver, over HTTP.
+`127.0.0.1:7650`, with the local driver, over HTTP. The start below also sets the SR Linux login,
+with `LOGIN` and `PASSWORD` standing for the image's published default login, since the first twin
+of [the command page](cli.md) is made of SR Linux nodes and fails without it.
 
 ```sh
 mkdir -p "$HOME/fylgja" && touch "$HOME/fylgja/tokens"
 export FYLGJA_STORE="$HOME/fylgja/store" FYLGJA_TOKENS="$HOME/fylgja/tokens"
+export FYLGJA_CREDENTIAL_SRLINUX_USERNAME=LOGIN FYLGJA_CREDENTIAL_SRLINUX_PASSWORD=PASSWORD
 fylgja-core-server
 ```
 
-An empty token file is valid, and the server then admits no client. [The token file](#the-token-file)
-adds one.
+An empty token file is valid, and the server then admits no client. To admit one, add a line as
+[the token file](#the-token-file) describes.
 
 ## Settings
 
@@ -81,9 +95,9 @@ The token file lists the clients that may call the server. It holds one line for
 SHA-256 hash of the client's token in lower-case hex, a space and the client's principal, a name
 that the server logs for every write. Blank lines and lines that begin with `#` are skipped. The
 file never holds a token, and several lines are valid at once. The server reads the file at start,
-so a line added later is read when the server is restarted. A line that does not have a hash and a principal,
-a hash that is not 64 characters of lower-case hex and the same hash twice are each refused, and
-the refusal names the line and never its content.
+so a line added later is read when the server is restarted. A line that does not have a hash and a
+principal, a hash that is not 64 characters of lower-case hex and the same hash twice are each
+refused, and the refusal names the line and never its content.
 
 This makes a token for a client named `alice`, adds its line to the file that `FYLGJA_TOKENS`
 names, which must exist in a directory you can write, and writes the token to a new file
@@ -97,7 +111,8 @@ rm -f client.env
 unset token
 ```
 
-The client sets `FYLGJA_API_TOKEN` to the value in `client.env`, as [the command page](cli.md)
+The client sets `FYLGJA_API_TOKEN` to the value in `client.env`: `set -a; . ./client.env; set +a`
+puts the line in the shell's environment, or you copy the value, as [the command page](cli.md)
 says. A request without a bearer token, or with one the file does not list, is refused with status
 401. Only the call that asks which API version the server speaks needs no token.
 
@@ -112,8 +127,9 @@ directories it names. A site that keeps its own packages beside the shipped ones
 export FYLGJA_PACKAGES="$(python3 -c 'from fylgja_core import packages; print(*packages.shipped(), sep=":")'):/srv/site/psp"
 ```
 
-The program prints the two directories the install carries, joined by a colon. A package the
-server refuses ends the start with status 2.
+The `python3` is the activated environment's, which has `fylgja_core`. The program prints the two
+directories the install carries, joined by a colon. A package the server refuses ends the start
+with status 2.
 
 ## Starting and stopping
 
@@ -124,11 +140,11 @@ fault. A start that has to wait for a Lease says so once and binds no socket.
 
 SIGTERM and Ctrl-C stop the server in the same way: open watches are told to end, the loop stops,
 the store is closed and the Lease is released. They stop it during the start too, and whatever the
-start had opened is closed again. A second Ctrl-C that lands before the server has begun to stop the loop gives the loop two
-seconds to stop, and the Lease is released once it has. One that lands after that changes nothing:
-the loop's stop runs on without a bound, and nothing is released until it ends. The server
-handles SIGTERM itself, so it stops as PID 1 in a container. A create that a stop cut short resumes
-at the next start. The exit statuses are [below](#exit-statuses).
+start had opened is closed again. A second Ctrl-C that lands before the server has begun to stop the
+loop gives the loop a short bound to stop in, and the Lease is released once it has. One that lands
+after that changes nothing: the loop's stop runs on without a bound, and nothing is released until
+it ends. The server handles SIGTERM itself, so it stops as PID 1 in a container. A create that a
+stop cut short resumes at the next start. The exit statuses are [below](#exit-statuses).
 
 To check that the server is up, ask which API version it speaks. The call needs no token:
 
@@ -161,7 +177,7 @@ secrets each pod reads and the steps that deploy it.
 
 ## Options
 
-The command has two options besides the settings.
+Besides the settings, the command has one option.
 
 | Option | Prints |
 |---|---|

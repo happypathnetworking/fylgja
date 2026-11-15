@@ -23,8 +23,17 @@ def _script() -> ModuleType:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        del sys.modules[spec.name]  # read only while the module's classes are made
     return module
+
+
+def _whole(number: int) -> str:
+    """A pattern for `number` as a whole number: not part of a longer one or of a decimal, and one that ends a
+    sentence (`4200.`) counts."""
+    return rf"(?<!\d)(?<!\d\.){number}(?!\d)(?!\.\d)"
 
 
 def _preconditions() -> str:
@@ -50,15 +59,21 @@ def test_the_preconditions_name_everything_the_script_checks() -> None:
     numbers = [*demo.PORTS.values(), demo.PREFECT_PORT, demo.TWIN_MB, *demo.SOURCE_MB.values(),
                *(demo.SOURCE_MB[source] + demo.TWIN_MB for source in demo.SOURCE_MB)]
     missing = [name for name in names if name not in spans]
-    missing += [str(n) for n in numbers if not re.search(rf"(?<![\d.]){n}(?![\d.])", body)]
+    missing += [str(n) for n in numbers if not re.search(_whole(n), body)]
     if "Python 3.14" not in body:
         missing.append("Python 3.14")
     assert not missing, f"the preconditions lack (a name as a `ticked` span): {missing}"
     assert demo.APPARMOR_LOCAL in body
+    assert demo.APPARMOR_PROFILE in body
 
 
 def test_the_page_promises_no_exit_status() -> None:
     assert rows(text(PAGE).splitlines(), "Status") == []
+
+
+def test_a_number_before_a_full_stop_is_a_whole_number() -> None:
+    assert re.search(_whole(4200), "the Prefect port, 4200.")
+    assert not re.search(_whole(4200), "version 4200.5 or 14200")
 
 
 def test_contributing_points_to_the_page_and_no_longer_lists_them() -> None:
@@ -67,7 +82,11 @@ def test_contributing_points_to_the_page_and_no_longer_lists_them() -> None:
     assert lines, "the parse is blind"
     body = "\n".join(lines)
     assert "docs/demonstrations.md" in body
-    assert not any(line in body for line in demo.APPARMOR_LINES)
+    values = [*(g for g in demo.GROUPS if g != "docker"), *demo.LOGIN, *demo.APPARMOR_LINES, *demo.IMAGES,
+              demo.DEFAULT_LISTEN, demo.APPARMOR_LOCAL, demo.APPARMOR_PROFILE]
+    numbers = [*demo.SOURCE_MB.values(), demo.TWIN_MB, *(demo.SOURCE_MB[s] + demo.TWIN_MB for s in demo.SOURCE_MB)]
+    held = [v for v in values if v in body] + [str(n) for n in numbers if re.search(_whole(n), body)]
+    assert not held, f"the section still lists preconditions the page holds: {held}"
     assert "### The host's preconditions" not in body
 
 

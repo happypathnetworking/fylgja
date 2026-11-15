@@ -34,7 +34,9 @@ and changes nothing until all are met. Only the host's owner can give them.
   with `apparmor_parser -r /etc/apparmor.d/usr.sbin.rsyslogd`. The script reads the local file. It
   cannot read the loaded profile, which AppArmor does not show a user, so it cannot check that you
   reloaded it. Where the local file lacks the lines it says so, and that SR Linux's `rsyslogd` needs
-  them on Ubuntu. Where `/etc/apparmor.d/usr.sbin.rsyslogd` is no file, nothing is asked.
+  them on Ubuntu. Where the local file is not yours to read, it says `cannot read <the file>: check
+  that it holds <the two lines>` and the run goes on. Where `/etc/apparmor.d/usr.sbin.rsyslogd` is
+  no file, nothing is asked.
 - **Memory available** (`MemAvailable`): 11776 MiB for Infrahub's demonstration and 8704 MiB for
   NetBox's, with the source stopped. With the source already up it is 7168 MiB, the twin's and the
   edge's. The source's own stack adds 4608 MiB for Infrahub and 1536 MiB for NetBox where it is not
@@ -61,7 +63,12 @@ and changes nothing until all are met. Only the host's owner can give them.
 - **A lab pool no Docker network holds whole.** Where one does, set `FYLGJA_LAB_POOL` in
   `local/.env` to an IPv4 network in CIDR form that holds a /24. The script reads Docker's networks
   once the source is up, since a source's own network may take the pool, and stops there, with the
-  source left up, where they leave the pool no /24 free.
+  source left up, where they leave the pool no /24 free. It says `The pool <pool> has no /24 that
+  neither a Docker network nor another twin holds.`, names the Docker networks that hold part of it,
+  and ends `Set FYLGJA_LAB_POOL to an IPv4 network with a free /24, and start the core again.`, then
+  `<source> is left up: set FYLGJA_LAB_POOL in local/.env, then run make <source>-demo again`. A
+  value that is no such network is refused with `FYLGJA_LAB_POOL is not an IPv4 network in CIDR form
+  that holds a /24`.
 
 Where a read of the host fails, the line says what was not judged. Where `docker info` fails, the
 run stops with the checks above and judges neither memory nor ports.
@@ -127,9 +134,9 @@ Each was read once, on the local driver, with the source's volumes kept.
 - `make netbox-demo` from NetBox stopped took about 5.5 minutes, and about 3 minutes run again at
   once.
 - `make infrahub-demo` from Infrahub stopped took about 25.6 minutes, and about 15.7 minutes run
-  again at once. Registering the repository in Infrahub is the longest of the steps, though the wait
-  for the rehearsal's run is longer, and the registration's first ask can run out its time and pass
-  on the second.
+  again at once. Registering the repository in Infrahub is the longest of the steps; the wait for
+  the rehearsal's run that follows is longer, and the registration's first ask can run out its time
+  and pass on the second.
 - `make demo-down` took about 15 to 25 seconds.
 
 The time of a whole demonstration from new volumes was not read. The first starts from new volumes
@@ -208,8 +215,11 @@ What stays: `local/demo/`, `local/.env`, the source's containers, stopped, and i
 change in the source: the proposed change open in Infrahub, or the branch with its marks and its
 report in NetBox. A Prefect server that was up before the demonstration is left running.
 
-A second `make demo-down`, with nothing left running, says so and ends. With nothing recorded under
-`local/demo/` it says `no demonstration is recorded under <local>/demo: nothing to end`.
+A second `make demo-down`, with nothing left running and the source's containers not up, says
+`nothing the <source> demonstration started is running, and <source> is not up: nothing to end; its
+records stay under <local>/demo`, and ends. Where the source's containers are up again, it stops
+them as the first did. With nothing recorded under `local/demo/` it says `no demonstration is
+recorded under <local>/demo: nothing to end`.
 
 A Ctrl-C while a demonstration or `make demo-down` runs says that it was interrupted and what is
 left up. `make demo-down` is what ends what the run started.

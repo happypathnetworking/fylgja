@@ -6,10 +6,10 @@ A blueprint is a network's intent: every device, link and configuration, as its 
 renders it, addressed by its contents, with optionally probes, small hosts that ping each other
 through the twin. A twin is that network running on real network operating system images, where a
 change is rehearsed before it reaches production: Fylgja compiles the blueprint to a bundle, runs
-the bundle and pushes each configuration, then steps the twin from one blueprint to another, and
-its verify and the probes' loss make the verdict. Vendors are data, not code: Nokia SR Linux and
-Arista EOS, alone or mixed in one twin. Anything that writes a blueprint can drive Fylgja, through
-its API or its command.
+the bundle and pushes each configuration, then steps the twin from one blueprint to another.
+Verify judges the running twin against its bundle, and the probes report the loss a step caused.
+Vendors are data, not code: Nokia SR Linux and Arista EOS, alone or mixed in one twin. Anything
+that writes a blueprint can drive Fylgja, through its API or its command.
 
 ## Installing
 
@@ -25,9 +25,10 @@ environment activated, or `fylgja-env/bin/` in front of each.
 
 ## A first twin
 
-Start the server, as [running the server](docs/server.md) describes. From a clone of the
-repository, with the address and token of a client set as [the command page](docs/cli.md) says,
-create a twin of the example blueprint, look at it and destroy it:
+Start the server, as [running the server](docs/server.md) describes, with the login of the nodes
+set as it says there. From a clone of the repository, with the address and token of a client set
+as [the command page](docs/cli.md) says, create a twin of the example blueprint, look at it and
+destroy it:
 
 ```sh
 fylgja-core twin create demo --blueprint testdata/blueprint/three-node.json

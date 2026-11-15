@@ -23,3 +23,6 @@ Beside them:
 - [Integrating Fylgja](integrating.md) walks through the example orchestrator, to join Fylgja to a
   source of truth and a platform of your own. The example is a model to copy. It is not part of
   what version 1.0 promises, and its commands may change.
+- [The formats](../formats/README.md) say what a blueprint and a package are written in, for
+  anything that writes one, and [the shipped platform packages](../psp/README.md) say what each
+  platform's package holds, for a site that writes its own.

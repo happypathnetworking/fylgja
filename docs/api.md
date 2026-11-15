@@ -159,7 +159,8 @@ The answer is `201`:
 }
 ```
 
-The same request again, with the same header, is refused:
+The same request again, with the same header, is refused. The `detail` is for people, and its words
+may change; a client reads `rule`:
 
 ```sh
 curl -X PUT -H "Authorization: Bearer $FYLGJA_API_TOKEN" -H "Content-Type: application/json" \
@@ -174,7 +175,7 @@ The answer is `412`:
   "type": "about:blank",
   "title": "Precondition failed",
   "status": 412,
-  "detail": "Twin demo already exists.",
+  "detail": "Twin demo exists, and If-None-Match asks for a create.",
   "instance": "/v1/twins/demo",
   "rule": "twin.exists"
 }
@@ -186,10 +187,11 @@ twin already holds changes nothing, starts no run and answers `200`. A step that
 recreate a node is refused by the loop unless the spec allows a restart, and the run ends
 `rejected`; [the dry run](#the-dry-run) says so before the write.
 
-The answer to a read of one twin and the answer to a write carry the record's revision as the `ETag`
-header, quoted, such as `"3"`. A client that reads a record and then writes sends that header back
-as `If-Match`, and the write is refused with `412` and the rule `twin.conflict` if the record
-has moved since. The same header makes a deletion conditional.
+The answer to a read of one twin and the answer to a write by `PUT` carry the record's revision as
+the `ETag` header, quoted, such as `"3"`; a dry run and a `DELETE` answer none. A client that reads
+a record and then writes sends that header back as `If-Match`, and the write is refused with `412`
+and the rule `twin.conflict` if the record has moved since. The same header makes a deletion
+conditional.
 
 Other refusals of a write are `409`, for a request the twin's state contradicts: the spec names
 another driver than the twin's (`twin.driver.fixed`), the twin is being deleted (`twin.deleting`),
@@ -278,8 +280,9 @@ run that has ended is `409` with the rule `run.ended`.
 
 A run's events are its steps, each with a `seq`. `GET /v1/runs/{run_id}/events` answers the events
 with a `seq` greater than `after`, which is 0 when absent, with `next`, the cursor for the next
-read, and `ended`, whether more will follow. A client polls with `after` set to the last `next`
-until `ended` is true. The events of a run the store no longer holds are not replayed.
+read, and `ended`, whether the run has ended, so that no more will follow. A client polls with
+`after` set to the last `next` until `ended` is true. The events of a run the store no longer holds
+are not replayed.
 
 ```sh
 curl -H "Authorization: Bearer $FYLGJA_API_TOKEN" \
@@ -310,8 +313,9 @@ curl -H "Authorization: Bearer $FYLGJA_API_TOKEN" \
 
 With `Accept: text/event-stream` the same route streams each event as one message, whose `id` is its
 `seq` and whose data is the event as JSON. The stream ends when the run does. A client that
-reconnects sends `Last-Event-ID`, and the server resumes after the greater of that and `after`. An
-`after` or a `Last-Event-ID` that is not an integer of 0 or more is `400`.
+reconnects sends `Last-Event-ID`, the header the server-sent events standard names, and the server
+resumes after the greater of that and `after`. An `after` or a `Last-Event-ID` that is not an
+integer of 0 or more is `400`.
 
 ## Problems
 

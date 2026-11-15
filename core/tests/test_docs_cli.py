@@ -75,6 +75,9 @@ def test_the_page_names_every_command_and_each_its_options() -> None:
     found = _commands()
     assert len(found) > 1, "the parse is blind"
     assert found == leaves
+    nodes = {path: longs for path, longs in held.items() if path and path not in leaves}
+    assert nodes, "the parse is blind"
+    assert all(not longs for longs in nodes.values()), "a noun's option has no row until it is listed"
     assert found[()] == {"--json", "--version"}
     assert len(found) == 15, "the root and fourteen commands"
 
@@ -89,6 +92,17 @@ def test_the_page_names_the_exit_statuses_the_cli_has() -> None:
     found = statuses(section(text(PAGE), "## Exit statuses"))
     assert found, "the parse is blind"
     assert found == set(cli.EXIT.values()) | {cli.EXIT_FAILURE}
+
+
+def test_the_json_section_names_every_command_that_takes_json() -> None:
+    """The list of what `--json` prints gives each leaf command that takes it, by its words."""
+    held = options(cli._parser())
+    body = " ".join(section(text(PAGE), "### Waiting and printing"))
+    body = re.sub(r"\s+", " ", body)
+    leaves = [path for path, longs in held.items() if path and "--json" in longs]
+    assert len(leaves) >= 10, "the parse is blind"
+    for path in leaves:
+        assert f"`{' '.join(path)}" in body, f"`--json`'s list lacks {' '.join(path)}"
 
 
 # The examples: each fake answers one command as a server would, the twin named `demo`.

@@ -134,6 +134,18 @@ def blocks(text: str) -> list[tuple[str, list[str]]]:
     return found
 
 
+def prose(text: str) -> list[str]:
+    """The lines of `text` outside every fenced code block, the fences themselves left out."""
+    kept: list[str] = []
+    fences = _Fences()
+    for line in text.splitlines():
+        was_open = fences.open is not None
+        fences.step(line)
+        if not was_open and fences.open is None:
+            kept.append(line)
+    return kept
+
+
 def ticked(cell: str) -> list[str]:
     """The backticked spans of a cell."""
     return re.findall(r"`([^`]+)`", cell)

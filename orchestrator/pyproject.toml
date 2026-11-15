@@ -25,6 +25,11 @@ dev = [
     "ruff==0.17.3",
 ]
 
+# uv rebuilds this editable install's metadata when a key changes: its own defaults, and the root's VERSION, which
+# setup.py reads and which lies outside the member (D-106; verified-facts.md, "A version read from a file").
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "setup.cfg" }, { file = "../VERSION" }]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

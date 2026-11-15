@@ -9060,6 +9060,7 @@ once. *(2026-11-13)*
     relative path to the root: the next sync rebuilt the four ("Building fylgja-core ...") and,
     with `VERSION` at `1.0.0rc2`, installed all four at `1.0.0rc2`; `uv sync --locked` exited 0
     both times and the lock was unchanged.
+    The tree now declares these keys in each member, with uv's default `setup.cfg` beside them.
   - **A build's copy needs the file beside it.** A copy of `core/` and `formats/` alone, built by
     `uv build --wheel`, exited 2, the backend's `get_requires_for_build_wheel` failing on
     "`<copy>/VERSION` cannot be read"; with `VERSION` copied to the copy's root, beside `formats/`,

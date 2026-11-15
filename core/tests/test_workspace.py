@@ -71,6 +71,17 @@ def test_the_lock_holds_the_four_editable_and_their_version_dynamic() -> None:
         assert "version" in load(f"{member}/pyproject.toml")["project"]["dynamic"]
 
 
+def test_each_members_editable_install_is_rebuilt_when_the_root_version_changes() -> None:
+    """uv rebuilds an editable member's metadata only when a cache key changes, and `VERSION` sits outside every member
+    (verified-facts.md, "A version read from a file"), so each names it beside uv's own defaults."""
+    for member in MEMBERS:
+        keys = load(f"{member}/pyproject.toml")["tool"]["uv"]["cache-keys"]
+        files = [key["file"] for key in keys]
+        assert {"pyproject.toml", "setup.py", "setup.cfg"} <= set(files), member
+        (version,) = [name for name in files if Path(name).name == "VERSION"]
+        assert (ROOT / member / version).resolve() == ROOT / "VERSION", member
+
+
 def test_each_exact_pin_is_the_locks_version() -> None:
     locked = packages()
     found = 0

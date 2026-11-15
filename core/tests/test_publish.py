@@ -35,14 +35,14 @@ def _script() -> ModuleType:
 
 
 def wheel(dist: Path, package: str, version: str, *, meta_version: str | None = None, floor: str | None = None,
-          commit: str = COMMIT) -> None:
+          requirement: str | None = None, commit: str = COMMIT) -> None:
     """One wheel in `dist`: its file name at `version`, its METADATA at `meta_version` (default `version`)."""
     dist.mkdir(exist_ok=True)
     stem = f"{package}-{version}"
     meta = f"Metadata-Version: 2.4\nName: {PACKAGES[package]}\nVersion: {meta_version or version}\n"
     if package != "fylgja_core":
         major = int(version.split(".")[0])
-        meta += f"Requires-Dist: fylgja-core{floor or '>=' + version},<{major + 1}\n"
+        meta += requirement or f"Requires-Dist: fylgja-core{floor or '>=' + version},<{major + 1}\n"
     with zipfile.ZipFile(dist / f"{stem}-py3-none-any.whl", "w") as z:
         z.writestr(f"{stem}.dist-info/METADATA", meta)
         z.writestr(f"{package}/COMMIT", commit + "\n")
@@ -100,8 +100,9 @@ def test_every_fault_of_the_wheels_is_named_in_one_pass(tmp_path: Path) -> None:
     lines = text.splitlines()
     assert len(lines) == len(set(lines)) >= 6
     for fragment in ("fylgja_orchestrator-1.0.0rc1-py3-none-any.whl", "fylgja_core-1.0.0rc1.tar.gz",
-                     "fylgja_netbox-1.0.0rc1-py3-none-any.whl: is missing", "fylgja_netbox-1.0.0rc2", "1.0.0rc2",
-                     ">=1.0", OTHER):
+                     "fylgja_netbox-1.0.0rc1-py3-none-any.whl: is missing", "fylgja_netbox-1.0.0rc2",
+                     "METADATA Version is '1.0.0rc2'", "requires fylgja-core ['<2', '>=1.0'], not ['<2', '>=1.0.0rc1']",
+                     OTHER):
         assert fragment in text, fragment
     # the other faults of a COMMIT: dirty and unknown
     for bad in (COMMIT + "-dirty", "unknown"):
@@ -274,3 +275,40 @@ def test_the_release_is_the_wheels_and_the_changelogs_notes() -> None:
     assert runs == ["python3 -I scripts/publish.py notes > notes.md",
                     'gh release create "$GITHUB_REF_NAME" dist/*.whl --verify-tag --title "$GITHUB_REF_NAME" '
                     "--notes-file notes.md"]
+
+
+def test_a_requirement_with_a_marker_is_refused(tmp_path: Path) -> None:
+    root = tree(tmp_path / "root")
+    dist = tmp_path / "dist"
+    three(dist)
+    wheel(dist, "fylgja_netbox", "1.0.0rc1",
+          requirement="Requires-Dist: fylgja-core>=1.0.0rc1,<2; python_version > '3'\n")
+    with pytest.raises(_script().Failure, match=r"fylgja_netbox.*python_version.*not plain") as caught:
+        _script().check("v1.0.0rc1", COMMIT, dist, root)
+    assert str(caught.value).count("\n") == 0
+
+
+def test_a_missing_version_file_is_one_line(tmp_path: Path) -> None:
+    root = tree(tmp_path / "root")
+    (root / "VERSION").unlink()
+    three(tmp_path / "dist")
+    with pytest.raises(_script().Failure, match=r"VERSION cannot be read") as caught:
+        _script().check("v1.0.0rc1", COMMIT, tmp_path / "dist", root)
+    assert str(caught.value).count("\n") == 0
+
+
+def test_a_version_stated_in_two_headings_is_refused(tmp_path: Path) -> None:
+    root = tree(tmp_path / "root")
+    (root / "CHANGELOG.md").write_text((root / "CHANGELOG.md").read_text() + "\n## 1.0.0rc1 - 2026-11-01\n\nAgain.\n")
+    three(tmp_path / "dist")
+    with pytest.raises(_script().Failure, match=r"1\.0\.0rc1 .*more than one heading") as caught:
+        _script().check("v1.0.0rc1", COMMIT, tmp_path / "dist", root)
+    assert str(caught.value).count("\n") == 0
+
+
+def test_a_malformed_commit_is_said_alone(tmp_path: Path) -> None:
+    root = tree(tmp_path / "root")
+    three(tmp_path / "dist")
+    with pytest.raises(_script().Failure) as caught:
+        _script().check("v1.0.0rc1", "abc", tmp_path / "dist", root)
+    assert str(caught.value).splitlines() == ["commit 'abc' is not 40 lowercase hex characters"]

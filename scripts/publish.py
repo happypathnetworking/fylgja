@@ -68,18 +68,12 @@ def notes(root: Path = ROOT) -> str:
     return "\n".join(lines[start:end]).strip("\n") + "\n"
 
 
-def _specifiers(requires: list[str]) -> set[str] | None:
-    """The `fylgja-core` requirement's specifiers among `requires`, or None where there is not exactly one."""
-    found = []
-    for entry in requires:
-        requirement = entry.split(";")[0].replace(" ", "").replace("(", "").replace(")", "")
-        match = re.match(r"fylgja[-_.]core(?![\w.-])(.*)$", requirement, re.I)
-        if match:
-            found.append({s for s in match.group(1).split(",") if s})
-    return found[0] if len(found) == 1 else None
+def _requirements(requires: list[str]) -> list[str]:
+    """The entries of `requires` that name `fylgja-core`."""
+    return [e for e in requires if re.match(r"\s*fylgja[-_.]core(?![\w.-])", e, re.I)]
 
 
-def _wheel(path: Path, package: str, version: str, commit: str) -> list[str]:
+def _wheel(path: Path, package: str, version: str, commit: str | None) -> list[str]:
     """What is wrong with one wheel: its metadata's name and version, its reader's floor and its commit."""
     faults = []
     try:
@@ -99,13 +93,18 @@ def _wheel(path: Path, package: str, version: str, commit: str) -> list[str]:
         faults.append(f"{path.name}: METADATA Version is {meta.get('Version')!r}, not {version!r}")
     if package != "fylgja_core":
         want = {f">={version}", f"<{int(version.split('.')[0]) + 1}"}
-        got = _specifiers(meta.get_all("Requires-Dist") or [])
-        if got != want:
-            faults.append(f"{path.name}: requires fylgja-core {sorted(got) if got is not None else 'not exactly once'}"
-                          f", not {sorted(want)}")
+        found = _requirements(meta.get_all("Requires-Dist") or [])
+        if len(found) != 1:
+            faults.append(f"{path.name}: requires fylgja-core {len(found)} times, not once")
+        elif ";" in found[0]:
+            faults.append(f"{path.name}: the requirement {found[0]!r} is not plain: it carries a marker")
+        else:
+            got = {x for x in re.sub(r"[\s()]", "", found[0])[len("fylgja-core"):].split(",") if x}
+            if got != want:
+                faults.append(f"{path.name}: requires fylgja-core {sorted(got)}, not {sorted(want)}")
     if held is None:
         faults.append(f"{path.name}: holds no {package}/COMMIT")
-    elif held != commit:
+    elif commit is not None and held != commit:
         faults.append(f"{path.name}: {package}/COMMIT is {held!r}, not {commit!r}")
     return faults
 
@@ -113,7 +112,10 @@ def _wheel(path: Path, package: str, version: str, commit: str) -> list[str]:
 def check(tag: str, commit: str, dist: Path, root: Path = ROOT) -> str:
     """Every fault in one `Failure`, one to a line; else the index the version is uploaded to."""
     faults: list[str] = []
-    version = (root / "VERSION").read_text().strip()
+    try:
+        version = (root / "VERSION").read_text().strip()
+    except OSError as e:
+        raise Failure(f"{root / 'VERSION'} cannot be read: {e.strerror or e}") from e
     result = ""
     if tag != "v" + version:
         faults.append(f"tag {tag!r} is not 'v' and VERSION ({'v' + version!r})")
@@ -121,10 +123,15 @@ def check(tag: str, commit: str, dist: Path, root: Path = ROOT) -> str:
         result = index(version)
     except Failure as e:
         faults.extend(e.lines)
-    if not COMMIT.fullmatch(commit):
+    well_formed = COMMIT.fullmatch(commit) is not None
+    if not well_formed:
         faults.append(f"commit {commit!r} is not 40 lowercase hex characters")
     try:
-        changelog_version, date = head((root / "CHANGELOG.md").read_text())
+        text = (root / "CHANGELOG.md").read_text()
+        changelog_version, date = head(text)
+        stated = [m.group(1) for line in text.splitlines() if (m := HEADING.match(line))]
+        if stated.count(version) > 1:
+            faults.append(f"CHANGELOG.md states {version} in more than one heading")
         if changelog_version != version:
             faults.append(f"CHANGELOG.md's head is {changelog_version}, not VERSION's {version}")
         elif date == "unreleased":
@@ -144,7 +151,7 @@ def check(tag: str, commit: str, dist: Path, root: Path = ROOT) -> str:
         if name not in present:
             faults.append(f"{dist.name}/{name}: is missing ({package})")
         else:
-            faults.extend(_wheel(dist / name, package, version, commit))
+            faults.extend(_wheel(dist / name, package, version, commit if well_formed else None))
     if faults:
         raise Failure(*faults)
     return result

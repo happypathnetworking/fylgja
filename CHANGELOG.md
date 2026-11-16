@@ -4,7 +4,7 @@ What each release changed for a user, newest first, and its known limits ([D-106
 release's section is headed `## <version> - <date>`, `unreleased` standing in the date until the commit that is tagged
 dates it.
 
-## 1.0.0rc1 - unreleased
+## 1.0.0rc1 - 2026-11-16
 
 The first release. The three distributions, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, are published
 as wheels at one version, each built from this repository alone: a release on PyPI, a candidate on TestPyPI.

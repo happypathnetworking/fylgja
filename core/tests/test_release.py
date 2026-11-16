@@ -454,7 +454,6 @@ NAMED = {
     "The size of the twin the many-twins scenario expects refused": "forty-node twin",
     "A check on a task worker that lacks its branch's commit": "task worker's clone",
     "A registration read from GitHub": "registration read from GitHub",
-    "Infrahub on volumes kept for days": "Infrahub on volumes kept for days",
     "The cluster's rehearsal against the local driver's": "rehearsal time",
     "Prefect's credential in NetBox's changelog": "Prefect's credential",
     "Authoring a change of several steps in NetBox": "authoring a change of several steps",
@@ -463,6 +462,7 @@ NAMED = {
 }
 ANSWERED = {
     "A core test whose margin is the host's load",  # the deploys' order is held by the test, the margin gone
+    "Infrahub on volumes kept for days",  # the development database's health check waits 180 s on them
 }
 
 

@@ -84,8 +84,8 @@ there, where its readings are.
 
 The example's, the test suites' and the development tooling's open questions are in
 [Open questions](design/decisions.md#open-questions) and are not promised: the many-twins
-scenario's forty-node twin, Infrahub on volumes kept for days, the cluster's rehearsal time, the
-task worker's clone, a registration read from GitHub, Prefect's credential in NetBox's changelog,
-authoring a change of several steps in NetBox, three small gaps, and `make netbox-up`'s network.
+scenario's forty-node twin, the cluster's rehearsal time, the task worker's clone, a registration
+read from GitHub, Prefect's credential in NetBox's changelog, authoring a change of several steps in
+NetBox, three small gaps, and `make netbox-up`'s network.
 
 [oq]: design/decisions.md#open-questions

@@ -36,7 +36,7 @@ reads for itself. It needs five things.
   and the shipped EOS package `FYLGJA_CREDENTIAL_EOS_USERNAME` and `FYLGJA_CREDENTIAL_EOS_PASSWORD`.
   For SR Linux the two carry the image's published default login, as
   [the demonstrations](demonstrations.md#what-the-host-must-have) use it; for EOS they carry the
-  login the imported image accepts. A package of your own names its credential, and the
+  kind's default login. A package of your own names its credential, and the
   [settings](#settings) give the variables that name makes.
 
 Two variables are required, `FYLGJA_STORE` and `FYLGJA_TOKENS`. A start with the two set serves
@@ -50,6 +50,9 @@ export FYLGJA_STORE="$HOME/fylgja/store" FYLGJA_TOKENS="$HOME/fylgja/tokens"
 export FYLGJA_CREDENTIAL_SRLINUX_USERNAME=LOGIN FYLGJA_CREDENTIAL_SRLINUX_PASSWORD=PASSWORD
 fylgja-core-server
 ```
+
+That start sets the SR Linux login alone: a blueprint with EOS nodes needs the EOS pair too, and
+without it a twin fails with `credential.missing`.
 
 An empty token file is valid, and the server then admits no client. To admit one, add a line as
 [the token file](#the-token-file) describes.

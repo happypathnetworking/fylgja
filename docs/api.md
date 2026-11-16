@@ -247,6 +247,11 @@ error: the plan's verdict is `rejected`, with a finding that says why, such as
 driver cannot plan and an admission the runtime's room refuses are each `422`, the last with the
 rule `admission.capacity`.
 
+On the clabernetes driver, a node the plan answers `recabled` may still be replaced, without
+`allow_restart`, if any step since that node was last made has added or removed a node: that can
+move its management address, and clabernetes then makes its pod anew when its links change. The
+answer stays `recabled`.
+
 ## Watching
 
 `GET /v1/twins/{name}` and `GET /v1/twins` answer once. With `?watch=true`, or with the header

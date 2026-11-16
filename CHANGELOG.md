@@ -86,6 +86,7 @@ The example's, the test suites' and the development tooling's open questions are
 [Open questions](design/decisions.md#open-questions) and are not promised: the many-twins
 scenario's forty-node twin, the cluster's rehearsal time, the task worker's clone, a registration
 read from GitHub, Prefect's credential in NetBox's changelog, authoring a change of several steps in
-NetBox, three small gaps, and `make netbox-up`'s network.
+NetBox, three small gaps, `make netbox-up`'s network, and a rehearsal's time on an Infrahub kept for
+days. The development database's health check on such an Infrahub is answered: it allows 180 s.
 
 [oq]: design/decisions.md#open-questions

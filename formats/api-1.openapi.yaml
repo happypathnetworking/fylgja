@@ -785,7 +785,9 @@ components:
                   What the runtime does to the node: recabled changes its links and the node stays, restarted is
                   a link change under a restart link mode, recreated makes the node anew, and unsupported is a
                   change the runtime cannot make. restarted and recreated need allow_restart; unsupported refuses
-                  the step. The step's refusals and clients read it.
+                  the step. The step's refusals and clients read it. On the clabernetes driver a recabled node
+                  may still be replaced where a node added or removed since it was made moved its management
+                  address; the answer stays recabled.
               reasons:
                 type: array
                 uniqueItems: true

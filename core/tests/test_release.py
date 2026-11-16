@@ -459,10 +459,10 @@ NAMED = {
     "Authoring a change of several steps in NetBox": "authoring a change of several steps",
     "Three small gaps the last plan left": "three small gaps",
     "`make netbox-up` where the network cannot be inspected": "`make netbox-up`'s network",
+    "Infrahub on volumes kept for days": "a rehearsal's time on an Infrahub kept for days",
 }
 ANSWERED = {
     "A core test whose margin is the host's load",  # the deploys' order is held by the test, the margin gone
-    "Infrahub on volumes kept for days",  # the development database's health check waits 180 s on them
 }
 
 

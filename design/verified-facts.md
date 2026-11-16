@@ -1386,6 +1386,33 @@ was loaded in the run's command.
 - **The host after the run**, at 06:47:06Z: as before, no container labelled `containerlab`, none
   running, no network named `clab-`, and the same networks with the same subnets.
 
+**fylgja-core, phase 10: the local harness's suite whole at the fix wave's head** *(0.81.0, as the
+block above read it, not read again; 2026-11-16)*
+
+`make conformance DRIVER=containerlab`, whole, uninterrupted, at `6bf4965`, the tree clean, timed by
+`date +%s` and Python's clock in the run's own command, the cluster quiet. `core/src` at `6bf4965`
+is `a1feb33`'s in code: it differs in one docstring of `clabernetes/changes.py`, the module's syntax
+trees equal with docstrings blanked. The suite's own code is not: an unchanged step held by its
+phases, the walk's tolerance of a re-addressed node and the kill scenarios' share of it came after
+`a1feb33` (`1f9aabd`, `b5743c9`, `6f37a92`). So this run supersedes the conformance half of `make
+live` at `a1feb33`, above, as the local harness's reading of the suite's code. The script and its
+log are kept outside the tree with the records of phase 10's plan 5, Task 11
+(`task-11-conformance-local.sh`, `task-11-conformance-local.log`); `local/.env` was loaded in the
+run's command.
+
+- **The host before the run**, at 14:26:24Z: no container labelled `containerlab` and none running,
+  the development Infrahub and NetBox among them; no network named `clab-`, and none over
+  `172.20.0.0/16`; no `fylgja-twin-*` namespace and no `fylgja-conformance-probe` on the cluster.
+- **`make conformance DRIVER=containerlab` at `6bf4965`: 53 passed, 1 skipped in 2198.71 s**
+  (0:36:38 by pytest, 14:26:27 to 15:03:08Z, 2201.3 s by Python's clock), exit 0; 54 tests by
+  collection. `test_lifecycle.py` 12, `test_steps.py` 20, `test_step_kills.py` 10, `test_many.py` 5,
+  `test_restore.py` 4, `test_zz_end.py` 2, and `test_isolation.py`'s one skipped, `the driver keeps
+  twins apart by names, not by the network`. No line of the walk's tolerance was printed: no
+  recabled node came back anew, and on a core on this host none is tolerated.
+- **The host after the run**, at 15:03:08Z: as before, no container labelled `containerlab`, none
+  running, no network named `clab-`, the same networks with the same subnets, and nothing of a twin
+  on the cluster.
+
 **The dry run**
 
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,

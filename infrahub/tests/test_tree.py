@@ -310,7 +310,8 @@ def test_the_tree_names_no_address() -> None:
     assert [*urls([*infrahub, HERE, ".infrahub.yml"])] == []
     seeded = {found for path, _, found in addresses(infrahub) if path.startswith("infrahub/seed/main/")}
     probe = ["10.1.10.2", "10.1.11.2"]
-    assert sorted(seeded) == sorted([*(f"10.{d}.{port}.1" for d in (1, 2, 3) for port in (10, 11)), *probe])
+    links = [f"10.0.0.{host}" for host in range(6)]
+    assert sorted(seeded) == sorted([*(f"10.{d}.{port}.1" for d in (1, 2, 3) for port in (10, 11)), *probe, *links])
     documentation = (ip_network("192.0.2.0/24"),)
     override = "infrahub/dev/compose.override.yml"
     bound = [hit for hit in addresses(infrahub) if among(hit[2], LOOPBACK)]

@@ -241,8 +241,8 @@ fixtures and the tests that pin the seed and the rendering follow."
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-RECORD = {"status": {"nodes": [{"name": "n1", "address": "172.20.20.11"}, {"name": "n2", "address": "172.20.20.12"},
-                               {"name": "n1-loop-a", "address": "172.20.20.21"}]}}   # shape per twin-record-1
+RECORD = {"status": {"nodes": [{"name": "n1", "address": "192.0.2.11"}, {"name": "n2", "address": "192.0.2.12"},
+                               {"name": "n1-loop-a", "address": "192.0.2.21"}]}}   # shape per twin-record-1
 BUNDLE = {"nodes": [{"name": "n1", "platform": "nokia_srlinux"}, {"name": "n2", "platform": "nokia_srlinux"}],
           "links": [{"a": {"device": "n1", "interface": "ethernet-1/1"}, "b": {"device": "n2", "interface": "ethernet-1/1"}}]}
 ENV = {"FYLGJA_CREDENTIAL_SRLINUX_USERNAME": "admin", "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD": "s3cret"}
@@ -250,7 +250,7 @@ ENV = {"FYLGJA_CREDENTIAL_SRLINUX_USERNAME": "admin", "FYLGJA_CREDENTIAL_SRLINUX
 def test_one_host_per_device_node_at_its_address():
     found = hosts(RECORD, BUNDLE, ROOT / "psp", ENV)
     assert sorted(found) == ["n1", "n2"]
-    assert found["n1"].hostname == "172.20.20.11"
+    assert found["n1"].hostname == "192.0.2.11"
 
 def test_the_login_is_the_packages_credential_read_from_the_environment():
     h = hosts(RECORD, BUNDLE, ROOT / "psp", ENV)["n1"]

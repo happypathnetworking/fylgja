@@ -1,7 +1,8 @@
 ---
 # The fixture network on main, read by infrahubctl object load (infrahub/seed/seed.py): the devices n1, n2 and n3 of
 # testdata/blueprint/three-node.json, each active at the site lab on SR Linux, tagged fylgja, a member of the group
-# fylgja-devices, with its physical ports nested under it and each address nested under its port.
+# fylgja-devices, with its physical ports nested under it and each address nested under its port. Each device link
+# is a /31, so that OSPF has a network to run on.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -20,7 +21,15 @@ spec:
           - name: mgmt0
             role: management
           - name: ethernet-1/1
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.0.0.0/31
           - name: ethernet-1/2
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.0.0.4/31
           - name: ethernet-1/10
             ip_addresses:
               kind: IpamIPAddress
@@ -44,7 +53,15 @@ spec:
           - name: mgmt0
             role: management
           - name: ethernet-1/1
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.0.0.1/31
           - name: ethernet-1/2
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.0.0.2/31
           - name: ethernet-1/10
             ip_addresses:
               kind: IpamIPAddress
@@ -68,7 +85,15 @@ spec:
           - name: mgmt0
             role: management
           - name: ethernet-1/1
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.0.0.3/31
           - name: ethernet-1/2
+            ip_addresses:
+              kind: IpamIPAddress
+              data:
+                - address: 10.0.0.5/31
           - name: ethernet-1/10
             ip_addresses:
               kind: IpamIPAddress

@@ -4,7 +4,10 @@
     it is cabled, its admin state, its one subinterface, its addresses in the order of their values, and its place in
     the default network-instance. Every line follows from the device, its platform and manufacturer, its ports, their
     cables and their addresses, and nothing is added. A device with no platform renders too, so that a generation
-    does not fail on one. -#}
+    does not fail on one. Where the device has at least one cabled port with an address, it also renders one OSPF
+    instance in the default network-instance, its router-id the lowest of those addresses as a string with the prefix
+    dropped, and each such port in area 0.0.0.0 as point-to-point, in the order of their names: each device link is a
+    /31, and the adjacency check of the example orchestrator judges those adjacencies. -#}
 {% set dev = data.DcimDevice.edges[0].node -%}
 {% set platform = dev.platform.node -%}
 {% set manufacturer = platform.manufacturer.node if platform else none -%}
@@ -13,6 +16,21 @@
 # platform {{ about }}{{ ('; ' ~ dev.description.value) if dev.description.value else '' }}
 set / system name host-name {{ dev.name.value }}
 set / network-instance default type default
+{% set ns = namespace(routed=[], addresses=[]) -%}
+{% for edge in dev.interfaces.edges | sort(attribute='node.name.value', case_sensitive=true) if edge.node['__typename'] == 'InterfacePhysical' and edge.node.role.value != 'management' and edge.node.connector.node and edge.node.ip_addresses.edges -%}
+{% set ns.routed = ns.routed + [edge.node] -%}
+{% for address in edge.node.ip_addresses.edges -%}
+{% set ns.addresses = ns.addresses + [address.node.address.value] -%}
+{% endfor -%}
+{% endfor -%}
+{% if ns.routed -%}
+set / network-instance default protocols ospf instance main admin-state enable
+set / network-instance default protocols ospf instance main version ospf-v2
+set / network-instance default protocols ospf instance main router-id {{ (ns.addresses | sort(case_sensitive=true) | first).split('/')[0] }}
+{% for port in ns.routed -%}
+set / network-instance default protocols ospf instance main area 0.0.0.0 interface {{ port.name.value }}.0 interface-type point-to-point
+{% endfor -%}
+{% endif -%}
 {% for edge in dev.interfaces.edges | sort(attribute='node.name.value', case_sensitive=true) if edge.node['__typename'] == 'InterfacePhysical' -%}
 {% set port = edge.node -%}
 {% if port.role.value == 'management' -%}

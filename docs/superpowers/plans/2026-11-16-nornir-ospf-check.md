@@ -22,6 +22,46 @@
 - Two gates stop the work and report to the maintainer instead of choosing a fallback: SR Linux refusing a /31 or point-to-point FULL (Task 2), and asyncssh failing against SR Linux (Task 2).
 - `make lint` and `make test` pass at the end of every task that touches code.
 
+## Amendments from Tasks 1 and 2 (read before Tasks 3 to 7; they override the task text)
+
+1. **Two reads, not one.** The adjacency read answers `{}` both for a node with no OSPF and for one
+   with no neighbour (`design/verified-facts.md`, SR Linux, "OSPF point-to-point on /31s"). Task 5
+   therefore has `COMMANDS: tuple[str, str]`, the oper-state read then the adjacency read, sent with
+   `nornir_scrapli.async_tasks.send_commands(commands=list(COMMANDS))`, and
+   `parse(oper_text: str, adjacency_text: str) -> dict[str, str] | None`: `None` when the oper-state
+   answer holds no instance, else interface → state, the interface name with its `.0` dropped. The
+   texts are `result[host][0].scrapli_response[i].result`.
+2. **Fixtures as captured** in `orchestrator/tests/nornir/answers/`: `oper.json` and `full.json`
+   (a speaking node, one FULL neighbour on `ethernet-1/1.0`), `absent.json` (oper-state of a node
+   with no OSPF), `no-neighbour.json` (adjacency of a node with an instance and no neighbour).
+3. **The connection needs an `on_open`.** Task 4's `scrapli` extras are `{"transport": "asyncssh",
+   "auth_strict_key": False, "timeout_ops": 30, "on_open": inventory.on_open}`, where
+   `async def on_open(conn)` writes `"\x1b[80;256R"` with `conn.channel.write(channel_input=...)`
+   and then awaits `scrapli_community.nokia.srlinux.async_driver.default_async_on_open(conn)`.
+   Without it every open times out at the prompt. Task 4's connection test asserts the key is there.
+4. **A timed-out or failed host joins `nr.data.failed_hosts`.** Task 5's poll calls
+   `nr.arun(..., on_failed=True)` every round, and closes with
+   `nr.aclose_connections(on_failed=True)`.
+5. **The plugin's capabilities are a `frozenset`**: `frozenset({"asyncio"})`, with `async def aload`.
+   It is registered by `CapabilityInventoryPluginRegister.register(PLUGIN, TwinInventory)`; guard a
+   second registration with a module flag. The runner is `{"plugin": "asyncio", "options":
+   {"num_workers": ..., "per_host_timeout": ..., "timeout": ...}}`. `scrapli_community` came with
+   the `asyncio` extra and needs no pin.
+6. **This host's core listens where `FYLGJA_LISTEN` says**, port 7651 on 2026-11-16, not 7650: set
+   `FYLGJA_API_ADDRESS` from it. The server is started from the main checkout as CONTRIBUTING has it
+   (`FYLGJA_DRIVER=containerlab FYLGJA_STORE=local/store FYLGJA_PACKAGES=psp:probes`); `FYLGJA_PACKAGES`
+   must name the worktree's `psp` only if a package changes, which this plan does not do.
+7. **The template's lines are Task 2's**, verbatim in `design/verified-facts.md`; the template also
+   needs `subinterface 0 ipv4 admin-state enable`, which it already renders for an addressed port.
+
+8. **One pure test is red until Task 3's seed lands.**
+   `infrahub/tests/test_tree.py::test_the_tree_names_no_address` lets a document quote only the
+   fixtures' own addresses, and the design, this plan and `design/verified-facts.md` quote the six
+   /31 addresses before the seed holds them (28 hits on 2026-11-16, every one `10.0.0.x` in those
+   three files). Task 3 Step 2 puts them in `infrahub/seed/main/5-devices.yml`, a fixture, after
+   which the test must pass; if it still names a file, mend it in Task 3. Every other pure test
+   passed at Task 2's commit.
+
 ## Review Focus
 
 Inputs the design implies but no test would otherwise pin; each has its test in the owning task.

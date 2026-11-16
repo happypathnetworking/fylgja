@@ -251,6 +251,14 @@ from the worktree; `FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S`, the polling budget, def
    `ospf.adjacency.not_full` with "no neighbour", and the rehearsal ends failed at stage 3. The
    third stage is deleted after the run and never committed.
 
+## Found at the gate (2026-11-16)
+
+- The adjacency read alone cannot tell a node without OSPF from one without a neighbour, so the
+  check sends two reads a host, the instance's oper-state and the adjacencies.
+- scrapli's asyncssh transport opens a terminal with no size, SR Linux then waits for a
+  cursor-position answer, and the open times out. The inventory's connection carries an `on_open`
+  that writes the answer. The transport stays asyncssh; no fallback was needed.
+
 ## Left to the builder
 
 - The exact alpha API names (runner config key, plugin registration call, `aload`'s return,

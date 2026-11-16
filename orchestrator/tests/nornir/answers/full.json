@@ -1,0 +1,32 @@
+{
+  "network-instance": [
+    {
+      "name": "default",
+      "protocols": {
+        "ospf": {
+          "instance": [
+            {
+              "name": "main",
+              "area": [
+                {
+                  "area-id": "0.0.0.0",
+                  "interface": [
+                    {
+                      "interface-name": "ethernet-1/1.0",
+                      "neighbor": [
+                        {
+                          "router-id": "10.0.0.1",
+                          "adjacency-state": "full"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

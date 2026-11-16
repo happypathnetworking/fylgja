@@ -3902,6 +3902,51 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
 
 ---
 
+### OSPF point-to-point on /31s, the state read, and scrapli over asyncssh (private branch)
+
+Read on 2026-11-16 on a twin of `testdata/blueprint/three-node.json` on the local driver, SR Linux
+24.7.1, configured by hand through `sr_cli` in a private candidate, one node at a time.
+
+- **A /31 and a point-to-point OSPF interface are accepted as written**, on `n1` with `10.0.0.0`
+  and on `n2` with `10.0.0.1`, the `.0` host address and a router-id of `10.0.0.0` among them. The
+  lines, beside the fixture's own `subinterface 0` and `network-instance default interface
+  ethernet-1/1.0`:
+
+  ```
+  set / interface ethernet-1/1 subinterface 0 ipv4 admin-state enable
+  set / interface ethernet-1/1 subinterface 0 ipv4 address 10.0.0.0/31
+  set / network-instance default protocols ospf instance main admin-state enable
+  set / network-instance default protocols ospf instance main version ospf-v2
+  set / network-instance default protocols ospf instance main router-id 10.0.0.0
+  set / network-instance default protocols ospf instance main area 0.0.0.0 interface ethernet-1/1.0 interface-type point-to-point
+  ```
+
+- **The adjacency was `full` on both ends at the first read**, taken within seconds of the second
+  node's commit; how long it takes to form was not measured beyond that.
+- **The adjacency read** is `info from state network-instance default protocols ospf instance main
+  area * interface * neighbor * adjacency-state | as json`. Its answer nests `network-instance[]`,
+  `protocols.ospf.instance[]`, `area[]`, `interface[]` keyed `interface-name` (the subinterface,
+  `ethernet-1/1.0`), `neighbor[]` with `router-id` and `adjacency-state`
+  (`orchestrator/tests/nornir/answers/full.json`).
+- **That read cannot tell a node with no OSPF from one with no neighbour**: both answer `{\n}`,
+  exit 0 (`n3` before any OSPF, and `n3` with an instance on a port whose far end ran none;
+  `no-neighbour.json`). The instance's presence is a read of its own, `info from state
+  network-instance default protocols ospf instance main oper-state | as json`: `oper-state`
+  `enable` where it runs (`oper.json`), `{\n}` where there is none (`absent.json`).
+- **scrapli's asyncssh transport does not reach the prompt as shipped** (scrapli 2026.2.20,
+  scrapli_community 2025.1.30): it opens its session with a terminal type and no size
+  (`scrapli/transport/plugins/asyncssh/transport.py`, `open_session(term_type="xterm")`), the CLI
+  then asks the terminal for its cursor position (`ESC[999;999H ESC[6n`) and prints no prompt
+  until it is answered, and the open fails after `timeout_ops` with `ScrapliTimeout: timed out
+  getting prompt`. Writing the answer `ESC[80;256R` to the channel in an `on_open` of the
+  connection's own, before the platform's `default_async_on_open`, opened it in 4.1 s, and every
+  read after answered.
+- **Through Nornir's asyncio runner**, with that `on_open` in the `scrapli` connection options'
+  `extras`, `send_commands` of the two reads against the three nodes took 4.6 s with the
+  connections opening and 0.18 s on the kept connections; each host's
+  `result[host][0].scrapli_response` is a list, one response a command, its `.result` the JSON
+  text, and `result[host][0].result` the two texts joined by a blank line.
+
 ## SR Linux 26.7.2
 
 Read on 2026-11-12 on the development host with containerlab 0.81.0, through a core of this

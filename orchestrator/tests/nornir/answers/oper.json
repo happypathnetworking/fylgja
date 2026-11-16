@@ -1,0 +1,17 @@
+{
+  "network-instance": [
+    {
+      "name": "default",
+      "protocols": {
+        "ospf": {
+          "instance": [
+            {
+              "name": "main",
+              "oper-state": "enable"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

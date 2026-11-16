@@ -1345,6 +1345,25 @@ with the records of phase 10's plan 1, Task 5; `local/.env` was loaded in each r
 - **Not shown:** the tier whole and passing in one run, at either commit; the time of such a
   run; the suite alone on this harness.
 
+**fylgja-core, phase 10: the live changes module with its step planned on admit's answer**
+*(0.81.0, read on the host the same day; 2026-11-16)*
+
+`core/tests/live/test_changes_live.py`'s helper `step` admits each step with the deployment the
+twin holds, plans the target with the allocation that admit answers, and keeps that answer as
+the twin's allocation, as the loop's step does. The script and its log are kept outside the tree
+with the records of phase 10's plan 5, Task 5 (`task-5-live.sh`, `task-5-live.log`); `local/.env`
+was loaded in the run's command.
+
+- **The host before the run**, at 04:40:37Z: no container labelled `containerlab` and none
+  running; no network named `clab-`; of the six networks Docker listed, `host` and `none` with no
+  subnet and four with one each, none inside or over 172.20.0.0/16; no line of `/etc/hosts`
+  naming `clab-`.
+- **`core/tests/live/test_changes_live.py` alone, `-m live`, at `949bfd9`: 15 passed in
+  284.41 s** (04:40:39 to 04:45:25Z), exit 0, the tree clean.
+- **The host after the run**, at 04:45:25Z: no container labelled `containerlab` and none
+  running; no network named `clab-`; the same six networks with the same subnets; no line of
+  `/etc/hosts` naming `clab-`.
+
 **The dry run**
 
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,
@@ -2790,6 +2809,26 @@ deleted by hand.
   `versity`, the gateway's; the Lease held by that pod, with no annotation. The development host
   held no running container, none labelled `containerlab` and no network named `clab-`.
 - **Not shown:** the tier whole and passing in one run, at any commit; the time of such a run.
+
+**fylgja-core, phase 10: the cluster changes module with its step planned on admit's answer**
+*(k3s v1.37.1+k3s1 and clabernetes 0.10.1 as the block above read them, not read again;
+2026-11-16)*
+
+`core/tests/cluster/test_clabernetes_changes_cluster.py`'s helper `step` admits each step with
+the deployment the twin holds, plans the target with the allocation that admit answers, and keeps
+that answer as the twin's allocation, as the loop's step does. The script and its log are kept
+outside the tree with the records of phase 10's plan 5, Task 5 (`task-5-cluster.sh`,
+`task-5-cluster.log`); `local/.env` was loaded in the run's command, and the deployed core was
+scaled to nothing before the module and back to one after it, by the script.
+
+- **Before the run**, at 04:45:38Z: no container labelled `containerlab` on the development host;
+  no namespace `fylgja-twin-*`; the Deployment `fylgja-core` at 1/1. Scaled to no replica at
+  04:45:39Z, it had no pod at 04:45:42Z.
+- **`core/tests/cluster/test_clabernetes_changes_cluster.py` alone, `-m cluster`, at `949bfd9`:
+  14 passed in 602.05 s** (04:45:42 to 04:55:45Z), exit 0, the tree clean.
+- **After the run**: the Deployment scaled back to one replica and rolled out, 1/1 with its one pod
+  Running, at 04:55:53Z; no namespace `fylgja-twin-*`; no container labelled `containerlab` on
+  the development host.
 
 ---
 

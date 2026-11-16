@@ -1533,6 +1533,24 @@ On kind v0.33.0 (below), unless marked; on three k3s hosts in
   - The cEOS image's uncompressed layer is the recorded `sha256:09ab9635…` (cEOS, below).
 - **Memory**, close to local containerlab: about 1.6–2 GiB per SR Linux node and
   0.9–1.5 GiB per cEOS node. *(2026-10-30)*
+- **An apply cancelled at its namespace's create, then destroyed at once.** *(k3s
+  v1.37.1+k3s1, lightkube 1.0.1, 2026-11-16)* On the three k3s hosts, the deployed core
+  scaled to none: `core/tests/cluster/test_clabernetes_driver_cluster.py`'s
+  `test_8_an_apply_cancelled_at_its_namespace_create_then_destroyed_leaves_no_namespace`,
+  eighteen twins of `three-node`, each `apply` cancelled 0, 2, 5, 10, 20 or 50 ms after its
+  Namespace's request was sent (three each; the cancel landed 2.4 to 55.9 ms after the send),
+  then `destroy` asked at once and the namespace read every 0.5 s for 30 s after it returned.
+  - At 0, 2 and 5 ms the Namespace's call was itself cancelled, 2.9 to 8.7 ms after the send.
+    In eight of those nine, `destroy`'s one read, answered 21.2 to 41.7 ms after the send,
+    found no namespace, and `destroy` returned with nothing to delete. In the ninth (5 ms, the
+    call cancelled at 7.8 ms) that read, at 55.1 ms, found the namespace: the API had made what
+    the client cancelled. `destroy` deleted it and read it gone 6.11 s after the send.
+  - At 10, 20 and 50 ms the Namespace's call had returned, 12.7 to 14.8 ms after the send;
+    at 50 ms the NetworkPolicy's and a Secret's had too, by 53.5 ms. `destroy`'s first read
+    found the namespace 55.1 to 94.2 ms after the send, deleted it, and read it gone 6.11 to
+    6.15 s after the send.
+  - No read in any row's 30 s after `destroy` returned found its namespace, and no
+    `fylgja-twin-` namespace stood before the run or after it.
 
 ---
 

@@ -70,10 +70,11 @@ there, where its readings are.
   blueprint from the core it runs through, by its id, so that core must have been given the same
   intent. ([more][oq])
 - On the clabernetes driver, a node the dry run answers `recabled` may be replaced, though the spec
-  does not allow a restart, in a step that adds or removes a node or in the next step after one. A
-  node added or removed can move another node's management address, and clabernetes then makes that
-  node's pod anew. By a simulation of how clabernetes draws the addresses, it happens in about one
-  step in a hundred that adds a probe's two hosts. ([more][oq])
+  does not allow a restart, if a step since the node was last made added or removed a node. A node
+  added or removed can move another node's management address, and clabernetes then makes that
+  node's pod anew at the next step that changes its links. By a simulation of how clabernetes draws
+  the addresses, a step that adds a probe's two hosts moves a device's address about 1.3 times in a
+  hundred. ([more][oq])
 - A step runs no flow and measures no loss: each probe of a step's target is reported `not_started`
   in its verdict, as [the findings format](formats/findings-1.schema.json) says.
 - A core remembers in memory alone that an apply of a twin on the cluster was cancelled, so that its

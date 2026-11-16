@@ -82,7 +82,7 @@ bound is a proxy: it times the CLI's round trips to the core and the core's read
 its store, not the step's work. What the scenario promises is held by the run's phases, `compile`
 alone, its outcome `unchanged` at `compiled` and every node's incarnation kept. Readings, end to
 end: on the local harness 0.20 to 0.30 s (at most 0.15 of `here`); on the cluster's, the core
-deployed over its object store, 1.90 s and 2.11 s (at most 0.42 of `away`)."""
+deployed over its object store, 1.90 to 2.61 s (at most 0.52 of `away`)."""
 EOS_WAIT_S = 60.0
 """How long a test waits for EOS to list a port `connected`, from the step's end."""
 ETHERNET10 = "show interfaces Ethernet10 status"

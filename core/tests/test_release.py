@@ -483,6 +483,7 @@ def test_every_open_question_is_a_known_limit_or_named() -> None:
     assert after, "the line naming the example's, the suites' and the tooling's questions is missing"
     assert "design/decisions.md#open-questions" in after.replace("\n", " ")
     bullets = [" ".join(b.split()) for b in re.split(r"\n- ", listed)[1:]]
+    assert len(bullets) == len(LIMITS) + len(UNQUESTIONED), f"{len(bullets)} known limits, each one counted once"
     # a limit that has an open question carries the link to where they are kept
     for phrase in LIMITS.values():
         found = [b for b in bullets if phrase in b]
@@ -491,6 +492,7 @@ def test_every_open_question_is_a_known_limit_or_named() -> None:
     for opening in UNQUESTIONED:
         assert [b for b in bullets if b.startswith(opening)] != [], f"{opening!r} is not a known limit of the notes"
         assert sum(opening in b for b in bullets) == 1, f"{opening!r} is in more than one known limit"
+        assert "[oq]" not in next(b for b in bullets if b.startswith(opening)), f"{opening!r} has no open question"
     assert re.search(r"^\[oq\]: design/decisions\.md#open-questions$", limits, re.M)
     line = " ".join(after.split())
     for title in titles:

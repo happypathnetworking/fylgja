@@ -98,7 +98,8 @@ the twin runs on; without it the server's default is used, and a step keeps the 
 `twin step --dry-run` writes nothing. It prints what the step would change, node by node and link
 by link, and exits by the verdict of that plan. It cannot be given with `--no-wait`. On the
 clabernetes driver, a node it answers `recabled` may still be replaced, without `--allow-restart`,
-when the step or the step before it adds or removes a node.
+if any step since that node was last made has added or removed a node: that can move its
+management address, and clabernetes then makes its pod anew when its links change.
 
 `twin destroy` waits until the twin is gone, then prints the destroy run. A teardown that leaves
 the twin's record prints it, and the command exits by the destroy run's verdict, 3 when it is

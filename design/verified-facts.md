@@ -1624,7 +1624,7 @@ On kind v0.33.0 (below), unless marked; on three k3s hosts in
   the pod-retaining path finds that the Deployment no longer conforms and recreates the pod
   instead. clabernetes reports nothing of this, and the pod comes back with a new uid. That can
   happen in the step that moved the address or, if the device was kept there, in the next step
-  that recables it.
+  that recables it, while the node that displaced it stands.
   - Seen in the clabernetes conformance suite's second run at `1f9aabd` (08:39 to 09:48Z):
     `n2` of `cf-step`, which the dry run answered `recabled`, came back at a new incarnation in
     the step to `three-node-probed-moved`, which added and removed nothing (its hosts

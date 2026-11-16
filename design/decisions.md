@@ -7744,13 +7744,14 @@ becomes an entry then.
   after a recreate, are held by pure tests and were not read on a real Docker; nor was what
   Compose's own `up` does to a standing network whose subnet the override changes.
 - **A fixed management address per node on clabernetes** ([D-057](#d-057), [D-105](#d-105)).
-  clabernetes 0.10.1 draws each node's management address from the namespace's whole set of
-  nodes, so a step that adds or removes a node can move a kept node's address, and clabernetes
-  then replaces that node's pod once a step changes its links, though the dry run answered
-  `recabled` and the spec allowed no restart ([verified-facts.md](verified-facts.md), "A
-  recabled node replaced when a step adds or removes a node: a known limit"). The conformance
-  walk tolerates it, and the release notes state it as a known limit. The fix is for the plan to
-  render a fixed management address per node, so that an added node can never displace one.
-  That is the only fix that keeps `--allow-restart`'s promise. It would add to the deployment
-  format, which is within major 1. Not read: whether clabernetes takes containerlab's
-  `mgmt-ipv4` as a declared address, and which addresses the plan would choose.
+  clabernetes 0.10.1, as its v0.10.0 source reads, draws each node's management address from the
+  namespace's whole set of nodes, so a step that adds or removes a node can move a kept node's
+  address, and clabernetes then replaces that node's pod once a step changes its links, though the
+  dry run answered `recabled` and the spec allowed no restart
+  ([verified-facts.md](verified-facts.md), "A recabled node replaced when a step adds or removes a
+  node: a known limit"). The conformance walk tolerates it, and the release notes state it as a
+  known limit. The fix is for the plan to render a fixed management address per node, so that an
+  added node can never displace one. That is the only fix that keeps `--allow-restart`'s promise.
+  It would add a member to the deployment format, which [D-105](#d-105) lets a minor release do.
+  Not read: whether clabernetes takes containerlab's `mgmt-ipv4` as a declared address, and which
+  addresses the plan would choose.

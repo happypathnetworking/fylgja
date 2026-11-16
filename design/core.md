@@ -2,7 +2,8 @@
 
 This is the design of the new core: a Python rebuild of `fylgja-core` with a clean break in
 formats, many named twins, and runtimes behind a driver seam. Phases 2–10 are planned from
-it.
+it. The first release is built in this repository, as three distributions at one version, and
+what its major version holds is stated on [one page](../docs/compatibility.md).
 
 - **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
   measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
@@ -17,9 +18,11 @@ it.
   each phase left is under its item there and among the
   [open questions](decisions.md#open-questions). The `hardware` driver is a later release's.
 - **Beside the core:** a reader for each source of truth, the Infrahub reader
-  (`readers/infrahub/`) and the NetBox reader (`readers/netbox/`), and the example
-  orchestrator (`orchestrator/`), which rehearses a change of either source, are in this
-  repository ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081),
+  (`readers/infrahub/`, the distribution `fylgja-infrahub`) and the NetBox reader
+  (`readers/netbox/`, `fylgja-netbox`), and the example orchestrator (`orchestrator/`), which
+  rehearses a change of either source, are in this repository; `infrahub/` and `netbox/` hold
+  what runs beside each source: Infrahub's checks, schema, queries and seed, and NetBox's seed
+  and development set-up ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081),
   [D-095](decisions.md#d-095), [D-097](decisions.md#d-097)). The Go core is retired: it gets
   no more fixes, and nothing tracked here needs it or the archived repository to build, test or
   run.

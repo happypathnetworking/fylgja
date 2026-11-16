@@ -1,10 +1,8 @@
 # Contributing
 
-> **Not accepting contributions yet.** Thank you for your interest in Fylgja. The project is
-> at an early stage: the core is being built phase by phase from
-> [design/core.md](design/core.md), and its formats and API are still settling, so outside
-> issues and pull requests are not being taken for now. This page describes how the project
-> itself works, and will say when that changes. A security concern is always welcome, as
+> **Not accepting contributions yet.** Thank you for your interest in Fylgja. Fylgja is not
+> taking outside issues or pull requests yet; this page will say when that changes. This page
+> describes how the project itself works. A security concern is always welcome, as
 > [SECURITY.md](SECURITY.md) describes.
 
 How to set up, build, test and change fylgja-core. The project's governance and design live

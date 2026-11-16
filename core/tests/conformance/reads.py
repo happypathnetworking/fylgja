@@ -99,7 +99,8 @@ def gone(harness: Harness, twin: str) -> bool | None:
 
 def remove(harness: Harness, twin: str) -> None:
     """Destroy `twin` through the API if it is still there, and wait until it is gone: a
-    scenario's own cleanup, however it ended."""
+    scenario's own cleanup, however it ended. It clears the twin's `RESHAPED` mark."""
+    RESHAPED.discard(twin)
     if harness.record(twin) is not None:
         print(f"\n[conformance] removing the twin {twin} left behind", flush=True)
         asked = harness.client().delete(f"/v1/twins/{twin}")
@@ -687,9 +688,38 @@ def reached(address: str) -> str:
 
 
 RESHAPED: set[str] = set()
-"""The twins whose last step by `walk` added or removed a node, so that on the cluster a kept
-node's management address may have moved without its pod being made anew (`walk`); a create
-clears its twin."""
+"""The twins whose last step, walked (`walk`) or resumed after a kill (`assert_resumed`), added or
+removed a node, so that on the cluster a kept node's management address may have moved without its
+pod being made anew yet (`readdressed`); a create or a destroy clears its twin. A step taken any
+other way (`stepped_until`, a test's own `stepped`) does not set it."""
+
+
+def readdressed(
+    harness: Harness, twin: str, fixture: Path, e: Expected, before: Mapping[str, str], now: Mapping[str, str]
+) -> frozenset[str]:
+    """The nodes the dry run `e` answered `recabled` that a step to `fixture` made anew, and that
+    the cluster's runtime may re-address: `before` and `now` are the nodes' incarnations on either
+    side of the step. The one tolerance of a conformance walk, of the cluster's runtime
+    (`design/verified-facts.md`, "A recabled node replaced when a step adds or removes a node: a
+    known limit"): it gives each node a management address drawn from the namespace's whole set of
+    nodes, so a node a step adds or removes can move another node's address, and that node, once a
+    step changes its links, is recreated: in that step, or in the next such step if it was kept in
+    it. So on a core reached over the network (`reached`, `away`), in a step that adds or removes a
+    node or follows one that did, a recabled node may come back at a new incarnation. On a core on
+    this host, or in any other step, none is tolerated: the answer is empty. A node that takes it is
+    named in the log.
+
+    It also records the step in `RESHAPED`, so it is asked once per step. Its callers are `walk`
+    and `assert_resumed`, the two that end a step on a held `e`; both keep `RESHAPED`, so a kill
+    scenario's twin, stepped back to its base by `walk`, carries the mark its resumed step left."""
+    reshaped, after_reshaped = bool(e.added or e.removed), twin in RESHAPED
+    (RESHAPED.add if reshaped else RESHAPED.discard)(twin)
+    may = e.recabled if reached(harness.address) == "away" and (reshaped or after_reshaped) else frozenset()
+    anew = frozenset(n for n in may if now[n] != before[n])
+    if anew:
+        print(f"[conformance] {twin} to {fixture.stem}: recabled {sorted(anew)} came back anew, held as recreated "
+              f"(the runtime re-addressed them)", flush=True)
+    return anew
 
 
 # The kills of a step.
@@ -751,8 +781,9 @@ def assert_resumed(
     run resumed after its wait carries none, D-054, and the core's log then says it resumed after
     `verified` or `flows`); `last_step` `stepped` at `flows`; the fixture's nodes in the record and
     in the runtime, the two at the same incarnations; every device node holding the bundle; every
-    node the dry run `e` keeps at the incarnation it had before the step; one `apply` done; and
-    `verified`. The run's events."""
+    node the dry run `e` keeps at the incarnation it had before the step, but a recabled one
+    `readdressed` tolerates, as `walk` does (a resumed step is held to the same tolerance and leaves
+    the same `RESHAPED` mark); one `apply` done; and `verified`. The run's events."""
     made = [(r["id"], r["operation"]) for r in runs_since(harness, twin, runs_before)]
     assert made == [(run_id, "step")], f"the resume made {made}, not the one step run {run_id}"
     run = harness.run(run_id)
@@ -772,7 +803,9 @@ def assert_resumed(
     owed = devices(fixture)
     held = {name: n.get("holds") for name, n in record_nodes(record).items() if name in owed}
     assert held == dict.fromkeys(owed, status["bundle_id"]), held
-    assert {n: now[n] for n in e.kept} == {n: incarnations_before[n] for n in e.kept}, \
+    anew = readdressed(harness, twin, fixture, e, incarnations_before, now)
+    kept = e.kept - anew
+    assert {n: now[n] for n in kept} == {n: incarnations_before[n] for n in kept}, \
         "a node the dry run keeps was made anew"
     events = harness.events(run_id)
     assert_events_whole(events)
@@ -794,17 +827,13 @@ def walk(
     recreated; `push` done for the device nodes among those and among `pushed`, and skipped for
     every other device node; then `verified`. The step, with the verify's verdict.
 
-    One tolerance, of the cluster's runtime (`design/verified-facts.md`, "A recabled node replaced
-    when a step adds or removes a node: a known limit"): it gives each node a management address
-    drawn from the namespace's whole set of nodes, so a node a step adds or removes can move a
-    kept node's address, and that node, once a step changes its links, is recreated: in that
-    step, or in the next if the node was kept in it. So on a core reached
-    over the network (`reached`, `away`), in a step that adds or removes a node or follows one
-    that did (`RESHAPED`), a node the dry run answers `recabled` may come back at a new
-    incarnation, and is then held as a recreated one: readied and pushed. Every other kept node
-    stays held, and so does a recabled one on a core on this host or in a step that neither adds
-    nor removes a node nor follows one that did. A node that takes the tolerance is named in the
-    log."""
+    One tolerance, `readdressed`'s: on a core reached over the network, a node the dry run answers
+    `recabled` may come back at a new incarnation in the step that adds or removes a node or, if
+    the node was kept in it, in whichever later step first changes its links; the walk tolerates
+    the step that adds or removes a node and the one walked step after it, and no later one. The
+    node is held as a recreated one, readied and pushed. Every other kept node stays held, and so
+    does a recabled one on a core on this host. `assert_resumed` holds the same tolerance, for the
+    kill scenarios' step."""
     e = expected(harness, fylgja, caps, twin, fixture)
     before = incarnations(harness, twin)
     s = stepped(harness, fylgja, twin, fixture, allow_restart=e.refused == RESTART, ready_before=ready_before)
@@ -815,13 +844,7 @@ def walk(
     now = {name: str(n["incarnation"]) for name, n in record_nodes(s.record).items()}
     held = harness.nodes(twin)
     assert set(now) == (set(before) - e.removed) | e.added, (sorted(before), sorted(now))
-    reshaped, after_reshaped = bool(e.added or e.removed), twin in RESHAPED
-    (RESHAPED.add if reshaped else RESHAPED.discard)(twin)
-    readdressed = e.recabled if reached(harness.address) == "away" and (reshaped or after_reshaped) else frozenset()
-    anew = frozenset(n for n in readdressed if now[n] != before[n])
-    if anew:
-        print(f"[conformance] {twin} to {fixture.stem}: recabled {sorted(anew)} came back anew, held as recreated "
-              f"(the runtime re-addressed them)", flush=True)
+    anew = readdressed(harness, twin, fixture, e, before, now)
     kept = e.kept - anew
     assert {n: now[n] for n in kept} == {n: before[n] for n in kept}, "a node the dry run keeps was made anew"
     assert all(now[n] != before[n] for n in e.recreated), "a node the dry run recreates kept its incarnation"

@@ -8,7 +8,8 @@ them in the order a client uses them, and holds nothing the document does not sa
 
 A request and an answer are JSON. A request with a body carries `Content-Type: application/json`. A
 refusal is a problem document, `application/problem+json`. API 1 does not change: a server of API 1
-answers every request this page shows. The examples use `curl` against the server's default
+answers every request this page shows. [What 1.0 holds](compatibility.md) says what an answer may
+gain within major version 1, and how to read one. The examples use `curl` against the server's default
 address.
 
 ## Reaching it

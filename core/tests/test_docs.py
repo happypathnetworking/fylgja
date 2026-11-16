@@ -131,10 +131,11 @@ def test_the_readme_links_the_index_and_each_page_a_user_starts_from() -> None:
     assert {"readers/infrahub/README.md", "readers/netbox/README.md", "docs/integrating.md"} <= links
 
 
-def test_the_index_gives_the_six_pages_in_reading_order_and_then_the_rest() -> None:
+def test_the_index_gives_the_seven_pages_in_reading_order_and_then_the_rest() -> None:
     lines = text("docs/README.md").splitlines()
     numbered = [m.group(1) for line in lines if (m := re.match(r"\d+\. \[[^\]]+\]\(([^)#\s]+)", line))]
-    assert numbered == ["installing.md", "server.md", "cli.md", "api.md", "client.md", "demonstrations.md"]
+    assert numbered == ["installing.md", "server.md", "cli.md", "api.md", "client.md", "compatibility.md",
+                        "demonstrations.md"]
     beside = lines[lines.index("Beside them:"):]
     rest = [t for t in re.findall(r"\]\(([^)#\s]+)", "\n".join(beside))]
     assert {"rules.md", "glossary.md", "integrating.md", "../readers/infrahub/README.md",

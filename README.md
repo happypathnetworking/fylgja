@@ -52,6 +52,8 @@ make netbox-demo
 
 ## Read on
 
+- [What 1.0 holds](docs/compatibility.md) says what stays the same across the releases of major
+  version 1, and what does not.
 - [The documentation](docs/README.md) lists every page: the server, the command, API 1 and the
   client library.
 - [The Infrahub reader](readers/infrahub/README.md) and

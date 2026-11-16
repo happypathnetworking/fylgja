@@ -4,7 +4,8 @@
 new blueprint, verifies them, reads what the runtime has room for, and files and compares
 blueprints and bundles. It holds no rule of its own: every check is the server's, and a refusal
 is printed as the server's status, rule and detail. Anything the command does, a program can do
-with the same API.
+with the same API. [What 1.0 holds](compatibility.md) says which of the command's options and exit
+statuses are held across the releases of major version 1.
 
 The command is installed with the package `fylgja-core`. The server it talks to is
 `fylgja-core-server`, a separate command that needs the package's `server` extra. `-h` and `--help`

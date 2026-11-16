@@ -9,7 +9,7 @@ dates it.
 The first release. The three distributions, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, are published
 as wheels at one version, each built from this repository alone: a release on PyPI, a candidate on TestPyPI.
 
-What 1.0 holds, and what it does not, is [D-105](design/decisions.md#d-105): the API and the formats at version 1, the
+What 1.0 holds, and what it does not, is stated on [one page](docs/compatibility.md): the API and the formats at version 1, the
 four commands with their options and exit statuses, and the names of the variables they read are held within major
 version 1, and the example orchestrator, the make targets and the scripts are not.
 

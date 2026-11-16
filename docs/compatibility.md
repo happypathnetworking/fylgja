@@ -8,7 +8,8 @@ of them are held.
 
 The three published distributions, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, share one
 version and follow semantic versioning from 1.0.0. A release is never one distribution alone. Each
-reader asks for `fylgja-core>=1.0.0rc1,<2`: it works with the core of its own major version.
+reader requires the core at the reader's own version or a later one below 2, so it works with the
+core of its own major version.
 
 ## What is held
 
@@ -25,8 +26,8 @@ at version 1 that you write or that the core answers with:
 | [platform package](../formats/platform-package-1.schema.json) | How a platform is run, which a site may write |
 | [probe package](../formats/probe-package-1.schema.json) | How a probe's hosts are run, which a site may write |
 | [probe declaration](../formats/probes-1.schema.json) | A blueprint's probes |
-| [Infrahub reader document](../formats/infrahub-reader-1.schema.json) | What `fylgja-infrahub` reads of Infrahub |
-| [NetBox reader document](../formats/netbox-reader-1.schema.json) | What `fylgja-netbox` reads of NetBox |
+| [Infrahub reader document](../formats/infrahub-reader-1.schema.json) | How `fylgja-infrahub` reads Infrahub, which you write |
+| [NetBox reader document](../formats/netbox-reader-1.schema.json) | How `fylgja-netbox` reads NetBox, which you write |
 | [findings](../formats/findings-1.schema.json) | A verdict, which the core answers |
 | [problem](../formats/problem-1.schema.json) | A refusal, which the core answers |
 | [twin record](../formats/twin-record-1.schema.json) | A twin, which the core answers |

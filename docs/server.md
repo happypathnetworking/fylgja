@@ -36,8 +36,8 @@ reads for itself. It needs five things.
   and the shipped EOS package `FYLGJA_CREDENTIAL_EOS_USERNAME` and `FYLGJA_CREDENTIAL_EOS_PASSWORD`.
   For SR Linux the two carry the image's published default login, as
   [the demonstrations](demonstrations.md#what-the-host-must-have) use it; for EOS they carry the
-  kind's default login. A package of your own names its credential, and the
-  [settings](#settings) give the variables that name makes.
+  kind's default login, the [kind](glossary.md) being containerlab's `ceos`. A package of your own
+  names its credential, and the [settings](#settings) give the variables that name makes.
 
 Two variables are required, `FYLGJA_STORE` and `FYLGJA_TOKENS`. A start with the two set serves
 `127.0.0.1:7650`, with the local driver, over HTTP. The start below also sets the SR Linux login,

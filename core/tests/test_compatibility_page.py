@@ -9,7 +9,7 @@ import json
 import re
 import tomllib
 
-from pages import ROOT, prose, section, text
+from pages import ROOT, USER_PAGES, prose, section, text
 
 PAGE = "docs/compatibility.md"
 PYPROJECTS = ("core", "readers/infrahub", "readers/netbox")
@@ -47,12 +47,28 @@ def test_the_page_holds_the_published_commands() -> None:
     assert "`fylgja-orchestrator`" not in _held()
 
 
+def _enums(node: object, path: tuple[str, ...] = ()) -> set[str]:
+    """The name the page gives each `enum` under `node`: its property's name, prefixed by `wait` or `loss` for the
+    members of those two objects."""
+    found: set[str] = set()
+    if isinstance(node, dict):
+        if "enum" in node and len(path) >= 2 and path[-2] == "properties":
+            owner = path[-3] if len(path) >= 3 else ""
+            found.add(f"{owner}.{path[-1]}" if owner in {"wait", "loss"} else path[-1])
+        for key, value in node.items():
+            found |= _enums(value, (*path, key))
+    return found
+
+
 def test_the_page_names_the_enums_a_client_refuses_a_new_value_of() -> None:
-    schema = json.loads((ROOT / "formats" / "findings-1.schema.json").read_text())
-    closed = {"status", "operation", "severity", "wait.outcome", "loss.outcome", "loss.from"}
+    """The names in the page's sentence are the enums of `findings-1` and `problem-1`, walked: no name is typed here."""
+    closed: set[str] = set()
+    for name in ("findings", "problem"):
+        closed |= _enums(json.loads((ROOT / "formats" / f"{name}-1.schema.json").read_text()))
+    assert len(closed) == 6, "the parse is blind"
     body = "\n".join(section(text(PAGE), "## Reading an answer"))
-    assert closed <= set(re.findall(r"`([\w.]+)`", body))
-    assert {"ok", "rejected"} <= set(schema["properties"]["status"]["enum"]), "the parse is blind"
+    sentence = next(p for p in body.split("\n\n") if "waits for a major release" in p)
+    assert set(re.findall(r"`([\w.]+)`", " ".join(sentence.split()))) == closed
 
 
 def test_each_page_that_speaks_of_what_it_holds_links_the_page() -> None:
@@ -74,11 +90,19 @@ def test_the_pull_request_template_says_a_held_format_only_adds() -> None:
 def test_the_server_page_says_the_packages_words_for_eos_and_that_the_start_sets_sr_linux_alone() -> None:
     body = " ".join(text("docs/server.md").split())
     assert "the kind's default login" in body and "the login the imported image accepts" not in body
+    assert "the [kind](glossary.md) being containerlab's `ceos`" in body
     assert "sets the SR Linux login alone: a blueprint with EOS nodes needs the EOS pair too" in body
 
 
 def test_no_user_page_says_a_step_reports_loss() -> None:
     """A step lists each probe's flow as not started: it measures no loss."""
     assert "not yet run" in " ".join(text("README.md").split())
-    for page in ("README.md", "docs/glossary.md", "docs/installing.md", "docs/cli.md", "docs/api.md"):
-        assert not re.search(r"report the loss|reports? (?:the )?loss", text(page)), page
+    pages = (*USER_PAGES, "readers/infrahub/README.md", "readers/netbox/README.md")
+    for page in pages:
+        assert not re.search(r"reports? (?:the )?loss|loss a step caused|measures? (?:the )?loss", text(page)), page
+
+
+def test_the_page_words_the_cores_floor_as_the_installing_page_does() -> None:
+    body = " ".join(text(PAGE).split())
+    assert "the core at the reader's own version or a later one below 2" in body
+    assert "fylgja-core>=" not in body, "a pin typed on the page goes stale at the tag"

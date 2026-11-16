@@ -203,7 +203,8 @@ class ClabernetesDriver:
         self.poll_s = poll_s
         self._backoff = backoff
         # The twins whose `apply` this driver saw cancelled and whose namespace no `destroy` has since seen gone
-        # (`_settle`).
+        # (`_settle`). In memory alone, a known limit: a core restarted loses the mark, and its next destroy of
+        # such a twin reads the namespace once.
         self._cancelled: set[str] = set()
         # Each node's renewals by `events`, (twin, node) to their times on `clock` within `RENEWAL_WINDOW_S`, a key
         # dropped when it is next read with every time past the window; and each pod left at a restart once the bound
@@ -444,7 +445,12 @@ class ClabernetesDriver:
         deleting and `Ready`, for a while. The budget run out in either is `DriverFailed` naming
         what is not ready; a cancel stops it where it is. A cancel is remembered for the twin's next
         `destroy`, which reads again a namespace it finds absent (`_settle`), since the API may still
-        make what the cancelled request asked; an `apply` of the twin that returns forgets it."""
+        make what the cancelled request asked; an `apply` of the twin that returns forgets it. The mark
+        is held in memory alone and lost when the core restarts, a known limit. Only a cancel marks:
+        a create cut by a transport failure (a `KubeFailed` from a timeout, an `OSError` after the
+        send) is not, though the API may likewise still make it: a gap accepted, as a transport
+        failure is not known to have sent the create at all, and marking every failed apply would
+        make each destroy of a twin that never reached the cluster wait out `SETTLE_WINDOW_S`."""
         namespace = _checked(deployment, files)
         twin = deployment.twin
         documents = {path: _document(path, data) for path, data in sorted(files.items())}
@@ -453,6 +459,7 @@ class ClabernetesDriver:
             await self._apply_checked(deployment, files, platforms, probe_packages, reconfigure, namespace, documents)
         except asyncio.CancelledError:
             # A request the cancel cut may still be made by the API: the twin's next destroy settles (`_settle`).
+            # Not marked: a create cut by a transport failure, which is no cancel (see `apply`).
             self._cancelled.add(twin)
             raise
         self._cancelled.discard(twin)  # an apply that returned made the namespace: a destroy finds it at once
@@ -594,7 +601,8 @@ class ClabernetesDriver:
         A namespace absent is nothing done; after an `apply` of the twin this driver saw cancelled,
         it is first read again every `poll_s` for `SETTLE_WINDOW_S` (`_settle`), and one that
         appears is deleted as below. The cancel is forgotten once the namespace is read absent at
-        the end, or gone. One that is not the twin's is logged at WARNING and
+        the end, or gone, and kept when this raises or is cancelled; it is held in memory alone and
+        lost when the core restarts, a known limit. One that is not the twin's is logged at WARNING and
         left: the driver never deletes it. One already being deleted is not asked again. The
         namespace is read every `poll_s` until it is gone; once the destroy's budget has passed
         (`destroy_budget`) it is `DriverFailed`, the loop's to retry. With the twin gone, what

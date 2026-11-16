@@ -1579,6 +1579,62 @@ def test_a_destroy_of_a_twin_whose_apply_was_not_cancelled_reads_the_namespace_o
     assert other.calls == [("namespace", NS)]
 
 
+def second_destroy_reads(d: ClabernetesDriver, fake: FakeKube, p: Planned) -> int:
+    """The namespace reads a destroy of `p`'s twin makes now, the namespace absent: one if the twin is unmarked,
+    more if it is settled."""
+    fake.namespaces.pop(NS, None)
+    mark = len(fake.calls)
+    asyncio.run(d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    return namespace_reads(fake, mark)
+
+
+def test_a_destroy_that_found_the_namespace_made_late_and_saw_it_gone_clears_the_mark() -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        fake.at(1.0, lambda: fake.add_namespace(NS, OWNED))
+        await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    assert NS not in fake.namespaces
+    assert second_destroy_reads(d, fake, p) == 1
+
+
+@pytest.mark.parametrize("call", ["delete_namespace", "namespace"])
+def test_a_destroy_that_raises_after_the_settle_keeps_the_mark(call: str) -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        fake.at(1.0, lambda: fake.add_namespace(NS, OWNED))
+        # The settle's read finds the namespace; the failure is the delete's, or the read that waits for it gone.
+        fake.fail[call] = [KubeFailed(f"{call}: the cluster did not answer", None)] if call == "delete_namespace" \
+            else [None, None, None, KubeFailed("namespace: the cluster did not answer", None)]
+        with pytest.raises(DriverFailed):
+            await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    assert second_destroy_reads(d, fake, p) > 1
+
+
+def test_a_destroy_cancelled_during_its_settle_keeps_the_mark() -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        task = asyncio.create_task(d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+        while fake.calls.count(("namespace", NS)) < 2:  # the first read, then the settle's first
+            await asyncio.sleep(0)
+        await cancelled(task)
+
+    bounded(body)
+    assert second_destroy_reads(d, fake, p) > 1
+
+
 def test_exec_runs_the_argument_vector_in_the_nodes_pod_and_answers_a_non_zero_status_as_it_is() -> None:
     fake = FakeKube()
     apply(fake, planned("three-node"))

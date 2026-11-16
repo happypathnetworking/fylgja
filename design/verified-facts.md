@@ -1364,6 +1364,28 @@ was loaded in the run's command.
   running; no network named `clab-`; the same six networks with the same subnets; no line of
   `/etc/hosts` naming `clab-`.
 
+**fylgja-core, phase 10: the live tier whole on the release candidate's code** *(0.81.0, as the
+block above read it, not read again; 2026-11-16)*
+
+`make live`, whole, uninterrupted, at `a1feb33`, the tree clean, timed by `date +%s` and Python's
+clock in the run's own command, the cluster quiet. The script and its log are kept outside the tree
+with the records of phase 10's plan 5, Task 6 (`task-6-live.sh`, `task-6-live.log`); `local/.env`
+was loaded in the run's command.
+
+- **The host before the run**, at 05:45:12Z: no container labelled `containerlab` and none
+  running; no network named `clab-`, and none over the local driver's pool; no `fylgja-twin-*`
+  namespace on the cluster.
+- **`make live` at `a1feb33`: 167 passed, 1 skipped in 3708.35 s** (1:01:48 by pytest, 05:45:14
+  to 06:47:06Z, 3711.4 s by Python's clock), exit 0; 168 tests by collection. `tests/live` 114:
+  `test_object_store_live.py` 61, `test_verify_live.py` 15, `test_changes_live.py` 15,
+  `test_containerlab_driver_live.py` 10, `test_push.py` 9, `test_restore_live.py` 3,
+  `test_many_labs_live.py` 1. The conformance suite on the local harness, 54: `test_lifecycle.py`
+  12, `test_steps.py` 20, `test_step_kills.py` 10, `test_many.py` 5, `test_restore.py` 4,
+  `test_zz_end.py` 2, and `test_isolation.py`'s one skipped, `the driver keeps twins apart by
+  names, not by the network`.
+- **The host after the run**, at 06:47:06Z: as before, no container labelled `containerlab`, none
+  running, no network named `clab-`, and the same networks with the same subnets.
+
 **The dry run**
 
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,
@@ -2888,6 +2910,61 @@ scaled to nothing before the module and back to one after it, by the script.
 - **After the run**: the Deployment scaled back to one replica and rolled out, 1/1 with its one pod
   Running, at 04:55:53Z; no namespace `fylgja-twin-*`; no container labelled `containerlab` on
   the development host.
+
+**fylgja-core, phase 10: the cluster tier and the cluster's conformance suite, each whole, on the
+release candidate's code** *(k3s v1.37.1+k3s1 and clabernetes 0.10.1 as the blocks above read
+them, not read again; 2026-11-16)*
+
+The core's image was built from `a1feb33` and deployed. Then the cluster tier ran whole at
+`a1feb33`, and the conformance suite whole at `f6bcc21`. That commit's `core/src` is
+`a1feb33`'s in code: the one file changed since, `clabernetes/changes.py`, differs only in its
+module docstring, with the same syntax tree once docstrings are stripped. So the deployed image
+ran the suite's code. Each run was one uninterrupted command, timed by `date +%s` and Python's
+clock. The scripts and logs are kept outside the tree with the records of phase 10's plan 5,
+Task 6 (`task-6-image`, `task-6-cluster`, `task-6-conformance3`, each `.sh` and `.log`);
+`local/.env` was loaded in each command. Nothing else ran on the host or the cluster meanwhile,
+and Infrahub and NetBox were down.
+
+- **The image**, 06:47:19 to 06:48:09Z: `make imagecheck` passed, and the image tagged
+  `a1feb33349d1` was pushed to the cluster's registry and rolled out at 1/1. The deployed core's
+  `GET /v1/version` named build `1.0.0rc1 (commit a1feb33349d12d2ef35b5626d7ea3254e78502e2)`,
+  API 1 and every format at 1.
+- **The cluster before the tier**, at 06:48:24Z: no container labelled `containerlab` on the
+  development host; no `fylgja-twin-*` namespace; no Topology; the Deployment at 1/1 on
+  `a1feb33349d1`. The script scaled it to no replica, with no pod left by 06:48:28Z.
+- **`make cluster` at `a1feb33`: 44 passed in 2109.84 s** (35:09 by pytest, 06:48:28 to
+  07:23:42Z, 2114.5 s by Python's clock), exit 0; 44 tests by collection:
+  `test_clabernetes_changes_cluster.py` 14, `test_clabernetes_driver_cluster.py` 9 (`test_8`, the
+  apply cancelled at its namespace's create, among them), `test_restore_cluster.py` 8,
+  `test_kube_cluster.py` 7, `test_lease_cluster.py` 5, `test_capacity_cluster.py` 1.
+- **The cluster after the tier**, at 07:23:50Z: the script's exit trap scaled the Deployment back
+  to one replica and it rolled out, 1/1 on `a1feb33349d1`; no `fylgja-twin-*` namespace; no
+  Topology; no container labelled `containerlab` and no network named `clab-` on the host.
+- **The cluster before the suite**, at 12:01:42Z: no `fylgja-twin-*` namespace and no
+  `fylgja-conformance-probe`; no Topology; the Deployment at 1/1 on `a1feb33349d1`; the
+  namespace's one NetworkPolicy `versity`. On the host: no container running and none labelled
+  `containerlab`, no network named `clab-`, and no Infrahub or NetBox container.
+- **`make conformance DRIVER=clabernetes` at `f6bcc21`: 53 passed, 1 skipped in 4071.71 s**
+  (1:07:51 by pytest, 12:01:45 to 13:09:39Z, 4073.7 s by Python's clock), exit 0; 54 tests by
+  collection. `test_steps.py` 20, `test_lifecycle.py` 12, `test_step_kills.py` 10, `test_many.py`
+  5, `test_restore.py` 3, `test_zz_end.py` 2 and `test_isolation.py` 1 passed.
+  `test_restore.py`'s stopped node was skipped, `a stopped node is not expressible on clabernetes
+  0.10.1`.
+  - The core ran `a1feb33349d1` with `FYLGJA_RESYNC_S` 3600. The suite killed it 18 times, and
+    the next pod answered 21.49 to 23.15 s after each kill. At the end the runtime held nothing
+    and no record named a twin. The core had logged 2506 lines, each one JSON, holding no token
+    or password. `fylgja-conformance-probe` was deleted and read gone 6.1 s after.
+  - The step to the bundle the twin runs took 2.61 s end to end, under `away`'s 5.0 s, with
+    `compile` its only phase.
+  - The walk stepped 22 times, 12 of them adding or removing a node. No line of the recabled
+    node's tolerance ("A recabled node replaced when a step adds or removes a node: a known
+    limit", above) was printed: in this run every node the dry run answered `recabled` kept its
+    incarnation.
+- **The cluster after the suite**, at 13:09:39Z: no `fylgja-twin-*` namespace and no
+  `fylgja-conformance-probe`; no Topology; the Deployment at 1/1 on `a1feb33349d1`, its pod the
+  one the last kill left, Running with no restart; the one NetworkPolicy `versity`. On the host:
+  no container running, none labelled `containerlab`, no network named `clab-`, and no Infrahub
+  or NetBox container.
 
 ---
 

@@ -1,8 +1,8 @@
 """The conformance suite's one tolerance, `reads.readdressed`, and the two calls that clear its mark
 (`reads.created`, `reads.remove`), read over a stub harness: the real functions, imported from
 `conformance.reads` as `test_conformance_scenarios.py` does, which pulls in no fixture and reaches no
-network (the suite's conftest loads only for a collection of `tests/conformance`). The live run of the
-scenarios is its own window; this holds the rule they lean on."""
+network (the suite's conftest touches only its own items). The live run of the scenarios is its own
+window; this holds the rule they lean on."""
 
 from __future__ import annotations
 

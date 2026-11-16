@@ -212,7 +212,9 @@ def test_every_dollar_ended_pattern_refuses_a_text_ending_in_a_newline(
 
 def test_no_pattern_uses_a_class_python_reads_otherwise() -> None:
     # Python's `\d`, `\w` and `\s` take Unicode where ECMA-262's take ASCII or another set, and `\b` follows `\w`;
-    # and each keyword below holds a pattern the extended class would not read.
+    # and each keyword below holds a pattern the extended class would not read. The two asserts after them
+    # hold the same for a pattern written out: ECMA-262's `[]` matches nothing and its `[^]` any character,
+    # where Python reads neither so, and its `.` excludes every line terminator, where Python's omits only `\n`.
     for name, doc in _formats().items():
         for pattern in _patterns(doc):
             assert not re.search(r"\\[dwsbDWSB]", pattern), (name, pattern)

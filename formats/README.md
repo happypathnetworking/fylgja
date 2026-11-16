@@ -169,8 +169,10 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
   rename output for such a kind.
 - **No bootstrap** is needed on either kind or either driver.
 - **`link_apply_mode` and `hot_add_ports`.** `live` re-cables both
-  kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port
-  added after boot. The mode is set at create and never changed: on clabernetes a change
+  kinds with no restart on both drivers, for ports present at boot (on clabernetes a recabled
+  node may still be replaced where a node added or removed since it was made moved its
+  management address: [verified-facts.md](../design/verified-facts.md), "A recabled node
+  replaced when a step adds or removes a node"). cEOS never sees a port added after boot. The mode is set at create and never changed: on clabernetes a change
   replaces the pod of each node whose mode changed.
 - **The twin record holds each node's `incarnation`** (the container's start time, the
   pod's uid and its container's restart count), since a replaced node loses its push and

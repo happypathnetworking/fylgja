@@ -58,7 +58,8 @@ platform package gives.
 The names that [the client library](client.md) gives, and those under "The library" in
 [the Infrahub reader's README](../readers/infrahub/README.md#the-library) and in
 [the NetBox reader's](../readers/netbox/README.md#the-library). A module or a name no page gives is
-not held, and the names [Integrating](integrating.md) gives are the example's, which is not held.
+not held, and the names of the example's code that [Integrating](integrating.md) gives are the
+example's, which is not held.
 
 ## What held means
 

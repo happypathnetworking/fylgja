@@ -326,7 +326,7 @@ phase: the tasks done with their commits, every *ruling*, and the findings defer
 re-cabled with no restart, or `restart`. Set by the platform package, written on each node
 at create, and never changed on a running twin. On clabernetes a re-cabled node may still be
 replaced where a node added or removed since it was made moved its management address
-([the fact](../design/verified-facts.md)).
+([A recabled node replaced when a step adds or removes a node](../design/verified-facts.md)).
 
 **Look** *(orchestrator)* — A dry run of each stage of a change as the twin it would make,
 before a *rehearsal* creates anything: a stage the runtime has no room for, lacks an image

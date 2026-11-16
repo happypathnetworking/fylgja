@@ -9,6 +9,7 @@ own tests. Where a test needs a real server, over TLS, `application` is what it 
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import ssl
@@ -16,11 +17,10 @@ import urllib.parse
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import httpx2
-import jsonschema
 import yaml
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
@@ -56,16 +56,17 @@ def openapi() -> dict[str, Any]:
 
 @cache
 def _registry() -> Registry[Any]:
-    formats = [json.loads(p.read_text()) for p in sorted(schemas.formats_dir().glob("*.schema.json"))]
-    resources = [(contents["$id"], Resource.from_contents(contents)) for contents in formats]
-    resources.append((API_ID, Resource.from_contents(openapi(), default_specification=DRAFT202012)))
-    return Registry().with_resources(resources)
+    """The formats as the core registers them, so that the fake reads a pattern as the core does,
+    and the OpenAPI document as this module reads it."""
+    api = Resource.from_contents(openapi(), default_specification=DRAFT202012)
+    registry: Registry[Any] = schemas._registry("fylgja_core").with_resource(API_ID, api)
+    return registry
 
 
 @cache
 def _validator(parts: tuple[str, ...]) -> Any:
     fragment = "/".join(urllib.parse.quote(p.replace("~", "~0").replace("/", "~1"), safe="~") for p in parts)
-    cls = jsonschema.Draft202012Validator
+    cls = schemas.Validator
     return cls({"$ref": f"{API_ID}#/{fragment}"}, registry=_registry(), format_checker=cls.FORMAT_CHECKER)
 
 
@@ -162,21 +163,80 @@ def check_request(request: httpx.Request) -> tuple[str, str]:
     return template, method
 
 
-def check_response(template: str, method: str, response: httpx.Response | httpx2.Response) -> None:
-    """Assert that an answer is one the operation declares: its status, its media type and,
-    for JSON, its body. A stream's events are checked where they are made (`sse`)."""
-    status = str(response.status_code)
+def _declared(template: str, method: str, status: int) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """The answer an operation declares for a status, and the pointer to it."""
     responses = openapi()["paths"][template][method]["responses"]
-    assert status in responses, f"{method.upper()} {template} declares no {status}"
-    declared = responses[status]
-    base: tuple[str, ...] = ("paths", template, method, "responses", status)
+    assert str(status) in responses, f"{method.upper()} {template} declares no {status}"
+    declared = responses[str(status)]
+    base: tuple[str, ...] = ("paths", template, method, "responses", str(status))
     if "$ref" in declared:
         name = declared["$ref"].rsplit("/", 1)[1]
         declared, base = openapi()["components"]["responses"][name], ("components", "responses", name)
+    return declared, base
+
+
+def check_response(template: str, method: str, response: httpx.Response | httpx2.Response) -> None:
+    """Assert that an answer is one the operation declares: its status, its media type and,
+    for JSON, its body. A stream's events are checked where they are made (`sse`)."""
+    status = response.status_code
+    declared, base = _declared(template, method, status)
     media = response.headers.get("content-type", "").partition(";")[0].strip()
     assert media in declared.get("content", {}), f"{method.upper()} {template} {status} declares no {media}"
     if media != EVENT_STREAM:
         check((*base, "content", media, "schema"), json.loads(response.content))
+
+
+# An answer a later minor release might give (D-105).
+
+LATER = {"member": 1}
+"""The member a widened answer gains, which no format of this release names."""
+
+
+def _objects(value: Any, at: tuple[Any, ...] = ()) -> Iterator[tuple[Any, ...]]:
+    """The path of every object in a document, the document's own first."""
+    if isinstance(value, dict):
+        yield at
+        for key, member in value.items():
+            yield from _objects(member, (*at, key))
+    elif isinstance(value, list):
+        for i, member in enumerate(value):
+            yield from _objects(member, (*at, i))
+
+
+def _at(doc: Any, path: tuple[Any, ...]) -> Any:
+    for part in path:
+        doc = doc[part]
+    return doc
+
+
+def _widen(parts: tuple[str, ...], doc: Any) -> Any:
+    """`doc` with `later` added to every object the schema at `parts` refuses it in, one at a time,
+    so that an object a map of names types, which takes any name, gains nothing."""
+    # A map whose value schema refused `{"member": 1}` would gain a name here, not a member, and
+    # an answer's validator would refuse it rightly; API 1 has no such map today.
+    validator = _validator(parts)
+    refused = []
+    for path in _objects(doc):
+        tried = copy.deepcopy(doc)
+        _at(tried, path)["later"] = LATER
+        if not validator.is_valid(tried):
+            refused.append(path)
+    wider = copy.deepcopy(doc)
+    for path in refused:
+        _at(wider, path)["later"] = LATER
+    return wider
+
+
+def widened(template: str, method: str, status: int, doc: Any) -> Any:
+    """The JSON answer `doc` of an operation with `later` added to every object of it the API's
+    schema for that answer refuses it in: what a later minor release may answer (D-105)."""
+    declared, base = _declared(template, method, status)
+    (media,) = [m for m in declared["content"] if m != EVENT_STREAM]
+    return _widen((*base, "content", media, "schema"), doc)
+
+
+# A stream's events, by the operation that streams them.
+STREAMED = {("/v1/twins/{name}", "get"): "WatchEvent", ("/v1/runs/{run_id}/events", "get"): "Event"}
 
 
 # The fake server.
@@ -185,11 +245,18 @@ def check_response(template: str, method: str, response: httpx.Response | httpx2
 class FakeAPI:
     """Answers each request from the answers given for its method and path, in turn, the last
     one repeated; every request carries the test token. A check that fails is raised and also
-    kept in `failures`, since the CLI turns anything a transport raises into an exit code."""
+    kept in `failures`, since the CLI turns anything a transport raises into an exit code.
 
-    def __init__(self) -> None:
+    `widen` answers as a later minor release may: each answer, once checked, is `widened`, and a
+    stream's every event with it, and kept: an answer in `widened_answers` with its operation, an
+    event in `widened_events` with its component."""
+
+    def __init__(self, *, widen: bool = False) -> None:
         self.requests: list[httpx.Request] = []
         self.failures: list[str] = []
+        self.widen = widen
+        self.widened_answers: list[tuple[str, str, httpx.Response]] = []
+        self.widened_events: list[tuple[str, Any]] = []
         self._answers: dict[tuple[str, str], list[Answer]] = {}
         self.on("GET", "/v1/version", ok(VERSION))
 
@@ -212,7 +279,33 @@ class FakeAPI:
         assert answers, f"no answer for {request.method} {request.url.path}"
         response = (answers.pop(0) if len(answers) > 1 else answers[0])(request)
         check_response(template, method, response)
-        return response
+        return self._widened(template, method, response) if self.widen else response
+
+    def _widened(self, template: str, method: str, response: httpx.Response) -> httpx.Response:
+        """`response` widened: a JSON body as `widened` widens it, a stream's every event as its
+        component; a stream is rewritten as it is read, so a stream cut off is cut off still."""
+        headers = {k: v for k, v in response.headers.items() if k not in ("content-length", "transfer-encoding")}
+        if response.headers.get("content-type", "").startswith(EVENT_STREAM):
+            component = STREAMED[(template, method)]
+
+            def events() -> Iterator[bytes]:
+                for chunk in cast(Iterable[bytes], response.stream):
+                    yield b"".join(self._event_line(component, line) for line in chunk.splitlines(keepends=True))
+
+            return httpx.Response(response.status_code, headers=headers, content=events())
+        doc = widened(template, method, response.status_code, json.loads(response.content))
+        wider = httpx.Response(response.status_code, headers=headers, content=json.dumps(doc).encode())
+        self.widened_answers.append((template, method, wider))
+        return wider
+
+    def _event_line(self, component: str, line: bytes) -> bytes:
+        """A stream's line, an event's data widened as `component`."""
+        if not line.startswith(b"data: "):
+            return line
+        data = line.removeprefix(b"data: ").rstrip(b"\r\n")
+        doc = _widen(("components", "schemas", component), json.loads(data))
+        self.widened_events.append((component, doc))
+        return b"data: " + json.dumps(doc).encode() + line[len(b"data: ") + len(data):]
 
     @property
     def transport(self) -> httpx.MockTransport:

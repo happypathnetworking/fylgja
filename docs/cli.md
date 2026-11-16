@@ -4,7 +4,8 @@
 new blueprint, verifies them, reads what the runtime has room for, and files and compares
 blueprints and bundles. It holds no rule of its own: every check is the server's, and a refusal
 is printed as the server's status, rule and detail. Anything the command does, a program can do
-with the same API.
+with the same API. [What 1.0 holds](compatibility.md) says which of the command's options and exit
+statuses are held across the releases of major version 1.
 
 The command is installed with the package `fylgja-core`. The server it talks to is
 `fylgja-core-server`, a separate command that needs the package's `server` extra. `-h` and `--help`
@@ -95,7 +96,10 @@ the twin runs on; without it the server's default is used, and a step keeps the 
 --no-wait` asks for the deletion and prints the record in the same way.
 
 `twin step --dry-run` writes nothing. It prints what the step would change, node by node and link
-by link, and exits by the verdict of that plan. It cannot be given with `--no-wait`.
+by link, and exits by the verdict of that plan. It cannot be given with `--no-wait`. On the
+clabernetes driver, a node it answers `recabled` may still be replaced, without `--allow-restart`,
+if any step since that node was last made has added or removed a node: that can move its
+management address, and clabernetes then makes its pod anew when its links change.
 
 `twin destroy` waits until the twin is gone, then prints the destroy run. A teardown that leaves
 the twin's record prints it, and the command exits by the destroy run's verdict, 3 when it is

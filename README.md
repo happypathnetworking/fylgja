@@ -7,7 +7,8 @@ renders it, addressed by its contents, with optionally probes, small hosts that 
 through the twin. A twin is that network running on real network operating system images, where a
 change is rehearsed before it reaches production: Fylgja compiles the blueprint to a bundle, runs
 the bundle and pushes each configuration, then steps the twin from one blueprint to another.
-Verify judges the running twin against its bundle, and the probes report the loss a step caused.
+Verify judges the running twin against its bundle, and sends each probe's burst of pings through the
+twin as one of its checks; a step lists each probe's flow, which is not yet run.
 Vendors are data, not code: Nokia SR Linux and Arista EOS, alone or mixed in one twin. Anything
 that writes a blueprint can drive Fylgja, through its API or its command.
 
@@ -52,6 +53,8 @@ make netbox-demo
 
 ## Read on
 
+- [What 1.0 holds](docs/compatibility.md) says what stays the same across the releases of major
+  version 1, and what does not.
 - [The documentation](docs/README.md) lists every page: the server, the command, API 1 and the
   client library.
 - [The Infrahub reader](readers/infrahub/README.md) and

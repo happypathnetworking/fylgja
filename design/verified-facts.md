@@ -1345,6 +1345,74 @@ with the records of phase 10's plan 1, Task 5; `local/.env` was loaded in each r
 - **Not shown:** the tier whole and passing in one run, at either commit; the time of such a
   run; the suite alone on this harness.
 
+**fylgja-core, phase 10: the live changes module with its step planned on admit's answer**
+*(0.81.0, read on the host the same day; 2026-11-16)*
+
+`core/tests/live/test_changes_live.py`'s helper `step` admits each step with the deployment the
+twin holds, plans the target with the allocation that admit answers, and keeps that answer as
+the twin's allocation, as the loop's step does. The script and its log are kept outside the tree
+with the records of phase 10's plan 5, Task 5 (`task-5-live.sh`, `task-5-live.log`); `local/.env`
+was loaded in the run's command.
+
+- **The host before the run**, at 04:40:37Z: no container labelled `containerlab` and none
+  running; no network named `clab-`; of the six networks Docker listed, `host` and `none` with no
+  subnet and four with one each, none inside or over 172.20.0.0/16; no line of `/etc/hosts`
+  naming `clab-`.
+- **`core/tests/live/test_changes_live.py` alone, `-m live`, at `949bfd9`: 15 passed in
+  284.41 s** (04:40:39 to 04:45:25Z), exit 0, the tree clean before the run.
+- **The host after the run**, at 04:45:25Z: no container labelled `containerlab` and none
+  running; no network named `clab-`; the same six networks with the same subnets; no line of
+  `/etc/hosts` naming `clab-`.
+
+**fylgja-core, phase 10: the live tier whole on the release candidate's code** *(0.81.0, as the
+block above read it, not read again; 2026-11-16)*
+
+`make live`, whole, uninterrupted, at `a1feb33`, the tree clean, timed by `date +%s` and Python's
+clock in the run's own command, the cluster quiet. The script and its log are kept outside the tree
+with the records of phase 10's plan 5, Task 6 (`task-6-live.sh`, `task-6-live.log`); `local/.env`
+was loaded in the run's command.
+
+- **The host before the run**, at 05:45:12Z: no container labelled `containerlab` and none
+  running; no network named `clab-`, and none over the local driver's pool; no `fylgja-twin-*`
+  namespace on the cluster.
+- **`make live` at `a1feb33`: 167 passed, 1 skipped in 3708.35 s** (1:01:48 by pytest, 05:45:14
+  to 06:47:06Z, 3711.4 s by Python's clock), exit 0; 168 tests by collection. `tests/live` 114:
+  `test_object_store_live.py` 61, `test_verify_live.py` 15, `test_changes_live.py` 15,
+  `test_containerlab_driver_live.py` 10, `test_push.py` 9, `test_restore_live.py` 3,
+  `test_many_labs_live.py` 1. The conformance suite on the local harness, 54: `test_lifecycle.py`
+  12, `test_steps.py` 20, `test_step_kills.py` 10, `test_many.py` 5, `test_restore.py` 4,
+  `test_zz_end.py` 2, and `test_isolation.py`'s one skipped, `the driver keeps twins apart by
+  names, not by the network`.
+- **The host after the run**, at 06:47:06Z: as before, no container labelled `containerlab`, none
+  running, no network named `clab-`, and the same networks with the same subnets.
+
+**fylgja-core, phase 10: the local harness's suite whole at the fix wave's head** *(0.81.0, as the
+block above read it, not read again; 2026-11-16)*
+
+`make conformance DRIVER=containerlab`, whole, uninterrupted, at `6bf4965`, the tree clean, timed by
+`date +%s` and Python's clock in the run's own command, the cluster quiet. `core/src` at `6bf4965`
+is `a1feb33`'s in code: it differs in one docstring of `clabernetes/changes.py`, the module's syntax
+trees equal with docstrings blanked. The suite's own code is not: an unchanged step held by its
+phases, the walk's tolerance of a re-addressed node and the kill scenarios' share of it came after
+`a1feb33` (`1f9aabd`, `b5743c9`, `6f37a92`). So this run supersedes the conformance half of `make
+live` at `a1feb33`, above, as the local harness's reading of the suite's code. The script and its
+log are kept outside the tree with the records of phase 10's plan 5, Task 11
+(`task-11-conformance-local.sh`, `task-11-conformance-local.log`); `local/.env` was loaded in the
+run's command.
+
+- **The host before the run**, at 14:26:24Z: no container labelled `containerlab` and none running,
+  the development Infrahub and NetBox among them; no network named `clab-`, and none over
+  `172.20.0.0/16`; no `fylgja-twin-*` namespace and no `fylgja-conformance-probe` on the cluster.
+- **`make conformance DRIVER=containerlab` at `6bf4965`: 53 passed, 1 skipped in 2198.71 s**
+  (0:36:38 by pytest, 14:26:27 to 15:03:08Z, 2201.3 s by Python's clock), exit 0; 54 tests by
+  collection. `test_lifecycle.py` 12, `test_steps.py` 20, `test_step_kills.py` 10, `test_many.py` 5,
+  `test_restore.py` 4, `test_zz_end.py` 2, and `test_isolation.py`'s one skipped, `the driver keeps
+  twins apart by names, not by the network`. No line of the walk's tolerance was printed: no
+  recabled node came back anew, and on a core on this host none is tolerated.
+- **The host after the run**, at 15:03:08Z: as before, no container labelled `containerlab`, none
+  running, no network named `clab-`, the same networks with the same subnets, and nothing of a twin
+  on the cluster.
+
 **The dry run**
 
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,
@@ -1533,6 +1601,83 @@ On kind v0.33.0 (below), unless marked; on three k3s hosts in
   - The cEOS image's uncompressed layer is the recorded `sha256:09ab9635…` (cEOS, below).
 - **Memory**, close to local containerlab: about 1.6–2 GiB per SR Linux node and
   0.9–1.5 GiB per cEOS node. *(2026-10-30)*
+- **An apply cancelled at its namespace's create, then destroyed at once.** *(k3s
+  v1.37.1+k3s1, lightkube 1.0.1, 2026-11-16)* On the three k3s hosts, the deployed core
+  scaled to none: `core/tests/cluster/test_clabernetes_driver_cluster.py`'s
+  `test_8_an_apply_cancelled_at_its_namespace_create_then_destroyed_leaves_no_namespace`,
+  eighteen twins of `three-node`, each `apply` cancelled 0, 2, 5, 10, 20 or 50 ms after its
+  Namespace's request was sent (three each; the cancel landed 2.4 to 55.9 ms after the send),
+  then `destroy` asked at once and the namespace read every 0.5 s for 30 s after it returned.
+  - At 0, 2 and 5 ms the Namespace's call was itself cancelled, 2.9 to 8.7 ms after the send.
+    In eight of those nine, `destroy`'s one read, answered 21.2 to 41.7 ms after the send,
+    found no namespace, and `destroy` returned with nothing to delete. In the ninth (5 ms, the
+    call cancelled at 7.8 ms) that read, at 55.1 ms, found the namespace: the API had made what
+    the client cancelled. `destroy` deleted it and read it gone 6.11 s after the send.
+  - At 10, 20 and 50 ms the Namespace's call had returned, 12.7 to 14.8 ms after the send;
+    at 50 ms the NetworkPolicy's and a Secret's had too, by 53.5 ms. `destroy`'s first read
+    found the namespace 55.1 to 94.2 ms after the send, deleted it, and read it gone 6.11 to
+    6.15 s after the send.
+  - No read in any row's 30 s after `destroy` returned found its namespace, and no
+    `fylgja-twin-` namespace stood before the run or after it.
+- **The same, with the driver's settle, forty rows.** *(k3s v1.37.1+k3s1, lightkube 1.0.1,
+  2026-11-16)* The test as above, run again once the driver read a namespace it found absent
+  again every 2 s for 5 s after an `apply` it saw cancelled (`_settle`): three rows each at 0,
+  2, 5, 20 and 50 ms and five each at 6 to 10 ms, every row cut and destroyed, then every row's
+  namespace read every 0.5 s for 30.7 s.
+  - In 27 rows the cancel landed before the Namespace's call returned: the call was cancelled
+    2.7 to 13.4 ms after the send. In 13 (at 20 and 50 ms, and seven of the ten at 9 and 10 ms)
+    the call had returned first, 13.2 to 14.2 ms after the send.
+  - In 21 of the 27 (every row from 5 to 8 ms, and three at 9 and 10 ms, the cancel at 7.5 to
+    12.4 ms) the API made the namespace the client had cancelled. `destroy`'s first read was
+    sent 27.3 to 35.6 ms after the send and found it 44.5 to 59.4 ms after it; in the 13 whose
+    call had returned, sent 35.2 to 72.5 ms and found it 53.6 to 91.2 ms. Each was deleted, and
+    `destroy` returned 6.09 to 6.13 s after it was asked.
+  - In the other six (0 and 2 ms, the cancel at 2.2 to 5.1 ms) `destroy`'s first read was sent
+    10.9 to 22.3 ms after the send and found none, nor did the settle's three reads after it;
+    `destroy` returned 6.05 to 6.07 s after it was asked. No settle read found a namespace the
+    first read had not.
+  - No read of the 30.7 s found any row's namespace, every `apply` ended cancelled, and no
+    `fylgja-twin-` namespace stood before the run or after it.
+- **A recabled node replaced when a step adds or removes a node: a known limit.** *(k3s
+  v1.37.1+k3s1, the core at `a1feb33349d1`, 2026-11-16)* The direct runtime gives each Node a
+  management address in clabernetes' default management `/24` that is a pure function of the namespace's whole set
+  of Nodes. The Nodes are ordered by UID, and each address is `sha256(uid + "\x00" + attempt)`,
+  moving to the next attempt on a collision (`controllers/node/directmanagement.go`,
+  `allocateDirectManagementAddresses` and `hashedPrefixAddress`, read in clabernetes' source at
+  commit `5a23fe7`, which the checkout read tags `v0.10.0`; the 0.10.1 source was not compared).
+  So a node a step adds, with a fresh UID, can take a device's address, and one a step removes
+  can give a displaced device its own address back. The device's certificate Secret then
+  changes. When the device's own Node is next reconciled, because a step changes its links,
+  the pod-retaining path finds that the Deployment no longer conforms and recreates the pod
+  instead. clabernetes reports nothing of this, and the pod comes back with a new uid. That can
+  happen in the step that moved the address or, if the device was kept there, in the next step
+  that recables it, while the node that displaced it stands.
+  - Seen in the clabernetes conformance suite's second run at `1f9aabd` (08:39 to 09:48Z):
+    `n2` of `cf-step`, which the dry run answered `recabled`, came back at a new incarnation in
+    the step to `three-node-probed-moved`, which added and removed nothing (its hosts
+    `recreated`), and again in the step back to `three-node`, which removed the hosts. In the
+    probed-moved step the hosts' clabernetes Nodes went from generation 1 to 2 on the twin
+    `cf-diag`, so they were updated in place and kept their UIDs, and the set of UIDs did not
+    change there. By the allocation, then, `n2`'s address moved at the step before, to
+    `three-node-probed`, where `n2` was kept. That is a derivation: no address was read in that
+    run. Each step's apply took about
+    57.5 s, readied and pushed `n2`, and ended `ok` with verify holding.
+  - Reproduced on `cf-diag` (09:54 to 11:37Z): in the step to `three-node-probed` at 11:30:54Z,
+    `n1` (answered `recabled`) moved to another management address of the `/24`, and its pod
+    went from `e4a49ed2…` to `d8992242…`. The step ended `ok`, verify 19 held.
+  - About 1.3% of the steps that add a probe's two hosts to `three-node`, by simulating the
+    allocation over 40,000 random UID sets. Three of the 56 steps read showed it.
+  - The core handled each case as a replaced node: it readied and pushed the new incarnation,
+    and the step ended `ok` with verify holding. But the dry run had answered `recabled`, so a
+    step without `--allow-restart` restarted that node. The conformance walk
+    (`core/tests/conformance/reads.py`, `walk`) tolerates exactly this on a core reached over
+    the network: in a step that adds or removes a node, or the step after one, a recabled node
+    may come back anew, and is then held as recreated (readied and pushed). The driver's
+    `changes` says so in its docstring. `core/src` changed in no code for it, only in that
+    docstring.
+  - Not verified: that clabernetes takes containerlab's `mgmt-ipv4` on a node as a declared
+    address (the loop above reserves a declared one before allocating the rest), which would
+    let the plan fix each node's address so that an added node could never displace it.
 
 ---
 
@@ -2657,7 +2802,7 @@ core && .venv/bin/pytest -q -rA -m cluster tests/cluster/test_clabernetes_driver
 `local/.env` loaded), from 19:26:31 to 19:30:49Z: **8 passed in 255.63 s**, exit 0, none skipped.
 Its `test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused` (the run's log,
 `task-1-cluster3.log`, names it `…_is_refused_before_any_request`: the test was renamed after the
-run, no line of its body changed) pins what follows ([D-102](decisions.md#d-102)), as the local
+run, by a change of its name alone) pins what follows ([D-102](decisions.md#d-102)), as the local
 driver's block does above ("containerlab 0.79.0"), but the cluster before the run and after the
 module, which were read by hand and are no assertion of the module's.
 
@@ -2772,6 +2917,81 @@ deleted by hand.
   `versity`, the gateway's; the Lease held by that pod, with no annotation. The development host
   held no running container, none labelled `containerlab` and no network named `clab-`.
 - **Not shown:** the tier whole and passing in one run, at any commit; the time of such a run.
+
+**fylgja-core, phase 10: the cluster changes module with its step planned on admit's answer**
+*(k3s v1.37.1+k3s1 and clabernetes 0.10.1 as the block above read them, not read again;
+2026-11-16)*
+
+`core/tests/cluster/test_clabernetes_changes_cluster.py`'s helper `step` admits each step with
+the deployment the twin holds, plans the target with the allocation that admit answers, and keeps
+that answer as the twin's allocation, as the loop's step does. The script and its log are kept
+outside the tree with the records of phase 10's plan 5, Task 5 (`task-5-cluster.sh`,
+`task-5-cluster.log`); `local/.env` was loaded in the run's command, and the deployed core was
+scaled to nothing before the module and back to one after it, by the script.
+
+- **Before the run**, at 04:45:38Z: no container labelled `containerlab` on the development host;
+  no namespace `fylgja-twin-*`; the Deployment `fylgja-core` at 1/1. Scaled to no replica at
+  04:45:39Z, it had no pod at 04:45:42Z.
+- **`core/tests/cluster/test_clabernetes_changes_cluster.py` alone, `-m cluster`, at `949bfd9`:
+  14 passed in 602.05 s** (04:45:42 to 04:55:45Z), exit 0, the tree clean before the run.
+- **After the run**: the Deployment scaled back to one replica and rolled out, 1/1 with its one pod
+  Running, at 04:55:53Z; no namespace `fylgja-twin-*`; no container labelled `containerlab` on
+  the development host.
+
+**fylgja-core, phase 10: the cluster tier and the cluster's conformance suite, each whole, on the
+release candidate's code** *(k3s v1.37.1+k3s1 and clabernetes 0.10.1 as the blocks above read
+them, not read again; 2026-11-16)*
+
+The core's image was built from `a1feb33` and deployed. Then the cluster tier ran whole at
+`a1feb33`, and the conformance suite whole at `f6bcc21`. That commit's `core/src` is
+`a1feb33`'s in code: the one file changed since, `clabernetes/changes.py`, differs only in its
+module docstring, with the same syntax tree once docstrings are stripped. So the deployed image
+ran the suite's code. Each run was one uninterrupted command, timed by `date +%s` and Python's
+clock. The scripts and logs are kept outside the tree with the records of phase 10's plan 5,
+Task 6 (`task-6-image`, `task-6-cluster`, `task-6-conformance3`, each `.sh` and `.log`);
+`local/.env` was loaded in each command. Nothing else ran on the host or the cluster meanwhile,
+and Infrahub and NetBox were down.
+
+- **The image**, 06:47:19 to 06:48:09Z: `make imagecheck` passed, and the image tagged
+  `a1feb33349d1` was pushed to the cluster's registry and rolled out at 1/1. The deployed core's
+  `GET /v1/version` named build `1.0.0rc1 (commit a1feb33349d12d2ef35b5626d7ea3254e78502e2)`,
+  API 1 and every format at 1.
+- **The cluster before the tier**, at 06:48:24Z: no container labelled `containerlab` on the
+  development host; no `fylgja-twin-*` namespace; no Topology; the Deployment at 1/1 on
+  `a1feb33349d1`. The script scaled it to no replica, with no pod left by 06:48:28Z.
+- **`make cluster` at `a1feb33`: 44 passed in 2109.84 s** (35:09 by pytest, 06:48:28 to
+  07:23:42Z, 2114.5 s by Python's clock), exit 0; 44 tests by collection:
+  `test_clabernetes_changes_cluster.py` 14, `test_clabernetes_driver_cluster.py` 9 (`test_8`, the
+  apply cancelled at its namespace's create, among them), `test_restore_cluster.py` 8,
+  `test_kube_cluster.py` 7, `test_lease_cluster.py` 5, `test_capacity_cluster.py` 1.
+- **The cluster after the tier**, at 07:23:50Z: the script's exit trap scaled the Deployment back
+  to one replica and it rolled out, 1/1 on `a1feb33349d1`; no `fylgja-twin-*` namespace; no
+  Topology; no container labelled `containerlab` and no network named `clab-` on the host.
+- **The cluster before the suite**, at 12:01:42Z: no `fylgja-twin-*` namespace and no
+  `fylgja-conformance-probe`; no Topology; the Deployment at 1/1 on `a1feb33349d1`; the
+  namespace's one NetworkPolicy `versity`. On the host: no container running and none labelled
+  `containerlab`, no network named `clab-`, and no Infrahub or NetBox container.
+- **`make conformance DRIVER=clabernetes` at `f6bcc21`: 53 passed, 1 skipped in 4071.71 s**
+  (1:07:51 by pytest, 12:01:45 to 13:09:39Z, 4073.7 s by Python's clock), exit 0; 54 tests by
+  collection. `test_steps.py` 20, `test_lifecycle.py` 12, `test_step_kills.py` 10, `test_many.py`
+  5, `test_restore.py` 3, `test_zz_end.py` 2 and `test_isolation.py` 1 passed.
+  `test_restore.py`'s stopped node was skipped, `a stopped node is not expressible on clabernetes
+  0.10.1`.
+  - The core ran `a1feb33349d1` with `FYLGJA_RESYNC_S` 3600. The suite killed it 18 times, and
+    the next pod answered 21.49 to 23.15 s after each kill. At the end the runtime held nothing
+    and no record named a twin. The core had logged 2506 lines, each one JSON, holding no token
+    or password. `fylgja-conformance-probe` was deleted and read gone 6.1 s after.
+  - The step to the bundle the twin runs took 2.61 s end to end, under `away`'s 5.0 s, with
+    `compile` its only phase.
+  - The walk stepped 22 times, 12 of them adding or removing a node. No line of the recabled
+    node's tolerance ("A recabled node replaced when a step adds or removes a node: a known
+    limit", above) was printed: in this run every node the dry run answered `recabled` kept its
+    incarnation.
+- **The cluster after the suite**, at 13:09:39Z: no `fylgja-twin-*` namespace and no
+  `fylgja-conformance-probe`; no Topology; the Deployment at 1/1 on `a1feb33349d1`, its pod the
+  one the last kill left, Running with no restart; the one NetworkPolicy `versity`. On the host:
+  no container running, none labelled `containerlab`, no network named `clab-`, and no Infrahub
+  or NetBox container.
 
 ---
 
@@ -6264,6 +6484,45 @@ scanned. No purge was made, so the time from new volumes was not read. *(2026-11
   held; a `make infrahub-demo` that fails at a step or ends with a verdict other than `passed`; the earlier proposed
   change's check left open while a second run seeds, the seed having removed it. *(2026-11-14)*
 
+**The database's health check on kept volumes, before and after its start period was given 180 s** *(Infrahub
+1.11.11, its database `neo4j:2026.05.0-community`, Docker 29.8.1, Docker Compose v5.6.0, the tree at `9466bf1` and then
+with the override's mend, 2026-11-16)*. Read on 2026-11-16 on the development host, for phase 10's plan 5's Task 7: six
+`make infrahub-up` from the plan's worktree with the main checkout's `local/`, each from stopped on the volumes kept
+since phase 8, each followed by `make infrahub-down` with no `PURGE`; no containerlab container, no `clab-` network and
+NetBox stopped throughout, Infrahub stopped before the first, its last stop 47 hours before. For the third start on, a
+poller of the reading's own read the database's `docker inspect` every 0.5 s from its container's next start, and
+printed each probe of `.State.Health.Log` once, with its exit code. Docker's own `health_status` events were read after
+each start too, but by the time the second start's were read its event buffer had rolled past them, and it emits none
+where the status a stopped container kept is the one it reaches. Each time below is from the container's `StartedAt`
+to Neo4j's first `Started.` line, by `docker logs --timestamps`, and to the end of the first passing probe, by Docker's
+timestamps, each a derivation; each target's time is by the host's clock, read by Python. Every output was saved.
+*(2026-11-16)*
+
+- **The published check:** `wget -O /dev/null http://localhost:7474`, every 2 s, timeout 10 s, 20 retries, start period
+  3 s, as `docker inspect --format '{{json .Config.Healthcheck}}'` read it. *(2026-11-16)*
+- **Three starts with it.** The first, after 47 hours stopped, failed: Compose said `dependency failed to start:
+  container fylgja-core-infrahub-database-1 is unhealthy` at the target's first and second asks, and the target exited
+  1, make 2, in 49.3 s; Docker said `health_status: unhealthy` 43.9 s after the start, `FailingStreak` 21, and
+  `health_status: healthy` 54.3 s after it, once the target had ended; Neo4j said `Started.` 53.8 s after it. The
+  second and third exited 0 at their first ask, in 109.3 s and 90.8 s, `Infrahub 1.11.11 answered at
+  http://127.0.0.1:8000 78 s` and `62 s after Compose's start returned`, the database `healthy`, `FailingStreak` 0, at
+  the end; Neo4j said `Started.` 27.7 s and 26.1 s after the start, and the third's first passing probe ended 26.6 s
+  after it, eleven having failed before it; the second's was not read. So one start in three failed, as the start of
+  51.6 s on 2026-11-13 did. *(2026-11-16)*
+- **Three starts with `start_period: 180s`** in `infrahub/dev/compose.override.yml`, which Docker then read as
+  `"StartPeriod":180000000000` with the published probe, interval, timeout and retries. The first recreated the
+  database's container, Compose saying `Recreate` and `Recreated`, on the same named volumes. Each exited 0 at its
+  first ask, Compose said no failed dependency, and the database was `healthy`, `FailingStreak` 0, at the end: in
+  102.0 s, 92.5 s and 93.1 s, answering 60 s, 62 s and 63 s after Compose's start returned; Neo4j said `Started.`
+  32.7 s, 26.8 s and 27.0 s after the start, and the first passing probe ended 36.5 s, 27.1 s and 27.4 s after it,
+  after 6, 4 and 4 probes failed. Within the start period the probes came about 5 s apart, not 2 s, which is Docker's
+  own `start_interval` default: so a database's first passing probe may come up to about 5 s after its `Started.`.
+  *(2026-11-16)*
+- **The stops:** each `make infrahub-down` exited 0, in 12.2 s (the failed start's, no server having started), 21.4 s,
+  45.5 s, 16.4 s, 45.6 s and 46.1 s, leaving the project's five volumes. *(2026-11-16)*
+- **Not read:** a start on new volumes (Task 13's); what made the first start after 47 hours twice as slow as the next
+  ones; a start near 180 s, which none came near; the second start's first passing probe. *(2026-11-16)*
+
 ---
 
 ## Prefect 3.9.2
@@ -8968,6 +9227,28 @@ The timing is one run. *(2026-11-09)*
   jsonschema-specifications 2023.7.1, rpds-py 2026.9.1, sniffio 1.3.1 and typing-extensions
   4.16.0: the 2026-11-09 list's transitive set for the base (jsonschema-specifications
   2023.7.1 and sniffio as there), and no other version differed. No floor moved.
+- **A `pattern`'s `$` under jsonschema** *(2026-11-15)*, with Python 3.14.4 on the development
+  host, each reading run once: in the core's environment (jsonschema 4.26.0, referencing 0.37.0)
+  and in a scratch environment outside the tree made by `uv venv`, holding jsonschema 4.18.0 and
+  referencing 0.28.4 installed by `uv pip install` (with jsonschema-specifications 2023.7.1).
+  At both, `Draft202012Validator({"pattern": "^a$"}).is_valid("a\n")` was `True`;
+  `jsonschema.validators.extend` was there, and the class it made from `Draft202012Validator`
+  with a `pattern` that reads `$` as `\Z` answered `False` for `"a\n"` and `True` for `"a"`;
+  `validator_for` of each of the thirteen `formats/*.schema.json` answered
+  `Draft202012Validator`. At both, the extended class given `{"$ref": …}` to a resource
+  holding `"$schema"` (draft 2020-12) and `"pattern": "^a$"` answered `True` for `"a\n"`, and
+  `False` where the same resource was made by `DRAFT202012.create_resource` without
+  `$schema`: the source of each shows `evolve`, which `descend` calls on every subschema,
+  making its validator by `validator_for(schema, default=cls)`. In the core's environment,
+  before the registry's resources were made without `$schema`,
+  `api_body_validator("/v1/blueprints", "post")` took a device name ending in a newline. With
+  the mend, `core/tests/test_schemas.py`,
+  `test_bundle.py`, `test_findings.py` and `test_twin_record.py` (48 tests) passed at the
+  floor over the tree's source (`PYTHONPATH=src:tests`), beside pytest 9.2.0 and rfc8785
+  0.1.4. In `formats/` no file holds `patternProperties`, `propertyNames` or
+  `unevaluatedProperties`, and no `pattern` holds `\d`, `\w`, `\s` or `\b` (the one `\w` is
+  in a description's text); 31 patterns end in `$`, in eleven formats, and `api-1.openapi.yaml`
+  holds no `pattern`.
 
 ## uv 0.12.23
 

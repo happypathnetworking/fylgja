@@ -14,7 +14,12 @@ neither allocation holds is written under none; a probe package runs a `linux` n
 image, likewise. The rules, and the facts each is written from:
 
 - A link change under the `live` mode re-cables and keeps the pod, `recabled`: no pod was
-  replaced ("Steps", and "Steps across hosts").
+  replaced ("Steps", and "Steps across hosts"). clabernetes may still replace such a node in a
+  step that adds or removes a node, or in the next step that recables it, while the node that
+  displaced it stands: its management address is drawn from the namespace's whole set of nodes,
+  and when the address moves, the node's pod is made anew once its links change ("A recabled
+  node replaced when a step adds or removes a node: a known limit"). The answer stays `recabled`,
+  as nothing in either deployment tells which addresses move.
 - A link change under the `restart` mode replaces the link's pods ("Steps": `restart` and
   `recreate` each replaced the link's cEOS pods). It is `restarted`, the seam's word for a
   link change under that mode, and `restarts()` covers it as it covers `recreated`.

@@ -24,13 +24,13 @@ from fake_netbox import FakeNetBox
 from fylgja_core import documents as core_documents
 from fylgja_core import release, ulid
 from fylgja_core.blueprint import blueprint_id
-from fylgja_core.client import ProblemError
+from fylgja_core.client import Client, ProblemError
 from fylgja_core.findings import Finding
 from fylgja_core.problem import ProblemDocument
 from fylgja_infrahub import InfrahubError, document
 from fylgja_netbox import NetBoxError, Result
 from fylgja_netbox import document as netbox_document
-from harness import ROOT, Clock, Served, Wrapped
+from harness import ALICE, ROOT, Clock, Served, Widening, Wrapped
 from sources import CHANGE, FIVE, SCOPE, FakeSource, empty, refused
 
 from fylgja_orchestrator import netbox
@@ -174,6 +174,20 @@ def test_twin_create_and_step_print_the_twin_its_stage_its_blueprint_and_the_ver
     assert (code, out) == (1, "demo: no stage, no blueprint, no run\n")
     assert err == f"error step.target.unknown demo: {CHANGE.where} has no stage nowhere.\n"
     assert opened.closed() == (True, 3)
+
+
+def test_twin_create_through_a_core_whose_answers_gain_a_member_prints_as_before(
+    opened: Opened, served: Served, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    widening = Widening()
+    with Client(served.address, ALICE, transport=widening) as wider:
+        opened.core = Wrapped(wider)
+        opened.core.close = lambda: opened.core_closed.append(None)  # type: ignore[method-assign]
+        code, out, err = called(capsys, ["twin", "create", "--branch", CHANGE.ref, "--twin", "demo"], environ(tmp_path))
+    twin, _ = served.other.get_twin("demo")
+    assert (code, out) == (0, f"demo: stage seeded, blueprint {twin['status']['blueprint_id']}, run ok\n")
+    assert err.splitlines()[0] == "create: stage 2, seeded, as demo"
+    assert widening.widened["verdicts"] > 0
 
 
 def test_stage_plan_exits_by_the_documents_status(

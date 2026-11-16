@@ -183,7 +183,7 @@ def on_github(path: str, ours: set[str]) -> bool:
 
 def test_the_override_holds_no_value_and_no_host() -> None:
     """The Compose override is two read-only mounts, their sources set by `infrahub_dev.py`, the edge's Prefect's
-    address and basic auth with the host's name they reach it by, and Neo4j's cap."""
+    address and basic auth with the host's name they reach it by, Neo4j's cap and its health check's start period."""
     override = yaml.safe_load((INFRAHUB / "dev" / "compose.override.yml").read_text())
     assert override == {
         "services": {
@@ -204,9 +204,27 @@ def test_the_override_holds_no_value_and_no_host() -> None:
                     "NEO4J_server_memory_heap_max__size": "2g",
                     "NEO4J_server_memory_pagecache_size": "1g",
                 },
+                "healthcheck": {"start_period": "180s"},
             },
         },
     }
+
+
+NEO4J_SLOWEST_START_S = 53.8
+"""The slowest start of the development database read on kept volumes, from its container's start to Neo4j's
+`Started.`, under Infrahub 1.11.11: 51.6 s on 2026-11-13; 53.8 s, 27.7 s and 26.1 s from stopped on 2026-11-16, the
+first of them after 47 hours stopped (design/verified-facts.md, "Infrahub 1.11.11")."""
+
+
+def test_the_databases_health_check_waits_for_a_start_on_kept_volumes() -> None:
+    """Infrahub's published check probes every 2 s, 20 retries after a 3 s start period, and called the database
+    unhealthy 43.9 s into the start of 53.8 s, which `make infrahub-up` then failed twice. The override's start period,
+    180 s, is about 3.3 times that slowest start, and is there to tell a database still starting from one that will
+    not. It sets the period alone: the probe, its interval and its retries stay the published file's."""
+    override = yaml.safe_load((INFRAHUB / "dev" / "compose.override.yml").read_text())
+    assert override["services"]["database"]["healthcheck"] == {"start_period": "180s"}
+    start_period_s = float(override["services"]["database"]["healthcheck"]["start_period"].removesuffix("s"))
+    assert start_period_s >= 3 * NEO4J_SLOWEST_START_S
 
 
 def test_pypi_is_a_public_reference_in_the_lock_alone() -> None:

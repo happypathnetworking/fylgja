@@ -10,7 +10,8 @@ third is written to be read once and replaced: it is honest on its main path and
 failures, and it is not hardened.
 
 The page walks through the example and says, at each part, which files to read and what you
-would write in their place. The terms are in the [glossary](glossary.md).
+would write in their place. The terms are in the [glossary](glossary.md). The names this page gives
+of the example's code are the example's and are not held ([what 1.0 holds](compatibility.md)).
 
 ## What you take unchanged
 

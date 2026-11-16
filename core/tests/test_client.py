@@ -43,6 +43,8 @@ from fake_api import (
     Answer,
     FakeAPI,
     application,
+    check_component,
+    check_response,
     cut,
     event_stream,
     last_step,
@@ -56,6 +58,7 @@ from fake_api import (
     untrusted,
     verification,
     watch,
+    widened,
 )
 
 from fylgja_core import documents, drivers, schemas
@@ -1250,3 +1253,102 @@ def test_an_exception_progress_raises_leaves_follow(
     assert said == [line]
     assert api.calls() == [f"GET {TWIN_PATH}"]  # no run is read
     assert [r.is_closed for r in responses] == [True]  # the watch closed behind it
+
+
+# An answer wider by a member (D-105).
+
+
+def _known(value: Any) -> Any:
+    """What a call answered, with every member a widened answer gained left out."""
+    if isinstance(value, Followed):
+        return Followed(_known(value.record), _known(value.run), value.gone)
+    if isinstance(value, dict):
+        return {k: _known(v) for k, v in value.items() if k != "later"}
+    if isinstance(value, list | tuple):
+        return type(value)(_known(v) for v in value)
+    return value
+
+
+def _answered(call: Callable[[Client], Any], c: Client) -> Any:
+    """What a call answered, as a list where it yields; a refusal as its status and problem."""
+    try:
+        result = call(c)
+        return list(result) if isinstance(result, types.GeneratorType) else result
+    except ProblemError as e:
+        return e.status, e.problem
+
+
+DIFF = {"from": BUNDLE_ID, "to": "b" * 64, "unchanged": True, "nodes": {"added": [], "removed": [], "changed": []},
+        "links": {"added": [], "removed": []}, "probes": {"added": [], "removed": []}}
+BUNDLE_FAULTS = [Finding(rule="platform.unsupported", severity="error", object="n1", message="No such platform.")]
+
+# Each public call of `Client`: what the fake answers it, and the call.
+EVERY_CALL: list[tuple[str, Callable[[FakeAPI], FakeAPI], Callable[[Client], Any]]] = [
+    ("version", lambda api: api, lambda c: c.version()),
+    ("put_blueprint", lambda api: api.on("POST", "/v1/blueprints", ok({"id": BLUEPRINT_ID}, 201, {
+        "Location": f"/v1/blueprints/{BLUEPRINT_ID}"})), lambda c: c.put_blueprint(BLUEPRINT)),
+    ("get_blueprint", lambda api: api.on("GET", f"/v1/blueprints/{BLUEPRINT_ID}", ok(BLUEPRINT)),
+     lambda c: c.get_blueprint(BLUEPRINT_ID)),
+    ("build_bundle", lambda api: api.on("POST", "/v1/bundles", ok(COMPILE_RESULT, 201, {
+        "Location": f"/v1/bundles/{BUNDLE_ID}"})), lambda c: c.build_bundle(BLUEPRINT_ID)),
+    ("get_bundle", lambda api: api.on("GET", f"/v1/bundles/{BUNDLE_ID}", ok(BUNDLE)),
+     lambda c: c.get_bundle(BUNDLE_ID)),
+    ("diff_bundles", lambda api: api.on("GET", f"/v1/bundles/{BUNDLE_ID}/diff/{'b' * 64}", ok(DIFF)),
+     lambda c: c.diff_bundles(BUNDLE_ID, "b" * 64)),
+    ("list_drivers", lambda api: api.on("GET", "/v1/drivers", ok(DRIVERS)), lambda c: c.list_drivers()),
+    ("capacity", lambda api: api.on("GET", "/v1/capacity", ok(CAPACITY)), lambda c: c.capacity()),
+    ("list_twins", lambda api: api.on("GET", "/v1/twins", ok({"twins": [record(), READY]})), lambda c: c.list_twins()),
+    ("get_twin", lambda api: api.on("GET", TWIN_PATH, ok(READY, headers={"ETag": '"4"'})), lambda c: c.get_twin(TWIN)),
+    ("apply_twin", lambda api: api.on("PUT", TWIN_PATH, ok(record(run_id=RUN_ID), 201, {
+        "Location": TWIN_PATH, "ETag": '"1"'})), lambda c: c.apply_twin(TWIN, SPEC, if_none_match="*")),
+    ("apply_twin-dry-run", lambda api: api.on("PUT", TWIN_PATH, ok(step_plan("rejected"))),
+     lambda c: c.apply_twin(TWIN, SPEC, dry_run=True)),
+    ("delete_twin", lambda api: api.on("DELETE", TWIN_PATH, ok(DELETING, 202)), lambda c: c.delete_twin(TWIN)),
+    ("watch_twin", lambda api: api.on("GET", TWIN_PATH, watch(COMPILED, READY, deleted=True)),
+     lambda c: c.watch_twin(TWIN, since_revision=1)),
+    ("follow", lambda api: api.on("GET", TWIN_PATH, watch(COMPILED, READY)).on("GET", RUN_PATH, ok(run())),
+     lambda c: c.follow(record(run_id=RUN_ID), ("create",))),
+    ("list_runs", lambda api: api.on("GET", "/v1/runs", ok({"runs": [run(), run(state="running")]})),
+     lambda c: c.list_runs(twin=TWIN)),
+    ("get_run", lambda api: api.on("GET", RUN_PATH, ok(run(status="failed", findings=[PUSH_REFUSED]))),
+     lambda c: c.get_run(RUN_ID)),
+    ("run_events", lambda api: api.on("GET", EVENTS_PATH, ok({"events": EVENTS, "next": 3, "ended": True})),
+     lambda c: c.run_events(RUN_ID)),
+    ("watch_run", lambda api: api.on("GET", EVENTS_PATH, event_stream(*EVENTS)), lambda c: c.watch_run(RUN_ID)),
+    ("cancel_run", lambda api: api.on("POST", f"{RUN_PATH}/cancel", ok(run(state="cancelling"), 202)),
+     lambda c: c.cancel_run(RUN_ID)),
+    ("verify_twin", lambda api: api.on("POST", f"{TWIN_PATH}/verifications", ok(verification(
+        "nonconforming", [NOT_HELD], (6, 1, 0)))), lambda c: c.verify_twin(TWIN)),
+    ("refused", lambda api: api.on("GET", TWIN_PATH, NOT_FOUND), lambda c: c.get_twin(TWIN)),
+    ("refused-with-findings", lambda api: api.on("POST", "/v1/bundles", refuse(
+        422, "bundle.rejected", "The blueprint does not compile.", BUNDLE_FAULTS)),
+     lambda c: c.build_bundle(BLUEPRINT_ID)),
+]
+
+
+@pytest.mark.parametrize(("arrange", "call"), [row[1:] for row in EVERY_CALL], ids=[row[0] for row in EVERY_CALL])
+def test_every_call_reads_an_answer_wider_by_a_member_at_each_object(
+    arrange: Callable[[FakeAPI], FakeAPI], call: Callable[[Client], Any]
+) -> None:
+    plain = _answered(call, connect(arrange(FakeAPI())))
+    api = arrange(FakeAPI(widen=True))
+    assert _known(_answered(call, connect(api))) == plain
+    assert api.failures == []
+    # The helper is not blind: it widened what the call read, and every widened answer is one this release's
+    # schema refuses.
+    assert api.widened_answers
+    for template, method, response in api.widened_answers:
+        assert "later" in response.json()
+        with pytest.raises(AssertionError):
+            check_response(template, method, response)
+    for component, doc in api.widened_events:
+        assert "later" in doc
+        with pytest.raises(AssertionError):
+            check_component(component, doc)
+
+
+def test_a_widened_answer_gains_nothing_in_a_map_of_names() -> None:
+    # A deployment's allocation is typed by its additionalProperties, so it takes the member as one more name.
+    plan = widened("/v1/twins/{name}", "put", 200, step_plan("rejected"))
+    assert plan["later"] == plan["deployment"]["later"] == plan["verdict"]["findings"][0]["later"]
+    assert "later" not in plan["deployment"]["allocation"]

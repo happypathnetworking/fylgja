@@ -43,3 +43,12 @@ def decode(doc: Any) -> ProblemDocument:
     if problems:
         raise Rejected(problems)
     return documents.decode(ProblemDocument, doc)
+
+
+def decode_answer(doc: Any) -> ProblemDocument:
+    """The `ProblemDocument` the core answered, or `Rejected` with every problem: as `decode`, but a
+    member the schema does not name is passed over, since a later minor release may add one (D-105)."""
+    problems = documents.answer_problems("problem-1", doc, RULE_INVALID)
+    if problems:
+        raise Rejected(problems)
+    return documents.decode(ProblemDocument, doc)

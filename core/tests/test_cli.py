@@ -1174,3 +1174,28 @@ def test_twin_verify_of_a_twin_not_running_is_a_problem_exit_2(capsys: pytest.Ca
                        refuse(409, "twin.not_running", f"Twin {TWIN} has no applied deployment to read."))
     assert fylgja(capsys, api, "twin", "verify", TWIN) == Result(
         2, "", f"409 twin.not_running: Twin {TWIN} has no applied deployment to read.\n")
+
+
+# An answer wider by a member (D-105).
+
+WIDER_BY_A_MEMBER: list[tuple[str, Any, list[str]]] = [
+    ("step-dry-run", lambda api: api.on("PUT", TWIN_PATH, ok(step_plan("rejected"))),
+     ["twin", "step", TWIN, "--bundle", STEP_TO, "--dry-run"]),
+    ("verify", lambda api: api.on("POST", f"{TWIN_PATH}/verifications",
+                                  ok(verification("nonconforming", [NOT_HELD], (6, 1, 0)))),
+     ["twin", "verify", TWIN]),
+    ("create", lambda api: creating(api, record(2, 1, 0, phase="compiled", run_id=RUN_ID), READY, status="failed"),
+     ["twin", "create", TWIN, "--bundle", BUNDLE_ID, "--driver", "containerlab"]),
+]
+
+
+@pytest.mark.parametrize(("arrange", "argv"), [row[1:] for row in WIDER_BY_A_MEMBER],
+                         ids=[row[0] for row in WIDER_BY_A_MEMBER])
+def test_a_verdict_wider_by_a_member_prints_as_before(
+    capsys: pytest.CaptureFixture[str], arrange: Any, argv: list[str]
+) -> None:
+    plain = fylgja(capsys, arrange(FakeAPI()), *argv)
+    api = arrange(FakeAPI(widen=True))
+    wide = fylgja(capsys, api, *argv)
+    assert (wide.code, wide.out, wide.err) == (plain.code, plain.out, plain.err)
+    assert plain.code == 1 and api.widened_answers

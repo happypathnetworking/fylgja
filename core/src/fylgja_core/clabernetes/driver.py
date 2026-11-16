@@ -132,6 +132,12 @@ the controller writes what a replaced pod is made from was not read. Two reads `
 cannot both fall in that window while it stays narrower than `POLL_S`; it was read only on a
 lightly loaded cluster."""
 
+SETTLE_WINDOW_S = 5.0
+"""How long `destroy`, after an `apply` of the twin it saw cancelled, reads again every `poll_s` a
+namespace it first found absent (`_settle`): the API may still make the Namespace whose request
+the cancel cut. The local driver's settle window. On the cluster (verified-facts.md, "clabernetes
+0.10.1", 2026-11-16) a create the client had cancelled was made by 55.1 ms after its send."""
+
 SECRET_NAME_MAX = 253
 """The longest name a Secret may have: a DNS-1123 subdomain's."""
 
@@ -196,6 +202,10 @@ class ClabernetesDriver:
         self.sleep = sleep
         self.poll_s = poll_s
         self._backoff = backoff
+        # The twins whose `apply` this driver saw cancelled and whose namespace no `destroy` has since seen gone
+        # (`_settle`). In memory alone, a known limit: a core restarted loses the mark, and its next destroy of
+        # such a twin reads the namespace once.
+        self._cancelled: set[str] = set()
         # Each node's renewals by `events`, (twin, node) to their times on `clock` within `RENEWAL_WINDOW_S`, a key
         # dropped when it is next read with every time past the window; and each pod left at a restart once the bound
         # was reached, (twin, uid, restart), so it is logged once. Both are kept while the twin is: `destroy` drops the
@@ -433,11 +443,39 @@ class ClabernetesDriver:
         before until the controller's pass, and for about 0.14 s after the pass that observes a
         new generation, every old pod still `Ready`; and a node being replaced keeps its old pod,
         deleting and `Ready`, for a while. The budget run out in either is `DriverFailed` naming
-        what is not ready; a cancel stops it where it is."""
+        what is not ready; a cancel stops it where it is. A cancel is remembered for the twin's next
+        `destroy`, which reads again a namespace it finds absent (`_settle`), since the API may still
+        make what the cancelled request asked; an `apply` of the twin that returns forgets it. The mark
+        is held in memory alone and lost when the core restarts, a known limit. Only a cancel marks:
+        a create cut by a transport failure (a `KubeFailed` from a timeout, an `OSError` after the
+        send) is not, though the API may likewise still make it: a gap accepted, as a transport
+        failure is not known to have sent the create at all, and marking every failed apply would
+        make each destroy of a twin that never reached the cluster wait out `SETTLE_WINDOW_S`."""
         namespace = _checked(deployment, files)
         twin = deployment.twin
         documents = {path: _document(path, data) for path, data in sorted(files.items())}
         _bound(documents, namespace, twin)
+        try:
+            await self._apply_checked(deployment, files, platforms, probe_packages, reconfigure, namespace, documents)
+        except asyncio.CancelledError:
+            # A request the cancel cut may still be made by the API: the twin's next destroy settles (`_settle`).
+            # Not marked: a create cut by a transport failure, which is no cancel (see `apply`).
+            self._cancelled.add(twin)
+            raise
+        self._cancelled.discard(twin)  # an apply that returned made the namespace: a destroy finds it at once
+
+    async def _apply_checked(
+        self,
+        deployment: Deployment,
+        files: Mapping[str, bytes],
+        platforms: Mapping[str, PlatformPackage],
+        probe_packages: Mapping[str, ProbePackage],
+        reconfigure: bool,
+        namespace: str,
+        documents: Mapping[str, dict[str, Any]],
+    ) -> None:
+        """`apply`'s requests and waits, its arguments checked."""
+        twin = deployment.twin
         registries: Mapping[str, str] = deployment.allocation["registries"]
         budget = deploy_budget(files, platforms, probe_packages, registries)
         deadline = self.clock() + budget
@@ -560,7 +598,11 @@ class ClabernetesDriver:
         the Topology, in its order, that no given package runs: the destroy's budget is its
         packages', so the namespace is left as it is (D-102).
 
-        A namespace absent is nothing done. One that is not the twin's is logged at WARNING and
+        A namespace absent is nothing done; after an `apply` of the twin this driver saw cancelled,
+        it is first read again every `poll_s` for `SETTLE_WINDOW_S` (`_settle`), and one that
+        appears is deleted as below. The cancel is forgotten once the namespace is read absent at
+        the end, or gone, and kept when this raises or is cancelled; it is held in memory alone and
+        lost when the core restarts, a known limit. One that is not the twin's is logged at WARNING and
         left: the driver never deletes it. One already being deleted is not asked again. The
         namespace is read every `poll_s` until it is gone; once the destroy's budget has passed
         (`destroy_budget`) it is `DriverFailed`, the loop's to retry. With the twin gone, what
@@ -571,8 +613,11 @@ class ClabernetesDriver:
         budget = destroy_budget(files, platforms, probe_packages, deployment.allocation["registries"])
         deadline = self.clock() + budget
         found = await self.kube.namespace(namespace)
+        if found is None and twin in self._cancelled:
+            found = await self._settle(twin, namespace)
         if found is None:
             _log.info("destroy %s: the namespace %s is absent: nothing to delete", twin, namespace)
+            self._cancelled.discard(twin)
             self._forget(twin)
             return
         if not _owned(found, twin):
@@ -589,7 +634,28 @@ class ClabernetesDriver:
                 raise DriverFailed(f"the namespace {namespace} was not gone within {budget:g}s")
             await self.sleep(self.poll_s)
         _log.info("destroy %s: the namespace %s is gone", twin, namespace)
+        self._cancelled.discard(twin)
         self._forget(twin)
+
+    async def _settle(self, twin: str, namespace: str) -> Namespace | None:
+        """The namespace, read every `poll_s` until it appears or `SETTLE_WINDOW_S` have passed with
+        none: None then. Logged once at INFO.
+
+        A destroy's first read after an `apply` of the twin this driver saw cancelled: the cancel
+        ends the client's request, and the API may make the Namespace after a read found it absent.
+        On the cluster a create whose call the client had cancelled at 7.8 ms after its send was
+        found by 55.1 ms (verified-facts.md, "clabernetes 0.10.1", 2026-11-16); a read that found
+        none and then none appearing would leave the namespace, and what later requests made in it,
+        standing with no twin to destroy it."""
+        _log.info("destroy %s: its apply was cancelled, so the API may still make the namespace %s: it is read until "
+                  "%gs have passed", twin, namespace, SETTLE_WINDOW_S)
+        deadline = self.clock() + SETTLE_WINDOW_S
+        while self.clock() < deadline:
+            await self.sleep(self.poll_s)
+            found = await self.kube.namespace(namespace)
+            if found is not None:
+                return found
+        return None
 
     def _forget(self, twin: str) -> None:
         """Drop what `events`' renewal keeps of `twin`, gone: its nodes' renewals and its pods left."""

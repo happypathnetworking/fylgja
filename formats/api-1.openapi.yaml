@@ -11,7 +11,8 @@ info:
     Every change of spec starts a run, linked from the status, read by id and by an event cursor, and
     cancelled by id. Verdicts are findings-1 documents; anything malformed or refused at the door is an RFC 9457
     problem-1 document. The API answers JSON only; clients render. Twins are independent: each has
-    at most one run at a time.
+    at most one run at a time. Within API 1 an answer may gain members, and a client passes over a
+    member it does not know (D-105).
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -784,7 +785,9 @@ components:
                   What the runtime does to the node: recabled changes its links and the node stays, restarted is
                   a link change under a restart link mode, recreated makes the node anew, and unsupported is a
                   change the runtime cannot make. restarted and recreated need allow_restart; unsupported refuses
-                  the step. The step's refusals and clients read it.
+                  the step. The step's refusals and clients read it. On the clabernetes driver a recabled node
+                  may still be replaced where a node added or removed since it was made moved its management
+                  address; the answer stays recabled.
               reasons:
                 type: array
                 uniqueItems: true

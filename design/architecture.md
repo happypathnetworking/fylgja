@@ -3,7 +3,7 @@
 This document describes Fylgja as this repository holds it: the core, at length, and the
 pieces beside it, a reader for each source of truth and the example orchestrator (section 5;
 [D-081](decisions.md#d-081)). It says what each is, what is built at this commit, and the
-architecture the core is being built to. The non-negotiables are in the
+architecture the core is built to. The non-negotiables are in the
 [constitution](constitution.md), the reasons in the [decision log](decisions.md), and the
 terms in the [glossary](../docs/glossary.md). The full design is [design/core.md](core.md),
 and every format is specified under [`formats/`](../formats/README.md).
@@ -162,11 +162,11 @@ writes them.
   from its tag on the cluster's core, and its report as they read it on the Journal tab").
 
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
-They are left to later phases.
+They are left to later releases.
 
-**Designed for the first release, not yet built** ([core.md](core.md), "Phase 10"): one make
+**Built for the first release, not yet published** ([core.md](core.md), "Phase 10"): one make
 target a source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version
-for every distribution, three wheels published and the packages inside the core's
+for every distribution, three wheels built and the packages inside the core's
 ([D-106](decisions.md#d-106)); the user's reference under `docs/`
 ([D-107](decisions.md#d-107)); and what 1.0 holds ([D-105](decisions.md#d-105)).
 

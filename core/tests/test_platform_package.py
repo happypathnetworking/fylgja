@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -250,3 +251,60 @@ def test_versions_and_images_are_read_by_the_package_module_alone() -> None:
     assert {"versions", "images"} <= attributes(SOURCE / "platform_package.py")  # the walk is not blind
     readers = {str(m.relative_to(SOURCE)): attributes(m) & {"versions", "images"} for m in modules}
     assert {m: found for m, found in readers.items() if found} == {"platform_package.py": {"versions", "images"}}
+
+
+def test_a_ports_discovering_given_as_null_is_refused() -> None:
+    """`discovering` may be left out, not given as nothing: its type is an object."""
+    doc: dict[str, Any] = yaml.safe_load(CHASSISOS.read_text())
+    doc["conformance"]["port"]["discovering"] = None
+    assert {(p.pointer, p.rule) for p in platform_package.validate(doc)} == {
+        ("/conformance/port/discovering", RULE_INVALID)
+    }
+
+
+def _descriptions(node: Any) -> list[str]:
+    """Every description and comment text of a schema, at any depth."""
+    if isinstance(node, dict):
+        own = [v for k, v in node.items() if k in ("description", "$comment") and isinstance(v, str)]
+        return own + [text for v in node.values() for text in _descriptions(v)]
+    if isinstance(node, list):
+        return [text for v in node for text in _descriptions(v)]
+    return []
+
+
+_TOKEN = r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+(?![\w\[]|\.[\w\[])"
+_AFTER_WORD = re.compile(rf"\b(?:rule|records?|fails with)\s+\(?({_TOKEN})")
+_IN_PARENTHESES = re.compile(rf"\(({_TOKEN})[,)]")
+
+
+def rules_named(text: str) -> set[str]:
+    """The rule ids a description gives: after `rule`, `record(s)` or `fails with`, a sentence's
+    last, or alone in parentheses."""
+    return set(_AFTER_WORD.findall(text)) | set(_IN_PARENTHESES.findall(text))
+
+
+def test_the_walk_for_rules_reads_each_shape_a_description_gives_one_in() -> None:
+    assert rules_named("the phase fails with apply.timeout.") == {"apply.timeout"}
+    assert rules_named("refused (package.patterns.placeholders).") == {"package.patterns.placeholders"}
+    assert rules_named("a mechanism (package.format.unsupported, D-014).") == {"package.format.unsupported"}
+    assert rules_named("the loader records tls2.v1_bad and rule x.y9") == {"tls2.v1_bad", "x.y9"}
+    assert rules_named("the data rule (interfaces.rules[].name) is, a file (probes/<format>.yaml)") == set()
+    assert rules_named("the release's text (24.7.1, 4.32.0.2F) and 1.5") == set()
+
+
+def test_every_rule_a_package_format_names_is_one_the_core_files() -> None:
+    """A description that says a rule follows an event names a `RULE_*` value of `core/src`, so the
+    formats promise no finding that no module files."""
+    filed = {
+        value
+        for module in SOURCE.rglob("*.py")
+        for value in re.findall(r'^\s*RULE_[A-Z_]+ = "([a-z_.]+)"', module.read_text(), re.M)
+    }
+    named: set[str] = set()
+    for name in ("platform-package-1", "probe-package-1"):
+        schema = json.loads((ROOT / "formats" / f"{name}.schema.json").read_text())
+        for text in _descriptions(schema):
+            named |= rules_named(text)
+    # the walk is not blind
+    assert {"push.timeout", "readiness.timeout", "package.patterns.placeholders"} <= named
+    assert named - filed == set()

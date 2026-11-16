@@ -150,7 +150,7 @@
         },
         "outcome": {
           "enum": ["measured", "not_started", "not_read", "interrupted", "dropped"],
-          "description": "Whether counters were read; dropped when the step's target removed the probe. not_started: the flow was not started; in phase 5 flows across a step are not built, and every probe of a step is reported so (D-051). The report reads it."
+          "description": "Whether counters were read; dropped when the step's target removed the probe. not_started: the flow was not started; this build runs no flow across a step and reports every probe of a step so (D-051). The report reads it."
         },
         "sent": {
           "type": "integer",

@@ -428,3 +428,79 @@ def test_make_wheels_builds_with_the_setuptools_the_build_constraints_name() -> 
     for member in ("core", "readers/infrahub", "readers/netbox"):
         with (ROOT / member / "pyproject.toml").open("rb") as f:
             assert tomllib.load(f)["build-system"]["requires"] == ["setuptools>=80"], member
+
+
+# Every bold title of "Open questions" (design/decisions.md), as the start of its text, and where the notes put it: a
+# known limit, which the notes' "Known limits" list states with a phrase of its own, the one line after the list
+# that names the questions of the example and the tooling and promises none, or answered by a change and left out.
+LIMITS = {
+    "A drain at the packages' requests": "A drain of a cluster host",
+    "The node clients under larger twins": "The connections the core opens to the nodes",
+    "A condition carrying the last verify's status": "`Ready` condition",
+    "A holder that outlives its Lease under a slow store": "A core that holds the Lease",
+    "The release on a Conflict": "A core that releases the Lease",
+    "A cEOS node with no data link refuses `ip routing`": "A cEOS node with no data link",
+    "What a read of Infrahub costs as an instance's history grows": "A read of Infrahub cost more",
+    "What the stale rule does not yet rest on a reading of": "The reader's stale rule",
+    "A row of the changelog that commits below a higher one": "NetBox may commit a row",
+    "A `view` grant with constraints, under the reader": "A `view` grant of NetBox",
+    "No rule of verify reads an address": "No rule of verify reads an address",
+    "A mark through another core": "A mark made through one core",
+    "A fixed management address per node on clabernetes": "On the clabernetes driver, a node the dry run answers",
+}
+UNQUESTIONED = ("A step runs no flow", "A core remembers in memory alone")
+"""The known limits with no open question: each the opening words of its own bullet."""
+NAMED = {
+    "The size of the twin the many-twins scenario expects refused": "forty-node twin",
+    "A check on a task worker that lacks its branch's commit": "task worker's clone",
+    "A registration read from GitHub": "registration read from GitHub",
+    "The cluster's rehearsal against the local driver's": "rehearsal time",
+    "Prefect's credential in NetBox's changelog": "Prefect's credential",
+    "Authoring a change of several steps in NetBox": "authoring a change of several steps",
+    "Three small gaps the last plan left": "three small gaps",
+    "`make netbox-up` where the network cannot be inspected": "`make netbox-up`'s network",
+    "Infrahub on volumes kept for days": "a rehearsal's time on an Infrahub kept for days",
+}
+ANSWERED = {
+    "A core test whose margin is the host's load",  # the deploys' order is held by the test, the margin gone
+}
+
+
+def open_question_titles() -> list[str]:
+    """The bold lead of each item of "Open questions", whitespace folded to one space."""
+    text = (ROOT / "design" / "decisions.md").read_text()
+    section = text[text.index("\n## Open questions\n") :]
+    return [" ".join(m.split()) for m in re.findall(r"^- \*\*(.+?)\*\*", section, re.M | re.S)]
+
+
+def test_every_open_question_is_a_known_limit_or_named() -> None:
+    titles = open_question_titles()
+    assert len(titles) > 10, "the parse is blind"
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    head = changelog[changelog.index("\n## ") :]
+    limits = head[head.index("\n### Known limits\n") :]
+    listed, _, after = limits.partition("\n\nThe example's, ")
+    assert after, "the line naming the example's, the suites' and the tooling's questions is missing"
+    assert "design/decisions.md#open-questions" in after.replace("\n", " ")
+    bullets = [" ".join(b.split()) for b in re.split(r"\n- ", listed)[1:]]
+    assert len(bullets) == len(LIMITS) + len(UNQUESTIONED), f"{len(bullets)} known limits, each one counted once"
+    # a limit that has an open question carries the link to where they are kept
+    for phrase in LIMITS.values():
+        found = [b for b in bullets if phrase in b]
+        assert len(found) == 1, f"{phrase!r} is not one known limit of the notes"
+        assert "[oq]" in found[0], found[0]
+    for opening in UNQUESTIONED:
+        assert [b for b in bullets if b.startswith(opening)] != [], f"{opening!r} is not a known limit of the notes"
+        assert sum(opening in b for b in bullets) == 1, f"{opening!r} is in more than one known limit"
+        assert "[oq]" not in next(b for b in bullets if b.startswith(opening)), f"{opening!r} has no open question"
+    assert re.search(r"^\[oq\]: design/decisions\.md#open-questions$", limits, re.M)
+    line = " ".join(after.split())
+    for title in titles:
+        starts = [k for k in {**LIMITS, **NAMED} if title.startswith(k)]
+        assert len(starts) == 1 or title in ANSWERED or any(title.startswith(a) for a in ANSWERED), (
+            f"the open question {title!r} is neither a known limit, named in the one line, nor answered"
+        )
+        if starts and starts[0] in NAMED:
+            assert NAMED[starts[0]] in line, f"{NAMED[starts[0]]!r} is not named in the one line"
+    for key in LIMITS.keys() | NAMED.keys():
+        assert any(t.startswith(key) for t in titles), f"{key!r} is no longer an open question: say where it went"

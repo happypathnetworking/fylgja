@@ -131,10 +131,10 @@ def compiled(name: str) -> compiler.Compiled:
     return compiler.compile(blueprint.load(ROOT / f"testdata/blueprint/{name}.json"), PLATFORMS, PROBES)
 
 
-def planned(driver: ClabernetesDriver, t: Stepped, name: str) -> Planned:
-    assert t.allocation is not None, f"{t.twin} was never admitted: an earlier test failed"
+def planned(driver: ClabernetesDriver, t: Stepped, name: str, allocation: Allocation | None) -> Planned:
+    assert allocation is not None, f"{t.twin} was never admitted: an earlier test failed"
     c = compiled(name)
-    return driver.plan(c.manifest, c.id, PLATFORMS, PROBES, t.twin, t.allocation)
+    return driver.plan(c.manifest, c.id, PLATFORMS, PROBES, t.twin, allocation)
 
 
 def state_of(loop: asyncio.Runner, driver: ClabernetesDriver, twin: str) -> str:
@@ -222,21 +222,34 @@ def held_to_the_pods(answer: Changes, before: Mapping[str, str], now: Mapping[st
     say(f"another uid: {moved}")
 
 
-def step(loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, t: Stepped, name: str) -> Changes:
-    """Step the twin to the fixture `name`: admit it with the deployment it holds, ask `changes`,
-    apply, and hold the answer to the pods' uids and to the pure tier's."""
+def admitted_plan(loop: asyncio.Runner, driver: ClabernetesDriver, t: Stepped, name: str) -> Planned:
+    """Admit the fixture `name` with the deployment the twin holds, plan it with the allocation
+    admit answered, as the loop does, hold the answer to D-073's form and record it as the twin's
+    allocation: the plan to apply."""
     current = t.current
     assert current is not None, f"{t.twin} runs nothing to step from: an earlier test failed"
+    assert t.allocation is not None, f"{t.twin} was never admitted: an earlier test failed"
     c = compiled(name)
-    after = planned(driver, t, name)
     held = run(loop, driver.admit(c.manifest, PLATFORMS, PROBES, t.twin, [], held=current.deployment),
                f"admit {name} with the held deployment")
+    if isinstance(held, Refusal):
+        pytest.fail(f"admit {name} with the held deployment refused: {held.rule}")
+    after = planned(driver, t, name, held)
     # A step keeps the twin's allocation in every member but the demand, which becomes the target's (D-073).
-    assert t.allocation is not None, f"{t.twin} was never admitted: an earlier test failed"
     target = after.deployment.demand
     demand = {"nodes": target.nodes, "cpu": target.cpu, "memory_mb": target.memory_mb}
     kept = held == {**t.allocation, "demand": demand}
-    assert kept, f"admit {name} with the held deployment answered another allocation, or refused"
+    assert kept, f"admit {name} with the held deployment answered another allocation"
+    t.allocation = held
+    return after
+
+
+def step(loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, t: Stepped, name: str) -> Changes:
+    """Step the twin to the fixture `name`: admit and plan it (`admitted_plan`), ask `changes`,
+    apply, and hold the answer to the pods' uids and to the pure tier's."""
+    current = t.current
+    assert current is not None, f"{t.twin} runs nothing to step from: an earlier test failed"
+    after = admitted_plan(loop, driver, t, name)
     answer = driver.changes(current, after, PLATFORMS, PROBES)
     before, base = uids(loop, driver, t.twin), t.name
     apply(loop, kube, driver, t, name, after, f"apply {name}")
@@ -319,7 +332,7 @@ def hot(loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver) -> Ite
 
 def test_01_the_base_deploys(loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, chg: Stepped) -> None:
     admit(loop, driver, chg, "three-node")
-    apply(loop, kube, driver, chg, "three-node", planned(driver, chg, "three-node"), "apply three-node")
+    apply(loop, kube, driver, chg, "three-node", planned(driver, chg, "three-node", chg.allocation), "apply three-node")
     assert set(uids(loop, driver, TWIN)) == {"n1", "n2", "n3"}
 
 
@@ -382,7 +395,7 @@ def test_12_mixed_deploys(
 ) -> None:
     gated(provider)
     admit(loop, driver, hot, "mixed")
-    apply(loop, kube, driver, hot, "mixed", planned(driver, hot, "mixed"), "apply mixed")
+    apply(loop, kube, driver, hot, "mixed", planned(driver, hot, "mixed", hot.allocation), "apply mixed")
     assert set(uids(loop, driver, HOT)) == {"e1", "e2", "s1"}
 
 
@@ -394,7 +407,7 @@ def test_13_a_port_added_after_boot_is_killed_before_its_deletions_and_resumed_a
     current, applied_name = hot.current, hot.name
     assert current is not None and applied_name == "mixed", "mixed was never applied: an earlier test failed"
     name, namespace = "steps/mixed-e2-port", namespace_of(HOT)
-    after = planned(driver, hot, name)
+    after = admitted_plan(loop, driver, hot, name)
     answer = driver.changes(current, after, PLATFORMS, PROBES)
     say(f"changes mixed -> {name}: {actions(answer)}; links added {answer.links_added}")
     assert actions(answer) == expected("mixed", name)

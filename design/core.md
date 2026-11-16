@@ -2,7 +2,8 @@
 
 This is the design of the new core: a Python rebuild of `fylgja-core` with a clean break in
 formats, many named twins, and runtimes behind a driver seam. Phases 2–10 are planned from
-it.
+it. The first release is built in this repository, as three distributions at one version, and
+what its major version holds is stated on [one page](../docs/compatibility.md).
 
 - **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
   measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
@@ -17,9 +18,11 @@ it.
   each phase left is under its item there and among the
   [open questions](decisions.md#open-questions). The `hardware` driver is a later release's.
 - **Beside the core:** a reader for each source of truth, the Infrahub reader
-  (`readers/infrahub/`) and the NetBox reader (`readers/netbox/`), and the example
-  orchestrator (`orchestrator/`), which rehearses a change of either source, are in this
-  repository ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081),
+  (`readers/infrahub/`, the distribution `fylgja-infrahub`) and the NetBox reader
+  (`readers/netbox/`, `fylgja-netbox`), and the example orchestrator (`orchestrator/`), which
+  rehearses a change of either source, are in this repository; `infrahub/` and `netbox/` hold
+  what runs beside each source: Infrahub's checks, schema, queries and seed, and NetBox's seed
+  and development set-up ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081),
   [D-095](decisions.md#d-095), [D-097](decisions.md#d-097)). The Go core is retired: it gets
   no more fixes, and nothing tracked here needs it or the archived repository to build, test or
   run.
@@ -87,7 +90,7 @@ Measured on containerlab 0.79 locally and on clabernetes 0.10.1 in a kind cluste
 | cEOS interface aliases | **None** in containerlab 0.79–0.82, so one rename rule stays. The kind's name pattern is unanchored at the start: a wrong name ending in `et<digit>` (`Ethernet1`) is accepted silently and wires a port EOS never sees | [D-015](decisions.md#d-015) |
 | SR Linux interface aliases | Yes: `ethernet-1/1` deploys as `e1-1`, breakouts too; an out-of-range name is refused at post-deploy | [D-015](decisions.md#d-015) |
 | Bootstrap | **Not needed** on either kind or driver. With no startup-config, each kind's baseline holds the hostname, linked ports enabled, LLDP and gNMI, and all of it survives the replace push | [D-015](decisions.md#d-015) |
-| Link changes | `link_apply_mode: live` re-cables both kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port added later. The mode is set at create only: on clabernetes a change replaces the pod of each node whose mode changed | [D-015](decisions.md#d-015) |
+| Link changes | `link_apply_mode: live` re-cables both kinds with no restart on both drivers, for ports present at boot (on clabernetes a recabled node may still be replaced where a node added or removed since it was made moved its management address: [verified-facts.md](verified-facts.md), "A recabled node replaced when a step adds or removes a node"). cEOS never sees a port added later. The mode is set at create only: on clabernetes a change replaces the pod of each node whose mode changed | [D-015](decisions.md#d-015) |
 | The seam | **Seven calls** settled here, with `admit` joining to reserve what `plan` binds (a subnet, a namespace, devices); nine since phase 5 added `changes` and `exec`, ten since phase 6 added `events`, eleven since phase 7 added `capacity` | [D-017](decisions.md#d-017), [D-011](decisions.md#d-011), [D-049](decisions.md#d-049), [D-058](decisions.md#d-058), [D-073](decisions.md#d-073) |
 | The core's own reconcile loop | Holds. Kills mid-apply, after apply, between pushes and mid-destroy each reach the desired state in one resume, given two recovery rules and each node's recorded incarnation (below). clabernetes finishes a step after its managers are killed mid-step | [D-023](decisions.md#d-023) |
 | Isolation | A lab or a namespace per twin works, with concurrent creates. Management reach between twins is closed on clabernetes by a NetworkPolicy per twin, and accepted locally | [D-019](decisions.md#d-019) |

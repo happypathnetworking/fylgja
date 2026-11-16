@@ -162,7 +162,7 @@ writes them.
   from its tag on the cluster's core, and its report as they read it on the Journal tab").
 
 **Designed, not yet built:** everything else in section 4: the flows beyond one burst a probe.
-They are left to later phases.
+They are left to later releases.
 
 **Built for the first release, not yet published** ([core.md](core.md), "Phase 10"): one make
 target a source that shows a rehearsal from nothing ([D-104](decisions.md#d-104)); one version

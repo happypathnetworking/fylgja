@@ -58,7 +58,7 @@ platform package gives.
 The names that [the client library](client.md) gives, and those under "The library" in
 [the Infrahub reader's README](../readers/infrahub/README.md#the-library) and in
 [the NetBox reader's](../readers/netbox/README.md#the-library). A module or a name no page gives is
-not held.
+not held, and the names [Integrating](integrating.md) gives are the example's, which is not held.
 
 ## What held means
 
@@ -66,6 +66,9 @@ not held.
   later one, and means the same.
 - What the core answers may gain a member, a route, a rule id or a finding in a minor release, and
   loses none.
+- A blueprint's id, which the blueprint format defines as a hash of its network and probes, is held
+  with the format: one blueprint document has the same id under every later release of major
+  version 1. A bundle's and a deployment's ids are not held (see below).
 - A refusal that is lifted is no loss. `package.versions.several`, which refuses a platform package
   that lists more than one version, is one that is expected to be lifted.
 

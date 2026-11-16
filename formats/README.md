@@ -3,9 +3,10 @@
 Every format of every distribution, version 1: each format and interface the core reads
 and writes, the reader document each reader takes, and the example orchestrator's two
 documents. Each has one version,
-specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). The
-design they follow is [design/core.md](../design/core.md). A change found while
-building the core is made here, in the same change as the code.
+specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). From 1.0 a
+change to a held format only adds ([what 1.0 holds](../docs/compatibility.md)). The design they
+follow is [design/core.md](../design/core.md). A change found while building the core is made
+here, in the same change as the code.
 
 The core's wheel carries the core's formats as the package's data, copied when it is built from the list in `core/setup.py` ([D-066](../design/decisions.md#d-066), [D-084](../design/decisions.md#d-084)); a format another distribution reads is carried by that distribution's wheel. This directory stays the one place a format is changed.
 

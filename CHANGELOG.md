@@ -35,8 +35,8 @@ Not published: an image, a source distribution and the example orchestrator.
 ### Known limits
 
 What is unread or unmended, and so not promised, in what you can run from the published
-distributions. Each line is one question of [Open questions](design/decisions.md#open-questions)
-there, where its readings are.
+distributions. Each line that ends ([more]) is one question of
+[Open questions](design/decisions.md#open-questions) there, where its readings are.
 
 - A drain of a cluster host is unread at the packages' requests of 0.5 CPU and 1.5 to 2 GiB. The
   spread of five twins over three hosts was read at them. ([more][oq])
@@ -80,7 +80,8 @@ there, where its readings are.
 - A core remembers in memory alone that an apply of a twin on the cluster was cancelled, so that its
   destroy waits for the cluster's API to settle. A core that restarts forgets it, and its next
   destroy of that twin does not wait, so a namespace the cancelled request goes on to make may be
-  left standing.
+  left standing. A create cut by a transport failure, a timeout or a connection lost after the
+  send, is not marked, though the API may likewise still make it.
 
 The example's, the test suites' and the development tooling's open questions are in
 [Open questions](design/decisions.md#open-questions) and are not promised: the many-twins

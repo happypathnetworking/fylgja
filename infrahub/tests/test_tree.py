@@ -223,7 +223,8 @@ def test_the_databases_health_check_waits_for_a_start_on_kept_volumes() -> None:
     not. It sets the period alone: the probe, its interval and its retries stay the published file's."""
     override = yaml.safe_load((INFRAHUB / "dev" / "compose.override.yml").read_text())
     assert override["services"]["database"]["healthcheck"] == {"start_period": "180s"}
-    assert 3 * NEO4J_SLOWEST_START_S <= 180
+    start_period_s = float(override["services"]["database"]["healthcheck"]["start_period"].removesuffix("s"))
+    assert start_period_s >= 3 * NEO4J_SLOWEST_START_S
 
 
 def test_pypi_is_a_public_reference_in_the_lock_alone() -> None:

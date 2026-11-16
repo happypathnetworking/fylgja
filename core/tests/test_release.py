@@ -446,7 +446,10 @@ LIMITS = {
     "A `view` grant with constraints, under the reader": "A `view` grant of NetBox",
     "No rule of verify reads an address": "No rule of verify reads an address",
     "A mark through another core": "A mark made through one core",
+    "A fixed management address per node on clabernetes": "On the clabernetes driver, a node the dry run answers",
 }
+UNQUESTIONED = ("A step runs no flow", "A core remembers in memory alone")
+"""The known limits with no open question: each the opening words of its own bullet."""
 NAMED = {
     "The size of the twin the many-twins scenario expects refused": "forty-node twin",
     "A check on a task worker that lacks its branch's commit": "task worker's clone",
@@ -485,6 +488,9 @@ def test_every_open_question_is_a_known_limit_or_named() -> None:
         found = [b for b in bullets if phrase in b]
         assert len(found) == 1, f"{phrase!r} is not one known limit of the notes"
         assert "[oq]" in found[0], found[0]
+    for opening in UNQUESTIONED:
+        assert [b for b in bullets if b.startswith(opening)] != [], f"{opening!r} is not a known limit of the notes"
+        assert sum(opening in b for b in bullets) == 1, f"{opening!r} is in more than one known limit"
     assert re.search(r"^\[oq\]: design/decisions\.md#open-questions$", limits, re.M)
     line = " ".join(after.split())
     for title in titles:

@@ -1589,6 +1589,46 @@ On kind v0.33.0 (below), unless marked; on three k3s hosts in
     first read had not.
   - No read of the 30.7 s found any row's namespace, every `apply` ended cancelled, and no
     `fylgja-twin-` namespace stood before the run or after it.
+- **A recabled node replaced when a step adds or removes a node: a known limit.** *(k3s
+  v1.37.1+k3s1, the core at `a1feb33349d1`, 2026-11-16)* The direct runtime gives each Node a
+  management address in clabernetes' default management `/24` that is a pure function of the namespace's whole set
+  of Nodes. The Nodes are ordered by UID, and each address is `sha256(uid + "\x00" + attempt)`,
+  moving to the next attempt on a collision (`controllers/node/directmanagement.go`,
+  `allocateDirectManagementAddresses` and `hashedPrefixAddress`, read in clabernetes' source at
+  commit `5a23fe7`, which the checkout read tags `v0.10.0`; the 0.10.1 source was not compared).
+  So a node a step adds, with a fresh UID, can take a device's address, and one a step removes
+  can give a displaced device its own address back. The device's certificate Secret then
+  changes. When the device's own Node is next reconciled, because a step changes its links,
+  the pod-retaining path finds that the Deployment no longer conforms and recreates the pod
+  instead. clabernetes reports nothing of this, and the pod comes back with a new uid. That can
+  happen in the step that moved the address or, if the device was kept there, in the next step
+  that recables it.
+  - Seen in the clabernetes conformance suite's second run at `1f9aabd` (08:39 to 09:48Z):
+    `n2` of `cf-step`, which the dry run answered `recabled`, came back at a new incarnation in
+    the step to `three-node-probed-moved`, which added and removed nothing (its hosts
+    `recreated`), and again in the step back to `three-node`, which removed the hosts. In the
+    probed-moved step the hosts' clabernetes Nodes went from generation 1 to 2 on the twin
+    `cf-diag`, so they were updated in place and kept their UIDs, and the set of UIDs did not
+    change there. By the allocation, then, `n2`'s address moved at the step before, to
+    `three-node-probed`, where `n2` was kept. That is a derivation: no address was read in that
+    run. Each step's apply took about
+    57.5 s, readied and pushed `n2`, and ended `ok` with verify holding.
+  - Reproduced on `cf-diag` (09:54 to 11:37Z): in the step to `three-node-probed` at 11:30:54Z,
+    `n1` (answered `recabled`) moved to another management address of the `/24`, and its pod
+    went from `e4a49ed2…` to `d8992242…`. The step ended `ok`, verify 19 held.
+  - About 1.3% of the steps that add a probe's two hosts to `three-node`, by simulating the
+    allocation over 40,000 random UID sets. Three of the 56 steps read showed it.
+  - The core handled each case as a replaced node: it readied and pushed the new incarnation,
+    and the step ended `ok` with verify holding. But the dry run had answered `recabled`, so a
+    step without `--allow-restart` restarted that node. The conformance walk
+    (`core/tests/conformance/reads.py`, `walk`) tolerates exactly this on a core reached over
+    the network: in a step that adds or removes a node, or the step after one, a recabled node
+    may come back anew, and is then held as recreated (readied and pushed). The driver's
+    `changes` says so in its docstring. `core/src` changed in no code for it, only in that
+    docstring.
+  - Not verified: that clabernetes takes containerlab's `mgmt-ipv4` on a node as a declared
+    address (the loop above reserves a declared one before allocating the rest), which would
+    let the plan fix each node's address so that an added node could never displace it.
 
 ---
 

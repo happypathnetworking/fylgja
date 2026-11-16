@@ -6457,6 +6457,45 @@ scanned. No purge was made, so the time from new volumes was not read. *(2026-11
   held; a `make infrahub-demo` that fails at a step or ends with a verdict other than `passed`; the earlier proposed
   change's check left open while a second run seeds, the seed having removed it. *(2026-11-14)*
 
+**The database's health check on kept volumes, before and after its start period was given 180 s** *(Infrahub
+1.11.11, its database `neo4j:2026.05.0-community`, Docker 29.8.1, Docker Compose v5.6.0, the tree at `9466bf1` and then
+with the override's mend, 2026-11-16)*. Read on 2026-11-16 on the development host, for phase 10's plan 5's Task 7: six
+`make infrahub-up` from the plan's worktree with the main checkout's `local/`, each from stopped on the volumes kept
+since phase 8, each followed by `make infrahub-down` with no `PURGE`; no containerlab container, no `clab-` network and
+NetBox stopped throughout, Infrahub stopped before the first, its last stop 47 hours before. For the third start on, a
+poller of the reading's own read the database's `docker inspect` every 0.5 s from its container's next start, and
+printed each probe of `.State.Health.Log` once, with its exit code. Docker's own `health_status` events were read after
+each start too, but by the time the second start's were read its event buffer had rolled past them, and it emits none
+where the status a stopped container kept is the one it reaches. Each time below is from the container's `StartedAt`
+to Neo4j's first `Started.` line, by `docker logs --timestamps`, and to the end of the first passing probe, by Docker's
+timestamps, each a derivation; each target's time is by the host's clock, read by Python. Every output was saved.
+*(2026-11-16)*
+
+- **The published check:** `wget -O /dev/null http://localhost:7474`, every 2 s, timeout 10 s, 20 retries, start period
+  3 s, as `docker inspect --format '{{json .Config.Healthcheck}}'` read it. *(2026-11-16)*
+- **Three starts with it.** The first, after 47 hours stopped, failed: Compose said `dependency failed to start:
+  container fylgja-core-infrahub-database-1 is unhealthy` at the target's first and second asks, and the target exited
+  1, make 2, in 49.3 s; Docker said `health_status: unhealthy` 43.9 s after the start, `FailingStreak` 21, and
+  `health_status: healthy` 54.3 s after it, once the target had ended; Neo4j said `Started.` 53.8 s after it. The
+  second and third exited 0 at their first ask, in 109.3 s and 90.8 s, `Infrahub 1.11.11 answered at
+  http://127.0.0.1:8000 78 s` and `62 s after Compose's start returned`, the database `healthy`, `FailingStreak` 0, at
+  the end; Neo4j said `Started.` 27.7 s and 26.1 s after the start, and the third's first passing probe ended 26.6 s
+  after it, eleven having failed before it; the second's was not read. So one start in three failed, as the start of
+  51.6 s on 2026-11-13 did. *(2026-11-16)*
+- **Three starts with `start_period: 180s`** in `infrahub/dev/compose.override.yml`, which Docker then read as
+  `"StartPeriod":180000000000` with the published probe, interval, timeout and retries. The first recreated the
+  database's container, Compose saying `Recreate` and `Recreated`, on the same named volumes. Each exited 0 at its
+  first ask, Compose said no failed dependency, and the database was `healthy`, `FailingStreak` 0, at the end: in
+  102.0 s, 92.5 s and 93.1 s, answering 60 s, 62 s and 63 s after Compose's start returned; Neo4j said `Started.`
+  32.7 s, 26.8 s and 27.0 s after the start, and the first passing probe ended 36.5 s, 27.1 s and 27.4 s after it,
+  after 6, 4 and 4 probes failed. Within the start period the probes came about 5 s apart, not 2 s, which is Docker's
+  own `start_interval` default: so a database's first passing probe may come up to about 5 s after its `Started.`.
+  *(2026-11-16)*
+- **The stops:** each `make infrahub-down` exited 0, in 12.2 s (the failed start's, no server having started), 21.4 s,
+  45.5 s, 16.4 s, 45.6 s and 46.1 s, leaving the project's five volumes. *(2026-11-16)*
+- **Not read:** a start on new volumes (Task 13's); what made the first start after 47 hours twice as slow as the next
+  ones; a start near 180 s, which none came near; the second start's first passing probe. *(2026-11-16)*
+
 ---
 
 ## Prefect 3.9.2

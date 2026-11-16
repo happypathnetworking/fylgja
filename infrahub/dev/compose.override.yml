@@ -13,6 +13,12 @@
 #
 # Neo4j is capped as it was for the reading of 1.11.11 that held 5.5 GiB (design/verified-facts.md).
 #
+# The database's health check keeps the published probe, interval and retries, and waits 180 s before a failed probe
+# counts: the published 3 s start period called it unhealthy 43.9 s into a start on kept volumes, and Compose then
+# refused to start what depends on it. Neo4j's `Started.` came 51.6 s and 53.8 s into its slowest starts read on kept
+# volumes, 26.1 s into its quickest (design/verified-facts.md, "Infrahub 1.11.11"); 180 s, about 3.3 times the slowest,
+# is there to tell a database still starting from one that will not.
+#
 # The image is not pinned here: the published file reads ${VERSION}, which infrahub_dev.py sets from the make
 # variable INFRAHUB_VERSION over whatever the shell or local/.env holds.
 services:
@@ -30,3 +36,5 @@ services:
       NEO4J_server_memory_heap_initial__size: 1g
       NEO4J_server_memory_heap_max__size: 2g
       NEO4J_server_memory_pagecache_size: 1g
+    healthcheck:
+      start_period: 180s

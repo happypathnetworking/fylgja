@@ -7,7 +7,8 @@ renders it, addressed by its contents, with optionally probes, small hosts that 
 through the twin. A twin is that network running on real network operating system images, where a
 change is rehearsed before it reaches production: Fylgja compiles the blueprint to a bundle, runs
 the bundle and pushes each configuration, then steps the twin from one blueprint to another.
-Verify judges the running twin against its bundle, and the probes report the loss a step caused.
+Verify judges the running twin against its bundle, and sends each probe's burst of pings through the
+twin as one of its checks; a step lists each probe's flow, which is not yet run.
 Vendors are data, not code: Nokia SR Linux and Arista EOS, alone or mixed in one twin. Anything
 that writes a blueprint can drive Fylgja, through its API or its command.
 

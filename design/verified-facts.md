@@ -1570,6 +1570,25 @@ On kind v0.33.0 (below), unless marked; on three k3s hosts in
     6.15 s after the send.
   - No read in any row's 30 s after `destroy` returned found its namespace, and no
     `fylgja-twin-` namespace stood before the run or after it.
+- **The same, with the driver's settle, forty rows.** *(k3s v1.37.1+k3s1, lightkube 1.0.1,
+  2026-11-16)* The test as above, run again once the driver read a namespace it found absent
+  again every 2 s for 5 s after an `apply` it saw cancelled (`_settle`): three rows each at 0,
+  2, 5, 20 and 50 ms and five each at 6 to 10 ms, every row cut and destroyed, then every row's
+  namespace read every 0.5 s for 30.7 s.
+  - In 27 rows the cancel landed before the Namespace's call returned: the call was cancelled
+    2.7 to 13.4 ms after the send. In 13 (at 20 and 50 ms, and seven of the ten at 9 and 10 ms)
+    the call had returned first, 13.2 to 14.2 ms after the send.
+  - In 21 of the 27 (every row from 5 to 8 ms, and three at 9 and 10 ms, the cancel at 7.5 to
+    12.4 ms) the API made the namespace the client had cancelled. `destroy`'s first read was
+    sent 27.3 to 35.6 ms after the send and found it 44.5 to 59.4 ms after it; in the 13 whose
+    call had returned, sent 35.2 to 72.5 ms and found it 53.6 to 91.2 ms. Each was deleted, and
+    `destroy` returned 6.09 to 6.13 s after it was asked.
+  - In the other six (0 and 2 ms, the cancel at 2.2 to 5.1 ms) `destroy`'s first read was sent
+    10.9 to 22.3 ms after the send and found none, nor did the settle's three reads after it;
+    `destroy` returned 6.05 to 6.07 s after it was asked. No settle read found a namespace the
+    first read had not.
+  - No read of the 30.7 s found any row's namespace, every `apply` ended cancelled, and no
+    `fylgja-twin-` namespace stood before the run or after it.
 
 ---
 

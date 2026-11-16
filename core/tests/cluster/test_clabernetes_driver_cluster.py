@@ -5,7 +5,7 @@ server makes (`drivers.make`), with every pull credential the environment holds,
 its repeat and a Service drifted back to `Cluster`; `exec`; a node's container ended in place; a
 pod deleted and `reconfigure`; a `destroy` under packages that do not list a node's image, refused
 (D-102); `destroy`, and a namespace alone as residue; and an `apply` cancelled at its namespace's
-create and destroyed at once, on eighteen twins of the test's own.
+create and destroyed at once, on forty twins of the test's own.
 
 A node's uid, where a test says one moves or stays, is its pod's uid, the part of `inspect`'s
 incarnation before the `/`; the restart count is the part after it (D-069).
@@ -527,18 +527,21 @@ def test_7_destroy_leaves_nothing_and_the_namespace_alone_is_residue_destroy_cle
     assert run(loop, kube.namespace(NS), "namespace") is None
 
 
-CUT_DELAYS_MS = (0, 2, 5, 10, 20, 50)
-"""How long after the namespace's request is sent each row's `apply` is cancelled."""
-CUT_TRIES = 3
+CUT_ROWS = tuple((delay, attempt) for delay in (0, 2, 5, 20, 50) for attempt in range(1, 4)) + tuple(
+    (delay, attempt) for delay in (6, 7, 8, 9, 10) for attempt in range(1, 6))
+"""Each row's delay, in ms after the namespace's request is sent, and its try: three at the first
+delays, and five each from 6 to 10 ms, where a cancel lands before the Namespace's call returns
+(12.7 to 14.8 ms in the first run) and after the request has reached the API."""
 CUT_WATCH_S = 30.0
-"""How long the namespace is read for after `destroy` returns: the brief's window."""
+"""How long every row's namespace is read for once the last row's `destroy` has returned: the brief's window."""
 CUT_WATCH_EVERY_S = 0.5
 
 
 class Timed(LightKube):
     """`LightKube` noting, on `monotonic`, when the twin's Namespace is sent to be applied and how
-    that call ended, and each `namespace` read and `delete_namespace` with its answer, in `calls`,
-    each as its offset from the Namespace's send. `sent` is set when that request is sent."""
+    that call ended, and each `namespace` read, when it is sent and its answer, and each
+    `delete_namespace`, in `calls`, each as its offset from the Namespace's send. `sent` is set
+    when that request is sent."""
 
     def __init__(self, client: AsyncClient) -> None:
         super().__init__(client)
@@ -572,6 +575,7 @@ class Timed(LightKube):
         self.calls.append(f"apply Namespace returned {self.since()}")
 
     async def namespace(self, name: str) -> Namespace | None:
+        self.calls.append(f"namespace read sent {self.since()}")
         found = await super().namespace(name)
         answer = "absent" if found is None else ("deleting" if found.deleting else "present")
         self.calls.append(f"namespace {answer} {self.since()}")
@@ -590,6 +594,7 @@ class Cut:
 
     twin: str
     delay_ms: int
+    topology: str
     cancel_ms: float = 0.0
     apply_ended: str = ""
     calls: list[str] = field(default_factory=list)
@@ -636,15 +641,17 @@ def owned_by(found: Namespace, twin: str) -> bool:
 
 
 def remove(loop: asyncio.Runner, kube: LightKube, twin: str, what: str) -> bool:
-    """Delete the twin's namespace, where one stands with its labels, and wait until it is gone:
-    whether there was one. One without them is not this test's, and fails it."""
+    """Delete the twin's namespace, where one stands with its labels and is not already being
+    deleted, and wait until it is gone: whether there was one. One without them is not this
+    test's, and fails it."""
     namespace = namespace_of(twin)
     found = run(loop, kube.namespace(namespace), f"namespace {namespace} ({what})")
     if found is None:
         return False
     if not owned_by(found, twin):
         pytest.fail(f"the namespace {namespace} stands and is not the twin {twin}'s: it is left")
-    run(loop, kube.delete_namespace(namespace), f"delete_namespace {namespace} ({what})")
+    if not found.deleting:
+        run(loop, kube.delete_namespace(namespace), f"delete_namespace {namespace} ({what})")
     gone(loop, kube, namespace, f"{namespace} gone ({what})")
     return True
 
@@ -652,18 +659,19 @@ def remove(loop: asyncio.Runner, kube: LightKube, twin: str, what: str) -> bool:
 def test_8_an_apply_cancelled_at_its_namespace_create_then_destroyed_leaves_no_namespace(
     site: Site, loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, provider: Provider
 ) -> None:
-    """A twin of its own each row, `drv-cut-<delay>ms-<try>`, planned from one admission of
-    `three-node`: its `apply`, by a driver over `Timed`, is cancelled `delay` after its Namespace
-    is sent, for each of `CUT_DELAYS_MS`, `CUT_TRIES` times; its `destroy` is asked at once; and
-    its namespace is read every `CUT_WATCH_EVERY_S` for `CUT_WATCH_S` after `destroy` returns. No
-    read may find it: an apply's create the API commits after `destroy` read the namespace absent
-    would leave it standing (the cut-create fix's diagnosis, "The clabernetes driver"). Every row
-    is read before any is judged, a namespace a read found removed by its labels and shown gone,
-    and the rows printed.
+    """A twin of its own each row of `CUT_ROWS`, `drv-cut-<delay>ms-<try>`, planned from one
+    admission of `three-node`: its `apply`, by one driver over `Timed`, is cancelled `delay` after
+    its Namespace is sent, and its `destroy` by that driver asked at once. Once every row is cut
+    and destroyed, each row's namespace is read every `CUT_WATCH_EVERY_S` for `CUT_WATCH_S`. No
+    read may find one, and each `apply` must have ended cancelled: an apply's create the API
+    commits after `destroy` read the namespace absent would leave it standing, were `destroy` not
+    to read again after a cancelled apply (the driver's `_settle`). Every row is read before any
+    is judged, a namespace a read found removed by its labels and shown gone, and the rows printed.
 
-    Read 2026-11-16 (design/verified-facts.md, "clabernetes 0.10.1"): in every row whose create
-    the API committed, `destroy`'s first read found the namespace, at most 94.2 ms after the send;
-    `CUT_WATCH_S`, the brief's window, is over 300 times that."""
+    Read 2026-11-16 in two runs (design/verified-facts.md, "clabernetes 0.10.1"): a create the API
+    committed, cancelled or not, was found by `destroy`'s first read at most 94.2 ms after its
+    send (91.2 ms in the second); `CUT_WATCH_S`, the brief's window, is over 300 times that, and
+    the driver's `SETTLE_WINDOW_S` over 50."""
     c = compiled("three-node")
     allocation = run(loop, driver.admit(c.manifest, PLATFORMS, PROBES, "drv-cut", []), "admit drv-cut")
     if isinstance(allocation, Refusal):
@@ -672,55 +680,56 @@ def test_8_an_apply_cancelled_at_its_namespace_create_then_destroyed_leaves_no_n
     timed = Timed(kubeapi_client())
     cut_driver = ClabernetesDriver(timed, provider, controller_namespace=site.controller_namespace,
                                    pod_cidr=site.pod_cidr)
+    names = [f"drv-cut-{delay_ms}ms-{attempt}" for delay_ms, attempt in CUT_ROWS]
     rows: list[Cut] = []
     try:
-        for delay_ms in CUT_DELAYS_MS:
-            for attempt in range(1, CUT_TRIES + 1):
-                name = f"drv-cut-{delay_ms}ms-{attempt}"
-                namespace = namespace_of(name)
-                if remove(loop, kube, name, "a namespace left before the row"):
-                    say(f"{namespace}: one was left before the row, removed")
-                p = driver.plan(c.manifest, c.id, PLATFORMS, PROBES, name, {**allocation, "namespace": namespace})
-                topology = yaml.safe_load(p.files[TOPOLOGY])["metadata"]["name"]
-                row = Cut(name, delay_ms)
-                row.cancel_ms, row.apply_ended = run(loop, cut(cut_driver, timed, p, delay_ms), f"apply {name}, cut")
-                timed.calls.append(f"destroy asked {timed.since()}")
-                start = time.monotonic()
-                try:
-                    run(loop, cut_driver.destroy(p.deployment, p.files, PLATFORMS, PROBES), f"destroy {name}")
-                    row.destroy = "returned"
-                except Exception as e:
-                    row.destroy = f"raised {type(e).__name__}"
-                row.destroy_s = time.monotonic() - start
-                timed.calls.append(f"destroy ended {timed.since()}")
-                row.calls = timed.calls[:]
-                returned = time.monotonic()
-                while (elapsed := time.monotonic() - returned) <= CUT_WATCH_S:
-                    found = loop.run(kube.namespace(namespace))
-                    if found is not None:
-                        row.seen.append(f"+{elapsed:.1f} s {'deleting' if found.deleting else 'standing'}")
-                        if not row.contents:
-                            row.contents = run(loop, contents(kube, raw, namespace, topology), f"in {namespace}")
-                    time.sleep(CUT_WATCH_EVERY_S)
-                if remove(loop, kube, name, "the row's end"):
-                    say(f"{namespace}: removed at the row's end")
-                rows.append(row)
-                say(f"row {name}: cancel at {row.cancel_ms:.1f} ms after the Namespace's send, "
-                    f"apply {row.apply_ended}; "
-                    f"destroy {row.destroy} in {row.destroy_s:.2f} s; calls: {'; '.join(row.calls)}; "
-                    f"read after destroy: {row.seen or 'never found'}; contents: {row.contents or '-'}")
+        for (delay_ms, _), name in zip(CUT_ROWS, names, strict=True):
+            namespace = namespace_of(name)
+            if remove(loop, kube, name, "a namespace left before the row"):
+                say(f"{namespace}: one was left before the row, removed")
+            p = driver.plan(c.manifest, c.id, PLATFORMS, PROBES, name, {**allocation, "namespace": namespace})
+            row = Cut(name, delay_ms, topology=yaml.safe_load(p.files[TOPOLOGY])["metadata"]["name"])
+            row.cancel_ms, row.apply_ended = run(loop, cut(cut_driver, timed, p, delay_ms), f"apply {name}, cut")
+            timed.calls.append(f"destroy asked {timed.since()}")
+            start = time.monotonic()
+            try:
+                run(loop, cut_driver.destroy(p.deployment, p.files, PLATFORMS, PROBES), f"destroy {name}")
+                row.destroy = "returned"
+            except Exception as e:
+                row.destroy = f"raised {type(e).__name__}"
+            row.destroy_s = time.monotonic() - start
+            timed.calls.append(f"destroy ended {timed.since()}")
+            row.calls = timed.calls[:]
+            rows.append(row)
+            say(f"row {name}: cancel at {row.cancel_ms:.1f} ms after the Namespace's send, "
+                f"apply {row.apply_ended}; destroy {row.destroy} in {row.destroy_s:.2f} s; "
+                f"calls: {'; '.join(row.calls)}")
+        watched = time.monotonic()
+        while (elapsed := time.monotonic() - watched) <= CUT_WATCH_S:
+            for row in rows:
+                found = loop.run(kube.namespace(namespace_of(row.twin)))
+                if found is not None:
+                    row.seen.append(f"+{elapsed:.1f} s {'deleting' if found.deleting else 'standing'}")
+                    if not row.contents:
+                        row.contents = run(loop, contents(kube, raw, namespace_of(row.twin), row.topology),
+                                           f"in {namespace_of(row.twin)}")
+            time.sleep(CUT_WATCH_EVERY_S)
+        say(f"the watch: every row's namespace read for {time.monotonic() - watched:.1f} s after the last destroy")
+        for row in rows:
+            if row.seen:
+                say(f"row {row.twin}: read after destroy: {row.seen}; contents: {row.contents}")
     finally:
-        for delay_ms in CUT_DELAYS_MS:
-            for attempt in range(1, CUT_TRIES + 1):
-                name = f"drv-cut-{delay_ms}ms-{attempt}"
-                try:
-                    if remove(loop, kube, name, "the test's end"):
-                        say(f"{namespace_of(name)}: removed at the test's end")
-                except (Exception, pytest.fail.Exception) as e:
-                    say(f"the test's end: {namespace_of(name)}: {type(e).__name__}")
+        for name in names:
+            try:
+                if remove(loop, kube, name, "the test's end"):
+                    say(f"{namespace_of(name)}: removed at the test's end")
+            except (Exception, pytest.fail.Exception) as e:
+                say(f"the test's end: {namespace_of(name)}: {type(e).__name__}")
         loop.run(timed.close())
         loop.run(raw.close())
-    standing = [row.twin for row in rows if row.seen]
+    uncut = [f"{row.twin} ({row.apply_ended})" for row in rows if row.apply_ended != "cancelled"]
     failed = [row.twin for row in rows if row.destroy != "returned"]
+    standing = [row.twin for row in rows if row.seen]
+    assert not uncut, f"the apply did not end cancelled for {uncut}"
     assert not failed, f"destroy did not return for {failed}"
     assert not standing, f"a namespace was read after destroy returned for {standing}"

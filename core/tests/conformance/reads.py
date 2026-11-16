@@ -14,6 +14,7 @@ follows (`stepped_until`), and its resume held to the same run (`assert_resumed`
 from __future__ import annotations
 
 import functools
+import ipaddress
 import itertools
 import json
 import re
@@ -22,6 +23,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -406,6 +408,7 @@ def created(harness: Harness, fylgja: Fylgja, twin: str, fixture: Path, nodes: I
     twin before: exit 0; the record Ready and settled, held to twin record 1, with the nodes
     `nodes`; and the runtime's nodes the record's, at its incarnations. The record."""
     assert harness.leftovers(twin) == [], f"the runtime holds {twin} already"
+    RESHAPED.discard(twin)
     began = time.monotonic()
     code, _ = fylgja("twin", "create", twin, "--blueprint", str(fixture))
     print(f"[conformance] create {twin}, end to end: {time.monotonic() - began:.1f}s", flush=True)
@@ -607,10 +610,12 @@ def _ceos_refusal(harness: Harness) -> str | None:
 @dataclass(frozen=True)
 class Expected:
     """What a step's dry run says the step does, by the actions of its `changes`: the nodes that
-    keep their incarnation (`kept`, `recabled`), those restarted, recreated, added and removed;
-    and the rule of its refusal, the spec allowing no restart, or None where it would go ahead."""
+    keep their incarnation (`kept`, `recabled`), those of them `recabled`, those restarted,
+    recreated, added and removed; and the rule of its refusal, the spec allowing no restart, or
+    None where it would go ahead."""
 
     kept: frozenset[str]
+    recabled: frozenset[str]
     restarted: frozenset[str]
     recreated: frozenset[str]
     added: frozenset[str]
@@ -656,8 +661,8 @@ def expected(harness: Harness, fylgja: Fylgja, caps: Mapping[str, Any], twin: st
     else:
         assert verdict["status"] == "ok" and errors == [], verdict
     assert code == (1 if refused is not None else 0), (code, verdict["status"])
-    e = Expected(kept=acting("kept", "recabled"), restarted=acting("restarted"), recreated=acting("recreated"),
-                 added=acting("added"), removed=acting("removed"), refused=refused)
+    e = Expected(kept=acting("kept", "recabled"), recabled=acting("recabled"), restarted=acting("restarted"),
+                 recreated=acting("recreated"), added=acting("added"), removed=acting("removed"), refused=refused)
     relinked = bool(changes["links_added"] or changes["links_removed"]) or "recabled" in actions.values()
     assert (RELINK in rules) == (not caps["relink"] and relinked), (rules, caps["relink"], relinked)
     if RELINK not in rules:  # the refusal no spec clears comes first; the restart's only without it
@@ -669,6 +674,22 @@ def expected(harness: Harness, fylgja: Fylgja, caps: Mapping[str, Any], twin: st
     assert harness.nodes(twin) == held, "the dry run touched the runtime's nodes"
     harness.audit_apply(twin, since, 0)
     return e
+
+
+def reached(address: str) -> str:
+    """Where the core at `address` is reached: `here` on this host's loopback, `away` otherwise.
+    An address without a scheme is the core's own `host:port`."""
+    host = urlsplit(address if "://" in address else f"//{address}").hostname or ""
+    try:
+        return "here" if ipaddress.ip_address(host).is_loopback else "away"
+    except ValueError:
+        return "here" if host == "localhost" else "away"
+
+
+RESHAPED: set[str] = set()
+"""The twins whose last step by `walk` added or removed a node, so that on the cluster a kept
+node's management address may have moved without its pod being made anew (`walk`); a create
+clears its twin."""
 
 
 # The kills of a step.
@@ -771,7 +792,19 @@ def walk(
     asserted: a runtime may keep it, `reconcile.py`'s `_apply`); those removed gone from the record
     and the runtime, those added in both; `ready` done for exactly the nodes added, restarted and
     recreated; `push` done for the device nodes among those and among `pushed`, and skipped for
-    every other device node; then `verified`. The step, with the verify's verdict."""
+    every other device node; then `verified`. The step, with the verify's verdict.
+
+    One tolerance, of the cluster's runtime (`design/verified-facts.md`, "A recabled node replaced
+    when a step adds or removes a node: a known limit"): it gives each node a management address
+    drawn from the namespace's whole set of nodes, so a node a step adds or removes can move a
+    kept node's address, and that node, once a step changes its links, is recreated: in that
+    step, or in the next if the node was kept in it. So on a core reached
+    over the network (`reached`, `away`), in a step that adds or removes a node or follows one
+    that did (`RESHAPED`), a node the dry run answers `recabled` may come back at a new
+    incarnation, and is then held as a recreated one: readied and pushed. Every other kept node
+    stays held, and so does a recabled one on a core on this host or in a step that neither adds
+    nor removes a node nor follows one that did. A node that takes the tolerance is named in the
+    log."""
     e = expected(harness, fylgja, caps, twin, fixture)
     before = incarnations(harness, twin)
     s = stepped(harness, fylgja, twin, fixture, allow_restart=e.refused == RESTART, ready_before=ready_before)
@@ -782,11 +815,19 @@ def walk(
     now = {name: str(n["incarnation"]) for name, n in record_nodes(s.record).items()}
     held = harness.nodes(twin)
     assert set(now) == (set(before) - e.removed) | e.added, (sorted(before), sorted(now))
-    assert {n: now[n] for n in e.kept} == {n: before[n] for n in e.kept}, "a node the dry run keeps was made anew"
+    reshaped, after_reshaped = bool(e.added or e.removed), twin in RESHAPED
+    (RESHAPED.add if reshaped else RESHAPED.discard)(twin)
+    readdressed = e.recabled if reached(harness.address) == "away" and (reshaped or after_reshaped) else frozenset()
+    anew = frozenset(n for n in readdressed if now[n] != before[n])
+    if anew:
+        print(f"[conformance] {twin} to {fixture.stem}: recabled {sorted(anew)} came back anew, held as recreated "
+              f"(the runtime re-addressed them)", flush=True)
+    kept = e.kept - anew
+    assert {n: now[n] for n in kept} == {n: before[n] for n in kept}, "a node the dry run keeps was made anew"
     assert all(now[n] != before[n] for n in e.recreated), "a node the dry run recreates kept its incarnation"
     assert not e.removed & (set(now) | set(held)), "a node removed is left"
     assert e.added <= set(now) & set(held), "a node added is missing"
-    made = e.added | e.restarted | e.recreated
+    made = e.added | e.restarted | e.recreated | anew
     assert ended(s.events, "ready") == dict.fromkeys(made, "done"), ended(s.events, "ready")
     owed = devices(fixture)
     assert ended(s.events, "push") == {n: "done" if n in made | pushed else "skipped" for n in owed}, \

@@ -26,11 +26,9 @@ prints what it took and what it saw (`-s`).
 
 from __future__ import annotations
 
-import ipaddress
 import re
 import time
 from typing import Any
-from urllib.parse import urlsplit
 
 import pytest
 
@@ -53,6 +51,7 @@ from conformance.reads import (
     holds,
     incarnations,
     needs_ceos,
+    reached,
     record_nodes,
     settled,
     stepped,
@@ -230,16 +229,6 @@ def test_a_probe_added_readies_its_hosts_and_its_bursts_hold(
     assert holds(harness, STEP) == {**dict.fromkeys(NODES, bundle_id), **dict.fromkeys(HOSTS)}, "a probe host holds"
     assert s.verdict["loss"] == NOT_STARTED
     assert s.verdict["counts"] == {"held": 19, "failed": 0, "skipped": 5}, "the wait's verify, bursts and all"
-
-
-def reached(address: str) -> str:
-    """Where the core at `address` is reached: `here` on this host's loopback, `away` otherwise.
-    An address without a scheme is the core's own `host:port`."""
-    host = urlsplit(address if "://" in address else f"//{address}").hostname or ""
-    try:
-        return "here" if ipaddress.ip_address(host).is_loopback else "away"
-    except ValueError:
-        return "here" if host == "localhost" else "away"
 
 
 def test_a_step_to_the_bundle_the_twin_runs_is_unchanged(harness: Harness, fylgja: Fylgja) -> None:

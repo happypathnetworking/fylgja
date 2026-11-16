@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 
 USER_PAGES: tuple[str, ...] = ("README.md", "docs/README.md", "docs/installing.md", "docs/cli.md", "docs/server.md",
-                               "docs/api.md", "docs/client.md", "docs/demonstrations.md")
+                               "docs/api.md", "docs/client.md", "docs/compatibility.md", "docs/demonstrations.md")
 """The pages a user reads, as paths from the repository's root, grown by the task that writes each."""
 
 

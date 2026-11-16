@@ -19,7 +19,7 @@ changes or removes. -->
 - [ ] A changed decision is a new entry in `design/decisions.md` that supersedes the old one;
       the log is append-only, and the constitution changes only by citing such an entry.
 - [ ] A change to a format is made in `formats/`, in this pull request, with the code that
-      reads or writes it; its version is still 1.
+      reads or writes it; its version is still 1, and the change only adds.
 - [ ] Anything that depends on how containerlab, clabernetes or a network operating system
       behaves was verified against the running system and recorded, with version and date,
       in `design/verified-facts.md`.

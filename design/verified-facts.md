@@ -9831,3 +9831,44 @@ container running, both sources' Compose projects stopped and their volumes kept
 - **Not read:** the files under `/sys/kernel/security/apparmor/policy/profiles/rsyslogd.178/`, and whether this
   user may read any of them; the AppArmor files on a host where the widening was never made, or where the local
   file is not the user's to read; whether the two lines alone suffice on 26.04, as above; a user outside either group.
+
+## Nornir 3.7.0a1 and nornir_scrapli 1.6.0a1 (private branch)
+
+Read from the packages installed in the worktree's `core/.venv` on 2026-11-16 (nornir 3.7.0a1,
+nornir_scrapli 1.6.0a1, scrapli 2026.2.20, scrapli_community 2025.1.30, asyncssh 2.24.1), each from
+the file named, and the starred ones by a run of a twelve-line script on the asyncio runner.
+
+- **`AInitNornir`** is `from nornir import AInitNornir`, `async def`, with `InitNornir`'s
+  arguments, and returns the same `Nornir` (`nornir/init_nornir.py`). *
+- **The asyncio runner** is the runner plugin `asyncio`, class
+  `nornir.plugins.runners.AsyncioRunner`, selected as
+  `runner={"plugin": "asyncio", "options": {...}}`. Its options are `num_workers` (default 20, the
+  hosts in flight at once, a semaphore), `per_host_timeout` and `timeout`, the last two seconds
+  or `None` (`nornir/plugins/runners/__init__.py`). *
+- **A run** is `await nr.arun(task=<an async def taking a Task>, **kwargs)`, an
+  `AggregatedResult`; `on_good` is True and `on_failed` False by default. A synchronous task
+  raises `SyncTaskOnAsyncRunError` (`nornir/core/__init__.py`). *
+- **A host past `per_host_timeout`** has `result[host].failed` True and
+  `result[host][0].exception` a `TaskTimeoutError`, and is added to `nr.data.failed_hosts`, so the
+  next `arun` skips it unless given `on_failed=True`. A poll that reads again must pass it. *
+- **A capability inventory plugin** is a class constructed with `inventory.options` as keyword
+  arguments, with `get_capabilities()` returning a `frozenset`, `frozenset({"asyncio"})` for one
+  with `async def aload(self) -> Inventory` alone. It is registered in code by
+  `CapabilityInventoryPluginRegister.register(name, cls)`
+  (`nornir/core/plugins/inventory.py`, `register.py`); registering a name twice with the same
+  class was not read. `Inventory`, `Hosts`, `Groups`, `Defaults`, `Host` and `ConnectionOptions`
+  are `nornir.core.inventory`'s, and a `Host`'s repr is `Host: <name>`. *
+- **Closing** is `await nr.aclose_connections(on_good=True, on_failed=False)`, itself an `arun`;
+  hosts that timed out need `on_failed=True` (`nornir/core/__init__.py`).
+- **nornir_scrapli's async task** is `from nornir_scrapli.async_tasks import send_command`,
+  `async def send_command(task, command, strip_prompt=True, failed_when_contains=None,
+  timeout_ops=None) -> Result`. It opens the connection `scrapli`, registered by the package's
+  entry point in `nornir.plugins.capability_connections`
+  (`nornir_scrapli/async_tasks/core.py`, its `entry_points.txt`).
+- **The connection's `aopen`** builds `AsyncScrapli(**parameters, platform=...)` from the host's
+  hostname, username, password and port, with `transport` defaulting to `asyncssh` and the
+  connection options' `extras` laid over it, `auth_strict_key` and `timeout_ops` among them
+  (`nornir_scrapli/connection.py`).
+- **SR Linux's scrapli platform** is `nokia_srlinux`, in `scrapli_community`
+  (`scrapli_community/nokia/srlinux/`), which nornir_scrapli's `asyncio` extra installed; it
+  needs no pin of its own.

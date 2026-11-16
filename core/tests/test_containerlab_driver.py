@@ -1673,11 +1673,11 @@ def test_a_deploy_that_fails_releases_the_lock(tmp_path: Path) -> None:
 
 
 def test_the_deploys_budget_starts_once_the_lock_is_held(tmp_path: Path) -> None:
-    """The wait for another twin's deploy is outside this one's budget (D-074): a budget spent
-    waiting would kill a deploy that had barely begun. The test holds the order of the two deploys,
-    u's begun only once t's returned, and not the gap between their starts: that gap is t's hold
-    less how late t's deploy began, and on a loaded host t's can begin late enough to make it any
-    shorter."""
+    # The wait for another twin's deploy is outside this one's budget (D-074): a budget spent
+    # waiting would kill a deploy that had barely begun. The test holds the order of the two deploys,
+    # u's begun only once t's returned, and not the gap between their starts: that gap is t's hold
+    # less how late t's deploy began, and on a loaded host t's can begin late enough to make it any
+    # shorter.
     t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
     runner = HeldRunner({DEPLOY: ""})
     driver = ContainerlabDriver(tmp_path, runner=runner)

@@ -149,7 +149,8 @@ relative to them.
     `re`, which the validators read a pattern with, lets `$` match before a final newline, so a
     checkout before 1.0.0rc1 took a value matching a `$`-ended pattern with a newline after it,
     such as a device name written as a folded YAML scalar. From 1.0.0rc1 that text is refused,
-    in every format and in the API's request bodies; no other pattern's meaning moved.
+    in every format and in the API's request bodies; no other pattern's meaning moved. It was
+    mended before 1.0, since a held format may only add ([D-105](../design/decisions.md#d-105)).
 27. **A reader of an answer passes over a member it does not know**
     ([D-105](../design/decisions.md#d-105)). Within API 1 what the core answers may gain a
     member, so the client library, the CLI and the example orchestrator hold a problem document

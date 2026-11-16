@@ -145,8 +145,8 @@ def _staged(
                    unchanged=unchanged,
                    findings=found + [finding(f["rule"], f["severity"], f["message"], f.get("object"))
                                      for f in built["findings"]],
-                   omitted=[_named(o, OMITTED) for o in fidelity["omitted"]],
-                   approximations=[_named(a, APPROXIMATION) for a in fidelity["approximations"]])
+                   omitted=[_named(o, _OMITTED) for o in fidelity["omitted"]],
+                   approximations=[_named(a, _APPROXIMATION) for a in fidelity["approximations"]])
     return entry, bundle_id
 
 
@@ -189,8 +189,8 @@ def _finding(f: Finding) -> dict[str, Any]:
 
 
 # The members of a fidelity row that the plan's own rows name.
-OMITTED = ("device", "interface", "omission")
-APPROXIMATION = ("package", "text")
+_OMITTED = ("device", "interface", "omission")
+_APPROXIMATION = ("package", "text")
 
 
 def _named(row: Mapping[str, Any], names: Sequence[str]) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 # Probe packages
 
-A probe package is what Fylgja must know to run one probe format's hosts: the image a
-host runs, how it is addressed and judged ready, how a step's flow (declared, not yet run) and verify's burst
+A probe package is what Fylgja must know to run one probe format's hosts: the image a host runs,
+how it is addressed and judged ready, how a step's flow (declared, not yet run) and verify's burst
 run on it, and what it cannot reproduce ([D-008](../design/decisions.md#d-008)). A blueprint's
 probe names its package by its `format`.
 

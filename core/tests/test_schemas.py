@@ -216,6 +216,8 @@ def test_no_pattern_uses_a_class_python_reads_otherwise() -> None:
     for name, doc in _formats().items():
         for pattern in _patterns(doc):
             assert not re.search(r"\\[dwsbDWSB]", pattern), (name, pattern)
+            assert "[]" not in pattern and "[^]" not in pattern, (name, pattern)
+            assert "." not in re.sub(r"\\.|\[[^\]]*\]", "", pattern), (name, pattern)
         text = json.dumps(doc)
         for keyword in ("patternProperties", "propertyNames", "unevaluatedProperties"):
             assert f'"{keyword}"' not in text, (name, keyword)

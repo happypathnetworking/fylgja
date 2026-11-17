@@ -6,10 +6,15 @@ Nothing here renders the template: Infrahub's own workers do, from the commit th
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
 import re
 from pathlib import Path
+from typing import Any
 
+import jinja2.sandbox
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -156,3 +161,53 @@ def test_the_template_asks_for_nothing_the_query_does_not_select() -> None:
     assert read - fields == set()
     assert "EOS" not in template
     assert "hostname" not in template
+
+
+ADDRESSED = re.compile(r"set / interface (\S+) subinterface 0 ipv4 address (\S+)")
+
+
+def _answer(network: dict[str, Any], device: dict[str, Any]) -> dict[str, Any]:
+    """The query device_config's answer for `device` of `network`, as Infrahub gives it: its ports, each with its
+    cable's two ends where it is cabled, its role and its addresses, the addresses read from the device's own
+    configuration."""
+    far: dict[tuple[str, str], dict[str, str]] = {}
+    for link in network["links"]:
+        far[(link["a"]["device"], link["a"]["interface"])] = link["b"]
+        far[(link["b"]["device"], link["b"]["interface"])] = link["a"]
+    addresses: dict[str, list[str]] = {}
+    for port, address in ADDRESSED.findall(device["config"]):
+        addresses.setdefault(port, []).append(address)
+
+    def end(device_name: str, port: str) -> dict[str, Any]:
+        return {"node": {"name": {"value": port}, "device": {"node": {"name": {"value": device_name}}}}}
+
+    edges = []
+    for interface in device["interfaces"]:
+        name = interface["name"]
+        other = far.get((device["name"], name))
+        ends = [end(device["name"], name), end(other["device"], other["interface"])] if other else []
+        connector = {"node": {"connected_endpoints": {"edges": ends}}} if other else {"node": None}
+        edges.append({"node": {
+            "__typename": "InterfacePhysical",
+            "name": {"value": name},
+            "role": {"value": "management" if interface["mgmt_only"] else None},
+            "status": {"value": "active" if interface["enabled"] else "disabled"},
+            "connector": connector,
+            "ip_addresses": {"edges": [{"node": {"address": {"value": a}}} for a in addresses.get(name, [])]},
+        }})
+    platform = {"node": {"name": {"value": "SR Linux"}, "manufacturer": {"node": {"name": {"value": "Nokia"}}}}}
+    node = {"name": {"value": device["name"]}, "description": {"value": "FYLGJA-MARKER-fixture"},
+            "platform": platform, "interfaces": {"edges": edges}}
+    return {"DcimDevice": {"edges": [{"node": node}]}}
+
+
+@pytest.mark.parametrize("fixture", ["three-node", "three-node-probed"])
+def test_the_template_renders_the_fixtures_configurations_as_infrahub_renders(fixture: str) -> None:
+    """Rendered in Jinja's async mode, as Infrahub renders a transform, in a sandbox that allows no mutation, from the
+    answer the query gives for each device, the template gives the fixture's configuration byte for byte."""
+    network = json.loads((ROOT / "testdata" / "blueprint" / f"{fixture}.json").read_text())["network"]
+    env = jinja2.sandbox.ImmutableSandboxedEnvironment(undefined=jinja2.StrictUndefined, enable_async=True)
+    template = env.from_string(TEMPLATE.read_text())
+    for device in network["devices"]:
+        rendered = asyncio.run(template.render_async(data=_answer(network, device)))
+        assert rendered == device["config"], device["name"]

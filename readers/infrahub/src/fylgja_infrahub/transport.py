@@ -196,12 +196,13 @@ class Infrahub:
 
     def content(self, branch: str, at: str | None, storage_id: str) -> Content:
         """The bytes Infrahub stores under `storage_id`, `GET /api/storage/object/<storage_id, percent-escaped>`, and
-        the status it answered, whatever that is, for the read to judge. The request carries no branch and no time: a
+        the status it answered, whatever that is, for the read to judge, but a shed past `SHED_BUDGET_S`, which is an
+        `InfrahubError`: a busy Infrahub is no fact about the artifact. The request carries no branch and no time: a
         storage id names one object, which Infrahub still serves after a rewrite has listed another in its place, so
         a read at a past time fetches the bytes it listed then (design/verified-facts.md, "Infrahub 1.11.11").
         `branch` and `at` name the read in an error; Infrahub not reached is an `InfrahubError`."""
         what, where = f"reading the content stored under {storage_id}", _where(branch, at)
-        response = self._send("GET", f"/api/storage/object/{quote(storage_id, safe='')}", what, where, judged=True)
+        response = self._send("GET", f"/api/storage/object/{quote(storage_id, safe='')}", what, where)
         return Content(response.status_code, response.content)
 
     def stamps(self, branch: str, at: str | None, tag: str) -> Listing[Stamped]:
@@ -381,11 +382,9 @@ class Infrahub:
         *,
         params: Mapping[str, str] | None = None,
         body: object | None = None,
-        judged: bool = False,
     ) -> httpx.Response:
         """The response to one request, a shed one sent again after each wait that fits in `SHED_BUDGET_S`. Once the
-        next would not, the last 429 is an `InfrahubError` that says the request was shed, or, where the response is
-        `judged` by its caller, answered as it is."""
+        next would not, the last 429 is an `InfrahubError` that says the request was shed."""
         waited = 0
         while True:
             response = self._request(method, path, what, where, params=params, body=body)
@@ -396,8 +395,6 @@ class Infrahub:
                 break
             self._sleep(wait)
             waited += wait
-        if judged:
-            return response
         said = f"HTTP 429: {self._words(response)}; Infrahub shed the request for {waited} s, so it was given up"
         raise self._error(what, where, 429, said)
 

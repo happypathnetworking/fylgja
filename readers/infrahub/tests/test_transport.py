@@ -1009,13 +1009,27 @@ def test_sheds_past_the_budget_give_up_naming_the_shed_and_never_the_token(
     assert [record for record in caplog.records if record.name.startswith("fylgja")] == []
 
 
-def test_a_shed_content_is_waited_out_and_past_the_budget_its_429_is_the_reads_to_judge() -> None:
+def test_a_shed_content_is_waited_out_and_past_the_budget_is_an_error_not_a_status_to_judge() -> None:
+    """A busy Infrahub is no fact about the artifact: a shed past the budget is an `InfrahubError`, so that Infrahub's
+    load never becomes `artifact.content.unavailable`; an unmarked 429 is still the read's to judge."""
     served, slept = Served(in_turn(shed("4"), httpx.Response(200, content=b"set / x\n"))), Slept()
     with shed_opened(served, slept) as conn:
         assert conn.content("main", AT, "s1") == Content(200, b"set / x\n")
     assert slept.waits == [4]
 
     served, slept = Served(in_turn(shed("30"))), Slept()
+    with shed_opened(served, slept) as conn, pytest.raises(InfrahubError) as raised:
+        conn.content("main", AT, "s1")
+    assert slept.waits == [30] * 10
+    assert raised.value.status == 429
+    assert str(raised.value).endswith(
+        f"HTTP 429: {SHED_WORDS}; Infrahub shed the request for 300 s, so it was given up"
+    )
+    for held in ("s1", "branch main", AT):
+        assert held in str(raised.value)
+    assert TOKEN not in str(raised.value) and TOKEN not in repr(raised.value)
+
+    served, slept = Served(lambda request: shed("3", marked=False)), Slept()
     with shed_opened(served, slept) as conn:
         assert conn.content("main", AT, "s1").status == 429
-    assert slept.waits == [30] * 10
+    assert slept.waits == []

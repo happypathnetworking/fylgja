@@ -12,10 +12,12 @@ what its major version holds is stated on [one page](../docs/compatibility.md).
   phase 5: step, verify and the burst on the local driver (2026-11-04); phase 6: the
   clabernetes driver, the core as a pod and the conformance suite (2026-11-08); phase 7:
   many twins at once, admitted by the runtime's room (2026-11-09); phase 8: the Infrahub
-  reader, the example orchestrator and the cut-over (2026-11-12); and phase 9: the NetBox
-  reader and the example's NetBox change source (2026-11-13).
-- **Next:** the first release, settled on 2026-11-13 ("Phase 10"; "Sequence", item 10). What
-  each phase left is under its item there and among the
+  reader, the example orchestrator and the cut-over (2026-11-12); phase 9: the NetBox reader
+  and the example's NetBox change source (2026-11-13); and phase 10: the first release, its
+  candidate `1.0.0rc2` published to TestPyPI and accepted (2026-11-17).
+- **Next:** 1.0.0 itself, from the accepted candidate, each act on the maintainer's word
+  ([D-117](decisions.md#d-117)). No item of "Sequence" is settled after phase 10. What each
+  phase left is under its item there and among the
   [open questions](decisions.md#open-questions). The `hardware` driver is a later release's.
 - **Beside the core:** a reader for each source of truth, the Infrahub reader
   (`readers/infrahub/`, the distribution `fylgja-infrahub`) and the NetBox reader
@@ -1587,7 +1589,12 @@ tree's own behaviour and is recorded here.
   core runs a package's one version: the blueprint, the bundle and every rendered topology
   are what they were. `conformance.version` stays, the path of the leaf a version is read
   at, still with no reader ([D-030](decisions.md#d-030)); its reader comes with support for
-  several versions. The probe package keeps its one image.
+  several versions. The probe package keeps its one image. *As built
+  ([D-109](decisions.md#d-109)):* the rules are `package.versions.name`,
+  `package.images.coverage` and `package.versions.several`, the last expected to be lifted; a
+  version's name refuses a parenthesis and `+`; and `conformance.port.discovering`, which no code
+  reads either, was made optional on the maintainer's word, so `conformance.version` is the one
+  required member nothing reads.
 - **A deletion the packages cannot account for is refused once, as a step is**
   ([D-102](decisions.md#d-102)). A step of a twin one of whose nodes runs an image no
   loaded package lists is already refused, `bundle.rejected`, from the error the driver's
@@ -1595,10 +1602,18 @@ tree's own behaviour and is recorded here.
   driver's `destroy` meets that node before it touches the runtime, the loop refuses the
   deletion once with the same rule, naming the node, its image and the remedy, and the twin
   waits for a core whose packages list it. No pass raises for it, on either driver, for a
-  device node or a probe host. The seam gains no call. The defect above is mended first.
+  device node or a probe host. The seam gains no call. The defect above is mended first. *As
+  built ([D-109](decisions.md#d-109)):* "once" is once in a core's life, a core started again
+  asking its driver again; and a cancelled or failed create's teardown and a create's apply
+  resumed after `planned` are refused alike, the lab kept, where each would have raised.
 - **The local driver's pool is a setting** ([D-103](decisions.md#d-103)). Its default
   stays. A create refused because Docker's networks hold the whole pool says so, and names
-  the networks and the setting.
+  the networks and the setting. *As built ([D-110](decisions.md#d-110)):* `FYLGJA_LAB_POOL`,
+  read and checked under either driver and used by the local driver alone; where twins alone
+  hold the pool, the refusal names the setting alone. Beside it the phase mended a teardown that
+  left a lab's containers when a deletion cut its create's deploy: after a cancel each driver
+  looks again, the local one listing the lab until it stays empty for 5 s and the clabernetes
+  one reading the namespace again for 5 s.
 - **One command a source** ([D-104](decisions.md#d-104)): `make infrahub-demo`,
   `make netbox-demo` and `make demo-down`. One script runs that source's runbook in the
   runbook's own order, with the core, the edge's Prefect and the runner in the background,
@@ -1610,7 +1625,12 @@ tree's own behaviour and is recorded here.
   one source's runner, and either source, up, starts the same two deployments by name
   ("Phase 9"; [D-099](decisions.md#d-099)). So a demonstration first stops the other source
   where it is up, by that source's own `down`, its volumes kept, and refuses while the
-  other's runner is up. No seed, fixture or template changes.
+  other's runner is up. No seed, fixture or template changes. *As built
+  ([D-111](decisions.md#d-111)):* Infrahub's seed runs once, last, with its proposed change,
+  after Prefect and the runner, and the core is started once; a precondition or a command line
+  is exit 2 and a Ctrl-C 130, and through make every failure is make's 2; the core's store and
+  token file are always the demonstration's own under `local/demo/`; and it refuses any runner
+  under `local/prefect` it did not record, and ends Prefect only where it started it.
 - **What a demonstration does for the host, and what it only checks**
   ([D-104](decisions.md#d-104)). It writes under `local/` what is missing and can be
   generated, never printed: the core's store, its token file, and a client's token and
@@ -1620,7 +1640,11 @@ tree's own behaviour and is recorded here.
   free ports, the node login's two lines in `local/.env`, a branch checked out where the
   source registers the repository at one, and, once the source is up, a pool no Docker
   network holds whole, which Infrahub's own may ([D-103](decisions.md#d-103)). Those are the host's preconditions,
-  stated in the user documentation; nothing else is done by hand.
+  stated in the user documentation; nothing else is done by hand. *As built
+  ([D-111](decisions.md#d-111)):* the free ports are the core's, 4200 and the source's own,
+  Infrahub's three others left to its start to refuse; the login is the core's from
+  `local/.env`, never written, defaulted or printed; and the checks no stop can cure come before
+  the earlier run is settled and the other source stopped, the host's memory and ports after.
 - **What 1.0 promises** ([D-105](decisions.md#d-105)). The three published distributions
   share one version and follow semantic versioning. Within major version 1, what a user
   writes stays valid and means the same, and what a user reads only gains: API 1, the
@@ -1631,7 +1655,11 @@ tree's own behaviour and is recorded here.
   release. Not promised: the example orchestrator, its commands and
   its two documents; the make targets, the scripts and `deploy/`; the wording of a message;
   a bundle's or a deployment's id from one release to the next; and a store with twins in
-  it carried across an upgrade, which each release's notes speak to.
+  it carried across an upgrade, which each release's notes speak to. *As built
+  ([D-112](decisions.md#d-112)):* what the client and the example held closed was problem
+  documents and verdicts, now read open; a pattern's `$` is read as the end of the text, so a
+  text ending in a newline that a checkout before 1.0 accepted is refused; and a value added to
+  an enumeration an answer closes waits for a major release.
 - **The release** ([D-106](decisions.md#d-106)). One version, in one place, for every
   distribution; each reader requires the core at its own version or later within the major. `fylgja-core`,
   `fylgja-infrahub` and `fylgja-netbox` are published to PyPI as wheels, by a workflow a
@@ -1639,11 +1667,18 @@ tree's own behaviour and is recorded here.
   maintainer's. A candidate, `1.0.0rc1`, is tagged on the phase's integration branch and
   goes to TestPyPI; the release is tagged on `main` and goes to PyPI. No source
   distribution, no image and no example orchestrator is published. Each command answers `--version` with the version
-  and the commit it was built from, and `GET /v1/version` gives the same as `build`.
+  and the commit it was built from, and `GET /v1/version` gives the same as `build`. *As built
+  ([D-113](decisions.md#d-113)):* the version is a root `VERSION` file, and each reader requires
+  `fylgja-core>=<VERSION>,<2`; the commit is a `COMMIT` file in each wheel, given to the image by
+  one build argument; each wheel is uploaded by a job of its own behind an environment of its
+  own, six in all, and a GitHub release follows a release alone; and there were two candidates,
+  `1.0.0rc1` and `1.0.0rc2`, the second after rc1's acceptance found the Infrahub reader failing
+  on a request Infrahub shed ([D-116](decisions.md#d-116)).
 - **The packages ship in the core's wheel** ([D-106](decisions.md#d-106)): `psp/` and
   `probes/`, as the formats do ([D-066](decisions.md#d-066)), and `FYLGJA_PACKAGES`, unset,
   means them. Set, it is every directory read, as now. The image takes its packages from
-  the wheel, and its own copy of them goes.
+  the wheel, and its own copy of them goes. *As built ([D-113](decisions.md#d-113)):* under
+  `fylgja_core/shipped/`, and `FYLGJA_PACKAGES` set to nothing means them too.
 - **User documentation is reference, in `docs/`, held to the code by tests**
   ([D-107](decisions.md#d-107)): installing; running the server and its settings; the
   core's two commands; the API; the client library; the two demonstrations with the host's
@@ -1651,7 +1686,10 @@ tree's own behaviour and is recorded here.
   tables tests hold today and whose commands gain the same test. Plain Markdown, no
   generator. A test compares each page's commands,
   options, routes, settings, exit statuses and client calls with the code's, as sets. `README.md` is rewritten for a user, and
-  `CONTRIBUTING.md` keeps what a contributor needs.
+  `CONTRIBUTING.md` keeps what a contributor needs. *As built ([D-114](decisions.md#d-114)):*
+  eight pages under `docs/`, the installing page and the promise's held by tests too; the
+  README each published wheel carries as its description has its relative links written into
+  the tag's tree at build; and no page states a tuning figure.
 
 **The formats touched.** `platform-package-1` alone: `versions` and the runtime section's
 images. Its `image` definition stays, since
@@ -1659,7 +1697,12 @@ images. Its `image` definition stays, since
 is the last change of a format that may break a document written to it
 ([D-105](decisions.md#d-105)). `api-1.openapi.yaml` is corrected where it disagrees with
 the server (where TLS ends, its licence), which changes no route or member; where it says
-what `build` holds, the server is brought to it.
+what `build` holds, the server is brought to it. *As built:* `conformance.port.discovering`
+became optional ([D-109](decisions.md#d-109)), and a pattern's `$` the end of the text in every
+format ([D-112](decisions.md#d-112)), both before the freeze; beside them, only descriptions
+changed: the probe format's, which now say a flow is declared and not yet run, the API
+document's 403, reserved until roles exist, and its `build`, for people, and those that named
+a rule no code files, or the conformance suite as a reader it is not.
 
 **Non-goals.** A device that names its version, a second version of any package, verify
 asserting the version a node runs, or a reader's row naming one; a new demonstration, or a
@@ -1687,7 +1730,15 @@ the release candidate itself; and what `pip` resolves for a reader installed fro
 while the core's name is, or is not, held on PyPI. The three names were read on 2026-11-13,
 on the maintainer's word, and are held by no project on either index
 ([verified-facts.md](verified-facts.md), "PyPI and TestPyPI"); whether an index takes each
-is read when its publisher is registered.
+is read when its publisher is registered. *As read:* the clabernetes driver's `destroy`
+meets such a node before any request to the cluster, by the same lookup as the local driver's,
+and the deletion is refused alike; each demonstration was timed on kept volumes, and from new
+volumes at the candidates, about seventeen minutes each, and a run over a change an earlier one
+left open passed; one version read through uv's lock and cache needed each member's cache keys
+to name `VERSION`; TestPyPI took the three names by trusted publishing; and the wheels installed
+from TestPyPI, PyPI the second index, took every dependency from PyPI, where no project held the
+core's name ([verified-facts.md](verified-facts.md); [D-113](decisions.md#d-113),
+[D-117](decisions.md#d-117)). Whether PyPI takes the names is read at the release.
 
 **Five plans, each a branch and a pull request useful on its own, in this order:**
 
@@ -1724,6 +1775,15 @@ is read when its publisher is registered.
    release's notes as a known limit; the candidate tagged, published to TestPyPI and
    installed from it; both demonstrations run from a fresh clone. It closes the phase.
 
+*As built*, three changes ran beside the five plans: the `uv` change, a plan of its own on the
+integration branch between plans 2 and 3 rather than a change merged to `main` first
+([D-115](decisions.md#d-115)); a fix of the local driver's cut create, found by plan 2's
+readings and merged beside plan 2 ([D-110](decisions.md#d-110)); and, at the candidate, a fix
+of Infrahub's clients, which made the second candidate. The loopback branch was merged before
+that candidate's tag, not at the landing ([D-116](decisions.md#d-116)). Plan 5 also ran the live
+and cluster tiers whole, the maintainer having left them to the candidate
+([D-117](decisions.md#d-117)).
+
 Plan 2 follows 1, for the pool's setting; 3 may be written beside 1 and 2; 4 follows 2 and
 3; 5 follows all. Live and demonstration runs are one at a time on the development host,
 each source stopped for the live tier and the suite as now. Plans 1 and 2 are built once
@@ -1740,7 +1800,12 @@ the source stopped and its volumes kept until `PURGE=1`; and the three wheels, i
 empty environment, give a `fylgja-core --version` that names the candidate and its commit
 and a server that starts with no `FYLGJA_PACKAGES`. Then, each on the maintainer's word:
 the tag, the upload to PyPI, the push, and at the landing the merge of the branch that
-binds the development Infrahub's ports to loopback.
+binds the development Infrahub's ports to loopback. *As made (2026-11-17,
+[D-117](decisions.md#d-117)):* at the second candidate, `1.0.0rc2`, from a clone of the public
+repository at its tag, checked out on a local branch there since a demonstration on Infrahub
+refuses a detached head; the loopback branch merged before that tag, on the maintainer's word;
+and both demonstrations passed, each report read by the maintainer in its source, and the wheels
+installed from TestPyPI as the criterion asks.
 
 **Left to the builder.** The members' names in the package format, each with its consumer,
 and how a version's name is spelled, the release's own text being the default; the rule
@@ -1957,6 +2022,42 @@ formats and the API are still settling.
     - Document the commands, the API and the client for a user
       ([D-107](decisions.md#d-107)).
 
+    Built, in the five plans of "Phase 10" and three changes beside them: a platform package's
+    versions, each with its image, one a package, and the deletion that raised without end
+    refused once in a core's life on both drivers ([D-102](decisions.md#d-102),
+    [D-109](decisions.md#d-109)); the local driver's pool as the setting `FYLGJA_LAB_POOL`, and a
+    teardown after a cancelled create that looks again on both drivers
+    ([D-103](decisions.md#d-103), [D-110](decisions.md#d-110)); `make infrahub-demo`,
+    `make netbox-demo` and `make demo-down` ([D-104](decisions.md#d-104),
+    [D-111](decisions.md#d-111)); the environment by one uv workspace and its lock
+    ([D-108](decisions.md#d-108), [D-115](decisions.md#d-115)); one `VERSION`, `--version` and
+    `build` naming the commit, the packages in the core's wheel, three wheels and the workflow
+    that publishes them ([D-106](decisions.md#d-106), [D-113](decisions.md#d-113)); the user's
+    reference under `docs/`, each page held by a test ([D-107](decisions.md#d-107),
+    [D-114](decisions.md#d-114)); the answers read open, a pattern's `$` the end of the text, and
+    the page "What 1.0 holds" with the release's notes and their known limits
+    ([D-105](decisions.md#d-105), [D-112](decisions.md#d-112)); and Infrahub's clients waiting
+    out a shed request, the development database given 180 s to start and its ports on loopback
+    ([D-116](decisions.md#d-116)). *Done on 2026-11-17* ([D-117](decisions.md#d-117)): the live
+    and cluster tiers passed whole, each for the first time since phase 7, and the conformance
+    suite whole on both drivers, on the candidate's core; `1.0.0rc2`, the second candidate, was
+    published to TestPyPI and installed from it into an empty environment, and from a fresh
+    clone at its tag `make netbox-demo` and `make infrahub-demo` each ended `passed`, each report
+    read by the maintainer in its source ([verified-facts.md](verified-facts.md), "From new
+    volumes, in a fresh clone at the candidates", under Infrahub and NetBox). The question of a
+    core test whose margin was the host's load was answered. It left to later phases, or to the
+    maintainer's word: 1.0.0 itself, its tag on `main`, its upload to PyPI and its GitHub release,
+    and the archived repository's privacy; support for several versions of a platform, a device
+    naming the version it runs, a second version listed and measured, and verify asserting the
+    version a node runs, the reader of `conformance.version` with it; the better demonstrations,
+    and a demonstration on the cluster; a published image and source distributions; a version's
+    name that a parenthesis or `+` would need; the cancel's mark and the refused deletion, which
+    a core restarted forgets; a fixed management address for each node on clabernetes, so that a
+    recabled node is never replaced; `exclude-newer` for the two-week rule; the live wait of a shed
+    request, which no run met; and the release's known limits, each among the
+    [open questions](decisions.md#open-questions) but two, flows across a step and the cancel's
+    mark on the cluster.
+
 ## Verification
 
 - **Formats**: every document the core emits validates against its schema. JCS ids are
@@ -1990,7 +2091,11 @@ formats and the API are still settling.
   wait expired; the capacity read before, during and after; a twin of forty nodes refused in a
   dry run and at its create with the shortfall named, the capacity read agreeing in its hosts and
   its sign; and every twin destroyed, leaving nothing. With it the suite passed on both drivers on
-  2026-11-09, 53 tests and a skip on each ([verified-facts.md](verified-facts.md)).
+  2026-11-09, 53 tests and a skip on each ([verified-facts.md](verified-facts.md)). On
+  2026-11-16 it passed whole on each driver again, on the candidate's core, its
+  unchanged step held by its phases and its end-to-end bound one a harness, and on the
+  clabernetes harness a recabled node held as recreated where a node added or removed moved its
+  management address ([D-110](decisions.md#d-110), [D-117](decisions.md#d-117)).
 - **Resumption**: kill the core mid-phase on each driver; the twin reaches its desired state
   or is cleaned up. The suite's kill scenarios do so on both drivers, where the kill found the
   run unfinished ([D-072](decisions.md#d-072) names the two boundaries it did not on the
@@ -2001,6 +2106,11 @@ formats and the API are still settling.
   on its fake runtime, and each change source's contract tier against its source; a proposed
   change rehearsed through Infrahub's own check on each driver ("Phase 8"); and a branch
   rehearsed from its tag in NetBox on each driver ("Phase 9").
+- **The release**: the wheel check, which installs each published wheel into an empty
+  environment and starts the core's server with no `FYLGJA_PACKAGES`; the image check; the
+  release check before any upload, which holds the wheels to the tag, the commit and the version;
+  the tests that hold each user page to the code; and, at a candidate, its wheels installed from
+  TestPyPI and both demonstrations run from a fresh clone at its tag ("Phase 10").
 
 ## The multi-host stage (2026-11-02)
 

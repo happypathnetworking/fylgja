@@ -6475,7 +6475,8 @@ scanned. No purge was made, so the time from new volumes was not read. *(2026-11
   listings' own interval, `SCHEDULED` to `RUNNING` 5.0 s and `PENDING` to `RUNNING` 5.1 s apart. The registration's own
   bound of 300 s ran out at its first ask in the first run; its second ask, the last the script gives, said `in-sync and
   online, 56 s on`, its own count, and took 62.3 s by the stamps (a derivation). *(2026-11-14)*
-- **Not read:** the time from new volumes, since no purge was given (the first starts recorded above: answering 155 and
+- **Not read:** ~~the time from new volumes, since no purge was given~~ (read on 2026-11-17 below, "From new volumes, in a
+  fresh clone at the candidates": 17m11.9s of wall time at v1.0.0rc2; the first starts recorded above: answering 155 and
   158 s after Compose's start); a first `make infrahub-up` that needed a second ask, the database being healthy at the
   first this time; a task worker recreated by the second `make infrahub-up`, none being; why the registration's first
   import did not reach `e4212a9` within 300 s; `STOP_WAIT_S` from a signal to the process gone, the signals' times not
@@ -6520,7 +6521,8 @@ timestamps, each a derivation; each target's time is by the host's clock, read b
   *(2026-11-16)*
 - **The stops:** each `make infrahub-down` exited 0, in 12.2 s (the failed start's, no server having started), 21.4 s,
   45.5 s, 16.4 s, 45.6 s and 46.1 s, leaving the project's five volumes. *(2026-11-16)*
-- **Not read:** a start on new volumes (Task 13's); what made the first start after 47 hours twice as slow as the next
+- **Not read:** ~~a start on new volumes (Task 13's)~~ (read on 2026-11-17 below, "From new volumes, in a fresh clone at
+  the candidates": both passed at the first ask, the start period not reached); what made the first start after 47 hours twice as slow as the next
   ones; a start near 180 s, which none came near; the second start's first passing probe. *(2026-11-16)*
 
 **Its API sheds load with a marked 429** *(Infrahub 1.11.11)*
@@ -9120,7 +9122,9 @@ stood untagged with its two marks and one report. *(2026-11-14)*
   128.5 s after the return, its document `passed`, `took_s` 118.1, its stages `created` (80.1 s), `passed` (13.1 s),
   `passed` (9.9 s) and `skipped`; the journal held its two marks and the report, kind `success`; and the core
   listed no twin. *(2026-11-14)*
-- **Not read:** the first start on new volumes, which no purge was made for (above: 748.9 s, 764.4 s and 749.6 s);
+- **Not read:** ~~the first start on new volumes, which no purge was made for~~ (read through the demonstration on
+  2026-11-17 below, "From new volumes, in a fresh clone at the candidates"; above, `make netbox-up` exited 0 in 748.9 s,
+  764.4 s and 749.6 s on new volumes, and the script said NetBox healthy 732 s and 744 s after its start);
   why the second cut left containers and the first none, and what removes them short of `docker rm`; a later twin
   of the same name as one whose containers were so left; a runner cut later in a rehearsal, its twin ready or a step
   in flight, or by SIGKILL, and so a twin a cut does leave in the store; the core given SIGTERM while a create or a
@@ -9208,8 +9212,11 @@ Every output was saved. The first run's output was searched for ten credentials 
   from the tag's line to the run said, 58 times; `RUN_WAIT_S` 4200 s over 110.7 s from said to ended, 37.9 times;
   `DOCUMENT_WAIT_S` 60 s over 0.21 s, the document read at the first ask both times, 286 times ("Prefect 3.9.2",
   above). *(2026-11-14)*
-- **Not read:** the time from new volumes, since no purge was given (the first starts recorded are above: NetBox
-  healthy 748.9 s, 764.4 s and 749.6 s after its start); `STOP_WAIT_S` from a signal to the process gone, the signals'
+- **Not read:** ~~the time from new volumes, since no purge was given~~ (read on 2026-11-17 below, "From new volumes, in
+  a fresh clone at the candidates": 17m41s at v1.0.0rc1 and 17m14.6s at v1.0.0rc2; the first starts recorded are above:
+  ~~NetBox healthy 748.9 s, 764.4 s and 749.6 s after its start~~ (those are `make netbox-up`'s exit times on new
+  volumes; the script said NetBox healthy 732 s and 744 s after its start, and `/login/` first answered 200 748.7 s
+  after `up -d`, "Through the make targets" and above it)); `STOP_WAIT_S` from a signal to the process gone, the signals'
   times not being logged; `DESTROY_TIMEOUT_S`, no twin being left for `settle` to destroy; `PULL_TIMEOUT_S`, both
   images being held; `DOCKER_TIMEOUT_S`, 60 s, and `REQUEST_TIMEOUT_S`, 30 s, every read of Docker, `ss` and the CLI
   and every request having answered, but none stamped apart from the lines around it; a `make netbox-demo` that fails
@@ -9501,7 +9508,8 @@ once. *(2026-11-13)*
   `setuptools>=80` resolves.
 - **Not read:**
   - `uv sync` against a venv of another Python minor.
-  - the uv'd CI: it has not run, and plan 5's run is its first.
+  - ~~the uv'd CI: it has not run, and plan 5's run is its first.~~ (Run on 2026-11-17, "GitHub Actions,
+    `ubuntu-26.04`", below.)
   - `make venv` on a host with no uv on the PATH (the shell's `uv: not found` is what is expected,
     not read).
   - a host with a uv-managed Python installed: none is on the development host, and installing one
@@ -9542,18 +9550,22 @@ second file, in a scratch project directory; no container started. *(2026-11-12)
   `ports: !reset []` rendered the service with no `ports` at all.
 - **The tree's override renders all four on loopback.** The published file with
   `infrahub/dev/compose.override.yml` rendered `host_ip: 127.0.0.1` on each of the four and
-  no other published port. Rendered only: no Infrahub was started under it, and the host's
-  listeners were not read.
+  no other published port. Rendered only: ~~no Infrahub was started under it, and the host's
+  listeners were not read~~ (read on 2026-11-17 under "Infrahub 1.11.11", "From new volumes, in a
+  fresh clone at the candidates": the running instance listened on `127.0.0.1` alone for the
+  four).
 
 ---
 
 ## PyPI and TestPyPI
 
-- **The three names are held by no project, on either index.** For each of `fylgja-core`,
+- ~~**The three names are held by no project, on either index.**~~ (On TestPyPI they are held since 2026-11-17, by
+  the candidates' uploads below; on PyPI by none still.) For each of `fylgja-core`,
   `fylgja-infrahub` and `fylgja-netbox`, `GET /pypi/<name>/json` and `GET /simple/<name>/`
   answered 404 on `pypi.org` and on `test.pypi.org`, asked with no account, on the
-  maintainer's word. That a name is free reserves nothing, and whether either index would
-  take it when a publisher is registered, its rule against names like another's among the
+  maintainer's word. That a name is free reserves nothing, and ~~whether either index would
+  take it when a publisher is registered~~ (TestPyPI took all three on 2026-11-17, below; PyPI's
+  not read before the release), its rule against names like another's among the
   reasons it may not, was not read. *(2026-11-13)*
 
 Read on 2026-11-15, as documented and not exercised, by anonymous requests and no account: PyPI's
@@ -9648,7 +9660,8 @@ gh 2.46.0, the runner's gh not read. No environment, setting or run was made. *(
   reviewers and wait timers are for public repositories alone; deployment branches and tags are
   for every public repository, and for private ones on Pro or Team. Up to six people or teams may
   be required reviewers, and one approval lets the job proceed. "Prevent self-review" stops the
-  user who started a run approving it; off, the pages do not say outright that that user may.
+  user who started a run approving it; ~~off, the pages do not say outright that that user may~~
+  (off, that user did, on 2026-11-17: `v1.0.0rc2`'s run, below).
   Deployment rules are name patterns for branches or for tags, matched against the run's
   `GITHUB_REF`, `*` not matching `/`. Every protection rule passes before a job naming the
   environment is sent to a runner. Running a workflow that names an environment that does not
@@ -9681,6 +9694,20 @@ gh 2.46.0, the runner's gh not read. No environment, setting or run was made. *(
   `checkout` and `setup-python` are the latest releases of the majors `ci.yml` names (`v5`, `v6`);
   later majors were released (`checkout` `v7.0.1` and `setup-python` `v7.1.0`, both more than two
   weeks old) and not read.
+
+Read on 2026-11-16 and 2026-11-17 in the runs of this repository's two workflows, as the release
+candidate's plan recorded them from GitHub. *(2026-11-17)*
+
+- **`ci.yml` under uv** ran on the draft pull request of `phase-10-integration` into `main`, at
+  `dd4cb3b` and again at `0410959`: `lint-and-test` and `image` each succeeded. *(2026-11-17)*
+- **`publish.yml` for `v1.0.0rc1`** started on the tag's push on 2026-11-16, before the
+  environments existed, and was cancelled during `build`: every job cancelled, nothing uploaded,
+  no environment made, no GitHub release. Re-run on 2026-11-17 at the same commit, once the six
+  environments and the tag ruleset stood, `build` succeeded and each `testpypi-*` job waited for
+  approval; the maintainer approved the three, each uploaded its one wheel, and the `pypi-*` jobs
+  and `release` were skipped. *(2026-11-17)*
+- **`publish.yml` for `v1.0.0rc2`** ran the same way at `0410959`. The maintainer, who pushed the
+  tag, approved the three upload jobs, each environment's "Prevent self-review" off. *(2026-11-17)*
 
 ---
 

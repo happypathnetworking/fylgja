@@ -15,8 +15,8 @@ already have been weighed.
   repository, and so are the prototype orchestrator's (reading Infrahub, stages, the checks,
   the rehearsal's report), which bind nothing here: those kept were restated in
   [D-082](#d-082), [D-086](#d-086), [D-087](#d-087) and [D-088](#d-088).
-- **Citing an entry.** Cite it by its number, `D-0NN`, and link it by its anchor:
-  `decisions.md#d-0nn` from `design/`, or `design/decisions.md#d-0nn` from the repository root.
+- **Citing an entry.** Cite it by its number, `D-NNN`, and link it by its anchor:
+  `decisions.md#d-nnn` from `design/`, or `design/decisions.md#d-nnn` from the repository root.
 - **The frozen Go core**, in the archived repository, was the reference implementation of
   the core ([D-001](#d-001)) and is retired ([D-081](#d-081), [D-094](#d-094)). Where an
   entry describes its behaviour, it says so.
@@ -133,6 +133,15 @@ already have been weighed.
 | [D-106](#d-106) | The first release: one version, three wheels on PyPI, the packages in the core's wheel | Process and repository |
 | [D-107](#d-107) | User documentation is reference in `docs/`, held to the code by tests | Process and repository |
 | [D-108](#d-108) | uv manages the Python environment: one workspace, one committed lock, and `make venv` a locked sync | Process and repository |
+| [D-109](#d-109) | A platform package's versions and the refused deletion as built: refused once in a core's life, at a create's teardown too, and the path that says LLDP runs made optional | Platforms and packages |
+| [D-110](#d-110) | The pool and a cancelled create's teardown as built: the pool's setting read under both drivers, a teardown that looks again after a cancel on both, and a recabled node clabernetes may replace | Runtimes and drivers |
+| [D-111](#d-111) | The demonstrations as built: Infrahub's seed once and last, a precondition exit 2, the demonstration's own store and tokens, and nothing signalled that does not still read as the demonstration's | Process and repository |
+| [D-112](#d-112) | What 1.0 promises as built: the answers read open where only problems and verdicts were closed, a pattern's `$` the end of the text, and a value added to an enumeration waiting for a major release | The project and its shape |
+| [D-113](#d-113) | The release as built: one `VERSION` file, the commit in each wheel, an upload job and an environment for each wheel, the image's one build argument, and a second candidate | Process and repository |
+| [D-114](#d-114) | The user documentation as built: eight pages, the installing and the promise's pages held by tests too, the long descriptions' links into the tagged tree, and no tuning figure on a page | Process and repository |
+| [D-115](#d-115) | uv as built: D-108's number confirmed, the pip a base image or an earlier venv holds left alone, the system's Python only, and each member's build keyed on `VERSION` | Process and repository |
+| [D-116](#d-116) | Infrahub's clients and the development Infrahub as built for the release: a shed request waited out, the database given 180 s to start, and the published ports on loopback | The API and its clients |
+| [D-117](#d-117) | The first release's candidate accepted as made: 1.0.0rc2 installed from TestPyPI, both demonstrations passed from a fresh clone at its tag, and each tier whole on its core | The project and its shape |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -185,6 +194,8 @@ identity) run through every layer, and its tests are tied to Go and Temporal.
 **Status:** Accepted at the baseline (2026-10-31).
 Superseded in part by [D-105](#d-105) on 2026-11-13 (phase 10): from 1.0.0 version 1 of each format is held
 compatible within major version 1; one current version of each stands.
+Superseded in part by [D-112](#d-112) on 2026-11-17 (phase 10's landing): a text a core before 1.0 accepted is refused where a
+pattern of a format ends in `$`.
 
 #### Context
 
@@ -514,6 +525,9 @@ The cluster run's criterion, of which the maintainer said "The rehearsal passed 
 was to follow, and [D-097](#d-097): how the phase's criterion was met. Adds to
 [D-094](#d-094): the seeded proposed change rehearsed through Infrahub's own check once more,
 under the edge as phase 9 left it. Supersedes nothing.
+Added to by [D-116](#d-116) on 2026-11-17 (phase 10's landing): of the question on Infrahub's start on kept volumes, the
+database's part is answered by a start period of 180 s; why what reads such an instance is slow
+stays open.
 
 #### Context
 
@@ -612,6 +626,8 @@ The Infrahub contract tier at the phase's closing gates:
 **Status:** Accepted 2026-11-13 (phase 10). Supersedes [D-002](#d-002) in one part: from
 1.0.0 there is an outside user to keep compatible with. D-002's one current version of each
 format stands.
+Superseded in part by [D-112](#d-112) on 2026-11-17 (phase 10's landing): problem documents and verdicts were what was held
+closed, and a value added to an enumeration an answer closes waits for a major release.
 
 #### Context
 
@@ -672,6 +688,163 @@ current version of a format and no reader of an older one
 - The blueprint's id is the format's own definition ([D-006](#d-006)) and is held with it.
 - The pull request template's line that formats stay at version 1 stays true, and gains
   "and only add".
+
+<a id="d-112"></a>
+### D-112 — What 1.0 promises as built: the answers read open where only problems and verdicts were closed, a pattern's `$` the end of the text, and a value added to an enumeration waiting for a major release
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Supersedes [D-105](#d-105) in two parts: what
+its Decision says the client and the example held closed, which was problem documents and
+verdicts alone; and what "held" means of an enumeration an answer closes. Supersedes
+[D-002](#d-002) once more, before the freeze: a text a core before 1.0 accepted is refused where a
+pattern ends in `$`. Details D-105 in the page that states the promise. The rest of each stands.
+
+#### Context
+
+The release candidate's plan built D-105 on 2026-11-15 and 2026-11-16 (its Tasks 1, 2 and 8).
+Plan 1's whole-branch review had found on 2026-11-14 that every pattern of the formats ending in
+`$`, 31 of them, let a text ending in a newline through, by Python's `re` under jsonschema: an id
+written as a folded YAML scalar loaded with its newline and validated clean. After 1.0 its mend
+would refuse a document a released core had accepted, which D-105 forbids. And D-105 supposed the
+client library and the example held each answer to its closed schema; as read in the code, the
+client held problem documents so, and the CLI and the example verdicts.
+
+#### Options considered
+
+The `$` of a pattern:
+
+- **Left, and held at 1.0.** Not taken: every format would accept forever a text its pattern was
+  written to refuse.
+- **Each pattern rewritten with `\Z` in the files.** Not taken: the files are JSON Schema, right
+  as ECMA-262 reads them, and another validator would read `\Z` otherwise.
+- **The core's validator reads each `$` that is neither escaped nor in a character class as the
+  end of the text** (`schemas.ecma`), in one place for every format and every request body.
+  Chosen.
+
+An answer gaining a member:
+
+- **No schema on an answer.** Not taken: an answer that lacks what a reader uses must still be
+  refused.
+- **The answer held to its format with each closed object left open** (`schemas.answer_validator`,
+  `findings.decode_answer`, `problem.decode_answer`). Chosen: the members a reader uses are held to
+  their kinds, and a member it does not know is passed over.
+
+#### Decision
+
+- **A text that ends in a newline is refused** wherever a pattern of a format ends in `$`, in a
+  document and in a request body alike. The release's notes tell a user upgrading from a checkout.
+- **The client library, `fylgja-core` and the example read an answer open**: a problem document,
+  a verdict, and the example's copy of a build's findings and fidelity into its `plan-1`, which it
+  builds from that format's named members. What a user writes is held to its schema whole.
+- **An enumeration an answer closes is held closed.** A value added to `status`, `operation`,
+  `severity`, `wait.outcome`, `loss.outcome` or `loss.from` waits for a major release, since a 1.0
+  reader refuses a value it does not know ([`docs/compatibility.md`](../docs/compatibility.md)).
+  So a condition that carries verify's status comes, if it comes in 1.x, as a member and not as a
+  value.
+- **The page, "What 1.0 holds"**, is held to the tree by a test: its formats and its commands, as
+  sets, and `plan-1`, `rehearsal-1` and `fylgja-orchestrator` among what is not promised. It also
+  states what D-105 left unnamed: flows across a step are not promised, a step listing each
+  probe's flow as not started; and `package.versions.several` is a refusal expected to be lifted.
+- **Not changed:** what D-105 holds within major version 1, and what it does not promise.
+
+#### Consequences
+
+- A document a checkout before 1.0 accepted may be refused by 1.0: a device's name written as a
+  folded scalar is one. This is the last such change ([D-105](#d-105)).
+- `fylgja_core.client`'s `ProblemError.status` and `.problem`, `documents.Rejected.problems` and
+  the `timeout` of `run_events`, whose type is `httpx.Timeout`, are named by the client's page, so
+  1.0 holds them, and ties the client's surface to httpx within major version 1.
+
+<a id="d-117"></a>
+### D-117 — The first release's candidate accepted as made: 1.0.0rc2 installed from TestPyPI, both demonstrations passed from a fresh clone at its tag, and each tier whole on its core
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Details [D-104](#d-104) and
+[D-106](#d-106): how the phase's criterion was met. Supersedes nothing.
+
+#### Context
+
+The phase was done when the maintainer had, at the release candidate, from a fresh clone of the
+candidate's branch on a host with its preconditions met, both sources' volumes purged and nothing
+of Fylgja's running, run `make infrahub-demo` and `make netbox-demo` to `passed`, read each report
+in its source, and seen `make demo-down` leave nothing of the demonstration's; and when the three
+wheels, installed from TestPyPI into an empty environment, gave a `--version` naming the
+candidate and its commit and a server that starts with no `FYLGJA_PACKAGES`
+([core.md](core.md#phase-10-the-first-release-settled-2026-11-13)). Plan 1 had found that the live
+tier's `changes` module and the cluster tier's restore module had not run whole since phase 7, and
+the maintainer had said of their whole runs "leave it for the RC" (2026-11-14). The release
+candidate's plan made those runs and the acceptance on 2026-11-16 and 2026-11-17, each window and
+each act on the maintainer's word ([verified-facts.md](verified-facts.md): "fylgja-core, phase 10:
+the live tier whole on the release candidate's code", "… the local harness's suite whole at the
+fix wave's head", "… the cluster tier and the cluster's conformance suite, each whole, on the
+release candidate's code", "PyPI and TestPyPI", and the two sections "From new volumes, in a fresh
+clone at the candidates").
+
+#### Options considered
+
+After rc1's Infrahub demonstration failed on a shed:
+
+- **1.0.0 from rc1, the shed a known limit.** Not taken.
+- **A second candidate, the install and both demonstrations made again.** Chosen
+  ([D-113](#d-113), [D-116](#d-116)).
+
+The clone the demonstrations ran from:
+
+- **The candidate's branch**, as the plan's step had it. Not taken: the tag names the tree that
+  was published.
+- **A clone at the tag, checked out on a local branch `rc2-acceptance`** at the tag's commit.
+  Chosen: a demonstration on Infrahub registers a branch and refuses a detached head, as its page
+  says.
+
+The conformance suite's bound on an unchanged step, 2.0 s, which an unchanged step through the deployed
+core exceeded, at 2.11 s, failing the cluster suite's first run, its time the CLI's round trips with
+a core whose store is the S3 gateway and not the step's work:
+
+- **The bound widened alone.** Not taken.
+- **What "touches nothing" means held exactly**, the run's phases compile alone, the outcome
+  unchanged and every incarnation kept, **and the end-to-end bound kept a harness**, 2.0 s on the
+  local harness and 5.0 s on the cluster's. Chosen: the bound is a proxy, the phases the promise.
+
+#### Decision
+
+- **Each tier whole, on the candidate's core.** `make live`, 167 passed and 1 skipped in
+  3,708.35 s, and `make cluster`, 44 passed in 2,109.84 s, at `a1feb33` on 2026-11-16, each one
+  uninterrupted run; the conformance suite whole on the cluster, 53 passed and 1 skipped in
+  4,071.71 s at `f6bcc21`, its third run, against the image built at `a1feb33`; and on the local
+  harness, 53 passed and 1 skipped in 2,198.71 s at `6bf4965`. `core/src` differs from `a1feb33`
+  through `v1.0.0rc2` in one docstring alone.
+- **The candidates.** `v1.0.0rc1` at `dd4cb3b` and `v1.0.0rc2` at `0410959`, each pushed by the
+  maintainer, each run uploading its three wheels to TestPyPI on the maintainer's approval of each
+  job, TestPyPI's file for each the run's artifact by its `sha256`; `ci.yml` passed on the draft
+  pull request at each commit. PyPI holds none of the three names.
+- **Installed into an empty environment** with `python3.14 -m venv` and pip, TestPyPI the index
+  and PyPI the extra one: the three wheels came from TestPyPI and their 33 dependencies from PyPI;
+  each of the four commands' `--version` named
+  `1.0.0rc2` and `0410959`'s commit; and `fylgja-core-server`,
+  with no `FYLGJA_PACKAGES`, answered `/v1/version`, filed `three-node.json` and built its bundle.
+- **Both demonstrations from the clone**, on a host emptied first, both sources purged:
+  `make netbox-demo` passed in 17m14.6s and `make infrahub-demo` in 17m11.9s of wall time. The
+  maintainer read each report in its source: on the branch `third-link`'s journal in NetBox,
+  "Rehearsal passed: 4 stages", `main` created 15 hold, `third-link` and `n1-address` passed 19
+  hold each, the head unchanged; and in the thread "Fylgja rehearsal" of the proposed change
+  "Rehearse third-link" in Infrahub the same, its first stage the branch point (2026-11-17). On
+  the hand-back, `make demo-down PURGE=1` and both sources' purges left no container, volume or
+  network of either project's, and no twin, listener or process.
+- **The open question of a core test whose margin is the host's load is answered**:
+  `test_the_deploys_budget_starts_once_the_lock_is_held` now holds the order of the two deploys,
+  the second begun only once the first returned, and not the gap between their starts, which a
+  loaded host shortens. The question is removed from [Open questions](#open-questions).
+
+#### Consequences
+
+- The tiers were not run again at `v1.0.0rc2`: the fix after rc1 changed no line of `core/src`,
+  and the pure tier, the wheel check and the image check ran on a fresh clone at `0410959`.
+- No live shed met the clients' wait ([D-116](#d-116)).
+- The kill scenarios' share of the re-addressed node's tolerance was not seen exercised live, and
+  the walk's met no case in the run of record, 22 steps walked. A cluster reached on loopback, through a port-forward, is `here` to
+  the suite and takes the local harness's 2.0 s bound.
+- The release follows on the maintainer's word for each act: `VERSION` at `1.0.0` in a commit of
+  its own, the tag on `main` after the squash, the upload to PyPI, and the GitHub release; then the
+  archived repository's privacy.
+- [core.md](core.md)'s "Sequence" marks item 10 done.
 
 ## Intent and the blueprint
 
@@ -1961,6 +2134,8 @@ SR Linux first, then EOS. The order after that is [parked](#parked).
 runtime section names an image for each version the package lists, not one image. Adds to
 [D-054](#d-054): a deletion that meets a node no loaded package runs is refused as its item
 4 refuses a step. Builds on [D-013](#d-013), [D-014](#d-014) and [D-030](#d-030).
+Superseded in part by [D-109](#d-109) on 2026-11-17 (phase 10's landing): the refusal is once in a core's life and reaches a
+create's teardown and a resumed apply; `conformance.port.discovering` is optional.
 
 #### Context
 
@@ -2048,6 +2223,96 @@ as its reader; the suite never read it.
 - `versions`' names gain their consumer, the images' keys. The schema's descriptions of
   `versions` and of `conformance.version` say what reads each today, which for the second
   is nothing yet.
+
+<a id="d-109"></a>
+### D-109 — A platform package's versions and the refused deletion as built: refused once in a core's life, at a create's teardown too, and the path that says LLDP runs made optional
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Supersedes [D-102](#d-102) in three parts:
+"refused once" is once in a core's life; the refusal reaches a create's teardown and a resumed
+apply as well as a deletion; and `conformance.port.discovering` is optional, so
+`conformance.version` is the one required member of a package that nothing reads. Supersedes
+[D-030](#d-030) in one part: no code of the conformance suite reads any of the five facts.
+Details D-102 in the schema's `images`, a step's finding, a version's name and the rule meant to
+go. Adds to [D-054](#d-054): the deletion's refusal is kept for the core's life, and a create's
+teardown and a resumed apply are refused alike. The rest of each stands.
+
+#### Context
+
+Phase 10's first plan built D-102 on 2026-11-13 and 2026-11-14: the deletion that raised without
+end, refused once on both drivers; a package's image given one reader; the format's versions,
+each with its image; and, on the maintainer's word, a member made optional
+([verified-facts.md](verified-facts.md), "fylgja-core, phase 10: a destroy under packages that do
+not list a node's image", in the containerlab and the clabernetes sections). D-102's text said
+what a deletion does. The build met the same error at three more places, a refusal the loop has
+to keep somewhere, and a second member of a package that nothing reads. Plan 1's whole-branch
+review read each against the code (the phase's ledgers, plan 1).
+
+#### Options considered
+
+Where the refusal is kept:
+
+- **In the store**, beside the twin's record. Not taken: a change of the twin record's format
+  before the freeze ([D-105](#d-105)), for a case a core started again already handles.
+- **In the loop's memory, for the core's life.** Chosen. A core started again asks its driver
+  again, under a destroy run of its own, and is refused again: one run record a restart.
+
+What the refusal reaches:
+
+- **A deletion alone**, as D-102 says. Not taken: a cancelled create's teardown, a failed create's
+  clean-up and the `apply` of a create resumed after `planned` meet the same error from the
+  driver, and each would raise on every pass.
+- **Each of the four turned into the refusal, the lab kept.** Chosen.
+
+`conformance.port.discovering`, which no code reads, D-030 having given it to verify "before
+reading neighbours":
+
+- **Held required at 1.0, unread, beside `conformance.version`.** Not taken: after 1.0 neither
+  could be removed, and `discovering` could not gain a reader that fails a twin a 1.0 package
+  verified (plan 1's whole-branch review, 2026-11-14).
+- **Made optional before the freeze.** Chosen by the maintainer: "make it optional"
+  (2026-11-14). A later reader adds it back as a member a package may give.
+- **`conformance.version` optional too.** Not taken: it stays required and unread. Its later
+  reader cannot compare the leaf with `versions[].name`, since the shipped leaves read
+  `v24.7.1-330-g…` and `4.32.0.2F-…` ([verified-facts.md](verified-facts.md), "SR Linux
+  26.7.2"), and needs a member of its own when it comes.
+
+#### Decision
+
+- **A deletion the packages cannot account for is refused once in a core's life.** The loop keeps
+  the refusal in memory: a later pass of the same core takes no run and calls no driver, and the
+  lab stays with its record. A core started again asks its driver again, under a destroy run of
+  its own, and is refused again ([`docs/rules.md`](../docs/rules.md)).
+- **A create's teardown and a resumed apply are refused alike.** A cancelled or failed create's
+  clean-up that meets such a node keeps the lab and its allocation, the run ending by its own
+  rule; a create resumed after `planned` whose `apply` meets it ends `rejected` with
+  `bundle.rejected` ("cannot be applied"), nothing torn down. A deletion asked of the same core
+  after any of them is refused by the same finding before the loop takes a run. A step's own
+  refusal, from `changes`, keeps the words it had; the deletion's finding carries the remedy, a
+  core whose packages list the image.
+- **The rules** are `package.versions.name` (two versions share a name),
+  `package.images.coverage` (a version with no image, or an image for no listed version) and
+  `package.versions.several` (more than one version), the last expected to be lifted
+  ([`docs/compatibility.md`](../docs/compatibility.md)). The schema lets `images` be empty, so
+  that the loader's coverage rule answers at its pointer rather than the schema's minimum.
+- **A version's name** matches `^[A-Za-z0-9][A-Za-z0-9._-]*$`: the shipped `nokia_srlinux` lists
+  `24.7.1` and `arista_eos` `4.32.0.2F`, the tests' own packages `0`. It refuses a parenthesis and
+  `+` (NX-OS's `10.3(2)`, IOS's `15.2(7)E`); widening it later only adds.
+- **`conformance.port.discovering` is optional** in `platform-package-1`, and no code reads it.
+  `conformance.version` stays required, read by nothing.
+- **Of D-030's five facts**, verify reads three, the host name, a port's state and its neighbour,
+  and a step's wait reads them through verify. No code of the conformance suite reads any of them
+  through a package's paths: the suite judges a twin through the core.
+
+#### Consequences
+
+- A core restarted over such a twin files one destroy run more a start. The refusal is kept in
+  memory alone, which the pure tier holds
+  (`test_a_deletion_that_meets_a_node_no_loaded_package_runs_is_refused_once_and_raises_nothing`);
+  three resumes of its path are untested (plan 1's whole-branch review).
+- The live modules of both drivers held the refusal on 2026-11-13: the local module 8 passed in
+  251.08 s, the cluster module 8 in 255.63 s, the clabernetes driver's teardown of a node no
+  package lists read on the cluster as D-102's design asked ([verified-facts.md](verified-facts.md)).
+- [core.md](core.md)'s "Phase 10" says each bend beside the sentence it bends.
 
 ## Runtimes and drivers
 
@@ -2575,6 +2840,8 @@ Admitting a step:
 which named `apply` alone, and the premise that a stray runs on) and details [D-029](#d-029) (a
 diverged twin's deletion removes everything). Superseded in part by [D-056](#d-056) on 2026-11-04: a stray
 deploy no longer ends at its next write, since its output goes to a file.
+Added to by [D-110](#d-110) on 2026-11-17 (phase 10's landing): after a deploy the driver killed, the teardown lists the
+lab again until it has stayed empty for 5 s.
 
 #### Context
 
@@ -2721,6 +2988,9 @@ namespace of the twin's name that is not the twin's is `absent` to `inspect`, le
 link-mode change replaces the pods of the nodes whose mode changed, not every pod. The rest
 stands.
 Detailed by [D-073](#d-073) on 2026-11-08: admission by capacity, and the allocation's `demand`.
+Added to by [D-110](#d-110) on 2026-11-17 (phase 10's landing): a destroy after an apply cancelled reads the namespace
+again for 5 s; and a node the dry run answers `recabled` may be replaced by clabernetes where a
+node added or removed moved its management address, a known limit.
 
 #### Context
 
@@ -3409,6 +3679,8 @@ The deploy a destroy's recovery makes:
 
 **Status:** Accepted 2026-11-13 (phase 10). Adds to [D-043](#d-043): the pool is read from
 the server's settings ([D-042](#d-042)); its default stands.
+Detailed by [D-110](#d-110) on 2026-11-17 (phase 10's landing): the refusal names the setting alone where no Docker network
+holds the pool, and the setting is read under both drivers.
 
 #### Context
 
@@ -3450,6 +3722,102 @@ source's Compose project and then a twin beside it ([D-104](#d-104)).
 - A host with several Compose projects runs twins by one line of its environment.
 - Twins made under one pool keep their subnets when the setting changes: an allocation is
   recorded with its twin ([D-043](#d-043)).
+
+<a id="d-110"></a>
+### D-110 — The pool and a cancelled create's teardown as built: the pool's setting read under both drivers, a teardown that looks again after a cancel on both, and a recabled node clabernetes may replace
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Details [D-103](#d-103): the refusal's
+words where no Docker network holds the pool, and the setting read under the clabernetes driver
+too. Adds to [D-055](#d-055): a teardown after a deploy the driver killed lists the lab again until
+it stays empty. Adds to [D-057](#d-057): a destroy after an apply cancelled at its namespace's
+create reads the namespace again; and a node the dry run answers `recabled` may be replaced by
+clabernetes where a node added or removed moved its management address, a known limit. The rest
+of each stands.
+
+#### Context
+
+Phase 10's first plan built D-103 on 2026-11-13 (its Task 4). On 2026-11-14 the second plan's
+first readings found that a deletion landing while the local driver's `containerlab deploy` had
+made a lab's containers and not started them left those containers, labelled `containerlab`,
+their network and the twin's record gone, which no core lists ([verified-facts.md](verified-facts.md),
+"A killed or partial deploy"). A fix of its own, on the maintainer's word ("fix the core
+defect", 2026-11-14), traced it: the cancel kills the deploy's process group, creates already
+sent to Docker's daemon finish there, and a container made so is listed a few tenths of a second
+later, after the teardown's one listing. The clabernetes driver's code had a gap of the same kind,
+read on the cluster by the release candidate's plan on 2026-11-16: the API may still make the
+Namespace a cancelled request asked for, after `destroy` has read it absent
+([verified-facts.md](verified-facts.md), "An apply cancelled at its namespace's create, then
+destroyed at once"). And the clabernetes conformance suite's second run of that day failed where
+a node the dry run answered `recabled` came back at a new incarnation, which clabernetes itself
+did ("A recabled node replaced when a step adds or removes a node: a known limit").
+
+#### Options considered
+
+The local teardown after a killed deploy:
+
+- **The deletion waits for the whole deploy.** Not taken: a deletion would wait minutes, and a
+  budget's kill reopens the same gap.
+- **The resync removes labelled containers no record names.** Not taken: it would take a user's
+  own labs unless the core labelled its nodes, a change of the rendered topology.
+- **The teardown lists the lab again until it has stayed empty for a settle window**, removing by
+  name each container that appears, then the network again. Chosen. It adds seconds to a
+  cancelled create's teardown and to no other path; the window is a bound, not a proof.
+
+Where the mark that a deploy was killed, or an apply cancelled, is kept:
+
+- **In the store.** Not taken: a change of the record's format before the freeze, for a case two
+  unlikely events deep.
+- **In memory.** Chosen, on both drivers. A core restarted loses it, and its next destroy of the
+  twin does not wait.
+
+The clabernetes gap:
+
+- **More rows sampled, the margin read.** Not taken: a margin read at idle could close under load.
+- **The destroy reads a cancelled twin's namespace again for the same window.** Chosen, the local
+  fix's form (the release candidate's plan, 2026-11-16).
+- **A create cut by a transport failure marked too.** Not taken: it is not known to have sent the
+  create, and every failed twin's destroy would wait out the window.
+
+The recabled node clabernetes replaces:
+
+- **The plan renders a fixed management address for each node.** Not taken before 1.0: it adds a
+  member to the deployment format, which [D-105](#d-105) lets a minor release do, and whether
+  clabernetes takes containerlab's `mgmt-ipv4` as a declared address was not read.
+- **The conformance walk tolerates exactly this on the cluster's harness, and it is a known
+  limit.** Chosen.
+
+#### Decision
+
+- **The pool's setting, `FYLGJA_LAB_POOL`,** is read and checked at the server's start under
+  either driver and used by the local driver alone. Its refusal names each Docker network that
+  overlaps the pool, a name that is not plain written as a JSON string, and the setting; where no
+  network overlaps it, other twins alone holding it, the setting alone. The demonstrations'
+  script reproduces the driver's question to Docker, its parse and its sentence, each held to the
+  driver's by a test.
+- **On the local driver,** after a deploy the driver killed, the teardown lists the lab every
+  0.5 s until the listing has been empty for 5 s, removing by name each container that appears,
+  then removes the network again. A deploy of the twin that returns 0 clears the mark. A destroy
+  reads the mark before its own recovery deploy and settles on that reading.
+- **On the clabernetes driver,** after an apply cancelled, `destroy` reads a namespace it finds
+  absent again for 5 s, the local driver's window; an `apply` that returns forgets the mark, and
+  only a cancel marks.
+- **On the clabernetes harness,** a node the dry run answers `recabled`, in a step that adds or
+  removes a node or the step after one, may come back at a new incarnation, and the walk then
+  holds it as recreated, readied and pushed. Every other kept node is still held.
+
+#### Consequences
+
+- After the local fix, 0 of 16 timed cuts left a container, where 1 of 8 had before; on the
+  cluster, 27 of 40 cancels landed in the window, the API made 21 of those creates anyway, and
+  `destroy`'s first read found each ([verified-facts.md](verified-facts.md)).
+- A core restarted between the cancel and the destroy loses the mark, on either driver. The
+  release's notes state it of the cluster.
+- On clabernetes a step may restart a node without `--allow-restart`, about 1.3 times in a hundred
+  steps that add a probe's two hosts, by a simulation. It is a known limit of the release, and the
+  open question "A fixed management address per node on clabernetes" holds the fix.
+- Docker's answer to the pool's question is parsed by `pool.networks` with no guard: an answer it
+  cannot parse leaves `admit` with a `ValueError`, not a `DriverFailed`, as before the parse moved
+  there (plan 1's whole-branch review).
 
 ## The reconcile loop and state
 
@@ -3835,6 +4203,8 @@ Detailed by [D-071](#d-071) on 2026-11-07: the Lease's rule is a Role in the cor
 beside the one ClusterRole; what the Lease promises and what it does not; what the server does
 when it loses it; and what a store's fault on a read route answers.
 Detailed by [D-106](#d-106) on 2026-11-13 (phase 10): no image is published at 1.0; it stays built in the tree.
+Detailed by [D-113](#d-113) on 2026-11-17 (phase 10's landing): the image takes one build argument, the commit, and its
+packages from the wheel it installs.
 
 #### Context
 
@@ -4746,6 +5116,8 @@ pull credential's `_REGISTRY`, and the TLS variables. Added to by [D-070](#d-070
 2026-11-06: `FYLGJA_RESYNC_S`.
 Added to by [D-103](#d-103) and [D-106](#d-106) on 2026-11-13 (phase 10): the local driver's pool is a
 setting, and `FYLGJA_PACKAGES` has a default, the packages the wheel carries.
+Added to by [D-113](#d-113) on 2026-11-17 (phase 10's landing): `FYLGJA_PACKAGES` set to nothing means the shipped
+packages, as unset does.
 
 #### Context
 
@@ -4952,6 +5324,8 @@ core writes comes from its `now()`.
 one library beside the core's package. [D-034](#d-034) stands and binds the reader's tests.
 Superseded in part by [D-091](#d-091) on 2026-11-12: the development Infrahub held 4.46 GiB,
 not about 5.5. Detailed by [D-108](#d-108) (provisional): `infrahubctl`'s environment is made by uv.
+Added to by [D-116](#d-116) on 2026-11-17 (phase 10's landing): the reader's transport sends a request Infrahub shed again,
+within a bound.
 
 #### Context
 
@@ -5021,6 +5395,8 @@ Superseded in part by [D-090](#d-090) on 2026-11-12: the base install is four li
 Superseded in part by [D-106](#d-106) on 2026-11-13 (phase 10): three distributions are published to PyPI,
 and each reader names the core with a range.
 Added to by [D-108](#d-108) on 2026-11-14 (phase 10): the image and the wheel check build and install with uv, and the `server` extra's pins are the statement `uv.lock` is checked against.
+Detailed by [D-113](#d-113) on 2026-11-17 (phase 10's landing): each reader requires the core at `>=<VERSION>,<2`, and the
+published metadata keeps the `dev` extra.
 
 #### Context
 
@@ -5383,6 +5759,8 @@ settled how (its items 3 and 14; rulings P1-4 and P1-5).
 the memory the development Infrahub takes, and [D-085](#d-085) in one, what Infrahub's task
 workers read the registration from. Details [D-081](#d-081), D-083 and [D-088](#d-088) in
 where what Infrahub fetches lives and in what the seed makes. The rest of each stands.
+Added to by [D-116](#d-116) on 2026-11-17 (phase 10's landing): the seed's transport waits out a shed request, the database's
+health check waits 180 s before a failed probe counts, and the published ports are on loopback.
 
 #### Context
 
@@ -5580,6 +5958,7 @@ Added to by [D-097](#d-097) on 2026-11-12 (phase 9): the edge asks a third call 
 the one that takes a request, which Infrahub's source answers by doing nothing.
 Detailed by [D-100](#d-100) on 2026-11-13 (phase 9's landing): that call's name, and the
 settings' fields that name no source.
+Added to by [D-116](#d-116) on 2026-11-17 (phase 10's landing): the example's Infrahub transport waits out a shed request.
 
 #### Context
 
@@ -6231,6 +6610,93 @@ The report's lists in NetBox:
 - [core.md](core.md), [docs/integrating.md](../docs/integrating.md) and `orchestrator/rules.md`
   say each as built.
 
+<a id="d-116"></a>
+### D-116 — Infrahub's clients and the development Infrahub as built for the release: a shed request waited out, the database given 180 s to start, and the published ports on loopback
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Adds to [D-083](#d-083): the Infrahub
+reader's transport sends a request Infrahub shed again, within a bound. Adds to
+[D-091](#d-091): the seed's transport does the same, the development database's health check
+waits 180 s before a failed probe counts, and every port Infrahub's published file publishes is
+bound to loopback. Adds to [D-093](#d-093): the example's Infrahub transport waits out a shed too.
+Adds to [D-101](#d-101): of its question on Infrahub's start on kept volumes, the database's part
+is answered. The rest of each stands.
+
+#### Context
+
+1.0.0rc1's demonstration on Infrahub, from new volumes in a fresh clone, failed at `make
+infrahub-register` on 2026-11-17: Infrahub 1.11.11 answered `POST /graphql/main` with a 429 that
+its API marks as a shed, `X-Infrahub-Admission: shed` with a `Retry-After`, written before any
+handler runs, and the script's one retry, sent at once, met the same ([verified-facts.md](verified-facts.md),
+"Its API sheds load with a marked 429"). infrahub-sdk 1.23.2 retries such a 429 itself; the
+reader, the seed's own transport and the example's did not. The reader is in a published wheel.
+Before it, on 2026-11-16, the database's published health check had called it unhealthy 43.9 s
+into a start on volumes kept for 47 hours, Neo4j saying `Started.` at 53.8 s, and Compose had
+refused what depends on it ("The database's health check on kept volumes, before and after its
+start period was given 180 s"). And since 2026-11-12 a branch, `fix/infrahub-loopback`, had bound
+the development Infrahub's published ports to loopback, ruled then to be merged at the landing.
+
+#### Options considered
+
+A shed request:
+
+- **An error, as before.** Not taken: a busy Infrahub fails a read the reader could make a few
+  seconds later, and the SDK beside it already waits.
+- **Any 429 sent again.** Not taken: only the marked shed is said to have done nothing, so only
+  it may be sent again, a mutation among them.
+- **A marked shed sent again after the wait it names, within a budget.** Chosen by the
+  maintainer: "Fix all three, rc2" (2026-11-17), the reader, the seed and the example.
+
+A shed past the budget during the read of an artifact's content:
+
+- **The finding `artifact.content.unavailable`.** Not taken: a busy server is not a fact about
+  the artifact, and the finding would put Infrahub's load into a blueprint's fidelity.
+- **An `InfrahubError`, as every other request past the budget.** Chosen.
+
+The database's start:
+
+- **The demonstration's asks alone** ([D-111](#d-111)). Kept, and not enough for `make
+  infrahub-up` by hand.
+- **A start period of 180 s** in the development override, the published probe, interval and
+  retries kept. Chosen: about 3.3 times the slowest `Started.` read on kept volumes, a derivation,
+  there to tell a database still starting from one that will not.
+
+The loopback branch:
+
+- **Merged at the landing**, as ruled on 2026-11-13. Not taken.
+- **Merged before the second candidate's tag**, so that both demonstrations run the tree that
+  lands, rc1's having served Infrahub on every interface. Chosen by the maintainer: "yes, merge it
+  now" (2026-11-17).
+
+#### Decision
+
+- **A 429 whose `X-Infrahub-Admission` is `shed`** is sent again with the same method, path,
+  parameters and body after its `Retry-After`, read as whole seconds and held to 1 to 30 s, or
+  5 s where it is missing or no count of seconds. Once the next wait would pass 300 s of waiting
+  for one request, the request ends in the error it would have ended in, naming the shed. The
+  300 s is ours, of the order of infrahub-sdk's own bound for a 429, ten retries of at most 60 s
+  each; the SDK's `max_retry_duration`, also 300 s, bounds its retries of a transient error and
+  not of a 429. An unmarked 429 is answered as before. So in the
+  reader's `transport.py`, the seed's `hub.py` and the example's `infrahub/transport.py`, and in
+  the seed's account, which asks through the same transport.
+- **The development database's health check** keeps the published probe, interval, timeout and
+  retries, with `start_period: 180s`.
+- **The development Infrahub's published ports**, 8000, 15692, 2004 and 6362, are each bound to
+  `127.0.0.1` by the override's `!override` lists, and reached from another machine through a
+  forward of port 8000 over SSH.
+
+#### Consequences
+
+- 1.0.0rc2's demonstration on Infrahub passed, and met no shed: the clients' wait was not
+  exercised against a live one. The pure tier holds it ([D-117](#d-117)).
+- From new volumes `make infrahub-up` passed at its first ask both times, Infrahub answering 159
+  s and 153 s after Compose's start returned. What makes one new instance shed and another not
+  was not read.
+- The rest of D-101's question stays open: why what reads an Infrahub kept for days is slow, and
+  whether `fylgja-step`'s 900 s stands on one.
+- Two gaps left by the fix's re-review, ruled small: a `Retry-After` of more than three digits,
+  zero-padded or not, waits the most, 30 s, Infrahub writing an unpadded count; and the seed's wait
+  as `account.py`'s `main` hands its sleep to the hub is untested, the account's own asks being
+  tested.
 
 ## Pushing, stepping and verifying
 
@@ -6444,6 +6910,8 @@ A step that restarts or recreates a node:
 ### D-030 — Observed facts are a Fylgja-owned vocabulary, mapped to paths by each package
 
 **Status:** Accepted at the baseline (2026-10-31).
+Superseded in part by [D-109](#d-109) on 2026-11-17 (phase 10's landing): no code of the conformance suite reads any of the
+five facts.
 
 #### Context
 
@@ -6811,6 +7279,8 @@ run works toward, the cancel's and the ending's readings, and a refused step's v
 a stepping twin against); adds to [D-052](#d-052) (the threads the wait's reads run on).
 Added to by [D-102](#d-102) on 2026-11-13 (phase 10): a deletion that meets a node no loaded package runs is
 refused once, as item 4 refuses a step; the driver's `destroy` says which node, before it touches the runtime.
+Added to by [D-109](#d-109) on 2026-11-17 (phase 10's landing): the deletion's refusal is once in a core's life, and a
+create's teardown and a resumed apply are refused alike.
 
 #### Context
 
@@ -7331,6 +7801,9 @@ Decisions during the build:
 **Status:** Accepted 2026-11-13 (phase 10). Builds on [D-085](#d-085), [D-091](#d-091),
 [D-096](#d-096) and [D-097](#d-097) as built ([D-099](#d-099), [D-100](#d-100)), and changes
 none of them: no seed, fixture, template or installed code changes.
+Superseded in part by [D-111](#d-111) on 2026-11-17 (phase 10's landing): Infrahub's order, the exit statuses, the
+demonstration's own store and token file, and what is refused and stopped. Detailed by
+[D-117](#d-117) the same day: both demonstrations from a fresh clone at the second candidate's tag.
 
 #### Context
 
@@ -7409,6 +7882,9 @@ distributions are published, and each reader names the core with a range. Adds t
 [D-066](#d-066): the wheel carries the platform and probe packages beside the formats; and
 to [D-042](#d-042): `FYLGJA_PACKAGES` has a default. Details [D-062](#d-062): no image is
 published at 1.0.
+Superseded in part by [D-113](#d-113) on 2026-11-17 (phase 10's landing): six environments, one for each upload; a GitHub
+release for a release alone; two candidates. Detailed by [D-117](#d-117) the same day: the second
+candidate accepted.
 
 #### Context
 
@@ -7477,6 +7953,8 @@ which `pip` resolves on PyPI whoever holds the name there.
 
 **Status:** Accepted 2026-11-13 (phase 10). Builds on [D-033](#d-033) and on the convention
 that user-facing documentation lives in `docs/` ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+Superseded in part by [D-114](#d-114) on 2026-11-17 (phase 10's landing): the installing page and the promise's are held by
+tests too.
 
 #### Context
 
@@ -7527,6 +8005,8 @@ compares the server's routes with the OpenAPI's paths as sets.
 ### D-108 — uv manages the Python environment: one workspace, one committed lock, and `make venv` a locked sync
 
 **Status:** Accepted 2026-11-14 (phase 10), provisionally: its number is taken on the phase's integration branch and confirmed at the phase's landing. Supersedes [D-090](#d-090) in one part: `core/.venv` is a locked sync of one uv workspace, not pip's install of each distribution in turn. Adds to [D-084](#d-084): the image and the wheel check build and install with uv, and the `server` extra's exact pins stay the statement a lock is checked against. Details [D-083](#d-083): `infrahubctl`'s own environment is made by uv.
+Confirmed under its number, and detailed, by [D-115](#d-115) on 2026-11-17 (phase 10's landing): the base image's
+pip stays, a `core/.venv` made by pip keeps its pip, and the root's settings gain `python-preference`.
 
 #### Context
 
@@ -7559,6 +8039,326 @@ compares the server's routes with the OpenAPI's paths as sets.
 - `core/.venv` holds no pip, and a library installed into it by hand goes at the next `make venv`.
 - A lock written through another index than PyPI names its host, and fails the pure tier.
 - The image and a user's install still resolve the versions nothing pins as they install. Nothing the tree runs calls pip; a user installs the published wheels with the installer of their choice.
+
+<a id="d-111"></a>
+### D-111 — The demonstrations as built: Infrahub's seed once and last, a precondition exit 2, the demonstration's own store and tokens, and nothing signalled that does not still read as the demonstration's
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Supersedes [D-104](#d-104) in four parts:
+the runbook's own order, for Infrahub; the exit statuses; "where it is missing", for the core's
+store and token file; and what is refused and stopped. Details it in the free ports, the node
+login, the order of the checks, and what a make step is given. The rest stands.
+
+#### Context
+
+Phase 10's second plan built D-104 on 2026-11-14 and 2026-11-15, from readings of the runbooks
+its first task took on the development host, and ran each demonstration end to end twice
+([verified-facts.md](verified-facts.md), "Infrahub 1.11.11" and "NetBox 4.7.5 with
+netbox-branching 1.2.3", 2026-11-14). The maintainer read each report in its source: in NetBox,
+"The journal has three entries. The most recent is the rehearsal's passing report, with tables
+and lists rendered correctly."; in Infrahub, "The rehearsal's passing report is lsted under the
+change's overview tab. It's in two messages and the table and lists render correctly." (both
+2026-11-14, quoted as given). Its reviews found where a script that signals, lists and destroys
+had to be narrower than D-104's words (the phase's ledgers, plan 2).
+
+#### Options considered
+
+Infrahub's order:
+
+- **The runbook's own**, which seeds, then seeds again with the proposed change. Not taken: a
+  proposed change opened before the runner serves fails its check, and seeding twice cost 108 to
+  128 s as read.
+- **One seed, last, with `PROPOSED_CHANGE=1`, after Prefect and the runner**, as NetBox's change
+  is its last with its tag. Chosen. The core is started once, where the runbook restarts it.
+
+A first `make infrahub-up` on kept volumes, read to exit other than 0 while the database was still
+unhealthy and to pass when run again (2026-11-13, 2026-11-14):
+
+- **Asked once.** Not taken: a demonstration that stops at its first step is not "no step by hand".
+- **Asked up to three times, `make infrahub-register` twice.** Chosen. The mend at its cause, the
+  database's health check, came later ([D-116](#d-116)); the asks stay.
+
+The core's store and token file:
+
+- **`local/.env`'s `FYLGJA_STORE` and `FYLGJA_TOKENS` where set.** Not taken: every twin the
+  demonstration's core lists must be the demonstration's, since `make demo-down` destroys them.
+- **Always `local/demo/store` and `local/demo/tokens`.** Chosen.
+
+What the script may signal or list through:
+
+- **A recorded pid, and whatever answers at the core's address.** Not taken: a pid is reused, and
+  a 200 proves nothing of who answered; a review's scratch run destroyed a twin not the
+  demonstration's through another core.
+- **A process only where it still reads as the demonstration's, and a core's answer only where
+  the listener at its port is that core's own pid.** Chosen.
+
+#### Decision
+
+- **The orders.** Infrahub: `infrahub-up` (asked up to three times), `orchestrator-env`, the
+  core, `infrahub-up` again, `infrahub-register REF=<branch>` (twice), `prefect-up`, the runner,
+  `infrahub-seed PROPOSED_CHANGE=1`. NetBox: `netbox-up`, `netbox-seed`,
+  `orchestrator-env SOURCE=netbox`, the core, `prefect-up`, the runner, `netbox-hook`,
+  `netbox-change NETBOX_TAG=1`. `local/.env` is read again before every step.
+- **Exit statuses.** 0 for `up` a rehearsal `passed` and for `down` everything ended; 1 for a
+  failed step, a verdict other than `passed`, no document or a wait run out; 2 for a command line,
+  a precondition of the host's, a line of `local/.env` a shell would read otherwise, another
+  demonstration running, or a runner it may not end; 130 for a Ctrl-C. Through make every status
+  but 0 is make's 2, the script's own in make's `Error` line.
+- **The checks no stop can cure come first**; then `up` settles what an earlier run left (its
+  runner ended, every twin its core lists destroyed, the core ended), stops the other source by
+  its own `down`, its volumes kept, and only then judges the host's memory and ports. It refuses a
+  runner under `local/prefect` it did not record, of either source. The free ports are the core's,
+  4200 on the Docker bridge's gateway, and the source's own; Infrahub's three other published
+  ports are left to its own start to refuse. The core's listen address must be on loopback.
+- **The node login** is the core's from `local/.env`, which the script loads to give the core its
+  environment; it never writes, defaults or prints it.
+- **A marker, `local/demo/unsettled`,** stands from before a core is first started over the store
+  until a core the script owns has listed it empty, and `down` is exit 0 only once it is gone.
+  `make demo-down` ends Prefect only where the demonstration started it.
+- **A make step is given its own variables alone**, on its command line: its environment is the
+  loaded one without make's own six and without every name the `Makefile` assigns by `?=`, so that
+  an exported `PURGE=1` cannot reach a stop that says the volumes are kept.
+
+#### Consequences
+
+- A demonstration passed in 329.5 s and 179.3 s on NetBox and in 1,536.4 s and 942.8 s on
+  Infrahub, each on kept volumes on 2026-11-14, the second over the proposed change the first
+  left open; from new volumes and a fresh clone, see [D-117](#d-117).
+- A demonstration on Infrahub refuses a detached head, a clone at a tag among them: the user
+  checks out a branch there, as [`docs/demonstrations.md`](../docs/demonstrations.md) says.
+- Where `local/` is reached through a symlink and Prefect was started by hand under the link's
+  spelling, the demonstration's `prefect-up` step does not see that server as up, since
+  `scripts/edge_dev.py` compares the home as spelled.
+
+<a id="d-113"></a>
+### D-113 — The release as built: one `VERSION` file, the commit in each wheel, an upload job and an environment for each wheel, the image's one build argument, and a second candidate
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Supersedes [D-106](#d-106) in three parts:
+the GitHub environment is six, one for each upload; a GitHub release follows a release and not a
+candidate; and the candidates are `1.0.0rc1` and `1.0.0rc2`. Details D-106 in where the version
+and the commit are written, the readers' range and what the release check refuses. Adds to
+[D-042](#d-042): `FYLGJA_PACKAGES` set to nothing means what unset means. Details
+[D-062](#d-062): the image takes one build argument, the commit. Details [D-084](#d-084): the
+published metadata keeps the `dev` extra. The rest of each stands.
+
+#### Context
+
+Phase 10's third plan built D-106 on 2026-11-15, nothing irreversible done, and the release
+candidate's plan published it, each act on the maintainer's word (the phase's ledgers, plans 3
+and 5). Its readings are in [verified-facts.md](verified-facts.md), "PyPI and TestPyPI", "GitHub
+Actions, `ubuntu-26.04`" and "uv 0.12.23". Plan 3's whole-branch review read in PyPI's source that
+a pending publisher is unique on repository, owner, workflow file and environment, not on its
+project, so three new projects cannot share one environment. And 1.0.0rc1's acceptance failed at
+the Infrahub demonstration ([D-116](#d-116), [D-117](#d-117)).
+
+#### Options considered
+
+Where the version is written:
+
+- **`fylgja_core.__version__`, parsed by the other builds.** Not taken: three builds reading a
+  module of a fourth.
+- **The tag, through setuptools-scm.** Not taken: a new build dependency, and no `.git` in the
+  image's context or the wheel check's copies.
+- **A root `VERSION` file, read by each `setup.py`.** Chosen: setuptools refuses
+  `{file = "../VERSION"}` outside a project.
+
+The commit:
+
+- **A commit file in the build context.** Not taken: stale outside `make`.
+- **`<package>/COMMIT` in each wheel**, from `FYLGJA_BUILD_COMMIT`, else `git rev-parse HEAD` with
+  `-dirty` beside it, else `unknown`; in a checkout, git at call time. Chosen. In the image the
+  variable is a build argument of the build stage alone, which `make image` gives. It replaces
+  phase 6's test that the image takes no build argument, which no decision stood behind.
+
+The readers' requirement of the core:
+
+- **`>=1.0,<2`**, the roadmap's. Not taken: a 1.2 reader would take a 1.0 core, and a candidate's
+  core would be left to an installer's fallback.
+- **`>=<VERSION>,<2`, written statically and held to `VERSION` by a test.** Chosen.
+
+The upload's environments:
+
+- **Two, one an index, with `skip-existing` and re-runs.** Not taken: the first upload of three
+  new projects could not complete.
+- **One upload job a wheel, `<index>-<distribution>`, each behind an environment of its name.**
+  Chosen by the maintainer: "One job per wheel" (2026-11-15).
+
+`FYLGJA_PACKAGES` set to nothing, as `set -a; . local/.env` leaves `.env.example`'s line:
+
+- **Refused, as before.** Not taken.
+- **The shipped packages, as unset.** Chosen: a loosening that breaks no deployment, as the lab
+  pool's setting already reads an empty value.
+
+A fix after a candidate's upload to what a wheel runs or builds:
+
+- **Straight to 1.0.0.** Not taken by the plan's call, which the maintainer approved.
+- **A second candidate, with the install and both demonstrations again.** Chosen; the maintainer
+  ruled "Fix all three, rc2" (2026-11-17).
+
+#### Decision
+
+- **`VERSION`** at the root, one line, is every distribution's version; each `setup.py` reads it,
+  and each member names it in `tool.uv.cache-keys` so that a checkout's environment follows it
+  ([D-115](#d-115)). Each reader requires `fylgja-core>=<VERSION>,<2`.
+- **`--version`** on `fylgja-core`, `fylgja-core-server`, `fylgja-infrahub`, `fylgja-netbox` and
+  `fylgja-orchestrator` prints `<prog> <version> (commit <40 hex>[-dirty])`, or `unknown` for the
+  commit, and exits 0; `fylgja-core-server` from the base install exits 2,
+  `server.extra.missing`, as its `--help` does. `GET /v1/version`'s `build` is the same text, for
+  people: its form may change within major version 1.
+- **The packages** are in the core's wheel under `fylgja_core/shipped/`, `psp/` and `probes/`,
+  and `FYLGJA_PACKAGES` unset or empty means them. The image has no copy of its own and no
+  setting of the variable.
+- **`make wheels`** builds the three into `dist/` with `setuptools==84.2.1` as a build constraint
+  (`build-constraints.txt`); the gates' builds take what `setuptools>=80` resolves.
+  `scripts/publish.py check` holds the wheels to the tag, the commit, the version and the
+  changelog's head before any upload, and `notes` gives a release its notes.
+- **`.github/workflows/publish.yml`**, started by a tag `v*` alone: `build`; six upload jobs,
+  `testpypi-fylgja-core`, `-infrahub`, `-netbox` and the same three under `pypi-`, each the only
+  holder of `id-token: write` for its one wheel; and `release`, the GitHub release, for a final
+  version alone. Each action is pinned by the commit of a release at least two weeks old.
+- **On GitHub**, set by the maintainer on 2026-11-16 and 2026-11-17: a tag ruleset on `v*`, the
+  six environments with the maintainer the required reviewer, "Prevent self-review" off and
+  deployments from `v*` tags alone, no secret; and on each index three pending publishers, one a
+  distribution, each naming its environment.
+- **A candidate's tag** is on a merge commit of the integration branch, its tree gated: `v1.0.0rc1`
+  on `dd4cb3b`, the merge of the release candidate's plan, and `v1.0.0rc2` on `0410959`, the merge
+  of `fix/infrahub-loopback`, which followed the shed fix's merge `f685cba` ([D-116](#d-116)).
+  `ci.yml` was read on that branch through a draft pull request into `main` before each upload. The
+  `dev` extra stays in each published wheel's metadata.
+
+#### Consequences
+
+- `v1.0.0rc1` was pushed on 2026-11-16 before the environments existed. Its run was cancelled in
+  `build`, nothing uploaded, on the maintainer's word ("Cancel it now"), and run again on
+  2026-11-17 once the settings stood and CI had passed; the tag stayed. `v1.0.0rc2`, at the merge
+  of the loopback fix, ran once ([D-117](#d-117)).
+- PyPI's names are held only once 1.0.0 is uploaded, its pending publishers reserving nothing
+  ([verified-facts.md](verified-facts.md), "PyPI and TestPyPI"). The metadata's Changelog and
+  Documentation URLs name `main`, and resolve once the phase has landed.
+- Not read: whether a re-run of one failed upload job can download the original run's artifact.
+  A name an index refuses is not cured by the next version.
+- The wheel check, the image and the editable builds take what `setuptools>=80` resolves, while
+  `make wheels`, which builds what is uploaded, pins 84.2.1: the gates may check a wheel built by
+  another backend than the published one.
+
+<a id="d-114"></a>
+### D-114 — The user documentation as built: eight pages, the installing and the promise's pages held by tests too, the long descriptions' links into the tagged tree, and no tuning figure on a page
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Supersedes [D-107](#d-107) in one part: the
+installing page and the promise's are held by tests, not by the link check and review alone.
+Details it in the pages' names, what the client's page names, the demonstrations' exit statuses,
+and the descriptions the published wheels carry. The rest stands.
+
+#### Context
+
+Phase 10's fourth plan wrote the pages on 2026-11-15, and the release candidate's plan the
+promise's page on 2026-11-16 (the phase's ledgers, plans 4 and 5). The core's description on PyPI
+is the root `README.md` and each reader's its own README, and a relative link does not resolve
+there. A figure on a page a user reads is a promise within major version 1 ([D-105](#d-105)).
+
+#### Options considered
+
+A README's relative links on PyPI:
+
+- **Absolute links to `main` in the file.** Not taken: unchecked by the link check, and a later
+  tree than the release's.
+- **Left broken on PyPI.** Not taken.
+- **Each relative link written absolute at build, into the tagged tree.** Chosen, for the core's
+  README and the readers', by one function shared by the three builds.
+
+A tuning figure (a reconnect's waits, verify's bound, a second Ctrl-C's two seconds):
+
+- **On the page, as the code holds it.** Not taken: the figure would be held within major
+  version 1, where it is tuning.
+- **Said in words, the figure left to the code.** Chosen.
+
+#### Decision
+
+- **The pages**, flat under `docs/`: `README.md`, the index; `installing.md`, `server.md`,
+  `cli.md`, `api.md`, `client.md`, `compatibility.md` ("What 1.0 holds") and `demonstrations.md`.
+  `integrating.md`, `rules.md` and `glossary.md` stay as they were but for their links.
+- **Each page is held by a test of its own**, the installing page and the promise's among them,
+  and every page by the checks they share: each command line it gives parses, each make target it
+  names exists, and no page cites a decision number or a phase. Each reader's README is held to its
+  command's parser both ways.
+- **The client's page** names `Client`, its public methods, `Followed`, the module's errors and
+  `documents.Rejected`; the constructor's keywords for tests are in its row as said, not as
+  promised. The demonstrations' exit statuses are prose, not a set a test compares, since D-105
+  holds no demonstration.
+- **`readme_links.py`** at the root writes a README's relative links absolute under the tag's
+  tree, `https://github.com/happypathnetworking/fylgja/blob/v<VERSION>/`, an image's under
+  `raw/v<VERSION>/`, for the core's and both
+  readers' descriptions; the wheel check compares the rewritten text.
+- **`fylgja-core-server --help`** cites `docs/server.md` at the installed version's tag on GitHub,
+  since an installed user has no `docs/`.
+- **No page states a tuning figure**, nor `build`'s form, nor a `405` the API's document does not
+  name.
+
+#### Consequences
+
+- A user installed from PyPI reads links into the tree of the release they installed.
+- `README.md` is for a user and `CONTRIBUTING.md` for a contributor; the demonstrations' account
+  moved from the second to `docs/demonstrations.md`.
+
+<a id="d-115"></a>
+### D-115 — uv as built: D-108's number confirmed, the pip a base image or an earlier venv holds left alone, the system's Python only, and each member's build keyed on `VERSION`
+
+**Status:** Accepted 2026-11-17 (phase 10's landing). Confirms [D-108](#d-108), taken
+provisionally on the phase's integration branch, under its number. Details it: "the final stage
+holds no uv" stands, and the base image's own pip is in it; "`core/.venv` holds no pip" is true of
+a venv uv made, not of one pip made before; and the root's settings, the environment's path, each
+member's cache keys and CI's pin. Supersedes nothing.
+
+#### Context
+
+The `uv` change was built as a plan of phase 10 on its integration branch on 2026-11-15, not
+merged to `main` before the phase as first planned, and merged between the demonstrations and the
+release (the phase's ledgers, the `uv` change and plan 3). Its readings are in
+[verified-facts.md](verified-facts.md), "uv 0.12.23" and "The core's image".
+
+#### Options considered
+
+The base image's pip, `python:3.14.9-slim`'s own under `/usr/local`:
+
+- **Removed from the final stage.** Not taken: a change of what the pinned base image is, which
+  no decision asked for, while the venv the server runs from holds none.
+- **Left.** Chosen.
+
+A uv-managed Python, which D-108's `python-downloads = "never"` stops uv downloading but not using
+where one is installed:
+
+- **Left to the host.** Not taken: the PATH's `python3` would not be held against one.
+- **`python-preference = "only-system"`** in the root. Chosen; that it refuses an installed one
+  was not read, none being on the development host.
+
+A changed `VERSION`, which uv was read not to bring into `core/.venv`'s metadata of a member
+until something else of the member changed:
+
+- **Left.** Not taken: a checkout's `--version` and `/v1/version` would name the version before.
+- **Each member names its `pyproject.toml`, `setup.py`, `setup.cfg` and the root `VERSION` in
+  `tool.uv.cache-keys`.** Chosen, read to work.
+
+#### Decision
+
+- **The root's `[tool.uv]`** holds `required-version = "==0.12.23"`, `python-downloads = "never"`
+  and `python-preference = "only-system"`.
+- **`make venv`** is `UV_PROJECT_ENVIRONMENT=$(abspath $(VENV)) uv sync --locked --all-packages
+  --all-extras --python python3`, `VENV` being `core/.venv`.
+- **Each member's `tool.uv.cache-keys`** names `VERSION`, so a version moved reaches the
+  environment at the next `make venv`.
+- **The image** has no uv, and no pip in its venv; the base image's pip under `/usr/local` stays.
+- **A `core/.venv` pip made before** keeps its pip under `make venv`; removing the directory once
+  gives a venv with none.
+- **CI's `astral-sh/setup-uv`** is pinned by the commit of `v10.3.3`, released 2026-10-28, the
+  release named beside it, as every action of the publish workflow is.
+
+#### Consequences
+
+- The lock records no version for a member whose version is dynamic, and no range on a workspace
+  dependency, as read on uv 0.12.23 ([verified-facts.md](verified-facts.md)).
+- `ci.yml` under uv first ran on the release candidate's branch, through its draft pull request,
+  and passed ([D-117](#d-117)).
+- Left open: `exclude-newer` for the two-week rule, the lock's other versions being what PyPI held
+  on the day of the lock.
 
 ## Parked
 
@@ -7640,13 +8440,6 @@ becomes an entry then.
   ([verified-facts.md](verified-facts.md), "The events' upper bound, and a completion as their
   floor"), which the reader does not send. Whether the events read is bounded or rebuilt is a
   later phase's.
-- **A core test whose margin is the host's load.**
-  `core/tests/test_containerlab_driver.py::test_the_deploys_budget_starts_once_the_lock_is_held`,
-  phase 7's and untouched by phase 8, failed once under load during phase 8's plan 6 with
-  `assert 0.2468 > 0.25`, and passed in the runs after. It holds one deploy for 0.3 s and
-  asserts that the second started more than 0.25 s after the first, a margin of 50 ms. The
-  margin is the test's, not the driver's. Mending it, so that it does not turn on when the
-  first deploy started, is a later plan's.
 - **A check on a task worker that lacks its branch's commit, and a check that runs for most of
   its `timeout`** ([D-091](#d-091), [D-093](#d-093)). In every acceptance run both checks ran
   on a worker that held the commit's tree, and `fylgja-twin` concluded within 485 s of the
@@ -7665,8 +8458,8 @@ becomes an entry then.
 - **A registration read from GitHub** ([D-085](#d-085), [D-094](#d-094)). The development
   Infrahub reads the registration from the main checkout's `.git`. What Infrahub does with this
   repository registered from GitHub was not read, and waits on the maintainer's word.
-- **Infrahub on volumes kept for days: its start, and why what reads it is slow**
-  ([D-101](#d-101), and the question above on what a read of Infrahub costs). On 2026-11-13
+- **Infrahub on volumes kept for days: why what reads it is slow** ([D-101](#d-101),
+  [D-116](#d-116), and the question above on what a read of Infrahub costs). On 2026-11-13
   `make infrahub-up` on the volumes kept since phase 8 failed twice of three, each time on a
   database container read unhealthy; the database's log said `Started.` 51.6 s after its
   container's start. Phase 8's rehearsal made once more then took 600.5 s where it had taken
@@ -7679,9 +8472,10 @@ becomes an entry then.
   ([verified-facts.md](verified-facts.md), the end of "Infrahub 1.11.11"). The cause was not
   read: whether it is the instance's history, the task manager's, the host's load, or code phase
   9 changed in the planning. The test the question above names, a read timed before a purge and
-  after a seed, is still not run. What is asked: what makes it slow; whether the database's
-  health check needs a longer allowance on kept volumes; and whether `fylgja-step`'s 900 s
-  stands on such an instance.
+  after a seed, is still not run. What is asked: what makes it slow, and whether `fylgja-step`'s
+  900 s stands on such an instance. The database's start is answered: its health check waits 180 s
+  before a failed probe counts, and its three starts read on kept volumes with it and two from new
+  volumes each passed at the first ask ([D-116](#d-116)).
 - **The cluster's rehearsal against the local driver's** ([D-101](#d-101)). In the dry runs the
   report came 249.6 s after the tag with the core on the cluster and 131.0 s with it on the
   local driver, 1.9 times, a derivation; in the maintainer's runs 231.2 s and 125.6 s. The

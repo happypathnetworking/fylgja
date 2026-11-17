@@ -139,9 +139,11 @@ Each was read once, on the local driver, with the source's volumes kept.
   and pass on the second.
 - `make demo-down` took about 15 to 25 seconds.
 
-The time of a whole demonstration from new volumes was not read. The first starts from new volumes
-were read: NetBox healthy about 750 seconds after its start, in three readings of 749 to 764
-seconds, and Infrahub answering about 155 seconds after Compose's start, in two readings.
+From new volumes, in a fresh clone, each demonstration took about 17 minutes of wall time, in three
+runs on the local driver, two of NetBox's and one of Infrahub's. NetBox's first start is most of
+NetBox's demonstration's time: NetBox was healthy about 730 to 790 seconds after its start, in four
+readings of 732 to 793 seconds. Infrahub answered about 155 seconds after Compose's start, in five
+readings of 153 to 159 seconds.
 
 Why it is so: the readings are in [verified-facts.md](../design/verified-facts.md).
 

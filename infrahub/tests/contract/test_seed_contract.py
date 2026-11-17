@@ -34,18 +34,20 @@ STAGE_KIND = Path(__file__).resolve().parents[2] / "schema" / "fylgja-stage.yml"
 BRANCH = "third-link"
 """The seeded branch, `make infrahub-seed`'s `SEED_BRANCH` as the Makefile gives it."""
 
-DROPPED = {
-    "n1": 'set / interface ethernet-1/2 description "to n3 ethernet-1/2"\n',
-    "n3": 'set / interface ethernet-1/2 description "to n1 ethernet-1/2"\n',
-}
-"""The one line of `n1`'s and of `n3`'s configuration that the link `main` lacks would give them."""
-
-ANCHOR = "set / interface ethernet-1/2 subinterface 0 admin-state enable\n"
-ADDRESSED = (
-    "set / interface ethernet-1/2 subinterface 0 ipv4 admin-state enable\n"
-    "set / interface ethernet-1/2 subinterface 0 ipv4 address 192.0.2.1/24\n"
+_AREA = (
+    "set / network-instance default protocols ospf instance main area 0.0.0.0 interface ethernet-1/2.0 "
+    "interface-type point-to-point\n"
 )
-"""The two lines the second stage's address gives `n1`'s configuration, after `ANCHOR`."""
+DROPPED = {
+    "n1": (_AREA, 'set / interface ethernet-1/2 description "to n3 ethernet-1/2"\n'),
+    "n3": (_AREA, 'set / interface ethernet-1/2 description "to n1 ethernet-1/2"\n'),
+}
+"""The two lines of `n1`'s and of `n3`'s configuration that the link `main` lacks would give them: its port in OSPF's
+area, and its far end."""
+
+ANCHOR = "set / interface ethernet-1/2 subinterface 0 ipv4 address 10.0.0.4/31\n"
+ADDRESSED = "set / interface ethernet-1/2 subinterface 0 ipv4 address 192.0.2.1/24\n"
+"""The line the second stage's address gives `n1`'s configuration, after its port's own /31, `ANCHOR`."""
 
 NETWORK = """
 query ($tag: String!, $name: String!) {
@@ -158,10 +160,14 @@ def stage(hub: Hub, at: str) -> tuple[tuple[int, int, int, int], dict[str, str]]
 
 def test_main_is_left_the_baseline(seeded: dict[str, Any], hub: Hub) -> None:
     devices = network(hub, "main")
-    assert counted(devices) == (3, 15, 6, 2)
+    assert counted(devices) == (3, 15, 12, 2)
     configs = configurations(hub, devices)
-    assert configs == {name: config.replace(DROPPED.get(name, ""), "") for name, config in fixture().items()}
-    assert DROPPED["n1"] not in configs["n1"]
+    wanted = fixture()
+    for name, lines in DROPPED.items():
+        for line in lines:
+            assert wanted[name].count(line) == 1, (name, line)
+            wanted[name] = wanted[name].replace(line, "")
+    assert configs == wanted
 
 
 def test_the_file_names_the_branch_the_scope_and_two_stages_in_order(seeded: dict[str, Any]) -> None:
@@ -184,15 +190,15 @@ def test_each_stage_reads_its_own_configuration_at_its_time(seeded: dict[str, An
     configs = fixture()
 
     at_first = network(hub, BRANCH, first)
-    assert counted(at_first) == (3, 15, 6, 3)
+    assert counted(at_first) == (3, 15, 12, 3)
     assert configurations(hub, at_first) == configs
-    assert addresses_on(at_first, "n1", "ethernet-1/2") == []
+    assert addresses_on(at_first, "n1", "ethernet-1/2") == ["10.0.0.4/31"]
 
     at_second = network(hub, BRANCH, second)
-    assert counted(at_second) == (3, 15, 7, 3)
+    assert counted(at_second) == (3, 15, 13, 3)
     assert configs["n1"].count(ANCHOR) == 1
     assert configurations(hub, at_second) == configs | {"n1": configs["n1"].replace(ANCHOR, ANCHOR + ADDRESSED)}
-    assert addresses_on(at_second, "n1", "ethernet-1/2") == ["192.0.2.1/24"]
+    assert sorted(addresses_on(at_second, "n1", "ethernet-1/2")) == ["10.0.0.4/31", "192.0.2.1/24"]
 
     assert network(hub, BRANCH) == at_second
 

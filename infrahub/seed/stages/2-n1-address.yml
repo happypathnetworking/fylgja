@@ -1,8 +1,10 @@
 ---
 # The seeded branch's second stage, read by infrahubctl object load (infrahub/seed/seed.py): one address, in the
-# documentation range, on n1's ethernet-1/2, the port the first stage cabled. The port is named by its name and its
+# documentation range, added on n1's ethernet-1/2, the port the first stage cabled. The port is named by its name and its
 # device, and sets nothing of its own, so the load finds the port main's devices' file made and makes the address
-# under it; no port and no cable changes, and only n1's configuration does.
+# under it; no port and no cable changes, and only n1's configuration does. The load sets the port's addresses to the
+# list nested here, so the port's own /31, main's, is listed first and kept: without it the stage would replace the
+# link's address and end the n1-n3 adjacency.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -13,4 +15,5 @@ spec:
       ip_addresses:
         kind: IpamIPAddress
         data:
+          - address: 10.0.0.4/31
           - address: 192.0.2.1/24

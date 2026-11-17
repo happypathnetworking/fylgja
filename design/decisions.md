@@ -8549,3 +8549,21 @@ becomes an entry then.
   It would add a member to the deployment format, which [D-105](#d-105) lets a minor release do.
   Not read: whether clabernetes takes containerlab's `mgmt-ipv4` as a declared address, and which
   addresses the plan would choose.
+- **What the first release left unread** ([D-117](#d-117)). Each of these was seen in a review or
+  a run of the release and not taken up. An answer from Docker that `pool.networks` cannot parse
+  leaves the local driver's `admit` raising a `ValueError`, not a `DriverFailed`
+  ([D-110](#d-110)). A `Retry-After` of more than three digits makes the Infrahub clients wait
+  the most, 30 s, and the seed's wait, as `account.py`'s `main` hands its sleep to the hub, is
+  untested ([D-116](#d-116)). The wait for a shed request was not exercised against a live shed,
+  which neither candidate's run met ([D-116](#d-116), [D-117](#d-117)). A cluster reached on
+  loopback, through a port-forward, takes the local harness's 2.0 s bound on an unchanged step,
+  and the kill scenarios' tolerance of a re-addressed node was not seen exercised live
+  ([D-117](#d-117)). The gates build with whatever `setuptools>=80` resolves, while `make wheels`
+  pins 84.2.1 ([D-113](#d-113)). The deletion's refusal is kept in the loop's memory for the
+  core's life, so a core started again is refused again, one run record a restart
+  ([D-109](#d-109)). Support for several versions of a platform, a device that names the
+  version it runs and a reader of `conformance.version` are unbuilt, and a version's name that
+  a parenthesis or `+` would need is refused ([D-102](#d-102), [D-109](#d-109)). The lock's
+  versions are what PyPI held on the day of the lock, and `exclude-newer` for the two-week rule
+  is not set ([D-108](#d-108), [D-115](#d-115)). The demonstrations run on the local driver
+  alone, and a better demonstration, or one on a cluster, is not built ([D-104](#d-104)).

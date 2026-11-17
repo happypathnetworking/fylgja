@@ -4,7 +4,7 @@ What each release changed for a user, newest first, and its known limits ([D-106
 release's section is headed `## <version> - <date>`, `unreleased` standing in the date until the commit that is tagged
 dates it.
 
-## 1.0.0rc2 - 2026-11-17
+## 1.0.0 - 2026-11-17
 
 The first release. The three distributions, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, are published
 as wheels at one version, each built from this repository alone: a release on PyPI, a candidate on TestPyPI.
@@ -16,11 +16,12 @@ targets and the scripts are not.
 
 Not published: an image, a source distribution and the example orchestrator.
 
-This candidate replaces `1.0.0rc1`, which stays on TestPyPI: its acceptance found that the Infrahub
-reader failed at once when Infrahub sheds load. Infrahub 1.11 answers a request it sheds with an HTTP
-429 that it marks as a shed, before the request does anything. The reader now sends such a request
-again after the `Retry-After` it gives, up to 300 s for one request, and past that the read is an
-`InfrahubError`.
+Two candidates came before it, `1.0.0rc1` and `1.0.0rc2`, and both stay on TestPyPI. The acceptance
+of `1.0.0rc1` found that the Infrahub reader failed at once when Infrahub sheds load. Infrahub 1.11
+answers a request it sheds with an HTTP 429 that it marks as a shed, before the request does
+anything. The reader now sends such a request again after the `Retry-After` it gives, up to 300 s for
+one request, and past that the read is an `InfrahubError`. That wait was not seen against a live
+shed: the acceptance of `1.0.0rc2` met none.
 
 ### Upgrading from a checkout before 1.0
 
@@ -87,13 +88,17 @@ distributions. Each line that ends ([more]) is one question of
   destroy waits for the cluster's API to settle. A core that restarts forgets it, and its next
   destroy of that twin does not wait, so a namespace the cancelled request goes on to make may be
   left standing. A create cut by a transport failure, a timeout or a connection lost after the
-  send, is not marked, though the API may likewise still make it.
+  send, is not marked, though the API may likewise still make it. The local driver's mark is lost
+  the same way: it marks a twin whose `containerlab deploy` was cancelled or ran out of its
+  budget, so that the destroy that follows lists the lab's containers again until none has appeared
+  for 5 s, but a core that restarts forgets the mark, and its next destroy of that twin does not.
 
 The example's, the test suites' and the development tooling's open questions are in
 [Open questions](design/decisions.md#open-questions) and are not promised: the many-twins
 scenario's forty-node twin, the cluster's rehearsal time, the task worker's clone, a registration
 read from GitHub, Prefect's credential in NetBox's changelog, authoring a change of several steps in
-NetBox, three small gaps, `make netbox-up`'s network, and a rehearsal's time on an Infrahub kept for
-days. The development database's health check on such an Infrahub is answered: it allows 180 s.
+NetBox, three small gaps, `make netbox-up`'s network, a rehearsal's time on an Infrahub kept for
+days, and what the first release left unread. The development database's health check on such an
+Infrahub is answered: it allows 180 s.
 
 [oq]: design/decisions.md#open-questions

@@ -70,6 +70,9 @@ and changes nothing until all are met. Only the host's owner can give them.
   value that is no such network is refused with `FYLGJA_LAB_POOL is not an IPv4 network in CIDR form
   that holds a /24`.
 
+A `local/` that is a symbolic link is not supported for the edge's Prefect: where Prefect was started by
+hand under the link's spelling, the demonstration's `prefect-up` step does not see that server as up.
+
 Where a read of the host fails, the line says what was not judged. Where `docker info` fails, the
 run stops with the checks above and judges neither memory nor ports.
 

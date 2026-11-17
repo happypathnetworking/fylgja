@@ -9922,3 +9922,36 @@ the file named, and the starred ones by a run of a twelve-line script on the asy
 - **SR Linux's scrapli platform** is `nokia_srlinux`, in `scrapli_community`
   (`scrapli_community/nokia/srlinux/`), which nornir_scrapli's `asyncio` extra installed; it
   needs no pin of its own.
+
+### The OSPF check on the seeded change (read 2026-11-17)
+
+Read on this host's development Infrahub 1.11.11, the core serving locally on the containerlab
+driver, SR Linux 24.7.1, by `fylgja-orchestrator twin rehearse --branch third-link --json` with
+the runner's tokens, the seed's proposed change open; times are seconds of the command's own
+clock, taken by stamping its progress lines.
+
+- **The seeded change passes, every adjacency FULL at the first read.** Stages `created`,
+  `passed`, `passed`, `skipped` (branch point, `third-link`, `n1-address`, head unchanged), exit
+  0, `already_failing` empty: `ospf: 4 of 4 link ends full` on the baseline's two links, then `6
+  of 6` after each step. Each check was one round, 4.8 s on the baseline and 5.1 s and 5.2 s
+  after the steps, each round opening the three connections anew; the check began 0.1 s after
+  verify held, and verify itself 2.5 s after the create's push (settle) and 2.5 s after each
+  step's. The whole rehearsal took 166 s.
+- **The first run under the check failed the seeded change at `n1-address`, rightly.** Infrahub's
+  object loader sets a port's addresses to the list nested under it: the stage nested one
+  address under `n1:ethernet-1/2`, which then held `192.0.2.1/24` and no longer its `/31`
+  (rendered configuration read back by the reader at the stage's time), so n1's end of n1-n3 left
+  n3's subnet. The check read `5 of 6` for four rounds and `4 of 6` from about 30 s after verify,
+  as the dead interval passed, and failed both ends with "no neighbour" when its 120 s ran out.
+  The stage now lists the port's `/31` with the address it adds.
+- **A link without an address fails both ends.** A throwaway third stage, never committed,
+  deleted `10.0.0.0/31` on the branch (by GraphQL: the loader cannot remove a peer). Verify held
+  (19 hold, 0 fail: layer 1), and the check failed the stage, the rehearsal `failed` at stage 4
+  of 5, exit 1, with `ospf.adjacency.not_full` on `n1:ethernet-1/1` and `n2:ethernet-1/1`, both
+  "no neighbour", the cause `The OSPF check found 2 failures at stage 4, n1-unaddressed, ...`.
+  Losing the address also moved n1's router-id from `10.0.0.0` to `10.0.0.4`, the template's
+  lowest routed address, and the n1-n3 adjacency reset with it: `2 of 6` for eight rounds, `3 of
+  6` at 41 s and `4 of 6` from 46 s into the check, which then ran to its budget, 125 s in all.
+- **A `head` refused for the event log's count, once.** One rehearsal begun seconds after a seed
+  ended refused its head stage with `read.incomplete` (`Infrahub counted 4 in InfrahubEvent ...
+  and answered 11`), as recorded under Infrahub 1.11.11; the same rehearsal run again passed.

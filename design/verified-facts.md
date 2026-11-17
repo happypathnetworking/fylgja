@@ -9901,10 +9901,15 @@ the file named, and the starred ones by a run of a twelve-line script on the asy
   with `async def aload(self) -> Inventory` alone. It is registered in code by
   `CapabilityInventoryPluginRegister.register(name, cls)`
   (`nornir/core/plugins/inventory.py`, `register.py`); registering a name twice with the same
-  class was not read. `Inventory`, `Hosts`, `Groups`, `Defaults`, `Host` and `ConnectionOptions`
+  class is a no-op, and another class under the same name raises `PluginAlreadyRegistered`
+  (`PluginRegister.register`, read 2026-11-16). `Inventory`, `Hosts`, `Groups`, `Defaults`, `Host` and `ConnectionOptions`
   are `nornir.core.inventory`'s, and a `Host`'s repr is `Host: <name>`. *
 - **Closing** is `await nr.aclose_connections(on_good=True, on_failed=False)`, itself an `arun`;
   hosts that timed out need `on_failed=True` (`nornir/core/__init__.py`).
+- **The runner's `timeout` bounds one `arun`, not a poll**: past it, each host not finished is
+  recorded with a `TaskTimeoutError` and the run returns; nothing is raised to the caller
+  (`nornir/core/run.py`, `_run_timeout_error`; read 2026-11-16). A poll of several rounds keeps
+  its own clock.
 - **nornir_scrapli's async task** is `from nornir_scrapli.async_tasks import send_command`,
   `async def send_command(task, command, strip_prompt=True, failed_when_contains=None,
   timeout_ops=None) -> Result`. It opens the connection `scrapli`, registered by the package's

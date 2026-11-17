@@ -16,19 +16,13 @@
 # platform {{ about }}{{ ('; ' ~ dev.description.value) if dev.description.value else '' }}
 set / system name host-name {{ dev.name.value }}
 set / network-instance default type default
-{% set ns = namespace(routed=[], addresses=[]) -%}
-{% for edge in dev.interfaces.edges | sort(attribute='node.name.value', case_sensitive=true) if edge.node['__typename'] == 'InterfacePhysical' and edge.node.role.value != 'management' and edge.node.connector.node and edge.node.ip_addresses.edges -%}
-{% set ns.routed = ns.routed + [edge.node] -%}
-{% for address in edge.node.ip_addresses.edges -%}
-{% set ns.addresses = ns.addresses + [address.node.address.value] -%}
-{% endfor -%}
-{% endfor -%}
-{% if ns.routed -%}
+{% set routed = dev.interfaces.edges | selectattr('node.__typename', 'equalto', 'InterfacePhysical') | rejectattr('node.role.value', 'equalto', 'management') | selectattr('node.connector.node') | selectattr('node.ip_addresses.edges') | sort(attribute='node.name.value', case_sensitive=true) | list -%}
+{% if routed -%}
 set / network-instance default protocols ospf instance main admin-state enable
 set / network-instance default protocols ospf instance main version ospf-v2
-set / network-instance default protocols ospf instance main router-id {{ (ns.addresses | sort(case_sensitive=true) | first).split('/')[0] }}
-{% for port in ns.routed -%}
-set / network-instance default protocols ospf instance main area 0.0.0.0 interface {{ port.name.value }}.0 interface-type point-to-point
+set / network-instance default protocols ospf instance main router-id {{ (routed | map(attribute='node.ip_addresses.edges') | sum(start=[]) | map(attribute='node.address.value') | sort(case_sensitive=true) | first).split('/')[0] }}
+{% for edge in routed -%}
+set / network-instance default protocols ospf instance main area 0.0.0.0 interface {{ edge.node.name.value }}.0 interface-type point-to-point
 {% endfor -%}
 {% endif -%}
 {% for edge in dev.interfaces.edges | sort(attribute='node.name.value', case_sensitive=true) if edge.node['__typename'] == 'InterfacePhysical' -%}

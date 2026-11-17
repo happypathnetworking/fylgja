@@ -3,31 +3,31 @@
  "about": "Facts the Go compiler's golden bundle 'three-node-probed' recorded, exported at the repository cut (2026-10-30). A compiler is correct on this fixture when its bundle holds the same nodes, links, mapping, probe hosts, omissions and lossy rows, whatever its format.",
  "input": {
   "blueprint": "testdata/blueprint/three-node-probed.json",
-  "blueprint_id": "cc10ef33eef488fb2d8814a22a4769f60952bf7547e0e5898e47a93bc9be0fc3"
+  "blueprint_id": "e833fd0aae543af51309bd5471f256144a481256e6eb947160349c2a012c32e4"
  },
  "nodes": [
   {
    "name": "n1",
    "platform_package": "nokia_srlinux",
    "config": {
-    "sha256": "365627d89a5faf82170fbdaf02e3f3a85ac104250f6dfe34df4e2b9a7d6b1b39",
-    "bytes": 1327
+    "sha256": "86b5d2ab1db8106398ede048ea0e6cb503ca3371daa8122cf2ecf12fec0f6cd8",
+    "bytes": 2091
    }
   },
   {
    "name": "n2",
    "platform_package": "nokia_srlinux",
    "config": {
-    "sha256": "95e5444da311e90de71a58fb63bb7c68f928685316a139861b860ffb5e59fad3",
-    "bytes": 1327
+    "sha256": "b356c227a97736a6ecebc18077323e8a4977548b9b7595f9d3b74e097b81d24f",
+    "bytes": 2091
    }
   },
   {
    "name": "n3",
    "platform_package": "nokia_srlinux",
    "config": {
-    "sha256": "ecbf2823211e871ea3855f208edf70e742d8d0b79cff536123e26a08ff8ed01e",
-    "bytes": 1327
+    "sha256": "b3da881195034af47a0104d52c26522371e34b41c691c06beca1a4cac3b9bf49",
+    "bytes": 2091
    }
   }
  ],

@@ -317,7 +317,8 @@ def test_the_tree_names_no_address() -> None:
     bound = [hit for hit in addresses(infrahub) if among(hit[2], LOOPBACK)]
     assert {path for path, _, _ in bound} == {override}
     rest = [hit for hit in addresses(infrahub) if hit not in bound]
-    assert [hit for hit in rest if not among(hit[2], documentation) and hit[2] not in seeded] == []
+    area = "0.0.0.0"  # OSPF's backbone area, an id in an address's form, in the template
+    assert [hit for hit in rest if not among(hit[2], documentation) and hit[2] not in {*seeded, area}] == []
 
     compose = URL.search(infrahub_dev.COMPOSE_URL)
     assert compose is not None

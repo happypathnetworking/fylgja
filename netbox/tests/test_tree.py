@@ -197,9 +197,9 @@ def test_the_plugins_configuration_assigns_four_settings_and_holds_no_value() ->
 
 def test_netbox_names_no_host_and_the_script_two_addresses() -> None:
     """No tracked file under `netbox/` holds a URL with a host, and none but this one an IPv4 address outside loopback,
-    the documentation range and the fixture's own: `netbox/seed/main.yaml`'s six, `10.<d>.10.1` and `10.<d>.11.1`,
-    and its probe's two hosts, which `netbox/` may hold as `infrahub/` holds its seed's;
-    `scripts/netbox_dev.py` holds two URLs, the release's and the address."""
+    the documentation range and the fixture's own: `netbox/seed/main.yaml`'s twelve, `10.<d>.10.1`, `10.<d>.11.1` and
+    each link's two /31 hosts `10.0.0.0` to `10.0.0.5`, and its probe's two hosts, which `netbox/` may hold as
+    `infrahub/` holds its seed's; `scripts/netbox_dev.py` holds two URLs, the release's and the address."""
     paths = tracked()
     assert HERE in paths
     assert FIXTURE in paths
@@ -207,7 +207,8 @@ def test_netbox_names_no_host_and_the_script_two_addresses() -> None:
     assert [(path, number) for path in netbox for number, line in lines(path) if URL.search(line)] == []
     seeded = {quad[1] for _, line in lines(FIXTURE) for quad in QUAD.finditer(line) if ipv4(quad[1])}
     probe = ["10.1.10.2", "10.1.11.2"]
-    assert sorted(seeded) == sorted([*(f"10.{d}.{port}.1" for d in (1, 2, 3) for port in (10, 11)), *probe])
+    links = [f"10.0.0.{host}" for host in range(6)]
+    assert sorted(seeded) == sorted([*(f"10.{d}.{port}.1" for d in (1, 2, 3) for port in (10, 11)), *probe, *links])
     found = [
         (path, number, quad[1])
         for path in netbox

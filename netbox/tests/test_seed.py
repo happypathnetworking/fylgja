@@ -35,7 +35,7 @@ ORDER = [
     "extras/tags/",
     *["dcim/devices/"] * 3,
     *["dcim/interfaces/"] * 15,
-    *["ipam/ip-addresses/"] * 6,
+    *["ipam/ip-addresses/"] * 12,
     *["dcim/cables/"] * 2,
     "extras/config-contexts/",
 ]

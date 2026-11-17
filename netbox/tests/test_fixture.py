@@ -81,7 +81,7 @@ def test_the_fixture_is_three_node_less_the_link_n1_n3() -> None:
     assert addresses == {
         (name, port, address) for name, device in wanted.items() for port, address in ADDRESS.findall(device["config"])
     }
-    assert len(addresses) == 6
+    assert len(addresses) == 12
 
     links = {
         frozenset(f"{end['device']}:{end['interface']}" for end in (link["a"], link["b"])) for link in network["links"]

@@ -181,12 +181,34 @@ def on_github(path: str, ours: set[str]) -> bool:
     return bool(parts) and (parts[0] in ours or "/".join(parts[:2]) in CITED)
 
 
+class Replaced(NamedTuple):
+    """A list under Compose's own tag `!override`, which replaces the published file's list where an untagged one
+    would be added to it (design/verified-facts.md, "Docker Compose v5.6.0")."""
+
+    items: list[str]
+
+
+class Override(yaml.SafeLoader):
+    """YAML as Compose reads an override: `!override` on a list, and no other tag of Compose's."""
+
+
+def replaced(loader: Override, node: yaml.SequenceNode) -> Replaced:
+    return Replaced(loader.construct_sequence(node))
+
+
+Override.add_constructor("!override", replaced)
+
+
 def test_the_override_holds_no_value_and_no_host() -> None:
     """The Compose override is two read-only mounts, their sources set by `infrahub_dev.py`, the edge's Prefect's
-    address and basic auth with the host's name they reach it by, Neo4j's cap and its health check's start period."""
-    override = yaml.safe_load((INFRAHUB / "dev" / "compose.override.yml").read_text())
+    address and basic auth with the host's name they reach it by, Neo4j's cap, its health check's start period,
+    and every port the published file publishes, each bound to loopback in place of every interface: the
+    server's, the message queue's metrics, and the database's metrics and backup."""
+    override = yaml.load((INFRAHUB / "dev" / "compose.override.yml").read_text(), Loader=Override)
     assert override == {
         "services": {
+            "infrahub-server": {"ports": Replaced(["127.0.0.1:8000:8000"])},
+            "message-queue": {"ports": Replaced(["127.0.0.1:15692:15692"])},
             "task-worker": {
                 "volumes": [
                     "${FYLGJA_INFRAHUB_REPO:?}:/srv/fylgja:ro",
@@ -199,6 +221,7 @@ def test_the_override_holds_no_value_and_no_host() -> None:
                 },
             },
             "database": {
+                "ports": Replaced(["127.0.0.1:2004:2004", "127.0.0.1:6362:6362"]),
                 "environment": {
                     "NEO4J_server_memory_heap_initial__size": "1g",
                     "NEO4J_server_memory_heap_max__size": "2g",
@@ -221,7 +244,7 @@ def test_the_databases_health_check_waits_for_a_start_on_kept_volumes() -> None:
     unhealthy 43.9 s into the start of 53.8 s, which `make infrahub-up` then failed twice. The override's start period,
     180 s, is about 3.3 times that slowest start, and is there to tell a database still starting from one that will
     not. It sets the period alone: the probe, its interval and its retries stay the published file's."""
-    override = yaml.safe_load((INFRAHUB / "dev" / "compose.override.yml").read_text())
+    override = yaml.load((INFRAHUB / "dev" / "compose.override.yml").read_text(), Loader=Override)
     assert override["services"]["database"]["healthcheck"] == {"start_period": "180s"}
     start_period_s = float(override["services"]["database"]["healthcheck"]["start_period"].removesuffix("s"))
     assert start_period_s >= 3 * NEO4J_SLOWEST_START_S
@@ -242,9 +265,9 @@ def test_the_tree_names_no_address() -> None:
     or a documentation range; the fixtures alone hold their own, and the documents (`*.md`) and the formats may quote
     them, source code never; the fixtures are `testdata/` and the Infrahub and NetBox seeds' networks on `main`. A URL
     on github.com names the organisation the formats' ids name, or a repository cited.
-    `infrahub/` holds no URL with a host at all, and no address but the documentation range's and, in the fixture's
-    object files, the fixture's six and its probe's two hosts. `scripts/infrahub_dev.py` holds the tree's two addresses
-    for the development Infrahub."""
+    `infrahub/` holds no URL with a host at all, and no address but the documentation range's, loopback in the Compose
+    override alone, where the published ports are bound, and, in the fixture's object files, the fixture's six and its
+    probe's two hosts. `scripts/infrahub_dev.py` holds the tree's two addresses for the development Infrahub."""
     paths = tracked()
     assert HERE in paths
     held = [path for path in paths if "tests" not in Path(path).parts and not path.startswith(FIXTURES + VENDORED)]
@@ -281,7 +304,11 @@ def test_the_tree_names_no_address() -> None:
     probe = ["10.1.10.2", "10.1.11.2"]
     assert sorted(seeded) == sorted([*(f"10.{d}.{port}.1" for d in (1, 2, 3) for port in (10, 11)), *probe])
     documentation = (ip_network("192.0.2.0/24"),)
-    assert [hit for hit in addresses(infrahub) if not among(hit[2], documentation) and hit[2] not in seeded] == []
+    override = "infrahub/dev/compose.override.yml"
+    bound = [hit for hit in addresses(infrahub) if among(hit[2], LOOPBACK)]
+    assert {path for path, _, _ in bound} == {override}
+    rest = [hit for hit in addresses(infrahub) if hit not in bound]
+    assert [hit for hit in rest if not among(hit[2], documentation) and hit[2] not in seeded] == []
 
     compose = URL.search(infrahub_dev.COMPOSE_URL)
     assert compose is not None

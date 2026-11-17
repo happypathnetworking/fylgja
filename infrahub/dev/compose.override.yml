@@ -19,9 +19,21 @@
 # volumes, 26.1 s into its quickest (design/verified-facts.md, "Infrahub 1.11.11"); 180 s, about 3.3 times the slowest,
 # is there to tell a database still starting from one that will not.
 #
+# Every port the published file publishes is bound to loopback here: it names none with an address, so each would
+# listen on every interface of the host, the server's among them, which answers a read with no token. The tag
+# !override replaces the published list; an untagged list is added to it, and the first binding stays
+# (design/verified-facts.md, "Docker Compose v5.6.0"). These are the three services 1.11.11's file publishes a port
+# for: read the file's `ports` again when INFRAHUB_VERSION moves.
+#
 # The image is not pinned here: the published file reads ${VERSION}, which infrahub_dev.py sets from the make
 # variable INFRAHUB_VERSION over whatever the shell or local/.env holds.
 services:
+  infrahub-server:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+  message-queue:
+    ports: !override
+      - "127.0.0.1:15692:15692"
   task-worker:
     volumes:
       - "${FYLGJA_INFRAHUB_REPO:?}:/srv/fylgja:ro"
@@ -32,6 +44,9 @@ services:
       FYLGJA_ORCHESTRATOR_ADDRESS: host.docker.internal:4200
       FYLGJA_ORCHESTRATOR_AUTH: ${FYLGJA_ORCHESTRATOR_AUTH:-}
   database:
+    ports: !override
+      - "127.0.0.1:2004:2004"
+      - "127.0.0.1:6362:6362"
     environment:
       NEO4J_server_memory_heap_initial__size: 1g
       NEO4J_server_memory_heap_max__size: 2g

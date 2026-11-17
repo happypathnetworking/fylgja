@@ -170,3 +170,23 @@ def test_a_clause_is_the_sentence_with_its_first_letter_lowered_and_no_full_stop
     assert clause("Set the tag `fylgja-rehearse` on the branch again.") == (
         "set the tag `fylgja-rehearse` on the branch again"
     )
+
+
+OSPF = "## Findings: the OSPF check"
+"""The heading of the private branch's OSPF check's section, after the NetBox source's."""
+
+
+def test_the_ospf_checks_section_holds_exactly_its_rules_with_their_severity() -> None:
+    from fylgja_orchestrator.nornir import ospf
+
+    rows = _rows(OSPF)
+    listed = [row[0] for row in rows]
+    assert "ospf.links.none" in listed, "the parse is blind"
+    assert len(listed) == len(set(listed)), "a rule has two rows"
+    constants = {value for name, value in vars(ospf).items() if name.startswith("RULE_")}
+    assert set(listed) == set(ospf.SEVERITY) == constants
+    assert set(listed).isdisjoint(rules.SEVERITY), "a rule is the library's and the check's"
+    for rule, severity, status, sentence in rows:
+        assert severity == ospf.SEVERITY[rule], rule
+        assert status == "none", rule
+        assert sentence, rule

@@ -128,3 +128,21 @@ done only while the branch still stands at that step; otherwise seed the change 
 | `mark.scope` | error | `failed` | The mark {label} on branch {branch}, journal entry {entry}, was read under scope {marked}, and this rehearsal reads under {scope}. Rehearse under {marked}, or {redo} (Its object is the label; `{marked}` is the scope its entry names, and `{redo}` here marks the step again under {scope}.) |
 | `mark.unheld` | error | `failed` | The core holds no blueprint {id}, which the mark {label} on branch {branch} names: a mark belongs to the core it was given to. Rehearse through that core, or seed and mark the change again for this one. *The core answering a document that is not the blueprint of that id:* The core answered another document than the blueprint {id}, which the mark {label} on branch {branch} names: a mark belongs to the core it was given to. Rehearse through that core, or seed and mark the change again for this one. (Its object is the label; `{id}` is the first 12 characters of the blueprint's id. The first is filed where the core answers 404 `blueprint.not_found`, the second where the id the core's own rule gives the document it answered is not the mark's; any other refusal of the core's is raised.) |
 | `stage.main.gained` | warning | none | main has gained {n} changes since branch {branch} was made or last synchronised, at {time}, counted of every kind but a journal entry's, a branch's own, a webhook's and an event rule's, and the marks were taken against main as it stood then: the first stage is main as it stands, so the first step may undo those changes on the twin. To rehearse against main as it stands, synchronise the branch and seed its steps again. (`{n} changes` reads `1 change` where {n} is 1. Its object is {branch}. Filed with `main`'s read where that gives a blueprint and `main`'s changelog holds rows of {time} or later, `time_after` counting inclusively, of any kind but a journal entry's, a branch's own, a webhook's and an event rule's, which no read reads, the last two the trigger's that `make netbox-hook` writes on `main`; a tag is counted, since a tag can be a scope; design/verified-facts.md, "A branch behind `main`" and "A rule's change is counted as a change of `main`".) |
+
+## Findings: the OSPF check
+
+The private branch's OSPF adjacency check,
+[`fylgja_orchestrator.nornir.ospf`](src/fylgja_orchestrator/nornir/ospf.py), reads every device
+node's OSPF state over Nornir after a stage is settled and verified, and files these as the
+reasons of that stage's failure; it names each by a `RULE_*` constant of its own. Each is an
+error that gives no status of its own: the rehearsal files the stage's failure as
+`rehearsal.stage.failed`, in its variant *By the OSPF check:*, or, on the baseline, holds them
+as already failing. `{device}` is a device node of the bundle and `{interface}` one of its
+ports, as the bundle's links name them.
+
+| Rule | Severity | Status | Sentence |
+|---|---|---|---|
+| `ospf.adjacency.not_full` | error | none | *No neighbour:* {device} has no neighbour on {interface}, where OSPF should be full. *A state short of full:* {device}'s OSPF neighbour on {interface} is {state}, not full. (Its object is `{device}:{interface}`, one link end of the bundle; the last read's state is the one said.) |
+| `ospf.instance.absent` | error | none | {device} runs no OSPF instance, so none of its link ends can be full. (Its object is {device}; its link ends are not filed again.) |
+| `ospf.node.unread` | error | none | {device}'s OSPF state could not be read: {reason}. (Its object is {device}; the reason is the host's failure, a timeout or a cancellation among them, and never holds a login; its link ends are not filed again, and the far ends are still judged.) |
+| `ospf.links.none` | error | none | The bundle has no link, so there is no adjacency to judge and the check cannot pass. (No object.) |

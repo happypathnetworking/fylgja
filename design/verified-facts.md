@@ -6532,10 +6532,16 @@ at v1.0.0rc1: its `/source/backend/infrahub/api/admission/middleware.py`, its CH
 - **The shape of a shed.** The API's priority-aware backpressure answers a request it sheds with HTTP 429, a
   `Retry-After` header in whole seconds and the header `X-Infrahub-Admission: shed`, written before any handler runs:
   the request did nothing, so it may be sent again, a mutation among them. Through the seed its words were `Server is
-  shedding load; retry later.`. A 429 with no such header is not one. *(2026-11-17)*
+  shedding load; retry later.`. The middleware marks the 429 it writes itself, so that a client can tell it from any
+  other 429: Infrahub's own comment in `middleware.py`, and its CHANGELOG's "so a client can tell an admission shed
+  from any other 429". *(2026-11-17)*
 - **On by default,** `INFRAHUB_API_BACKPRESSURE_ENABLED`. A request without `X-Priority` is `medium`. The release
   notes say an initial data load goes through the same back-off. infrahub-sdk 1.23.2 sends `X-Priority`
-  (`client.py:300`) and retries a 429 itself (`client.py:335`, `rate_limit_max_retries`). *(2026-11-17)*
+  (`client.py:300`) and retries a 429 itself (`client.py:335`). *(2026-11-17)*
+- **The SDK's bounds,** read by the controller in infrahub-sdk 1.23.2's `infrahub_sdk/config.py`:
+  `rate_limit_retry_enabled` defaults to true; `rate_limit_max_retries` is 10; `rate_limit_backoff_base` 0.5 s;
+  `rate_limit_backoff_max` 60 s, which also clamps a `Retry-After`; and `max_retry_duration` 300 s, which bounds the
+  retries of a transient error where retrying on failure is on. *(2026-11-17)*
 - **What sheds it.** The stress floor is the all-time fastest reference query, 3.2 ms, measured on the new, empty
   database; `medium` sheds from 20 times the floor, 20 to 80 % of its requests. The ratio read afterwards was 2.4.
   *(2026-11-17)*

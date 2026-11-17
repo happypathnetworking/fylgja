@@ -973,8 +973,17 @@ def test_a_429_without_the_mark_is_not_sent_again() -> None:
 
 @pytest.mark.parametrize(
     ("retry_after", "wait"),
-    [(None, 5), ("soon", 5), ("-3", 5), ("2.5", 5), ("Wed, 21 Oct 2026 07:28:00 GMT", 5), ("0", 1), ("120", 30)],
-    ids=["missing", "garbage", "negative", "fraction", "a-date", "zero", "past-the-most"],
+    [
+        (None, 5),
+        ("soon", 5),
+        ("-3", 5),
+        ("2.5", 5),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", 5),
+        ("0", 1),
+        ("120", 30),
+        ("9" * 5000, 30),
+    ],
+    ids=["missing", "garbage", "negative", "fraction", "a-date", "zero", "past-the-most", "past-what-int-reads"],
 )
 def test_the_wait_is_retry_after_held_to_1_to_30_s_and_5_s_where_it_is_no_count(
     retry_after: str | None, wait: int

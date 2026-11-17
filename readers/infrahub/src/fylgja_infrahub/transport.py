@@ -99,8 +99,9 @@ SHED_WAIT_MAX_S = 30
 """The most seconds one wait for a shed request lasts, whatever `Retry-After` says; the least is 1."""
 
 SHED_BUDGET_S = 300
-"""The most seconds the waits for one shed request add up to, the SDK's own `max_retry_duration`: a wait that would pass
-it is not taken, and the last 429 is answered as any 429 is."""
+"""The most seconds the waits for one shed request add up to, ours: of the order of infrahub-sdk's own bound for a 429,
+10 retries of at most 60 s each (design/verified-facts.md, "Infrahub 1.11.11"). A wait that would pass it is not taken,
+and the last 429 is answered as any 429 is."""
 
 REDACTED = "<redacted>"
 """What stands for the token in an error's text."""
@@ -395,8 +396,9 @@ class Infrahub:
                 break
             self._sleep(wait)
             waited += wait
-        said = f"HTTP 429: {self._words(response)}; Infrahub shed the request for {waited} s, so it was given up"
-        raise self._error(what, where, 429, said)
+        status = response.status_code
+        said = f"HTTP {status}: {self._words(response)}; Infrahub shed the request for {waited} s, so it was given up"
+        raise self._error(what, where, status, said)
 
     def _request(
         self,
@@ -495,10 +497,13 @@ def _is_shed(response: httpx.Response) -> bool:
 
 def _shed_wait(response: httpx.Response) -> int:
     """The seconds to wait before a shed request is sent again: its `Retry-After`, held to 1 to `SHED_WAIT_MAX_S`, or
-    `SHED_WAIT_DEFAULT_S` where that is missing or no count of seconds."""
+    `SHED_WAIT_DEFAULT_S` where that is missing or no count of seconds. A count of more than three digits is past the
+    most, and is not read: `int` refuses one of more than 4,300."""
     said = response.headers.get("Retry-After", "").strip()
     if not (said.isascii() and said.isdigit()):
         return SHED_WAIT_DEFAULT_S
+    if len(said) > 3:
+        return SHED_WAIT_MAX_S
     return min(max(int(said), 1), SHED_WAIT_MAX_S)
 
 

@@ -4,7 +4,7 @@ What each release changed for a user, newest first, and its known limits ([D-106
 release's section is headed `## <version> - <date>`, `unreleased` standing in the date until the commit that is tagged
 dates it.
 
-## 1.0.0rc1 - 2026-11-16
+## 1.0.0rc2 - 2026-11-17
 
 The first release. The three distributions, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, are published
 as wheels at one version, each built from this repository alone: a release on PyPI, a candidate on TestPyPI.
@@ -15,6 +15,12 @@ of the variables they read are held within major version 1, and the example orch
 targets and the scripts are not.
 
 Not published: an image, a source distribution and the example orchestrator.
+
+This candidate replaces `1.0.0rc1`, which stays on TestPyPI: its acceptance found that the Infrahub
+reader failed at once when Infrahub sheds load. Infrahub 1.11 answers a request it sheds with an HTTP
+429 that it marks as a shed, before the request does anything. The reader now sends such a request
+again after the `Retry-After` it gives, up to 300 s for one request, and past that the read is an
+`InfrahubError`.
 
 ### Upgrading from a checkout before 1.0
 

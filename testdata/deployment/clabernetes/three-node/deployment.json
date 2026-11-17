@@ -8,7 +8,7 @@
    "ARISTA_CEOS": "registry.example:5443/arista"
   }
  },
- "bundle_id": "6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31",
+ "bundle_id": "059b8ef4f8eb2e6b0db4e70ac15564e0211af5b4a2d3e245f807b4aa1fb9bd77",
  "demand": {
   "cpu": 1.5,
   "memory_mb": 6144,
@@ -53,6 +53,6 @@
    "sha256": "bb26f8e60d66453828af5a4c1bd060fd49d255a188fd4f2c48c66bd08fa6e0a4"
   }
  ],
- "id": "0ea24119e42bd553c6db56306bc11a5b8ca89c6ca389dc49255756f20618ebb8",
+ "id": "d2cae87ccde04c37ad8fbdf9d82c87d42193c6e049ffe6313ecf63fd6bf89e68",
  "twin": "three-node"
 }

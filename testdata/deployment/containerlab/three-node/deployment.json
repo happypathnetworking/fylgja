@@ -3,7 +3,7 @@
   "lab": "three-node",
   "mgmt_subnet": "172.20.1.0/24"
  },
- "bundle_id": "6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31",
+ "bundle_id": "059b8ef4f8eb2e6b0db4e70ac15564e0211af5b4a2d3e245f807b4aa1fb9bd77",
  "demand": {
   "cpu": 1.5,
   "memory_mb": 6144,
@@ -40,6 +40,6 @@
    "sha256": "0fdf111cee483aacf9b29589fa9a480d63fd94320f3486ae00c68ade51224dbb"
   }
  ],
- "id": "ea5bec45e47c677a365051ee341e69f4d2d639b630ad786cd5d3f7157d76acda",
+ "id": "8b02a4d19a4dba47caa6d129ed285cbacc63f9ce431aa5994ca3c2455ff1eb0c",
  "twin": "three-node"
 }

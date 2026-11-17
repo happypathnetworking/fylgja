@@ -63,6 +63,14 @@ class Limits:
     limit_s: float = 3600.0
 
 
+StageCheck = Callable[[Mapping[str, Any], Mapping[str, Any], float], list[dict[str, Any]]]
+"""A stage check: `(record, bundle, timeout_s) -> failures`, the twin's record, the bundle it runs and a budget in
+seconds, answering the rehearsal findings that fail the stage."""
+
+OSPF_TIMEOUT_S = 120.0
+"""The stage check's budget where none is given."""
+
+
 class _Ended(Exception):
     """The rehearsal concluded before its end: the finding that is its cause."""
 
@@ -87,11 +95,19 @@ def rehearse(
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], str] = stamp,
+    check: StageCheck | None = None,
+    ospf_timeout_s: float = OSPF_TIMEOUT_S,
 ) -> dict[str, Any]:
     """The rehearsal of the change `ref` names, every stage read under `scope`, on the twin `run_id` names with it: its
     rehearsal 1 document, once its report is posted. What the source's `change` raises is raised, before anything else
     is asked. `clock` and `sleep` are every clock the rehearsal reads and every wait it makes; `now` stamps when the
     stages were read; `progress` is given a plain line an event.
+
+    `check`, the private branch's stage check (its OSPF adjacency check), is given the twin's record, the bundle it
+    runs and a budget, the lesser of `ospf_timeout_s` and the time left under `limits.limit_s`, after the baseline
+    settles and after each step's verify holds, and answers its failures: on the baseline they are already failing, and
+    on a step they fail the stage as a verify failure does, judged absolutely. A stage skipped as unchanged is not
+    checked, and without a check nothing is.
 
     Three things bend D-085 and D-086 for this core:
 
@@ -115,6 +131,7 @@ def rehearse(
     started = clock()
     change = source.change(ref)
     rehearsal = _Rehearsal(source, core, change, scope, run_id, limits, progress or _unsaid, clock, sleep, now, started)
+    rehearsal.check, rehearsal.ospf_timeout_s = check, ospf_timeout_s
     try:
         rehearsal.carry()
         rehearsal.destroy()
@@ -178,6 +195,9 @@ class _Rehearsal:
         # How one asks for the rehearsal again, in the source's words, lowered as the end of a cause's sentence; the
         # whole sentence is `source.again`.
         self.again_clause = rules.clause(source.again)
+        # The stage check and its budget; `rehearse` sets them.
+        self.check: StageCheck | None = None
+        self.ospf_timeout_s = OSPF_TIMEOUT_S
 
     # The path.
 
@@ -329,6 +349,7 @@ class _Rehearsal:
         if verdict.status != "ok":
             self.already_failing = _errors(verdict.findings)
             stage["wait"] = {"budget_s": int(self.limits.settle_s), "after_s": self.clock() - first}
+        self.already_failing += self._ospf(k, label)
         self.stages[k - 1] = stage | _counts(verdict) | {"took_s": self.clock() - began}
 
     def _settled(self, first: float) -> Verdict:
@@ -392,7 +413,26 @@ class _Rehearsal:
             many = "failure" if len(new) == 1 else "failures"
             raise _Ended(_said(rules.STAGE_FAILED, f"Verify found {len(new)} {many} at stage {k}, {label}, that the "
                                                    f"baseline did not have, the first {rules.quote(new[0])}."))
-        self.stages[k - 1] = stage
+        found = self._ospf(k, label)
+        if found:
+            self.stages[k - 1] = stage | {"result": "failed", "failures": found, "took_s": self.clock() - began}
+            many = "failure" if len(found) == 1 else "failures"
+            raise _Ended(_said(rules.STAGE_FAILED, f"The OSPF check found {len(found)} {many} at stage {k}, {label}, "
+                                                   f"the first {rules.quote(found[0])}."))
+        self.stages[k - 1] = stage | {"took_s": self.clock() - began}
+
+    def _ospf(self, k: int, label: str) -> list[dict[str, Any]]:
+        """The stage check's failures at stage `k`, given the twin's record, the bundle it runs and the lesser of its
+        budget and the time left; none without a check."""
+        if self.check is None:
+            return []
+        self._check()
+        record, _ = self.core.get_twin(self.twin)
+        bundle = self.core.get_bundle(record["status"]["bundle_id"])["manifest"]
+        left = self.limits.limit_s - (self.clock() - self.started)
+        budget = max(1.0, min(self.ospf_timeout_s, left))
+        self.say(f"ospf: stage {k}, {label}, checking within {budget:g}s")
+        return self.check(record, bundle, budget)
 
     def _step_failed(
         self, k: int, label: str, run: Mapping[str, Any], verdict: Verdict, stage: dict[str, Any]

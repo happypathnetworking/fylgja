@@ -107,6 +107,9 @@ def clocked(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     rehearse = functools.partial(run.rehearse, clock=c.now, sleep=c.sleep)
 
     def recorded(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        # The command hands the OSPF check over; the fake runtime's nodes answer no SSH, so it is not run here.
+        assert callable(kwargs.pop("check"))
+        assert kwargs.pop("ospf_timeout_s") == 120.0
         doc = rehearse(*args, **kwargs)
         answered.append(doc)
         return doc

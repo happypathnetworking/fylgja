@@ -7,7 +7,7 @@ own server on its fake runtime, over a fake change source, on a clock that never
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -21,6 +21,7 @@ from fylgja_orchestrator.rehearsal import (
     Limits,
     Read,
     Stage,
+    StageCheck,
     documents,
     rehearse,
     report,
@@ -43,14 +44,17 @@ def rehearsed(
     *,
     core: Client | None = None,
     progress: Callable[[str], None] | None = None,
+    check: StageCheck | None = None,
+    limits: Limits | None = None,
 ) -> tuple[dict[str, Any], FakeSource]:
     """The rehearsal of `CHANGE` over `stages` as the run `RUN`, on the clock `c`, once its document validates, and the
-    source it read and posted to; its progress put in `lines`, or given to `progress`."""
+    source it read and posted to; its progress put in `lines`, or given to `progress`; `check` its stage check."""
     source = FakeSource(CHANGE, stages)
     told = progress if progress is not None else (lines.append if lines is not None else None)
     seam: ChangeSource = source  # the fake answers the seam, as mypy reads it
-    doc = rehearse(seam, served.client if core is None else core, CHANGE.ref, SCOPE, run_id=RUN, limits=Limits(),
-                   progress=told, clock=c.now, sleep=c.sleep)
+    doc = rehearse(seam, served.client if core is None else core, CHANGE.ref, SCOPE, run_id=RUN,
+                   limits=Limits() if limits is None else limits, progress=told, clock=c.now, sleep=c.sleep,
+                   check=check)
     assert documents.validate("rehearsal-1", doc) == []
     return doc, source
 
@@ -334,3 +338,89 @@ def test_one_stage_alone_is_created_verified_and_destroyed(served: Served) -> No
     assert doc["headline"].splitlines() == ["Rehearsal passed: 1 stage", warning["message"]]
     assert operations(served) == ["destroy", "create"]
     assert served.other.list_twins() == [] and [p.status for p in source.posted] == ["passed"]
+
+
+
+# The stage check (the private branch's OSPF check): called after the baseline settles and after each step's verify.
+
+NOT_FULL = documents.finding("ospf.adjacency.not_full", "error", "n2 has no neighbour on ethernet-1/1, where OSPF "
+                             "should be full.", "n2:ethernet-1/1")
+TWO = (built("seeded", "steps/two-node.json"), built("third-node", "steps/three-node-unlinked.json"))
+
+
+class Checked:
+    """A stage check that answers `answers` in turn, `[]` once they run out, and records what it was given."""
+
+    def __init__(self, *answers: list[dict[str, Any]]) -> None:
+        self.answers = list(answers)
+        self.given: list[tuple[dict[str, Any], dict[str, Any], float]] = []
+
+    def __call__(self, record: Mapping[str, Any], bundle: Mapping[str, Any], timeout_s: float) -> list[dict[str, Any]]:
+        self.given.append((dict(record), dict(bundle), timeout_s))
+        return self.answers.pop(0) if self.answers else []
+
+
+def test_a_check_failure_fails_the_stage_as_verify_does(served: Served) -> None:
+    check = Checked([], [NOT_FULL])
+    doc, _ = rehearsed(served, TWO, Clock(), check=check)
+    assert results(doc) == ["created", "failed"]
+    assert doc["stages"][1]["failures"] == [NOT_FULL]
+    assert doc["status"] == "failed"
+    heading, sentence = doc["headline"].splitlines()
+    assert heading == "Rehearsal failed at stage 2 of 2: third-node"
+    assert sentence.startswith("The OSPF check found 1 failure at stage 2, third-node, the first n2:ethernet-1/1: ")
+    assert doc["findings"][0]["rule"] == "rehearsal.stage.failed"
+    assert len(check.given) == 2
+    assert served.other.list_twins() == []
+
+
+def test_a_passing_check_leaves_each_stage_as_verify_judged_it(served: Served) -> None:
+    check = Checked()
+    doc, _ = rehearsed(served, TWO, Clock(), check=check)
+    assert results(doc) == ["created", "passed"] and doc["status"] == "passed"
+    assert len(check.given) == 2
+
+
+def test_the_check_is_given_the_twins_record_and_the_bundle_it_runs(served: Served) -> None:
+    check = Checked()
+    rehearsed(served, TWO, Clock(), check=check)
+    for record, bundle, _ in check.given:
+        assert record["name"] == T
+        assert bundle == served.other.get_bundle(record["status"]["bundle_id"])["manifest"]
+        assert bundle["links"], "the bundle given holds the links the check judges"
+        assert [node["name"] for node in bundle["nodes"]] == sorted(node["name"] for node in bundle["nodes"])
+    assert [len(bundle["nodes"]) for _, bundle, _ in check.given] == [2, 3]
+
+
+def test_a_baseline_failure_is_already_failing_and_the_rehearsal_goes_on(served: Served) -> None:
+    check = Checked([NOT_FULL])
+    doc, _ = rehearsed(served, TWO, Clock(), check=check)
+    assert doc["already_failing"] == [NOT_FULL]
+    assert results(doc) == ["created", "passed"] and doc["status"] == "passed"
+    assert doc["headline"].splitlines()[1] == ALREADY
+
+
+def test_a_stage_skipped_as_unchanged_is_not_checked(served: Served) -> None:
+    check = Checked()
+    doc, _ = rehearsed(served, FIVE, Clock(), check=check)
+    assert results(doc) == ["empty", "created", "passed", "passed", "skipped"]
+    assert len(check.given) == 3
+
+
+def test_the_check_is_given_the_lesser_of_its_budget_and_the_time_left(served: Served) -> None:
+    check = Checked()
+    rehearsed(served, TWO, Clock(), check=check)
+    assert [timeout_s for _, _, timeout_s in check.given] == [120.0, 120.0]
+
+    check = Checked()
+    c = Clock()
+    rehearsed(served, TWO, c, check=check, limits=Limits(limit_s=100.0))
+    budgets = [timeout_s for _, _, timeout_s in check.given]
+    assert all(1.0 <= budget <= 100.0 for budget in budgets) and budgets == sorted(budgets, reverse=True)
+
+
+def test_without_a_check_nothing_is_checked(served: Served) -> None:
+    lines: list[str] = []
+    doc, _ = rehearsed(served, TWO, Clock(), lines)
+    assert doc["status"] == "passed"
+    assert not any(line.startswith("ospf:") for line in lines)

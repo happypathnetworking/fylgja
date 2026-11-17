@@ -12,7 +12,7 @@ from fylgja_orchestrator.rehearsal import commands, documents, planning, record,
 from fylgja_orchestrator.rehearsal.commands import Listed, Made, create, stage_list, step
 from fylgja_orchestrator.rehearsal.names import twin_name, twin_prefix
 from fylgja_orchestrator.rehearsal.planning import plan, stamp
-from fylgja_orchestrator.rehearsal.rehearsing import Limits, rehearse
+from fylgja_orchestrator.rehearsal.rehearsing import Limits, StageCheck, rehearse
 from fylgja_orchestrator.rehearsal.report import Report, headline, render
 from fylgja_orchestrator.rehearsal.source import Change, ChangeSource, Read, Stage
 
@@ -25,6 +25,7 @@ __all__ = [
     "Read",
     "Report",
     "Stage",
+    "StageCheck",
     "commands",
     "create",
     "documents",

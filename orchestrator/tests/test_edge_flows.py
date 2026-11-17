@@ -156,6 +156,8 @@ def test_a_flow_that_ends_files_its_document_whatever_its_status_and_closes_both
     assert (kwargs.pop("source"), kwargs.pop("core")) == (opened.source, opened.core)
     if call == "rehearse":
         assert kwargs.pop("run_id") == str(RUN)
+        assert callable(kwargs.pop("check"))  # the OSPF check, made from the settings
+        assert kwargs.pop("ospf_timeout_s") == SETTINGS.ospf_timeout_s
     progress: Callable[[str], None] = kwargs.pop("progress")
     assert kwargs == {}
     assert progress.__self__.extra["flow_run_id"] == str(RUN)  # type: ignore[attr-defined]

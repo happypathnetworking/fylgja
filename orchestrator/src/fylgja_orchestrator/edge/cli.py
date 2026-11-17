@@ -89,6 +89,7 @@ class Context:
     core: Client
     config: settings.Settings
     json: bool
+    environ: Mapping[str, str]
 
 
 Command = Callable[[Context, argparse.Namespace], int]
@@ -139,7 +140,7 @@ def _run(args: argparse.Namespace, env: Mapping[str, str]) -> int:
         _error(f"{settings.READER} names {config.reader}: {getattr(e, 'strerror', None) or e}", env)
         return EXIT_FAILURE
     command: Command = args.command
-    context = Context(source, core, config, args.json)
+    context = Context(source, core, config, args.json, env)
     try:
         return command(context, args)
     except run.DraftRefused as e:
@@ -291,7 +292,8 @@ def _twin_step(ctx: Context, args: argparse.Namespace) -> int:
 def _twin_rehearse(ctx: Context, args: argparse.Namespace) -> int:
     """The report, whole: its summary, then its detail. A draft is refused (`run.DraftRefused`)."""
     doc = run.rehearse(args.branch, ctx.config.scope, source=ctx.source, core=ctx.core, run_id=RUN_PREFIX + ulid.new(),
-                       progress=_progress)
+                       progress=_progress, check=run.ospf_check(ctx.config, ctx.environ, _progress),
+                       ospf_timeout_s=ctx.config.ospf_timeout_s)
     if ctx.json:
         _json(doc)
     else:

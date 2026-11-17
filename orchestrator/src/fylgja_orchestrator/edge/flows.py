@@ -103,7 +103,9 @@ def twin_rehearse(branch: str) -> dict[str, Any]:
     source, core = run.opened(config)
     document: dict[str, Any] | None = None
     try:
-        document = run.rehearse(branch, config.scope, source=source, core=core, run_id=run_id, progress=progress)
+        document = run.rehearse(branch, config.scope, source=source, core=core, run_id=run_id, progress=progress,
+                                check=run.ospf_check(config, os.environ, progress),
+                                ospf_timeout_s=config.ospf_timeout_s)
         return document
     finally:
         _ended(TWIN_REHEARSE, run_id, document, source, core)

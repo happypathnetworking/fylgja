@@ -10,7 +10,7 @@ is raised on, its refused token among it, and so is whatever the library raises.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 from fylgja_core.client import Client
@@ -18,10 +18,11 @@ from fylgja_infrahub import document as infrahub_document
 from fylgja_netbox import document as netbox_document
 
 from fylgja_orchestrator import rehearsal
-from fylgja_orchestrator.edge.settings import Settings, UnknownSource
+from fylgja_orchestrator.edge.settings import OSPF_TIMEOUT_S, Settings, UnknownSource
 from fylgja_orchestrator.infrahub import InfrahubSource
 from fylgja_orchestrator.netbox import NetBoxSource
-from fylgja_orchestrator.rehearsal import Change, ChangeSource, Limits
+from fylgja_orchestrator.nornir import ospf
+from fylgja_orchestrator.rehearsal import Change, ChangeSource, Limits, StageCheck
 
 
 class EdgeSource(ChangeSource, Protocol):
@@ -95,9 +96,12 @@ def rehearse(
     progress: Callable[[str], None] | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    check: StageCheck | None = None,
+    ospf_timeout_s: float = OSPF_TIMEOUT_S,
 ) -> dict[str, Any]:
-    """The library's rehearsal of the change `branch` names, on the twin `run_id` names with it, within `Limits()`: a
-    rehearsal 1 document. `DraftRefused` where the change is a draft, before the core is asked anything. Then the
+    """The library's rehearsal of the change `branch` names, on the twin `run_id` names with it, within `Limits()`, its
+    stage check `check` given `ospf_timeout_s` at most (`ospf_check` makes the private branch's): a rehearsal 1
+    document. `DraftRefused` where the change is a draft, before the core is asked anything. Then the
     source takes the request (`claim`), before the library starts, so that a request is used once whatever the
     rehearsal comes to; a refusal of the claim is raised with nothing asked of the core. `clock` and `sleep` are the
     library's, for tests."""
@@ -108,4 +112,12 @@ def rehearse(
         )
     source.claim(change)
     return rehearsal.rehearse(source, core, branch, scope, run_id=run_id, limits=Limits(), progress=progress,
-                              clock=clock, sleep=sleep)
+                              clock=clock, sleep=sleep, check=check, ospf_timeout_s=ospf_timeout_s)
+
+
+def ospf_check(
+    settings: Settings, environ: Mapping[str, str], progress: Callable[[str], None] | None = None
+) -> StageCheck:
+    """The private branch's OSPF adjacency check, its hosts' logins read from `environ` as the core reads them, with
+    the platform packages `settings.packages` names."""
+    return ospf.check(settings.packages, environ, say=progress)

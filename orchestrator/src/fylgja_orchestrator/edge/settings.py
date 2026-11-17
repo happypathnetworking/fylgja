@@ -11,6 +11,10 @@ source's three are read, and the other's are neither required nor judged. A vari
 the CAs may be. The values are taken as given: the client and the source refuse an address, a token or a CA by their
 own rules when they are made (`run.opened`), and `refused` judges them by those rules first, for a command and the
 runner to name each fault before anything is made.
+
+The private branch's OSPF check adds two, both optional: `FYLGJA_ORCHESTRATOR_PACKAGES`, the platform packages'
+directory, the checkout's `psp/` where it is unset; and `FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S`, the check's polling
+budget in seconds, `OSPF_TIMEOUT_S` where it is unset, which `refused` judges a positive number.
 """
 
 from __future__ import annotations
@@ -35,6 +39,13 @@ SCOPE = "FYLGJA_ORCHESTRATOR_SCOPE"
 READER = "FYLGJA_ORCHESTRATOR_READER"
 ROOT = "FYLGJA_ORCHESTRATOR_ROOT"
 SOURCE = "FYLGJA_ORCHESTRATOR_SOURCE"
+PACKAGES = "FYLGJA_ORCHESTRATOR_PACKAGES"
+OSPF_TIMEOUT = "FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S"
+
+DEFAULT_PACKAGES = Path(__file__).resolve().parents[4] / "psp"
+"""The checkout's platform packages, where `PACKAGES` is unset."""
+OSPF_TIMEOUT_S = 120.0
+"""The OSPF check's budget, where `OSPF_TIMEOUT` is unset."""
 
 SOURCES = ("infrahub", "netbox")
 """The change sources the edge opens; the first where `SOURCE` is unset."""
@@ -98,6 +109,8 @@ class Settings:
     scope: str
     reader: Path
     root: Path
+    packages: Path = DEFAULT_PACKAGES
+    ospf_timeout_s: float = OSPF_TIMEOUT_S
 
 
 class Unset(Exception):
@@ -134,6 +147,8 @@ def from_env(environ: Mapping[str, str]) -> Settings:
         scope=environ[SCOPE],
         reader=Path(environ[READER]),
         root=Path(environ[ROOT]),
+        packages=Path(environ[PACKAGES]) if environ.get(PACKAGES) else DEFAULT_PACKAGES,
+        ospf_timeout_s=float(environ[OSPF_TIMEOUT]) if environ.get(OSPF_TIMEOUT) else OSPF_TIMEOUT_S,
     )
 
 
@@ -171,4 +186,16 @@ def refused(environ: Mapping[str, str]) -> tuple[str, ...]:
                 _RULES[name](value)
             except (InvalidAddress, InvalidToken, InvalidCA) as e:
                 lines.append(f"{name} {e}")
+    timeout = environ.get(OSPF_TIMEOUT)
+    if timeout and not _positive(timeout):
+        lines.append(f"{OSPF_TIMEOUT} is not a positive number of seconds")
     return tuple(lines)
+
+
+def _positive(value: str) -> bool:
+    """Whether `value` reads as a finite number of seconds above zero."""
+    try:
+        seconds = float(value)
+    except ValueError:
+        return False
+    return 0 < seconds < float("inf")

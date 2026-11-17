@@ -23,6 +23,7 @@ from nornir import AInitNornir
 from nornir_scrapli.async_tasks import send_commands
 
 from fylgja_orchestrator.nornir import inventory
+from fylgja_orchestrator.rehearsal import StageCheck
 from fylgja_orchestrator.rehearsal.documents import finding
 
 RULE_NOT_FULL = "ospf.adjacency.not_full"
@@ -48,7 +49,6 @@ class Unread:
 
 
 Answer = dict[str, str] | None | Unread
-StageCheck = Callable[[Mapping[str, Any], Mapping[str, Any], float], list[dict[str, Any]]]
 
 
 def expected(bundle: Mapping[str, Any]) -> list[tuple[str, str]]:

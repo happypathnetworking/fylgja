@@ -122,7 +122,7 @@ def test_rehearse_passes_the_run_id_and_the_fixed_limits(served: Served, monkeyp
     ((args, kwargs),) = asked
     assert args == (source, served.client, CHANGE.ref, SCOPE)
     assert kwargs == {"run_id": "r1", "limits": Limits(), "progress": lines.append, "clock": clock.now,
-                      "sleep": clock.sleep}
+                      "sleep": clock.sleep, "check": None, "ospf_timeout_s": 120.0}
     assert Limits() == Limits(settle_s=180.0, limit_s=3600.0)
 
 
@@ -317,3 +317,37 @@ def test_the_infrahub_source_takes_a_request_by_doing_nothing() -> None:
     finally:
         source.close()
     assert asked == []
+
+
+
+def test_the_ospf_checks_settings_have_defaults_and_are_read_where_set() -> None:
+    s = settings.from_env(ENVIRON)
+    assert s.packages == Path(__file__).resolve().parents[2] / "psp"
+    assert s.ospf_timeout_s == 120.0
+    given = settings.from_env(ENVIRON | {"FYLGJA_ORCHESTRATOR_PACKAGES": "/opt/psp",
+                                         "FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S": "45"})
+    assert (given.packages, given.ospf_timeout_s) == (Path("/opt/psp"), 45.0)
+
+
+def test_rehearse_hands_the_library_its_check_and_its_budget(served: Served, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def library(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {"status": "passed"}
+
+    monkeypatch.setattr(rehearsal, "rehearse", library)
+
+    def check(record: Any, bundle: Any, timeout_s: float) -> list[dict[str, Any]]:
+        return []
+
+    source = FakeSource(CHANGE, FIVE)
+    run.rehearse(CHANGE.ref, SCOPE, source=source, core=served.client, run_id="r1", check=check, ospf_timeout_s=45.0)
+    assert (seen["check"], seen["ospf_timeout_s"]) == (check, 45.0)
+
+
+def test_a_timeout_that_is_no_positive_number_is_refused_by_name_alone() -> None:
+    for value in ("soon", "0", "-5", "inf", "nan"):
+        lines = settings.refused(ENVIRON | {"FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S": value})
+        assert lines == ("FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S is not a positive number of seconds",), value
+    assert settings.refused(ENVIRON | {"FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S": "45"}) == ()

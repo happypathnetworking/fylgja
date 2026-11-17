@@ -6523,6 +6523,35 @@ timestamps, each a derivation; each target's time is by the host's clock, read b
 - **Not read:** a start on new volumes (Task 13's); what made the first start after 47 hours twice as slow as the next
   ones; a start near 180 s, which none came near; the second start's first passing probe. *(2026-11-16)*
 
+**Its API sheds load with a marked 429** *(Infrahub 1.11.11)*
+
+Read on 2026-11-17 in the running server of the instance `make infrahub-demo` started from new volumes in a fresh clone
+at v1.0.0rc1: its `/source/backend/infrahub/api/admission/middleware.py`, its CHANGELOG for 1.11.x and its `/metrics`.
+*(2026-11-17)*
+
+- **The shape of a shed.** The API's priority-aware backpressure answers a request it sheds with HTTP 429, a
+  `Retry-After` header in whole seconds and the header `X-Infrahub-Admission: shed`, written before any handler runs:
+  the request did nothing, so it may be sent again, a mutation among them. Through the seed its words were `Server is
+  shedding load; retry later.`. The middleware marks the 429 it writes itself, so that a client can tell it from any
+  other 429: Infrahub's own comment in `middleware.py`, and its CHANGELOG's "so a client can tell an admission shed
+  from any other 429". *(2026-11-17)*
+- **On by default,** `INFRAHUB_API_BACKPRESSURE_ENABLED`. A request without `X-Priority` is `medium`. The release
+  notes say an initial data load goes through the same back-off. infrahub-sdk 1.23.2 sends `X-Priority`
+  (`client.py:300`) and retries a 429 itself (`client.py:335`). *(2026-11-17)*
+- **The SDK's bounds,** read by the controller in infrahub-sdk 1.23.2's `infrahub_sdk/config.py`:
+  `rate_limit_retry_enabled` defaults to true; `rate_limit_max_retries` is 10; `rate_limit_backoff_base` 0.5 s;
+  `rate_limit_backoff_max` 60 s, which also clamps a `Retry-After`; and `max_retry_duration` 300 s, which bounds the
+  retries of a transient error where retrying on failure is on. *(2026-11-17)*
+- **What sheds it.** The stress floor is the all-time fastest reference query, 3.2 ms, measured on the new, empty
+  database; `medium` sheds from 20 times the floor, 20 to 80 % of its requests. The ratio read afterwards was 2.4.
+  *(2026-11-17)*
+- **Seen on a new instance.** During `make infrahub-register`, after the schema library loaded (42 s and 3 s), the
+  group was made and the repository registered, the next `POST /graphql/main` answered `HTTP 429: Server is shedding
+  load; retry later.`, and the demonstration's one retry, sent at once, the same. `/metrics` on the worker that
+  answered: `infrahub_admission_rejected_total{priority="medium",reason="stress"} 3`. *(2026-11-17)*
+- **Not read:** the `Retry-After` a shed carried; how long a new instance sheds; a shed of a reader's read.
+  *(2026-11-17)*
+
 ---
 
 ## Prefect 3.9.2

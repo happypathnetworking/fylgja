@@ -3,6 +3,7 @@
 `connect` makes the writer's `Hub` from an environment: `FYLGJA_INFRAHUB_ADDRESS`, `FYLGJA_INFRAHUB_WRITE_TOKEN` and,
 where set, `FYLGJA_INFRAHUB_CA` (D-042). There is no default address. The token goes to Infrahub as the header
 `X-INFRAHUB-KEY` and to `infrahubctl` as `INFRAHUB_API_TOKEN` in the child's environment, never on a command line.
+A request Infrahub sheds under load is sent again after the wait it names, up to `SHED_BUDGET_S` in all.
 
 Every failure is a `HubError` of one sentence, built here with the token replaced, and none is chained to the
 exception it came from: an httpx exception carries its request, whose headers hold the key. The token is replaced
@@ -46,10 +47,25 @@ first load took the server about 133 s, past the 120 s (design/verified-facts.md
 CTL_LINES = 5
 """How many of `infrahubctl`'s last lines of output a failure carries."""
 
+SHED_WAIT_DEFAULT_S = 5
+"""Seconds waited before a shed request is sent again where Infrahub's `Retry-After` is missing or no count of seconds.
+Infrahub 1.11.11's backpressure answers a request it sheds with HTTP 429, `Retry-After` in whole seconds and
+`X-Infrahub-Admission: shed`, written before any handler runs, so the request did nothing and is sent again, a mutation
+among them (design/verified-facts.md, "Infrahub 1.11.11")."""
+
+SHED_WAIT_MAX_S = 30
+"""The most seconds one wait for a shed request lasts, whatever `Retry-After` says; the least is 1."""
+
+SHED_BUDGET_S = 300
+"""The most seconds the waits for one shed request add up to, ours: of the order of infrahub-sdk's own bound for a 429,
+10 retries of at most 60 s each (design/verified-facts.md, "Infrahub 1.11.11"). A wait that would pass it is not taken,
+and the last 429 fails as any 429 does."""
+
 HIDDEN = "<token>"
 """What stands for the token wherever Infrahub or `infrahubctl` echoes it."""
 
 Run = Callable[..., subprocess.CompletedProcess[str]]
+Sleep = Callable[[float], None]
 
 
 class HubError(Exception):
@@ -60,7 +76,15 @@ class Hub:
     """The writer's reach into one Infrahub: GraphQL, REST and `infrahubctl`. Made by `connect`."""
 
     def __init__(
-        self, client: httpx.Client, *, address: str, token: str, ctl: Path, environ: Mapping[str, str], run: Run
+        self,
+        client: httpx.Client,
+        *,
+        address: str,
+        token: str,
+        ctl: Path,
+        environ: Mapping[str, str],
+        run: Run,
+        sleep: Sleep = time.sleep,
     ) -> None:
         self._client = client
         self._address = address
@@ -69,6 +93,7 @@ class Hub:
         self._ctl = ctl
         self._environ = dict(environ)
         self._run = run
+        self._sleep = sleep
 
     def __repr__(self) -> str:
         return f"Hub({self._address!r})"
@@ -135,6 +160,26 @@ class Hub:
     def _send(
         self, method: str, path: str, params: Mapping[str, str] | None, body: object | None
     ) -> httpx.Response:
+        """The response to one request, a shed one sent again after each wait that fits in `SHED_BUDGET_S`; once the
+        next would not, the last 429 is a `HubError` that says the request was shed."""
+        waited = 0
+        while True:
+            response = self._request(method, path, params, body)
+            if not is_shed(response):
+                return response
+            wait = shed_wait(response)
+            if waited + wait > SHED_BUDGET_S:
+                break
+            self._sleep(wait)
+            waited += wait
+        raise self._error(
+            f"{method} {path} answered HTTP {response.status_code}: {words(response, self._hide)}; Infrahub shed the "
+            f"request for {waited} s, so it was given up"
+        )
+
+    def _request(
+        self, method: str, path: str, params: Mapping[str, str] | None, body: object | None
+    ) -> httpx.Response:
         try:
             return self._client.request(method, path, params=params, json=body)
         except httpx.HTTPError as e:
@@ -147,6 +192,23 @@ class Hub:
 
     def _error(self, sentence: str) -> HubError:
         return HubError(" ".join(self._hide(sentence).split()))
+
+
+def is_shed(response: httpx.Response) -> bool:
+    """Whether `response` is a request Infrahub's backpressure shed: HTTP 429 marked `X-Infrahub-Admission: shed`."""
+    return response.status_code == 429 and response.headers.get("X-Infrahub-Admission", "").strip().lower() == "shed"
+
+
+def shed_wait(response: httpx.Response) -> int:
+    """The seconds to wait before a shed request is sent again: its `Retry-After`, held to 1 to `SHED_WAIT_MAX_S`, or
+    `SHED_WAIT_DEFAULT_S` where that is missing or no count of seconds. A count of more than three digits is past the
+    most, and is not read: `int` refuses one of more than 4,300."""
+    said = response.headers.get("Retry-After", "").strip()
+    if not (said.isascii() and said.isdigit()):
+        return SHED_WAIT_DEFAULT_S
+    if len(said) > 3:
+        return SHED_WAIT_MAX_S
+    return min(max(int(said), 1), SHED_WAIT_MAX_S)
 
 
 def decoded(response: httpx.Response) -> object:
@@ -188,9 +250,11 @@ def connect(
     ctl: Path,
     transport: httpx.BaseTransport | None = None,
     run: Run = subprocess.run,
+    sleep: Sleep = time.sleep,
 ) -> Hub:
     """The writer's `Hub` from `environ`; a variable not set, a token a header cannot carry (anything but printable
-    ASCII free of whitespace), or a CA that does not load, is a `HubError` naming the variable alone."""
+    ASCII free of whitespace), or a CA that does not load, is a `HubError` naming the variable alone. `sleep` is the
+    wait for a shed request, for tests."""
     address = environ.get(ADDRESS, "")
     if not address:
         raise HubError(f"{ADDRESS} is not set")
@@ -218,7 +282,7 @@ def connect(
         limits=httpx.Limits(keepalive_expiry=KEEPALIVE_S),
         trust_env=False,
     )
-    return Hub(client, address=address, token=token, ctl=ctl, environ=environ, run=run)
+    return Hub(client, address=address, token=token, ctl=ctl, environ=environ, run=run, sleep=sleep)
 
 
 def wait_until[T](

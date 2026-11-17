@@ -474,3 +474,110 @@ def test_an_accepted_line_whose_group_lacks_the_role_mends_the_group_alone(
     said = told(capsys)[0]
     assert "made the group fylgja-orchestrator" in said
     assert f"{LINE} in {env} is accepted" in said
+
+
+# A request Infrahub sheds under load (design/verified-facts.md, "Infrahub 1.11.11").
+
+SHED_WORDS = "Server is shedding load; retry later."
+
+
+def shed(retry_after: str = "3", *, marked: bool = True) -> httpx.Response:
+    """A 429 as Infrahub's backpressure writes one: `Retry-After` and `X-Infrahub-Admission: shed`, or no mark."""
+    headers = {"Retry-After": retry_after}
+    if marked:
+        headers["X-Infrahub-Admission"] = "shed"
+    return httpx.Response(429, headers=headers, json={"detail": SHED_WORDS})
+
+
+class Shedding:
+    """`infrahub` behind a shed of the first `times` requests to `path`; each request to `path` kept."""
+
+    def __init__(self, infrahub: Infrahub, path: str, times: int, answer: httpx.Response) -> None:
+        self.infrahub, self.path, self.times, self.answer = infrahub, path, times, answer
+        self.sent: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path != self.path:
+            return self.infrahub(request)
+        self.sent.append(request)
+        if len(self.sent) <= self.times:
+            return self.answer
+        return self.infrahub(request)
+
+
+class Slept:
+    def __init__(self) -> None:
+        self.waits: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        self.waits.append(seconds)
+
+
+def shed_run(served: Shedding, env: Path, slept: Slept) -> int:
+    return account.main(["--env", str(env), "--ctl", str(CTL)], transport=httpx.MockTransport(served), sleep=slept)
+
+
+def test_a_shed_login_is_sent_again_after_the_wait_infrahub_names(tmp_path: Path) -> None:
+    """A shed is written before any handler runs, so the request did nothing: the same one is sent again."""
+    env = written(tmp_path / ".env", "A=1\n")
+    infrahub, slept = Infrahub(), Slept()
+    served = Shedding(infrahub, "/api/auth/login", 1, shed("3"))
+    assert shed_run(served, env, slept) == 0
+    assert slept.waits == [3]
+    first, second = served.sent
+    same = (first.method, first.url, first.content) == (second.method, second.url, second.content)
+    assert same, "the request sent again is not the one shed"
+    [line] = token_lines(env)
+    owner = infrahub.tokens.get(line.split("=", 1)[1])
+    assert owner == "fylgja-orchestrator"
+
+
+def test_a_shed_mutation_of_this_scripts_own_is_sent_again(tmp_path: Path) -> None:
+    """The token's create, a mutation sent with the login's bearer, after the profile check of a line it refuses."""
+    env = written(tmp_path / ".env", f"{LINE}=00000000-0000-4000-8000-000000000000\n")
+    infrahub, slept = Infrahub(), Slept()
+    creates: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/graphql/main" and b"InfrahubAccountTokenCreate" in request.content:
+            creates.append(request)
+            if len(creates) == 1:
+                return shed("2")
+        return infrahub(request)
+
+    shed_once = httpx.MockTransport(handler)
+    assert account.main(["--env", str(env), "--ctl", str(CTL)], transport=shed_once, sleep=slept) == 0
+    assert slept.waits == [2]
+    assert len(creates) == 2 and creates[0].content == creates[1].content
+    [line] = token_lines(env)
+    owner = infrahub.tokens.get(line.split("=", 1)[1])
+    assert owner == "fylgja-orchestrator"
+
+
+def test_a_429_without_the_mark_is_not_sent_again(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    env = written(tmp_path / ".env", "A=1\n")
+    infrahub, slept = Infrahub(), Slept()
+    served = Shedding(infrahub, "/api/auth/login", 1, shed("3", marked=False))
+    assert shed_run(served, env, slept) == 1
+    assert slept.waits == []
+    assert len(served.sent) == 1
+    said, _ = told(capsys)
+    assert "the login of fylgja-orchestrator answered HTTP 429 with no access token" in said
+
+
+def test_sheds_past_the_budget_give_up_naming_the_shed_and_no_value(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every wait that fits in 300 s is waited; then the run fails saying the request was shed, the file untouched."""
+    env = written(tmp_path / ".env", f"{LINE}=00000000-0000-4000-8000-000000000000\n")
+    before = env.read_bytes()
+    infrahub, slept = Infrahub(), Slept()
+    served = Shedding(infrahub, "/graphql/main", 10_000, shed("30"))
+    assert shed_run(served, env, slept) == 1
+    assert slept.waits == [30] * 10
+    assert len(served.sent) == 11
+    same = env.read_bytes() == before
+    assert same, "the file changed"
+    said, leaked = told(capsys, "00000000-0000-4000-8000-000000000000", ADMIN)
+    assert not leaked, "a value was printed"
+    assert "POST /graphql/main answered HTTP 429; Infrahub shed the request for 300 s, so it was given up" in said

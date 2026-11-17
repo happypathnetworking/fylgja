@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 import pytest
-from hub import HubError, connect, wait_until
+from hub import Hub, HubError, connect, wait_until
 
 HOST = "infrahub.example"
 ADDRESS = f"http://{HOST}"
@@ -319,3 +319,109 @@ def test_wait_until_returns_what_it_read_and_ends_at_its_bound_with_the_last_rea
     assert str(raised.value) == "n1's configuration not within 180 s: n1: Pending"
     assert sum(clock.slept) <= 180
     assert clock.now == 180
+
+
+SHED_WORDS = "Server is shedding load; retry later."
+"""What 1.11.11 answered a request it shed, with HTTP 429 (design/verified-facts.md, "Infrahub 1.11.11")."""
+
+
+def shed(retry_after: str | None = "3", *, marked: bool = True) -> httpx.Response:
+    """A 429 as Infrahub's backpressure writes one: `Retry-After` and `X-Infrahub-Admission: shed`, or neither."""
+    headers = {} if retry_after is None else {"Retry-After": retry_after}
+    if marked:
+        headers["X-Infrahub-Admission"] = "Shed"
+    return httpx.Response(429, headers=headers, json={"detail": SHED_WORDS})
+
+
+class Shedding:
+    """A fake Infrahub answering each of `answers` in turn, the last for every request after; each request kept."""
+
+    def __init__(self, *answers: httpx.Response) -> None:
+        self.answers = answers
+        self.requests: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        return self.answers[min(len(self.requests), len(self.answers)) - 1]
+
+
+def shedding_hub(served: Shedding, clock: Clock) -> Hub:
+    return connect(ENVIRON, ctl=CTL, transport=answering(served), sleep=clock.sleep)
+
+
+def test_a_shed_request_is_sent_again_after_the_wait_infrahub_names() -> None:
+    """A shed is written before any handler runs, so the request did nothing: the same one is sent again."""
+    served = Shedding(shed("3"), httpx.Response(200, json={"nodes": []}))
+    clock = Clock()
+    hub = shedding_hub(served, clock)
+    assert hub.rest("GET", "/api/schema", params={"branch": "main"}).json() == {"nodes": []}
+    assert clock.slept == [3]
+    first, second = served.requests
+    assert (first.method, first.url, first.content) == (second.method, second.url, second.content)
+
+
+def test_a_shed_mutation_is_sent_again() -> None:
+    mutation = 'mutation { CoreStandardGroupCreate(data: {name: {value: "g"}}) { ok } }'
+    served = Shedding(shed("2"), httpx.Response(200, json={"data": {"CoreStandardGroupCreate": {"ok": True}}}))
+    clock = Clock()
+    hub = shedding_hub(served, clock)
+    assert hub.gql("main", mutation, {"n": 1}) == {"CoreStandardGroupCreate": {"ok": True}}
+    assert clock.slept == [2]
+    first, second = served.requests
+    assert first.method == second.method == "POST"
+    assert first.url == second.url
+    assert json.loads(first.content) == json.loads(second.content) == {"query": mutation, "variables": {"n": 1}}
+
+
+def test_a_429_without_the_mark_is_not_sent_again() -> None:
+    served = Shedding(shed("3", marked=False), httpx.Response(200, json={"data": {}}))
+    clock = Clock()
+    hub = shedding_hub(served, clock)
+    with pytest.raises(HubError) as raised:
+        hub.gql("main", QUERY)
+    assert str(raised.value) == f"POST /graphql/main answered HTTP 429: {SHED_WORDS}"
+    assert len(served.requests) == 1
+    assert clock.slept == []
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "wait"),
+    [
+        (None, 5),
+        ("soon", 5),
+        ("-3", 5),
+        ("2.5", 5),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", 5),
+        ("0", 1),
+        ("120", 30),
+        ("9" * 5000, 30),
+    ],
+    ids=["missing", "garbage", "negative", "fraction", "a-date", "zero", "past-the-most", "past-what-int-reads"],
+)
+def test_the_wait_is_retry_after_held_to_1_to_30_s_and_5_s_where_it_is_no_count(
+    retry_after: str | None, wait: int
+) -> None:
+    served = Shedding(shed(retry_after), httpx.Response(200, json={"data": {}}))
+    clock = Clock()
+    shedding_hub(served, clock).gql("main", QUERY)
+    assert clock.slept == [wait]
+
+
+@pytest.mark.parametrize(("retry_after", "waits"), [("30", 10), ("7", 42)])
+def test_sheds_past_the_budget_give_up_naming_the_shed_and_never_the_token(retry_after: str, waits: int) -> None:
+    """Every wait that fits in 300 s is waited; the last 429 then fails as any 429 does, saying it was a shed."""
+    served = Shedding(shed(retry_after))
+    clock = Clock()
+    hub = shedding_hub(served, clock)
+    with pytest.raises(HubError) as raised:
+        hub.gql("main", QUERY)
+    assert clock.slept == [int(retry_after)] * waits
+    assert len(served.requests) == waits + 1
+    total = int(retry_after) * waits
+    assert str(raised.value) == (
+        f"POST /graphql/main answered HTTP 429: {SHED_WORDS}; Infrahub shed the request for {total} s, so it was "
+        "given up"
+    )
+    for text in (str(raised.value), repr(raised.value)):
+        assert not holds_part(text)
+    assert raised.value.__context__ is None

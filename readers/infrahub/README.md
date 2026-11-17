@@ -91,6 +91,8 @@ with connect(address, token) as conn:  # ca=Path(...) for an https:// address a 
 - `InfrahubError`: Infrahub refused a request, answered what is no answer, or was not reached.
   Its text names what was being read, the branch and the time; its `status` is the HTTP status
   Infrahub answered, the one a GraphQL error carries under 200, or None where it was not reached.
+  A request Infrahub sheds under load, HTTP 429 marked `X-Infrahub-Admission: shed`, is sent
+  again after the wait Infrahub names, up to 300 s in all, before it is one.
 
 No finding, error, log line or blueprint holds the token, and no finding a byte of a
 configuration. The library logs under `fylgja.infrahub`, the version warning alone, and gives that

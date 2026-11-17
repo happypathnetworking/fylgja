@@ -273,7 +273,7 @@ def test_no_error_repr_cause_or_log_line_holds_the_token(caplog: pytest.LogCaptu
             assert TOKEN not in text
     # A traceback can show each frame's locals: no frame between the call and the raise holds the token in one.
     frames = [entry.frame for entry in raised.traceback[1:]]
-    assert [entry.name for entry in raised.traceback[1:]][-1] == "_send", "the walk is blind"
+    assert [entry.name for entry in raised.traceback[1:]][-2:] == ["_send", "_request"], "the walk is blind"
     held_locals = [(f.code.name, name) for f in frames for name, value in f.f_locals.items() if TOKEN in repr(value)]
     assert held_locals == []
     assert "branch main" in str(raised.value) and AT in str(raised.value)
@@ -907,3 +907,138 @@ def test_a_stamp_that_is_no_time_is_an_error_and_no_finding(stamp: str) -> None:
     assert raised.value.status == 200
     for held in ("'yesterday'", "branch main"):
         assert held in str(raised.value)
+
+
+# A request Infrahub sheds under load (design/verified-facts.md, "Infrahub 1.11.11").
+
+SHED_WORDS = "Server is shedding load; retry later."
+
+
+def shed(retry_after: str | None = "3", *, marked: bool = True) -> httpx.Response:
+    """A 429 as Infrahub's backpressure writes one: `Retry-After` and `X-Infrahub-Admission: shed`, or neither."""
+    headers = {} if retry_after is None else {"Retry-After": retry_after}
+    if marked:
+        headers["X-Infrahub-Admission"] = "Shed"
+    return httpx.Response(429, headers=headers, json={"detail": SHED_WORDS})
+
+
+def in_turn(*answers: httpx.Response) -> Answer:
+    """Each of `answers` in turn, the last for every request after."""
+    given = iter(answers)
+    last = answers[-1]
+    return lambda request: next(given, last)
+
+
+class Slept:
+    """The waits asked for, none of them taken."""
+
+    def __init__(self) -> None:
+        self.waits: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        self.waits.append(seconds)
+
+
+def shed_opened(served: Served, slept: Slept) -> Infrahub:
+    return connect(ADDRESS, TOKEN, transport=httpx.MockTransport(served), sleep=slept)
+
+
+def test_a_shed_request_is_sent_again_after_the_wait_infrahub_names() -> None:
+    """A shed is written before any handler runs, so the request did nothing: the same one is sent again."""
+    served, slept = Served(in_turn(shed("3"), page("DcimDevice", 0, []))), Slept()
+    with shed_opened(served, slept) as conn:
+        assert conn.devices("main", AT, "fylgja").count == 0
+    assert slept.waits == [3]
+    first, second = served.asked
+    assert (first.method, first.url, first.content) == (second.method, second.url, second.content)
+
+
+def test_a_shed_at_connect_is_waited_out() -> None:
+    answers = in_turn(shed("2"), httpx.Response(200, json={"deployment_id": "d", "version": "1.11.11"}))
+    served, slept = Served(info=answers), Slept()
+    with shed_opened(served, slept) as conn:
+        assert conn.version == "1.11.11"
+    assert slept.waits == [2]
+
+
+def test_a_429_without_the_mark_is_not_sent_again() -> None:
+    served, slept = Served(in_turn(shed("3", marked=False), page("DcimDevice", 0, []))), Slept()
+    with shed_opened(served, slept) as conn, pytest.raises(InfrahubError) as raised:
+        conn.devices("main", AT, "fylgja")
+    assert raised.value.status == 429
+    assert str(raised.value).endswith(f"HTTP 429: {SHED_WORDS}")
+    assert len(served.asked) == 1
+    assert slept.waits == []
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "wait"),
+    [
+        (None, 5),
+        ("soon", 5),
+        ("-3", 5),
+        ("2.5", 5),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", 5),
+        ("0", 1),
+        ("120", 30),
+        ("9" * 5000, 30),
+    ],
+    ids=["missing", "garbage", "negative", "fraction", "a-date", "zero", "past-the-most", "past-what-int-reads"],
+)
+def test_the_wait_is_retry_after_held_to_1_to_30_s_and_5_s_where_it_is_no_count(
+    retry_after: str | None, wait: int
+) -> None:
+    served, slept = Served(in_turn(shed(retry_after), page("DcimDevice", 0, []))), Slept()
+    with shed_opened(served, slept) as conn:
+        conn.devices("main", AT, "fylgja")
+    assert slept.waits == [wait]
+
+
+@pytest.mark.parametrize(("retry_after", "waits"), [("30", 10), ("7", 42)])
+def test_sheds_past_the_budget_give_up_naming_the_shed_and_never_the_token(
+    retry_after: str, waits: int, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Every wait that fits in 300 s is waited, and nothing is logged; the last 429 then fails as any 429 does,
+    saying it was a shed."""
+    caplog.set_level(logging.DEBUG)
+    served, slept = Served(in_turn(shed(retry_after))), Slept()
+    with shed_opened(served, slept) as conn, pytest.raises(InfrahubError) as raised:
+        conn.devices("main", AT, "fylgja")
+    assert slept.waits == [int(retry_after)] * waits
+    assert len(served.asked) == waits + 1
+    assert raised.value.status == 429
+    total = int(retry_after) * waits
+    assert str(raised.value).endswith(
+        f"HTTP 429: {SHED_WORDS}; Infrahub shed the request for {total} s, so it was given up"
+    )
+    for held in ("branch main", AT):
+        assert held in str(raised.value)
+    assert TOKEN not in str(raised.value) and TOKEN not in repr(raised.value)
+    assert raised.value.__cause__ is None and raised.value.__context__ is None
+    assert [record for record in caplog.records if record.name.startswith("fylgja")] == []
+
+
+def test_a_shed_content_is_waited_out_and_past_the_budget_is_an_error_not_a_status_to_judge() -> None:
+    """A busy Infrahub is no fact about the artifact: a shed past the budget is an `InfrahubError`, so that Infrahub's
+    load never becomes `artifact.content.unavailable`; an unmarked 429 is still the read's to judge."""
+    served, slept = Served(in_turn(shed("4"), httpx.Response(200, content=b"set / x\n"))), Slept()
+    with shed_opened(served, slept) as conn:
+        assert conn.content("main", AT, "s1") == Content(200, b"set / x\n")
+    assert slept.waits == [4]
+
+    served, slept = Served(in_turn(shed("30"))), Slept()
+    with shed_opened(served, slept) as conn, pytest.raises(InfrahubError) as raised:
+        conn.content("main", AT, "s1")
+    assert slept.waits == [30] * 10
+    assert raised.value.status == 429
+    assert str(raised.value).endswith(
+        f"HTTP 429: {SHED_WORDS}; Infrahub shed the request for 300 s, so it was given up"
+    )
+    for held in ("s1", "branch main", AT):
+        assert held in str(raised.value)
+    assert TOKEN not in str(raised.value) and TOKEN not in repr(raised.value)
+
+    served, slept = Served(lambda request: shed("3", marked=False)), Slept()
+    with shed_opened(served, slept) as conn:
+        assert conn.content("main", AT, "s1").status == 429
+    assert slept.waits == []

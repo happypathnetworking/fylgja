@@ -117,7 +117,10 @@ def rehearse(
 
 def ospf_check(
     settings: Settings, environ: Mapping[str, str], progress: Callable[[str], None] | None = None
-) -> StageCheck:
+) -> StageCheck | None:
     """The private branch's OSPF adjacency check, its hosts' logins read from `environ` as the core reads them, with
-    the platform packages `settings.packages` names."""
+    the platform packages `settings.packages` names; none for the NetBox source, whose template renders no OSPF, so
+    that each of its rehearsals is not failed for an instance its devices were never given."""
+    if settings.source != "infrahub":
+        return None
     return ospf.check(settings.packages, environ, say=progress)

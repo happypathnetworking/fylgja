@@ -351,3 +351,10 @@ def test_a_timeout_that_is_no_positive_number_is_refused_by_name_alone() -> None
         lines = settings.refused(ENVIRON | {"FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S": value})
         assert lines == ("FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S is not a positive number of seconds",), value
     assert settings.refused(ENVIRON | {"FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S": "45"}) == ()
+
+
+def test_the_ospf_check_is_infrahubs_alone_whose_template_renders_ospf() -> None:
+    infrahub = settings.from_env(ENVIRON)
+    assert infrahub.source == "infrahub" and callable(run.ospf_check(infrahub, ENVIRON))
+    netbox = dataclasses.replace(infrahub, source="netbox")
+    assert run.ospf_check(netbox, ENVIRON) is None

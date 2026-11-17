@@ -115,6 +115,10 @@ PASSED_ON = ("FYLGJA_API_", "FYLGJA_ORCHESTRATOR_")
 INFRAHUB_PASSED_ON = "FYLGJA_INFRAHUB_"
 """The prefix of the names it is given as loaded under `infrahub` alone, less `KEPT_BACK`."""
 
+NODE_LOGIN = ("FYLGJA_CREDENTIAL_SRLINUX_USERNAME", "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD")
+"""The private branch's: the SR Linux nodes' login, which its OSPF check logs in with from the runner, given as loaded
+under `infrahub` alone, the one source whose template renders OSPF; no other credential."""
+
 KEPT_BACK = (WRITE_TOKEN, AUTH, API_TOKEN, INFRAHUB_TOKEN, NETBOX_TOKEN, NETBOX_READER, NETBOX_SCOPE, SOURCE)
 """Names of those prefixes the runner is not given as loaded: the admin's token, the source, set to the one it
 serves, and the six it is given under the names `fylgja_orchestrator.edge.settings` and Prefect read, or not
@@ -197,8 +201,9 @@ def source_env(environ: Mapping[str, str], source: str) -> dict[str, str]:
     `FYLGJA_NETBOX_*`. Under `netbox`: `NETBOX_ADDRESS` and `NETBOX_CA` as held, by name and never by prefix, since
     the superuser's lines begin as they do; the example's NetBox token as `FYLGJA_NETBOX_TOKEN`; NetBox's reader
     document and scope as `FYLGJA_ORCHESTRATOR_READER` and `FYLGJA_ORCHESTRATOR_SCOPE`; and no `FYLGJA_INFRAHUB_*`. No
-    `INFRAHUB_*` name of Compose's, nothing of Prefect's and no node credential. A name of `NEEDS` not set raises
-    `Missing`; a source not of `SOURCES`, `ValueError`."""
+    `INFRAHUB_*` name of Compose's, nothing of Prefect's and no node credential but, under `infrahub`, `NODE_LOGIN`'s,
+    for the private branch's OSPF check. A name of `NEEDS` not set raises `Missing`; a source not of `SOURCES`,
+    `ValueError`."""
     if source not in NEEDS:
         raise ValueError(f"the source is neither {' nor '.join(SOURCES)}")
     for name in NEEDS[source]:
@@ -210,6 +215,7 @@ def source_env(environ: Mapping[str, str], source: str) -> dict[str, str]:
     given |= {SOURCE: source, "FYLGJA_API_TOKEN": environ[API_TOKEN]}
     if source == "infrahub":
         given["FYLGJA_INFRAHUB_TOKEN"] = environ[INFRAHUB_TOKEN]
+        given |= {name: environ[name] for name in NODE_LOGIN if environ.get(name)}
     else:
         given |= {name: environ[name] for name in (NETBOX_ADDRESS, NETBOX_CA) if environ.get(name)}
         given |= {

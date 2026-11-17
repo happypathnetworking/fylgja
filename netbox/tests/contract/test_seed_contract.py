@@ -86,7 +86,7 @@ def test_main_holds_the_fixture(box: Box, fixture: dict[str, Any]) -> None:
         ("n3", "mgmt0"),
     ]
     addresses = [row for device in held.values() for row in box.listed("ipam/ip-addresses/", device_id=device["id"])]
-    assert len(addresses) == 6
+    assert len(addresses) == 12
     cables = {
         row["id"]: seed.cabled(row)
         for device in held.values()
@@ -99,13 +99,16 @@ def test_main_holds_the_fixture(box: Box, fixture: dict[str, Any]) -> None:
 
 
 def test_each_device_renders_three_nodes_configuration(box: Box, fixture: dict[str, Any]) -> None:
-    """The blueprint's line for line after the first, but the far end of the link `main` lacks; each ends in the
-    newline the template writes after its last line, as a newline written inside a loop was read kept."""
+    """The blueprint's line for line after the first, but the far end of the link `main` lacks and the OSPF lines
+    Infrahub's template renders on the private branch, which NetBox's does not; each ends in the newline the template
+    writes after its last line, as a newline written inside a loop was read kept."""
     wanted = configurations()
     for name, text in rendered(box).items():
         lines = text.split("\n")
         assert lines[0] == FIRST.format(name=name)
-        assert lines[1:] == [line for line in wanted[name][1:] if line != LACKED.get(name)], name
+        assert lines[1:] == [
+            line for line in wanted[name][1:] if line != LACKED.get(name) and " protocols ospf " not in line
+        ], name
         assert text[-1:] == "\n"
 
 
@@ -182,5 +185,5 @@ def test_the_seed_run_twice_is_one_network(box: Box, fixture: dict[str, Any]) ->
     already = len(box.ensured)
     seed.seed(box, FILES)
     assert [what for what, _, _ in box.ensured[already:]] == ["found"] * (len(box.ensured) - already)
-    assert counts(box) == before == {"devices": 3, "interfaces": 15, "addresses": 6, "cables": 2}
+    assert counts(box) == before == {"devices": 3, "interfaces": 15, "addresses": 12, "cables": 2}
     assert box.get("core/object-changes/", limit=1)["count"] == changes

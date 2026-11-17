@@ -99,3 +99,53 @@ def test_no_links_cannot_pass() -> None:
 def test_every_rule_is_an_error() -> None:
     rules = {value for name, value in vars(ospf).items() if name.startswith("RULE_")}
     assert set(ospf.SEVERITY) == rules and set(ospf.SEVERITY.values()) == {"error"}
+
+
+# A check that cannot run answers findings, never an exception: a rehearsal's every path ends in its document.
+
+RECORD = {"status": {"nodes": [{"name": "n1", "handle": "h1", "address": "192.0.2.11"},
+                               {"name": "n2", "handle": "h2", "address": "192.0.2.12"}]}}
+ROOT = Path(__file__).resolve().parents[3]
+LOGIN = {"FYLGJA_CREDENTIAL_SRLINUX_USERNAME": "admin", "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD": "s3cret"}
+
+
+def test_a_login_not_set_is_every_device_unread_and_names_the_variable() -> None:
+    found = ospf.check(ROOT / "psp", {})(RECORD, BUNDLE, 1.0)
+    assert [(f["rule"], f["object"]) for f in found] == [(RULE_UNREAD, "n1"), (RULE_UNREAD, "n2")]
+    assert "FYLGJA_CREDENTIAL_SRLINUX_USERNAME is not set" in found[0]["message"]
+
+
+def test_a_package_not_found_is_every_device_unread(tmp_path: Path) -> None:
+    found = ospf.check(tmp_path, LOGIN)(RECORD, BUNDLE, 1.0)
+    assert [(f["rule"], f["object"]) for f in found] == [(RULE_UNREAD, "n1"), (RULE_UNREAD, "n2")]
+    assert "FileNotFoundError" in found[0]["message"]
+    assert all("s3cret" not in f["message"] for f in found)
+
+
+class _Response:
+    def __init__(self, result: str) -> None:
+        self.result = result
+
+
+class _Host:
+    """One host's MultiResult as Nornir answers it: `failed`, `exception`, and its first result's responses."""
+
+    def __init__(self, *texts: str, failed: bool = False, exception: BaseException | None = None) -> None:
+        self.failed, self.exception = failed, exception
+        self.scrapli_response = [_Response(text) for text in texts]
+
+    def __getitem__(self, index: int) -> _Host:
+        return self
+
+
+def test_each_hosts_answers_are_parsed_and_a_failed_or_garbled_one_is_unread() -> None:
+    result = {
+        "n1": _Host(_answer("oper.json"), _answer("full.json")),
+        "n2": _Host(failed=True, exception=TimeoutError("timed out")),
+        "n3": _Host("not json", "{}"),
+    }
+    answers = ospf.answered(result)
+    assert answers["n1"] == FULL
+    assert answers["n2"] == Unread("TimeoutError: timed out")
+    n3 = answers["n3"]
+    assert isinstance(n3, Unread) and n3.reason.startswith("JSONDecodeError")

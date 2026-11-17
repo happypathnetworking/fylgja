@@ -121,6 +121,28 @@ def judge(
     return sorted(failures, key=lambda f: f.get("object", ""))
 
 
+def _reason(e: BaseException) -> str:
+    """An exception as a finding says it: its type, and its text where it has one; neither holds a login."""
+    return f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+
+
+def answered(result: Mapping[str, Any]) -> dict[str, Answer]:
+    """Each host's two answers of one round, parsed: `Unread` where its result failed, timed out or was cancelled, or
+    where an answer does not parse as SR Linux's JSON."""
+    answers: dict[str, Answer] = {}
+    for host, multi in result.items():
+        if multi.failed:
+            answers[host] = Unread(_reason(multi.exception) if multi.exception else "the device answered an error")
+            continue
+        # nornir_scrapli's Result subclass sets it; Nornir's Result type does not declare it.
+        responses = multi[0].scrapli_response
+        try:
+            answers[host] = parse(responses[0].result, responses[1].result)
+        except (ValueError, KeyError, TypeError, AttributeError, IndexError) as e:
+            answers[host] = Unread(_reason(e))
+    return answers
+
+
 async def adjacencies(
     record: Mapping[str, Any],
     bundle: Mapping[str, Any],
@@ -148,15 +170,7 @@ async def adjacencies(
     try:
         while True:
             result = await nr.arun(task=send_commands, commands=list(COMMANDS), on_failed=True)
-            answers: dict[str, Answer] = {}
-            for host, multi in result.items():
-                if multi.failed:
-                    answers[host] = Unread(str(multi.exception) or type(multi.exception).__name__)
-                else:
-                    # nornir_scrapli's Result subclass sets it; Nornir's Result type does not declare it.
-                    responses = multi[0].scrapli_response  # type: ignore[attr-defined]
-                    answers[host] = parse(responses[0].result, responses[1].result)
-            failures = judge(ends, devices, answers)
+            failures = judge(ends, devices, answered(result))
             short = {f["object"] for f in failures if f["rule"] == RULE_NOT_FULL}
             silent = {f.get("object") for f in failures if f["rule"] in (RULE_UNREAD, RULE_ABSENT)}
             full = sum(1 for device, port in ends if f"{device}:{port}" not in short and device not in silent)
@@ -173,6 +187,13 @@ def check(packages_dir: Path, environ: Mapping[str, str], *, say: Callable[[str]
     """The rehearsal's stage check: `(record, bundle, timeout_s) -> failures`, the poll run to its end."""
 
     def run(record: Mapping[str, Any], bundle: Mapping[str, Any], timeout_s: float) -> list[dict[str, Any]]:
-        return asyncio.run(adjacencies(record, bundle, packages_dir, environ, timeout_s=timeout_s, say=say))
+        try:
+            return asyncio.run(adjacencies(record, bundle, packages_dir, environ, timeout_s=timeout_s, say=say))
+        except Exception as e:
+            # A check that cannot run (a login not set, a package not found, Nornir refusing the inventory) fails
+            # every device as unread, so that the rehearsal ends in its document.
+            devices = [node["name"] for node in bundle["nodes"]]
+            unread = Unread(f"the check could not run: {_reason(e)}")
+            return judge(expected(bundle), devices, dict.fromkeys(devices, unread))
 
     return run

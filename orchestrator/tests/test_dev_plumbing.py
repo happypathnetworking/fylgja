@@ -117,7 +117,10 @@ def test_the_runner_is_given_its_own_tokens_and_none_of_composes() -> None:
         "FYLGJA_ORCHESTRATOR_SCOPE": "tag:fylgja",
         "FYLGJA_ORCHESTRATOR_READER": "/srv/example/reader.yaml",
         "FYLGJA_ORCHESTRATOR_ROOT": "/srv/example/orchestrator",
+        "FYLGJA_CREDENTIAL_SRLINUX_USERNAME": "a-node-user",
         "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD": "a-node-password",
+        "FYLGJA_CREDENTIAL_EOS_PASSWORD": "another-node-password",
+        "FYLGJA_CREDENTIAL_ARISTA_CEOS_REGISTRY": "registry.example/arista",
         "INFRAHUB_INITIAL_ADMIN_TOKEN": ADMIN_TOKEN,
         "INFRAHUB_INITIAL_AGENT_TOKEN": "the-agents-token",
     }
@@ -140,9 +143,15 @@ def test_the_runner_is_given_its_own_tokens_and_none_of_composes() -> None:
         "FYLGJA_ORCHESTRATOR_API_TOKEN",
         "FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN",
         "FYLGJA_ORCHESTRATOR_AUTH",
-        "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD",
+        "FYLGJA_CREDENTIAL_EOS_PASSWORD",
+        "FYLGJA_CREDENTIAL_ARISTA_CEOS_REGISTRY",
     }
     assert sorted(left_out & set(given)) == []
+    # The private branch's OSPF check logs in to the SR Linux nodes from the runner: their login, and no other.
+    assert sorted(name for name in given if name.startswith("FYLGJA_CREDENTIAL_")) == [
+        "FYLGJA_CREDENTIAL_SRLINUX_PASSWORD",
+        "FYLGJA_CREDENTIAL_SRLINUX_USERNAME",
+    ]
     values = list(given.values())
     holds_the_admins = any(same(value, ADMIN_TOKEN) for value in values)
     holds_the_developers = any(same(value, DEVELOPER_API_TOKEN) for value in values)
@@ -240,6 +249,7 @@ def test_the_netbox_runner_is_given_netboxs_own_and_nothing_of_infrahubs() -> No
     assert given["FYLGJA_ORCHESTRATOR_SCOPE"] == "tag:netboxs"
     assert given["FYLGJA_NETBOX_ADDRESS"] == "http://127.0.0.1:8800"
     assert given["FYLGJA_NETBOX_CA"] == "/srv/example/netbox-ca.pem"
+    assert [name for name in given if name.startswith("FYLGJA_CREDENTIAL_")] == []  # no OSPF check under NetBox
     assert given["PREFECT_API_URL"] == "http://192.0.2.1:4200/api"
     assert [name for name in given if name.startswith("FYLGJA_INFRAHUB_")] == []
     assert [name for name in given if name.startswith("FYLGJA_ORCHESTRATOR_NETBOX_")] == []

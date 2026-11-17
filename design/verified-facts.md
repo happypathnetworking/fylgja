@@ -6552,6 +6552,27 @@ at v1.0.0rc1: its `/source/backend/infrahub/api/admission/middleware.py`, its CH
 - **Not read:** the `Retry-After` a shed carried; how long a new instance sheds; a shed of a reader's read.
   *(2026-11-17)*
 
+**From new volumes, in a fresh clone at the candidates** *(Infrahub 1.11.11)*
+
+Read on 2026-11-17 through `make infrahub-demo`, run by the maintainer in a clone of the public repository at each
+tag, on a host emptied first (`make infrahub-down PURGE=1`, `make netbox-down PURGE=1`). *(2026-11-17)*
+
+- **`infrahub-up` passed at its first ask from new volumes, both times.** At v1.0.0rc1 Infrahub answered 159 s after
+  Compose's start returned, at v1.0.0rc2 153 s, with no line of a failed first start: the database's 180 s start
+  period (above) was not reached. *(2026-11-17)*
+- **v1.0.0rc1's demonstration failed at `make infrahub-register`** on the shed above, and v1.0.0rc2's passed in
+  17m11.9s of wall time: the schema library's 27 kinds loaded (`infrahubctl` returned 65 s after the load was sent,
+  `main` listed them 3 s after), the repository read the clone's branch at the tag's commit, in sync 86 s on, and the
+  rehearsal passed, 4 stages in 160.5 s. The maintainer read its thread "Fylgja rehearsal" on the proposed change
+  "Rehearse third-link": passed, `branch-point` created 15 hold, `third-link` and `n1-address` passed 19 hold each,
+  `head` unchanged, nothing not modelled and nothing failing before. *(2026-11-17)*
+- **No shed at v1.0.0rc2.** After the run, `/metrics` held no `infrahub_admission_rejected_total`, and neither the
+  core's log, the runner's nor the server's held a 429: the clients' wait was not exercised against a live shed.
+  *(2026-11-17)*
+- **The published ports on loopback.** With the override's `!override` lists ("Docker Compose v5.6.0"), the
+  running instance listened on `127.0.0.1` alone for 8000, 15692, 2004 and 6362. *(2026-11-17)*
+- **Not read:** what makes one new instance shed and another not. *(2026-11-17)*
+
 ---
 
 ## Prefect 3.9.2
@@ -9220,6 +9241,19 @@ worker's provisioning moved a branch `new` to `ready` and added no row to `main`
 management command or the shell; and a revert of a merged branch, what it writes to `main`'s
 changelog, and one made during a read of `main`.
 
+**From new volumes, in a fresh clone at the candidates** *(NetBox 4.7.5, netbox-branching 1.2.3)*
+
+Read on 2026-11-17 through `make netbox-demo`, run by the maintainer in a clone of the public repository at each tag,
+on a host emptied first. *(2026-11-17)*
+
+- **Both passed.** At v1.0.0rc1 in 17m41s of wall time, the rehearsal 114.7 s; at v1.0.0rc2 in 17m14.6s, the
+  rehearsal 4 stages in 114.9 s. Each Journal's newest entry, as the maintainer read it: passed, `main` created 15
+  hold, `third-link` and `n1-address` passed 19 hold each, `head` unchanged. *(2026-11-17)*
+- **The first start on new volumes failed again, and the wait held.** At v1.0.0rc2 Compose called `netbox` unhealthy
+  122 s into its first start and exited 1; the script said `netbox healthy 793 s after its start` (732 s on
+  2026-11-12, above), asked once more and started the worker. That wait is most of the demonstration's time from new
+  volumes. NetBox listened on `127.0.0.1:8800` alone. *(2026-11-17)*
+
 ## The base install at its floors
 
 Read on 2026-11-09 on the development host, with Python 3.14.4 and the pip 25.1.1 its `venv`
@@ -9574,6 +9608,21 @@ considerations", "Troubleshooting"), read as their source in `pypi/warehouse`'s
   directory. `actions/download-artifact`'s `README.md` at `v8.0.2`: `pattern` matches artifacts'
   names ("Ignored if name is specified"), and `merge-multiple: true` extracts every matched
   artifact into `path` itself. *(2026-11-15)*
+
+- **1.0.0rc1 and 1.0.0rc2 on TestPyPI, by the publish workflow.** Each tag's run built the three wheels and, on the
+  maintainer's approval of each upload job, uploaded them; the `pypi` jobs and the release were skipped. TestPyPI's
+  JSON API lists one wheel for each name and version, its `sha256` equal to the run's artifact's. `pypi.org` answered
+  404 for the three names after each. *(2026-11-17)*
+- **The simple index lagged the JSON API.** A minute or so after rc2's uploads, `GET /pypi/fylgja-netbox/1.0.0rc2/json`
+  listed the wheel while `pip` read only `1.0.0rc1` in `/simple/fylgja-netbox/` and refused the pin; a minute later
+  the simple index listed it. *(2026-11-17)*
+- **Installed into an empty environment.** `python3.14 -m venv`, then `pip install 'fylgja-core[server]==<v>'
+  fylgja-infrahub==<v> fylgja-netbox==<v>` with TestPyPI's simple index as `--index-url` and PyPI's as
+  `--extra-index-url`: the three wheels came from `test-files.pythonhosted.org` and the 33
+  dependencies from `files.pythonhosted.org`, none from TestPyPI. Each of the four commands' `--version` printed
+  `<v> (commit <the tag's commit>)`; `fylgja-core-server` with no `FYLGJA_PACKAGES` answered `/v1/version` 200 with
+  that build, filed `three-node.json` (`98f106a1…`) and built its bundle (`6a6f441c…`), and SIGTERM ended it 143.
+  The same for both candidates. *(2026-11-17)*
 
 ---
 

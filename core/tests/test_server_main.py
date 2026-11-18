@@ -1966,9 +1966,18 @@ def test_the_process_stops_on_a_signal_with_its_status_and_no_traceback(
     LocalStore.open(Path(environ["FYLGJA_STORE"])).close()
 
 
-IMPORTING_S = 0.3
-"""When a test sends SIGTERM to a server just started: inside its import of the server's modules,
-0.7 to 0.9 s on the development host and about 2 s in the image (verified-facts.md)."""
+SIGTERM_CAUGHT = 1 << (signal.SIGTERM - 1)
+"""SIGTERM's bit in the `SigCgt` mask of `/proc/<pid>/status` (proc(5)): set once the process has a
+handler of its own for it."""
+
+
+def catches_sigterm(pid: int) -> bool:
+    """Whether the process `pid` has a handler of its own for SIGTERM: its `SigCgt` read for
+    SIGTERM's bit alone, since Python catches SIGINT from its start."""
+    for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+        if line.startswith("SigCgt:"):
+            return bool(int(line.split()[1], 16) & SIGTERM_CAUGHT)
+    raise AssertionError(f"/proc/{pid}/status has no SigCgt")
 
 
 def test_the_console_script_is_the_entry_module() -> None:
@@ -2032,13 +2041,23 @@ def test_sigterm_while_the_console_script_imports_the_server_exits_143_with_noth
 ) -> None:
     """In a container the server is PID 1, which ignores a signal it has no handler for, and the
     import of the server's modules comes before `main` installs its own: the console script has
-    one first. Run as the venv installs it (`make venv`), with an environment it would serve."""
+    one first. Run as the venv installs it (`make venv`), with an environment it would serve.
+
+    SIGTERM is sent as soon as the process catches it, its `SigCgt` polled about every millisecond:
+    the console script's handler is then in place and the import it guards has begun, before the
+    server's `main` replaces the handler. That import was read at 0.7 to 0.9 s on the development
+    host and about 2 s in the image (verified-facts.md), the poll's millisecond a small part of it.
+    A sleep sized on one host lands before the handler or after the import on another."""
     script = Path(sys.executable).parent / "fylgja-core-server"
     env = {**environ, "FYLGJA_LISTEN": f"127.0.0.1:{free_port()}", "PATH": os.environ.get("PATH", "")}
     with (tmp_path / "stderr").open("w") as err:
         process = subprocess.Popen([str(script)], env=env, stderr=err, stdout=subprocess.DEVNULL)
     try:
-        time.sleep(IMPORTING_S)
+        deadline = time.monotonic() + DEADLINE_S
+        while not catches_sigterm(process.pid):
+            assert process.poll() is None, "the console script ended before it caught SIGTERM"
+            assert time.monotonic() < deadline, f"the console script did not catch SIGTERM within {DEADLINE_S:g}s"
+            time.sleep(0.001)
         process.send_signal(signal.SIGTERM)
         assert process.wait(timeout=DEADLINE_S) == 143
     finally:

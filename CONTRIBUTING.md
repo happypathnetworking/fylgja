@@ -20,13 +20,12 @@ example orchestrator.
 This repository, **fylgja-core**, holds three pieces: the core, which turns a blueprint into a
 twin and knows no source of truth ([D-003](design/decisions.md#d-003)); a reader for each source
 of truth, [Infrahub](readers/infrahub/README.md) and [NetBox](readers/netbox/README.md); and the
-example orchestrator under `orchestrator/` ([D-081](design/decisions.md#d-081)). It is a rebuild,
-in Python, of a prototype with a Go core
-([happypathnetworking/fylgja-prototype](https://github.com/happypathnetworking/fylgja-prototype)),
-on a clean break in formats ([D-001](design/decisions.md#d-001),
-[D-002](design/decisions.md#d-002)); the prototype is archived, and the design documents cite it
-as history. [design/core.md](design/core.md) says which phases are done, and its "Sequence" what
-each built and what it left. The core's drivers are local containerlab, for development, and
+example orchestrator under `orchestrator/` ([D-081](design/decisions.md#d-081)). It is a
+rebuild, in Python, of a prototype with a Go core (`happypathnetworking/fylgja-prototype`), on a
+clean break in formats ([D-001](design/decisions.md#d-001), [D-002](design/decisions.md#d-002));
+the prototype is archived and private, and the design documents cite it as history.
+[design/core.md](design/core.md) says which phases are done, and its "Sequence" what each built
+and what it left. The core's drivers are local containerlab, for development, and
 [clabernetes](https://github.com/clabernetes/clabernetes) on Kubernetes, for production.
 
 ## Setting up

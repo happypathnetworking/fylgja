@@ -3,9 +3,16 @@
 
 In a container the server is PID 1, which ignores a signal it has no handler for, and the import
 of the server's modules takes about two seconds there (verified-facts.md, "The core's image"),
-all of it before `main` installs its own handler. So this module imports `signal` alone, installs
-a handler that exits 143, nothing being open yet, and only then imports the server and runs its
-`main`, whose own handler replaces this one before anything is opened.
+all of it before `main` installs its own handler. So this module imports `os` and `signal` alone,
+installs a handler that exits 143, nothing being open yet, and only then imports the server and
+runs its `main`, whose own handler replaces this one before anything is opened.
+
+The handler ends the process with `os._exit`, not by raising `SystemExit`: CPython may run a
+signal handler inside a weakref callback, the callback of the import's module lock among them,
+and an exception raised there is printed and dropped, so the import, and the start, went on
+(verified-facts.md, "The server is the container's PID 1"). Nothing of the server's is open or
+buffered while it is in place: this module writes nothing before the import, and `main` puts it
+back as it returns, what it opened closed.
 
 `python -m fylgja_core.server` runs the server's `__main__` without it: for the development host,
 where the server is not PID 1 and SIGTERM's default action ends it during the import.
@@ -15,13 +22,15 @@ is not installed is one ERROR line naming it and the extra, `fylgja-core[server]
 A module of the core's own that is missing is no such thing, and is raised.
 """
 
+import os
 import signal
 
 RULE_EXTRA_MISSING = "server.extra.missing"
 
 
 def _terminated(signum: int, frame: object) -> None:
-    raise SystemExit(143)
+    """Exit 143 at once, by `os._exit`: a raise could be dropped (the module's docstring)."""
+    os._exit(143)
 
 
 def main() -> int:

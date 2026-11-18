@@ -23,6 +23,7 @@ import threading
 import time
 import tomllib
 import types
+import weakref
 from collections.abc import Callable, Iterator, Sequence
 from ipaddress import IPv4Network
 from pathlib import Path
@@ -702,6 +703,90 @@ def test_sigterm_between_the_stores_open_and_uvicorns_run_returns_143_with_all_c
     assert infos[-2:] == ["released the Lease fylgja-core", "stopped by SIGTERM"]
     assert [write.holder for write in leases.written] == [IDENTITY, ""] and leases.closed and len(closed) == 1
     LocalStore.open(Path(environ["FYLGJA_STORE"])).close()  # the store it opened is closed again
+
+
+def dropped_sigterm() -> None:
+    """SIGTERM handled inside a weakref callback, where CPython prints the exception a handler
+    raises and drops it, as inside the callback of an import's module lock (verified-facts.md):
+    `main`'s handler sets `terminated`, and the `KeyboardInterrupt` it raises is lost."""
+
+    class Referent:
+        pass
+
+    referent = Referent()
+    ref = weakref.ref(referent, lambda _: signal.raise_signal(signal.SIGTERM))
+    del referent  # the callback runs here, and the handler inside it
+    assert ref() is None
+
+
+@pytest.mark.parametrize("where", ["the-settings", "the-stores-open", "uvicorns-run"])
+def test_sigterm_whose_raise_python_drops_still_ends_the_start_with_143_and_serves_nothing(
+    environ: dict[str, str], leases: FakeLeases, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    sigterm: Callable[[], None], where: str,
+) -> None:
+    """A SIGTERM whose `KeyboardInterrupt` Python dropped leaves `terminated` set and the start
+    going on: the start reads it before the wait for the Lease, once the application is built and
+    as uvicorn's run begins, and takes the exit a raise would have, what was opened closed and the
+    Lease released. Dropped as the settings are read, before the take; while the store is opened;
+    and in `served.run` before asyncio's runner takes SIGINT, where uvicorn imports its loop."""
+    dropped: list[type[BaseException] | None] = []
+    monkeypatch.setattr(sys, "unraisablehook", lambda unraisable: dropped.append(unraisable.exc_type))
+    closed = closed_drivers(monkeypatch)
+    listeners: list[socket.socket] = []
+    listener = server._listener
+
+    def listening(host: str, port: int) -> socket.socket:
+        listeners.append(listener(host, port))
+        return listeners[-1]
+
+    async def startup(self: uvicorn.Server, sockets: list[socket.socket] | None = None) -> None:
+        pytest.fail("the server went on to serve after SIGTERM")
+
+    monkeypatch.setattr(server, "_listener", listening)
+    monkeypatch.setattr(uvicorn.Server, "startup", startup)
+    if where == "the-settings":
+        from_environ = config.from_environ
+
+        def read(environ: Any) -> Settings:
+            settings = from_environ(environ)
+            dropped_sigterm()
+            return settings
+
+        monkeypatch.setattr(config, "from_environ", read)
+    elif where == "the-stores-open":
+        load = packages.load
+
+        def loaded(*args: Any, **kw: Any) -> Any:
+            dropped_sigterm()
+            return load(*args, **kw)
+
+        monkeypatch.setattr(packages, "load", loaded)
+    else:
+        get_loop_factory = uvicorn.Config.get_loop_factory
+
+        def loop_factory(self: uvicorn.Config) -> Any:
+            dropped_sigterm()
+            return get_loop_factory(self)
+
+        monkeypatch.setattr(uvicorn.Config, "get_loop_factory", loop_factory)
+    monkeypatch.setenv("FYLGJA_LISTEN", f"127.0.0.1:{free_port()}")
+    assert server.main([]) == 143
+    assert dropped == [KeyboardInterrupt]  # the raise was lost, not taken
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    infos = [entry["message"] for entry in logged(err) if entry["level"] == "INFO"]
+    if where == "the-settings":
+        assert infos[-1] == "stopped by SIGTERM while waiting for the Lease fylgja-core"
+        assert (leases.written, leases.closed, closed, listeners) == ([], True, [], [])  # nothing taken or opened
+        assert not Path(environ["FYLGJA_STORE"]).exists()
+        return
+    assert infos[-2:] == ["released the Lease fylgja-core", "stopped by SIGTERM"]
+    assert [write.holder for write in leases.written] == [IDENTITY, ""] and leases.closed and len(closed) == 1
+    LocalStore.open(Path(environ["FYLGJA_STORE"])).close()  # the store it opened is closed again
+    if where == "the-stores-open":  # stopped before the address is bound, so it never said it serves
+        assert listeners == [] and not [info for info in infos if info.startswith("serving")]
+    else:
+        assert [sock.fileno() for sock in listeners] == [-1]
 
 
 def test_ctrl_c_before_anything_is_held_returns_130_with_no_traceback(
@@ -1917,6 +2002,29 @@ def test_a_missing_module_of_the_cores_own_is_not_taken_for_the_extra() -> None:
     assert "Traceback" in done.stderr
     assert "fylgja_core.config" in done.stderr
     assert "server.extra.missing" not in done.stderr
+
+
+def test_the_console_scripts_handler_ends_the_process_where_python_drops_a_handlers_exception() -> None:
+    """CPython may run a signal handler inside a weakref callback, the callback of an import's
+    module lock among them, and there an exception the handler raises is printed and dropped
+    (verified-facts.md): a SIGTERM handled there, during the import of the server, ends the
+    process all the same, and nothing after it runs. The server's module is one whose `main` is
+    looked up inside such a callback."""
+    probe = ("import signal, sys, types, weakref\n"
+             "class Server(types.ModuleType):\n"
+             "    def __getattr__(self, name):\n"
+             "        class Referent: pass\n"
+             "        referent = Referent()\n"
+             "        ref = weakref.ref(referent, lambda _: signal.raise_signal(signal.SIGTERM))\n"
+             "        del referent\n"
+             "        print('the import went on', flush=True)\n"
+             "        self.main = lambda: print('served', flush=True) or 0\n"
+             "        return self.main\n"
+             "sys.modules['fylgja_core.server.__main__'] = Server('fylgja_core.server.__main__')\n"
+             "from fylgja_core.server.entry import main\n"
+             "sys.exit(main())\n")
+    done = subprocess.run([sys.executable, "-I", "-c", probe], capture_output=True, text=True, timeout=DEADLINE_S)
+    assert (done.returncode, done.stdout, done.stderr) == (143, "", "")
 
 
 def test_sigterm_while_the_console_script_imports_the_server_exits_143_with_nothing_logged_or_opened(

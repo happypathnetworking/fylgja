@@ -46,6 +46,21 @@ where it is refused: in a pod on the cluster a process may not signal itself
 (`_Server.capture_signals`). A start refused is one log line, naming the variable or the file at
 fault and never a value.
 
+CPython may run a signal handler inside a weakref callback, the callback of an import's module
+lock among them, and there an exception the handler raises is printed and dropped
+(verified-facts.md): the console script's handler exits by `os._exit` for it, and the
+`KeyboardInterrupt` `_on_sigterm` raises outside asyncio's runner may be lost so, `terminated` set
+before it. So the start reads `terminated` where a lost raise would let it go on to serve, and
+exits as the raise would have: before the wait for the Lease, which can be unbounded (`_taken`);
+once the application is built, so no address is bound and no serving said; and as uvicorn's run
+begins (`_Server.serve`), since `run` imports uvicorn's loop before asyncio's runner takes SIGINT.
+Between one and the next a lost raise only puts the stop off to the next: the wait for the Lease
+is the runner's to cut, and the rest ends of itself. After the last a SIGTERM is the runner's,
+then uvicorn's, neither raising in its handler, and once uvicorn has stopped `main` reads
+`terminated` as before. Ctrl-C can be lost the same way and sets no flag, so a start whose Ctrl-C
+is dropped goes on, and a second one stops it: a known limit, since a flag would need a SIGINT
+handler of `main`'s, and asyncio's runner takes SIGINT only from Python's own.
+
 Three windows are known and left, each failing safe, a Lease it leaves taken by the next holder
 once its duration has passed: the interpreter's first 0.14-0.16 s in the image, before the console
 script's handler, where SIGTERM is dropped (verified-facts.md); the take's end, once `acquire` has
@@ -64,11 +79,11 @@ Its exit status:
   first when one is held; or Ctrl-C anywhere in the start, while it waits for the Lease, while the
   store is opened or before uvicorn runs, what was opened closed again and the Lease released
   first, but in the two windows of the start above, where the status is the same and the Lease
-  is left to its duration;
+  is left to its duration; a Ctrl-C whose raise Python drops does not stop the start (above);
 - 143, stopped by SIGTERM, as by Ctrl-C and with what 130 says, whatever the process's id: after
   uvicorn's graceful shutdown, which releases the Lease, or anywhere in the start, its two
-  windows above as for 130; or, run by the console script, while this module is imported, before
-  anything is;
+  windows above as for 130, its raise dropped by Python or not; or, run by the console script,
+  while this module is imported, before anything is;
 - 1, the store held by another core, an object store that cannot be opened (an `S3Error`), the
   Lease lost, or the application's lifespan failing to start;
 - 2, a misconfiguration: settings not whole (among them an `s3://` store without `FYLGJA_LEASE`
@@ -243,6 +258,17 @@ class _Server(uvicorn.Server):
         except PermissionError:
             if not (stopped and self.signalled):
                 raise
+
+    async def serve(self, sockets: list[socket.socket] | None = None) -> None:
+        """uvicorn's, unless `terminated` is set as it begins: a SIGTERM whose raise Python dropped
+        (`_on_sigterm`) while `run` ran under Python's own SIGINT handler, before asyncio's runner
+        took SIGINT, `run` importing uvicorn's loop there. Then nothing is served: the driver is
+        closed and the Lease released (`_stop`), and `main` exits 143 by `terminated`. From here a
+        SIGTERM is the runner's, then uvicorn's, and neither raises in its handler."""
+        if self.terminated.is_set():
+            await self._stop(release=True)
+            return
+        await super().serve(sockets)
 
     async def startup(self, sockets: list[socket.socket] | None = None) -> None:
         try:
@@ -470,7 +496,8 @@ def _on_sigterm(terminated: threading.Event, signum: int, frame: FrameType | Non
     SIGINT at that moment: asyncio's runner cancels the task it runs (the wait for the Lease), and
     Python's own handler raises `KeyboardInterrupt` (the store's open), so what was opened is
     closed and a Lease held released by Ctrl-C's paths; `terminated` set first, so `main` exits
-    143 where Ctrl-C exits 130. A signal with no handler is ignored by a container's PID 1."""
+    143 where Ctrl-C exits 130, and so the start ends where Python drops that raise (the module's
+    docstring). A signal with no handler is ignored by a container's PID 1."""
     terminated.set()
     on_sigint = signal.getsignal(signal.SIGINT)
     if callable(on_sigint):
@@ -520,10 +547,15 @@ def _config(app: Starlette, settings: Settings) -> uvicorn.Config:
                           timeout_graceful_shutdown=GRACE_S, ssl_certfile=cert, ssl_keyfile=key)
 
 
-async def _taken(held: lease.Lease) -> None:
+async def _taken(held: lease.Lease, terminated: threading.Event) -> None:
     """Take the Lease, then close its client: this loop ends here, and uvicorn's makes its own. A
-    close that fails is one WARNING by its type (`_aclosed_anyway`), so the start goes on."""
+    close that fails is one WARNING by its type (`_aclosed_anyway`), so the start goes on. With
+    `terminated` already set, by a SIGTERM whose raise Python dropped (`_on_sigterm`), it takes
+    nothing and raises `KeyboardInterrupt`, as the runner does for one during the wait: the check
+    is made under the runner's SIGINT handler, which raises nothing, so none is lost after it."""
     try:
+        if terminated.is_set():
+            raise KeyboardInterrupt
         await held.acquire()
     finally:
         await _aclosed_anyway(held.close, "the Lease's client")
@@ -581,7 +613,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _start(terminated: threading.Event) -> int:
     """`main`'s start and serving, SIGTERM taken as Ctrl-C is (`_on_sigterm`, which sets
-    `terminated`), before anything that can wait: the Lease, the store."""
+    `terminated`), before anything that can wait: the Lease, the store. `terminated` is read
+    before the wait for the Lease, once the application is built and as uvicorn's run begins, for
+    a SIGTERM whose raise Python dropped (the module's docstring)."""
     if _optimised():
         _refused("cannot start: Python runs optimised (-O or PYTHONOPTIMIZE), which strips the assert the stop at a "
                  "lost Lease rests on", rule="server.optimised")
@@ -609,7 +643,7 @@ def _start(terminated: threading.Event) -> int:
         held = lease.Lease(lease.KubeLeases(name), lease.identity(), on_wait=lambda holder: _log.info(
             "waiting for the Lease %s, held by %s", name, holder, **logs.fields(lease=name, holder=holder)))
         try:
-            asyncio.run(_taken(held))
+            asyncio.run(_taken(held, terminated))
         except KeyboardInterrupt:
             sent, status = _stopped(terminated)
             _log.info("stopped by %s while waiting for the Lease %s", sent, name, **logs.fields(lease=name))
@@ -663,6 +697,8 @@ def _start(terminated: threading.Event) -> int:
     host, port = settings.listen
     listener: socket.socket | None = None
     try:
+        if terminated.is_set():  # a SIGTERM whose raise Python dropped (`_on_sigterm`): its exit all the same
+            raise KeyboardInterrupt
         try:
             listener = _listener(host, port)
         except OSError as e:  # uvicorn would exit 3 for it: it is the address's fault, so the settings'

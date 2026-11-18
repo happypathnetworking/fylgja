@@ -3625,6 +3625,24 @@ development host; held by the pure tier's `core/tests/test_client.py`. *(2026-11
     and 1.9 s after `docker run -d` returned exited 143 within 0.28-0.50 s, nothing logged, three
     runs each; at 2.3 s `main`'s handler took it (143, `stopped by SIGTERM` its one line), and at
     3.0 s uvicorn's graceful stop (143). None hung.
+  - **A signal handler's exception is dropped inside a weakref callback** *(Python 3.14.4 on the
+    development host, 2026-11-18)*. CPython runs a pending signal handler at its next check, and
+    that may fall inside a weakref callback: the one `_get_module_lock` gives each module lock
+    (`importlib/_bootstrap.py`, its `cb`, line 448), which runs as an import ends, among them. An
+    exception the handler raises there is printed ("Exception ignored while calling weakref
+    callback") and dropped. In a sweep of the console script under ten busy loops, SIGTERM sent
+    0.10 to 0.80 s into a start, 1 of 284 starts went on to serve: the console script's
+    `SystemExit(143)`, raised in that callback, printed as ignored. Read deterministically, each
+    in a child of its own: a handler run by `signal.raise_signal(SIGTERM)` inside a `weakref.ref`
+    callback that raised `SystemExit(143)`, or `KeyboardInterrupt`, was printed as ignored, and
+    the child printed its next line and exited 0; one that called `os._exit(143)` ended the child
+    there, 143, nothing after it printed; `SystemExit(143)` raised outside any callback exited 143.
+    So the console script's handler exits by `os._exit`, and the start reads the flag `main`'s
+    handler sets before it raises (`server/__main__.py`). `uvicorn.loops.asyncio` (uvicorn
+    0.54.0) is not imported with the server's modules: `Server.run` imports it, by
+    `Config.get_loop_factory`, before `asyncio.run` gives the runner SIGINT. After the change the
+    same sweep, 284 starts, another task's load perhaps on the host as well, none hung: 283 exited 143, nothing printed, and one, sent at 0.10 s
+    before the console script caught SIGTERM, ended by the signal's default action (-15).
   - **In a pod on the cluster a process may not signal itself** *(k3s v1.37.1+k3s1, containerd
     2.3.4-k3s1, 2026-11-07)*. A signal a process sends itself is refused: in an exec in the core's
     pod, `signal.raise_signal`, `os.kill(os.getpid(), …)` and `signal.pthread_kill` of its own

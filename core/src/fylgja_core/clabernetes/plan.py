@@ -82,7 +82,7 @@ def plan(
     pod_cidr = _pod_cidr(allocation["pod_cidr"])
     registries: Mapping[str, str] = allocation["registries"]
 
-    images = {device.name: platforms[device.platform].runtime.containerlab.image for device in manifest.nodes}
+    images = {device.name: platform_package.image(platforms[device.platform]) for device in manifest.nodes}
     images |= {
         host: probe_packages[probe.format].runtime.containerlab.image
         for probe in manifest.probes

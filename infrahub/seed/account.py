@@ -22,7 +22,8 @@ Infrahub not answering the check is a failure, never a refusal, and the file is 
 `0600` is set to it, as `make infrahub-up` sets `local/.env`.
 
 The admin's writes go through `hub.connect`'s writer, `FYLGJA_INFRAHUB_WRITE_TOKEN`; the login, the token's create and
-each check through an `httpx.Client` of this script's own (P5-16). It prints the names of what it made and never a
+each check through an `httpx.Client` of this script's own (P5-16), each request of which Infrahub sheds is sent again
+as `hub.py` sends one. It prints the names of what it made and never a
 value: the password is generated, sent to Infrahub and kept nowhere, and neither the old token nor the new one is
 printed, logged or carried by an error. Exit 0; 1 for a refusal or a failure said on stderr; 2 for a command line not
 understood, a variable not set, or a file that is not there.
@@ -37,13 +38,14 @@ import secrets
 import ssl
 import subprocess
 import sys
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
-from hub import ADDRESS, CA, Hub, HubError, Run, connect
+from hub import ADDRESS, CA, SHED_BUDGET_S, Hub, HubError, Run, Sleep, connect, is_shed, shed_wait
 
 ACCOUNT = "fylgja-orchestrator"
 """The example's account, and the name of its role and its group."""
@@ -254,8 +256,27 @@ def client(environ: Mapping[str, str], transport: httpx.BaseTransport | None) ->
     )
 
 
-def ask(own: httpx.Client, path: str, body: object, headers: Mapping[str, str], *values: str) -> httpx.Response:
-    """One POST of this script's own; a failure to be answered is an `AccountError` with `values` scrubbed."""
+def ask(
+    own: httpx.Client, path: str, body: object, headers: Mapping[str, str], *values: str, sleep: Sleep = time.sleep
+) -> httpx.Response:
+    """One POST of this script's own, sent again after each wait for a shed that fits in `SHED_BUDGET_S` (`hub.py`);
+    once the next would not, an `AccountError` that says the request was shed, quoting nothing of the answer."""
+    waited = 0
+    while True:
+        response = post(own, path, body, headers, *values)
+        if not is_shed(response):
+            return response
+        wait = shed_wait(response)
+        if waited + wait > SHED_BUDGET_S:
+            break
+        sleep(wait)
+        waited += wait
+    said = f"Infrahub shed the request for {waited} s, so it was given up"
+    raise AccountError(f"POST {path} answered HTTP {response.status_code}; {said}")
+
+
+def post(own: httpx.Client, path: str, body: object, headers: Mapping[str, str], *values: str) -> httpx.Response:
+    """One POST; a failure to be answered is an `AccountError` with `values` scrubbed."""
     failure = ""
     try:
         return own.post(path, json=body, headers=dict(headers))
@@ -264,12 +285,12 @@ def ask(own: httpx.Client, path: str, body: object, headers: Mapping[str, str], 
     raise AccountError(failure)
 
 
-def holder(own: httpx.Client, token: str) -> str | None:
+def holder(own: httpx.Client, token: str, *, sleep: Sleep = time.sleep) -> str | None:
     """The account Infrahub answers `token` as, by `AccountProfile`, or None where it refuses the token (HTTP 401) or
     the token is none a header can carry. Any other answer is an `AccountError`."""
     if not token or not all("!" <= character <= "~" for character in token):
         return None
-    response = ask(own, "/graphql/main", {"query": PROFILE}, {"X-INFRAHUB-KEY": token}, token)
+    response = ask(own, "/graphql/main", {"query": PROFILE}, {"X-INFRAHUB-KEY": token}, token, sleep=sleep)
     if response.status_code == 401:
         return None
     try:
@@ -281,10 +302,10 @@ def holder(own: httpx.Client, token: str) -> str | None:
     return name
 
 
-def login(own: httpx.Client, password: str) -> str:
+def login(own: httpx.Client, password: str, *, sleep: Sleep = time.sleep) -> str:
     """A new token of the account: its login with `password`, then `InfrahubAccountTokenCreate` with the login's
     bearer, named `fylgja-orchestrator-<8 hex>`."""
-    response = ask(own, "/api/auth/login", {"username": ACCOUNT, "password": password}, {}, password)
+    response = ask(own, "/api/auth/login", {"username": ACCOUNT, "password": password}, {}, password, sleep=sleep)
     bearer = ""
     if response.status_code == 200:
         try:
@@ -295,7 +316,7 @@ def login(own: httpx.Client, password: str) -> str:
         raise AccountError(f"the login of {ACCOUNT} answered HTTP {response.status_code} with no access token")
     name = f"{ACCOUNT}-{secrets.token_hex(4)}"
     body = {"query": TOKEN_CREATE, "variables": {"name": name}}
-    response = ask(own, "/graphql/main", body, {"Authorization": f"Bearer {bearer}"}, bearer, password)
+    response = ask(own, "/graphql/main", body, {"Authorization": f"Bearer {bearer}"}, bearer, password, sleep=sleep)
     token: Any = None
     try:
         token = response.json()["data"]["InfrahubAccountTokenCreate"]["object"]["token"]["value"]
@@ -347,7 +368,7 @@ def rewrite(path: Path, held: bytes, token: str) -> str:
     return what
 
 
-def ensure(env: Path, hub: Hub, own: httpx.Client) -> None:
+def ensure(env: Path, hub: Hub, own: httpx.Client, *, sleep: Sleep = time.sleep) -> None:
     """The account and its token's line in `env`, as the module says."""
     mode = env.stat().st_mode & 0o7777
     if mode & 0o177:
@@ -356,7 +377,7 @@ def ensure(env: Path, hub: Hub, own: httpx.Client) -> None:
     held = env.read_bytes()
     tokens = [token for token in (value(line) for line in held.decode().splitlines()) if token is not None]
     made: list[str] = []
-    owner = holder(own, tokens[-1]) if tokens else None
+    owner = holder(own, tokens[-1], sleep=sleep) if tokens else None
     if owner == ACCOUNT:
         member = found(hub, ACCOUNT_READ, "CoreAccount", {"name": ACCOUNT})
         if member is None:
@@ -376,8 +397,8 @@ def ensure(env: Path, hub: Hub, own: httpx.Client) -> None:
         group(hub, member_role, member, made)
     except HubError as e:
         raise AccountError(scrubbed(str(e), password)) from None
-    token = login(own, password)
-    if holder(own, token) != ACCOUNT:
+    token = login(own, password, sleep=sleep)
+    if holder(own, token, sleep=sleep) != ACCOUNT:
         raise AccountError(f"Infrahub does not answer the new token as {ACCOUNT}'s; {env} is left as it was")
     made.append("a token")
     say(f"made {', '.join(made)}")
@@ -392,9 +413,14 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(
-    argv: Sequence[str], *, transport: httpx.BaseTransport | None = None, run: Run = subprocess.run
+    argv: Sequence[str],
+    *,
+    transport: httpx.BaseTransport | None = None,
+    run: Run = subprocess.run,
+    sleep: Sleep = time.sleep,
 ) -> int:
-    """The account and its token's line, as `make orchestrator-env` runs it."""
+    """The account and its token's line, as `make orchestrator-env` runs it; `sleep` is the wait for a shed request,
+    for tests."""
     try:
         args = parser().parse_args(argv)
     except SystemExit as e:
@@ -403,13 +429,13 @@ def main(
         print(f"account: {args.env} is not there: run make infrahub-up first", file=sys.stderr)
         return 2
     try:
-        hub = connect(os.environ, ctl=args.ctl, transport=transport, run=run)
+        hub = connect(os.environ, ctl=args.ctl, transport=transport, run=run, sleep=sleep)
     except HubError as e:
         print(f"account: {e}", file=sys.stderr)
         return 2
     try:
         with client(os.environ, transport) as own:
-            ensure(args.env, hub, own)
+            ensure(args.env, hub, own, sleep=sleep)
     except (AccountError, HubError, OSError) as e:
         print(f"account: {e}", file=sys.stderr)
         return 1

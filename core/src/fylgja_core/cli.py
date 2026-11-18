@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-from fylgja_core import blueprint, documents, findings
+from fylgja_core import blueprint, documents, findings, release
 from fylgja_core.client import (
     Client,
     FollowError,
@@ -164,6 +164,7 @@ def _parser() -> argparse.ArgumentParser:
         description=f"The core's thin CLI, a client of API 1 at ${ADDRESS} with the token in ${TOKEN}.",
     )
     parser.add_argument("--json", action="store_true", help="print the API's documents as JSON")
+    release.add_version(parser, "fylgja-core", "fylgja_core")
     nouns = parser.add_subparsers(dest="noun", required=True, metavar="NOUN")
 
     def verbs(noun: str, about: str) -> Callable[[str, str, Command], argparse.ArgumentParser]:
@@ -261,7 +262,7 @@ def _twin_step(ctx: Context, args: argparse.Namespace) -> int:
     if args.dry_run:
         plan, _ = ctx.client.apply_twin(args.name, spec, if_match="*", dry_run=True)
         try:
-            verdict = findings.decode(plan["verdict"])
+            verdict = findings.decode_answer(plan["verdict"])
         except Rejected as e:
             raise Failure("the plan's verdict is no findings 1 document:", *_problem_lines(e)) from None
         ctx.show(plan, _plan_lines(plan, verdict))
@@ -331,7 +332,7 @@ def _twin_destroy(ctx: Context, args: argparse.Namespace) -> int:
 def _twin_verify(ctx: Context, args: argparse.Namespace) -> int:
     document = ctx.client.verify_twin(args.name)
     try:
-        verdict = findings.decode(document)
+        verdict = findings.decode_answer(document)
     except Rejected as e:
         raise Failure("the verdict is no findings 1 document:", *_problem_lines(e)) from None
     ctx.show(document, _verdict_lines(verdict))
@@ -405,7 +406,7 @@ def _verdict(run: Mapping[str, Any]) -> Verdict:
     if "verdict" not in run:
         raise Failure(f"run {run['id']} is {run['state']}, with no verdict")
     try:
-        return findings.decode(run["verdict"])
+        return findings.decode_answer(run["verdict"])
     except Rejected as e:
         raise Failure(f"run {run['id']}'s verdict is no findings 1 document:", *_problem_lines(e)) from None
 

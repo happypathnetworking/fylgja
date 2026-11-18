@@ -162,7 +162,7 @@ and steps, verifies, shows and destroys it. It knows no source of truth.
 
 **Credential provider** — The one source of node logins and *pull credentials*: the
 environment locally, Secrets on a cluster. A platform package names its login by a
-`credentials` name, and a gated image's pull credential by its `image.pull_secret`, never a
+`credentials` name, and a gated image's pull credential by the image's `pull_secret`, never a
 value.
 
 **CTM (Canonical Topology Model)** — The archived repository's network body, version 2,
@@ -235,8 +235,10 @@ left out, with its reason.
 **Finding** — One thing an operation found: a stable rule id, a severity and a message.
 Findings make up a *verdict* or a problem document's `findings`.
 
-**Flow** — Traffic a step runs between a probe's two hosts while it changes the twin. Its
-*transient loss* (packets lost, the longest gap) is reported, never asserted.
+**Flow** — Traffic a step is to run between a probe's two hosts while it changes the twin,
+declared by the probe package and not yet run: a step records each probe's flow from each host
+as not started. Its *transient loss* (packets lost, the longest gap) is to be reported, never
+asserted.
 
 **Frozen Go core** — The core as built in Go, in the *archived repository*, which also holds
 the prototype orchestrator and the earlier formats ([D-005](../design/decisions.md#d-005)). It was
@@ -298,6 +300,14 @@ with its own management network, a namespace, or a device reservation
 package states only what the kind does not ([D-015](../design/decisions.md#d-015)); for a kind with
 no aliases (cEOS), that includes a *rename rule* from production names to the kind's ports.
 
+**Lab pool** — The IPv4 network the local driver takes each lab's management subnet from: the
+first /24 of it that no Docker network and no other twin's *allocation* holds
+([D-043](../design/decisions.md#d-043)). It is the server's setting `FYLGJA_LAB_POOL`, and
+`172.20.0.0/16` where that is not set. A create that finds no /24 free is refused,
+`admission.capacity`, naming the Docker networks that hold part of the pool and the setting; a
+twin keeps the subnet its record holds when the setting changes
+([D-103](../design/decisions.md#d-103)).
+
 **Landing** — The end of a *build phase*, on the maintainer's word: the phase written as built,
 the *integration branch* squashed onto `main` as one commit and its history tagged, and the
 build's records copied to `local/sdd/phase-N/` ([D-080](../design/decisions.md#d-080)).
@@ -314,7 +324,9 @@ phase: the tasks done with their commits, every *ruling*, and the findings defer
 
 **`link_apply_mode`** — How a link change reaches a running node of a kind: `live`,
 re-cabled with no restart, or `restart`. Set by the platform package, written on each node
-at create, and never changed on a running twin.
+at create, and never changed on a running twin. On clabernetes a re-cabled node may still be
+replaced where a node added or removed since it was made moved its management address
+([A recabled node replaced when a step adds or removes a node](../design/verified-facts.md)).
 
 **Look** *(orchestrator)* — A dry run of each stage of a change as the twin it would make,
 before a *rehearsal* creates anything: a stage the runtime has no room for, lacks an image
@@ -394,10 +406,12 @@ share (`interface.port.shared`, [D-045](../design/decisions.md#d-045)).
 plans, its rule for live runs, the names the plans share, and each place the build has bent
 a decision's text. Plans live under `local/plans/`, outside the tree ([D-080](../design/decisions.md#d-080)).
 
-**Platform package** — The data that makes one network operating system supported:
-interface rules, push, readiness, gNMI paths, conformance, fidelity, and a section per
-runtime ([`platform-package-1.schema.json`](../formats/platform-package-1.schema.json),
-[Constitution II](../design/constitution.md#ii-platforms-are-data-never-code)). Adding a platform is
+**Platform package** — The data that makes one network operating system supported: the
+versions of it the package runs, interface rules, push, readiness, gNMI paths, conformance,
+fidelity, and a section per runtime, which names an image for each version
+([`platform-package-1.schema.json`](../formats/platform-package-1.schema.json),
+[Constitution II](../design/constitution.md#ii-platforms-are-data-never-code)). A package lists
+one version in this build ([D-102](../design/decisions.md#d-102)). Adding a platform is
 writing one. It replaces the *PSP*.
 
 **Principal** — Who a request acts for, named by its bearer token. Every run records its
@@ -412,7 +426,7 @@ producer, never the core ([D-008](../design/decisions.md#d-008)).
 cabled to its device's port with an IPv4 address and a gateway.
 
 **Probe package** — The data for one probe format, such as `ping`: the host's image and
-set-up commands, its readiness, and the flow and burst commands
+set-up commands, its readiness, and the burst command and the flow it declares
 ([`probe-package-1.schema.json`](../formats/probe-package-1.schema.json)).
 
 **Problem document** — An RFC 9457 answer for a request that is malformed, unauthorised,
@@ -426,8 +440,8 @@ id, and several faults ride in `findings`.
 **PSP (Platform Support Package)** — The archived repository's platform package format,
 `0.7`. Platform package 1 replaces it.
 
-**Pull credential** — What a gated image is pulled with on clabernetes, named by its
-package's `image.pull_secret`: the image prefix in `FYLGJA_CREDENTIAL_<NAME>_REGISTRY` (a
+**Pull credential** — What a gated image is pulled with on clabernetes, named by the image's
+`pull_secret` in its package: the image prefix in `FYLGJA_CREDENTIAL_<NAME>_REGISTRY` (a
 host, an optional port and an optional path, with no scheme), with the registry's login in
 `_USERNAME` and `_PASSWORD`. A twin's allocation records every prefix the provider holds at
 admission, and `apply` makes each one a Secret in the twin's namespace; none is ever a file
@@ -650,3 +664,5 @@ library does so itself when a stream ends early.
 
 **Work queue** — The loop's queue of twin names waiting to be reconciled. A name is never
 queued twice, and each twin has at most one worker at a time ([D-023](../design/decisions.md#d-023)).
+
+**Workspace** — The uv workspace at the repository's root: its four members, `core/`, `readers/infrahub/`, `readers/netbox/` and `orchestrator/`, and its lock, `uv.lock`, which `make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).

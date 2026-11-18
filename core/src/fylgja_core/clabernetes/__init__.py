@@ -27,5 +27,5 @@ def namespace_of(twin: str) -> str:
 def pull_secret(key: str) -> str:
     """The name of the pull secret, in a twin's namespace, for a pull credential's key as
     `credentials.key` writes it: the key lower-cased, its underscores as dashes, so that it is
-    `fylgja-pull-<pull_secret>` for a package's `image.pull_secret`."""
+    `fylgja-pull-<pull_secret>` for an image's `pull_secret`."""
     return "fylgja-pull-" + key.lower().replace("_", "-")

@@ -4,9 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fylgja-core"
-version = "0.0.0"
+# The version is VERSION's at the root, which setup.py reads (D-106).
+# The long description is the root README.md, which setup.py passes as long_description (D-106).
+dynamic = ["version", "readme"]
 description = "Fylgja's core: a blueprint becomes a twin."
 license = "Apache-2.0"
+# No licence classifier: setuptools refuses one beside the expression. No author or contact (D-106).
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
+    "Operating System :: POSIX :: Linux",
+]
 requires-python = ">=3.14"
 # The base install, the model package, the client library and the thin CLI, as ranges below each next major (D-084):
 # each floor is the lowest release tried, and the base's tests passed on it; `make wheelcheck` installs the base alone
@@ -17,6 +31,11 @@ dependencies = [
     "PyYAML>=6.0.3,<7",
     "referencing>=0.28.4,<1",
 ]
+
+[project.urls]
+Repository = "https://github.com/happypathnetworking/fylgja"
+Changelog = "https://github.com/happypathnetworking/fylgja/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/happypathnetworking/fylgja/tree/main/docs"
 
 [project.scripts]
 fylgja-core = "fylgja_core.cli:main"
@@ -48,6 +67,17 @@ server = [
     "uvicorn==0.54.0",
 ]
 
+# uv rebuilds this editable install's metadata when a key changes: its own defaults, and the root's VERSION, which
+# setup.py reads and which lies outside the member (D-106; verified-facts.md, "A version read from a file").
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "setup.py" },
+    { file = "setup.cfg" },
+    { file = "../VERSION" },
+    { file = "../README.md" },
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -75,7 +105,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 [tool.mypy]
 strict = true
 python_version = "3.14"
-files = ["src", "tests", "../scripts"]
+files = ["src", "tests", "../scripts", "../readme_links.py"]
 
 [[tool.mypy.overrides]]
 module = ["jsonschema.*", "rfc8785.*", "referencing.*", "pygnmi.*", "grpc.*"]

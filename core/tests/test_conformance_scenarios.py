@@ -388,3 +388,28 @@ def test_the_big_blueprint_is_valid_compiles_to_forty_nodes_and_demands_what_no_
     assert len(compiled.manifest.links) == 39
     demand = plan.demand(compiled.manifest, loaded.platforms, loaded.probes)
     assert demand == Demand(nodes=40, cpu=20.0, memory_mb=81920)
+
+
+@pytest.mark.parametrize(
+    ("address", "where"),
+    [
+        ("127.0.0.1:8080", "here"),
+        ("http://127.0.0.1:8080", "here"),
+        ("127.0.0.2:8080", "here"),
+        ("[::1]:8080", "here"),
+        ("http://[::1]:8080", "here"),
+        ("localhost:8080", "here"),
+        ("http://LocalHost:8080", "here"),
+        ("https://fylgja.example.org", "away"),
+        ("fylgja.example.org:8443", "away"),
+        ("192.0.2.10:8443", "away"),
+        ("https://192.0.2.10", "away"),
+        ("[2001:db8::10]:8443", "away"),
+        ("https://[2001:db8::10]:8443", "away"),
+        ("", "away"),
+    ],
+)
+def test_a_core_is_reached_here_on_this_hosts_loopback_and_away_otherwise(address: str, where: str) -> None:
+    """`reached` reads the host of the harness's address, with or without a scheme; a name other
+    than `localhost`, and an empty address, are away."""
+    assert reads.reached(address) == where

@@ -14,7 +14,12 @@ neither allocation holds is written under none; a probe package runs a `linux` n
 image, likewise. The rules, and the facts each is written from:
 
 - A link change under the `live` mode re-cables and keeps the pod, `recabled`: no pod was
-  replaced ("Steps", and "Steps across hosts").
+  replaced ("Steps", and "Steps across hosts"). clabernetes may still replace such a node in a
+  step that adds or removes a node, or in the next step that recables it, while the node that
+  displaced it stands: its management address is drawn from the namespace's whole set of nodes,
+  and when the address moves, the node's pod is made anew once its links change ("A recabled
+  node replaced when a step adds or removes a node: a known limit"). The answer stays `recabled`,
+  as nothing in either deployment tells which addresses move.
 - A link change under the `restart` mode replaces the link's pods ("Steps": `restart` and
   `recreate` each replaced the link's cEOS pods). It is `restarted`, the seam's word for a
   link change under that mode, and `restarts()` covers it as it covers `recreated`.
@@ -67,7 +72,8 @@ def changes(
     probe_packages: Mapping[str, ProbePackage],
 ) -> Changes:
     """What the cluster does to each node's pod to go from `before` to `after`. `ValueError` for
-    deployments of two twins, or for a node no given package runs."""
+    deployments of two twins; `Unpackaged`, which is one, for the first node by name that no
+    given package runs."""
     if before.deployment.twin != after.deployment.twin:
         raise ValueError(f"the deployments are of two twins, {before.deployment.twin} and {after.deployment.twin}")
     registries = tuple(planned.deployment.allocation["registries"] for planned in (before, after))
@@ -88,7 +94,7 @@ def sections_of(
     """The containerlab section of each package that runs the Topology's node `name`, whose
     definition entry is `node`: the local driver's lookup, a package's image matched as the
     Topology writes it under any of `registries`, each an allocation's (`plan.image`).
-    `ValueError` for a node no given package runs."""
+    `Unpackaged` for a node no given package runs, its image as the Topology writes it."""
 
     def written(pulled: Image) -> set[str]:
         return _written(pulled, registries)

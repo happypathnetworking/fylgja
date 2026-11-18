@@ -648,7 +648,7 @@ def _refusal(method: str, path: str, response: httpx.Response) -> ProblemError |
     """A non-2xx answer: the server's problem document, or no API 1 answer at all, which for a
     5xx is a proxy's while the server is away and so `_Interrupted`."""
     try:
-        return ProblemError(response.status_code, problem.decode(response.json()))
+        return ProblemError(response.status_code, problem.decode_answer(response.json()))
     except (ValueError, Rejected):
         failure = _Interrupted if response.is_server_error else TransportError
         return failure(f"{method} {path} answered {response.status_code} with no problem document")

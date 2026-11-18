@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 from aio import BOUND_S, bounded, cancelled, closed
+from fakes import with_image
 
 from fylgja_core import blueprint, bundle, compiler, containerlab, logs, platform_package, probe_package
 from fylgja_core.capacity import LOCAL_HOST, Host, Reading, Resources
@@ -40,7 +41,19 @@ from fylgja_core.containerlab.driver import (
 from fylgja_core.containerlab.plan import TOPOLOGY
 from fylgja_core.containerlab.pool import DEFAULT_POOL
 from fylgja_core.deployment import Demand, Deployment
-from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, events_backoff
+from fylgja_core.driver import (
+    Allocation,
+    DriverFailed,
+    Exec,
+    Inspection,
+    NodeState,
+    Planned,
+    Refusal,
+    Unpackaged,
+    events_backoff,
+)
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.probe_package import ProbePackage
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORMS = {
@@ -50,8 +63,24 @@ PLATFORMS = {
 }
 PROBES = {p.format: p for p in [probe_package.load(ROOT / "probes/ping.yaml")]}
 
+# A twin planned under the packages above, then met by a core whose packages no longer list the image one of its
+# nodes runs: a platform package whose image moved, or the probe package whose image did. Each row is the fixture,
+# the packages the driver is given, and the node, kind and image of the first node, in the file's order, that none
+# of them runs, the image as the deployment's own file writes it.
+SRL, PING = PLATFORMS["nokia_srlinux"], PROBES["ping"]
+SRL_MOVED = {**PLATFORMS, "nokia_srlinux": with_image(SRL, ref=platform_package.image(SRL).ref + "-moved")}
+PING_MOVED = {"ping": dataclasses.replace(PING, runtime=dataclasses.replace(
+    PING.runtime, containerlab=dataclasses.replace(PING.runtime.containerlab, image=dataclasses.replace(
+        PING.runtime.containerlab.image, ref=PING.runtime.containerlab.image.ref + "-moved"))))}
+Unrun = tuple[str, Mapping[str, PlatformPackage], Mapping[str, ProbePackage], tuple[str, str, str]]
+UNRUN: list[Unrun] = [
+    ("three-node", SRL_MOVED, PROBES, ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")),
+    ("three-node-probed", PLATFORMS, PING_MOVED, ("n1-loop-a", "linux", PING.runtime.containerlab.image.ref)),
+]
+UNRUN_IDS = ["device", "probe-host"]
+
 NETWORK_LS = ("docker", "network", "ls", "--format", "{{.ID}}")
-NETWORK_INSPECT = ("docker", "network", "inspect", "--format", "{{json .IPAM.Config}}")
+NETWORK_INSPECT = ("docker", "network", "inspect", "--format", "{{json .Name}} {{json .IPAM.Config}}")
 IMAGE_INSPECT = ("docker", "image", "inspect", "--format", "{{.Id}}")
 
 
@@ -90,10 +119,14 @@ class FakeRunner:
         return self.answers[max(matches, key=len)]
 
 
-def docker(*configs: str) -> dict[tuple[str, ...], str]:
-    """Docker answering one network per IPAM config, each `{{json .IPAM.Config}}` line as given."""
+def docker(*configs: str, names: Sequence[str] = ()) -> dict[tuple[str, ...], str]:
+    """Docker answering one network per IPAM config, each a line as Docker 29.8.1 printed one for the driver's
+    format (verified-facts.md): the network's name as a JSON string, one space, and its `{{json .IPAM.Config}}` as
+    given. The networks are named by `names`, in order, and each past them by its id, `net<i>`."""
     ids = [f"net{i}" for i in range(len(configs))]
-    return {NETWORK_LS: "".join(f"{i}\n" for i in ids), (*NETWORK_INSPECT, *ids): "".join(f"{c}\n" for c in configs)}
+    named = [*names, *ids[len(names):]]
+    lines = "".join(f"{json.dumps(name)} {config}\n" for name, config in zip(named, configs, strict=True))
+    return {NETWORK_LS: "".join(f"{i}\n" for i in ids), (*NETWORK_INSPECT, *ids): lines}
 
 
 # A default bridge, the host and none networks (no IPv4 config), and a lab's dual-stack network.
@@ -102,7 +135,10 @@ HOLDING_172_20_0 = docker(
     "[]",
     "null",
     '[{"Subnet":"172.20.0.0/24","Gateway":"172.20.0.1"},{"Subnet":"3fff:172:20::/64"}]',
+    names=("bridge", "host", "none", "clab-u"),
 )
+NO_SLASH24 = "has no /24 that neither a Docker network nor another twin holds."
+SET_THE_POOL = "Set FYLGJA_LAB_POOL to an IPv4 network with a free /24, and start the core again."
 
 
 def manifest(name: str) -> bundle.Manifest:
@@ -172,11 +208,38 @@ def test_admit_logs_the_twin_the_subnet_and_the_demand(tmp_path: Path, caplog: p
 
 def test_an_exhausted_pool_is_refused_for_capacity(tmp_path: Path) -> None:
     refused = admit(tmp_path, FakeRunner(HOLDING_172_20_0), pool=IPv4Network("172.20.0.0/24"))
-    assert refused == Refusal(RULE_CAPACITY, "The pool 172.20.0.0/24 has no /24 that neither a Docker network "
-                                             "nor another twin holds.")
+    assert refused == Refusal(RULE_CAPACITY, f"The pool 172.20.0.0/24 {NO_SLASH24} Docker networks holding part of "
+                                             f"it: clab-u (172.20.0.0/24). {SET_THE_POOL}")
+    # D-103's case: a Compose project's network, wider than the default pool, holds it whole on an idle host.
+    compose = docker('[{"Subnet":"172.17.0.0/16","Gateway":"172.17.0.1"}]',
+                     '[{"Subnet":"172.16.0.0/12","Gateway":"172.16.0.1"}]', names=("bridge", "source_default"))
+    assert admit(tmp_path, FakeRunner(compose)) == Refusal(
+        RULE_CAPACITY, f"The pool 172.20.0.0/16 {NO_SLASH24} Docker networks holding part of it: "
+                       f"source_default (172.16.0.0/12). {SET_THE_POOL}")
     reserved = admit(tmp_path, FakeRunner(docker("[]")), reserved=[{"lab": "u", "mgmt_subnet": "172.20.0.0/24"}],
                      pool=IPv4Network("172.20.0.0/24"))
     assert isinstance(reserved, Refusal) and reserved.rule == "admission.capacity"
+
+
+def test_a_pool_other_twins_hold_whole_names_no_network(tmp_path: Path) -> None:
+    refused = admit(tmp_path, FakeRunner(HOLDING_172_20_0), reserved=[{"lab": "u", "mgmt_subnet": "198.51.100.0/24"}],
+                    pool=IPv4Network("198.51.100.0/24"))
+    assert refused == Refusal(RULE_CAPACITY, f"The pool 198.51.100.0/24 {NO_SLASH24} {SET_THE_POOL}")
+
+
+def test_a_network_with_no_ipv4_subnet_is_never_named(tmp_path: Path) -> None:
+    # `null` (host and none), an empty list and an IPv6 subnet alone hold no /24; a dual-stack network is named
+    # once, by its IPv4 subnet.
+    networks = docker(
+        "null",
+        "[]",
+        '[{"Subnet":"2001:db8::/64","Gateway":"2001:db8::1"}]',
+        '[{"Subnet":"198.51.100.0/24","Gateway":"198.51.100.1"},{"Subnet":"2001:db8:1::/64"}]',
+        names=("host", "empty", "six", "dual"),
+    )
+    refused = admit(tmp_path, FakeRunner(networks), pool=IPv4Network("198.51.100.0/24"))
+    assert refused == Refusal(RULE_CAPACITY, f"The pool 198.51.100.0/24 {NO_SLASH24} Docker networks holding part of "
+                                             f"it: dual (198.51.100.0/24). {SET_THE_POOL}")
 
 
 def test_a_twin_larger_than_the_hosts_available_memory_is_refused_naming_the_shortfall(tmp_path: Path) -> None:
@@ -197,7 +260,8 @@ def test_every_shortfall_is_named_in_one_refusal(tmp_path: Path) -> None:
                     cpus=1)
     assert isinstance(refused, Refusal) and refused.rule == RULE_CAPACITY
     assert refused.message == (
-        "The pool 172.20.0.0/24 has no /24 that neither a Docker network nor another twin holds. "
+        f"The pool 172.20.0.0/24 {NO_SLASH24} Docker networks holding part of it: clab-u (172.20.0.0/24). "
+        f"{SET_THE_POOL} "
         "The twin needs 1.5 CPUs, and the host has 1 free with 0 pending. "
         "The twin needs 6144 MiB of memory, and the host has 1024 MiB free with 0 MiB pending. "
         + " ".join(
@@ -375,6 +439,18 @@ def test_a_step_keeps_the_held_allocation_when_the_host_has_room_for_the_added_n
     assert answer == {"lab": "t", "mgmt_subnet": "172.20.7.0/24",
                       "demand": {"nodes": 4, "cpu": 2.0, "memory_mb": 8192}}
     assert runner.calls == []  # no `docker network` command: the twin's own network is not read
+
+
+def test_a_step_reads_no_network(tmp_path: Path) -> None:
+    # A stepping twin keeps the subnet its record holds, under a pool that has since moved, and with a Docker
+    # network over that subnet and the default pool it came from, though not over the moved pool (D-043, D-103):
+    # neither the pool nor a network is consulted.
+    runner = FakeRunner(docker('[{"Subnet":"172.16.0.0/12","Gateway":"172.16.0.1"}]', names=("source_default",)))
+    driver = ContainerlabDriver(tmp_path, pool=IPv4Network("198.51.100.0/24"), runner=runner,
+                                meminfo=meminfo(tmp_path, ROOMY_KB), cpus=64)
+    answer = asyncio.run(driver.admit(with_a_fourth_node(), PLATFORMS, PROBES, "t", [], held()))
+    assert isinstance(answer, dict) and answer["mgmt_subnet"] == "172.20.7.0/24"
+    assert not any(c[:2] == ("docker", "network") for c in runner.calls)
 
 
 def test_a_step_the_host_has_no_room_for_is_refused_naming_the_added_demand(tmp_path: Path) -> None:
@@ -727,6 +803,21 @@ def test_files_that_are_not_the_deployments_are_refused_before_any_command_or_wr
     assert not (tmp_path / "containerlab").exists()
 
 
+@pytest.mark.parametrize(("name", "platforms", "probes", "unrun"), UNRUN, ids=UNRUN_IDS)
+def test_apply_meets_such_a_node_before_any_write_or_command(
+    tmp_path: Path, name: str, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    p = planned(name)
+    runner = FakeRunner({})
+    strays = Strays(runner, running=None)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(tmp_path, runner, strays=strays).apply(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert runner.calls == [] and strays.asked == []  # no command, and no wait for a stray deploy
+    assert not (tmp_path / "root/containerlab").exists()
+
+
 def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:
     assert deploy_budget(planned("three-node").files, PLATFORMS, PROBES) == 180 + 60  # EOS's 300 s is not used
     assert deploy_budget(planned("mixed").files, PLATFORMS, PROBES) == 300 + 60
@@ -739,8 +830,10 @@ def test_the_deploy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() 
 
 
 def test_a_node_no_given_package_runs_has_no_budget() -> None:
-    with pytest.raises(ValueError, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
+    with pytest.raises(Unpackaged, match=r"no package given runs the node e1 \(ceos, ceos:4\.32\.0\.2F\)"):
         deploy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
+    with pytest.raises(Unpackaged, match="no package given runs the node e1"):
+        destroy_budget(planned("mixed").files, {"nokia_srlinux": PLATFORMS["nokia_srlinux"]}, PROBES)
 
 
 class Inspected(ContainerlabDriver):
@@ -1055,6 +1148,21 @@ def test_destroy_refuses_files_that_are_not_the_deployments_before_any_command(t
     assert runner.calls == []
 
 
+@pytest.mark.parametrize(("name", "platforms", "probes", "unrun"), UNRUN, ids=UNRUN_IDS)
+def test_destroy_meets_a_node_no_given_package_runs_before_any_command(
+    tmp_path: Path, name: str, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    p = planned(name)
+    runner = FakeRunner({})
+    strays = Strays(runner, running=None)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(tmp_path, runner, strays=strays).destroy(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert runner.calls == [] and strays.asked == []  # no command, and no wait for a stray deploy
+    assert not (tmp_path / "root/containerlab").exists()
+
+
 def test_the_destroy_budget_is_the_slowest_package_the_nodes_use_plus_a_minute() -> None:
     assert destroy_budget(planned("three-node").files, PLATFORMS, PROBES) == 60 + 60
     assert destroy_budget(planned("three-node-probed").files, PLATFORMS, PROBES) == 60 + 60  # ping's is 30
@@ -1095,6 +1203,325 @@ def test_a_failed_rule_2_deploy_is_raised_and_destroys_nothing(
         destroy(tmp_path, runner)
     assert [c[:2] for c in runner.calls] == [PS[:2], DEPLOY]
     assert any(r.levelname == "WARNING" and "destroy t failed" in r.getMessage() for r in caplog.records)
+
+
+# A deploy the driver killed (a create's or a step's apply cancelled, or a deploy past its budget) leaves the
+# creates containerlab had sent running in the daemon: a container is listed only once the daemon has made it,
+# after the kill, so the destroy's one listing can miss it (verified-facts.md, 2026-11-14). The teardown after such
+# a kill lists the lab again until it has been empty for the settle window.
+
+RM: tuple[str, ...] = ("docker", "rm", "-f")
+
+
+class Daemon:
+    """Docker under a killed deploy, on a fake clock that `sleep` moves: the lab's listing answers each container of
+    `late` whose time has come (the daemon has made it) and that no `docker rm -f` removed; the management network
+    is there from `network_at` until `docker network rm`. `containerlab deploy` waits until it is cancelled, or
+    raises `deploy` when given, or returns for `deploy_returns`. `rm` is the (status, stderr) of each removal;
+    `again` lists a removed container again at the next listing, as a daemon that keeps making it would. `docker
+    inspect` answers a node for each container named, and `containerlab destroy` removes each container listed and
+    the network."""
+
+    def __init__(
+        self, late: Mapping[str, float] | None = None, *, network_at: float | None = 0.0,
+        deploy: BaseException | None = None, deploy_returns: bool = False, rm: tuple[int, str] = (0, ""),
+        again: bool = False,
+    ) -> None:
+        self.now = 0.0
+        self.late = dict(late or {})
+        self.removed: set[str] = set()
+        self.network_at = network_at
+        self.network_removed = False
+        self.deploy = deploy
+        self.deploy_returns = deploy_returns
+        self.rm = rm
+        self.again = again
+        self.calls: list[tuple[float, tuple[str, ...]]] = []
+        self.budgets: list[float] = []
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+        await asyncio.sleep(0)
+
+    def listed(self) -> list[str]:
+        return sorted(h for h, at in self.late.items() if at <= self.now and h not in self.removed)
+
+    async def run(
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None,
+        log: Path | None = None,
+    ) -> str:
+        args = tuple(argv)
+        self.calls.append((self.now, args))
+        self.budgets.append(timeout_s)
+        if args[:2] == DEPLOY:
+            if self.deploy is not None:
+                raise self.deploy
+            if not self.deploy_returns:
+                await asyncio.Event().wait()
+            return ""
+        if args == PS:
+            return "".join(f"{h}\n" for h in self.listed())
+        if args == NETWORK:
+            if self.network_at is not None and self.network_at <= self.now and not self.network_removed:
+                return "[]\n"
+            raise CommandFailed(args, 1, "Error response from daemon: network clab-t not found\n")
+        if args == NETWORK_RM:
+            self.network_removed = True
+            return ""
+        if args[:4] == INSPECT:
+            return json.dumps([{**container(h.removeprefix("clab-t-")), "Name": f"/{h}"} for h in args[4:]])
+        if args[:2] == DESTROY:  # it removes the lab's nodes it lists, and the network
+            self.removed |= set(self.listed())
+            self.network_removed = True
+            return ""
+        raise AssertionError(f"unexpected command {args}")
+
+    async def run_status(
+        self, argv: Sequence[str], *, timeout_s: float, env: Mapping[str, str] | None = None, cwd: Path | None = None
+    ) -> tuple[int, str, str]:
+        args = tuple(argv)
+        self.calls.append((self.now, args))
+        self.budgets.append(timeout_s)
+        assert args[:3] == RM, f"unexpected command {args}"
+        status, stderr = self.rm
+        if status == 0 and not self.again:
+            self.removed.add(args[3])
+        return status, "", stderr
+
+    def commands(self) -> list[tuple[str, ...]]:
+        return [args for _, args in self.calls]
+
+
+def daemon_driver(tmp_path: Path, daemon: Daemon) -> ContainerlabDriver:
+    """The driver over `daemon`, its clock and sleep the daemon's, the host's residue staged as `driver` stages it."""
+    hosts = tmp_path / "etc-hosts"
+    if not hosts.exists():
+        hosts.write_text("127.0.0.1 localhost\n")
+    (tmp_path / "ssh_config.d").mkdir(exist_ok=True)
+    return ContainerlabDriver(tmp_path / "root", runner=daemon.run, status_runner=daemon.run_status,
+                              hosts_path=hosts, ssh_config_dir=tmp_path / "ssh_config.d", clock=daemon.clock,
+                              sleep=daemon.sleep)
+
+
+def killed_then_destroyed(tmp_path: Path, daemon: Daemon, d: ContainerlabDriver | None = None) -> ContainerlabDriver:
+    """Apply three-node with the deploy cancelled once it runs, as the loop cancels a create's apply for a
+    deletion, then destroy it; the calls are those of the destroy alone."""
+    d = d or daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+
+    async def body() -> None:
+        applying = asyncio.ensure_future(d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+        while not any(args[:2] == DEPLOY for _, args in daemon.calls):
+            await asyncio.sleep(0)
+        await cancelled(applying)
+        daemon.calls.clear()
+        daemon.budgets.clear()
+        await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    return d
+
+
+def settle_polls(start: float, end: float) -> list[tuple[float, tuple[str, ...]]]:
+    """The settle's listings, one every `SETTLE_POLL_S` from `start` to `end` inclusive."""
+    poll = driver_module.SETTLE_POLL_S
+    return [(start + i * poll, PS) for i in range(round((end - start) / poll) + 1)]
+
+
+def test_the_settle_constants_are_the_ruled_first_values() -> None:
+    assert (driver_module.SETTLE_POLL_S, driver_module.SETTLE_WINDOW_S) == (0.5, 5.0)
+
+
+def test_after_a_killed_deploy_the_teardown_removes_the_containers_the_daemon_made_after_it(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The cut of 2026-11-14: the destroy's listing came before the daemon had made the nodes, so it read residue,
+    # removed the network, and the three containers were listed afterwards, `Created`, the record gone.
+    caplog.set_level("INFO", logger="fylgja.containerlab")
+    late = {"clab-t-n1": 0.25, "clab-t-n2": 0.25, "clab-t-n3": 0.25}
+    daemon = Daemon(late)
+    d = killed_then_destroyed(tmp_path, daemon)
+    # Today's teardown at the kill's time, then the settle: the late nodes are listed at 0.5 and removed, and the
+    # listing is then empty from 1.0 to 6.0, the whole window; the network is looked for again after.
+    assert daemon.calls == [
+        (0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM),
+        (0.0, PS), (0.5, PS), *[(0.5, (*RM, h)) for h in sorted(late)],
+        *settle_polls(1.0, 6.0), (6.0, NETWORK)]
+    assert set(daemon.sleeps) == {driver_module.SETTLE_POLL_S}
+    assert daemon.listed() == [] and daemon.network_removed
+    assert all(b == DOCKER_TIMEOUT_S for b in daemon.budgets)
+    assert not (tmp_path / "root/containerlab/t").exists()
+    assert ("destroy t: its deploy was killed, so the daemon may still make its containers: the lab is listed "
+            "until it has been empty for 5s") in caplog.messages
+    assert ("destroy t: removed clab-t-n1, or it was already gone (docker answers 0 for both), since the daemon "
+            "made it after the deploy was killed") in caplog.messages
+    # The kill is settled: the next destroy of the twin is today's, and waits nothing.
+    daemon.calls.clear()
+    daemon.sleeps.clear()
+    p = planned("three-node")
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.commands() == [PS, NETWORK] and daemon.sleeps == []  # nothing left, and no settle
+
+
+def test_a_network_the_daemon_made_after_the_kill_is_removed_after_the_settle(tmp_path: Path) -> None:
+    # Killed before the network was listed: the teardown reads nothing at all, and the settle finds the network.
+    daemon = Daemon(network_at=0.25)
+    killed_then_destroyed(tmp_path, daemon)
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), *settle_polls(0.0, 5.0), (5.0, NETWORK), (5.0, NETWORK_RM)]
+
+
+def test_a_container_listed_at_the_last_poll_before_the_windows_end_restarts_the_window(tmp_path: Path) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25, "clab-t-n2": 5.25})
+    killed_then_destroyed(tmp_path, daemon)
+    settle = [args for _, args in daemon.calls[4:]]
+    assert [c for c in daemon.calls if c[1][:3] == RM] == [(0.5, (*RM, "clab-t-n1")), (5.5, (*RM, "clab-t-n2"))]
+    # Empty from 1.0, n2 at 5.5 (the poll before 6.0 would end it), empty again from 6.0 to 11.0.
+    assert daemon.calls[-1] == (11.0, NETWORK) and daemon.calls[-2] == (11.0, PS)
+    assert settle.count(PS) == 1 + 1 + 10 + 11
+
+
+def test_a_deploy_killed_at_its_budget_is_settled_too(tmp_path: Path) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25}, deploy=CommandFailed(("containerlab", "deploy"), TIMED_OUT,
+                                                              "timed out after 240 s"))
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    with pytest.raises(CommandFailed):
+        bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert (0.5, (*RM, "clab-t-n1")) in daemon.calls and daemon.calls[-1] == (6.0, NETWORK)
+
+
+@pytest.mark.parametrize("how", ["returned", "failed"])
+def test_a_deploy_the_driver_did_not_kill_leaves_the_destroy_as_it_is(tmp_path: Path, how: str) -> None:
+    # A deploy that ended by itself, ok or with its own status, was not killed by the driver; that containerlab had
+    # every create answered by then is assumed, not read: no listing is added.
+    daemon = Daemon({"clab-t-n1": 0.25}, deploy=CommandFailed(("containerlab", "deploy"), 1, "") if how == "failed"
+                    else None, deploy_returns=how == "returned")
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    if how == "failed":
+        with pytest.raises(CommandFailed):
+            bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    else:
+        bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM)]
+    assert daemon.sleeps == []
+
+
+def kill_a_deploy(daemon: Daemon, d: ContainerlabDriver, p: Planned) -> None:
+    """Apply `p` with its deploy cancelled once it runs, as the loop cancels an apply; the calls are cleared."""
+
+    async def body() -> None:
+        applying = asyncio.ensure_future(d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+        while not any(args[:2] == DEPLOY for _, args in daemon.calls):
+            await asyncio.sleep(0)
+        await cancelled(applying)
+
+    bounded(body)
+    daemon.calls.clear()
+
+
+def test_a_deploy_that_succeeds_after_a_killed_one_clears_the_mark(tmp_path: Path) -> None:
+    # A create retried to success, or a step's apply cancelled and then applied: the deploy that returned made the
+    # lab whole, so the twin's later deletion is today's, with no listing added and no wait.
+    daemon = Daemon()
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    kill_a_deploy(daemon, d, p)
+    daemon.deploy_returns = True
+    bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM)]
+    assert daemon.sleeps == []
+
+
+def test_a_deploy_that_fails_after_a_killed_one_keeps_the_mark(tmp_path: Path) -> None:
+    daemon = Daemon()
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    kill_a_deploy(daemon, d, p)
+    daemon.deploy = CommandFailed(("containerlab", "deploy"), 1, "")
+    with pytest.raises(CommandFailed):
+        bounded(lambda: d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    daemon.calls.clear()
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.calls == [(0.0, PS), (0.0, NETWORK), (0.0, NETWORK), (0.0, NETWORK_RM), *settle_polls(0.0, 5.0),
+                            (5.0, NETWORK)]
+
+
+@pytest.mark.parametrize("killed", [True, False], ids=["killed", "not-killed"])
+def test_a_destroy_that_deploys_for_residue_settles_on_the_mark_it_found(tmp_path: Path, killed: bool) -> None:
+    # Rule 2: root-owned residue and no container, so the destroy deploys, then destroys. That deploy returns 0 and
+    # clears the mark, but the kill before it may still have a container coming that the topology does not name and
+    # containerlab's destroy leaves: the destroy settles on the mark it found before its own deploy.
+    daemon = Daemon({"clab-t-x9": 0.25} if killed else None)
+    d = daemon_driver(tmp_path, daemon)
+    p = planned("three-node")
+    if killed:
+        kill_a_deploy(daemon, d, p)
+    (tmp_path / "ssh_config.d" / "clab-t.conf").write_text("Host clab-t-n1\n")
+    daemon.deploy_returns = True
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    rule_2 = [(0.0, PS), (0.0, ("containerlab", "deploy", "-t", topology)),
+              (0.0, ("containerlab", "destroy", "-t", topology, "--cleanup")), (0.0, NETWORK)]
+    if killed:
+        assert daemon.calls == [*rule_2, (0.0, PS), (0.5, PS), (0.5, (*RM, "clab-t-x9")), *settle_polls(1.0, 6.0),
+                                (6.0, NETWORK)]
+        assert daemon.listed() == []
+    else:
+        assert daemon.calls == rule_2 and daemon.sleeps == []
+
+
+def test_a_destroy_of_a_twin_no_deploy_ran_for_waits_nothing(tmp_path: Path) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25})
+    p = planned("three-node")
+    bounded(lambda: daemon_driver(tmp_path, daemon).destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert daemon.commands() == [PS, NETWORK, NETWORK, NETWORK_RM] and daemon.sleeps == []
+
+
+def test_a_late_container_that_cannot_be_removed_fails_the_destroy_and_the_next_one_settles_again(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    daemon = Daemon({"clab-t-n1": 0.25}, rm=(1, "Error response from daemon: removal of container clab-t-n1 is "
+                                                "already in progress"))
+    d = daemon_driver(tmp_path, daemon)
+    with pytest.raises(CommandFailed) as raised:
+        killed_then_destroyed(tmp_path, daemon, d)
+    assert raised.value.argv == (*RM, "clab-t-n1")
+    assert daemon.calls[-1] == (0.5, (*RM, "clab-t-n1"))  # nothing after the failure: no network, no directory
+    assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
+    assert any(r.levelname == "WARNING" and r.getMessage().startswith("destroy t failed") for r in caplog.records)
+    # The loop's retry, on the same driver: the kill is not forgotten, so the next destroy settles again.
+    daemon.rm = (0, "")
+    daemon.calls.clear()
+    p = planned("three-node")
+    bounded(lambda: d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    topology = str(tmp_path / "root/containerlab/t" / TOPOLOGY)
+    assert daemon.calls == [(0.5, PS), (0.5, (*INSPECT, "clab-t-n1")),
+                            (0.5, ("containerlab", "destroy", "-t", topology, "--cleanup")), (0.5, NETWORK),
+                            *settle_polls(0.5, 5.5), (5.5, NETWORK)]
+    assert daemon.listed() == [] and not (tmp_path / "root/containerlab/t").exists()
+
+
+def test_a_lab_still_listed_past_the_destroys_budget_is_a_driver_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A container the daemon lists again after each removal never lets the window pass: the settle is bounded.
+    monkeypatch.setattr(driver_module, "destroy_budget", lambda *args: 3.0)
+    daemon = Daemon({"clab-t-n1": 0.25}, again=True)
+    with pytest.raises(DriverFailed, match=r"^the lab t still lists containers 3s after its teardown: clab-t-n1$"):
+        killed_then_destroyed(tmp_path, daemon)
+    assert (tmp_path / "root/containerlab/t" / TOPOLOGY).exists()
 
 
 def test_an_unreadable_hosts_file_holds_no_residue(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -1247,7 +1674,10 @@ def test_a_deploy_that_fails_releases_the_lock(tmp_path: Path) -> None:
 
 def test_the_deploys_budget_starts_once_the_lock_is_held(tmp_path: Path) -> None:
     # The wait for another twin's deploy is outside this one's budget (D-074): a budget spent
-    # waiting would kill a deploy that had barely begun.
+    # waiting would kill a deploy that had barely begun. The test holds the order of the two deploys,
+    # u's begun only once t's returned, and not the gap between their starts: that gap is t's hold
+    # less how late t's deploy began, and on a loaded host t's can begin late enough to make it any
+    # shorter.
     t, u = planned("three-node"), planned("three-node", twin="u", subnet=U_SUBNET)
     runner = HeldRunner({DEPLOY: ""})
     driver = ContainerlabDriver(tmp_path, runner=runner)
@@ -1260,8 +1690,7 @@ def test_the_deploys_budget_starts_once_the_lock_is_held(tmp_path: Path) -> None
         assert await both == [None, None]
 
     bounded(body)
-    assert runner.calls == [deploy_of(tmp_path, "t"), deploy_of(tmp_path, "u")]
-    assert runner.started[1] - runner.started[0] > 0.25  # u's deploy waited out t's, held 0.3 s
+    assert runner.order == [deploy_of(tmp_path, "t"), ("returned", "t"), deploy_of(tmp_path, "u"), ("returned", "u")]
     assert runner.budgets == [deploy_budget(u.files, PLATFORMS, PROBES)] * 2 == [180 + 60] * 2
 
 

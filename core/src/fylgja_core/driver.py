@@ -87,6 +87,27 @@ class Unplannable(Exception):
         return "; ".join(f"{f.rule} on {f.object}: {f.message}" for f in self.findings)
 
 
+class Unpackaged(ValueError):
+    """No given package runs the node `node` of a deployment, whose `kind` and `image` its own
+    file writes: a device node is run by the platform package of that kind and image, a probe
+    host by the probe package whose image a `linux` node's is. `image` is the reference as the
+    file writes it, which on clabernetes is a gated image under its registry's prefix. A
+    package's image edited while a twin runs the one it had leaves such a node (D-102).
+
+    `changes`, `apply` and `destroy` raise it, the last two before they touch the runtime, from
+    the one lookup of a node's package (`containerlab.changes.sections_of`). It is a
+    `ValueError`, as the lookup's error was, and its text is that error's."""
+
+    def __init__(self, node: str, kind: str, image: str) -> None:
+        self.node = node
+        self.kind = kind
+        self.image = image
+        super().__init__(node, kind, image)
+
+    def __str__(self) -> str:
+        return f"no package given runs the node {self.node} ({self.kind}, {self.image})"
+
+
 @dataclass(frozen=True)
 class Planned:
     """What `plan` answers: the deployment and every rendered file by path, the same paths
@@ -192,7 +213,9 @@ class Driver(Protocol):
     the deployment's nodes use, which neither the deployment nor its files carry. The five
     calls that act on the runtime, `admit`, `apply`, `inspect`, `destroy` and `exec`, raise
     `DriverFailed` for a runtime failure; `events`, which follows the runtime, is the one that
-    raises nothing: it starts its own source again."""
+    raises nothing: it starts its own source again. `changes`, `apply` and `destroy` raise
+    `Unpackaged` for a node of a deployment that no given package runs, the two that act before
+    they touch the runtime."""
 
     name: str
 
@@ -252,7 +275,8 @@ class Driver(Protocol):
     ) -> Changes:
         """Pure: what the runtime does to each node to go from the deployment `before` to
         `after`, both one twin's, with the links added and removed (D-049). `ValueError` for
-        deployments of two twins, or for a node no given package runs."""
+        deployments of two twins; `Unpackaged`, which is one, for the first node by name that no
+        given package runs."""
         ...
 
     async def apply(
@@ -266,7 +290,9 @@ class Driver(Protocol):
         """Make the runtime hold the deployment. `reconfigure` rebuilds the whole lab: every
         node is made anew, so every node's incarnation changes and every node's `holds` is
         void. It is the loop's remedy for a node that stays silent (D-023), asked only of a
-        driver that does not declare `reapply` (D-068)."""
+        driver that does not declare `reapply` (D-068). `Unpackaged`, before the runtime is
+        touched, for the first node of the deployment, in its file's order, that no given package
+        runs."""
         ...
 
     async def inspect(self, twin: str) -> Inspection:
@@ -280,7 +306,9 @@ class Driver(Protocol):
         platforms: Mapping[str, PlatformPackage],
         probe_packages: Mapping[str, ProbePackage],
     ) -> None:
-        """Remove the deployment and its residue from the runtime."""
+        """Remove the deployment and its residue from the runtime. `Unpackaged`, before the
+        runtime is touched, for the first node of the deployment, in its file's order, that no
+        given package runs: the loop refuses the deletion and keeps the lab (D-102)."""
         ...
 
     async def endpoints(self, twin: str) -> Mapping[str, str]:

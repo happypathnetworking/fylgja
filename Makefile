@@ -1,8 +1,8 @@
 # fylgja-core (CONTRIBUTING.md).
 
-.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck image imagecheck infrahub-up infrahub-down \
+.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck infrahub-up infrahub-down \
 	infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down orchestrator-serve netbox-up \
-	netbox-down netbox-seed netbox-hook netbox-change contract-netbox
+	netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo netbox-demo demo-down
 
 VENV := core/.venv
 
@@ -43,18 +43,18 @@ SOURCE_REFUSED = $(filter-out 1,$(words $(SOURCE)))$(filter-out $(SOURCES),$(SOU
 # `image` and `imagecheck` build and check one tag, whatever changes in the tree meanwhile.
 IMAGE ?= fylgja-core
 TAG := $(shell git rev-parse HEAD 2>/dev/null | cut -c1-12)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
+# The same commit in full, which the image's build stage writes into the core's package as the build it answers
+# --version with (D-106): `image` passes it, and `imagecheck` holds the image's --version to TAG's twelve characters.
+COMMIT := $(shell git rev-parse HEAD 2>/dev/null)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
 
 all: lint test
 
-# The core's venv at core/pyproject.toml's pins: the package editable, with its extras server and dev (D-084), and
-# the two readers' and the example orchestrator's beside it, each editable, with its extra dev.
+# The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the four distributions editable with every
+# extra, at the versions uv.lock holds, which a pin moved in a pyproject.toml without `uv lock` refuses. The
+# interpreter is the PATH's python3, never one uv fetches.
 venv:
-	test -x $(VENV)/bin/python || python3 -m venv $(VENV)
+	UV_PROJECT_ENVIRONMENT=$(abspath $(VENV)) uv sync --locked --all-packages --all-extras --python python3
 	printf '*\n' > $(VENV)/.gitignore
-	$(VENV)/bin/pip install -q -e 'core[server,dev]'
-	$(VENV)/bin/pip install -q -e 'readers/infrahub[dev]'
-	$(VENV)/bin/pip install -q -e 'readers/netbox[dev]'
-	$(VENV)/bin/pip install -q -e 'orchestrator[dev]'
 
 # The pure tier: no infrastructure (Constitution, Development).
 test:
@@ -85,7 +85,7 @@ conformance:
 
 # mypy runs three times: the core's tests, infrahub/'s and netbox/'s would name modules alike in one run.
 lint:
-	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../infrahub ../netbox && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py
+	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../readme_links.py ../infrahub ../netbox && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py
 	cd readers/infrahub && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
 	cd orchestrator && ../core/.venv/bin/ruff check --config pyproject.toml . && ../core/.venv/bin/mypy
 	cd readers/netbox && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
@@ -100,16 +100,34 @@ linkcheck:
 # the base alone, where its command answers --help; then the NetBox reader's, with its one format, beside the base
 # alone, where it answers --help and refuses a missing token; then the example's, built from orchestrator/ and
 # formats/ with its two formats and its Infrahub change source's queries, installed beside the base and the two
-# readers alone, where both its change sources import and its command answers --help.
+# readers alone, where both its change sources import and its command answers --help. Each wheel is built at the
+# tree's commit and holds it, and each installed command's --version names the tree's version and that commit.
 wheelcheck:
 	python3 -I scripts/wheelcheck.py
 
-# The core's image from the Dockerfile; its build context is .dockerignore's allow-list. Needs Docker and the network.
+# The three published wheels (D-106), core, readers/infrahub and readers/netbox, and no other, built by uv into dist/
+# (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. Each member's build/ is
+# removed first, so that no file since removed from the tree rides along from an earlier build. The backend is the
+# setuptools build-constraints.txt names, not whatever the index holds that day. scripts/publish.py check holds them,
+# the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check refuses any
+# file but the three wheels. Needs the network.
+wheels:
+	rm -rf dist core/build readers/infrahub/build readers/netbox/build
+	mkdir dist
+	for member in core readers/infrahub readers/netbox; do \
+		FYLGJA_BUILD_COMMIT=$(COMMIT) uv build --wheel --no-python-downloads --python python3 --build-constraints build-constraints.txt --out-dir dist $$member || exit 1; \
+	done
+	rm -f dist/.gitignore
+
+# The core's image from the Dockerfile; its build context is .dockerignore's allow-list. The commit it is built at,
+# COMMIT, is given as the build stage's one argument. Needs Docker and the network.
 image:
-	docker build -t $(IMAGE):$(TAG) .
+	docker build --build-arg FYLGJA_BUILD_COMMIT=$(COMMIT) -t $(IMAGE):$(TAG) .
 
 # The image built, then run: its user, its entry point's refusal, its formats (those CORE_FORMATS in core/setup.py
-# names, each byte for byte its file in formats/), its packages' files against git's; the tag printed last.
+# names, each byte for byte its file in formats/), its wheel's packages (the YAML git tracks in psp/ and probes/, no
+# copy of its own and no FYLGJA_PACKAGES), and the build its two commands
+# answer --version with, which names the commit in TAG; the tag printed last.
 imagecheck: image
 	python3 -I scripts/imagecheck.py $(IMAGE):$(TAG)
 
@@ -160,11 +178,12 @@ netbox-hook:
 netbox-change:
 	$(VENV)/bin/python netbox/seed/change.py --branch $(NETBOX_BRANCH) $(if $(filter 1,$(NETBOX_TAG)),--tag )-- python3 -I scripts/edge_dev.py run --source netbox --local $(LOCAL) --main $(MAIN) -- stage mark
 
-# infrahubctl, in a venv of its own under local/infrahub/, so that the SDK meets nothing else (D-083).
+# infrahubctl, in a venv of its own under local/infrahub/, so that the SDK meets nothing else (D-083): made by uv, at
+# the SDK's pin, and no part of the workspace.
 $(LOCAL)/infrahub/.venv/bin/infrahubctl:
-	python3 -m venv $(LOCAL)/infrahub/.venv
+	uv venv --no-project --clear --python python3 $(LOCAL)/infrahub/.venv
 	printf '*\n' > $(LOCAL)/infrahub/.venv/.gitignore
-	$(LOCAL)/infrahub/.venv/bin/pip install -q 'infrahub-sdk[ctl]==$(INFRAHUB_SDK_VERSION)'
+	uv pip install -q --python $(LOCAL)/infrahub/.venv/bin/python 'infrahub-sdk[ctl]==$(INFRAHUB_SDK_VERSION)'
 
 # The schema library, the group fylgja-devices and this repository's registration on main, at REF, the branch checked
 # out, and its commit (CONTRIBUTING.md); a detached head names no branch and is refused. Load local/.env first.
@@ -221,3 +240,24 @@ contract-netbox:
 	cd netbox && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd readers/netbox && ../../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd orchestrator && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract_netbox
+
+# A demonstration of one source of truth, infrahub or netbox, with no step by hand (CONTRIBUTING.md, "The
+# demonstrations"; D-104): the host's preconditions checked, then the source's runbook taken in order through the
+# targets above, the core and the runner started in the background by recorded pids, to the change opened, then the
+# rehearsal it starts waited for on the edge's Prefect and its verdict read: exit 0 for passed alone. It reads
+# local/.env itself, before every step, and at REF it registers this repository with Infrahub. No other variable
+# given here, or held by the shell or local/.env, reaches a target: each is run at this file's own value, the script
+# saying which were not passed on.
+infrahub-demo netbox-demo: | $(VENV)/bin/fylgja-core-server
+	python3 -I scripts/demo.py up $(@:-demo=) --local $(LOCAL) --main $(MAIN) --ref='$(REF)'
+
+# The venv, made for a demonstration where the core's server command is missing, and never remade by one.
+$(VENV)/bin/fylgja-core-server:
+	$(MAKE) venv
+
+# What a demonstration started, ended: its runner, every twin its core holds, its core, the Prefect server it
+# started and its source, whose volumes are kept; PURGE=1 on a make command line removes them too, one a make above
+# hands down in MAKEFLAGS counting as a command line's, and no other value and no PURGE of the environment's,
+# exported by the shell or by a local/.env it loaded, does.
+demo-down:
+	python3 -I scripts/demo.py down --local $(LOCAL) --main $(MAIN) $(if $(and $(filter 1,$(PURGE)),$(filter command line,$(origin PURGE))),--purge)

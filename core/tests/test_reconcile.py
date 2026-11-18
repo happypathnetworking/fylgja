@@ -34,7 +34,7 @@ from fylgja_core import (
     reconcile,
 )
 from fylgja_core.credentials import Credential, Provider
-from fylgja_core.driver import Changes, Exec, Inspection, NodeChange, Planned, Refusal, Unplannable
+from fylgja_core.driver import Changes, Exec, Inspection, NodeChange, Planned, Refusal, Unpackaged, Unplannable
 from fylgja_core.findings import Finding, Loss, Subject, Verdict
 from fylgja_core.local_store import LocalStore
 from fylgja_core.reconcile import Reconciler
@@ -1754,6 +1754,168 @@ def test_a_cancel_whose_teardown_this_core_cannot_do_says_it_kept_the_lab(killin
     assert run.verdict is not None and "kept" in run.verdict.findings[0].message
     assert "torn down" not in run.verdict.findings[0].message.replace("to tear it down", "")
     assert ("destroy", "t") not in driver.calls and killing.get_twin("t").status.deployment_id is not None
+
+
+# A node no loaded package runs (D-102): every package the bundle names is loaded, so the check of its package ids
+# passes, and one of them no longer lists the image a node of the deployment runs. Only the driver can say, from its
+# lookup of a node's package by its kind and image, which its `apply` and `destroy` take before they touch the runtime.
+
+UNRUN = Unpackaged("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")
+UNACCOUNTED = ("The deployment of t cannot be {done}: no package given runs the node n1 (nokia_srlinux, "
+               "ghcr.io/nokia/srlinux:24.7.1). It waits for a core whose packages list that image.")
+
+
+def kept_of(record: TwinRecord) -> tuple[Any, ...]:
+    """What show and verify read of a twin's record: its deployment, allocation, nodes and bundle."""
+    status = record.status
+    return status.deployment_id, status.allocation, status.nodes, status.bundle_id
+
+
+def test_a_deletion_that_meets_a_node_no_loaded_package_runs_is_refused_once_and_raises_nothing(
+    store: LocalStore,
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.unpackaged = {"destroy": UNRUN}
+    destroy = request_deletion(store)
+    r = make(store, driver)
+    asyncio.run(r.reconcile("t"))  # it returns: the driver's error is refused, not raised
+
+    run = store.get_run(destroy.id)
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "rejected"
+    assert [(f.rule, f.object, f.message) for f in run.verdict.findings] == [
+        ("bundle.rejected", "t", UNACCOUNTED.format(done="torn down"))]
+    assert seen(store, run.id) == [("destroy", "started", None), ("destroy", "failed", None)]
+    assert store.events(run.id)[-1].rule == "bundle.rejected"
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "bundle.rejected")
+    assert record.status.run_id is None and record.status.observed_generation == record.generation == 2
+    assert kept_of(record) == kept_of(before) and "t" in driver.labs
+    assert r.backoff == {} and r.queue.waiting() == []
+
+    revision, runs, calls = record.revision, len(store.list_runs("t")), len(driver.calls)
+    for _ in range(3):  # asked again by the same core: said once, and the driver is not called again
+        asyncio.run(r.reconcile("t"))
+    assert store.get_twin("t").revision == revision and len(store.list_runs("t")) == runs == 2
+    assert driver.calls[calls:] == [] and driver.calls.count(("destroy", "t")) == 1
+    assert r.backoff == {} and r.queue.waiting() == []
+
+
+def test_a_core_started_again_refuses_it_again_and_one_whose_packages_list_the_image_tears_down(
+    store: LocalStore,
+) -> None:
+    driver = FakeDriver()
+    before = ready_twin(store, driver)
+    driver.unpackaged = {"destroy": UNRUN}
+    asked = request_deletion(store)
+    asyncio.run(make(store, driver).reconcile("t"))
+
+    # What a core found is its own life's: one started again has only its driver to ask, under a destroy run of its
+    # own, since the client's was ended by the core before it.
+    asyncio.run(make(store, driver).reconcile("t"))
+    (again,) = [run for run in store.list_runs("t") if run.operation == "destroy" and run.id != asked.id]
+    assert again.principal == "core" and again.verdict is not None and again.verdict.status == "rejected"
+    assert [(f.rule, f.object, f.message) for f in again.verdict.findings] == [
+        ("bundle.rejected", "t", UNACCOUNTED.format(done="torn down"))]
+    record = store.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "bundle.rejected")
+    assert record.status.run_id is None and kept_of(record) == kept_of(before)
+    assert "t" in driver.labs and driver.calls.count(("destroy", "t")) == 2
+
+    driver.unpackaged = {}  # a core whose packages list the image
+    asyncio.run(make(store, driver).reconcile("t"))
+    with pytest.raises(NotFound):
+        store.get_twin("t")
+    assert "t" not in driver.labs and driver.calls.count(("destroy", "t")) == 3
+
+
+def test_a_cancelled_creates_teardown_that_meets_such_a_node_keeps_the_lab(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "applied"
+    killed(make(killing, driver))
+    run = only_run(killing)
+    applied = killing.get_twin("t")
+    mark_cancelling(killing, run.id)
+    driver.unpackaged = {"destroy": UNRUN}
+    r = make(killing, driver)  # every package the bundle names is loaded
+    asyncio.run(r.reconcile("t"))
+
+    run = killing.get_run(run.id)
+    assert_cancelled(run)
+    assert run.verdict is not None and "kept" in run.verdict.findings[0].message
+    assert "torn down" not in run.verdict.findings[0].message.replace("to tear it down", "")
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "run.cancelled")
+    assert record.status.run_id is None and kept_of(record) == kept_of(applied)
+    assert record.status.deployment_id is not None and record.status.allocation is not None
+    assert "t" in driver.labs and driver.calls.count(("destroy", "t")) == 1 and r.backoff == {}
+
+    revision, calls = record.revision, len(driver.calls)
+    asyncio.run(r.reconcile("t"))  # the kept twin is not inspected, and nothing is written
+    assert killing.get_twin("t").revision == revision and driver.calls[calls:] == []
+
+
+def test_a_failed_creates_cleanup_that_meets_such_a_node_keeps_the_lab_and_its_allocation(store: LocalStore) -> None:
+    new_twin(store, file_blueprint(store))
+    driver = FakeDriver()
+    driver.unpackaged = {"destroy": UNRUN}
+    r = make(store, driver, pusher=fake_push(refuse={"n2"}, driver=driver))
+    asyncio.run(r.reconcile("t"))  # the push is refused after `applied`, and the cleanup's destroy meets the node
+
+    record, run = store.get_twin("t"), only_run(store)
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "failed"
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "push.refused")  # the run's own rule
+    assert record.status.observed_generation == 1 and record.status.run_id is None
+    assert record.status.deployment_id is not None and record.status.allocation is not None
+    assert "t" in driver.labs and driver.calls.count(("destroy", "t")) == 1
+    assert r.backoff == {} and r.queue.waiting() == []
+
+    revision, calls = record.revision, len(driver.calls)
+    asyncio.run(r.reconcile("t"))
+    assert store.get_twin("t").revision == revision and len(store.list_runs("t")) == 1
+    assert driver.calls[calls:] == [] and r.backoff == {}
+
+
+def test_a_create_resumed_where_no_package_lists_its_image_is_rejected_not_raised(killing: KillingStore) -> None:
+    new_twin(killing, file_blueprint(killing))
+    driver = FakeDriver()
+    killing.kill_at = "planned"
+    killed(make(killing, driver))
+    planned = killing.get_twin("t")
+    driver.unpackaged = {"apply": UNRUN, "destroy": UNRUN}
+    r = make(killing, driver)  # a core started again, one of whose packages no longer lists the image
+    asyncio.run(r.reconcile("t"))
+
+    run = only_run(killing)
+    assert run.state == "ended" and run.verdict is not None and run.verdict.status == "rejected"
+    assert [(f.rule, f.object, f.message) for f in run.verdict.findings] == [
+        ("bundle.rejected", "t", UNACCOUNTED.format(done="applied"))]
+    assert seen(killing, run.id)[-1] == ("apply", "failed", None)
+    assert killing.events(run.id)[-1].rule == "bundle.rejected"
+    record = killing.get_twin("t")
+    assert (ready_of(record).status, ready_of(record).reason) == ("False", "bundle.rejected")
+    assert record.status.run_id is None and record.status.observed_generation == 1
+    assert kept_of(record) == kept_of(planned) and record.status.deployment_id is not None
+    assert "t" not in driver.labs and r.backoff == {} and r.queue.waiting() == []
+    # What `apply` met is kept before the run ends, so its cleanup keeps what is there and asks no `destroy`.
+    assert ("destroy", "t") not in driver.calls
+
+    revision, calls = record.revision, len(driver.calls)
+    asyncio.run(r.reconcile("t"))
+    assert killing.get_twin("t").revision == revision and len(killing.list_runs("t")) == 1
+    assert driver.calls[calls:] == [] and r.backoff == {}
+
+    # What is kept of the deployment is what this core cannot do next, its teardown: a deletion asked of the same
+    # core is refused by it, in a teardown's words, and the driver is still not asked.
+    destroy = request_deletion(killing)
+    asyncio.run(r.reconcile("t"))
+    refused = killing.get_run(destroy.id).verdict
+    assert refused is not None and refused.status == "rejected"
+    assert [(f.rule, f.object, f.message) for f in refused.findings] == [
+        ("bundle.rejected", "t", UNACCOUNTED.format(done="torn down"))]
+    assert kept_of(killing.get_twin("t")) == kept_of(planned)
+    assert driver.calls[calls:] == [] and r.backoff == {}
 
 
 def test_a_reconciler_without_a_verifier_is_a_type_error(store: LocalStore) -> None:

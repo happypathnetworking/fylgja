@@ -16,6 +16,8 @@ bearer rule before any request, so that no HTTP library's complaint can quote it
 `X-INFRAHUB-KEY`. Every failure is an `InfrahubError` whose text names what was being read, the branch and the time,
 and keeps the status Infrahub answered. None holds the token: a transport failure's text has it replaced by
 `<redacted>`, and the error is raised from nothing, since an httpx exception carries its request, whose headers hold it.
+A request Infrahub sheds under load is sent again after the wait it names, up to `SHED_BUDGET_S` in all, and nothing
+is logged while it waits.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import Callable, Mapping, Sequence
 from functools import cache
 from importlib import resources
@@ -86,6 +89,20 @@ sent 2 s after the last, on a connection kept for httpx's own 5 s, once went una
 TOKEN = "FYLGJA_INFRAHUB_TOKEN"
 """The variable a refused token is named by: the command reads the token from it."""
 
+SHED_WAIT_DEFAULT_S = 5
+"""Seconds waited before a shed request is sent again where Infrahub's `Retry-After` is missing or no count of seconds.
+Infrahub 1.11.11's backpressure answers a request it sheds with HTTP 429, `Retry-After` in whole seconds and
+`X-Infrahub-Admission: shed`, written before any handler runs, so the request did nothing and is sent again
+(design/verified-facts.md, "Infrahub 1.11.11")."""
+
+SHED_WAIT_MAX_S = 30
+"""The most seconds one wait for a shed request lasts, whatever `Retry-After` says; the least is 1."""
+
+SHED_BUDGET_S = 300
+"""The most seconds the waits for one shed request add up to, ours: of the order of infrahub-sdk's own bound for a 429,
+10 retries of at most 60 s each (design/verified-facts.md, "Infrahub 1.11.11"). A wait that would pass it is not taken,
+and the last 429 is answered as any 429 is."""
+
 REDACTED = "<redacted>"
 """What stands for the token in an error's text."""
 
@@ -132,10 +149,13 @@ class Infrahub:
     version: str
     unverified: Finding | None
 
-    def __init__(self, http: httpx.Client, *, url: str, token: str) -> None:
+    def __init__(
+        self, http: httpx.Client, *, url: str, token: str, sleep: Callable[[float], None] = time.sleep
+    ) -> None:
         self._http = http
         self._url = url
         self._token = token
+        self._sleep = sleep
         self.version = ""
         self.unverified = None
 
@@ -177,7 +197,8 @@ class Infrahub:
 
     def content(self, branch: str, at: str | None, storage_id: str) -> Content:
         """The bytes Infrahub stores under `storage_id`, `GET /api/storage/object/<storage_id, percent-escaped>`, and
-        the status it answered, whatever that is, for the read to judge. The request carries no branch and no time: a
+        the status it answered, whatever that is, for the read to judge, but a shed past `SHED_BUDGET_S`, which is an
+        `InfrahubError`: a busy Infrahub is no fact about the artifact. The request carries no branch and no time: a
         storage id names one object, which Infrahub still serves after a rewrite has listed another in its place, so
         a read at a past time fetches the bytes it listed then (design/verified-facts.md, "Infrahub 1.11.11").
         `branch` and `at` name the read in an error; Infrahub not reached is an `InfrahubError`."""
@@ -363,6 +384,32 @@ class Infrahub:
         params: Mapping[str, str] | None = None,
         body: object | None = None,
     ) -> httpx.Response:
+        """The response to one request, a shed one sent again after each wait that fits in `SHED_BUDGET_S`. Once the
+        next would not, the last 429 is an `InfrahubError` that says the request was shed."""
+        waited = 0
+        while True:
+            response = self._request(method, path, what, where, params=params, body=body)
+            if not _is_shed(response):
+                return response
+            wait = _shed_wait(response)
+            if waited + wait > SHED_BUDGET_S:
+                break
+            self._sleep(wait)
+            waited += wait
+        status = response.status_code
+        said = f"HTTP {status}: {self._words(response)}; Infrahub shed the request for {waited} s, so it was given up"
+        raise self._error(what, where, status, said)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        what: str,
+        where: str | None,
+        *,
+        params: Mapping[str, str] | None,
+        body: object | None,
+    ) -> httpx.Response:
         try:
             return self._http.request(method, path, params=params, json=body)
         except httpx.HTTPError as e:
@@ -412,12 +459,17 @@ class Infrahub:
 
 
 def connect(
-    address: str, token: str, *, ca: Path | None = None, transport: httpx.BaseTransport | None = None
+    address: str,
+    token: str,
+    *,
+    ca: Path | None = None,
+    transport: httpx.BaseTransport | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Infrahub:
     """The `Infrahub` at `address`, an http(s):// URL or host:port, read with `token`, its version read. An `https://`
     address is verified against the CA file `ca`, or the system's trust where it is None. `InvalidAddress`,
     `InvalidToken` and `InvalidCA` (fylgja_core.client) are raised before any request, each a predicate that repeats
-    nothing; `transport` replaces the network, for tests."""
+    nothing; `transport` replaces the network and `sleep` the wait for a shed request, for tests."""
     url = base_url(address)
     bearer(token)
     http = httpx.Client(
@@ -429,13 +481,30 @@ def connect(
         limits=httpx.Limits(keepalive_expiry=KEEPALIVE_S),
         trust_env=False,
     )
-    conn = Infrahub(http, url=url, token=token)
+    conn = Infrahub(http, url=url, token=token, sleep=sleep)
     try:
         conn._read_version()
     except BaseException:
         conn.close()
         raise
     return conn
+
+
+def _is_shed(response: httpx.Response) -> bool:
+    """Whether `response` is a request Infrahub's backpressure shed: HTTP 429 marked `X-Infrahub-Admission: shed`."""
+    return response.status_code == 429 and response.headers.get("X-Infrahub-Admission", "").strip().lower() == "shed"
+
+
+def _shed_wait(response: httpx.Response) -> int:
+    """The seconds to wait before a shed request is sent again: its `Retry-After`, held to 1 to `SHED_WAIT_MAX_S`, or
+    `SHED_WAIT_DEFAULT_S` where that is missing or no count of seconds. A count of more than three digits is past the
+    most, and is not read: `int` refuses one of more than 4,300."""
+    said = response.headers.get("Retry-After", "").strip()
+    if not (said.isascii() and said.isdigit()):
+        return SHED_WAIT_DEFAULT_S
+    if len(said) > 3:
+        return SHED_WAIT_MAX_S
+    return min(max(int(said), 1), SHED_WAIT_MAX_S)
 
 
 def _status(errors: object) -> int:

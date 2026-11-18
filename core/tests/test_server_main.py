@@ -12,6 +12,7 @@ import functools
 import json
 import logging
 import os
+import re
 import shlex
 import signal
 import socket
@@ -23,6 +24,7 @@ import time
 import tomllib
 import types
 from collections.abc import Callable, Iterator, Sequence
+from ipaddress import IPv4Network
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +42,7 @@ from starlette.routing import BaseRoute, Route
 from starlette.testclient import TestClient
 from test_containerlab_cli import gone_within
 
-from fylgja_core import config, kubeapi, lease, packages
+from fylgja_core import config, kubeapi, lease, packages, release
 from fylgja_core import drivers as registry
 from fylgja_core.client import messages
 from fylgja_core.config import Misconfigured, Settings
@@ -179,6 +181,90 @@ def test_an_empty_environment_exits_2_naming_the_variable(
     (line,) = logged(capsys.readouterr().err)
     assert (line["level"], line["variable"], line["rule"]) == ("ERROR", "FYLGJA_STORE", "settings.missing")
     assert "FYLGJA_STORE" in line["message"]
+
+
+def test_a_lab_pool_that_is_no_network_exits_2_naming_the_variable(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("FYLGJA_LAB_POOL", "198.51.100.7/24")  # a host bit set
+    assert server.main([]) == 2
+    err = capsys.readouterr().err
+    (line,) = logged(err)
+    assert (line["level"], line["variable"], line["rule"]) == ("ERROR", "FYLGJA_LAB_POOL", "settings.missing")
+    assert "FYLGJA_LAB_POOL" in line["message"]
+    assert "198.51.100.7" not in err  # the value is in no log record
+    assert not Path(environ["FYLGJA_STORE"]).exists()
+
+
+def test_the_help_names_the_lab_pool(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--help"])
+    assert stopped.value.code == 0
+    assert "FYLGJA_LAB_POOL" in capsys.readouterr().out
+
+
+def test_the_help_says_the_packages_default_to_the_installs(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--help"])
+    assert stopped.value.code == 0
+    text = " ".join(capsys.readouterr().out.split())
+    assert "the packages this install carries" in text
+    assert "FYLGJA_STORE and FYLGJA_TOKENS, which are required" in text
+
+
+def test_the_help_cites_the_servers_page_at_the_installed_versions_tag(capsys: pytest.CaptureFixture[str]) -> None:
+    """A pip-installed user has no `docs/`: the help gives the page's URL at the tag of the version installed."""
+    with pytest.raises(SystemExit):
+        server.main(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    version = release.version("fylgja-core", "fylgja_core")
+    url = f"https://github.com/happypathnetworking/fylgja/blob/v{version}/docs/server.md"
+    assert re.search(re.escape(url) + r"(?![\w/])", text), "the URL of the page, whole"
+
+
+def test_a_server_given_no_packages_loads_the_shipped_ones(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("FYLGJA_PACKAGES")
+    made_drivers(monkeypatch)
+    results: list[packages.Loaded] = []
+    real = packages.load
+
+    def recording(dirs: Sequence[Path]) -> packages.Loaded:
+        results.append(real(dirs))
+        return results[-1]
+
+    monkeypatch.setattr(packages, "load", recording)
+    app, store = server.build_app(config.from_environ(os.environ))
+    store.close()
+    del app
+    (loaded,) = results
+    assert {"nokia_srlinux", "arista_eos"} <= set(loaded.platforms)
+    assert "ping" in loaded.probes
+
+
+def test_version_names_the_build_before_anything_is_read(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in [n for n in os.environ if n.startswith("FYLGJA_")]:
+        monkeypatch.delenv(name)
+    with pytest.raises(SystemExit) as stopped:
+        server.main(["--version"])
+    assert stopped.value.code == 0
+    out, err = capsys.readouterr()
+    assert (out, err) == (f"fylgja-core-server {release.build('fylgja-core', 'fylgja_core')}\n", "")
+
+
+def test_the_servers_build_is_the_release_build(environ: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> None:
+    endpoint = Endpoint(FakeS3("fylgja"))
+    monkeypatch.setattr(server, "S3", endpoint)
+    made_drivers(monkeypatch)
+    app, store = server.build_app(object_store(environ, "dev/core", Path("/etc/fylgja/s3-ca.pem")))
+    try:
+        with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as client:
+            assert client.get("/v1/version").json()["build"] == release.build("fylgja-core", "fylgja_core")
+    finally:
+        store.close()
 
 
 def test_python_run_optimised_exits_2_before_the_settings_are_read(
@@ -859,6 +945,23 @@ def test_the_application_answers_the_version_and_its_driver(environ: dict[str, s
     finally:
         store.close()
     assert [(d["name"], d["default"]) for d in drivers] == [("containerlab", True)]
+
+
+@pytest.mark.parametrize(("value", "given"), [("198.51.100.0/24", IPv4Network("198.51.100.0/24")), (None, None)],
+                         ids=["set", "unset"])
+def test_the_lab_pool_reaches_the_driver(
+    environ: dict[str, str], monkeypatch: pytest.MonkeyPatch, value: str | None, given: IPv4Network | None
+) -> None:
+    made: list[dict[str, Any]] = []
+
+    def make(name: str, **kw: Any) -> Driver:
+        made.append(kw)
+        return FakeDriver(name)
+
+    monkeypatch.setattr(registry, "make", make)
+    _, store = server.build_app(settings(environ if value is None else {**environ, "FYLGJA_LAB_POOL": value}))
+    store.close()
+    assert [kw["lab_pool"] for kw in made] == [given]
 
 
 def test_the_loop_follows_docker_events_through_the_stub_alone(environ: dict[str, str], tmp_path: Path) -> None:

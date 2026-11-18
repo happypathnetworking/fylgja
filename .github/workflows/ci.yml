@@ -19,6 +19,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
+      # make venv and make wheelcheck need uv on the PATH, at the version the root pyproject.toml requires; the action is pinned by the commit of its release. It fetches uv from Astral's mirror (`download-from-astral-mirror` defaults to true) and may use GitHub's cache (`enable-cache` is "auto"); nothing else is set.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.12.23'
       - run: make venv
       - run: make lint
       - run: make test

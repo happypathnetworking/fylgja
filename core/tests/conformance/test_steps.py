@@ -51,6 +51,7 @@ from conformance.reads import (
     holds,
     incarnations,
     needs_ceos,
+    reached,
     record_nodes,
     settled,
     stepped,
@@ -74,8 +75,14 @@ HOSTS = ("n1-loop-a", "n1-loop-b")
 NOT_STARTED = [{"probe": "n1-loop", "from": "a", "outcome": "not_started"},
                {"probe": "n1-loop", "from": "b", "outcome": "not_started"}]
 """A step's `loss` when the probe's hosts were just made: no burst ran before the step."""
-UNCHANGED_S = 2.0
-"""A step to the bundle the twin runs ends at `compiled`, touching nothing: within this, end to end."""
+UNCHANGED_S = {"here": 2.0, "away": 5.0}
+"""How long a step to the bundle the twin runs may take end to end, through the CLI, by where the
+core is reached: `here` a core on this host's loopback, `away` one reached over the network. The
+bound is a proxy: it times the CLI's round trips to the core and the core's reads and writes of
+its store, not the step's work. What the scenario promises is held by the run's phases, `compile`
+alone, its outcome `unchanged` at `compiled` and every node's incarnation kept. Readings, end to
+end: on the local harness 0.20 to 0.30 s (at most 0.15 of `here`); on the cluster's, the core
+deployed over its object store, 1.90 to 2.61 s (at most 0.52 of `away`)."""
 EOS_WAIT_S = 60.0
 """How long a test waits for EOS to list a port `connected`, from the step's end."""
 ETHERNET10 = "show interfaces Ethernet10 status"
@@ -234,14 +241,16 @@ def test_a_step_to_the_bundle_the_twin_runs_is_unchanged(harness: Harness, fylgj
     last = s.record["status"]["last_step"]
     print(f"[conformance] a step to the bundle it runs: exit {s.code} in {s.took_s:.2f}s, the run's phases "
           f"{sorted({e['phase'] for e in s.events})}", flush=True)
-    assert s.code == 0 and s.took_s < UNCHANGED_S
+    assert s.code == 0
+    assert {e["phase"] for e in s.events} == {"compile"}, "the run went past compile"
     assert (last["outcome"], last["phase"], last["from"], last["to"]) == ("unchanged", "compiled", bundle_id, bundle_id)
     assert s.verdict["status"] == "ok", s.verdict
     assert_settled_ready(harness, s.record, f"{STEP} after a step to the bundle it runs")
     assert s.record["status"]["bundle_id"] == bundle_id
-    assert {e["phase"] for e in s.events} == {"compile"}
     harness.audit_apply(STEP, s.since, 0)
     assert incarnations(harness, STEP) == kept == harness.nodes(STEP), "a node was touched"
+    bound = UNCHANGED_S[reached(harness.address)]
+    assert s.took_s < bound, f"{s.took_s:.2f}s end to end, the bound {bound}s"
 
 
 def test_a_dry_run_of_the_probe_moved_answers_its_changes_and_touches_nothing(

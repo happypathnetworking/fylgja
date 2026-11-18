@@ -437,7 +437,7 @@ class _Rehearsal:
         followed = self.core.follow(record, operations, progress=self._phase)
         if followed.gone:
             raise _Ended(self._deleted())
-        return followed.run, findings.decode(followed.run["verdict"])
+        return followed.run, findings.decode_answer(followed.run["verdict"])
 
     def _phase(self, line: str) -> None:
         """A phase `follow` reports, said, then the limit checked."""
@@ -446,7 +446,7 @@ class _Rehearsal:
 
     def _verify(self) -> Verdict:
         self._check()
-        return findings.decode(self.core.verify_twin(self.twin))
+        return findings.decode_answer(self.core.verify_twin(self.twin))
 
     def _refused_run(self, verdict: Verdict) -> dict[str, Any] | None:
         """The cause a create's or a step's run `rejected` gives where its refusal is the runtime's, as a dry run's

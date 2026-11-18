@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/platform-package-1.schema.json",
   "title": "Fylgja platform package 1",
-  "description": "What Fylgja must know of one network operating system that the runtime's kind does not already know. Written as YAML (packages/<id>.yaml), read by the compiler, the drivers' plan, the push, readiness, verify and the conformance suite.",
-  "$comment": "PLATFORM-LEVEL sections (id, versions, interfaces, push, readiness, gnmi, conformance, fidelity) are shared by every driver; what differs by runtime lives under runtime.<runtime>, and only runtime.containerlab exists now (both containerlab drivers read it; runtime.hardware arrives with that driver). A package states nothing a kind already provides: interface aliases, default logins and default configuration are the kind's. CROSS-FIELD RULES the core holds when it loads a package (POST /v1/packages:validate reports all of them in one pass): interface rule names unique (package.rule.name); exactly one management rule (package.management.rule); a template uses only placeholders its match captures (package.patterns.placeholders); every runtime.containerlab.rename entry names a data rule, and every data rule has one when alias is false (package.rename.coverage); a ranges key is a placeholder of match (package.ranges.placeholder). FIXED, not fields: the push is a replace with an explicit commit, the startup format is cli, the scheme is https, the gNMI encoding is json_ietf, and readiness is an authenticated request to the push transport. LOSSINESS is never declared: the driver's plan computes it from the rename rules.",
+  "description": "What Fylgja must know of one network operating system that the runtime's kind does not already know. Written as YAML, a file a platform (psp/<id>.yaml in this repository), read by the compiler, the drivers' plan, the push, readiness, verify and the conformance suite.",
+  "$comment": "PLATFORM-LEVEL sections (id, versions, interfaces, push, readiness, gnmi, conformance, fidelity) are shared by every driver; what differs by runtime lives under runtime.<runtime>, and only runtime.containerlab exists now (both containerlab drivers read it; runtime.hardware arrives with that driver). A package states nothing a kind already provides: interface aliases, default logins and default configuration are the kind's. CROSS-FIELD RULES the core holds when it loads a package (POST /v1/packages:validate reports all of them in one pass): interface rule names unique (package.rule.name); exactly one management rule (package.management.rule); a template uses only placeholders its match captures (package.patterns.placeholders); every runtime.containerlab.rename entry names a data rule, and every data rule has one when alias is false (package.rename.coverage); a ranges key is a placeholder of match (package.ranges.placeholder); version names unique (package.versions.name); every listed version has an image in runtime.containerlab.images, and every key there is a listed version's name (package.images.coverage); one version a package in this build, which runs the one listed, until a device can name the version it runs (package.versions.several). FIXED, not fields: the push is a replace with an explicit commit, the startup format is cli, the scheme is https, the gNMI encoding is json_ietf, and readiness is an authenticated request to the push transport. LOSSINESS is never declared: the driver's plan computes it from the rename rules.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -32,12 +32,10 @@
     "versions": {
       "type": "array",
       "minItems": 1,
-      "uniqueItems": true,
       "items": {
-        "type": "string",
-        "minLength": 1
+        "$ref": "#/$defs/version"
       },
-      "description": "Software versions the package was measured on, as prefixes; the conformance suite checks a booted node's version leaf against them."
+      "description": "The versions of the platform's software the package runs, each by its name; every other member of the package holds for each of them. Read by a runtime section's images, whose keys are these names: the driver's plan writes the image of the version the core runs. This build runs one version a package, the one listed, and refuses a second (rule package.versions.several)."
     },
     "credentials": {
       "type": "string",
@@ -82,7 +80,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "description": "The HTTPS port the push and readiness dial at the node's management address."
+          "description": "The HTTPS port the push and readiness dial at the node's management address; the clabernetes driver's plan declares it among each node's ports, so that the node's LoadBalancer serves it."
         },
         "timeout_s": {
           "type": "integer",
@@ -119,11 +117,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "description": "The gNMI port verify and the conformance suite dial at the node's management address."
+          "description": "The gNMI port verify dials at the node's management address; the clabernetes driver's plan declares it among each node's ports, so that the node's LoadBalancer serves it."
         },
         "tls": {
           "type": "boolean",
-          "description": "Whether verify and the conformance suite dial gNMI over TLS (the boot-time certificate accepted unverified) or plaintext."
+          "description": "Whether verify dials gNMI over TLS (the boot-time certificate accepted unverified) or plaintext."
         }
       },
       "description": "How a node's state is read; encoding is always json_ietf."
@@ -143,14 +141,13 @@
         },
         "version": {
           "$ref": "#/$defs/path",
-          "description": "The leaf holding the software version; the conformance suite matches it against versions."
+          "description": "The leaf holding the software version a node runs. No code reads it yet: its reader, the conformance suite's or verify's, comes with support for several versions of a package (D-102)."
         },
         "port": {
           "type": "object",
           "additionalProperties": false,
           "required": [
             "enabled",
-            "discovering",
             "neighbor"
           ],
           "properties": {
@@ -160,7 +157,7 @@
             },
             "discovering": {
               "$ref": "#/$defs/value_at",
-              "description": "The leaf and value saying LLDP runs on a port; verify asserts it before reading neighbours."
+              "description": "Optional: the leaf and value saying LLDP runs on a port. No code reads it: verify reads a port's neighbours without it, and a package may leave it out."
             },
             "neighbor": {
               "type": "object",
@@ -192,7 +189,7 @@
           "description": "Per-port reads; {node_name} renders the port's node name."
         }
       },
-      "description": "The gNMI paths verify and the conformance suite read on a booted node."
+      "description": "The gNMI paths of a booted node. verify reads host_name and, for each cabled port intent enables, port.enabled and port.neighbor. No code reads the other two: version, which every package gives, and port.discovering, which a package may leave out."
     },
     "fidelity": {
       "type": "object",
@@ -228,6 +225,21 @@
     }
   },
   "$defs": {
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "description": "The release's own text (24.7.1, 4.32.0.2F), unique in the package (rule package.versions.name); a runtime section's images name the version by it, as a key. Quoted in YAML, as a key and as a value: a bare 4.32 is a number."
+        }
+      },
+      "description": "One version of the platform's software that the package runs."
+    },
     "pattern": {
       "type": "string",
       "minLength": 1,
@@ -248,15 +260,15 @@
       "properties": {
         "path": {
           "$ref": "#/$defs/path",
-          "description": "The leaf verify reads."
+          "description": "The leaf the fact is read at. verify reads it for port.enabled; no code reads it for port.discovering, which is optional."
         },
         "value": {
           "type": "string",
-          "description": "What the leaf must read for verify's assertion to hold."
+          "description": "What the leaf must read for the fact to hold; verify asserts it for port.enabled."
         },
         "absent": {
           "type": "string",
-          "description": "The value verify takes an unreported leaf to mean (cEOS reports nothing while LLDP runs); without it nothing read fails."
+          "description": "The value an unreported leaf is taken to mean (cEOS reports nothing at port.discovering while LLDP runs); without it nothing read fails. verify applies it where it reads the leaf, for port.enabled; for port.discovering, which is optional, no code reads the leaf."
         }
       }
     },
@@ -344,7 +356,7 @@
         "ref": {
           "type": "string",
           "minLength": 1,
-          "description": "The image reference every measured value here was taken on; the driver's plan writes it into the rendered topology."
+          "description": "The image reference, of a platform's version or of a probe host; the driver's plan writes it into the rendered topology, and a running node's package is found by its kind and this reference."
         },
         "pull_secret": {
           "type": "string",
@@ -377,7 +389,7 @@
       "additionalProperties": false,
       "required": [
         "kind",
-        "image",
+        "images",
         "resources",
         "deploy_timeout_s",
         "destroy_timeout_s",
@@ -391,9 +403,12 @@
           "pattern": "^[a-z0-9_]+$",
           "description": "The containerlab kind; the plan of both containerlab drivers writes it into the topology."
         },
-        "image": {
-          "$ref": "#/$defs/image",
-          "description": "The node image and how it is acquired; read by the plan and by the local driver's presence check."
+        "images": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/image"
+          },
+          "description": "The node image of each version the package lists and how it is acquired, keyed by the version's name: every listed version has one, and no other key is held (rule package.images.coverage). Read by the plan, by the lookup of a running node's package and by the local driver's presence check."
         },
         "resources": {
           "type": "object",
@@ -419,16 +434,16 @@
         "deploy_timeout_s": {
           "type": "integer",
           "minimum": 1,
-          "description": "Measured bound on bringing this kind's nodes up, an image pull included; the apply phase fails with apply.timeout after it."
+          "description": "Measured bound on bringing this kind's nodes up, an image pull included. A driver bounds its apply by the largest of the bounds of the packages the twin's nodes use, and a minute; an apply that outlasts it is the driver's runtime failure, which the reconcile loop takes as transient: the phase's failed event, no finding, the run still in flight, and the apply made again after a backoff."
         },
         "destroy_timeout_s": {
           "type": "integer",
           "minimum": 1,
-          "description": "Measured bound on removing this kind's nodes; the destroy phase records destroy.timeout and leaves the twin unclean after it."
+          "description": "Measured bound on removing this kind's nodes. A driver bounds its destroy by the largest of the bounds of the packages the twin's nodes use, and a minute; a destroy that outlasts it is the driver's runtime failure, which the reconcile loop takes as transient: the phase's failed event, no finding, the twin's record kept, and the destroy made again after a backoff, finding what the one before left."
         },
         "alias": {
           "type": "boolean",
-          "description": "true when the kind accepts production interface names as endpoint aliases, so the plan emits them unchanged; false when it needs rename. Verified 2026-10-30: nokia_srlinux true (ethernet-L/P[/C] accepted, out-of-range names refused in post-deploy); ceos false in containerlab 0.79-0.82, whose pattern eth[1-9][\\w.]*$|et[1-9][\\w.]*$ is unanchored at the start, so a wrong name ending in et<digit> (\"Ethernet1\") is accepted and wires a port EOS never sees: the plan emits only rename output for such a kind, and conformance checks every link's port appears in the NOS."
+          "description": "true when the kind accepts production interface names as endpoint aliases, so the plan emits them unchanged; false when it needs rename. Verified 2026-10-30: nokia_srlinux true (ethernet-L/P[/C] accepted, out-of-range names refused in post-deploy); ceos false in containerlab 0.79-0.82, whose pattern eth[1-9][\\w.]*$|et[1-9][\\w.]*$ is unanchored at the start, so a wrong name ending in et<digit> (\"Ethernet1\") is accepted and wires a port EOS never sees: the plan emits only rename output for such a kind, and verify, which reads each enabled cabled port's admin state and neighbours on the node, fails a port the NOS does not have."
         },
         "rename": {
           "type": "array",
@@ -443,7 +458,7 @@
             "live",
             "restart"
           ],
-          "description": "The containerlab link-apply-mode both containerlab drivers write on every node of this kind at create (containerlab 0.79 and clabernetes 0.10.1 both take it; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30). Never changed on a running twin: on clabernetes a changed mode alters the pod spec of each node of this kind and replaces those pods, losing their pushes, and keeps the other device nodes' pods (verified on k3s v1.37.1+k3s1 with clabernetes 0.10.1, 2026-11-05), and a probe host's too [unverified: a probe host's pod under a device's mode change was not read]. live: a link added or removed on a port the node had at boot re-cables with no restart and the push kept, for SR Linux and for cEOS 4.32 alike. restart: the node's pod or container is restarted and re-pushed."
+          "description": "The containerlab link-apply-mode both containerlab drivers write on every node of this kind at create (containerlab 0.79 and clabernetes 0.10.1 both take it; verified on containerlab 0.79 and clabernetes 0.10.1, 2026-10-30). Never changed on a running twin: on clabernetes a changed mode alters the pod spec of each node of this kind and replaces those pods, losing their pushes, and keeps the other device nodes' pods (verified on k3s v1.37.1+k3s1 with clabernetes 0.10.1, 2026-11-05), and a probe host's too [unverified: a probe host's pod under a device's mode change was not read]. live: a link added or removed on a port the node had at boot re-cables with no restart and the push kept, for SR Linux and for cEOS 4.32 alike; on the clabernetes driver a recabled node may still be replaced where a node added or removed since it was made moved its management address. restart: the node's pod or container is restarted and re-pushed."
         },
         "hot_add_ports": {
           "type": "boolean",

@@ -120,7 +120,7 @@ secrets` lists both).
 
 | File | Secret | Holds |
 |---|---|---|
-| `tokens` | `fylgja-tokens` | The token file `FYLGJA_TOKENS` names, made as [CONTRIBUTING.md](../CONTRIBUTING.md#running-the-core) says: a token's hash and its principal a line, never a token |
+| `tokens` | `fylgja-tokens` | The token file `FYLGJA_TOKENS` names, made as [the server page](../docs/server.md#the-token-file) says: a token's hash and its principal a line, never a token |
 | `credentials.env` | `fylgja-credentials` | An env file of the credential provider's variables: each package's node login, and the pull credential's `_REGISTRY`, `_USERNAME` and `_PASSWORD` |
 | `s3.env` | `fylgja-s3` | An env file of `FYLGJA_S3_ACCESS_KEY` and `FYLGJA_S3_SECRET_KEY`: the core's keys to its store, and the gateway's root keys |
 | `tls.crt`, `tls.key` | `fylgja-tls` | The pair the server ends TLS with ([D-063](../design/decisions.md#d-063)), signed by the site's CA as the registry's certificate is, the certificate naming the Service's address as an IP SAN; the key unencrypted. The CA's certificate, which a client's `FYLGJA_API_CA` names, must carry a key usage allowing certificate signing: Python's client verifies strictly, and refuses a CA without one ([CONTRIBUTING.md](../CONTRIBUTING.md#running-the-core-on-a-cluster)) |

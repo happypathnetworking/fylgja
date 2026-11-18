@@ -13,6 +13,7 @@ module alone, the driver's one module that imports lightkube, over the client
 from __future__ import annotations
 
 from collections.abc import Mapping
+from ipaddress import IPv4Network
 from pathlib import Path
 
 from fylgja_core import clabernetes, containerlab, kubeapi
@@ -56,13 +57,16 @@ def make(
     credentials: Provider,
     clabernetes_namespace: str | None = None,
     pod_cidr: str | None = None,
+    lab_pool: IPv4Network | None = None,
 ) -> Driver:
     """The driver `name`, made from what it needs. The containerlab driver keeps its working
-    files under `root`, the store's directory. The clabernetes driver reaches the cluster
-    through lightkube's client, from the service account in a pod and from `KUBECONFIG` off the
-    cluster, with no request made until it acts; it makes its pull secrets from `credentials`,
-    and reserves clabernetes' namespace `clabernetes_namespace`, the pod CIDR `pod_cidr` and the
-    core's own namespace when the core runs as a pod (D-057).
+    files under `root`, the store's directory, and takes each lab's subnet from `lab_pool` where
+    one is given and from its own default otherwise (D-103); the clabernetes driver takes no
+    pool. The clabernetes driver reaches the cluster through lightkube's client, from the
+    service account in a pod and from `KUBECONFIG` off the cluster, with no request made until
+    it acts; it makes its pull secrets from `credentials`, and reserves clabernetes' namespace
+    `clabernetes_namespace`, the pod CIDR `pod_cidr` and the core's own namespace when the core
+    runs as a pod (D-057).
 
     A value the driver needs that is not given is a `ValueError`; a cluster the core cannot
     reach is `Unmakeable`, naming the variable at fault; a name this core does not serve is a
@@ -71,7 +75,7 @@ def make(
     if served == containerlab.NAME:
         if root is None:
             raise ValueError("the containerlab driver needs a root, the store's directory")
-        return ContainerlabDriver(root)
+        return ContainerlabDriver(root) if lab_pool is None else ContainerlabDriver(root, pool=lab_pool)
     if served == clabernetes.NAME:
         if clabernetes_namespace is None or pod_cidr is None:
             raise ValueError("the clabernetes driver needs clabernetes' namespace and the pod CIDR")

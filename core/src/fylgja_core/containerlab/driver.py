@@ -7,12 +7,14 @@ pure tier stands a fake in for both. The driver's working files live under
 `<root>/containerlab/<twin>/`, `root` being the directory the server gives it.
 
 `admit` reserves what `plan` binds: a /24 of the pool that no Docker network and no other
-twin's allocation holds, and writes the twin's demand into the allocation. It refuses a twin the
-host cannot fit (`admission.capacity`: the pool exhausted, the demand above the host's free room less
-the demand of twins admitted whose nodes are not yet up, or a node above the host's room, D-073), and one
-whose account-gated image is not on the host (`admission.image.absent`), since locally a
-`pull_secret` is a presence check and the image is never pulled (D-015). An ungated image is
-containerlab's to pull at deploy.
+twin's allocation holds, and writes the twin's demand into the allocation. The pool is the one
+the driver is made with, the server's setting `FYLGJA_LAB_POOL` where it is set (D-103), and a
+pool with no /24 free is refused naming each Docker network that holds part of it and that
+setting (`pool.refusal`). It refuses a twin the host cannot fit (`admission.capacity`: the pool
+exhausted, the demand above the host's free room less the demand of twins admitted whose nodes are
+not yet up, or a node above the host's room, D-073), and one whose account-gated image is not on
+the host (`admission.image.absent`), since locally a `pull_secret` is a presence check and the
+image is never pulled (D-015). An ungated image is containerlab's to pull at deploy.
 
 `apply` writes the deployment's files, each checked against its hash, into the twin's
 directory and deploys the topology: on a running lab that is containerlab's own reconcile,
@@ -59,7 +61,14 @@ it and no container it deploys, then destroys (recovery rule 2, D-019, D-023), w
 network left alone, as a deploy refused at its start leaves it, is removed with `docker`.
 containerlab's `destroy -t` removes only the nodes its file names, so a container of the lab
 the deployment destroyed does not name (one a step's deploy, cut short, added) is removed with
-`docker` first (D-055).
+`docker` first (D-055). A deploy the driver killed (its caller cancelled, as the loop cancels an
+apply for a deletion, or its budget run out) leaves the creates it had sent running in the
+daemon, which lists a container only once it has made it, after the kill (verified-facts.md,
+2026-11-14). So the twin's next teardown does not trust one empty listing: it lists the lab
+again every `SETTLE_POLL_S` until the listing has been empty for `SETTLE_WINDOW_S`, removing by
+name each container that appears, then removes the network again (`_settle`). The driver holds
+which twins it killed a deploy of in memory alone, until the teardown has settled or a later
+deploy of the twin returns 0; a destroy of any other twin is unchanged.
 
 `events` follows `docker events` for the containers that carry the lab label, a start, a die
 or a destroy (`EVENTS_ARGV`), as one long-lived command under the allow-listed environment
@@ -78,7 +87,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import ipaddress
 import json
 import logging
 import os
@@ -146,6 +154,15 @@ NEVER_STARTED = "0001-01-01T00:00:00Z"
 
 STRAY_POLL_S = 1.0
 """How often `apply` and `destroy` look again for a stray deploy of the twin to have ended."""
+
+SETTLE_POLL_S = 0.5
+"""How often the teardown after a killed deploy lists the lab again (`_settle`)."""
+
+SETTLE_WINDOW_S = 5.0
+"""How long the lab's listing must stay empty before the teardown after a killed deploy ends (`_settle`). A first
+value, read on Docker 29.8.1 (verified-facts.md, 2026-11-14): a container the daemon made after its client was
+killed was listed 0.1 to 0.6 s after the kill, and in a cut of a create it was not yet listed 0.35 s after its
+`Created`."""
 
 EVENTS_ARGV = ("docker", "events", "--filter", "type=container", "--filter", "label=containerlab", "--filter",
                "event=start", "--filter", "event=die", "--filter", "event=destroy", "--format", "{{json .}}")
@@ -227,7 +244,8 @@ class ContainerlabDriver:
     deploy` processes running over a topology file (`stray_deploys`), and `stray_poll_s` is how
     often `apply` and `destroy` ask it again; `follower` yields a long-lived command's lines, as
     `cli.follow` does, and `backoff` is how long `events` waits before it follows `docker events`
-    again (`events_backoff`). All are injectable, for the pure tier."""
+    again (`events_backoff`); `clock` and `sleep` are the time of the stray wait and of the settle
+    after a killed deploy (`_settle`). All are injectable, for the pure tier."""
 
     name = containerlab.NAME
 
@@ -246,6 +264,8 @@ class ContainerlabDriver:
         stray_poll_s: float = STRAY_POLL_S,
         follower: Callable[..., AsyncGenerator[str]] = cli.follow,
         backoff: Callable[[float | None], float] = events_backoff,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self.root = Path(root).absolute()
         self.pool = pool
@@ -259,6 +279,10 @@ class ContainerlabDriver:
         self._stray_poll_s = stray_poll_s
         self._follow = follower
         self._backoff = backoff
+        self._clock = clock
+        self._sleep = sleep
+        # The twins whose `containerlab deploy` this driver killed and whose teardown has not yet settled (`_settle`).
+        self._killed: set[str] = set()
         # The deploy lock and the loop it was made on (`_deploy_lock`): one `containerlab deploy` at a time (D-074).
         self._deploying: tuple[asyncio.AbstractEventLoop, asyncio.Lock] | None = None
         # The twins whose reserved allocation records no demand, and those whose demand will not read, logged once each.
@@ -356,7 +380,9 @@ class ContainerlabDriver:
     ) -> Allocation | Refusal:
         """The first free /24 of the pool as the twin's allocation, with the demand it reserves of the
         host's room, or a refusal naming every shortfall (`admission.capacity`) or every absent gated
-        image (`admission.image.absent`).
+        image (`admission.image.absent`). A pool with no /24 free is the first shortfall, in
+        `pool.refusal`'s words: the Docker networks that hold part of it, by name and subnet, and
+        the setting that moves it (D-103).
 
         A create must fit the reading (`capacity`) in its sum, and each node must fit the host. With
         `held`, the deployment a stepping twin has applied, the answer is `held.allocation` with the
@@ -374,11 +400,12 @@ class ContainerlabDriver:
         shortfalls = []
         subnet = None
         if held is None:
-            taken = await self._docker_subnets() + [IPv4Network(a["mgmt_subnet"]) for a in reserved]
+            networks = await self._docker_networks()
+            taken = [docker_subnet for _, docker_subnet in networks]
+            taken += [IPv4Network(a["mgmt_subnet"]) for a in reserved]
             subnet = pool.choose(self.pool, taken)
             if subnet is None:
-                shortfalls.append(
-                    f"The pool {self.pool} has no /24 that neither a Docker network nor another twin holds.")
+                shortfalls.append(pool.refusal(self.pool, pool.holders(self.pool, networks)))
         demand = clab_plan.demand(manifest, platforms, probe_packages)
         reading = await self.capacity(reserved)
         if held is None:
@@ -420,7 +447,8 @@ class ContainerlabDriver:
     ) -> None:
         """Write the deployment's files under the twin's directory and deploy its topology, with
         `--reconfigure` when asked; `ValueError`, before any write or command, for files that are
-        not the deployment's or a node no given package runs.
+        not the deployment's, and `Unpackaged`, before any write, command or wait, for the first
+        node of the topology, in its order, that no given package runs.
 
         Under containerlab's live link mode a port added after boot to a node whose kind cannot
         add one comes up in Linux and the node never lists it, so before the deploy the container
@@ -445,9 +473,11 @@ class ContainerlabDriver:
 
         The order is: wait for a stray deploy, take the deploy lock, read the previous topology,
         compute the changes, remove each hot-add container, write the new files, deploy, release
-        the lock. The on-disk topology is the record of what the lab was built from, so it moves
-        only once the containers that must go are gone: a core killed
-        before the write leaves the old topology, the retry computes the same hot-add, and the
+        the lock. A deploy the runner killed, cancelled or past its budget, is remembered for the
+        twin's next `destroy`, which settles (`_settle`), until a deploy of the twin returns 0; a
+        deploy that fails with its own status changes nothing of it. The on-disk topology is the record of
+        what the lab was built from, so it moves only once the containers that must go are gone: a
+        core killed before the write leaves the old topology, the retry computes the same hot-add, and the
         removal tolerates the containers already gone. Written first, a kill would leave a retry
         that sees no hot-add and deploys the port into a container never recreated.
 
@@ -479,8 +509,16 @@ class ContainerlabDriver:
                                    "since it gains a port its kind cannot add after boot")
             directory = self._write(twin, files)
             argv = ["containerlab", "deploy", "-t", str(directory / TOPOLOGY)]
-            await self._run([*argv, "--reconfigure"] if reconfigure else argv, timeout_s=budget, cwd=directory,
-                            log=directory / DEPLOY_LOG)
+            try:
+                await self._run([*argv, "--reconfigure"] if reconfigure else argv, timeout_s=budget, cwd=directory,
+                                log=directory / DEPLOY_LOG)
+            except BaseException as e:
+                # The runner kills the deploy when its caller is cancelled and when its budget runs out (`cli.run`):
+                # the creates it had sent run on in the daemon, so the twin's next teardown settles (`_settle`).
+                if not isinstance(e, Exception) or (isinstance(e, cli.CommandFailed) and e.returncode == cli.TIMED_OUT):
+                    self._killed.add(twin)
+                raise
+            self._killed.discard(twin)  # a deploy that returned 0 made the lab whole: its teardown need not settle
 
     async def inspect(self, twin: str) -> Inspection:
         """The twin's containers, by node name, `present` when there is one; else `residue` when
@@ -519,7 +557,9 @@ class ContainerlabDriver:
         """Remove everything the twin holds: its containers, host entries, ssh config and
         management network, and the twin's directory. Root-owned residue with no container is
         deployed, then destroyed (rule 2); nothing found is nothing done. `ValueError`, before
-        any command, for files that are not the deployment's.
+        any command, for files that are not the deployment's, and `Unpackaged`, before any
+        command or wait, for the first node of the topology, in its order, that no given package
+        runs: the destroy's budget is its packages', so the lab is left as it is (D-102).
 
         Before anything else, a stray `containerlab deploy` of the twin's topology is waited for,
         as `apply` waits for one, within the deploy's budget: a core killed during a deploy and a
@@ -533,11 +573,21 @@ class ContainerlabDriver:
         It never takes the deploy lock, so it never waits for another twin's deploy: a destroy
         beside one is D-055's (D-074). Rule 2's deploy is an `apply`, and takes the lock as any does.
 
-        A command that fails (the destroy, rule 2's deploy, or the network's removal) raises
-        `CommandFailed`, logged at WARNING, and leaves the rest undone: the next destroy finds
-        what is left and goes on from there. A twin's directory that cannot be removed, such as a root-owned lab
-        directory containerlab left, is logged at WARNING and left, so that it never wedges
-        a destroy."""
+        After a deploy of the twin this driver killed, the teardown ends with `_settle`, bounded by
+        the destroy's budget, and the network's removal once more: the daemon may make a container
+        the kill's listing missed. The kill is forgotten once that has passed, or once a later
+        deploy of the twin returns 0, so a destroy that fails settles again when it is retried. The
+        destroy reads the mark before rule 2's deploy and settles on that reading, though that
+        deploy's return clears it: a late container its topology does not name is left by
+        containerlab's destroy.
+
+        A command that fails (the destroy, rule 2's deploy, the network's removal, or the settle's
+        listing or removal of a container) raises `CommandFailed`, logged at WARNING, and leaves the
+        rest undone: the next destroy finds what is left and goes on from there. A lab the settle
+        still finds containers in once the destroy's budget has passed is `DriverFailed`, not
+        logged here, as a stray deploy that outlives its budget is. A twin's directory that cannot
+        be removed, such as a root-owned lab directory containerlab left, is logged at WARNING and
+        left, so that it never wedges a destroy."""
         _check_files(deployment, files)
         twin = deployment.twin
         budget = destroy_budget(files, platforms, probe_packages)
@@ -546,6 +596,7 @@ class ContainerlabDriver:
         inspection = await self.inspect(twin)
         lab = inspection.state == "present"
         named = set(yaml.safe_load(files[TOPOLOGY])["topology"]["nodes"])
+        killed = twin in self._killed  # read before rule 2's deploy, whose return of 0 clears it
         try:
             if inspection.state == "residue" and self._root_owned_residue(twin):
                 _log.info("destroy %s: residue and no container: deploy, then destroy (D-023)", twin)
@@ -560,6 +611,11 @@ class ContainerlabDriver:
                                 timeout_s=budget, cwd=directory)
             if inspection.state != "absent" and await self._network_exists(twin):
                 await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
+            if killed:
+                await self._settle(twin, budget)
+                if await self._network_exists(twin):
+                    await self._run(["docker", "network", "rm", f"clab-{twin}"], timeout_s=DOCKER_TIMEOUT_S)
+                self._killed.discard(twin)
         except cli.CommandFailed as e:
             _log.warning("destroy %s failed, and the next destroy finds what is left: %s", twin, e)
             raise
@@ -686,13 +742,47 @@ class ContainerlabDriver:
             return
         _log.info("%s %s: a stray deploy of %s is still running (pid %s): waiting for it to end before %s",
                   operation, twin, twin, ", ".join(map(str, pids)), before)
-        deadline = time.monotonic() + budget
+        deadline = self._clock() + budget
         while pids:
-            if time.monotonic() >= deadline:
+            if self._clock() >= deadline:
                 raise DriverFailed(f"a stray deploy of {twin} did not end within {budget:g}s "
                                    f"(pid {', '.join(map(str, pids))})")
-            await asyncio.sleep(self._stray_poll_s)
+            await self._sleep(self._stray_poll_s)
             pids = self._strays(str(topology))
+
+    async def _settle(self, twin: str, budget: float) -> None:
+        """Return once the lab's listing (`docker ps -a` by its label, as `inspect` lists it) has been empty for
+        `SETTLE_WINDOW_S`, listing it every `SETTLE_POLL_S`; each container a listing finds is removed by name
+        (`_remove`) and the window starts again at the next empty listing. Logged once at INFO. `DriverFailed` once
+        `budget` seconds have passed with the lab still listing containers.
+
+        The teardown after a deploy this driver killed: the creates containerlab had sent run on in the daemon, which
+        lists a container only once it has made it, after the kill, so one empty listing does not show the lab gone
+        (verified-facts.md, 2026-11-14). Such a container is `Created` and was never started: it holds no endpoint, host
+        entry or ssh config, so `docker rm -f` removes all of it."""
+        _log.info("destroy %s: its deploy was killed, so the daemon may still make its containers: the lab is listed "
+                  "until it has been empty for %gs", twin, SETTLE_WINDOW_S, **logs.fields(twin=twin))
+        deadline = self._clock() + budget
+        empty_since: float | None = None
+        while True:
+            names = sorted((await self._run(
+                ["docker", "ps", "-a", "--filter", f"label=containerlab={twin}", "--format", "{{.Names}}"],
+                timeout_s=DOCKER_TIMEOUT_S)).split())
+            now = self._clock()
+            if not names:
+                if empty_since is None:
+                    empty_since = now
+                if now - empty_since >= SETTLE_WINDOW_S:
+                    return
+            elif now >= deadline:
+                raise DriverFailed(f"the lab {twin} still lists containers {budget:g}s after its teardown: "
+                                   f"{', '.join(names)}")
+            else:
+                empty_since = None
+                for handle in names:
+                    await self._remove("destroy", twin, handle, handle, "since the daemon made it after the deploy "
+                                       "was killed")
+            await self._sleep(SETTLE_POLL_S)
 
     async def _remove(self, operation: str, twin: str, node: str, handle: str, why: str) -> None:
         """`docker rm -f` the node's container, `handle` (the name `inspect` read under the lab's
@@ -748,20 +838,15 @@ class ContainerlabDriver:
             return False
         return True
 
-    async def _docker_subnets(self) -> list[IPv4Network]:
-        """Every IPv4 subnet a Docker network on the host holds."""
+    async def _docker_networks(self) -> list[tuple[str, IPv4Network]]:
+        """Every Docker network on the host with an IPv4 subnet: its name with each such subnet it
+        holds, a pair a subnet, as `pool.networks` reads Docker's answer to `pool.FORMAT`. A
+        network with none, as `host` and `none`, is not among them."""
         ids = (await self._run(["docker", "network", "ls", "--format", "{{.ID}}"], timeout_s=DOCKER_TIMEOUT_S)).split()
         if not ids:
             return []
-        configs = await self._run(["docker", "network", "inspect", "--format", "{{json .IPAM.Config}}", *ids],
-                                  timeout_s=DOCKER_TIMEOUT_S)
-        subnets = []
-        for line in configs.splitlines():  # one network's config per line: a list, or null for none
-            for config in (json.loads(line) if line.strip() else None) or []:
-                network = ipaddress.ip_network(config["Subnet"], strict=False) if config.get("Subnet") else None
-                if isinstance(network, IPv4Network):
-                    subnets.append(network)
-        return subnets
+        return pool.networks(await self._run(["docker", "network", "inspect", "--format", pool.FORMAT, *ids],
+                                             timeout_s=DOCKER_TIMEOUT_S))
 
     async def _image_present(self, ref: str) -> bool:
         """Whether Docker holds the image `ref`; a hung `docker` is a driver error, not an absence."""
@@ -838,8 +923,8 @@ def _sections(
 ) -> list[platform_package.Containerlab | probe_package.Containerlab]:
     """The containerlab section of each package a node of the topology uses: a platform's by
     the node's kind and image, a probe package's by a linux node's image. The deployment does
-    not name its packages, and its topology, the plan's render, does. `ValueError` for a node
-    no given package runs."""
+    not name its packages, and its topology, the plan's render, does. `Unpackaged` for the
+    first node, in the topology's order, that no given package runs."""
     used: list[platform_package.Containerlab | probe_package.Containerlab] = []
     for name, node in yaml.safe_load(files[TOPOLOGY])["topology"]["nodes"].items():
         used += clab_changes.sections_of(name, node, platforms, probe_packages)
@@ -884,7 +969,7 @@ def _images(
     order, then the probe formats."""
     used = sorted({node.platform for node in manifest.nodes})
     formats = sorted({probe.format for probe in manifest.probes})
-    return [(p, platforms[p].runtime.containerlab.image) for p in used] + [
+    return [(p, platform_package.image(platforms[p])) for p in used] + [
         (f, probe_packages[f].runtime.containerlab.image) for f in formats]
 
 

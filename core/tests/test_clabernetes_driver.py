@@ -31,8 +31,8 @@ import pytest
 import yaml
 from aio import bounded, cancelled, closed
 from fake_kube import FakeKube, undecodable
-from fakes import FakeDriver, FakeReader, fake_push, fake_ready
-from test_containerlab_driver import apply_hot_add
+from fakes import FakeDriver, FakeReader, fake_push, fake_ready, with_image
+from test_containerlab_driver import PING_MOVED, SRL_MOVED, apply_hot_add
 
 from fylgja_core import blueprint, clabernetes, compiler, credentials, logs, platform_package, probe_package
 from fylgja_core.bundle import Manifest
@@ -48,6 +48,7 @@ from fylgja_core.clabernetes.driver import (
     RENEWAL_WINDOW_S,
     RENEWALS,
     RULE_NAMESPACE,
+    SETTLE_WINDOW_S,
     ClabernetesDriver,
     _current,
     deploy_budget,
@@ -67,9 +68,12 @@ from fylgja_core.driver import (
     NodeState,
     Planned,
     Refusal,
+    Unpackaged,
     events_backoff,
 )
 from fylgja_core.local_store import LocalStore
+from fylgja_core.platform_package import PlatformPackage
+from fylgja_core.probe_package import ProbePackage
 from fylgja_core.reconcile import RESTORE_PRINCIPAL, Reconciler
 from fylgja_core.twin_record import Spec, Status, TwinRecord
 from fylgja_core.verify import Verifier
@@ -1181,7 +1185,7 @@ def test_a_topology_on_the_cluster_the_comparison_cannot_read_fails_the_apply_na
     definition["containerlab"] = definition["containerlab"].replace("registry.example:5000/lab/", "elsewhere.example/")
     applied = len(fake.annotations)
     with pytest.raises(DriverFailed, match=re.escape(f"the Topology {NS}/t the cluster holds cannot be compared: "
-                                                     "ValueError: no package given runs the node e1 (ceos, "
+                                                     "Unpackaged: no package given runs the node e1 (ceos, "
                                                      "elsewhere.example/ceos:4.32.0.2F)")):
         apply(fake, p)
     assert fake.annotations[applied:] == []
@@ -1460,6 +1464,175 @@ def test_destroy_refuses_an_allocation_whose_namespace_is_not_the_twins_before_a
     with pytest.raises(ValueError, match="the deployment's namespace None is not the twin t's"):
         asyncio.run(driver(fake).destroy(unnamed, p.files, PLATFORMS, PROBES))
     assert fake.calls == []
+
+
+@pytest.mark.parametrize(("name", "allocation", "platforms", "probes", "unrun"), [
+    ("three-node", BARE, SRL_MOVED, PROBES, ("n1", "nokia_srlinux", "ghcr.io/nokia/srlinux:24.7.1")),
+    ("three-node-probed", BARE, PLATFORMS, PING_MOVED,
+     ("n1-loop-a", "linux", PROBES["ping"].runtime.containerlab.image.ref)),
+    # A gated node is written under its registry's prefix, which a package whose pull secret moved no longer writes.
+    ("mixed", ADMITTED, {**PLATFORMS, "arista_eos": with_image(PLATFORMS["arista_eos"], pull_secret="other")}, PROBES,
+     ("e1", "ceos", "registry.example:5000/lab/ceos:4.32.0.2F")),
+], ids=["device", "probe-host", "gated"])
+def test_destroy_meets_a_node_no_given_package_runs_before_any_call(
+    name: str, allocation: Allocation, platforms: Mapping[str, PlatformPackage], probes: Mapping[str, ProbePackage],
+    unrun: tuple[str, str, str],
+) -> None:
+    fake = FakeKube()
+    p = planned(name, allocation)
+    with pytest.raises(Unpackaged) as met:
+        asyncio.run(driver(fake).destroy(p.deployment, p.files, platforms, probes))
+    assert (met.value.node, met.value.kind, met.value.image) == unrun
+    assert fake.calls == []
+
+
+# A destroy after an apply cancelled: the API may make the Namespace whose request the cancel cut.
+
+OWNED = {"fylgja.owner": "core", "fylgja.twin": "t"}
+
+
+class Cut(FakeKube):
+    """`FakeKube` whose Namespace's apply, recorded, never returns while `holding`: an apply is
+    cancelled there, at its namespace's create, and the test makes the namespace as the API would."""
+
+    holding = True
+
+    async def apply(self, obj: Mapping[str, Any]) -> None:
+        if obj["kind"] == "Namespace" and self.holding:
+            self._call("apply", "Namespace", None, obj["metadata"]["name"])
+            await asyncio.Event().wait()
+        await super().apply(obj)
+
+
+async def cut_at_the_namespace(d: ClabernetesDriver, fake: Cut, p: Planned) -> None:
+    """Start `p`'s apply by `d` and cancel it once its Namespace's apply is sent."""
+    task = asyncio.create_task(d.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    while ("apply", "Namespace", None, NS) not in fake.calls:
+        await asyncio.sleep(0)
+    await cancelled(task)
+
+
+def namespace_reads(fake: FakeKube, mark: int) -> int:
+    return sum(1 for c in fake.calls[mark:] if c == ("namespace", NS))
+
+
+def test_a_destroy_after_an_apply_cancelled_at_its_namespace_deletes_the_namespace_made_after_its_first_read(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        fake.at(1.0, lambda: fake.add_namespace(NS, OWNED))  # the cut create, committed after the first read
+        await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    mark = len(fake.calls)
+    with caplog.at_level(logging.INFO, logger="fylgja.clabernetes"):
+        bounded(body)
+    assert ("delete_namespace", NS) in fake.calls[mark:]
+    assert NS not in fake.namespaces
+    assert [m for m in caplog.messages if m.startswith("destroy t")] == [
+        f"destroy t: its apply was cancelled, so the API may still make the namespace {NS}: it is read until "
+        f"{SETTLE_WINDOW_S:g}s have passed", f"destroy t: deleted the namespace {NS}",
+        f"destroy t: the namespace {NS} is gone"]
+
+
+def test_a_destroy_after_an_apply_cancelled_ends_once_the_window_has_passed_with_no_namespace_and_forgets_it() -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+    start, mark = 0.0, 0
+
+    async def body() -> None:
+        nonlocal start, mark
+        await cut_at_the_namespace(d, fake, p)
+        start, mark = fake.now, len(fake.calls)
+        await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    assert SETTLE_WINDOW_S <= fake.now - start < SETTLE_WINDOW_S + POLL_S
+    assert namespace_reads(fake, mark) == 1 + -(-SETTLE_WINDOW_S // POLL_S)  # the first, then one each poll
+    assert not any(c[0] == "delete_namespace" for c in fake.calls[mark:])
+    again = len(fake.calls)
+    asyncio.run(d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert fake.calls[again:] == [("namespace", NS)]
+
+
+def test_a_destroy_of_a_twin_whose_apply_was_not_cancelled_reads_the_namespace_once() -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        fake.holding = False
+        await d.apply(p.deployment, p.files, PLATFORMS, PROBES)  # a whole apply clears what the cancel marked
+        await fake.delete_namespace(NS)
+        await fake.sleep(0)
+
+    bounded(body)
+    assert NS not in fake.namespaces
+    mark = len(fake.calls)
+    asyncio.run(d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert fake.calls[mark:] == [("namespace", NS)]
+    other = Cut()
+    asyncio.run(driver(other).destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    assert other.calls == [("namespace", NS)]
+
+
+def second_destroy_reads(d: ClabernetesDriver, fake: FakeKube, p: Planned) -> int:
+    """The namespace reads a destroy of `p`'s twin makes now, the namespace absent: one if the twin is unmarked,
+    more if it is settled."""
+    fake.namespaces.pop(NS, None)
+    mark = len(fake.calls)
+    asyncio.run(d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+    return namespace_reads(fake, mark)
+
+
+def test_a_destroy_that_found_the_namespace_made_late_and_saw_it_gone_clears_the_mark() -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        fake.at(1.0, lambda: fake.add_namespace(NS, OWNED))
+        await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    assert NS not in fake.namespaces
+    assert second_destroy_reads(d, fake, p) == 1
+
+
+@pytest.mark.parametrize("call", ["delete_namespace", "namespace"])
+def test_a_destroy_that_raises_after_the_settle_keeps_the_mark(call: str) -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        fake.at(1.0, lambda: fake.add_namespace(NS, OWNED))
+        # The settle's read finds the namespace; the failure is the delete's, or the read that waits for it gone.
+        fake.fail[call] = [KubeFailed(f"{call}: the cluster did not answer", None)] if call == "delete_namespace" \
+            else [None, None, None, KubeFailed("namespace: the cluster did not answer", None)]
+        with pytest.raises(DriverFailed):
+            await d.destroy(p.deployment, p.files, PLATFORMS, PROBES)
+
+    bounded(body)
+    assert second_destroy_reads(d, fake, p) > 1
+
+
+def test_a_destroy_cancelled_during_its_settle_keeps_the_mark() -> None:
+    fake, p = Cut(), planned("three-node")
+    d = driver(fake)
+
+    async def body() -> None:
+        await cut_at_the_namespace(d, fake, p)
+        task = asyncio.create_task(d.destroy(p.deployment, p.files, PLATFORMS, PROBES))
+        while fake.calls.count(("namespace", NS)) < 2:  # the first read, then the settle's first
+            await asyncio.sleep(0)
+        await cancelled(task)
+
+    bounded(body)
+    assert second_destroy_reads(d, fake, p) > 1
 
 
 def test_exec_runs_the_argument_vector_in_the_nodes_pod_and_answers_a_non_zero_status_as_it_is() -> None:

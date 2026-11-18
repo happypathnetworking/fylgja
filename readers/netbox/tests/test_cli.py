@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 import pytest
 from fake import ROOT, TEXT, THREE_NODE, FakeSource, listing, three_node
-from fylgja_core import blueprint
+from fylgja_core import blueprint, release
 from fylgja_core.findings import Finding
 
 from fylgja_netbox import NetBoxError, cli, transport
@@ -122,6 +122,11 @@ def configured(said: Said) -> list[str]:
 
 def branched(source: FakeSource, branch: Branch = BRANCH) -> None:
     source.held_branches = listing("netbox_branching.branch", [branch])
+
+
+def test_version_names_the_version_and_the_commit(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["--version"]) == 0
+    assert capsys.readouterr() == (f"fylgja-netbox {release.build('fylgja-netbox', 'fylgja_netbox')}\n", "")
 
 
 def test_read_writes_the_blueprint_and_prints_its_id(run: Command, tmp_path: Path) -> None:

@@ -9,7 +9,9 @@ is None, and a document member whose name is not a Python name is declared with
 Each format module follows one pattern: `validate(doc)` reports every problem in one pass
 (Constitution III), the version first, then the schema, then the rules the schema cannot
 state, each with a stable rule id and a JSON pointer; `decode(doc)` validates and builds the
-model type, or raises `Rejected`; `load(path)` reads a file and decodes it.
+model type, or raises `Rejected`; `load(path)` reads a file and decodes it. Findings and problem,
+which a client decodes from what the core answers, have `decode_answer(doc)` too: `decode` with a
+member the schema does not name passed over (`answer_problems`, D-105).
 """
 
 from __future__ import annotations
@@ -72,6 +74,13 @@ def schema_problems(name: str, doc: Any, rule: str, package: str = "fylgja_core"
     """Every violation of the schema `name` (a file stem among the core's formats and
     `package`'s), sorted and unique, each under `rule` at its pointer."""
     errors = schemas.validator(name, package).iter_errors(doc)
+    return sorted({Problem(pointer(e.absolute_path), rule, e.message) for e in errors})
+
+
+def answer_problems(name: str, doc: Any, rule: str, package: str = "fylgja_core") -> list[Problem]:
+    """`schema_problems` of an answer of the core's, a member its schema does not name passed over
+    (`schemas.answer_validator`, D-105)."""
+    errors = schemas.answer_validator(name, package).iter_errors(doc)
     return sorted({Problem(pointer(e.absolute_path), rule, e.message) for e in errors})
 
 

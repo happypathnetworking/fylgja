@@ -3,11 +3,19 @@
 Configuration and credentials come from `FYLGJA_*` variables, never a file the core reads
 for itself. A variable that is missing or malformed is refused by name: a message names the
 variable, never a value (Constitution X). A variable a driver needs (the registry says which)
-is required when it is the driver, and read whenever it is set (D-057).
+is required when it is the driver, and read whenever it is set (D-057). `FYLGJA_LAB_POOL`, the
+pool the local driver takes each lab's subnet from (D-103), is read whenever it is set too, and
+given to that driver alone; unset, the driver's own default stands, which this module does not
+name.
 
 `FYLGJA_STORE` names a directory, or an object store as `s3://<bucket>[/<prefix>]`, whose
 endpoint and keys are `FYLGJA_S3_*` variables read for it alone (D-061). The scheme is read in
 any case, and any other value that begins `s3:` is refused, never taken for a directory.
+
+`FYLGJA_PACKAGES` names the directories of platform and probe packages the server loads, colon-separated, every
+one of them and no other; unset or empty it means the packages the install carries (D-106): the wheel's, or a
+checkout's `psp/` and `probes/`. A site that wants its own beside the shipped lists `packages.shipped()`'s paths
+itself.
 
 `FYLGJA_LEASE` names the Lease that holds the store for one core (D-062), and `FYLGJA_TLS_CERT`
 and `FYLGJA_TLS_KEY` the certificate and key the server serves TLS with, set together or not at
@@ -26,6 +34,7 @@ from ipaddress import IPv4Network
 from pathlib import Path
 
 from fylgja_core import drivers
+from fylgja_core import packages as packages_module
 from fylgja_core.store import check_file_key
 
 # Rule id. Clients and tests match on it.
@@ -96,6 +105,9 @@ class Settings:
     """clabernetes' namespace, `FYLGJA_CLABERNETES_NAMESPACE`; required by that driver."""
     pod_cidr: str | None = None
     """The cluster's pod network, `FYLGJA_POD_CIDR`; required by the clabernetes driver."""
+    lab_pool: IPv4Network | None = None
+    """The pool the local driver takes each lab's management subnet from, `FYLGJA_LAB_POOL`
+    (D-103); None, the driver's default."""
     lease: str | None = None
     """The name of the Lease in the core's namespace that holds the store for one core,
     `FYLGJA_LEASE` (D-062); required by an object store."""
@@ -191,6 +203,25 @@ def _pod_cidr(text: str) -> str:
         raise Misconfigured("FYLGJA_POD_CIDR", "is not an IPv4 network in CIDR form") from None
 
 
+def lab_pool(environ: Mapping[str, str]) -> IPv4Network | None:
+    """The local driver's pool as `environ` sets it, `FYLGJA_LAB_POOL` (D-103): an IPv4 network in
+    CIDR form, no host bit set, of prefix 24 or shorter, so that it holds a lab's /24. None when
+    the variable is unset or empty, and the driver's default stands; `Misconfigured` for a value
+    that is no such network. It is read whichever the driver, as the pod CIDR is."""
+    text = environ.get("FYLGJA_LAB_POOL", "")
+    if not text:
+        return None
+    try:
+        if "/" not in text:  # a bare address reads as a /32, as in `_pod_cidr`
+            raise ValueError(text)
+        network = IPv4Network(text)
+        if network.prefixlen > 24:
+            raise ValueError(text)
+    except ValueError:
+        raise Misconfigured("FYLGJA_LAB_POOL", "is not an IPv4 network in CIDR form that holds a /24") from None
+    return network
+
+
 def _needed(environ: Mapping[str, str], variable: str, driver: str, read: Callable[[str], str]) -> str | None:
     """The variable a driver needs, read by `read` whenever it is set; None when it is not and
     `driver` does not need it."""
@@ -236,14 +267,26 @@ def check(settings: Settings) -> None:
                                                  "and FYLGJA_STORE names none")
 
 
+def _packages(given: str) -> tuple[Path, ...]:
+    """The directories of packages: those `given` names, colon-separated and every one of them, none other (D-042);
+    unset or empty, the ones this install carries (D-106). `given` is read exactly as it was before the default."""
+    if not given:
+        try:
+            return tuple(packages_module.shipped())
+        except FileNotFoundError as e:
+            raise Misconfigured("FYLGJA_PACKAGES", "is empty or not set, and this install carries no packages") from e
+    found = tuple(Path(p) for p in given.split(":") if p)
+    if not found:
+        raise Misconfigured("FYLGJA_PACKAGES", "names no directory")
+    return found
+
+
 def from_environ(environ: Mapping[str, str]) -> Settings:
     """The `Settings` an environment holds, or `Misconfigured` naming the first fault: each
     setting read alone, then what one rules out of another (`check`)."""
     store = _required(environ, "FYLGJA_STORE")
     tokens = _required(environ, "FYLGJA_TOKENS")
-    packages = tuple(Path(p) for p in _required(environ, "FYLGJA_PACKAGES").split(":") if p)
-    if not packages:
-        raise Misconfigured("FYLGJA_PACKAGES", "names no directory")
+    packages = _packages(environ.get("FYLGJA_PACKAGES", ""))
     listen = _listen(environ.get("FYLGJA_LISTEN") or DEFAULT_LISTEN)
     driver = _driver(environ.get("FYLGJA_DRIVER") or DEFAULT_DRIVER)
     lease = environ.get("FYLGJA_LEASE", "")
@@ -258,6 +301,7 @@ def from_environ(environ: Mapping[str, str]) -> Settings:
         tokens=Path(tokens),
         clabernetes_namespace=_needed(environ, "FYLGJA_CLABERNETES_NAMESPACE", driver, _namespace),
         pod_cidr=_needed(environ, "FYLGJA_POD_CIDR", driver, _pod_cidr),
+        lab_pool=lab_pool(environ),
         lease=_lease(lease) if lease else None,
         tls=_tls(environ),
     )

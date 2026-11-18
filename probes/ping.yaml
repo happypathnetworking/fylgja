@@ -20,8 +20,10 @@ readiness:
   timeout_s: 30
 
 flow:
-  # Started after a step's stage, read after its wait: an interrupt ends ping and prints
-  # its counters. BusyBox ping accepts -i 0.2 as root with no minimum-interval refusal.
+  # Declared for a later release: this build starts no flow and records each as not_started.
+  # Only interval_s is read, by the burst. A flow is to start after a step's stage and be read
+  # after its wait: an interrupt ends ping and prints its counters. BusyBox ping accepts
+  # -i 0.2 as root with no minimum-interval refusal.
   interval_s: 0.2
   command: ["ping", "-i", "{interval}", "{far_address}"]
   start_timeout_s: 30

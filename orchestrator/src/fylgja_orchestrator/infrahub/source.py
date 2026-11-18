@@ -239,7 +239,7 @@ class InfrahubSource:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        self._transport = Transport(address, token, ca=ca, transport=transport)
+        self._transport = Transport(address, token, ca=ca, transport=transport, sleep=sleep)
         self._address = address
         self._token = token
         self._ca = ca
@@ -496,7 +496,8 @@ class InfrahubSource:
         """The reader's connection, made at the first call that needs it and kept."""
         if self._conn is None:
             self._conn = self._guarded(
-                None, lambda: connect(self._address, self._token, ca=self._ca, transport=self._network)
+                None,
+                lambda: connect(self._address, self._token, ca=self._ca, transport=self._network, sleep=self._sleep),
             )
         return self._conn
 

@@ -46,11 +46,15 @@ does not own, and a NetBox upgrade is a procedure, below, not a rewrite.
 
 It needs Python 3.14, `fylgja-core`'s base install, the model package and the client library
 ([D-084](../../design/decisions.md#d-084)), and httpx at the core's range; never the core's
-`server` extra. Nothing is published: each wheel is built from this repository, the reader's
-from `readers/netbox/` with `formats/` beside it, since its `setup.py` copies the reader's
-format into the wheel, and the core's from `core/`. Install the two together into the
-platform's environment. In the tree, `make venv` installs it editable into `core/.venv`, with
-its console script `core/.venv/bin/fylgja-netbox`.
+`server` extra. From 1.0.0 the reader is published to PyPI as the wheel `fylgja-netbox`, at the
+core's version and requiring `fylgja-core` at that version or later within its major
+([D-106](../../design/decisions.md#d-106)), so that installing it into the platform's environment
+brings the core's base install with it. `make wheels` builds the published wheels from this
+repository: the reader's from `readers/netbox/` with `formats/` beside it, since its
+`setup.py` copies the reader's format into the wheel, and the core's from `core/`; install the
+two together. `fylgja-netbox --version` prints the version and the commit it was built at. In
+the tree, `make venv` installs it editable into `core/.venv`, with its console script
+`core/.venv/bin/fylgja-netbox`.
 
 NetBox needs the branching plugin to hold a branch, and no schema or plugin of Fylgja's. The
 probes are the data of a configuration context, inactive so that no device's rendered context
@@ -122,6 +126,7 @@ verified against the system's trust. The reader document's path and `--out`'s ar
 given, a relative one from the working directory, and `--out` names a file.
 
 ```sh
+fylgja-netbox --version
 fylgja-netbox read [--branch B] --scope tag:N --reader FILE --out FILE
 fylgja-netbox check [--branch B]
 ```
@@ -132,6 +137,9 @@ fylgja-netbox check [--branch B]
 - `check` prints `ok: NetBox <version>, netbox-branching <version, or none>`, and for a branch
   `, branch B ready`. For `main` it sends nothing beyond `connect`'s `GET /api/status/`, which a
   token of no grant may read, so it checks none of the grants below.
+
+`--version` prints the command's version and the build it came from, and `--help`, given alone,
+lists the commands and `--version`; given after a command, it lists that command's options.
 
 Each finding is one line on stderr, `<severity> <rule> <object>: <message>`, in a result's order.
 A blueprint holds every device's configuration, so it is written to `--out` and never printed,

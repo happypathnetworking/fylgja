@@ -14,14 +14,16 @@ source gives for the reader's too: a 401 the token refused, a 403 the account la
 with the permissions Infrahub's words name (P5-44). Any other status than 200, or a 200 whose body holds `errors`,
 quotes Infrahub's messages, cut at `QUOTED` characters, the token replaced first. None holds the token: its text has
 it replaced by `<redacted>`, and one of httpx's is raised from nothing, since an httpx exception carries its request,
-whose headers hold it.
+whose headers hold it. A request Infrahub sheds under load is sent again after the wait it names, up to `SHED_BUDGET_S`
+in all, and nothing is printed while it waits.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from functools import cache
 from importlib import resources
 from pathlib import Path
@@ -38,6 +40,20 @@ KEEPALIVE_S = 1.0
 """Seconds an idle connection is kept for the next request, as the reader keeps one: on a connection kept 2.0 s idle,
 one request in three trials was refused (`RemoteProtocolError`), and from 2.2 s Infrahub's answer came on a new
 connection; the source asks every `VALIDATION_POLL_S` while it waits (design/verified-facts.md, "Infrahub 1.11.11")."""
+
+SHED_WAIT_DEFAULT_S = 5
+"""Seconds waited before a shed request is sent again where Infrahub's `Retry-After` is missing or no count of seconds.
+Infrahub 1.11.11's backpressure answers a request it sheds with HTTP 429, `Retry-After` in whole seconds and
+`X-Infrahub-Admission: shed`, written before any handler runs, so the request did nothing and is sent again, a mutation
+among them (design/verified-facts.md, "Infrahub 1.11.11")."""
+
+SHED_WAIT_MAX_S = 30
+"""The most seconds one wait for a shed request lasts, whatever `Retry-After` says; the least is 1."""
+
+SHED_BUDGET_S = 300
+"""The most seconds the waits for one shed request add up to, ours: of the order of infrahub-sdk's own bound for a 429,
+10 retries of at most 60 s each (design/verified-facts.md, "Infrahub 1.11.11"). A wait that would pass it is not taken,
+and the last 429 fails as any 429 does."""
 
 QUOTED = 500
 """How many characters of Infrahub's messages an error quotes."""
@@ -104,14 +120,22 @@ def _document(name: str) -> tuple[str, str]:
 class Transport:
     """One Infrahub, asked through one pool of connections with one token. Made with no request: the address and the
     CA are read by the core's client rules (`InvalidAddress`, `InvalidCA`) and the token by its bearer rule
-    (`InvalidToken`), each a predicate that repeats nothing; `transport` replaces the network, for tests."""
+    (`InvalidToken`), each a predicate that repeats nothing; `transport` replaces the network and `sleep` the wait for a
+    shed request, for tests."""
 
     def __init__(
-        self, address: str, token: str, *, ca: Path | None = None, transport: httpx.BaseTransport | None = None
+        self,
+        address: str,
+        token: str,
+        *,
+        ca: Path | None = None,
+        transport: httpx.BaseTransport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._url = base_url(address)
         bearer(token)
         self._token = token
+        self._sleep = sleep
         self._http = httpx.Client(
             base_url=self._url,
             headers={"X-INFRAHUB-KEY": token},
@@ -143,7 +167,7 @@ class Transport:
         document, operation = _document(name)
         what = f"asking {operation} of Infrahub (branch {branch}{f', at {at}' if at is not None else ''})"
         body = {"query": document, "variables": dict(variables), "operationName": operation}
-        response = self._post(f"/graphql/{quote(branch, safe='')}", what, at, body)
+        response, shed_s = self._post(f"/graphql/{quote(branch, safe='')}", what, at, body)
         try:
             answer = json.loads(response.content)
         except ValueError:
@@ -156,7 +180,8 @@ class Transport:
                               status=refused)
         if response.status_code != 200:
             words = _messages(errors) if errors else response.text.strip() or "an empty body"
-            raise SourceError(f"{what}: HTTP {response.status_code}: {self._quote(words)}")
+            gave_up = f"; Infrahub shed the request for {shed_s} s, so it was given up" if _is_shed(response) else ""
+            raise SourceError(f"{what}: HTTP {response.status_code}: {self._quote(words)}{gave_up}")
         if errors:
             status = _status(errors)
             said = "HTTP 200" if status is None else f"HTTP 200, http_status {status}"
@@ -166,7 +191,21 @@ class Transport:
             raise SourceError(f"{what}: HTTP 200: answered no data")
         return data
 
-    def _post(self, path: str, what: str, at: str | None, body: object) -> httpx.Response:
+    def _post(self, path: str, what: str, at: str | None, body: object) -> tuple[httpx.Response, int]:
+        """The response to one request and the seconds waited for it, a shed one sent again after each wait that fits
+        in `SHED_BUDGET_S`; once the next would not, the last 429 is answered."""
+        waited = 0
+        while True:
+            response = self._request(path, what, at, body)
+            if not _is_shed(response):
+                return response, waited
+            wait = _shed_wait(response)
+            if waited + wait > SHED_BUDGET_S:
+                return response, waited
+            self._sleep(wait)
+            waited += wait
+
+    def _request(self, path: str, what: str, at: str | None, body: object) -> httpx.Response:
         try:
             return self._http.post(path, params={"at": at} if at is not None else None, json=body)
         except httpx.HTTPError as e:
@@ -183,6 +222,23 @@ class Transport:
 
     def _hide(self, text: str) -> str:
         return " ".join(text.replace(self._token, REDACTED).split())
+
+
+def _is_shed(response: httpx.Response) -> bool:
+    """Whether `response` is a request Infrahub's backpressure shed: HTTP 429 marked `X-Infrahub-Admission: shed`."""
+    return response.status_code == 429 and response.headers.get("X-Infrahub-Admission", "").strip().lower() == "shed"
+
+
+def _shed_wait(response: httpx.Response) -> int:
+    """The seconds to wait before a shed request is sent again: its `Retry-After`, held to 1 to `SHED_WAIT_MAX_S`, or
+    `SHED_WAIT_DEFAULT_S` where that is missing or no count of seconds. A count of more than three digits is past the
+    most, and is not read: `int` refuses one of more than 4,300."""
+    said = response.headers.get("Retry-After", "").strip()
+    if not (said.isascii() and said.isdigit()):
+        return SHED_WAIT_DEFAULT_S
+    if len(said) > 3:
+        return SHED_WAIT_MAX_S
+    return min(max(int(said), 1), SHED_WAIT_MAX_S)
 
 
 def _status(errors: object) -> int | None:

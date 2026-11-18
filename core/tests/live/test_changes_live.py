@@ -128,8 +128,8 @@ def compiled(name: str) -> compiler.Compiled:
     return compiler.compile(blueprint.load(ROOT / f"testdata/blueprint/{name}.json"), PLATFORMS, PROBES)
 
 
-def planned(lab: Lab, c: compiler.Compiled) -> Planned:
-    return lab.driver.plan(c.manifest, c.id, PLATFORMS, PROBES, TWIN, lab.allocation)
+def planned(lab: Lab, c: compiler.Compiled, allocation: Allocation) -> Planned:
+    return lab.driver.plan(c.manifest, c.id, PLATFORMS, PROBES, TWIN, allocation)
 
 
 def apply(lab: Lab, p: Planned, what: str) -> None:
@@ -262,14 +262,20 @@ def held_to_the_lab(c: Changes, before: dict[str, str | None], now: dict[str, st
 
 
 def step(lab: Lab, name: str) -> Stepped:
-    """Step the twin to the fixture `name`: admit it with the deployment it holds, compare
-    `changes` with the dry run, apply it, and check the lab against `changes`."""
+    """Step the twin to the fixture `name`: admit it with the deployment it holds, plan it with
+    the allocation admit answered, as the loop does, compare `changes` with the dry run, apply it,
+    and check the lab against `changes`."""
     assert lab.current is not None
     c = compiled(name)
-    after = planned(lab, c)
     held = run(lab.driver.admit(c.manifest, PLATFORMS, PROBES, TWIN, [], held=lab.current.deployment),
                f"admit {name} with the held deployment")
-    assert held == lab.allocation, held
+    assert not isinstance(held, Refusal), held
+    after = planned(lab, c, held)
+    # A step keeps the lab's allocation in every member but the demand, which becomes the target's (D-073).
+    target = after.deployment.demand
+    demand = {"nodes": target.nodes, "cpu": target.cpu, "memory_mb": target.memory_mb}
+    assert held == {**lab.allocation, "demand": demand}, held
+    lab.allocation = held
     answer = lab.driver.changes(lab.current, after, PLATFORMS, PROBES)
     print(f"[live] changes to {name}: {actions(answer)}; links added {answer.links_added}, "
           f"removed {answer.links_removed}")
@@ -337,7 +343,7 @@ def lab(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Lab]:
 
 def test_01_the_base_deploys(lab: Lab) -> None:
     assert leftovers() == CLEAN, "the host holds chg-live already"
-    apply(lab, planned(lab, compiled("three-node")), "apply three-node")
+    apply(lab, planned(lab, compiled("three-node"), lab.allocation), "apply three-node")
     assert set(incarnations(lab)) == {"n1", "n2", "n3"}
 
 
@@ -448,7 +454,7 @@ def test_13_mixed_deploys_and_e2_has_no_ethernet10(lab: Lab) -> None:
     allocation = run(lab.driver.admit(c.manifest, PLATFORMS, PROBES, TWIN, []), "admit mixed")
     assert not isinstance(allocation, Refusal), allocation
     lab.allocation = allocation
-    apply(lab, planned(lab, c), "apply mixed")
+    apply(lab, planned(lab, c, allocation), "apply mixed")
     returned = time.monotonic()
     assert set(incarnations(lab)) == {"e1", "e2", "s1"}
     _, status = until_eos(lab, "e2", "show interfaces status", re.compile(r"^Et1\s", re.MULTILINE))

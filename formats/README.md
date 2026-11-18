@@ -3,9 +3,10 @@
 Every format of every distribution, version 1: each format and interface the core reads
 and writes, the reader document each reader takes, and the example orchestrator's two
 documents. Each has one version,
-specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). The
-design they follow is [design/core.md](../design/core.md). A change found while
-building the core is made here, in the same change as the code.
+specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). From 1.0 a
+change to a held format only adds ([what 1.0 holds](../docs/compatibility.md)). The design they
+follow is [design/core.md](../design/core.md). A change found while building the core is made
+here, in the same change as the code.
 
 The core's wheel carries the core's formats as the package's data, copied when it is built from the list in `core/setup.py` ([D-066](../design/decisions.md#d-066), [D-084](../design/decisions.md#d-084)); a format another distribution reads is carried by that distribution's wheel. This directory stays the one place a format is changed.
 
@@ -22,7 +23,7 @@ relative to them.
 | File | Introduced by |
 |---|---|
 | [`blueprint-1.schema.json`](blueprint-1.schema.json) | [D-006](../design/decisions.md#d-006) |
-| [`platform-package-1.schema.json`](platform-package-1.schema.json) | [D-015](../design/decisions.md#d-015) |
+| [`platform-package-1.schema.json`](platform-package-1.schema.json) | [D-015](../design/decisions.md#d-015), [D-102](../design/decisions.md#d-102) |
 | [`probe-package-1.schema.json`](probe-package-1.schema.json) | [D-015](../design/decisions.md#d-015) |
 | [`probes-1.schema.json`](probes-1.schema.json) | [D-002](../design/decisions.md#d-002) |
 | [`bundle-1.schema.json`](bundle-1.schema.json) | [D-011](../design/decisions.md#d-011) |
@@ -126,6 +127,37 @@ relative to them.
 23. **The plan and the rehearsal are the example orchestrator's documents** since phase 8,
     carried by its wheel and not the core's ([D-084](../design/decisions.md#d-084)). Each
     `$ref`s nothing outside the two files, so that wheel resolves them alone.
+24. **A platform package lists its versions, each with its image**
+    ([D-102](../design/decisions.md#d-102)). `versions` is a list of versions, each an object
+    with a `name`, the release's own text, and `runtime.containerlab.images` names an image
+    for each by that name, where a package named one image. A package lists one version in
+    this build, and the core runs it: a second is refused when the package is loaded, until a
+    device can name the version it runs. What comes later only adds, and breaks no package
+    written to this shape: a device's optional `version`, a second listed version, a version's
+    further members, the reader of `conformance.version`, which nothing reads yet, and that
+    refusal lifted. Nothing reads `conformance.port.discovering` either, the path that says
+    LLDP runs on a port, and it is optional: a package may leave it out, where every package
+    gives `conformance.version`.
+25. **API 1's document is corrected where it disagreed with the server**
+    ([D-105](../design/decisions.md#d-105)). Its licence is `Apache-2.0`, as the distributions'
+    metadata say; its server says TLS ends at the server where `FYLGJA_TLS_CERT` and
+    `FYLGJA_TLS_KEY` are set ([D-063](../design/decisions.md#d-063)), not at an ingress; 403,
+    `auth.forbidden`, is described as reserved until roles exist, as `docs/rules.md` says, and no
+    route answers it; `Version.build` is `<version> (commit <commit>)`. No route, operation,
+    parameter, member or status changed.
+26. **A `pattern` is ECMA-262's, as JSON Schema says: its `$` is the end of the text.** Python's
+    `re`, which the validators read a pattern with, lets `$` match before a final newline, so a
+    checkout before 1.0.0rc1 took a value matching a `$`-ended pattern with a newline after it,
+    such as a device name written as a folded YAML scalar. From 1.0.0rc1 that text is refused,
+    in every format and in the API's request bodies; no other pattern's meaning moved. It was
+    mended before 1.0, since a held format may only add ([D-105](../design/decisions.md#d-105)).
+27. **A reader of an answer passes over a member it does not know**
+    ([D-105](../design/decisions.md#d-105)). Within API 1 what the core answers may gain a
+    member, so the client library, the CLI and the example orchestrator hold a problem document
+    and a verdict the core answered to its schema with each object closed by
+    `additionalProperties: false` left open: what they use must still be there and of its kind,
+    and a map of names is still held to the schema its `additionalProperties` gives. What a user
+    writes, what is filed and what the server checks are still held whole. No format changed.
 
 ## Settled by measurement (2026-10-30)
 
@@ -137,8 +169,10 @@ Measured on containerlab 0.79 and clabernetes 0.10.1:
   rename output for such a kind.
 - **No bootstrap** is needed on either kind or either driver.
 - **`link_apply_mode` and `hot_add_ports`.** `live` re-cables both
-  kinds with no restart on both drivers, for ports present at boot. cEOS never sees a port
-  added after boot. The mode is set at create and never changed: on clabernetes a change
+  kinds with no restart on both drivers, for ports present at boot (on clabernetes a recabled
+  node may still be replaced where a node added or removed since it was made moved its
+  management address: [verified-facts.md](../design/verified-facts.md), "A recabled node
+  replaced when a step adds or removes a node"). cEOS never sees a port added after boot. The mode is set at create and never changed: on clabernetes a change
   replaces the pod of each node whose mode changed.
 - **The twin record holds each node's `incarnation`** (the container's start time, the
   pod's uid and its container's restart count), since a replaced node loses its push and

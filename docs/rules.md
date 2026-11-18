@@ -35,6 +35,9 @@ well, and its catalogue is [`readers/netbox/rules.md`](../readers/netbox/rules.m
 | `package.patterns.placeholders` | both package loaders | a template uses a placeholder its match does not capture (`node_name`, a rename's `port`), a match captures one twice, a probe package's command or readiness text names a placeholder that does not exist, or a host's start-up command (`host.address`, `host.route`) names one the plan does not render there: it may name `{address}`, `{interface}`, `{far_address}` and `{gateway}` alone |
 | `package.ranges.placeholder` | the platform package loader | a `ranges` key is no placeholder of the rule's match |
 | `package.rename.coverage` | the platform package loader | a rename names no data rule or names one twice, or a data rule has no rename while the kind has no aliases |
+| `package.versions.name` | the platform package loader | two versions share a name |
+| `package.images.coverage` | the platform package loader | a listed version has no image under `runtime.containerlab.images`, or a key there is no listed version's name; a key YAML read as a number is the name of none, which is why a name is quoted. `POST /v1/packages:validate` takes the package as JSON, whose keys are text, so such a key is refused by the core's own load of the file and not by the route |
+| `package.versions.several` | the platform package loader | the package lists more than one version, and this build runs one version a package ([D-102](../design/decisions.md#d-102)). The refusal is lifted once a device can name the version it runs; a refusal lifted loses a user nothing ([D-105](../design/decisions.md#d-105)) |
 | `package.format.unsupported` | the probe package loader | the format names a mechanism this build does not run ([D-014](../design/decisions.md#d-014)) |
 | `probes.version.unsupported` | the declaration loader | `probes_version` is not `1` |
 | `probes.invalid` | the declaration loader | the declaration violates its schema at the pointer |
@@ -105,7 +108,7 @@ ends the run `rejected` ([Conditions and runs](#conditions-and-runs)).
 
 | Rule | Filed by | Means |
 |---|---|---|
-| `admission.capacity` | both drivers | the runtime cannot fit the twin: on the local driver the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)); on either, the demand exceeds the runtime's free room less the admitted twins' pending demand, or a node fits no host ([D-073](../design/decisions.md#d-073)). The message is one sentence per shortfall, naming what the twin needs, what the reading found free and pending, or the node and the roomiest host |
+| `admission.capacity` | both drivers | the runtime cannot fit the twin: on the local driver the pool has no /24 that neither a Docker network nor another twin's allocation holds ([D-043](../design/decisions.md#d-043)), and the message names each Docker network that holds part of the pool, by its name and its subnet, the name written as it is where it is letters, digits, `_`, `.` and `-` after a first letter or digit, and as a JSON string otherwise, and the setting that moves the pool, `FYLGJA_LAB_POOL` ([D-103](../design/decisions.md#d-103)); on either, the demand exceeds the runtime's free room less the admitted twins' pending demand, or a node fits no host ([D-073](../design/decisions.md#d-073)). Each of those is one sentence of the message, naming what the twin needs, what the reading found free and pending, or the node and the roomiest host |
 | `admission.image.absent` | the local driver | a package the twin's nodes use has an account-gated image (one with a `pull_secret`) that is not on the host, which the local driver never pulls ([D-015](../design/decisions.md#d-015)); an ungated image is containerlab's to pull at deploy |
 | `admission.namespace.taken` | the clabernetes driver | the namespace `fylgja-twin-<twin>` exists and does not carry the twin's labels ([D-057](../design/decisions.md#d-057)); nothing is reserved |
 
@@ -167,8 +170,10 @@ event carries the error's rule when it has one, no finding is filed, and the pha
 
 A cancelled create stops where it is, stopping a call on the runtime in flight, tears down
 what it built, and ends `failed` with `run.cancelled`. A twin's deletion cancels a create in
-flight that way, then a destroy run tears the twin down and deletes its record; it ends `ok`,
-and a destroy run is never stopped halfway. In the partial-lab probe a node that refuses the
+flight that way, then a destroy run tears the twin down and deletes its record, ending `ok`; or,
+where this core's packages cannot account for the twin's deployment, it tears nothing down and
+ends `rejected`, the lab and the record kept (below). A destroy run is never stopped halfway.
+In the partial-lab probe a node that refuses the
 login is not silent: the run fails at once with `readiness.unauthorized`, since a reconfigure
 would not help. The probe does not run on a driver that declares `reapply`
 ([D-068](../design/decisions.md#d-068)): a resumed apply there applies again, and a node
@@ -183,10 +188,33 @@ deployment, its allocation and its nodes, until a deletion or a new spec is hand
 that has the packages. Here, both are refused the same way, once, and a new spec starts no
 create: nothing is compiled, admitted or destroyed over the kept deployment.
 
+A deployment one of whose nodes runs an image no loaded package lists is kept the same way
+([D-102](../design/decisions.md#d-102)): every package its bundle names is loaded, and one of
+them was edited to another image while the twin ran the one it had. A node's package is found
+by its kind and its image, a probe host's by its image, so the core's packages no longer
+account for that node. At a step the driver's `changes` finds it, and the step is refused
+before it touches anything ([Steps](#steps)). At a deletion the driver's `destroy` finds it
+before it touches the runtime: the destroy run ends `rejected` with one `bundle.rejected`
+finding, its object the twin, naming the node, its kind, its image and the remedy (`The
+deployment of <twin> cannot be torn down: no package given runs the node <node> (<kind>,
+<image>). It waits for a core whose packages list that image.`), its `destroy` event `failed`
+under the rule, and `Ready` is False for `bundle.rejected`. It is said once: a later pass of the
+same core takes no run and calls no driver, and the lab stays, with its record, which keeps the
+deployment, its allocation and its nodes, until a core whose packages list the image handles
+the deletion; a core started again asks its driver again, under a destroy run of its own. A
+cancelled or failed create's cleanup that meets such a node keeps the lab and its allocation
+too, the run ending by its own rule, and a create resumed after `planned` whose apply meets it
+ends `rejected` with `bundle.rejected` (`cannot be applied`), nothing torn down. A deletion asked
+of the same core after any of the three is refused by the same finding (`cannot be torn down`)
+before the loop takes a run: its destroy run ends `rejected` with no call on the driver and no
+`destroy` event, where a deletion that met the node itself has the pair, `started` and `failed`.
+
 A restore is a run too ([D-067](../design/decisions.md#d-067)), the loop's own, by the
 principal `core`. A pass on a settled twin (no deletion asked, its generation observed, a
 deployment applied, no run in flight, not diverged) inspects it, unless this core lacks a
-package its deployment names. A node at another incarnation than the record holds was replaced
+package its deployment names, or, for this core's life, a cancelled or failed create's cleanup
+kept the deployment because one of its nodes runs an image no loaded package lists (above). A
+node at another incarnation than the record holds was replaced
 behind the core's back and lost its push: it is readied and pushed again, and verify is run,
 under a `restore` run, as a step does for a node whose incarnation moved. `ready` waits for each device
 node holding nothing and every probe host, `push` pushes each node not holding the twin's
@@ -265,7 +293,7 @@ The `Ready` condition's reasons:
 | `twin.restoring` | `False` | a restore runs ([D-067](../design/decisions.md#d-067)): a node of a settled twin was found at another incarnation, and is readied and pushed again, then verify is run, which is advisory; or every node of a twin reported `twin.node.missing` runs again, and verify is run before it is Ready. Not set on a twin that does not run what its spec asks: a restore leaves the conditions a refused or cancelled step left |
 | `twin.node.missing` | `False` | a node of a settled twin is missing or not running past its boot window, or a restore ended for it ([D-067](../design/decisions.md#d-067)); the log names each node. It is never made: the twin stays so until the node returns, when a restore readies and pushes what holds nothing and runs verify, which is advisory, before it is Ready, or until the twin is stepped or deleted. Not set on a twin that does not run what its spec asks |
 | `twin.deleting` | `False` | the twin's deletion was asked, and the loop tears it down |
-| `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)) |
+| `bundle.rejected` | `False` | the compile refused the blueprint; the run's verdict holds every finding ([a compile refused](#findings-a-compile-refused)). Or this core's packages cannot account for the twin's deployment, which is kept: its bundle names a package not loaded, or one of its nodes runs an image no loaded package lists, at a step, a deletion or a resumed create's apply ([D-102](../design/decisions.md#d-102)) |
 | `plan.rejected` | `False` | the driver's plan refused the bundle; the run's verdict holds every finding ([a plan refused](#findings-a-plan-refused)) |
 | a finding's rule | `False` | the run ended with that one finding: `blueprint.missing`, `bundle.missing`, `run.cancelled`, `twin.driver.unknown`, an `admission.*` rule, `readiness.timeout`, `readiness.unauthorized`, `credential.missing`, `push.refused` or `push.unauthorized` |
 

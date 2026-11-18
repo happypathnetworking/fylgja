@@ -42,3 +42,16 @@ def test_a_schema_fault_is_reported_with_its_pointer_and_decode_refuses_it() -> 
     assert {p.pointer for p in found} == {"/status", "/findings"}
     with pytest.raises(Rejected):
         problem.decode(bad)
+
+
+def test_a_problem_answered_with_a_member_more_decodes_as_without() -> None:
+    wider = documents.encode(UNPROCESSABLE)
+    wider["later"] = {"member": 1}
+    wider["findings"][0]["later"] = {"member": 1}
+    assert problem.decode_answer(wider) == UNPROCESSABLE
+    with pytest.raises(Rejected):
+        problem.decode(wider)
+    del wider["rule"]
+    with pytest.raises(Rejected) as e:
+        problem.decode_answer(wider)
+    assert [(p.pointer, p.rule) for p in e.value.problems] == [("", RULE_INVALID)]

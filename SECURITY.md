@@ -1,15 +1,17 @@
 # Security
 
 fylgja-core turns a blueprint into a twin of a network. This page says what it protects,
-what it leaves to the person running it, and how to report a vulnerability. The core is
-being built ([design/core.md](design/core.md)), so this page states the design.
-Each point holds from the release that implements it.
+what it leaves to the person running it, and how to report a vulnerability. What it holds
+across the releases of major version 1 is on [one page](docs/compatibility.md); this page
+states the design of its security, and each point holds from the release that implements it.
 
 ## The threat model
 
 **Every request carries a principal** ([D-025](design/decisions.md#d-025)).
 - Clients authenticate with per-client bearer tokens.
-- A missing or unknown token is `401`, and a refused action is `403`.
+- A missing or unknown token is `401`. `403` is reserved until roles exist: the API's
+  document ([`api-1.openapi.yaml`](formats/api-1.openapi.yaml)) lists it, no route answers it
+  yet, and every known principal makes every call.
 - Several tokens can be valid at once, for rotation.
 - An audit log names the principal behind every change to a twin.
 - The server ends TLS itself when given a certificate and its key (`FYLGJA_TLS_CERT`,
@@ -45,8 +47,9 @@ Report it privately, through GitHub's private vulnerability reporting: the repos
 **Security** tab, then **Report a vulnerability**. Do not open a public issue. Say what you
 found, how to reproduce it, and the commit it applies to.
 
-**In scope**: the core under `core/`, the scripts under `scripts/`, and the workflows under
-`.github/workflows/`.
+**In scope**: the core under `core/`, the readers under `readers/`, the example orchestrator
+under `orchestrator/`, `infrahub/` and `netbox/`, whose checks and scripts run beside a source
+of truth, the scripts under `scripts/`, and the workflows under `.github/workflows/`.
 
 **Not in scope**:
 - **The network operating system images and their default logins,** which a twin uses on

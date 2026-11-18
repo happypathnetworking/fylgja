@@ -3,12 +3,14 @@
 server makes (`drivers.make`), with every pull credential the environment holds, so that its
 `apply` makes their pull secrets. `admit` against a namespace that is not the twin's; `apply`,
 its repeat and a Service drifted back to `Cluster`; `exec`; a node's container ended in place; a
-pod deleted and `reconfigure`; `destroy`, and a namespace alone as residue.
+pod deleted and `reconfigure`; a `destroy` under packages that do not list a node's image, refused
+(D-102); `destroy`, and a namespace alone as residue; and an `apply` cancelled at its namespace's
+create and destroyed at once, on forty twins of the test's own.
 
 A node's uid, where a test says one moves or stays, is its pod's uid, the part of `inspect`'s
 incarnation before the `/`; the restart count is the part after it (D-069).
 
-The tests run in order and share the twin; each asserts what it read and prints it with its time
+The tests run in order and the first seven share the twin; each asserts what it read and prints it with its time
 (`-s`), and design/verified-facts.md records the readings. The module destroys the twin at its
 end, whatever happened, then deletes its namespace and the refused twin's through `kube` and
 waits for them to go, each delete and wait tried whatever another did. Nothing of the site is
@@ -32,22 +34,27 @@ import socket
 import time
 import traceback
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
+from fakes import with_image
+from lightkube import AsyncClient
+from lightkube.resources import core_v1, networking_v1
 
 from cluster.conftest import GATED, Site, run, say, until, watching
-from fylgja_core import blueprint, compiler, packages, push
+from fylgja_core import blueprint, compiler, packages, platform_package, push
 from fylgja_core.clabernetes import OWNER, OWNER_LABEL, TWIN_LABEL, namespace_of
 from fylgja_core.clabernetes.driver import RULE_NAMESPACE, ClabernetesDriver
-from fylgja_core.clabernetes.kube import NODE_LABEL, LightKube, Pod
-from fylgja_core.clabernetes.plan import NAMESPACE
+from fylgja_core.clabernetes.kube import NODE_LABEL, LightKube, Namespace, Pod
+from fylgja_core.clabernetes.plan import NAMESPACE, TOPOLOGY
 from fylgja_core.credentials import Provider
-from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal
+from fylgja_core.driver import Allocation, DriverFailed, Exec, Inspection, NodeState, Planned, Refusal, Unpackaged
 from fylgja_core.kubeapi import REQUEST_TIMEOUT_S
+from fylgja_core.kubeapi import client as kubeapi_client
 
 ROOT = Path(__file__).resolve().parents[3]
 LOADED = packages.load([ROOT / "psp", ROOT / "probes"])
@@ -263,7 +270,9 @@ def test_1_admit_answers_the_sites_values_and_refuses_a_namespace_that_is_not_th
         pytest.fail(f"admit {TWIN} refused: {allocation.rule}")
     site_values = {"namespace": NS, "controller_namespace": site.controller_namespace, "pod_cidr": site.pod_cidr,
                    "registries": provider.registries()}
-    differing = sorted(k for k in {*allocation, *site_values} if allocation.get(k) != site_values.get(k))
+    # The allocation carries the demand it reserved beside the site's values (D-073): the twin's, not the site's.
+    assert allocation.get("demand") == {"nodes": 3, "cpu": 1.5, "memory_mb": 6144}, "the demand is not the twin's"
+    differing = sorted(k for k in {*allocation, *site_values} - {"demand"} if allocation.get(k) != site_values.get(k))
     assert not differing, f"the allocation differs from the site's in {differing}"
     say(f"allocation: {sorted(allocation)}, registries {sorted(allocation['registries'])}")
     twin.planned = driver.plan(c.manifest, c.id, PLATFORMS, PROBES, TWIN, allocation)
@@ -467,6 +476,36 @@ def test_6_a_deleted_pod_is_another_uid_at_the_same_address_and_reconfigure_repl
     assert not elsewhere, f"the addresses of {elsewhere} moved"
 
 
+def test_6b_destroy_under_packages_that_do_not_list_the_image_is_refused(
+    loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, twin: Twin
+) -> None:
+    # D-102's premise, on the cluster: a core whose SR Linux package was edited to another image is
+    # asked to destroy the twin that runs the one it had. The driver meets `n1` in its lookup of a
+    # node's package, before any request, so the namespace stands and every node is the pod it was,
+    # at the address it had; the true packages' destroy, the next test, then removes everything.
+    p = twin.deployed()
+    before = present(loop, driver)
+    srl = PLATFORMS["nokia_srlinux"]
+    listed = platform_package.image(srl).ref
+    unlisted = {**PLATFORMS, "nokia_srlinux": with_image(srl, ref=listed + "-moved")}
+    with pytest.raises(Unpackaged) as refused:
+        run(loop, driver.destroy(p.deployment, p.files, unlisted, PROBES),
+            f"destroy {TWIN} under a package whose image moved")
+    named = (refused.value.node, refused.value.kind, refused.value.image) == ("n1", "nokia_srlinux", listed)
+    assert named, f"the refusal names {refused.value.node} ({refused.value.kind})"
+    say(f"refused: {type(refused.value).__name__}: {refused.value}")
+    namespace = run(loop, kube.namespace(NS), "namespace")
+    standing = namespace is not None and not namespace.deleting
+    assert standing, f"the namespace {NS} is gone, or being deleted"
+    after = present(loop, driver)
+    elsewhere = moved(before, after)
+    assert not elsewhere, f"the addresses of {elsewhere} moved"
+    replaced = sorted(name for name in NODES if after[name].incarnation != before[name].incarnation)
+    assert not replaced, f"the pods of {replaced} are not the ones they were"
+    say(f"the namespace {NS} stands, not deleting; no address moved and every node is at its incarnation: "
+        f"{ {name: n.incarnation for name, n in after.items()} }")
+
+
 def test_7_destroy_leaves_nothing_and_the_namespace_alone_is_residue_destroy_clears(
     loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, twin: Twin
 ) -> None:
@@ -486,3 +525,211 @@ def test_7_destroy_leaves_nothing_and_the_namespace_alone_is_residue_destroy_cle
     state = state_of(loop, driver, TWIN)
     assert state == "absent", f"inspect {TWIN}: {state}"
     assert run(loop, kube.namespace(NS), "namespace") is None
+
+
+CUT_ROWS = tuple((delay, attempt) for delay in (0, 2, 5, 20, 50) for attempt in range(1, 4)) + tuple(
+    (delay, attempt) for delay in (6, 7, 8, 9, 10) for attempt in range(1, 6))
+"""Each row's delay, in ms after the namespace's request is sent, and its try: three at the first
+delays, and five each from 6 to 10 ms, where a cancel lands before the Namespace's call returns
+(12.7 to 14.8 ms in the first run) and after the request has reached the API."""
+CUT_WATCH_S = 30.0
+"""How long every row's namespace is read for once the last row's `destroy` has returned: the brief's window."""
+CUT_WATCH_EVERY_S = 0.5
+
+
+class Timed(LightKube):
+    """`LightKube` noting, on `monotonic`, when the twin's Namespace is sent to be applied and how
+    that call ended, and each `namespace` read, when it is sent and its answer, and each
+    `delete_namespace`, in `calls`, each as its offset from the Namespace's send. `sent` is set
+    when that request is sent."""
+
+    def __init__(self, client: AsyncClient) -> None:
+        super().__init__(client)
+        self.sent = asyncio.Event()
+        self.at = 0.0
+        self.calls: list[str] = []
+
+    def reset(self) -> None:
+        self.sent = asyncio.Event()
+        self.at = 0.0
+        self.calls = []
+
+    def since(self) -> str:
+        """The offset from the Namespace's send, or that the call came before it."""
+        if not self.sent.is_set():
+            return "before the send"
+        return f"{(time.monotonic() - self.at) * 1000:.1f} ms"
+
+    async def apply(self, obj: Mapping[str, Any]) -> None:
+        if obj["kind"] != "Namespace":
+            await super().apply(obj)
+            self.calls.append(f"apply {obj['kind']} returned {self.since()}")
+            return
+        self.at = time.monotonic()
+        self.sent.set()
+        try:
+            await super().apply(obj)
+        except asyncio.CancelledError:
+            self.calls.append(f"apply Namespace cancelled {self.since()}")
+            raise
+        self.calls.append(f"apply Namespace returned {self.since()}")
+
+    async def namespace(self, name: str) -> Namespace | None:
+        self.calls.append(f"namespace read sent {self.since()}")
+        found = await super().namespace(name)
+        answer = "absent" if found is None else ("deleting" if found.deleting else "present")
+        self.calls.append(f"namespace {answer} {self.since()}")
+        return found
+
+    async def delete_namespace(self, name: str) -> None:
+        await super().delete_namespace(name)
+        self.calls.append(f"delete_namespace {self.since()}")
+
+
+@dataclass
+class Cut:
+    """One row's readings: the cancel's offset from the Namespace's send, the driver's calls,
+    how `destroy` answered and what it took, and every read of the namespace after it returned that
+    found one, with what the first held."""
+
+    twin: str
+    delay_ms: int
+    topology: str
+    cancel_ms: float = 0.0
+    apply_ended: str = ""
+    calls: list[str] = field(default_factory=list)
+    destroy: str = ""
+    destroy_s: float = 0.0
+    seen: list[str] = field(default_factory=list)
+    contents: str = ""
+
+
+async def contents(kube: LightKube, raw: AsyncClient, namespace: str, topology: str) -> str:
+    """What the namespace holds of what `apply` makes, by kind and name alone: the NetworkPolicy, the
+    Secrets (never their data), the Topology, pods and Services."""
+    policies = [p.metadata.name async for p in raw.list(networking_v1.NetworkPolicy, namespace=namespace)
+                if p.metadata is not None]
+    secrets = [s.metadata.name async for s in raw.list(core_v1.Secret, namespace=namespace)
+               if s.metadata is not None]
+    held = await kube.topology(namespace, topology)
+    pods = [p.name for p in await kube.pods(namespace, {})]
+    services = [s.name for s in await kube.services(namespace)]
+    return (f"policies {policies}, secrets {secrets}, topology {'present' if held else 'absent'}, pods {pods}, "
+            f"services {services}")
+
+
+async def cut(cut_driver: ClabernetesDriver, timed: Timed, p: Planned, delay_ms: int) -> tuple[float, str]:
+    """Start `p`'s apply, cancel it `delay_ms` after its Namespace is sent, and await its end:
+    the cancel's offset from the send, in ms, and how the apply ended."""
+    timed.reset()
+    task = asyncio.create_task(cut_driver.apply(p.deployment, p.files, PLATFORMS, PROBES))
+    sent = asyncio.create_task(timed.sent.wait())
+    await asyncio.wait({task, sent}, return_when=asyncio.FIRST_COMPLETED)
+    if not sent.done():
+        sent.cancel()
+        [raised] = await asyncio.gather(task, return_exceptions=True)
+        pytest.fail(f"apply {p.deployment.twin} ended before its Namespace was sent: {type(raised).__name__}")
+    await asyncio.sleep(delay_ms / 1000)
+    task.cancel()
+    cancel_ms = (time.monotonic() - timed.at) * 1000
+    [ended] = await asyncio.gather(task, return_exceptions=True)
+    return cancel_ms, "cancelled" if isinstance(ended, asyncio.CancelledError) else type(ended).__name__
+
+
+def owned_by(found: Namespace, twin: str) -> bool:
+    return found.labels.get(OWNER_LABEL) == OWNER and found.labels.get(TWIN_LABEL) == twin
+
+
+def remove(loop: asyncio.Runner, kube: LightKube, twin: str, what: str) -> bool:
+    """Delete the twin's namespace, where one stands with its labels and is not already being
+    deleted, and wait until it is gone: whether there was one. One without them is not this
+    test's, and fails it."""
+    namespace = namespace_of(twin)
+    found = run(loop, kube.namespace(namespace), f"namespace {namespace} ({what})")
+    if found is None:
+        return False
+    if not owned_by(found, twin):
+        pytest.fail(f"the namespace {namespace} stands and is not the twin {twin}'s: it is left")
+    if not found.deleting:
+        run(loop, kube.delete_namespace(namespace), f"delete_namespace {namespace} ({what})")
+    gone(loop, kube, namespace, f"{namespace} gone ({what})")
+    return True
+
+
+def test_8_an_apply_cancelled_at_its_namespace_create_then_destroyed_leaves_no_namespace(
+    site: Site, loop: asyncio.Runner, kube: LightKube, driver: ClabernetesDriver, provider: Provider
+) -> None:
+    """A twin of its own each row of `CUT_ROWS`, `drv-cut-<delay>ms-<try>`, planned from one
+    admission of `three-node`: its `apply`, by one driver over `Timed`, is cancelled `delay` after
+    its Namespace is sent, and its `destroy` by that driver asked at once. Once every row is cut
+    and destroyed, each row's namespace is read every `CUT_WATCH_EVERY_S` for `CUT_WATCH_S`. No
+    read may find one, and each `apply` must have ended cancelled: an apply's create the API
+    commits after `destroy` read the namespace absent would leave it standing, were `destroy` not
+    to read again after a cancelled apply (the driver's `_settle`). Every row is read before any
+    is judged, a namespace a read found removed by its labels and shown gone, and the rows printed.
+
+    Read 2026-11-16 in two runs (design/verified-facts.md, "clabernetes 0.10.1"): a create the API
+    committed, cancelled or not, was found by `destroy`'s first read at most 94.2 ms after its
+    send (91.2 ms in the second); `CUT_WATCH_S`, the brief's window, is over 300 times that, and
+    the driver's `SETTLE_WINDOW_S` over 50."""
+    c = compiled("three-node")
+    allocation = run(loop, driver.admit(c.manifest, PLATFORMS, PROBES, "drv-cut", []), "admit drv-cut")
+    if isinstance(allocation, Refusal):
+        pytest.fail(f"admit drv-cut refused: {allocation.rule}")
+    raw = kubeapi_client()
+    timed = Timed(kubeapi_client())
+    cut_driver = ClabernetesDriver(timed, provider, controller_namespace=site.controller_namespace,
+                                   pod_cidr=site.pod_cidr)
+    names = [f"drv-cut-{delay_ms}ms-{attempt}" for delay_ms, attempt in CUT_ROWS]
+    rows: list[Cut] = []
+    try:
+        for (delay_ms, _), name in zip(CUT_ROWS, names, strict=True):
+            namespace = namespace_of(name)
+            if remove(loop, kube, name, "a namespace left before the row"):
+                say(f"{namespace}: one was left before the row, removed")
+            p = driver.plan(c.manifest, c.id, PLATFORMS, PROBES, name, {**allocation, "namespace": namespace})
+            row = Cut(name, delay_ms, topology=yaml.safe_load(p.files[TOPOLOGY])["metadata"]["name"])
+            row.cancel_ms, row.apply_ended = run(loop, cut(cut_driver, timed, p, delay_ms), f"apply {name}, cut")
+            timed.calls.append(f"destroy asked {timed.since()}")
+            start = time.monotonic()
+            try:
+                run(loop, cut_driver.destroy(p.deployment, p.files, PLATFORMS, PROBES), f"destroy {name}")
+                row.destroy = "returned"
+            except Exception as e:
+                row.destroy = f"raised {type(e).__name__}"
+            row.destroy_s = time.monotonic() - start
+            timed.calls.append(f"destroy ended {timed.since()}")
+            row.calls = timed.calls[:]
+            rows.append(row)
+            say(f"row {name}: cancel at {row.cancel_ms:.1f} ms after the Namespace's send, "
+                f"apply {row.apply_ended}; destroy {row.destroy} in {row.destroy_s:.2f} s; "
+                f"calls: {'; '.join(row.calls)}")
+        watched = time.monotonic()
+        while (elapsed := time.monotonic() - watched) <= CUT_WATCH_S:
+            for row in rows:
+                found = loop.run(kube.namespace(namespace_of(row.twin)))
+                if found is not None:
+                    row.seen.append(f"+{elapsed:.1f} s {'deleting' if found.deleting else 'standing'}")
+                    if not row.contents:
+                        row.contents = run(loop, contents(kube, raw, namespace_of(row.twin), row.topology),
+                                           f"in {namespace_of(row.twin)}")
+            time.sleep(CUT_WATCH_EVERY_S)
+        say(f"the watch: every row's namespace read for {time.monotonic() - watched:.1f} s after the last destroy")
+        for row in rows:
+            if row.seen:
+                say(f"row {row.twin}: read after destroy: {row.seen}; contents: {row.contents}")
+    finally:
+        for name in names:
+            try:
+                if remove(loop, kube, name, "the test's end"):
+                    say(f"{namespace_of(name)}: removed at the test's end")
+            except (Exception, pytest.fail.Exception) as e:
+                say(f"the test's end: {namespace_of(name)}: {type(e).__name__}")
+        loop.run(timed.close())
+        loop.run(raw.close())
+    uncut = [f"{row.twin} ({row.apply_ended})" for row in rows if row.apply_ended != "cancelled"]
+    failed = [row.twin for row in rows if row.destroy != "returned"]
+    standing = [row.twin for row in rows if row.seen]
+    assert not uncut, f"the apply did not end cancelled for {uncut}"
+    assert not failed, f"destroy did not return for {failed}"
+    assert not standing, f"a namespace was read after destroy returned for {standing}"

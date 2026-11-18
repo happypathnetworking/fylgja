@@ -7,5 +7,9 @@
 !formats
 !psp
 !probes
+!VERSION
+!LICENSE
+!README.md
+!readme_links.py
 **/__pycache__
 **/*.egg-info

@@ -87,45 +87,54 @@ diverged: the lab is the running twin's, or what the step made of it.
 
 A pass that begins with no run to do on a settled twin (`settled`: no deletion asked, the
 generation observed, a deployment applied, no run in flight, not diverged), whose packages this
-core has loaded, inspects it (D-067); a pass that settles an ended run, or ends one, takes no
-settled pass after it. A recorded node, device node or probe host, is absent when the inspection
-lacks it or says it is not running, and moved when its incarnation is not the one the record
-holds; incarnations are compared as the driver writes them, never read. An absent node is waited
-for, then reported, never made: while any absent node is inside its boot window (its package's
-readiness window, from the first pass that saw that node absent) the pass writes nothing and
-queues the twin again within `MISSING_POLL_S`, since a runtime that replaces a node brings it back
-by itself. Once none is, a warning names each node, the twin is not queued again, and Ready is
-False for `twin.node.missing`, written once and only where the twin runs what its spec asks; a
-restore in flight ends `failed` instead, one finding per node. Nothing is applied: a node gone
-for good leaves its twin so until the twin is stepped or deleted. With every node running at its
-recorded incarnation the pass writes nothing either, and its `inspect` is its only call on the
-runtime, unless the twin was reported missing, which a restore verifies first. A moved node
-is restored under a run of operation `restore`, the core's own (`RESTORE_PRINCIPAL`): the record
-names it with Ready False for `twin.restoring`, or, where the twin does not run what the spec
-asks (`spec_met`, false after a refused or cancelled step), with its conditions as they are; then
-the nodes as inspected, a moved one holding nothing; then `RESTORE`, a step's `ready`, `pushed`
-and `verified`, for the nodes holding nothing, every probe host and the twin's own bundle. A
-restore records no phase: its progress is the nodes' `holds`, and the record's `phase`,
-`last_step`, observed generation, bundle, deployment and allocation stay as they are. Nothing is
-compiled, admitted, planned or applied, and nothing is torn down. It ends `ok` with verify's
-counts and the wait, Ready True for `twin.ready` where it set `twin.restoring`; a failure only a
-new spec can clear ends it with its own status, and a cancel `failed` with `run.cancelled`, Ready
-False for its rule there. Either way the moved node keeps its new incarnation, holding nothing
-when it was not pushed again, so no later pass repeats the restore, and the twin is not
-diverged; a new spec is the remedy, since a step, even one to the bundle the twin runs, readies
-and pushes what holds nothing. A transient failure leaves the run in flight, and the next pass
-resumes it by the same code: it reads its cancel, inspects again (a node replaced once more
-holds nothing at its newest incarnation) and passes over what is already held. A restore in
-flight is resumed before a new spec is acted on, so no step is taken beside it; a deletion
-cancels it first (below). A pass in which a restore ends goes on: a spec written meanwhile is
-stepped to, and a deletion asked meanwhile torn down, by that pass, since the kick of the
-client's write may have been spent on the restore (a kick during its backoff, say, or a core's
+core has loaded and whose teardown its driver has not refused (`_lacking`), inspects it (D-067); a
+pass that settles an ended run, or ends one, takes no settled pass after it. A recorded node,
+device node or probe host, is absent when the inspection lacks it or says it is not running, and
+moved when its incarnation is not the one the record holds; incarnations are compared as the
+driver writes them, never read. An absent node is waited for, then reported, never made: while any
+absent node is inside its boot window (its package's readiness window, from the first pass that
+saw that node absent) the pass writes nothing and queues the twin again within `MISSING_POLL_S`,
+since a runtime that replaces a node brings it back by itself. Once none is, a warning names each
+node, the twin is not queued again, and Ready is False for `twin.node.missing`, written once and
+only where the twin runs what its spec asks; a restore in flight ends `failed` instead, one
+finding per node. Nothing is applied: a node gone for good leaves its twin so until the twin is
+stepped or deleted. With every node running at its recorded incarnation the pass writes nothing
+either, and its `inspect` is its only call on the runtime, unless the twin was reported missing,
+which a restore verifies first. A moved node is restored under a run of operation `restore`, the
+core's own (`RESTORE_PRINCIPAL`): the record names it with Ready False for `twin.restoring`, or,
+where the twin does not run what the spec asks (`spec_met`, false after a refused or cancelled
+step), with its conditions as they are; then the nodes as inspected, a moved one holding nothing;
+then `RESTORE`, a step's `ready`, `pushed` and `verified`, for the nodes holding nothing, every
+probe host and the twin's own bundle. A restore records no phase: its progress is the nodes'
+`holds`, and the record's `phase`, `last_step`, observed generation, bundle, deployment and
+allocation stay as they are. Nothing is compiled, admitted, planned or applied, and nothing is
+torn down. It ends `ok` with verify's counts and the wait, Ready True for `twin.ready` where it
+set `twin.restoring`; a failure only a new spec can clear ends it with its own status, and a
+cancel `failed` with `run.cancelled`, Ready False for its rule there. Either way the moved node
+keeps its new incarnation, holding nothing when it was not pushed again, so no later pass repeats
+the restore, and the twin is not diverged; a new spec is the remedy, since a step, even one to the
+bundle the twin runs, readies and pushes what holds nothing. A transient failure leaves the run in
+flight, and the next pass resumes it by the same code: it reads its cancel, inspects again (a node
+replaced once more holds nothing at its newest incarnation) and passes over what is already held.
+A restore in flight is resumed before a new spec is acted on, so no step is taken beside it; a
+deletion cancels it first (below). A pass in which a restore ends goes on: a spec written
+meanwhile is stepped to, and a deletion asked meanwhile torn down, by that pass, since the kick of
+the client's write may have been spent on the restore (a kick during its backoff, say, or a core's
 start after it stopped mid-restore).
 
 A twin whose deletion was asked is torn down by a destroy run instead (D-025): a create, a step
 or a restore still in flight is cancelled first (a step's cancel and a restore's touch nothing),
 then the driver's `destroy` removes the deployment the record names, `destroyed` is recorded,
-and the record is deleted.
+and the record is deleted. A deployment this core cannot tear down is kept, and its deletion
+refused once, `bundle.rejected`: one whose bundle names a package this core has not loaded, which
+the loop reads itself, and one a node of which no loaded package runs (its package's image was
+edited while the twin ran it), which only the driver can say, by `Unpackaged` from its `destroy`
+before it touches the runtime (`_teardown`, D-102). A later pass of this core finds what was said
+and calls nothing; a create's cleanup, its cancel's and its `apply` that meet such a node keep the
+lab the same way. A deletion asked of this core after any of them is refused in a teardown's
+words before the loop takes a run (`_lacking`): the driver is not called, and the run the request
+queued ends `rejected` with no `destroy` event, where a deletion that met the node itself has
+the pair, `started` and `failed`.
 
 Every phase emits run events: `started`, then `done`, `skipped`, `failed`, `timed_out` or
 `cancelled`, with the seconds since `started`, and on a failure the rule; `ready` and `push`
@@ -223,6 +232,7 @@ from fylgja_core.driver import (
     NodeChange,
     Planned,
     Refusal,
+    Unpackaged,
     Unplannable,
     events_backoff,
     relinks,
@@ -495,7 +505,9 @@ class Reconciler:
         # Each twin's delay after its last transient failure; a pass that completes drops it.
         self.backoff: dict[str, float] = {}
         # What this core lacks to serve each deployment, by its id (`_lacking`): deployments and bundles are
-        # content-addressed and the loaded packages are this reconciler's for good, so each is read once.
+        # content-addressed and the loaded packages are this reconciler's for good, so each is read once. A node
+        # no loaded package runs is kept here too, as the driver's `destroy` or `apply` said it (`_teardown`,
+        # `_apply`), so that it is asked once in this core's life.
         self._lacks: dict[str, tuple[Finding, ...]] = {}
         # When a pass first saw each node of a twin missing or not running, by `time.monotonic()`, twin to node: the
         # start of that node's boot window. A node's is dropped by a pass that sees it running, and a twin's by a pass
@@ -746,25 +758,26 @@ class Reconciler:
         (D-067); or `named`, a restore run in flight, resumed by the same code. It answers whether a
         restore run ended in this pass, so the pass goes on to a spec or a deletion written
         meanwhile. A twin whose deployment names a package this core lacks is not inspected:
-        nothing could be readied or pushed. One `inspect`, the pass's only call on the runtime
-        unless a restore follows. A resume reads its cancel before that `inspect` and during it
-        (`_runtime`), so a cancelled restore never waits out a node's boot window, nor on an
-        `inspect` that keeps failing: it ends cancelled at once (`_cancel_restore`). A recorded
-        node, device node or probe host, is absent when the inspection lacks it or says it is not
-        running, and moved when its incarnation is not the one the record holds. An absent node is
-        waited for, then reported, never made (`_missing`). With none absent, the twin's sightings
-        are dropped; with none moved either, a settled twin whose Ready reason is not
-        `twin.node.missing` is left as it is, nothing written. Otherwise the restore run, the core's
-        own, is taken, so a twin reported missing whose nodes all run again is verified before it
-        is Ready again: the record names the run with Ready False for `twin.restoring`, or, where
-        the twin does not run what the spec asks (`spec_met`), with its conditions as a refused or
-        cancelled step left them. The nodes are recorded as inspected, a moved one holding nothing
-        and every other what it held (a node the inspection holds and the record does not is not
-        recorded), then `RESTORE` runs: `ready` for each device node holding nothing and every probe
-        host, `push` for each node not holding the twin's bundle, and the wait for verify. A resume
-        passes over what is already held, and a node replaced once more holds nothing at its newest
-        incarnation. A transient failure leaves the run in flight, raised as `_Retry`: the next pass
-        resumes it."""
+        nothing could be readied or pushed. Nor is one whose deployment was kept because a cancelled
+        or failed create's cleanup met a node of it that no loaded package runs (`_teardown`), for
+        this core's life (`_lacking`). One `inspect`, the pass's only call on the runtime unless a
+        restore follows. A resume reads its cancel before that `inspect` and during it (`_runtime`),
+        so a cancelled restore never waits out a node's boot window, nor on an `inspect` that keeps
+        failing: it ends cancelled at once (`_cancel_restore`). A recorded node, device node or
+        probe host, is absent when the inspection lacks it or says it is not running, and moved when
+        its incarnation is not the one the record holds. An absent node is waited for, then
+        reported, never made (`_missing`). With none absent, the twin's sightings are dropped; with
+        none moved either, a settled twin whose Ready reason is not `twin.node.missing` is left as
+        it is, nothing written. Otherwise the restore run, the core's own, is taken, so a twin
+        reported missing whose nodes all run again is verified before it is Ready again: the record
+        names the run with Ready False for `twin.restoring`, or, where the twin does not run what
+        the spec asks (`spec_met`), with its conditions as a refused or cancelled step left them.
+        The nodes are recorded as inspected, a moved one holding nothing and every other what it
+        held (a node the inspection holds and the record does not is not recorded), then `RESTORE`
+        runs: `ready` for each device node holding nothing and every probe host, `push` for each
+        node not holding the twin's bundle, and the wait for verify. A resume passes over what is
+        already held, and a node replaced once more holds nothing at its newest incarnation. A
+        transient failure leaves the run in flight, raised as `_Retry`: the next pass resumes it."""
         if named is None and self._lacking(record):
             return False
         resumed = None if named is None else _Pass(record=record, run=named, driver=driver)
@@ -966,7 +979,11 @@ class Reconciler:
         before its apply began and diverged after, D-029; nor does a restore's, D-067), and any
         create, step or restore run that never started is ended cancelled; then the destroy run, of
         the deployment the record names (a diverged step's target once it was applied, else the one
-        the twin ran)."""
+        the twin ran). A deployment this core cannot tear down is kept and the deletion refused,
+        once (`_refuse`): before any run is taken where the loop knows it (`_lacking`), and under
+        the destroy run, its `destroy` step ending `failed` for `bundle.rejected`, where the
+        driver's `destroy` is what says so (`_teardown`). A later pass finds that finding through
+        `_lacking`, so it takes no run and calls no driver (D-102)."""
         named = self._read_run(record.status.run_id) if record.status.run_id is not None else None
         if named is not None and named.operation in ("create", "step", "restore") and named.state != "ended":
             try:
@@ -992,15 +1009,41 @@ class Reconciler:
         subject = self._subject(p.record, p.run)  # before `destroyed` clears the deployment it names
         try:
             if p.record.status.phase != "destroyed":
-                async with self._step(p, "destroy"):
-                    if p.record.status.deployment_id is not None:
-                        deployment, files = self._deployment(p)
-                        await driver.destroy(deployment, files, self.platforms, self.probe_packages)
-                    p.record = self._write(p.record, p.run, phase="destroyed", nodes=(), deployment_id=None,
-                                           allocation=None)
+                try:
+                    async with self._step(p, "destroy"):
+                        if p.record.status.deployment_id is not None:
+                            deployment, files = self._deployment(p)
+                            found = await self._teardown(driver, deployment, files)
+                            if found:  # the step's ending event: `destroy failed`, under the rule
+                                raise _Failed("rejected", RULE_BUNDLE_REJECTED, found)
+                        p.record = self._write(p.record, p.run, phase="destroyed", nodes=(), deployment_id=None,
+                                               allocation=None)
+                except _Failed as failure:  # the lab is kept: the destroy run ends rejected, Ready False, once
+                    await self._refuse(p.record, RULE_BUNDLE_REJECTED, failure.findings)
+                    return
             await self._end(p, "ok", (), None, subject)
         except TRANSIENT as e:
             raise _Retry(e, p.run.id) from e
+
+    async def _teardown(
+        self, driver: Driver, deployment: Deployment, files: Mapping[str, bytes]
+    ) -> tuple[Finding, ...]:
+        """The driver's `destroy` of `deployment`, which every teardown of the loop goes through:
+        a deletion's, a cancelled create's and a failed create's cleanup. Empty once the runtime
+        holds nothing of it. For a node no loaded package runs (`Unpackaged`, which a driver
+        raises before it touches the runtime), the one finding that says so (`_unaccounted`): the
+        lab is as it was, the finding is kept as what this core lacks for the deployment
+        (`_lacks`), so `_lacking` answers it at every later pass and the driver is not asked
+        again, and the caller keeps the deployment, as it does one whose packages are not loaded
+        (D-102). The finding is this core's own: one started again asks its driver again, since
+        only `destroy` can say."""
+        try:
+            await driver.destroy(deployment, files, self.platforms, self.probe_packages)
+        except Unpackaged as e:
+            found = (_unaccounted(deployment.twin, "torn down", e),)
+            self._lacks[deployment.id] = found
+            return found
+        return ()
 
     async def _unserved(self, record: TwinRecord) -> None:
         """A spec naming a driver this core does not serve: a failure only a new spec (or a core
@@ -1017,15 +1060,15 @@ class Reconciler:
 
     async def _refuse(self, record: TwinRecord, reason: str, found: Iterable[Finding]) -> None:
         """What this core cannot do for the twin at all, whatever is asked (a driver it does not
-        serve, a teardown without the packages): every run of the twin in flight ends `rejected`
-        with `found`, and Ready is False for `reason`, once; nothing is torn down. A step's verdict
-        names its target; one whose apply had begun ends `diverged` instead, with `step.diverged`
-        beside `found` (D-029); one whose phases have all run has completed, and ends `ok`, as it
-        would have. The step the record names is recorded as its run ended (`_step_ending`, or
-        `_step_done` for `ok`): Stepping False for `reason` too, `last_step` `rejected`, or
-        `diverged` with the twin Diverged for `step.diverged`; a twin diverged already keeps the
-        `last_step` of the step that left it so. An `ok` step's verdict lists its target's flows,
-        `not_started` (D-051), as the `flows` phase it had run recorded them."""
+        serve, a teardown its packages cannot account for): every run of the twin in flight ends
+        `rejected` with `found`, and Ready is False for `reason`, once; nothing is torn down. A
+        step's verdict names its target; one whose apply had begun ends `diverged` instead, with
+        `step.diverged` beside `found` (D-029); one whose phases have all run has completed, and
+        ends `ok`, as it would have. The step the record names is recorded as its run ended
+        (`_step_ending`, or `_step_done` for `ok`): Stepping False for `reason` too, `last_step`
+        `rejected`, or `diverged` with the twin Diverged for `step.diverged`; a twin diverged
+        already keeps the `last_step` of the step that left it so. An `ok` step's verdict lists its
+        target's flows, `not_started` (D-051), as the `flows` phase it had run recorded them."""
         status = record.status
         in_flight = [r for r in self.store.list_runs(record.name) if r.state != "ended"]
         settled = (ready_reason(status.conditions) == reason and status.run_id is None
@@ -1189,9 +1232,11 @@ class Reconciler:
         """The cancel path (D-023): events `cancel started`, the cleanup (`destroy` when a
         deployment was filed, and the record's nodes, deployment and allocation cleared), and
         `cancel done` carrying `run.cancelled`; then the run ends `failed` with that finding,
-        and Ready is False for it. A step's is `_cancel_step`, told the `phase` the cancel was read
-        in, and a restore's `_cancel_restore`: neither cleans anything up. A core stopped meanwhile
-        finds the run still cancelling and runs the path again."""
+        and Ready is False for it. What this core cannot tear down is kept, and the finding says so:
+        a deployment whose packages it lacks (`_lacking`), or one a node of which none of them runs,
+        as the driver's `destroy` says (`_teardown`). A step's is `_cancel_step`, told the `phase`
+        the cancel was read in, and a restore's `_cancel_restore`: neither cleans anything up. A
+        core stopped meanwhile finds the run still cancelling and runs the path again."""
         p.run = self.store.get_run(p.run.id)
         if p.run.operation == "step":
             await self._cancel_step(p, phase)
@@ -1204,12 +1249,14 @@ class Reconciler:
         async with self._step(p, "cancel") as step:
             step.rule = RULE_CANCELLED
             if p.record.status.deployment_id is not None:
-                if self._lacking(p.record):
+                kept = bool(self._lacking(p.record))
+                if not kept:
+                    deployment, files = self._deployment(p)
+                    kept = bool(await self._teardown(p.driver, deployment, files))
+                if kept:
                     message = ("The run was cancelled; what it had built is kept, since this core lacks the "
                                "packages to tear it down.")
                 else:
-                    deployment, files = self._deployment(p)
-                    await p.driver.destroy(deployment, files, self.platforms, self.probe_packages)
                     p.record = self._write(p.record, p.run, nodes=(), deployment_id=None, allocation=None,
                                            phase=None)
                     message = "The run was cancelled, and what it had built was torn down."
@@ -1332,7 +1379,9 @@ class Reconciler:
         Ready True for an `ok` verdict; otherwise the cleanup, `destroy` when a deployment was
         filed, and then the nodes, deployment and allocation cleared, with Ready False for
         `reason` (read from the run's ending event when not given). A failed destroy records the
-        failure, keeps the rest, and is raised.
+        failure, keeps the rest, and is raised. A deployment this core cannot tear down, for the
+        packages it lacks (`_lacking`) or for a node none of them runs (`_teardown`), is kept with
+        its allocation and its nodes, Ready False for `reason` and no run named.
 
         A create's end sets `observed_generation` to the generation it acted on, unless the twin's
         deletion was asked meanwhile: that generation is the deletion's, which the destroy run
@@ -1358,22 +1407,22 @@ class Reconciler:
             return
         reason = reason if reason is not None else self._failing_rule(run)
         conditions = ready_condition(record.status.conditions, "False", reason)
-        lacking = self._lacking(record)
-        if lacking:
-            _log.error("%s: its deployment %s cannot be torn down without the packages its bundle names (%s): it is "
-                       "kept, and so is its allocation", record.name, record.status.deployment_id,
-                       ", ".join(str(f.object) for f in lacking), **logs.fields(twin=record.name, run=run.id))
-            self._write(record, run, conditions=conditions, observed_generation=observed, run_id=None,
-                        generation_in_flight=None, phase=None)
-            return
-        if record.status.deployment_id is not None:
+        lacking: Sequence[Finding] = self._lacking(record)
+        if not lacking and record.status.deployment_id is not None:
             deployment, files = self.store.get_deployment(record.status.deployment_id)
             try:
-                await driver.destroy(deployment, files, self.platforms, self.probe_packages)
+                lacking = await self._teardown(driver, deployment, files)
             except DriverFailed:
                 if (conditions, observed) != (record.status.conditions, record.status.observed_generation):
                     self._write(record, run, conditions=conditions, observed_generation=observed)
                 raise
+        if lacking:
+            _log.error("%s: its deployment %s cannot be torn down by this core, and is kept with its allocation: %s",
+                       record.name, record.status.deployment_id, " ".join(f.message for f in lacking),
+                       **logs.fields(twin=record.name, run=run.id))
+            self._write(record, run, conditions=conditions, observed_generation=observed, run_id=None,
+                        generation_in_flight=None, phase=None)
+            return
         self._write(record, run, conditions=conditions, observed_generation=observed, run_id=None,
                     generation_in_flight=None, phase=None,
                     nodes=(), deployment_id=None, allocation=None)
@@ -1557,7 +1606,9 @@ class Reconciler:
         deployment's own bundle names that are not loaded, since a driver's `destroy` takes them.
         The deployment's, not the record's `bundle_id`, which a newer compile may have written.
         Empty without a deployment. The store is read once per deployment (`_lacks`), not at every
-        settled pass."""
+        settled pass. Where the driver's `destroy` or `apply` has met a node of the deployment that
+        no loaded package runs, the answer is the finding kept then (`_teardown`, `_apply`), that
+        the deployment cannot be torn down, with no call on the driver (D-102)."""
         deployment_id = record.status.deployment_id
         if deployment_id is None:
             return []
@@ -1817,7 +1868,14 @@ class Reconciler:
         A step's lab is always present, so it is probed only when an earlier pass of the run began
         its apply (`_apply_begun`, `_reconfigures`). On a driver that declares `reapply` neither is
         probed: applying again finishes an apply cut short there, so the deployment is applied
-        plainly, never with `reconfigure`, and `step.node.silent` cannot arise (D-068)."""
+        plainly, never with `reconfigure`, and `step.node.silent` cannot arise (D-068). A driver's
+        `apply` that meets a node no loaded package runs (`Unpackaged`, before it touches the
+        runtime: a create resumed after `planned` by a core one of whose packages no longer lists
+        the image) is `bundle.rejected`, the `apply` step's ending event carrying the rule, the
+        run's finding saying the deployment cannot be applied. What this core lacks for the
+        deployment is kept first (`_lacks`), as the finding that it cannot be torn down, for the
+        same node: the cleanup that follows keeps what is there and calls no `destroy`, and a
+        deletion asked of this core later is refused by that finding (D-102)."""
         stepping = p.run.operation == "step"
         reapply = p.driver.capabilities().reapply
         # Read before this pass writes its own `apply started`: any earlier one began the apply, a transient
@@ -1835,26 +1893,34 @@ class Reconciler:
             await self._checkpoint(p)  # a cancel during the pure re-plan is read before the apply begins
         async with self._step(p, "apply") as step:
             deployment, files = self._deployment(p)
-            if stepping:
-                reconfigure = begun and not reapply and await self._reconfigures(p)
-                await self._runtime(p, p.driver.apply, deployment, files, self.platforms, self.probe_packages,
-                                    reconfigure=reconfigure)
-            elif reapply:  # a lab the record lacks `applied` for is finished by applying again: no probe (D-068)
-                await self._runtime(p, p.driver.apply, deployment, files, self.platforms, self.probe_packages)
-            else:
-                inspection = await self._runtime(p, p.driver.inspect, p.name)
-                if inspection.state == "present":  # a lab while the record lacks applied: probe it (D-023)
-                    silent = await self._silent(p, inspection)
-                    if silent is None:
-                        step.outcome = "skipped"
-                        _log.info("%s: the lab is present and every node answers: no deploy", p.name, **p.fields())
-                    else:
-                        _log.info("%s: the lab is present and %s is silent: reconfigure", p.name, silent,
-                                  **p.fields(node=silent))
-                        await self._runtime(p, p.driver.apply, deployment, files, self.platforms,
-                                            self.probe_packages, reconfigure=True)
-                else:
+            try:
+                if stepping:
+                    reconfigure = begun and not reapply and await self._reconfigures(p)
+                    await self._runtime(p, p.driver.apply, deployment, files, self.platforms, self.probe_packages,
+                                        reconfigure=reconfigure)
+                elif reapply:  # a lab the record lacks `applied` for is finished by applying again: no probe (D-068)
                     await self._runtime(p, p.driver.apply, deployment, files, self.platforms, self.probe_packages)
+                else:
+                    inspection = await self._runtime(p, p.driver.inspect, p.name)
+                    if inspection.state == "present":  # a lab while the record lacks applied: probe it (D-023)
+                        silent = await self._silent(p, inspection)
+                        if silent is None:
+                            step.outcome = "skipped"
+                            _log.info("%s: the lab is present and every node answers: no deploy", p.name,
+                                      **p.fields())
+                        else:
+                            _log.info("%s: the lab is present and %s is silent: reconfigure", p.name, silent,
+                                      **p.fields(node=silent))
+                            await self._runtime(p, p.driver.apply, deployment, files, self.platforms,
+                                                self.probe_packages, reconfigure=True)
+                    else:
+                        await self._runtime(p, p.driver.apply, deployment, files, self.platforms,
+                                            self.probe_packages)
+            except Unpackaged as e:  # the driver's `apply`, before it touched the runtime (D-102)
+                # Kept first, and in a teardown's words: the cleanup that follows keeps what is there, and a later
+                # deletion is refused by what this core cannot do then.
+                self._lacks[deployment.id] = (_unaccounted(p.name, "torn down", e),)
+                raise _Failed("rejected", RULE_BUNDLE_REJECTED, [_unaccounted(p.name, "applied", e)]) from e
             inspection = await self._runtime(p, p.driver.inspect, p.name)
             nodes = tuple(Node(name=n.name, handle=n.handle, address=n.address, incarnation=n.incarnation)
                           for n in sorted(inspection.nodes, key=lambda n: n.name))
@@ -2225,6 +2291,17 @@ def _unsteppable(twin: str, error: ValueError) -> Finding:
     its packages is refused."""
     return Finding(rule=RULE_BUNDLE_REJECTED, severity="error", object=twin,
                    message=f"The deployment {twin} runs cannot be stepped from: {error}.")
+
+
+def _unaccounted(twin: str, done: str, error: Unpackaged) -> Finding:
+    """`bundle.rejected` for a deployment of `twin` that cannot be `done`, `torn down` or `applied`,
+    since a node of it runs an image no loaded package lists, as after a package's image was
+    edited while the twin ran it: `error` is the driver's, raised before it touched the runtime,
+    and names the node, its kind and its image. The remedy is a core whose packages list that
+    image (D-102)."""
+    return Finding(rule=RULE_BUNDLE_REJECTED, severity="error", object=twin,
+                   message=f"The deployment of {twin} cannot be {done}: {error}. It waits for a core whose packages "
+                           f"list that image.")
 
 
 def _reasons(change: NodeChange) -> str:

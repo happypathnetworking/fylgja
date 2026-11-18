@@ -6,7 +6,8 @@
 # rendered config's artifact name and content type, are held by the orchestrator.
 platform_package_version: "1"
 id: nokia_srlinux
-versions: ["24.7"]                    # v24.7.1-330-g38f237abfe read from the booted image
+versions:
+  - name: "24.7.1"                    # v24.7.1-330-g38f237abfe read from the booted image
 credentials: srlinux                  # the node login's name for the credential provider; never a value
 
 interfaces:
@@ -40,7 +41,8 @@ gnmi:
   port: 57400                         # in the management namespace, at the node's management address
   tls: true                           # the boot-time certificate accepted unverified; set the encoding (json_ietf), or the node answers Unimplemented
 
-# The paths verify and the conformance suite read. {node_name} is the port's node name.
+# The paths of a booted node. verify reads host_name and each cabled port's enabled and neighbor; no code reads version or
+# port.discovering, which a package may leave out. {node_name} is the port's node name.
 conformance:
   host_name: /system/name/host-name
   version: /system/information/version
@@ -61,8 +63,9 @@ fidelity:
 runtime:
   containerlab:
     kind: nokia_srlinux
-    image:
-      ref: ghcr.io/nokia/srlinux:24.7.1   # the image every value here was measured on; public, so either driver may pull it
+    images:
+      "24.7.1":
+        ref: ghcr.io/nokia/srlinux:24.7.1   # the image every value here was measured on; public, so either driver may pull it
     resources:
       cpu: 0.5                        # 0.35-0.5 core measured per node, five twins on three k3s hosts (2026-11-02); clabernetes requests it, so it sizes the cluster
       memory_mb: 2048                 # 1641 MiB measured, three nodes, steady over a minute; x1.25. About 1.6-2 GiB per node on both containerlab drivers

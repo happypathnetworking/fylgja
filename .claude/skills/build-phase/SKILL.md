@@ -97,6 +97,13 @@ written.
   command cannot be built as written.
 - Plans drafted side by side are reconciled where they meet, and plan 0 gains a section
   saying what was settled.
+- **A criterion that says the maintainer has watched says how.** The plan names who runs the
+  command and where its output shows: the maintainer runs it, or the controller shows its
+  whole output before the next act. Phase 9's first run was built with the output in a log,
+  and whether it had been watched had to be asked afterwards.
+- **A bound a runbook states as a rule says what it is there to tell.** "A run with no
+  validator 120 s after the creation is not the run" told a check that never starts; a run
+  that passed 11 s later had to be ruled on, and the ruling got the bound's origin wrong.
 - **Plan 0 keeps the bends.** Each place a plan, or later a ruling, departs from a
   decision's text is added to plan 0 when it is made, with the entry it bends. The landing
   writes its decision entries from that list.
@@ -143,6 +150,18 @@ written.
 - **A fix that changes a test run live is followed by one run of that test**, so that the
   merged code has run; where no window allows it, the landing says at which commit the
   facts were read.
+- **A live run made from the main checkout runs the main checkout's code.** `local/` is
+  there alone, and the `make` targets run the working directory's scripts and venv. For a
+  plan's live run the main checkout is checked out detached at the code under test, the
+  ledger says so, and it goes back on the integration branch when the runs are over.
+- **A task off the live window may run in a worktree of its own** beside the one that holds
+  it (a runbook, the documents, a fix wave while a contract tier reads the plan's worktree),
+  its branch merged by the controller. Once the plan's trailers are made uniform such a
+  branch is no ancestor of the archive tag: the tag made before the rewrite holds it, and
+  it is removed when a commit of the same tree stands in the rewritten history.
+- **What a fact cites is in a file of its run's directory** before the task is reviewed. A
+  script a later task reuses is kept in the plan's workspace under its task's name: phase
+  9's scratch reader of one run was overwritten by the next task's.
 - **A fact is a reading.** A reviewer is asked whether each new fact says only what its run
   showed. A figure worked out from others is called a derivation, and whether a bound or a
   wider wait is needed is a ruling, recorded in the ledger and entered at the landing.
@@ -154,8 +173,13 @@ written.
   to say they read the report in its thread, not only that the run passed.
 - **A plan ends** with one review of its whole branch on the most capable model, one fix
   wave, and one check of that wave. The last plan's reviewer is also asked for every line
-  of the design documents the phase has made untrue. Then its commits' trailers are made uniform, it is merged
-  into the integration branch (`--no-ff`), and the next plan's branch is cut.
+  of the design documents the phase has made untrue. Where the last record of a run waits on
+  the maintainer, the review starts without it: that record gets its task review, and the
+  check of the fix wave reads it. Then the plan's commits' trailers are made uniform, it is
+  merged into the integration branch (`--no-ff`), and the next plan's branch is cut.
+- **A reason the controller gives for a ruling is checked against the tree** before it is
+  written or told. What a ruling costs if wrong is the controller's to judge; what the tree
+  says is not.
 - **The controller rules and goes on.** It stops for four things alone: an operation that
   cannot be undone, a security-sensitive action, a side effect outside the phase's own
   branches that one asks about first (a merge into `main`, a push), and a plan so broken that
@@ -179,8 +203,11 @@ Only on the maintainer's word.
    - the item of "Sequence" marked done, with its date, what it built and what it left to
      later phases; what it left unanswered goes under "Open questions".
 
-   Before the tag, the as-built commit gets a fresh review on the most capable model, one fix
-   wave and one re-review, as a plan's last review does.
+   Before the tag, the as-built commit gets a review on the most capable model, one fix wave
+   and one re-review, as a plan's last review does. The reviewer is a fresh one, or the one
+   who compiled the last list of design lines, who holds what the commit was written from.
+   The wave amends the commit, so the phase as built stays one commit, and the re-review is
+   made before the squash: phase 9's was made after it.
 3. Tag the integration branch `archive/phase-N-integration`, so the hashes the ledgers name
    still resolve.
 4. Squash the integration branch onto `main` as one commit, `feat: phase N, <what it built>`,

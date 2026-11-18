@@ -5,7 +5,9 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
 
 - **Where you work.** Only in the worktree your dispatch names. Never edit, stage or commit
   anything in the main checkout or in another worktree. Never push. Never commit `local/`.
-  Never touch `local/plans/`: the controller ticks a plan's boxes.
+  Never touch `local/plans/`: the controller ticks a plan's boxes. Where your dispatch says
+  another implementer shares the worktree, look at `git status` before you edit, and wait
+  while it is not clean.
 - **Gates.** Every commit passes `make lint` and `make test`, run from the worktree's root,
   and `make linkcheck` where Markdown changed. Read a gate's status directly, never through a
   pipe: `if make lint > /tmp/lint.log 2>&1; then echo ok; else tail -20 /tmp/lint.log; fi`.
@@ -34,6 +36,12 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
 - **A fact says what a run showed, and no more.** A figure worked out from other figures is
   called a derivation. Whether a reading calls for a bound, a wider wait or nothing is not
   yours to write into a fact: put it in your report's concerns, and the controller rules.
+- **A reading a fact cites is saved**, in a file of the run's directory that your report
+  names. A label your script prints ("held", "empty") says what the script could tell, and
+  the fact says no more than that. A later read of the same thing is a reading too, with
+  its time.
+- **A script you write for a run** goes where your dispatch says, under your task's name.
+  Never overwrite a file another task left.
 - **Formats change in `formats/`**, in the same commit as the code. `design/decisions.md` is
   append-only: never rewrite an entry. Its preface is conventions, not an entry.
 - **Prose** in documents and docstrings follows the text around it: plain and specific.

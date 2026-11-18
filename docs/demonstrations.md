@@ -14,6 +14,12 @@ orchestrator it uses is described in [integrating Fylgja](integrating.md).
 A demonstration checks these before it starts, says each one that is not met in a line of its own,
 and changes nothing until all are met. Only the host's owner can give them.
 
+`make demo-dependencies` gives the host what it can of them, using sudo for each change and
+nothing where all is present: git, `ss` and curl, uv, Docker with its Compose plugin and
+containerlab, the two groups and the AppArmor widening. It checks Python, the node login and the
+memory and says what is left to do by hand. `make demo-dependencies DRY_RUN=1` prints what it
+would run instead.
+
 - **A Linux host with Python 3.14, uv 0.12.23, GNU make, git, `ss` and the network.** The script
   looks for `docker`, `containerlab`, `git`, `make` and `ss` on `PATH` and says `<name> is not on
   PATH` for each it does not find. It does not check the versions of Python and uv, or the network:

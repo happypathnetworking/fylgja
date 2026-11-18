@@ -1,8 +1,9 @@
 # fylgja-core (CONTRIBUTING.md).
 
-.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck infrahub-up infrahub-down \
-	infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down orchestrator-serve netbox-up \
-	netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo netbox-demo demo-down
+.PHONY: all demo-dependencies venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck \
+	infrahub-up infrahub-down infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down \
+	orchestrator-serve netbox-up netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo \
+	netbox-demo demo-down
 
 VENV := core/.venv
 
@@ -48,6 +49,21 @@ TAG := $(shell git rev-parse HEAD 2>/dev/null | cut -c1-12)$(if $(shell git stat
 COMMIT := $(shell git rev-parse HEAD 2>/dev/null)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
 
 all: lint test
+
+# What the demonstrations need of the host (docs/demonstrations.md, "What the host must have"), installed where it is
+# missing and checked where only its owner can give it (scripts/demo_dependencies.sh): git, ss and curl; uv at the
+# version pyproject.toml's required-version pins; python3 at the members' requires-python, checked and never
+# installed (D-115); Docker with its Compose plugin, and containerlab at the version the demonstrations were verified
+# on, by containerlab's setup script; the groups docker and clab_admins; the AppArmor widening on Ubuntu; and the node
+# login in local/.env and the memory, checked. DRY_RUN=1 prints each command that would change the host instead.
+UV_VERSION := $(shell sed -n 's/^required-version = "==\(.*\)"$$/\1/p' pyproject.toml)
+PYTHON_MIN := 3.14
+CONTAINERLAB_VERSION := 0.81.0
+
+demo-dependencies:
+	@test -n "$(UV_VERSION)" || { echo "demo-dependencies: no required-version in pyproject.toml" >&2; exit 1; }
+	@UV_VERSION=$(UV_VERSION) PYTHON_MIN=$(PYTHON_MIN) CONTAINERLAB_VERSION=$(CONTAINERLAB_VERSION) LOCAL='$(LOCAL)' \
+		bash scripts/demo_dependencies.sh
 
 # The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the four distributions editable with every
 # extra, at the versions uv.lock holds, which a pin moved in a pyproject.toml without `uv lock` refuses. The

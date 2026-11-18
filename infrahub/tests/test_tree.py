@@ -58,6 +58,11 @@ LOCKED = {"uv.lock": ("pypi.org", "files.pythonhosted.org")}
 """The hosts a file alone may name, each file by its path: the lock's index and its files (D-108). A lock written
 through a site's mirror names that site's host, and fails."""
 
+TEMPLATES = {"scripts/publish.py": ("github.com", "/{repository}/blob/{tag}")}
+"""The one address a file alone may write as a template, each file by its path: the base the publish script makes
+the changelog's relative links absolute under, whose repository and tag are given to it when it runs (it holds their
+shapes). Any other path on github.com under a placeholder is still refused."""
+
 NOT_HOSTS = {
     ("s3", "fylgja"): "the S3 bucket an `s3` URL names in the place of a host, its endpoint given apart",
     ("http", "versity"): "the deploy base's own Service, named in its namespace",
@@ -284,7 +289,9 @@ def test_the_tree_names_no_address() -> None:
     github = [
         (path, number, found.path)
         for path, number, found in urls(held)
-        if found.host == "github.com" and not on_github(found.path, ours)
+        if found.host == "github.com"
+        and not on_github(found.path, ours)
+        and (found.host, found.path) != TEMPLATES.get(path)
     ]
     assert github == []
     bare = [

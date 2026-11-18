@@ -1969,8 +1969,8 @@ environment, registers a publisher, tags, pushes a tag or approves an upload.
    token is stored anywhere, and only the six upload jobs may ask GitHub for an identity token.
    A file uploaded to an index can never be uploaded again, nor replaced.
 6. **For a release**, once its three uploads have passed, the job `release` makes the GitHub
-   release, titled by the tag, carrying the same wheels and the changelog's head section. A
-   candidate has none.
+   release, titled by the tag, carrying the same wheels and the changelog's head section, whose
+   links are made absolute at the tag. A candidate has none.
 
 **Where a run fails.** A tag whose `build` job failed, before any upload, may be deleted and
 pushed again on a mended commit. Where one upload job failed and the others uploaded, that job

@@ -131,6 +131,76 @@ def test_the_notes_are_the_head_sections_body(tmp_path: Path) -> None:
     assert _script().notes(root) == "The first release.\n"
 
 
+LINKED = """\
+See [the page](docs/compatibility.md) and [the questions](design/decisions.md#open-questions "why").
+Also [a schema](./formats/findings-1.schema.json), [the web](https://example.org/a/b), [here](#below),
+[mail](mailto:someone@example.org) and [more][oq].
+
+```
+[kept](docs/in-a-fence.md)
+```
+
+[oq]: design/decisions.md#open-questions
+[ext]: https://example.org/x
+"""
+BASE = "https://github.com/example-org/fylgja/blob/v1.0.0/"
+
+
+def linked(tmp_path: Path, body: str = LINKED) -> Path:
+    root = tmp_path / "linked"
+    root.mkdir()
+    (root / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## 1.0.0 - 2026-11-18\n\n{body}\n## 0.9.0 - 2026-01-01\n\nOld.\n")
+    return root
+
+
+def test_a_relative_link_is_absolute_at_the_tag_and_its_anchor_kept(tmp_path: Path) -> None:
+    out = _script().notes(linked(tmp_path), "example-org/fylgja", "v1.0.0")
+    assert f"[the page]({BASE}docs/compatibility.md)" in out
+    assert f'[the questions]({BASE}design/decisions.md#open-questions "why")' in out
+    assert f"[a schema]({BASE}formats/findings-1.schema.json)" in out
+    assert f"[oq]: {BASE}design/decisions.md#open-questions\n" in out
+
+
+def test_an_absolute_link_a_bare_anchor_and_a_fence_are_untouched(tmp_path: Path) -> None:
+    out = _script().notes(linked(tmp_path), "example-org/fylgja", "v1.0.0")
+    for kept in ("[the web](https://example.org/a/b)", "[here](#below)", "[mail](mailto:someone@example.org)",
+                 "[ext]: https://example.org/x\n", "[kept](docs/in-a-fence.md)"):
+        assert kept in out
+
+
+def test_without_a_repository_and_a_tag_the_body_is_verbatim(tmp_path: Path) -> None:
+    assert _script().notes(linked(tmp_path)) == LINKED
+
+
+@pytest.mark.parametrize("target", ["../x.md", "docs/../../x.md", "/x.md", "//host.example/x"])
+def test_a_link_that_leaves_the_repository_is_refused(tmp_path: Path, target: str) -> None:
+    root = linked(tmp_path, f"A [link]({target}).\n")
+    with pytest.raises(_script().Failure, match="not a path inside the repository"):
+        _script().notes(root, "example-org/fylgja", "v1.0.0")
+
+
+def test_the_repository_and_the_tag_hold_their_shapes(tmp_path: Path) -> None:
+    root = linked(tmp_path)
+    for repository, tag in (("fylgja", "v1.0.0"), ("a/b/c", "v1.0.0"), ("example-org/fylgja", "1.0.0"),
+                            ("example-org/fylgja", "v1.0")):
+        with pytest.raises(_script().Failure):
+            _script().notes(root, repository, tag)
+    with pytest.raises(_script().Failure, match="together"):
+        _script().notes(root, "example-org/fylgja", None)
+
+
+def test_the_notes_command_needs_both_and_prints_the_absolute_links(tmp_path: Path,
+                                                                    capsys: pytest.CaptureFixture[str],
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_script(), "ROOT", linked(tmp_path))
+    with pytest.raises(SystemExit):
+        _script().main(["notes"])
+    capsys.readouterr()
+    assert _script().main(["notes", "--repository", "example-org/fylgja", "--tag", "v1.0.0"]) == 0
+    assert f"[the page]({BASE}docs/compatibility.md)" in capsys.readouterr().out
+
+
 def test_the_index_is_written_for_the_workflow(tmp_path: Path, capsys: pytest.CaptureFixture[str],
                                                monkeypatch: pytest.MonkeyPatch) -> None:
     root = tree(tmp_path / "root")
@@ -294,7 +364,8 @@ def test_the_release_is_the_wheels_and_the_changelogs_notes() -> None:
     (download,) = _uses("release", "actions/download-artifact")
     assert download["with"] == {"pattern": "fylgja-*", "merge-multiple": True, "path": "dist/"}
     runs = [step["run"] for step in steps if "run" in step]
-    assert runs == ["python3 -I scripts/publish.py notes > notes.md",
+    assert runs == ['python3 -I scripts/publish.py notes --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" '
+                    "> notes.md",
                     'gh release create "$GITHUB_REF_NAME" dist/*.whl --verify-tag --title "$GITHUB_REF_NAME" '
                     "--notes-file notes.md"]
 

@@ -6,7 +6,7 @@ Run as `python3 -I scripts/publish.py`, standard library alone. It performs no u
 network: it checks and prints.
 
     check --tag T --commit C --dist D [--output F]   prints `index=<pypi|testpypi>` (and appends it to F), exit 0
-    notes                                            prints the changelog's head section's body
+    notes --repository OWNER/REPO --tag T            prints the changelog's head section's body, its links absolute at T
 
 A `Failure` is its lines on stderr, exit 1: `check` names every fault in one pass.
 """
@@ -28,6 +28,11 @@ RELEASE = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)")
 CANDIDATE = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)rc[1-9]\d*")
 HEADING = re.compile(r"^## (\S+) - (unreleased|\d{4}-\d{2}-\d{2})$")
 COMMIT = re.compile(r"[0-9a-f]{40}")
+REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+# An inline link's target, with an optional title after it; a reference definition's target.
+INLINE = re.compile(r"(\]\()([^)\s]*)((?:\s+\"[^\"]*\")?\))")
+DEFINITION = re.compile(r"^(\s{0,3}\[[^\]]+\]:\s*)(\S+)")
 
 
 class Failure(Exception):
@@ -47,6 +52,14 @@ def index(version: str) -> str:
     raise Failure(f"version {version!r} is neither X.Y.Z nor X.Y.ZrcN: no index takes it")
 
 
+def index_or_none(version: str) -> str | None:
+    """`index(version)`, or None where no index takes the version."""
+    try:
+        return index(version)
+    except Failure:
+        return None
+
+
 def head(changelog: str) -> tuple[str, str]:
     """The first `## ` heading's version and date (`unreleased` or `YYYY-MM-DD`); a `Failure` where there is none or
     it is not of the form `## <version> - <date>`."""
@@ -64,14 +77,51 @@ def head(changelog: str) -> tuple[str, str]:
     raise Failure("CHANGELOG.md holds no '## ' heading")
 
 
-def notes(root: Path = ROOT) -> str:
-    """The body of the changelog's head section: what follows its heading up to the next `## ` heading."""
+def _absolute(target: str, base: str) -> str:
+    """A link's `target` made absolute under `base` (the repository's tree at the tag): a target with a scheme (so
+    `mailto:` too) and a bare `#anchor` stay; a path from the repository's root gains `base`, its `#anchor` kept; one
+    that is rooted, protocol-relative or climbs by `..` is a `Failure`, for it names nothing in the repository."""
+    if target == "" or target.startswith("#") or SCHEME.match(target):
+        return target
+    path, hash_, anchor = target.partition("#")
+    parts = path.split("/")
+    if path.startswith("/") or ".." in parts or "?" in path:
+        raise Failure(f"CHANGELOG.md: the link target {target!r} is not a path inside the repository")
+    while parts and parts[0] == ".":
+        parts.pop(0)
+    return f"{base}/{'/'.join(parts)}{hash_}{anchor}"
+
+
+def notes(root: Path = ROOT, repository: str | None = None, tag: str | None = None) -> str:
+    """The body of the changelog's head section: what follows its heading up to the next `## ` heading. Given
+    `repository` (`owner/name`) and `tag`, each relative link, inline or a reference definition, is written absolute at
+    its path in the repository's tree at the tag on github.com, since on a release page a relative link resolves under
+    `/releases/tag/` and answers 404; given neither, the body is verbatim; one without the other is a `Failure`."""
     text = (root / "CHANGELOG.md").read_text()
     head(text)
     lines = text.splitlines()
     start = next(i for i, line in enumerate(lines) if line.startswith("## ")) + 1
     end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
-    return "\n".join(lines[start:end]).strip("\n") + "\n"
+    body = lines[start:end]
+    if repository is not None or tag is not None:
+        if repository is None or tag is None:
+            raise Failure("notes: the repository and the tag are given together")
+        faults = []
+        if REPOSITORY.fullmatch(repository) is None:
+            faults.append(f"repository {repository!r} is not 'owner/name'")
+        if not tag.startswith("v") or index_or_none(tag[1:]) is None:
+            faults.append(f"tag {tag!r} is not 'v' and a version")
+        if faults:
+            raise Failure(*faults)
+        base = f"https://github.com/{repository}/blob/{tag}"
+        fenced = False
+        for i, line in enumerate(body):
+            if line.lstrip().startswith(("```", "~~~")):
+                fenced = not fenced
+            elif not fenced:
+                line = INLINE.sub(lambda f: f[1] + _absolute(f[2], base) + f[3], line)
+                body[i] = DEFINITION.sub(lambda f: f[1] + _absolute(f[2], base), line)
+    return "\n".join(body).strip("\n") + "\n"
 
 
 def _requirements(requires: list[str]) -> list[str]:
@@ -171,11 +221,13 @@ def main(argv: list[str]) -> int:
     one.add_argument("--commit", required=True)
     one.add_argument("--dist", required=True, type=Path)
     one.add_argument("--output", type=Path, help="a file the line index=<index> is appended to")
-    sub.add_parser("notes", help="print the changelog's head section's body")
+    two = sub.add_parser("notes", help="print the changelog's head section's body, its links absolute at the tag")
+    two.add_argument("--repository", required=True, help="owner/name")
+    two.add_argument("--tag", required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "notes":
-            sys.stdout.write(notes(ROOT))
+            sys.stdout.write(notes(ROOT, args.repository, args.tag))
             return 0
         line = f"index={check(args.tag, args.commit, args.dist, ROOT)}\n"
         if args.output is not None:

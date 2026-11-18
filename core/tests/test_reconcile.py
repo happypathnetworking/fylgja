@@ -5560,17 +5560,37 @@ def test_an_event_received_while_a_twin_backs_off_does_not_bring_its_retry_forwa
     assert gaps(driver.applied) == pytest.approx([1.0], abs=0.1)
 
 
+class Stamped(dict[str, float]):
+    """A reconciler's `backoff` that keeps the loop's time at each delay written to it, as `(name, delay, time)`: the
+    loop writes a twin's delay just before it queues the twin after it, so the backoff ends no earlier than that time
+    and the delay."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.written: list[tuple[str, float, float]] = []
+
+    def __setitem__(self, name: str, delay: float) -> None:
+        self.written.append((name, delay, asyncio.get_running_loop().time()))
+        super().__setitem__(name, delay)
+
+
 def test_a_clients_write_while_a_twin_backs_off_brings_its_pass_forward_as_it_always_did(store: LocalStore) -> None:
-    """A client's write kicks its twin (`kick`), which the queue serves at once, the backoff's later deadline lost."""
+    """A client's write kicks its twin (`kick`), which the queue serves at once, the backoff's later deadline lost.
+    Held by the order of the times on the loop's clock, not by their gap, which a loaded host's time at work
+    lengthens, before the backoff as after it: the second apply comes no earlier than the kick, and before the 1 s
+    backoff would have ended."""
     new_twin(store, file_blueprint(store))
     driver = Clocked(fail_apply=True)
     r = make(store, driver, resync_s=3600)
+    r.backoff = backoff = Stamped()
+    kicked: list[float] = []
 
     async def scenario() -> None:
         await r.start()
         try:
             await until(lambda: r.backoff.get("t") == 1.0)
             await asyncio.sleep(0.5)
+            kicked.append(asyncio.get_running_loop().time())
             r.kick("t")  # half way through the backoff
             # The pass it brought forward has failed and grown the backoff: a stop as its apply begins would cut it.
             await until(lambda: len(driver.applied) == 2 and r.backoff.get("t") == 2.0)
@@ -5578,7 +5598,11 @@ def test_a_clients_write_while_a_twin_backs_off_brings_its_pass_forward_as_it_al
             await r.stop()
 
     bounded(scenario, loop=Skipping())
-    assert gaps(driver.applied) == pytest.approx([0.5], abs=0.1)
+    _, second = driver.applied
+    (kick,) = kicked
+    (name, delay, backed_off), _ = backoff.written  # the first pass's 1 s, then the second's 2 s
+    assert (name, delay) == ("t", 1.0)
+    assert kick <= second < backed_off + 1.0  # brought forward by the kick, not by the backoff's end
     assert r.backoff == {"t": 2.0}  # the pass it brought forward failed too: the backoff grows as before
 
 

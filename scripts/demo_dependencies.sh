@@ -24,7 +24,9 @@ set -uo pipefail
 DRY_RUN="${DRY_RUN:-}"
 SETUP_URL="https://containerlab.dev/setup"
 APPARMOR_PROFILE="/etc/apparmor.d/usr.sbin.rsyslogd"
-APPARMOR_LOCAL="/etc/apparmor.d/local/usr.sbin.rsyslogd"
+APPARMOR_LOCAL="${APPARMOR_LOCAL:-/etc/apparmor.d/local/usr.sbin.rsyslogd}"
+# AppArmor's kernel interface, without which no profile is reloaded. This and APPARMOR_LOCAL are set only by a test.
+APPARMOR_FS="${APPARMOR_FS:-/sys/kernel/security/apparmor}"
 APPARMOR_LINES=("/opt/srlinux/** mr," "/run/srlinux/** rw,")
 # scripts/demo.py's SOURCE_MB and TWIN_MB: the larger source's need, Infrahub's, with the twin's and the edge's.
 NEED_MB=$((4608 + 7168))
@@ -86,7 +88,8 @@ else
 fi
 
 # Docker and containerlab, by containerlab's setup script as root. It reads SUDO_USER for the user it adds to the
-# groups, so it is run under sudo even where this script is root.
+# groups, so it is run under sudo even where this script is root, and is given its two names through env: Ubuntu
+# 26.04's sudo, sudo-rs, ignores -E and says so.
 setup_script=""
 run_setup() {
     if [ -z "$setup_script" ]; then
@@ -94,7 +97,7 @@ run_setup() {
         trap 'rm -f "$setup_script"' EXIT
         curl -fsSL "$SETUP_URL" -o "$setup_script" || { setup_script=""; return 1; }
     fi
-    change sudo -E env SUDO_USER="$USER_NAME" CLAB_VERSION="$CONTAINERLAB_VERSION" bash "$setup_script" "$@"
+    change sudo env SUDO_USER="$USER_NAME" CLAB_VERSION="$CONTAINERLAB_VERSION" bash "$setup_script" "$@"
 }
 
 if have docker; then
@@ -173,8 +176,14 @@ if [ -f "$APPARMOR_PROFILE" ]; then
             printf '%s\n' "${lacking[@]}" | "${SUDO[@]}" tee -a "$APPARMOR_LOCAL" > /dev/null \
                 || BY_HAND+=("$APPARMOR_LOCAL could not be written")
         fi
-        change "${SUDO[@]}" apparmor_parser -r "$APPARMOR_PROFILE" \
-            || BY_HAND+=("apparmor_parser -r $APPARMOR_PROFILE failed")
+        # A reload needs AppArmor's kernel interface, which a host without AppArmor enabled, or a container not
+        # given securityfs, lacks; there the lines are added and no reload asked.
+        if [ -d "$APPARMOR_FS" ]; then
+            change "${SUDO[@]}" apparmor_parser -r "$APPARMOR_PROFILE" \
+                || BY_HAND+=("apparmor_parser -r $APPARMOR_PROFILE failed")
+        else
+            NOTES+=("AppArmor's kernel interface, $APPARMOR_FS, is not here: the lines were added and the profile not reloaded")
+        fi
     fi
 fi
 
@@ -187,9 +196,9 @@ done
 if [ ${#unset_names[@]} -eq 0 ]; then
     say "node login in $env_file: present"
 elif [ -f "$env_file" ]; then
-    BY_HAND+=("$env_file gives ${unset_names[*]} no value: add the lines; the image's published default login is enough")
+    BY_HAND+=("$env_file gives ${unset_names[*]} no value: add NAME=value lines for them; the SR Linux image's published default login is enough")
 else
-    BY_HAND+=("$env_file is not there: make it, mode 0600, with ${unset_names[*]}")
+    BY_HAND+=("$env_file is not there: make it with \`install -m 0600 /dev/null $env_file\`, then add NAME=value lines for ${unset_names[*]}; the SR Linux image's published default login is enough")
 fi
 
 # The memory: the host's whole, since what is free depends on what runs at the demonstration's start.

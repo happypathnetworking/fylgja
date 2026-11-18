@@ -9738,6 +9738,17 @@ and each says whether it was re-verified on 26.04.
 - With those lines the profile still denies SR Linux's `rsyslogd` the `net_admin`
   capability (`capable`: 10 denials over a full live run), denies no file, and every
   deploy passes. *(26.04, 2026-10-08)*
+- **Ubuntu 26.04's `sudo` is sudo-rs, which ignores `-E`.** `sudo -n -E true` under sudo-rs
+  0.2.13 printed `sudo: preserving the entire environment is not supported, '-E' is ignored`
+  and went on. So `make demo-dependencies` hands containerlab's setup script its variables
+  through `env` on sudo's command line. *(26.04, sudo-rs 0.2.13, 2026-11-18)*
+- **Where AppArmor's kernel interface is missing, `apparmor_parser -r` fails.** On a clean
+  26.04 install of the maintainer's that lacked `/sys/kernel/security/apparmor`, `make
+  demo-dependencies` added the two lines and the reload failed with `Cache read/write
+  disabled: interface file missing. (Kernel needs AppArmor 2.4 compatibility patch.)` and
+  `unable to find a suitable fs in /proc/mounts`. The script now adds the lines and asks for no
+  reload where that directory is absent. Whether SR Linux's `rsyslogd` is confined on such a
+  host was not read. *(26.04, 2026-11-18)*
 - A guest that does not nest has no `/dev/kvm`, which only a `vrnetlab_vm` platform
   package would need. *(2026-09-30; 26.04, 2026-10-08)*
 - **A Compose project's default network can take the local driver's whole pool.** On the

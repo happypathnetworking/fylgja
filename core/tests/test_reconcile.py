@@ -9,7 +9,6 @@ import contextlib
 import dataclasses
 import hashlib
 import io
-import itertools
 import json
 import logging
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping
@@ -5478,8 +5477,28 @@ class Clocked(FakeDriver):
         return await super().inspect(twin)
 
 
-def gaps(times: list[float]) -> list[float]:
-    return [b - a for a, b in itertools.pairwise(times)]
+class Stamped(dict[str, float]):
+    """A reconciler's `backoff` that keeps the loop's time at each delay written to it, as `(name, delay, time)`: the
+    loop writes a twin's delay just before it queues the twin after it, so the backoff ends no earlier than that time
+    and the delay."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.written: list[tuple[str, float, float]] = []
+
+    def __setitem__(self, name: str, delay: float) -> None:
+        self.written.append((name, delay, asyncio.get_running_loop().time()))
+        super().__setitem__(name, delay)
+
+
+def assert_retried_as_each_backoff_ends(applied: list[float], backoff: Stamped, delays: list[float]) -> None:
+    """Each pass failed and wrote the next of `delays`, doubling; the pass after it came no earlier than that delay
+    after the loop wrote it, which its own events do not shorten. Held on the loop's clock by order, not by the gap
+    between passes, which a loaded host's time at work lengthens."""
+    assert [(name, delay) for name, delay, _ in backoff.written] == [("t", d) for d in delays]
+    for (_, delay, written), retry in zip(backoff.written, applied[1:], strict=False):
+        assert retry >= written + delay
+    assert len(applied) == len(delays)  # never hundreds back to back: one pass for each delay written
 
 
 def test_a_failing_apply_whose_driver_names_the_twin_is_retried_at_the_backoffs_pace(store: LocalStore) -> None:
@@ -5489,19 +5508,17 @@ def test_a_failing_apply_whose_driver_names_the_twin_is_retried_at_the_backoffs_
     new_twin(store, file_blueprint(store))
     driver = Clocked(fail_apply=True, own_events=True)
     r = make(store, driver, resync_s=3600)
+    r.backoff = backoff = Stamped()
 
     async def scenario() -> None:
-        loop = asyncio.get_running_loop()
         await r.start()
-        began = loop.time()
-        try:
-            while len(driver.applied) < 10 and loop.time() < began + 20:
-                await asyncio.sleep(0.01)
+        try:  # the fifth pass has failed and written 16 s; the sixth is 16 s off, so a stop now cuts nothing
+            await until(lambda: len(driver.applied) >= 5 and r.backoff.get("t") == 16.0, timeout_s=60)
         finally:
             await r.stop()
 
     bounded(scenario, loop=Skipping())
-    assert gaps(driver.applied) == pytest.approx([1.0, 2.0, 4.0, 8.0], abs=0.1)
+    assert_retried_as_each_backoff_ends(driver.applied, backoff, [1.0, 2.0, 4.0, 8.0, 16.0])
     assert r.backoff == {"t": 16.0}
 
 
@@ -5522,20 +5539,18 @@ def test_a_pass_that_fails_outside_the_seams_contract_is_retried_at_the_backoffs
     new_twin(store, file_blueprint(store))
     driver = Faulty()
     r = make(store, driver, resync_s=3600)
+    r.backoff = backoff = Stamped()
 
     async def scenario() -> None:
-        loop = asyncio.get_running_loop()
         await r.start()
-        began = loop.time()
-        try:
-            while len(driver.applied) < 10 and loop.time() < began + 20:
-                await asyncio.sleep(0.01)
+        try:  # the fifth pass has failed and written 16 s; the sixth is 16 s off, so a stop now cuts nothing
+            await until(lambda: len(driver.applied) >= 5 and r.backoff.get("t") == 16.0, timeout_s=60)
         finally:
             await r.stop()
 
     with caplog.at_level(logging.ERROR, logger="fylgja"):
         bounded(scenario, loop=Skipping())
-    assert gaps(driver.applied) == pytest.approx([1.0, 2.0, 4.0, 8.0], abs=0.1)
+    assert_retried_as_each_backoff_ends(driver.applied, backoff, [1.0, 2.0, 4.0, 8.0, 16.0])
     assert r.backoff == {"t": 16.0}
     logged = [record for record in caplog.records if record.name == "fylgja.queue" and record.exc_info is not None]
     assert len(logged) == len(driver.applied)  # each failure logged once, by the worker, as before
@@ -5545,6 +5560,7 @@ def test_an_event_received_while_a_twin_backs_off_does_not_bring_its_retry_forwa
     new_twin(store, file_blueprint(store))
     driver = Clocked(fail_apply=True)  # it names nothing of its own
     r = make(store, driver, resync_s=3600)
+    r.backoff = backoff = Stamped()
 
     async def scenario() -> None:
         await r.start()
@@ -5557,21 +5573,10 @@ def test_an_event_received_while_a_twin_backs_off_does_not_bring_its_retry_forwa
             await r.stop()
 
     bounded(scenario, loop=Skipping())
-    assert gaps(driver.applied) == pytest.approx([1.0], abs=0.1)
-
-
-class Stamped(dict[str, float]):
-    """A reconciler's `backoff` that keeps the loop's time at each delay written to it, as `(name, delay, time)`: the
-    loop writes a twin's delay just before it queues the twin after it, so the backoff ends no earlier than that time
-    and the delay."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.written: list[tuple[str, float, float]] = []
-
-    def __setitem__(self, name: str, delay: float) -> None:
-        self.written.append((name, delay, asyncio.get_running_loop().time()))
-        super().__setitem__(name, delay)
+    _, retry = driver.applied
+    (name, delay, backed_off), *_ = backoff.written  # the first pass's 1 s; the second may be cut by the stop
+    assert (name, delay) == ("t", 1.0)
+    assert retry >= backed_off + 1.0  # the event did not bring it forward: it came as the backoff ended
 
 
 def test_a_clients_write_while_a_twin_backs_off_brings_its_pass_forward_as_it_always_did(store: LocalStore) -> None:
@@ -5635,6 +5640,7 @@ def test_a_node_replaced_while_its_twin_backs_off_is_restored_by_the_pass_the_ba
     driver.replace("t", "n2")
     pusher = fake_push(unreachable={"n2"}, driver=driver)
     r = restorer(store, driver, pusher=pusher, resync_s=3600)
+    r.backoff = backoff = Stamped()
     since = len(driver.inspected)
 
     async def scenario() -> None:
@@ -5652,7 +5658,10 @@ def test_a_node_replaced_while_its_twin_backs_off_is_restored_by_the_pass_the_ba
     restore = newest(store)
     assert restore.operation == "restore" and restore.verdict is not None and restore.verdict.status == "ok"
     assert [n for n, _ in pusher.calls] == ["n2", "n2", "n3"]
-    assert gaps(driver.inspected[since:]) == pytest.approx([1.0], abs=0.1)
+    _, retry = driver.inspected[since:]
+    ((name, delay, backed_off),) = backoff.written
+    assert (name, delay) == ("t", 1.0)
+    assert retry >= backed_off + 1.0  # the replaced node's event did not bring the retry forward
     record = store.get_twin("t")
     nodes = {n.name: n for n in record.status.nodes}
     for node in ("n2", "n3"):

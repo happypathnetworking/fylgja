@@ -32,7 +32,9 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
   `design/verified-facts.md` with the version and the date, in that document's style.
 - **A time budget a live test rests on is a reading**, and readings of a shared system drift.
   The test's docstring names the readings the budget was sized from and its ratio to the
-  slowest of them.
+  slowest of them. A wait or a tolerance in a pure-tier test sized on the development host
+  is a reading too, and a slower runner voids it: wait on a condition where one can be
+  awaited.
 - **A fact says what a run showed, and no more.** A figure worked out from other figures is
   called a derivation. Whether a reading calls for a bound, a wider wait or nothing is not
   yours to write into a fact: put it in your report's concerns, and the controller rules.
@@ -40,6 +42,17 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
   names. A label your script prints ("held", "empty") says what the script could tell, and
   the fact says no more than that. A later read of the same thing is a reading too, with
   its time.
+- **A test that reads a Compose file** reads it with a loader that knows the tags the file
+  uses: `yaml.safe_load` fails on them, as it did when a merge brought an `!override` into
+  a file a test read. The tree's `Override` loader (`infrahub/tests/test_tree.py`) knows
+  `!override` alone.
+- **A fact names a site that is not listed by its name, not its URL.** Outside the test
+  directories `test_the_tree_names_no_address` (`infrahub/tests/test_tree.py`) refuses a
+  URL whose host is not loopback, a `*.example` name, a documentation range or a host its
+  `REFERENCES` lists as a public reference (`test.pypi.org` is listed, `pypi.org` is not;
+  `github.com` only under the formats' organisation or a repository in `CITED`), and a
+  bare address outside loopback and the documentation ranges. A public host the tree must
+  name is added to `REFERENCES` with its reason.
 - **A script you write for a run** goes where your dispatch says, under your task's name.
   Never overwrite a file another task left.
 - **Formats change in `formats/`**, in the same commit as the code. `design/decisions.md` is

@@ -105,13 +105,29 @@ statement for people, and is the one that is right where the two disagree.
      act, and their word on whether that was their watching is recorded as they gave it.
    - A live run made from the main checkout, the one that holds `local/`, runs that
      checkout's code: it is checked out at the code under test for the run, and put back.
+   - A runbook for an acceptance run from a fresh clone says to clone at the tag and
+     `git switch -c <name>`, since a clone at a tag is on a detached head and
+     `make infrahub-demo` refuses one; the clone's `local/.env` is made from the lines the
+     runbook names, never copied from an earlier clone.
+   - An install that follows an upload first reads the index's simple page for the version,
+     which can lag the index's JSON API by about a minute; an install from PyPI that must use
+     PyPI alone runs `pip --isolated`.
 4. **Land.** On the maintainer's word:
+   - `main` is brought into the integration branch where it is not an ancestor of it
+     (`git merge-base --is-ancestor main phase-N-integration`): merged in (`--no-ff`) and
+     gated, so that the squash's tree is the gated one;
    - the phase is written as built on the integration branch: a decision entry for each
      place the build departed from a decision, the sentences it made untrue corrected, and
      the item in "Sequence" marked done, with what it left to later phases;
    - that commit is reviewed afresh, its findings fixed by amending it and the fix read
-     again, before the history is tagged;
-   - the integration branch is squashed onto `main` as one commit;
+     again, before the history is tagged; a figure it states is read from the run's own log
+     by the controller, and not only by the reviewer;
+   - where the phase is a release, the version commit is the last commit before the squash,
+     and the changelog's head is dated the day the tag will be made;
+   - the integration branch is squashed onto `main` as one commit; where CI fails on the
+     landing's last commits on a tree it passed before, the failing test is read against the
+     earlier green run, only the failed job is re-run, the test is recorded for a fix, and a
+     release's tag waits for a green run;
    - its history is kept under the local tag `archive/phase-N-integration`;
    - the build's records (ledgers, briefs, reviews, rulings, run logs) go to
      `local/sdd/phase-N/`.
@@ -1925,7 +1941,8 @@ environment, registers a publisher, tags, pushes a tag or approves an upload.
 1. **One commit** sets `VERSION` and dates `CHANGELOG.md`'s head: `VERSION` the version,
    `X.Y.ZrcN` for a candidate or `X.Y.Z` for a release, the readers' `fylgja-core` floor the same
    version, and the head `## <version> - <YYYY-MM-DD>`, with its known limits. A release's commit
-   is on `main`.
+   is on `main`. The date is the day the tag will be made: `scripts/publish.py check` refuses a
+   head that is `unreleased` or whose date is no date, and does not compare it with the tag.
 2. **Before the tag**, on that commit with a clean tree, `make wheels` and then the check the
    workflow runs, so that a fault is found before anything can be uploaded:
 

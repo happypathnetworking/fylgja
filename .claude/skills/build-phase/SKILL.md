@@ -104,6 +104,16 @@ written.
 - **A bound a runbook states as a rule says what it is there to tell.** "A run with no
   validator 120 s after the creation is not the run" told a check that never starts; a run
   that passed 11 s later had to be ruled on, and the ruling got the bound's origin wrong.
+- **A runbook for an acceptance run from a fresh clone** says to clone at the tag and then
+  `git switch -c <name>`: a clone at a tag is on a detached head, and `make infrahub-demo`
+  refuses one, since it registers a branch. The clone's `local/.env` is made from the lines
+  the runbook names, the site's own (a platform's credentials), and never copied from an
+  earlier clone: phase 10's first candidate's file held 25 generated values bound to
+  instances purged since, and they were wrong for the new ones.
+- **An install that follows an upload** first reads the package index's simple page for the
+  version: TestPyPI's lagged its JSON API by about a minute, and pip found only an older
+  candidate. An install from PyPI that must use PyPI alone runs `pip --isolated`, so that no
+  local configuration can name another index.
 - **Plan 0 keeps the bends.** Each place a plan, or later a ruling, departs from a
   decision's text is added to plan 0 when it is made, with the entry it bends. The landing
   writes its decision entries from that list.
@@ -184,6 +194,11 @@ written.
   cannot be undone, a security-sensitive action, a side effect outside the phase's own
   branches that one asks about first (a merge into `main`, a push), and a plan so broken that
   every way forward is a guess.
+- **An act on the maintainer's word that the session's tools refuse** (phase 10's session
+  refused a `git push` the maintainer had asked for) is handed to the maintainer as one
+  command, which they run at the session's prompt with a leading `!` so that its output
+  lands in the session. The controller reads it and goes on. It never works around the
+  refusal.
 
 ## 4. Land
 
@@ -191,7 +206,12 @@ Only on the maintainer's word.
 
 1. When every plan is merged and the phase's "done when" holds, tell the maintainer, with
    every ruling made on their behalf and what each costs if wrong.
-2. **Write the phase as built**, in one gated commit on the integration branch
+2. **Bring `main` in, then write the phase as built.** Where `main` is not an ancestor of
+   the integration branch (`git merge-base --is-ancestor main phase-N-integration`), merge
+   it in (`--no-ff`) and gate: phase 9's process commit landed on `main` after phase 10's
+   integration branch was cut, and was found missing only at the squash, whose rule is that
+   `git diff main phase-N-integration` prints nothing. Then write the phase as built, in one
+   gated commit on the integration branch
    (`docs(design): phase N as built, …`), so that the squash carries it:
    - a decision entry for the bends of each topic ("… as built"), from plan 0's list and the
      ledgers' rulings, with its index row and a status note on every entry it supersedes in
@@ -207,12 +227,23 @@ Only on the maintainer's word.
    and one re-review, as a plan's last review does. The reviewer is a fresh one, or the one
    who compiled the last list of design lines, who holds what the commit was written from.
    The wave amends the commit, so the phase as built stays one commit, and the re-review is
-   made before the squash: phase 9's was made after it.
+   made before the squash: phase 9's was made after it. A figure the commit states is read
+   by the controller from the run's own log before the tag, and not only by the reviewer:
+   phase 10's re-review caught a command's exit time given as a service's health time.
+   Where the phase is a release, the version commit (`VERSION`, and the changelog's head
+   dated) is the last commit before the squash, and the head is dated the day the tag will
+   be made: phase 10's tag was made a day after its version commit, so the date was moved in
+   a commit of its own, and nothing checks the date against the tag.
 3. Tag the integration branch `archive/phase-N-integration`, so the hashes the ledgers name
    still resolve.
 4. Squash the integration branch onto `main` as one commit, `feat: phase N, <what it built>`,
    its body saying why, what was verified and what was not run. The squash's tree is the
-   gated one: `git diff main phase-N-integration` prints nothing.
+   gated one: `git diff main phase-N-integration` prints nothing. Where CI runs on the
+   landing's last commits and a job fails on a tree it passed before, read the failing test
+   against the earlier green run of the same tree, re-run only the failed job, and record
+   the test for a fix: phase 10's two such failures were each a pure-tier test whose margin
+   is wall-clock time (a 0.3 s sleep before a SIGTERM; a 0.5 ± 0.1 s gap) on a slow runner.
+   The irreversible act, a release's tag, waits for a green run.
 5. Copy each plan's workspace to `local/sdd/phase-N/<plan>/`, the collected rulings to
    `local/sdd/phase-N/rulings.md`, and the logs of the runs the facts were read from.
 6. Remove the worktrees and the phase's branches, once each branch is an ancestor of the

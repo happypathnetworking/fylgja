@@ -448,7 +448,7 @@ LIMITS = {
     "A mark through another core": "A mark made through one core",
     "A fixed management address per node on clabernetes": "On the clabernetes driver, a node the dry run answers",
 }
-UNQUESTIONED = ("A step runs no flow", "A core remembers in memory alone")
+UNQUESTIONED = ("A step runs no flow", "A core remembers in memory alone", "A Ctrl-C while the server starts")
 """The known limits with no open question: each the opening words of its own bullet."""
 NAMED = {
     "The size of the twin the many-twins scenario expects refused": "forty-node twin",

@@ -15,7 +15,9 @@
 # - The user in the groups docker and clab_admins: added where the group exists and does not list the user; a group
 #   added reaches no process begun before it, so the user logs in again.
 # - On Ubuntu, the two lines SR Linux's rsyslogd needs in AppArmor's local profile, added and the profile reloaded.
-# - The node login's two names in <local>/.env, and the memory: checked, never written.
+# - The node login's two names in <local>/.env: checked, never written.
+# - The memory available, MemAvailable, against each demonstration's need, as scripts/demo.py reads it: short of
+#   both is left to do by hand, short of Infrahub's alone a note.
 #
 # The twin's images are not pulled here: the demonstration pulls the ones Docker does not hold.
 set -uo pipefail
@@ -25,11 +27,14 @@ DRY_RUN="${DRY_RUN:-}"
 SETUP_URL="https://containerlab.dev/setup"
 APPARMOR_PROFILE="/etc/apparmor.d/usr.sbin.rsyslogd"
 APPARMOR_LOCAL="${APPARMOR_LOCAL:-/etc/apparmor.d/local/usr.sbin.rsyslogd}"
-# AppArmor's kernel interface, without which no profile is reloaded. This and APPARMOR_LOCAL are set only by a test.
+# AppArmor's kernel interface, without which no profile is reloaded. This, APPARMOR_LOCAL and MEMINFO, the file
+# MemAvailable is read from, are set only by a test.
 APPARMOR_FS="${APPARMOR_FS:-/sys/kernel/security/apparmor}"
 APPARMOR_LINES=("/opt/srlinux/** mr," "/run/srlinux/** rw,")
-# scripts/demo.py's SOURCE_MB and TWIN_MB: the larger source's need, Infrahub's, with the twin's and the edge's.
-NEED_MB=$((4608 + 7168))
+# What each demonstration needs available, its source's stack and the twin's and the edge's: scripts/demo.py's
+# SOURCE_MB and TWIN_MB, for a source not yet up.
+INFRAHUB_NEED_MB=$((4608 + 7168))
+NETBOX_NEED_MB=$((1536 + 7168))
 
 USER_NAME="$(id -un)"
 SUDO=()
@@ -201,12 +206,21 @@ else
     BY_HAND+=("$env_file is not there: make it with \`install -m 0600 /dev/null $env_file\`, then add NAME=value lines for ${unset_names[*]}; the SR Linux image's published default login is enough")
 fi
 
-# The memory: the host's whole, since what is free depends on what runs at the demonstration's start.
-total_mb=$(($(sed -n 's/^MemTotal: *\([0-9]*\) kB$/\1/p' /proc/meminfo) / 1024))
-if [ "$total_mb" -ge "$NEED_MB" ]; then
-    say "memory: $total_mb MiB in all, of the $NEED_MB MiB available Infrahub's demonstration needs"
+# The memory available now, in whole MiB as scripts/demo.py's `available_mb` reads it. A source already up holds
+# some of it, and the demonstration of that source then needs only the twin's and the edge's.
+available_kb="$(sed -n 's/^MemAvailable: *\([0-9]*\) kB$/\1/p' "${MEMINFO:-/proc/meminfo}")"
+needs="Infrahub's demonstration needs $INFRAHUB_NEED_MB MiB and NetBox's $NETBOX_NEED_MB"
+if [ -z "$available_kb" ]; then
+    BY_HAND+=("/proc/meminfo names no MemAvailable: the memory available was not read")
 else
-    NOTES+=("the host has $total_mb MiB of memory in all, and Infrahub's demonstration needs $NEED_MB MiB available, NetBox's 8704")
+    available_mb=$((available_kb / 1024))
+    if [ "$available_mb" -ge "$INFRAHUB_NEED_MB" ]; then
+        say "memory: $available_mb MiB available; $needs"
+    elif [ "$available_mb" -ge "$NETBOX_NEED_MB" ]; then
+        NOTES+=("$available_mb MiB of memory is available: enough for NetBox's demonstration, not Infrahub's; $needs")
+    else
+        BY_HAND+=("$available_mb MiB of memory is available, enough for neither demonstration: $needs")
+    fi
 fi
 
 [ -n "$RELOGIN" ] && NOTES+=("log in again: a group added reaches no process begun before it")

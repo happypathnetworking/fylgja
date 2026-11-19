@@ -154,7 +154,7 @@ twin demo: generation 1, observed 1
 Ready: True
 Stepping: False
 phase: pushed
-bundle: 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31
+bundle: 059b8ef4f8eb2e6b0db4e70ac15564e0211af5b4a2d3e245f807b4aa1fb9bd77
 nodes:
   n1 192.0.2.11
   n2 192.0.2.12 via bastion.example
@@ -170,7 +170,7 @@ twin demo: generation 1, observed 1
 Ready: True
 Stepping: False
 phase: pushed
-bundle: 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31
+bundle: 059b8ef4f8eb2e6b0db4e70ac15564e0211af5b4a2d3e245f807b4aa1fb9bd77
 nodes:
   n1 192.0.2.11
   n2 192.0.2.12 via bastion.example
@@ -179,7 +179,7 @@ nodes:
 
 ```console
 $ fylgja-core twin step demo --blueprint testdata/blueprint/three-node-probed.json --dry-run
-deployment: ea5bec45e47c677a365051ee341e69f4d2d639b630ad786cd5d3f7157d76acda
+deployment: 8b02a4d19a4dba47caa6d129ed285cbacc63f9ce431aa5994ca3c2455ff1eb0c
 verdict: ok
 changes:
   n1: kept
@@ -194,8 +194,8 @@ verdict: ok
 ```
 
 ```console
-$ fylgja-core bundle diff 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31 d45f6b7de1d7d90466cb31aeeb0197a0d2ab5f0beecb2ad69de6e480ebef2c31
-diff 6a6f441cad24814b55f082958b9caa2858660aea9d01fa9c6b20ea50f5ac2b31 -> d45f6b7de1d7d90466cb31aeeb0197a0d2ab5f0beecb2ad69de6e480ebef2c31
+$ fylgja-core bundle diff 059b8ef4f8eb2e6b0db4e70ac15564e0211af5b4a2d3e245f807b4aa1fb9bd77 26217ee6c062147cee40e70d5571e7a0ac23ff409831e6cf9bc0ece06a426da6
+diff 059b8ef4f8eb2e6b0db4e70ac15564e0211af5b4a2d3e245f807b4aa1fb9bd77 -> 26217ee6c062147cee40e70d5571e7a0ac23ff409831e6cf9bc0ece06a426da6
 probes added: n1-loop
 ```
 

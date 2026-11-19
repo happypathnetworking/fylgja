@@ -21,7 +21,7 @@ NAMES = {
     "readers/netbox": "fylgja-netbox",
     "orchestrator": "fylgja-orchestrator",
 }
-PINNED = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;,]+)$")
+PINNED = re.compile(r"^([A-Za-z0-9._-]+)(?:\[[^\]]*\])?==([^\s;,]+)$")
 
 
 def load(path: str) -> dict[str, Any]:
@@ -96,7 +96,7 @@ def test_each_exact_pin_is_the_locks_version() -> None:
             found += 1
             versions = locked[normalised(pin[1])]
             assert [v["version"] for v in versions] == [pin[2]], f"{member}: {entry}"
-    assert found == 30
+    assert found == 32
 
 
 def test_venv_is_a_locked_sync_into_core_venv() -> None:

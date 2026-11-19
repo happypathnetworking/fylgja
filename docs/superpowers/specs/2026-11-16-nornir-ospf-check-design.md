@@ -1,7 +1,7 @@
 # Design: an OSPF adjacency check in the example orchestrator, over Nornir 3.7.0a1's asyncio runner
 
-Private, 2026-11-16. Test code on a private branch of this repository; never pushed to the public
-remote. This document lives on that branch, `private/nornir-ospf`.
+2026-11-16. Test code on a branch of this repository, kept off `main`. This document lives on that
+branch, `nornir-ospf`.
 
 ## Intent
 
@@ -85,8 +85,8 @@ Three choices were weighed in conversation; the first was the maintainer's, the 
   Everything but the task body carries over from A.
 
 **Where the code lives.**
-- *A worktree of this repository on branch `private/nornir-ospf`.* Chosen, for the Infrahub mount
-  reason above. Never pushed to `origin`.
+- *A worktree of this repository on branch `nornir-ospf`.* Chosen, for the Infrahub mount
+  reason above.
 - *A clone.* The maintainer's first thought; it would need its branch pushed into this checkout for
   Infrahub to read the template, so it adds a step for no gain.
 
@@ -102,9 +102,9 @@ Three choices were weighed in conversation; the first was the maintainer's, the 
 
 ### 1. The branch and worktree
 
-`git worktree add ~/projects/fylgja-core-wt/nornir-ospf -b private/nornir-ospf main`, then
+`git worktree add ~/projects/fylgja-core-wt/nornir-ospf -b nornir-ospf main`, then
 `make venv` there. All work, this document included, lands there. The branch is registered to the
-development Infrahub with `make infrahub-register REF=private/nornir-ospf` and the network
+development Infrahub with `make infrahub-register REF=nornir-ospf` and the network
 re-seeded with `make infrahub-seed`, which regenerates the artifacts.
 
 ### 2. The seed
@@ -240,7 +240,7 @@ from the worktree; `FYLGJA_ORCHESTRATOR_OSPF_TIMEOUT_S`, the polling budget, def
 2. **Pure tests**, few: the plugin's hosts from a canned record and bundle; the comparison from a
    canned JSON answer, covering a FULL link, a missing neighbour, a non-FULL state, an unread
    node and no link in scope.
-3. **Live**, with `make infrahub-register REF=private/nornir-ospf`, `make infrahub-seed`, the core
+3. **Live**, with `make infrahub-register REF=nornir-ospf`, `make infrahub-seed`, the core
    serving locally and `fylgja-orchestrator twin rehearse` on the seeded branch: a report whose
    stages all pass with three links FULL at stage 1 and 2. Then one negative run: disable OSPF on
    one node of a twin by hand between create and the step... which the rehearsal does not allow;

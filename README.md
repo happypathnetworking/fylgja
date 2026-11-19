@@ -12,6 +12,18 @@ twin as one of its checks; a step lists each probe's flow, which is not yet run.
 Vendors are data, not code: Nokia SR Linux and Arista EOS, alone or mixed in one twin. Anything
 that writes a blueprint can drive Fylgja, through its API or its command.
 
+> **This is the `nornir-ospf` branch,** kept off `main` on purpose. It adds one judgement to the
+> example orchestrator's rehearsal: after each stage, every link between two OSPF-speaking devices
+> has a FULL adjacency on both ends, checked over Nornir 3.7.0a1's asyncio runner and
+> nornir-scrapli 1.6.0a1, both alphas pinned exactly. Only the example, the Infrahub seed and
+> template, and the fixtures change; the core and the readers are 1.0.1's. Its design is
+> `docs/superpowers/specs/2026-11-16-nornir-ospf-check-design.md`.
+>
+> Run it with `make infrahub-demo` from a checkout of this branch. When switching the demo between
+> `main` and this branch, run `make demo-down PURGE=1` first: the seed loads nothing onto an
+> Infrahub that holds the devices already, so the other branch's devices, without this branch's
+> link addresses, would stay, and the check would find no OSPF instance.
+
 ## Installing
 
 ```sh

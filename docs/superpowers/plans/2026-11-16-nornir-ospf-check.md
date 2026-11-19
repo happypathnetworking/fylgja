@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Nothing under `core/`, `readers/` or `formats/` changes. `testdata/` fixtures and the tests that pin them may.
-- Branch `private/nornir-ospf`, worktree `~/projects/fylgja-core-wt/nornir-ospf`. Never `git push`. Never commit `local/`.
+- Branch `nornir-ospf`, worktree `~/projects/fylgja-core-wt/nornir-ospf`. Never commit `local/`.
 - Conventional-commit messages whose body says why; each ends `Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>`.
 - Pins: `nornir==3.7.0a1`, `nornir-scrapli[asyncio]==1.6.0a1`; `scrapli-community` at the version the venv resolves, if needed.
 - No password reaches a log line, a progress line, a repr, a finding or the report.
@@ -77,7 +77,7 @@ Inputs the design implies but no test would otherwise pin; each has its test in 
 ### Task 1: Branch, worktree, dependencies and the alpha's API facts
 
 **Files:**
-- Create: worktree `~/projects/fylgja-core-wt/nornir-ospf` on branch `private/nornir-ospf` from `main`
+- Create: worktree `~/projects/fylgja-core-wt/nornir-ospf` on branch `nornir-ospf` from `main`
 - Create: `docs/superpowers/specs/2026-11-16-nornir-ospf-check-design.md`, `docs/superpowers/plans/2026-11-16-nornir-ospf-check.md` (moved from `local/nornir-ospf/`)
 - Modify: `orchestrator/pyproject.toml:15` (dependencies)
 - Modify: `design/verified-facts.md` (new section at the end)
@@ -88,7 +88,7 @@ Inputs the design implies but no test would otherwise pin; each has its test in 
 - [ ] **Step 1: Cut the worktree**
 
 ```bash
-cd ~/projects/fylgja-core && git worktree add ~/projects/fylgja-core-wt/nornir-ospf -b private/nornir-ospf main
+cd ~/projects/fylgja-core && git worktree add ~/projects/fylgja-core-wt/nornir-ospf -b nornir-ospf main
 cd ~/projects/fylgja-core-wt/nornir-ospf && mkdir -p docs/superpowers/specs docs/superpowers/plans
 cp ~/projects/fylgja-core/local/nornir-ospf/design.md docs/superpowers/specs/2026-11-16-nornir-ospf-check-design.md
 cp ~/projects/fylgja-core/local/nornir-ospf/plan.md docs/superpowers/plans/2026-11-16-nornir-ospf-check.md
@@ -201,7 +201,7 @@ In `device_config.j2`, after the `network-instance default type default` line, r
 
 ```bash
 set -a; . local/.env; set +a
-make infrahub-register REF=private/nornir-ospf
+make infrahub-register REF=nornir-ospf
 make infrahub-seed
 ```
 Expected: both end 0, every artifact `Ready`. Then read the branch `third-link` at its first stage with the reader's CLI (`readers/infrahub/README.md`, "The CLI") under `infrahub/seed/reader.yaml` and scope `tag:fylgja`, and copy each device's `config` into `three-node.json` and `three-node-probed.json`. Confirm the OSPF lines are in each, and that `n1`'s lists `router-id 10.0.0.0`.
@@ -435,7 +435,7 @@ rehearsal's time left, and a stage skipped as unchanged is not checked."
 
 - [ ] **Step 1: Everything up**
 
-`local/.env` loaded; the core server running locally; `make infrahub-up` (if down); `make infrahub-register REF=private/nornir-ospf` (picks up Task 6's commit on the task workers); `make infrahub-seed`; `make orchestrator-env`. Expected: each ends 0.
+`local/.env` loaded; the core server running locally; `make infrahub-up` (if down); `make infrahub-register REF=nornir-ospf` (picks up Task 6's commit on the task workers); `make infrahub-seed`; `make orchestrator-env`. Expected: each ends 0.
 
 - [ ] **Step 2: The positive run**
 

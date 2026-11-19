@@ -40,7 +40,8 @@ REFERENCES = {
     "json-schema.org": "the dialect each format's schema names",
     "www.apache.org": "the licence's own text",
     "infrahub.opsmill.io": "Infrahub's published Compose file, fetched by scripts/infrahub_dev.py",
-    "containerlab.dev": "containerlab's documentation, cited",
+    "containerlab.dev": "containerlab's documentation, and its setup script, which scripts/demo_dependencies.sh runs",
+    "astral.sh": "Astral's uv installer, fetched by scripts/demo_dependencies.sh",
     "ghcr.io": "the registry a public image is pulled from",
     "test.pypi.org": "TestPyPI's upload address, where the publish workflow uploads a candidate's wheels",
 }

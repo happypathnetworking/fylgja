@@ -447,6 +447,27 @@ def test_a_kind_main_lacks_is_loaded_before_the_baseline_and_one_it_holds_is_not
     assert "main holds FylgjaProbe of fylgja-probe.yml already" in said
 
 
+def test_repeated_schema_files_are_loaded_in_the_order_given(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    other = tmp_path / "other.yml"
+    other.write_text('version: "1.0"\nnodes:\n  - name: Other\n    namespace: Fylgja\n')
+    infrahub = Infrahub(generated=[{name: ready("c1") for name in NAMES}])
+    monkeypatch.setenv("FYLGJA_INFRAHUB_ADDRESS", ADDRESS)
+    monkeypatch.setenv("FYLGJA_INFRAHUB_WRITE_TOKEN", "a-tests-token")
+    clock = Clock()
+    argv = ["--branch", BRANCH, "--files", str(SEED), "--out", str(tmp_path / "seed.json"), "--ctl", str(CTL)]
+    for order in ((PROBE_KIND, other), (other, PROBE_KIND)):
+        infrahub.kinds.clear()
+        first = len(infrahub.events)
+        flags = [part for path in order for part in ("--schema", str(path))]
+        run = Ctl(infrahub)
+        transport = httpx.MockTransport(infrahub)
+        args = [*argv, *flags]
+        done = seed.main(args, transport=transport, run=run, clock=clock, sleep=clock.sleep, head=infrahub.head)
+        assert done == 0
+        loads = [event for event in infrahub.events[first:] if event[:2] == ("infrahubctl", "schema")]
+        assert [event[3] for event in loads] == [str(path) for path in order]
+
+
 def test_a_kind_main_never_lists_lapses_and_a_file_of_no_kind_is_refused(tmp_path: Path) -> None:
     infrahub = Infrahub(unlisted=True)
     hub, _ = hub_for(infrahub)

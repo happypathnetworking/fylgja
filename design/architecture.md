@@ -131,8 +131,10 @@ writes them.
 - **The Infrahub reader and the example orchestrator** (section 5,
   [D-081](decisions.md#d-081)): the reader under `readers/infrahub/`, which reads a branch of
   Infrahub into a blueprint, and the example, now in `fylgja-examples`, which rehearses a proposed
-  change on a twin through Infrahub's own check `fylgja-twin` and posts its report in the
-  change's thread, with what the development Infrahub is given under `infrahub/`. The two
+  change on a twin through its own check `fylgja-twin` and posts its report in the
+  change's thread; the check and its stage kind are `fylgja-examples`', and what this repository's
+  `infrahub/` gives the development Infrahub is the registration, the schema library, the seed and the
+  Compose override alone. The two
   acceptance runs were made on 2026-11-12: a proposed change the maintainer created in
   Infrahub's UI was rehearsed through its check, once with the core on the local driver and
   once with the core deployed on the cluster, and each ended `passed`, a twin created at the

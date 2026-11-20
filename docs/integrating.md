@@ -254,9 +254,9 @@ task worker  --> Infrahub     success or failure, the headline its message
    written on `main`, naming its branch as text, with a label and an optional `as_of`, so it is
    written before any proposed change exists ([D-088](../design/decisions.md#d-088)). Infrahub
    runs a proposed change's checks when it is created, a draft or not, and when its checks are
-   run again; leaving draft starts nothing. This repository's development seed makes the
-   branch and its two edits alone (`make infrahub-seed`): the marks and the proposed change are
-   the example's.
+   run again; leaving draft starts nothing. The marks and the proposed change are made by
+   `fylgja-examples`' seed, not by this repository's: its development seed (`make infrahub-seed`)
+   makes the branch and its two edits alone.
 2. **Infrahub's check.** A proposed change runs the checks as its source branch was made with
    them: a branch keeps the registration's commit it was made with, so a branch made before an
    import runs the check files of before it. Infrahub runs `fylgja-step` and `fylgja-twin` on a
@@ -515,8 +515,10 @@ be refused again.
   auth and nothing of the admin's.
 - **The checks hold no token of the core's or of Infrahub's.** A task worker is given the
   platform's address and its basic auth alone, `FYLGJA_ORCHESTRATOR_ADDRESS`, a host and a port
-  with no scheme, and `FYLGJA_ORCHESTRATOR_AUTH`
-  ([`infrahub/dev/compose.override.yml`](../infrahub/dev/compose.override.yml)). The rehearsal's
+  with no scheme, and `FYLGJA_ORCHESTRATOR_AUTH`, which
+  `fylgja-examples`' override gives them
+  ([`infrahub/dev/compose.override.yml`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/infrahub/dev/compose.override.yml));
+  this repository's gives them neither. The rehearsal's
   code and its tokens stay in the runner.
 - **The Infrahub account `fylgja-orchestrator`** has one role, in one group, of four
   permissions ([`infrahub/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/infrahub/seed/account.py)): `object:Core:ChangeThread:create:allow_default` and

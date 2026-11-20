@@ -352,6 +352,33 @@ def test_netbox_not_answering_leaves_the_file_as_it_was(
         assert list(tmp_path.iterdir()) == [env], at
 
 
+def test_a_token_made_before_the_file_write_fails_is_in_nothing_printed_or_raised(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reader's token is made, then the rename into `local/.env` fails: one live token stands in NetBox, and
+    neither what is printed nor the error raised holds a part of it or of the password."""
+
+    def refuse(self: Path, target: Path) -> Path:
+        raise OSError("the disk refused the rename")
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    fake = FakeNetBox()
+    env = env_file(tmp_path)
+    code, out, err = run(fake, env, capsys)
+    assert code == 1 and "the disk refused the rename" in err
+    answered = [presented(row) for row in fake.objects[TOKENS].values()]
+    assert len(answered) == 1
+    assert not holds_part(out + err, *answered, *passwords(fake))
+    assert env.read_bytes() == OTHER
+
+    fake = FakeNetBox()
+    with pytest.raises(OSError, match="refused") as raised:
+        account.ensure(env_file(tmp_path), over(fake))
+    answered = [presented(row) for row in fake.objects[TOKENS].values()]
+    assert len(answered) == 1
+    assert not holds_part(f"{raised.value} {raised.value!r}", *answered, *passwords(fake))
+
+
 def test_nothing_printed_or_raised_holds_a_token_or_the_password(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

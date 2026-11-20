@@ -175,9 +175,8 @@ nautobot-seed:
 # The fixture network on the development NetBox's main from netbox/seed/main.yaml, found by its names or made, with
 # the configuration template that renders it and the probes' inactive configuration context; main read back and
 # refused, naming each difference and deleting nothing, where it is not the fixture (CONTRIBUTING.md). Then the
-# reader's and the example's accounts at their least permissions, and their tokens' lines in local/.env, each kept
-# where NetBox holds its token as that account's and made again where it does not. Load local/.env first, and again
-# after for the two lines.
+# reader's account at its least permissions, and its token's line in local/.env, kept where NetBox holds the token as
+# the account's and made again where it does not. Load local/.env first, and again after for the line.
 netbox-seed:
 	$(VENV)/bin/python netbox/seed/seed.py --files netbox/seed
 	$(VENV)/bin/python netbox/seed/account.py --env $(LOCAL)/.env

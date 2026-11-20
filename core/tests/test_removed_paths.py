@@ -19,19 +19,14 @@ REMOVED = (
     "infrahub/queries/fylgja_branch.gql",
     "infrahub/schema/fylgja-stage.yml",
     "infrahub/seed/account.py",
+    "netbox/seed/hook.py",
+    "netbox/seed/change.py",
 )
 HISTORY = ("design/", "CHANGELOG.md")
 # A path is a name when no word character, dot or hyphen runs into it: fylgja_orchestrator/ is a package's.
 BOUNDARY = r"(?<![\w.-])"
 URL = r"https://github\.com/happypathnetworking/fylgja-examples/[^\s)]*"
 LINK = re.compile(r"\[[^\]]*\]\(" + URL + r"\)|" + URL)
-# Files the next tasks of the trim remove whole, each with the example's seed script or test that names the path.
-PENDING = (
-    "netbox/seed/hook.py",
-    "netbox/seed/change.py",
-    "netbox/tests/test_hook.py",
-    "netbox/tests/test_change.py",
-)
 
 
 def _tracked() -> list[str]:
@@ -41,7 +36,6 @@ def _tracked() -> list[str]:
 
 def test_the_scan_is_not_blind() -> None:
     assert len(_tracked()) > 100
-    assert set(PENDING) <= set(_tracked()), "a PENDING file is gone: take it off the list"
     link = "https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/x.md"
     assert LINK.sub("", f"see {link} now") == "see  now"
     assert LINK.sub("", f"see [`orchestrator/`]({link}) now") == "see  now"
@@ -52,7 +46,7 @@ def test_the_scan_is_not_blind() -> None:
 def test_no_tracked_file_names_a_removed_path() -> None:
     found: list[str] = []
     for name in _tracked():
-        if name == "core/tests/test_removed_paths.py" or name in PENDING or not (ROOT / name).is_file():
+        if name == "core/tests/test_removed_paths.py" or not (ROOT / name).is_file():
             continue
         try:
             body = (ROOT / name).read_text()

@@ -1,5 +1,5 @@
-"""`netbox/seed/account.py`: the reader's and the example's NetBox accounts, `fylgja-reader` and
-`fylgja-orchestrator`, their grants, and their tokens' lines in `local/.env`, each checked before it is trusted.
+"""`netbox/seed/account.py`: the reader's NetBox account, `fylgja-reader`, its grants, and its token's line in
+`local/.env`, each checked before it is trusted.
 
 NetBox is `fake.FakeNetBox`, an `httpx.MockTransport` handler, and `local/.env` a file under `tmp_path`: nothing here
 opens a socket or starts a process. The tokens are values of the tests' own and the fake's. No value of a token or a
@@ -20,7 +20,7 @@ import account
 import httpx
 import pytest
 import seed
-from account import GRANTS, LINES, ORCHESTRATOR, READER, Grant
+from account import GRANTS, LINES, READER, Grant
 from box import ADDRESS as ADDRESS_NAME
 from box import TOKEN as TOKEN_NAME
 from box import WORDS, Box, BoxError
@@ -32,7 +32,7 @@ of."""
 HALVES = ("abcdefghijkl", "s3cr3ts3cr3ts3cr3t")
 
 OTHER = f"# the developer's own\nexport FYLGJA_NETBOX_ADDRESS={ADDRESS}\nFYLGJA_ELSE='kept' # a note\n".encode()
-"""Three lines of `local/.env` that are none of the accounts': each is kept byte for byte."""
+"""Three lines of `local/.env` that are none of the account's: each is kept byte for byte."""
 
 READS = (
     "dcim.device",
@@ -50,20 +50,8 @@ TOKENS = "users/tokens/"
 PERMISSIONS = "users/permissions/"
 USERS = "users/users/"
 
-FIRST = [
-    USERS,
-    PERMISSIONS,
-    PERMISSIONS,
-    TOKENS,
-    USERS,
-    PERMISSIONS,
-    PERMISSIONS,
-    PERMISSIONS,
-    PERMISSIONS,
-    TOKENS,
-]
-"""The creates of a first run over an empty NetBox: each account's user, its grants and its token, the reader's
-first."""
+FIRST = [USERS, PERMISSIONS, PERMISSIONS, TOKENS]
+"""The creates of a first run over an empty NetBox: the reader's user, its two grants and its token."""
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -129,30 +117,18 @@ def holds_part(text: str, *values: str) -> bool:
     return any(part[at : at + 8] in text for part in held for at in range(max(len(part) - 7, 1)))
 
 
-def test_the_accounts_their_lines_and_their_grants_are_the_table() -> None:
-    assert LINES == {READER: "FYLGJA_NETBOX_TOKEN", ORCHESTRATOR: "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN"}
-    assert (READER, ORCHESTRATOR) == ("fylgja-reader", "fylgja-orchestrator")
-    assert list(GRANTS) == [READER, ORCHESTRATOR]
+def test_the_account_its_line_and_its_grants_are_the_table() -> None:
+    assert LINES == {READER: "FYLGJA_NETBOX_TOKEN"}
+    assert READER == "fylgja-reader"
+    assert list(GRANTS) == [READER]
     assert GRANTS[READER] == (
         Grant("fylgja-reader", READS, ("view",)),
         Grant("fylgja-reader-render", ("dcim.device",), ("view", "render_config")),
     )
-    assert GRANTS[ORCHESTRATOR] == (
-        Grant("fylgja-orchestrator", READS, ("view",)),
-        Grant("fylgja-orchestrator-render", ("dcim.device",), ("view", "render_config")),
-        Grant("fylgja-orchestrator-journal", ("extras.journalentry",), ("view", "add")),
-        Grant("fylgja-orchestrator-branch", ("netbox_branching.branch",), ("view", "change")),
-    )
     every = [grant for grants in GRANTS.values() for grant in grants]
-    assert all("delete" not in grant.actions for grant in every)
-    assert all(not {"add", "change"} & set(grant.actions) for grant in GRANTS[READER])
+    assert all(not {"add", "change", "delete"} & set(grant.actions) for grant in every)
     assert len({grant.name for grant in every}) == len(every)
     assert all(grant.name.startswith(name) for name, grants in GRANTS.items() for grant in grants)
-
-    def rows(grants: tuple[Grant, ...]) -> set[tuple[frozenset[str], frozenset[str]]]:
-        return {(frozenset(grant.object_types), frozenset(grant.actions)) for grant in grants}
-
-    assert rows(GRANTS[READER]) <= rows(GRANTS[ORCHESTRATOR])
 
 
 def test_the_fake_answers_users_permissions_and_tokens_as_netbox_does() -> None:
@@ -188,7 +164,7 @@ def test_the_fake_answers_users_permissions_and_tokens_as_netbox_does() -> None:
     assert row["permissions"] == [{"id": grant["id"], "name": "g"}]
 
 
-def test_a_first_run_makes_each_account_its_grants_and_its_token_and_writes_two_lines(tmp_path: Path) -> None:
+def test_a_first_run_makes_the_account_its_grants_and_its_token_and_writes_one_line(tmp_path: Path) -> None:
     fake = FakeNetBox()
     env = env_file(tmp_path)
     env.chmod(0o644)
@@ -197,25 +173,28 @@ def test_a_first_run_makes_each_account_its_grants_and_its_token_and_writes_two_
     posted = fake.sent("POST")
     assert [path for path, _ in posted] == FIRST
     assert fake.sent("PATCH") == [] and fake.sent("DELETE") == []
-    reader, orchestrator = user_id(fake, READER), user_id(fake, ORCHESTRATOR)
+    reader = user_id(fake, READER)
     users = [body for path, body in posted if path == USERS]
     assert [{k: v for k, v in body.items() if k != "password"} for body in users] == [
         {"username": READER, "is_active": True},
-        {"username": ORCHESTRATOR, "is_active": True},
     ]
     sent = passwords(fake)
-    assert len(sent) == 2 and len(set(sent)) == 2 and all(len(password) >= 32 for password in sent)
+    assert len(sent) == 1 and all(len(password) >= 32 for password in sent)
     assert [body for path, body in posted if path == PERMISSIONS] == [
-        {"name": grant.name, "object_types": list(grant.object_types), "actions": list(grant.actions), "users": [who]}
-        for name, who in ((READER, reader), (ORCHESTRATOR, orchestrator))
-        for grant in GRANTS[name]
+        {
+            "name": grant.name,
+            "object_types": list(grant.object_types),
+            "actions": list(grant.actions),
+            "users": [reader],
+        }
+        for grant in GRANTS[READER]
     ]
-    assert [body for path, body in posted if path == TOKENS] == [{"user": reader}, {"user": orchestrator}]
+    assert [body for path, body in posted if path == TOKENS] == [{"user": reader}]
 
     data = env.read_bytes()
     assert data.startswith(OTHER)
-    [reads], [writes] = tokens_of(fake, READER), tokens_of(fake, ORCHESTRATOR)
-    same = data[len(OTHER) :] == f"FYLGJA_NETBOX_TOKEN={reads}\nFYLGJA_ORCHESTRATOR_NETBOX_TOKEN={writes}\n".encode()
+    [reads] = tokens_of(fake, READER)
+    same = data[len(OTHER) :] == f"FYLGJA_NETBOX_TOKEN={reads}\n".encode()
     assert same
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
     assert made == [
@@ -223,14 +202,7 @@ def test_a_first_run_makes_each_account_its_grants_and_its_token_and_writes_two_
         "made the permission fylgja-reader",
         "made the permission fylgja-reader-render",
         "made a token of fylgja-reader",
-        "made the user fylgja-orchestrator",
-        "made the permission fylgja-orchestrator",
-        "made the permission fylgja-orchestrator-render",
-        "made the permission fylgja-orchestrator-journal",
-        "made the permission fylgja-orchestrator-branch",
-        "made a token of fylgja-orchestrator",
         "appended FYLGJA_NETBOX_TOKEN",
-        "appended FYLGJA_ORCHESTRATOR_NETBOX_TOKEN",
     ]
     assert list(tmp_path.iterdir()) == [env]
 
@@ -255,10 +227,10 @@ def lines_of(env: Path) -> list[bytes]:
     return env.read_bytes().splitlines(keepends=True)
 
 
-@pytest.mark.parametrize("case", ["gone", "not a token", "the other account's", "held twice"])
-def test_a_dead_line_and_another_accounts_are_replaced_and_every_other_line_kept(case: str, tmp_path: Path) -> None:
+@pytest.mark.parametrize("case", ["gone", "not a token", "another user's", "held twice"])
+def test_a_dead_line_and_another_users_are_replaced_and_every_other_line_kept(case: str, tmp_path: Path) -> None:
     fake, env = seeded(tmp_path)
-    [reads], [writes] = tokens_of(fake, READER), tokens_of(fake, ORCHESTRATOR)
+    [reads] = tokens_of(fake, READER)
     other = OTHER.splitlines(keepends=True)
     held = f"FYLGJA_NETBOX_TOKEN={reads}\n".encode()
     if case == "gone":
@@ -266,13 +238,16 @@ def test_a_dead_line_and_another_accounts_are_replaced_and_every_other_line_kept
         del fake.objects[TOKENS][row["id"]]
     elif case == "not a token":
         held = b"FYLGJA_NETBOX_TOKEN=not-a-token\n"
-    elif case == "the other account's":
-        held = f"FYLGJA_NETBOX_TOKEN={writes}\n".encode()
-    before = [other[0], held, other[1], f"FYLGJA_ORCHESTRATOR_NETBOX_TOKEN={writes}\n".encode(), other[2]]
+    elif case == "another user's":
+        stranger = fake.add(USERS, {"username": "someone-else", "password": "p4ssw0rd-p4ssw0rd", "is_active": True})
+        made_for = over(fake).post(TOKENS, {"user": stranger["id"]})
+        held = f"FYLGJA_NETBOX_TOKEN={presented(made_for)}\n".encode()
+        fake.requests.clear()
+    before = [other[0], held, other[1], other[2]]
     at = 1
     if case == "held twice":
         before += [b"FYLGJA_NETBOX_TOKEN=nbt_000000000000.dead # and the last\n"]
-        at = 5
+        at = 4
     env.write_bytes(b"".join(before))
 
     made = account.ensure(env, over(fake))
@@ -299,7 +274,7 @@ def test_a_grant_is_brought_to_exactly_its_row(case: str, tmp_path: Path) -> Non
     elif case == "dcim.site among its types":
         grant["object_types"] = [*grant["object_types"], "dcim.site"]
     elif case == "a second user":
-        grant["users"] = [reader, user_id(fake, ORCHESTRATOR)]
+        grant["users"] = [reader, fake.add(USERS, {"username": "someone-else", "password": "p4ssw0rd-p4ssw0rd"})["id"]]
     else:
         grant["object_types"] = list(reversed(grant["object_types"]))
     before = env.read_bytes()
@@ -327,8 +302,8 @@ def test_a_found_user_is_set_active_and_a_superuser_is_refused(tmp_path: Path) -
     assert fake.sent("PATCH") == [(f"{USERS}{user_id(fake, READER)}/", {"is_active": True})]
 
     fake.requests.clear()
-    fake.held(USERS, username=ORCHESTRATOR)["is_superuser"] = True
-    with pytest.raises(BoxError, match=r"fylgja-orchestrator is a superuser.*make netbox-down PURGE=1"):
+    fake.held(USERS, username=READER)["is_superuser"] = True
+    with pytest.raises(BoxError, match=r"fylgja-reader is a superuser.*make netbox-down PURGE=1"):
         account.ensure(env, over(fake))
     assert fake.writes() == []
     assert env.read_bytes() == before
@@ -384,30 +359,30 @@ def test_nothing_printed_or_raised_holds_a_token_or_the_password(
     code, out, err = run(fake, env_file(tmp_path), capsys)
     assert (code, err) == (0, "")
     answered = [presented(row) for row in fake.objects[TOKENS].values()]
-    assert len(answered) == 2
+    assert len(answered) == 1
     assert not holds_part(out, *answered, *passwords(fake))
 
     counted = FakeNetBox()
     account.ensure(env_file(tmp_path), over(counted))
     creates = [number for number, request in enumerate(counted.requests, 1) if request.method == "POST"]
-    second = [at for at in creates if counted.requests[at - 1].url.path == f"/api/{TOKENS}"][-1]
+    last = [at for at in creates if counted.requests[at - 1].url.path == f"/api/{TOKENS}"][-1]
 
     fake = FakeNetBox()
-    fake.refused[second] = 403
+    fake.refused[last] = 403
     env = env_file(tmp_path)
     code, out, err = run(fake, env, capsys)
     assert code == 1 and "HTTP 403" in err
-    answered = [presented(row) for row in fake.objects[TOKENS].values()]
-    assert len(answered) == 1
+    answered = [presented(row) for row in fake.objects.get(TOKENS, {}).values()]
+    assert answered == []
     assert not holds_part(out + err, *answered, *passwords(fake))
     assert env.read_bytes() == OTHER
 
     fake = FakeNetBox()
-    fake.refused[second] = 403
+    fake.refused[last] = 403
     with pytest.raises(BoxError) as raised:
         account.ensure(env_file(tmp_path), over(fake))
     assert raised.value.status == 403
-    answered = [presented(row) for row in fake.objects[TOKENS].values()]
+    answered = [presented(row) for row in fake.objects.get(TOKENS, {}).values()]
     assert not holds_part(f"{raised.value} {raised.value!r}", *answered, *passwords(fake))
 
     seen: list[httpx.Request] = []
@@ -536,7 +511,7 @@ def test_an_account_holding_more_than_its_grants_is_refused_naming_each(
 
 
 PURGE = "make netbox-down PURGE=1, then make netbox-up, then load local/.env again and run make netbox-seed"
-"""The purge as the accounts say it, with `local/.env` loaded again before the seed: `make netbox-up` replaces the
+"""The purge as the account says it, with `local/.env` loaded again before the seed: `make netbox-up` replaces the
 write token's line after a purge."""
 
 
@@ -596,7 +571,7 @@ def test_the_remedy_is_said_for_what_failed(kind: str, tmp_path: Path, capsys: p
         assert env.read_bytes() == OTHER
 
 
-def test_the_accounts_remedies_are_the_seeds() -> None:
+def test_the_account_remedies_are_the_seeds() -> None:
     """Each script runs alone and imports neither the other nor a module beside `box.py`, so each holds its own words
     for the remedies `make netbox-seed` prints; they are held equal here."""
     assert (account.PURGE, account.UP, account.RELOAD) == (seed.PURGE, seed.UP, seed.RELOAD)

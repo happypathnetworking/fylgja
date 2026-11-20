@@ -313,8 +313,8 @@ The development host runs the example with NetBox as the section
 [With NetBox](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/CONTRIBUTING.md#with-netbox) of the example's CONTRIBUTING sets it up: the development NetBox, the edge's
 Prefect server on port 4200 of the Docker bridge's gateway, the runner of the source `netbox`,
 and the core. NetBox's worker reaches Prefect as `host.docker.internal:4200`, the name
-[`netbox/dev/compose.override.yml`](../netbox/dev/compose.override.yml) gives the development
-host.
+[`netbox/dev/compose.override.yml`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/dev/compose.override.yml)
+of the example's development NetBox gives the development host.
 
 ```text
 operator     --> NetBox       netbox-change: the branch made from main, a step written
@@ -352,7 +352,7 @@ runner       --> Prefect      the rehearsal 1 document, filed as the run's artif
 2. **The tag.** [`netbox/seed/hook.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/hook.py) (the example's `netbox-hook` target) installs the trigger on `main` with the
    superuser's token, each part found by its name or made, and left: the tag `fylgja-rehearse`,
    limited to branches; the webhook `fylgja-rehearse`, a `POST` to
-   `http://host.docker.internal:4200/api/deployments/<id>/create_flow_run`, `<id>` the deployment
+   a `host.docker.internal` URL on port 4200 ending `/api/deployments/<id>/create_flow_run`, `<id>` the deployment
    `twin-rehearse/main`'s as Prefect answers it, with the body
    `{"parameters": {"branch": {{ data.name | tojson }}}}`, which writes the branch's name as a
    JSON string, as read of names holding `"` or `\`, and Prefect's basic auth in its
@@ -547,7 +547,7 @@ be refused again.
   hand is given the same through [`scripts/edge_dev.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/scripts/edge_dev.py) `run --source netbox`, with nothing of
   Prefect's.
 - **The NetBox account `fylgja-orchestrator`** is no superuser, and holds four grants
-  (`GRANTS` in [`netbox/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/account.py), made by `make netbox-seed`): `view` of the nine types a
+  (`GRANTS` in [`netbox/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/account.py), made by the example's `netbox-seed` target): `view` of the nine types a
   read lists, and `view` with `render_config` on `dcim.device`, as the reader's account holds
   them, since the source reads through the reader with its own token; `view` and `add` on
   `extras.journalentry`, for its marks and its report; and `view` and `change` on

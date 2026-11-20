@@ -67,10 +67,6 @@ NOT_HOSTS = {
     ("s3", "fylgja"): "the S3 bucket an `s3` URL names in the place of a host, its endpoint given apart",
     ("http", "versity"): "the deploy base's own Service, named in its namespace",
     ("scheme", "host"): "the placeholder of the form of an address a docstring of the core's configuration gives",
-    ("http", "host.docker.internal"): (
-        "the name Compose's `host-gateway` gives the development host inside a container, where a listener on the "
-        "host is reached"
-    ),
 }
 """Names in a URL's place of a host that name no host of a site's, each under the one scheme it is written with."""
 

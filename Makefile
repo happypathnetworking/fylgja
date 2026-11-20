@@ -123,11 +123,9 @@ linkcheck:
 # with the extra server and alone, each base library at the floor of its range (D-066, D-084). Needs the network.
 # Then the reader's, built from readers/infrahub/ and formats/ with its one format and its queries, installed beside
 # the base alone, where its command answers --help; then the NetBox reader's, with its one format, beside the base
-# alone, where it answers --help and refuses a missing token; then the Nautobot reader's, checked the same way;
-# then the example's, built from orchestrator/ and
-# formats/ with its two formats and its Infrahub change source's queries, installed beside the base and the two
-# readers alone, where both its change sources import and its command answers --help. Each wheel is built at the
-# tree's commit and holds it, and each installed command's --version names the tree's version and that commit.
+# alone, where it answers --help and refuses a missing token; then the Nautobot reader's, checked the same way.
+# Each wheel is built at the tree's commit and holds it, and each installed command's --version names the tree's
+# version and that commit.
 wheelcheck:
 	python3 -I scripts/wheelcheck.py
 

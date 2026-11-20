@@ -5,7 +5,7 @@ script of your own. `pip install fylgja-core` gives the model and the client and
 server, with its dependencies, is the extra `fylgja-core[server]`
 ([the server page](server.md)). `fylgja-core`, the command ([the command page](cli.md)), is written
 against this module, and every call it makes is one of the calls below.
-[What 1.0 holds](compatibility.md) says which of the module's names are held across the releases of
+[What major version 1 holds](compatibility.md) says which of the module's names are held across the releases of
 major version 1, and that the client passes over a member of an answer it does not know.
 
 The client is synchronous. It reaches the server over HTTP alone and holds none of the server's

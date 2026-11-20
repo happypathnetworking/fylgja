@@ -91,7 +91,11 @@ def _forbidden(path: Path) -> tuple[str, ...]:
 
 @pytest.mark.parametrize(
     ("name", "reader"),
-    [("NOT_BESIDE_READER", "infrahub"), ("NOT_BESIDE_NETBOX_READER", "netbox")],
+    [
+        ("NOT_BESIDE_READER", "infrahub"),
+        ("NOT_BESIDE_NETBOX_READER", "netbox"),
+        ("NOT_BESIDE_NAUTOBOT_READER", "nautobot"),
+    ],
 )
 def test_what_a_readers_command_never_loads_is_its_import_tests(name: str, reader: str) -> None:
     held = getattr(_script(), name)
@@ -453,6 +457,35 @@ def test_the_netbox_readers_links_directory_is_the_two_wheels_alone(tmp_path: Pa
     module.check_netbox_reader(tmp_path, core)
     version = module.tree_version()
     by_name = [links for requirements, links in installs if requirements == (f"fylgja-netbox=={version}",)]
+    assert by_name == [sorted([core.name, reader.name])]
+    assert [links for _, links in installs if links is not None] == by_name
+
+
+def test_the_nautobot_readers_links_directory_is_the_two_wheels_alone(tmp_path: Path,
+                                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    core = tmp_path / "fylgja_core-1.0.0rc1-py3-none-any.whl"
+    reader = tmp_path / "nautobot-reader" / "dist" / "fylgja_nautobot-1.0.0rc1-py3-none-any.whl"
+    reader.parent.mkdir(parents=True)
+    for wheel in (core, reader):
+        wheel.write_bytes(b"a wheel")
+    (reader.parent / "fylgja_netbox-1.0.0rc1-py3-none-any.whl").write_bytes(b"another, built beside it")
+    for name in ("versioned", "requires_core", "held_commit", "published_metadata", "held_licence",
+                 "carried_by_nautobot_reader", "run", "answers_version", "refused_without_nautobot_token"):
+        monkeypatch.setattr(module, name, lambda *a, **k: None)
+    monkeypatch.setattr(module, "build_nautobot_reader", lambda tmp: reader)
+    monkeypatch.setattr(module, "base_requirements", lambda wheel: ["httpx>=0.27.0,<1"])
+    monkeypatch.setattr(module, "venv", lambda path: path / "bin")
+    installs: list[tuple[tuple[str, ...], list[str] | None]] = []
+
+    def install(env: Path, *requirements: str, constraints: Path | None = None,
+                find_links: Path | None = None) -> None:
+        installs.append((requirements, sorted(p.name for p in find_links.iterdir()) if find_links else None))
+
+    monkeypatch.setattr(module, "install", install)
+    module.check_nautobot_reader(tmp_path, core)
+    version = module.tree_version()
+    by_name = [links for requirements, links in installs if requirements == (f"fylgja-nautobot=={version}",)]
     assert by_name == [sorted([core.name, reader.name])]
     assert [links for _, links in installs if links is not None] == by_name
 

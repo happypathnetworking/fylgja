@@ -2,8 +2,8 @@
 
 .PHONY: all demo-dependencies venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck \
 	infrahub-up infrahub-down infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down \
-	orchestrator-serve netbox-up netbox-down netbox-seed netbox-hook netbox-change contract-netbox infrahub-demo \
-	netbox-demo demo-down
+	orchestrator-serve netbox-up netbox-down netbox-seed netbox-hook netbox-change contract-netbox nautobot-up \
+	nautobot-down nautobot-seed contract-nautobot infrahub-demo netbox-demo demo-down
 
 VENV := core/.venv
 
@@ -30,6 +30,12 @@ NETBOX_BRANCHING_VERSION ?= 1.2.3
 # asks for the rehearsal.
 NETBOX_BRANCH ?= third-link
 NETBOX_TAG ?=
+
+# The development Nautobot (CONTRIBUTING.md): Nautobot's version, Golden Config's and the image's Python; PURGE=1
+# above, and no other value, for a nautobot-down that removes the volumes.
+NAUTOBOT_VERSION ?= 3.2.8
+GOLDEN_CONFIG_VERSION ?= 3.0.8
+NAUTOBOT_PYTHON ?= 3.14
 
 # The example orchestrator's change source, infrahub or netbox (D-097): the runner orchestrator-serve starts is
 # given that source's environment, and orchestrator-env SOURCE=netbox runs nothing of Infrahub's.
@@ -65,7 +71,7 @@ demo-dependencies:
 	@UV_VERSION=$(UV_VERSION) PYTHON_MIN=$(PYTHON_MIN) CONTAINERLAB_VERSION=$(CONTAINERLAB_VERSION) LOCAL='$(LOCAL)' \
 		bash scripts/demo_dependencies.sh
 
-# The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the four distributions editable with every
+# The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the five distributions editable with every
 # extra, at the versions uv.lock holds, which a pin moved in a pyproject.toml without `uv lock` refuses. The
 # interpreter is the PATH's python3, never one uv fetches.
 venv:
@@ -77,9 +83,11 @@ test:
 	cd core && .venv/bin/pytest -q
 	cd infrahub && ../core/.venv/bin/pytest -q
 	cd netbox && ../core/.venv/bin/pytest -q
+	cd nautobot && ../core/.venv/bin/pytest -q
 	cd readers/infrahub && ../../core/.venv/bin/pytest -q
 	cd orchestrator && ../core/.venv/bin/pytest -q
 	cd readers/netbox && ../../core/.venv/bin/pytest -q
+	cd readers/nautobot && ../../core/.venv/bin/pytest -q
 
 # The live tier: booted images on the local driver, on demand (CONTRIBUTING.md): tests/live, and the conformance
 # suite on the local harness. Load local/.env first.
@@ -99,12 +107,13 @@ conformance:
 	$(if $(CONFORMANCE_MARKER),,$(error DRIVER is containerlab or clabernetes))
 	cd core && FYLGJA_CONFORMANCE_DRIVER=$(DRIVER) .venv/bin/pytest -q -rA -m $(CONFORMANCE_MARKER) tests/conformance
 
-# mypy runs three times: the core's tests, infrahub/'s and netbox/'s would name modules alike in one run.
+# mypy runs four times: the core's tests, infrahub/'s, netbox/'s and nautobot/'s would name modules alike in one run.
 lint:
-	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../readme_links.py ../infrahub ../netbox && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py
+	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../readme_links.py ../infrahub ../netbox ../nautobot && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py && .venv/bin/mypy ../nautobot/seed ../nautobot/tests ../scripts/nautobot_dev.py
 	cd readers/infrahub && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
 	cd orchestrator && ../core/.venv/bin/ruff check --config pyproject.toml . && ../core/.venv/bin/mypy
 	cd readers/netbox && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
+	cd readers/nautobot && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
 
 # Every relative link and anchor in the tracked Markdown resolves in a clone.
 linkcheck:
@@ -114,23 +123,24 @@ linkcheck:
 # with the extra server and alone, each base library at the floor of its range (D-066, D-084). Needs the network.
 # Then the reader's, built from readers/infrahub/ and formats/ with its one format and its queries, installed beside
 # the base alone, where its command answers --help; then the NetBox reader's, with its one format, beside the base
-# alone, where it answers --help and refuses a missing token; then the example's, built from orchestrator/ and
+# alone, where it answers --help and refuses a missing token; then the Nautobot reader's, checked the same way;
+# then the example's, built from orchestrator/ and
 # formats/ with its two formats and its Infrahub change source's queries, installed beside the base and the two
 # readers alone, where both its change sources import and its command answers --help. Each wheel is built at the
 # tree's commit and holds it, and each installed command's --version names the tree's version and that commit.
 wheelcheck:
 	python3 -I scripts/wheelcheck.py
 
-# The three published wheels (D-106), core, readers/infrahub and readers/netbox, and no other, built by uv into dist/
-# (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. Each member's build/ is
-# removed first, so that no file since removed from the tree rides along from an earlier build. The backend is the
-# setuptools build-constraints.txt names, not whatever the index holds that day. scripts/publish.py check holds them,
-# the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check refuses any
-# file but the three wheels. Needs the network.
+# The four published wheels (D-106, D-121), core, readers/infrahub, readers/netbox and readers/nautobot, and no other,
+# built by uv into dist/ (git-ignored), emptied first, each at COMMIT, the tree's commit, which each wheel holds. Each
+# member's build/ is removed first, so that no file since removed from the tree rides along from an earlier build. The
+# backend is the setuptools build-constraints.txt names, not whatever the index holds that day. scripts/publish.py
+# check holds them, the tag, VERSION and CHANGELOG.md to one another. uv writes dist/.gitignore, which is removed: the check refuses any
+# file but the four wheels. Needs the network.
 wheels:
-	rm -rf dist core/build readers/infrahub/build readers/netbox/build
+	rm -rf dist core/build readers/infrahub/build readers/netbox/build readers/nautobot/build
 	mkdir dist
-	for member in core readers/infrahub readers/netbox; do \
+	for member in core readers/infrahub readers/netbox readers/nautobot; do \
 		FYLGJA_BUILD_COMMIT=$(COMMIT) uv build --wheel --no-python-downloads --python python3 --build-constraints build-constraints.txt --out-dir dist $$member || exit 1; \
 	done
 	rm -f dist/.gitignore
@@ -169,6 +179,32 @@ netbox-up:
 # release and the image stay.
 netbox-down:
 	python3 -I scripts/netbox_dev.py down --local $(LOCAL) --netbox $(NETBOX_VERSION) --docker $(NETBOX_DOCKER_VERSION) --branching $(NETBOX_BRANCHING_VERSION) --override netbox/dev/compose.override.yml $(if $(filter 1,$(PURGE)),--purge)
+
+# The development Nautobot, the Compose project fylgja-core-nautobot: local/.env's missing names written, never
+# printed; local/nautobot/git made, the directory the git service serves; the image built from nautobot/dev/, started,
+# and waited for until /health/ answers 200 from the host (Docker's word is not asked), then /api/status/ names both
+# versions and a running worker, read with the superuser's token, the line local/.env holds, which the image takes at
+# each start.
+nautobot-up:
+	python3 -I scripts/nautobot_dev.py up --local $(LOCAL) --nautobot $(NAUTOBOT_VERSION) --golden-config $(GOLDEN_CONFIG_VERSION) --python $(NAUTOBOT_PYTHON)
+
+# Stopped, its containers, network and volumes kept; PURGE=1, and no other value, removes them. local/.env,
+# local/nautobot/git and the image stay.
+nautobot-down:
+	python3 -I scripts/nautobot_dev.py down --local $(LOCAL) --nautobot $(NAUTOBOT_VERSION) --golden-config $(GOLDEN_CONFIG_VERSION) --python $(NAUTOBOT_PYTHON) $(if $(filter 1,$(PURGE)),--purge)
+
+# The fixture network on the development Nautobot from nautobot/seed/main.yaml, found by its names or made, with
+# the probes' inactive configuration context; nautobot/seed/templates/ committed into local/nautobot/git's
+# templates.git, the repository the git service serves, where its tree is not main's; the repository, the GraphQL query
+# nautobot/seed/sotagg.graphql and Golden Config's installed Default Settings pointed at both, its group saved where
+# its stored members are not the tagged devices; Nautobot read back and refused, naming each difference and deleting
+# nothing, where it is not the fixture; and last each device rendered once, held to three-node.json's configuration
+# (CONTRIBUTING.md). Then the reader's account fylgja-reader at its least view grants, under which a render is the
+# superuser's, and its write-disabled token's line FYLGJA_NAUTOBOT_TOKEN in local/.env, kept where Nautobot still
+# takes it (nautobot/seed/account.py). Load local/.env first, and again after.
+nautobot-seed:
+	$(VENV)/bin/python nautobot/seed/seed.py --files nautobot/seed --git $(LOCAL)/nautobot/git
+	$(VENV)/bin/python nautobot/seed/account.py --env $(LOCAL)/.env
 
 # The fixture network on the development NetBox's main from netbox/seed/main.yaml, found by its names or made, with
 # the configuration template that renders it and the probes' inactive configuration context; main read back and
@@ -256,6 +292,12 @@ contract-netbox:
 	cd netbox && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd readers/netbox && ../../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd orchestrator && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract_netbox
+
+# The Nautobot contract tier: nautobot/'s code, then the Nautobot reader's, against the running development Nautobot
+# (CONTRIBUTING.md). Load local/.env first.
+contract-nautobot:
+	cd nautobot && ../core/.venv/bin/pytest -q -rA -m contract_nautobot tests/contract
+	cd readers/nautobot && ../../core/.venv/bin/pytest -q -rA -m contract_nautobot tests/contract
 
 # A demonstration of one source of truth, infrahub or netbox, with no step by hand (CONTRIBUTING.md, "The
 # demonstrations"; D-104): the host's preconditions checked, then the source's runbook taken in order through the

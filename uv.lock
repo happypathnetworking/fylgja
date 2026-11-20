@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "fylgja-core",
     "fylgja-infrahub",
+    "fylgja-nautobot",
     "fylgja-netbox",
     "fylgja-orchestrator",
 ]
@@ -689,6 +690,33 @@ provides-extras = ["dev", "server"]
 [[package]]
 name = "fylgja-infrahub"
 source = { editable = "readers/infrahub" }
+dependencies = [
+    { name = "fylgja-core" },
+    { name = "httpx" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "types-pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fylgja-core", editable = "core" },
+    { name = "httpx", specifier = ">=0.27.0,<1" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = "==2.4.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = "==9.2.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.17.3" },
+    { name = "types-pyyaml", marker = "extra == 'dev'", specifier = "==6.0.12.20260906" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "fylgja-nautobot"
+source = { editable = "readers/nautobot" }
 dependencies = [
     { name = "fylgja-core" },
     { name = "httpx" },

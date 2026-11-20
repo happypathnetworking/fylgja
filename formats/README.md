@@ -4,7 +4,7 @@ Every format of every distribution, version 1: each format and interface the cor
 and writes, the reader document each reader takes, and the example orchestrator's two
 documents. Each has one version,
 specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). From 1.0 a
-change to a held format only adds ([what 1.0 holds](../docs/compatibility.md)). The design they
+change to a held format only adds ([What major version 1 holds](../docs/compatibility.md)). The design they
 follow is [design/core.md](../design/core.md). A change found while building the core is made
 here, in the same change as the code.
 
@@ -34,6 +34,7 @@ relative to them.
 | [`api-1.openapi.yaml`](api-1.openapi.yaml) | [D-025](../design/decisions.md#d-025) |
 | [`infrahub-reader-1.schema.json`](infrahub-reader-1.schema.json) | [D-082](../design/decisions.md#d-082) |
 | [`netbox-reader-1.schema.json`](netbox-reader-1.schema.json) | [D-095](../design/decisions.md#d-095) |
+| [`nautobot-reader-1.schema.json`](nautobot-reader-1.schema.json) | [D-118](../design/decisions.md#d-118) |
 | [`plan-1.schema.json`](plan-1.schema.json) | [D-086](../design/decisions.md#d-086) |
 | [`rehearsal-1.schema.json`](rehearsal-1.schema.json) | [D-086](../design/decisions.md#d-086) |
 
@@ -75,7 +76,9 @@ relative to them.
     [`readers/infrahub/rules.md`](../readers/infrahub/rules.md)
     ([D-082](../design/decisions.md#d-082)), the NetBox reader's in
     [`readers/netbox/rules.md`](../readers/netbox/rules.md)
-    ([D-095](../design/decisions.md#d-095)). Rules for stages and rehearsals are the example
+    ([D-095](../design/decisions.md#d-095)), the Nautobot reader's in
+    [`readers/nautobot/rules.md`](../readers/nautobot/rules.md)
+    ([D-118](../design/decisions.md#d-118)). Rules for stages and rehearsals are the example
     orchestrator's ([D-081](../design/decisions.md#d-081)), in
     [`orchestrator/rules.md`](../orchestrator/rules.md).
 12. **A device name is a DNS-1123 label** of at most 63 characters

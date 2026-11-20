@@ -180,6 +180,8 @@ DOLLAR_ENDED: list[tuple[str, str, Callable[[], Any], str]] = [
     ("infrahub-reader-1", "infrahub/seed/reader.yaml", _file("infrahub", "seed", "reader.yaml"),
      "/platforms/0/package"),
     ("netbox-reader-1", "netbox/seed/reader.yaml", _file("netbox", "seed", "reader.yaml"), "/platforms/0/package"),
+    ("nautobot-reader-1", "nautobot/seed/reader.yaml", _file("nautobot", "seed", "reader.yaml"),
+     "/platforms/0/package"),
     ("plan-1", "_plan", _plan, "/read_at"),
     ("platform-package-1", "psp/nokia_srlinux.yaml", _file("psp", "nokia_srlinux.yaml"), "/id"),
     ("probe-package-1", "probes/ping.yaml", _file("probes", "ping.yaml"), "/format"),
@@ -191,7 +193,7 @@ DOLLAR_ENDED: list[tuple[str, str, Callable[[], Any], str]] = [
 def test_the_rows_are_every_format_with_a_dollar_ended_pattern() -> None:
     ended = {name: [p for p in _patterns(doc) if p.endswith("$")] for name, doc in _formats().items()}
     assert {name for name, found in ended.items() if found} == {row[0] for row in DOLLAR_ENDED}
-    assert sum(len(found) for found in ended.values()) == 31
+    assert sum(len(found) for found in ended.values()) == 32
 
 
 @pytest.mark.parametrize(("name", "source", "made", "pointer"), DOLLAR_ENDED, ids=[row[0] for row in DOLLAR_ENDED])

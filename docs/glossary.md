@@ -6,8 +6,9 @@ repository, and to the source of truth they join: the core never uses it, but it
 blueprint's `source` or in these documents. See also
 [architecture.md](../design/architecture.md) and the formats in [`formats/`](../formats/README.md).
 
-**Acceptance run** — A phase's own gate, made once with the core on the local driver and once
-with the core deployed on the cluster. Through Infrahub's check, phase 8's: the seeded branch's
+**Acceptance run** — A phase's own gate, which the maintainer watches. Phase 8's and phase 9's were each
+made once with the core on the local driver and once with the core deployed on the cluster. Through
+Infrahub's check, phase 8's: the seeded branch's
 proposed change, created by the maintainer in the development Infrahub, rehearsed through
 Infrahub's own check `fylgja-twin`, the maintainer reading each report in its thread
 ([core.md](../design/core.md#phase-8-the-infrahub-reader-and-the-example-orchestrator-settled-2026-11-09)).
@@ -16,6 +17,10 @@ then given the tag `fylgja-rehearse`, by the script's last act or by hand, which
 rehearsal through NetBox's webhook and Prefect, the maintainer reading each report on the branch's
 journal
 ([core.md](../design/core.md#phase-9-the-netbox-reader-and-the-examples-netbox-change-source-settled-2026-11-12)).
+From the Nautobot reader, phase 11's: the seed read by `fylgja-nautobot`, a twin of it created,
+verified and destroyed on the local driver
+([core.md](../design/core.md#phase-11-the-nautobot-reader-settled-2026-11-19)), with the runbook in
+[CONTRIBUTING.md](../CONTRIBUTING.md#from-the-nautobot-reader).
 Each run's every command, and the blocks that say the maintainer can act, are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#the-acceptance-run).
 
@@ -85,7 +90,13 @@ changelog. A row between the two ids of a kind a read reads, every kind but a jo
 the branch object's own; a count that moved, a row of any kind written below the open's id; or a
 branch gone, synced or no longer `ready`, refuses the read, `read.moved`, with the remedy: read
 again ([D-095](../design/decisions.md#d-095),
-[`readers/netbox/mapping.md`](../readers/netbox/mapping.md)).
+[`readers/netbox/mapping.md`](../readers/netbox/mapping.md)). The Nautobot reader's, whose
+changelog's ids are UUIDs that order nothing: the newest row, by its id and time, and the
+changelog's count, and the head of each template repository *Golden Config*'s settings name,
+taken at the open and again at the close, another newest row, a count that moved or a head that
+moved refusing the read, `read.moved`
+([D-118](../design/decisions.md#d-118),
+[`readers/nautobot/mapping.md`](../readers/nautobot/mapping.md)).
 
 **Branch point** *(orchestrator)* — The first *stage* of a proposed change: the default branch
 as it stood when the change's branch was cut, read at the time Infrahub gives that cut
@@ -257,6 +268,14 @@ reads its objects into a blueprint's `probes` where the *reader document* asks f
 once it has acted on it, so a client can tell whether the status is current
 ([D-025](../design/decisions.md#d-025)).
 
+**Golden Config** *(orchestrator)* — Network to Code's free app for Nautobot that, among other
+things, renders a device's intended configuration on request, from the Jinja templates of a Git
+repository Nautobot holds (its *template repository*) and the data of a GraphQL query, under the
+setting whose dynamic group of devices the device is a member of. The Nautobot reader takes each
+device's configuration from that render, as it stands at the read
+([`readers/nautobot/mapping.md`](../readers/nautobot/mapping.md)); nothing of Golden Config's stored intended
+configuration is read ([D-118](../design/decisions.md#d-118)).
+
 **Hardware driver** — A later release's driver: it claims devices from a pool rather than
 creating nodes, cannot re-cable, and resets each device to a stored baseline. Its paper
 shape checks the seam ([design/core.md](../design/core.md)).
@@ -353,6 +372,11 @@ label, the blueprint's id, the scope and the time read. A label is unique within
 is never taken twice; the marks stand between `main` and the head in the order written, and a
 mark's blueprint is read from the core the rehearsal runs through, which holds it where it was
 given it ([D-097](../design/decisions.md#d-097), [D-100](../design/decisions.md#d-100)).
+
+**Nautobot** *(orchestrator)* — The source of truth from which the Nautobot *reader* reads devices,
+interfaces, cables and each device's configuration as *Golden Config* renders it at the read, as
+it stands ([D-118](../design/decisions.md#d-118)). Its free edition has no change to rehearse, so
+the example orchestrator has no change source for it.
 
 **NetBox** *(orchestrator)* — The source of truth from which the NetBox *reader* reads devices,
 interfaces, cables and each device's configuration as NetBox renders it at the read from its
@@ -457,18 +481,23 @@ mapping, reporting every fault in one pass and writing no blueprint on failure
 ([Constitution III](../design/constitution.md#iii-the-blueprint-is-the-contract)). Each source
 of truth Fylgja reads has its own, and no reader imports another: the Infrahub reader,
 `fylgja-infrahub` ([D-082](../design/decisions.md#d-082)), under
-[`readers/infrahub/`](../readers/infrahub/README.md), and the NetBox reader, `fylgja-netbox`
+[`readers/infrahub/`](../readers/infrahub/README.md), the NetBox reader, `fylgja-netbox`
 ([D-095](../design/decisions.md#d-095)), under [`readers/netbox/`](../readers/netbox/README.md),
-each the library and a command of that name.
+and the Nautobot reader, `fylgja-nautobot` ([D-118](../design/decisions.md#d-118)), under
+[`readers/nautobot/`](../readers/nautobot/README.md), published from 1.1.0
+([D-121](../design/decisions.md#d-121)), each the library and a command of that name.
 
-**Reader document** — The input a read takes beside its branch and scope, in each reader's
+**Reader document** — The input a read takes beside its scope, and its branch where the source
+has one, in each reader's
 own format, holding what the source cannot. For the Infrahub reader, `infrahub-reader-1`, whose
 read is given a time as well: which manufacturer and platform pair is which platform package,
 the name of the artifact that holds a device's configuration, and whether probes are read
 ([D-082](../design/decisions.md#d-082)). For the NetBox reader, `netbox-reader-1`: which pair
 is which platform package, and the name of the configuration context that declares the probes,
 or none; NetBox renders each device's configuration itself
-([D-095](../design/decisions.md#d-095)). Neither holds an address or a credential.
+([D-095](../design/decisions.md#d-095)). For the Nautobot reader,
+`nautobot-reader-1`: the same two, *Golden Config* rendering each device's configuration
+([D-118](../design/decisions.md#d-118)). None holds an address or a credential.
 
 **Reconcile loop** — The core's own loop that drives each twin's observed state toward its
 desired state through its driver, phase by phase ([D-023](../design/decisions.md#d-023)).
@@ -547,14 +576,16 @@ address. The base holds what is the same at every site, the overlay what a site 
 **Snapshot** — The earlier name for a blueprint, still used by the archived repository's
 formats (snapshot 2) ([D-006](../design/decisions.md#d-006)).
 
-**Source envelope** — Where a blueprint came from (source, branch, point in time, scope,
-mapping, when it was read), carried as the opaque `source` object. The core stores and
+**Source envelope** — Where a blueprint came from (source, branch where the source has one,
+point in time where it has one, scope, mapping, when it was read), carried as the opaque `source`
+object. For Nautobot, which has no branch and no earlier time, it holds the changelog's newest
+row and each template repository's head at the read. The core stores and
 returns it, and never reads or hashes it
 ([Constitution VI](../design/constitution.md#vi-intent-is-addressed)).
 
 **Source of truth** *(orchestrator)* — The system that holds a network's intent, such as
-*Infrahub* or *NetBox*. A *reader* reads its intent; a *change source* reads its changes and
-posts the report to it.
+*Infrahub*, *NetBox* or *Nautobot*. A *reader* reads its intent; a *change source*, where the
+source has a change to rehearse, reads its changes and posts the report to it.
 
 **Stage** *(orchestrator)* — A moment of a change. Of a proposed change in Infrahub: its *branch
 point*, a *mark* the operator records on the branch, or its *head*
@@ -612,6 +643,11 @@ apply began, or, unchanged, failed to ready or push such a node, with the twin r
 ran; or *diverged*, when it fails or is cancelled from its apply on: a step is never rolled back
 ([D-029](../design/decisions.md#d-029)).
 
+**Template repository** *(orchestrator)* — The Git repository Nautobot holds and *Golden Config*
+renders a device's Jinja template from, named by the setting that applies to the device. The
+Nautobot *reader* takes each repository's head at the open of a read and again at its close, and a
+head that moved refuses the read, as a newer changelog row does, the *bracket* ([D-118](../design/decisions.md#d-118)).
+
 **Thin CLI** — `fylgja-core`, a client of API 1 like any other. It renders documents as
 text and exits 0 for ok, 1 for a negative verdict, 2 for a problem, a transport failure or
 a usage error, and 3 for a twin left dirty.
@@ -665,4 +701,4 @@ library does so itself when a stream ends early.
 **Work queue** — The loop's queue of twin names waiting to be reconciled. A name is never
 queued twice, and each twin has at most one worker at a time ([D-023](../design/decisions.md#d-023)).
 
-**Workspace** — The uv workspace at the repository's root: its four members, `core/`, `readers/infrahub/`, `readers/netbox/` and `orchestrator/`, and its lock, `uv.lock`, which `make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).
+**Workspace** — The uv workspace at the repository's root: its five members, `core/`, `readers/infrahub/`, `readers/netbox/`, `readers/nautobot/` and `orchestrator/`, and its lock, `uv.lock`, which `make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).

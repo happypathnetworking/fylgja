@@ -157,8 +157,8 @@ on, its depth, and makefiles to read before the checkout's. No make child of the
 
 MAKE_VARIABLES = (
     "LOCAL", "INFRAHUB_VERSION", "INFRAHUB_SDK_VERSION", "REF", "SEED_BRANCH", "PURGE", "PROPOSED_CHANGE",
-    "NETBOX_VERSION", "NETBOX_DOCKER_VERSION", "NETBOX_BRANCHING_VERSION", "NETBOX_BRANCH", "NETBOX_TAG", "SOURCE",
-    "IMAGE", "DRIVER",
+    "NETBOX_VERSION", "NETBOX_DOCKER_VERSION", "NETBOX_BRANCHING_VERSION", "NETBOX_BRANCH", "NETBOX_TAG",
+    "NAUTOBOT_VERSION", "GOLDEN_CONFIG_VERSION", "NAUTOBOT_PYTHON", "SOURCE", "IMAGE", "DRIVER",
 )  # fmt: skip
 """Every name the `Makefile` assigns by `?=`, in its order, held to it by a test: make takes each from its
 environment where that holds it, so no make child of the script's is given one (`make_env`), and a target's

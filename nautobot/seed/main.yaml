@@ -1,0 +1,63 @@
+# The fixture network on the development Nautobot, made by nautobot/seed/seed.py (make nautobot-seed):
+# testdata/blueprint/three-node.json's network whole, since Nautobot has no change to hold a link back for; the
+# repository that serves nautobot/seed/templates/ and the GraphQL query nautobot/seed/sotagg.graphql, which Golden
+# Config's installed Default Settings are pointed at, its group's filter the devices tagged fylgja; and the probe of
+# testdata/blueprint/three-node-probed.json as the configuration context the reader document names (reader.yaml).
+# Each object is found by its name, a device type by its model, or made. A device carries the marker as its comments:
+# a Nautobot device has no description. The statuses, the namespace Global and each address's prefix are the seed's
+# own, never written here. nautobot/tests/test_fixture.py holds these values against the blueprints.
+manufacturer: {name: Nokia}
+platform: {name: SR Linux, network_driver: nokia_srl}
+device_type: {model: 7220 IXR-D2L}
+location_type: {name: Site}
+location: {name: lab}
+role: {name: fylgja}
+tag: {name: fylgja}
+devices:
+  - name: n1
+    comments: FYLGJA-MARKER-fixture
+    interfaces:
+      - {name: mgmt0, type: 1000base-t, mgmt_only: true, addresses: []}
+      - {name: ethernet-1/1, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/2, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/10, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.1.10.1/24]}
+      - {name: ethernet-1/11, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.1.11.1/24]}
+  - name: n2
+    comments: FYLGJA-MARKER-fixture
+    interfaces:
+      - {name: mgmt0, type: 1000base-t, mgmt_only: true, addresses: []}
+      - {name: ethernet-1/1, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/2, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/10, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.2.10.1/24]}
+      - {name: ethernet-1/11, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.2.11.1/24]}
+  - name: n3
+    comments: FYLGJA-MARKER-fixture
+    interfaces:
+      - {name: mgmt0, type: 1000base-t, mgmt_only: true, addresses: []}
+      - {name: ethernet-1/1, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/2, type: 25gbase-x-sfp28, mgmt_only: false, addresses: []}
+      - {name: ethernet-1/10, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.3.10.1/24]}
+      - {name: ethernet-1/11, type: 25gbase-x-sfp28, mgmt_only: false, addresses: [10.3.11.1/24]}
+cables:
+  - [n1:ethernet-1/1, n2:ethernet-1/1]
+  - [n1:ethernet-1/2, n3:ethernet-1/2]
+  - [n2:ethernet-1/2, n3:ethernet-1/1]
+repository:
+  name: fylgja-templates
+  remote_url: http://templates.fylgja.example:8000/templates.git
+  branch: main
+query: fylgja-sotagg
+setting:
+  slug: default
+  path: "{{ obj.platform.network_driver }}.j2"
+  filter: {tags: [fylgja]}
+probes:
+  name: fylgja-probes
+  data:
+    probes_version: "1"
+    probes:
+      - name: n1-loop
+        format: ping
+        endpoints:
+          - {device: n1, interface: ethernet-1/10, address: 10.1.10.2/24, gateway: 10.1.10.1}
+          - {device: n1, interface: ethernet-1/11, address: 10.1.11.2/24, gateway: 10.1.11.1}

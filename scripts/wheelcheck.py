@@ -73,6 +73,27 @@ The NetBox reader's check, `check_netbox_reader`, follows it in directories of i
    `fylgja-netbox check`, given an address and no token, exits 2 with the one line that names the
    token's variable, printing nothing on stdout and not the address.
 
+The Nautobot reader's check, `check_nautobot_reader`, follows it in directories of its own, under
+`nautobot-reader/` in the same temporary directory:
+
+1. **Its wheel.** It is built once, by `build_nautobot_reader`, with `uv build --wheel` from a
+   copy of `readers/nautobot/` and `formats/` at their places, as `readers/nautobot/setup.py` finds
+   `formats/` two directories up; it requires the core as the Infrahub reader's does; its
+   `fylgja_nautobot/formats/` holds the format of the reader's document, `NAUTOBOT_READER_FORMATS`,
+   and no other, and the package carries `py.typed`.
+2. **Beside the base alone**, in an empty environment of its own: the core's base libraries from the
+   index, then `uv pip install --no-index --find-links <dir> fylgja-nautobot==<VERSION>`, the directory
+   holding the core's wheel and its own and nothing else, with no pre-release flag, so the reader's
+   requirement takes the candidate's core; the core with no extra: `PROBE_NAUTOBOT_READER`, run
+   outside the tree, finds the format the package reads beside it and not in the tree; a copy of
+   the seed's `nautobot/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the
+   mapping is `nautobot-dcim`; and once the command's module has imported, no module of the server's
+   libraries, Prefect, Infrahub's SDK, the client libraries of NetBox and Nautobot, the Infrahub and NetBox
+   readers or the example (`NOT_BESIDE_NAUTOBOT_READER`) is loaded, or installed. Then
+   `fylgja-nautobot --help` exits 0, and
+   `fylgja-nautobot check`, given an address and no token, exits 2 with the one line that names the
+   token's variable, printing nothing on stdout and not the address.
+
 The example orchestrator's check, `check_orchestrator`, follows them in directories of its own,
 under `orchestrator/` in the same temporary directory:
 
@@ -127,7 +148,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # The one version every distribution is built at (D-106), copied beside each build's copy of the tree, as `formats/` is.
 VERSION = ROOT / "VERSION"
-# What the builds read at the root: the version, the licence the three published wheels carry, and the core's long
+# What the builds read at the root: the version, the licence the four published wheels carry, and the core's long
 # description.
 ROOT_FILES = ("VERSION", "LICENSE", "README.md", "readme_links.py")
 # The metadata every published wheel states (D-106): the project's repository and what hangs off it, the classifiers
@@ -394,6 +415,73 @@ assert decoded.probes == probes, f"{reader.name}'s probes are {decoded.probes!r}
 assert fylgja_netbox.mapping.READER == mapping, f"fylgja_netbox.mapping.READER is {fylgja_netbox.mapping.READER!r}"
 
 import fylgja_netbox.cli
+
+loaded = sorted(m for m in sys.modules if any(m == name or m.startswith(f"{name}.") for name in absent))
+assert not loaded, f"loaded beside the base alone: {loaded}"
+
+
+def present(name):
+    # Whether `name` is installed: a missing parent package of a dotted name means it is not.
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ModuleNotFoundError:
+        return False
+
+
+installed = [name for name in absent if present(name)]
+assert not installed, f"installed beside the base alone: {installed}"
+"""
+
+# The format the Nautobot reader's wheel carries under `fylgja_nautobot/formats/`, that of its one document, and no
+# other:
+# stated here and not read from `readers/nautobot/setup.py`, so a list emptied or widened there fails the check.
+NAUTOBOT_READER_FORMATS = ("nautobot-reader-1.schema.json",)
+NAUTOBOT_READER_PREFIX = "fylgja_nautobot/formats/"
+NAUTOBOT_READER_TYPED = "fylgja_nautobot/py.typed"
+# The seed's reader document, which the installed reader decodes from a copy outside the tree, and the configuration
+# context it names for the probes; the mapping the reader names in a blueprint's source.
+NAUTOBOT_READER_DOCUMENT = ROOT / "nautobot" / "seed" / "reader.yaml"
+NAUTOBOT_PROBES = "fylgja-probes"
+NAUTOBOT_MAPPING = "nautobot-dcim"
+# The command's two variables: an address it is given, a reserved name that is never reached, and the token it is not.
+NAUTOBOT_ADDRESS = ("FYLGJA_NAUTOBOT_ADDRESS", "http://nautobot.example:8810")
+NAUTOBOT_TOKEN = "FYLGJA_NAUTOBOT_TOKEN"
+# What the Nautobot reader's command never loads beside the base alone, and what is not installed there: the Infrahub
+# reader's list, the example among it, with the client libraries of NetBox and Nautobot and the Infrahub and NetBox
+# readers, as the reader's import
+# test forbids them (`readers/nautobot/tests/test_boundary.py`'s `FORBIDDEN`); `core/tests/test_wheelcheck.py` holds the
+# two to each other.
+NOT_BESIDE_NAUTOBOT_READER = (*NOT_BESIDE_READER, "pynetbox", "pynautobot", "fylgja_infrahub", "fylgja_netbox")
+
+# Run beside the base alone, given the tree's root, a copy of the seed's reader document, the probes' context, the
+# mapping and then `NOT_BESIDE_NAUTOBOT_READER`: the reader's format, outside the tree; the document decoded; the
+# mapping's name; and nothing of `NOT_BESIDE_NAUTOBOT_READER` loaded once the command's module has imported, or
+# installed. A dotted name is judged whole, as `PROBE_READER` judges one.
+PROBE_NAUTOBOT_READER = r"""
+import importlib.util
+import sys
+from pathlib import Path
+
+import fylgja_nautobot
+from fylgja_core import schemas
+
+root, reader, probes, mapping, absent = Path(sys.argv[1]).resolve(), Path(sys.argv[2]), *sys.argv[3:5], sys.argv[5:]
+here = Path(fylgja_nautobot.__file__).resolve().parent / "formats"
+found = schemas.formats_dir("fylgja_nautobot")
+assert found == here, f"formats_dir('fylgja_nautobot') is {found}, not {here}"
+assert root not in found.parents, f"formats_dir('fylgja_nautobot') {found} is under the tree {root}"
+assert root not in reader.resolve().parents, f"the reader document {reader} is under the tree {root}"
+
+from fylgja_nautobot import document
+import fylgja_nautobot.mapping
+
+decoded = document.load(reader)
+assert isinstance(decoded, document.ReaderDocument), f"{reader.name} decodes to {decoded!r}"
+assert decoded.probes == probes, f"{reader.name}'s probes are {decoded.probes!r}, not {probes!r}"
+named = fylgja_nautobot.mapping.READER
+assert named == mapping, f"fylgja_nautobot.mapping.READER is {named!r}"
+
+import fylgja_nautobot.cli
 
 loaded = sorted(m for m in sys.modules if any(m == name or m.startswith(f"{name}.") for name in absent))
 assert not loaded, f"loaded beside the base alone: {loaded}"
@@ -1239,6 +1327,100 @@ def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
             "variable")
 
 
+def build_nautobot_reader(tmp: Path) -> Path:
+    """The Nautobot reader's one wheel, built by `uv build --wheel` from a copy of `readers/nautobot/` and `formats/` at
+    their places under `tmp/nautobot-reader/src`, as `readers/nautobot/setup.py` finds `formats/` two directories up.
+    Built once: called again with the same `tmp`, it answers the wheel already there."""
+    here = tmp / "nautobot-reader"
+    src, dist = here / "src", here / "dist"
+    if not dist.is_dir():
+        shutil.copytree(
+            ROOT / "readers" / "nautobot",
+            src / "readers" / "nautobot",
+            ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
+        )
+        shutil.copytree(ROOT / "formats", src / "formats")
+        copy_root_files(src)
+        wheel(src / "readers" / "nautobot", dist)
+    wheels = sorted(dist.glob("*.whl"))
+    if len(wheels) != 1:
+        raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
+    return wheels[0]
+
+
+def carried_by_nautobot_reader(wheel: Path) -> None:
+    """Nothing, once the Nautobot reader's wheel carries under `NAUTOBOT_READER_PREFIX` exactly
+    `NAUTOBOT_READER_FORMATS`, and `NAUTOBOT_READER_TYPED`; `Failure` otherwise."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+    prefix = NAUTOBOT_READER_PREFIX
+    found = {n[len(prefix) :] for n in names if n.startswith(prefix) and not n.endswith("/")}
+    expected = set(NAUTOBOT_READER_FORMATS)
+    listed = "NAUTOBOT_READER_FORMATS in scripts/wheelcheck.py"
+    problems = [f"missing from the wheel: {prefix}{n} ({listed})" for n in sorted(expected - found)]
+    problems += [f"extra in the wheel: {prefix}{n} ({listed})" for n in sorted(found - expected)]
+    if NAUTOBOT_READER_TYPED not in names:
+        problems.append(f"missing from the wheel: {NAUTOBOT_READER_TYPED}")
+    if problems:
+        raise Failure(f"{wheel.name} does not carry the Nautobot reader's format and py.typed, and no other:\n"
+                      + "\n".join(problems))
+
+
+def refused_without_nautobot_token(command: Path, tmp: Path) -> None:
+    """`command check`, given an address and no token, in this process's environment with every `FYLGJA_NAUTOBOT_`
+    variable taken out: it exits 2, prints nothing on stdout, and on stderr the one line that names the token's
+    variable, so not the address; `Failure` otherwise."""
+    name, address = NAUTOBOT_ADDRESS
+    env = {k: v for k, v in os.environ.items() if not k.startswith("FYLGJA_NAUTOBOT_")} | {name: address}
+    done = exits([str(command), "check"], tmp, 2, env)
+    expected = f"{NAUTOBOT_TOKEN} is not set\n"
+    if done.stdout or done.stderr != expected:
+        raise Failure(f"{command.name} check with no token exited 2, but did not print {expected!r} alone on stderr:\n"
+                      f"{done.stdout}{done.stderr}")
+
+
+def check_nautobot_reader(tmp: Path, core_wheel: Path) -> str:
+    """The Nautobot reader's check, under `tmp/nautobot-reader`: its wheel, from `build_nautobot_reader`, its version
+    and its requirement of the core, and what it carries; then, in an empty venv of its own, the core's base libraries
+    from the index and `fylgja-nautobot==<VERSION>` by name from a directory of `core_wheel` and its wheel alone, no
+    index, so the core with no extra, where `PROBE_NAUTOBOT_READER` runs outside the tree over a copy of the seed's
+    reader document, `fylgja-nautobot --help` exits 0 and `fylgja-nautobot check` with no token is refused, naming the
+    variable."""
+    wheel = build_nautobot_reader(tmp)
+    version = tree_version()
+    versioned(wheel, version)
+    requires_core(wheel, version)
+    held_commit(wheel, "fylgja_nautobot", tree_commit())
+    published_metadata(wheel, "tree/main/readers/nautobot")
+    held_licence(wheel, "fylgja_nautobot")
+    carried_by_nautobot_reader(wheel)
+    here = tmp / "nautobot-reader"
+    reader = here / NAUTOBOT_READER_DOCUMENT.name
+    shutil.copyfile(NAUTOBOT_READER_DOCUMENT, reader)
+    links = here / "links"
+    links.mkdir()
+    shutil.copyfile(core_wheel, links / core_wheel.name)
+    shutil.copyfile(wheel, links / wheel.name)
+    env = venv(here / "venv")
+    install(env, *base_requirements(core_wheel))
+    install(env, f"fylgja-nautobot=={version}", find_links=links)
+    run([str(env / "python"), "-I", "-c", PROBE_NAUTOBOT_READER, str(ROOT), str(reader), NAUTOBOT_PROBES,
+         NAUTOBOT_MAPPING, *NOT_BESIDE_NAUTOBOT_READER], tmp)
+    run([str(env / "fylgja-nautobot"), "--help"], tmp)
+    answers_version(env / "fylgja-nautobot", "fylgja-nautobot", version, tree_commit(), tmp)
+    refused_without_nautobot_token(env / "fylgja-nautobot", tmp)
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, states the "
+            f"project's metadata and holds the licence's text, and fylgja-nautobot=={version} "
+            "installs by name from a directory of the two wheels and no index, with no pre-release flag; it carries "
+            f"the Nautobot reader's {len(NAUTOBOT_READER_FORMATS)} format and no other; beside {core_wheel.name} "
+            "alone it "
+            f"decodes {NAUTOBOT_READER_DOCUMENT.name} outside the tree, its command "
+            "imports with nothing of the server, Prefect, a client library of Infrahub's, NetBox's or Nautobot's, the "
+            "Infrahub or NetBox reader or the example, answers --help and --version, and refuses a check without a "
+            "token, naming the "
+            "variable")
+
+
 def carried_by_example(wheel: Path) -> int:
     """How many GraphQL documents the example's wheel carries, once it carries under `ORCHESTRATOR_PREFIX` exactly
     `ORCHESTRATOR_FORMATS`, under `ORCHESTRATOR_QUERIES` exactly the tree's `*.gql` in `SOURCE_QUERIES`, and
@@ -1320,6 +1502,7 @@ def main() -> int:
             print(check(tmp))
             print(check_reader(tmp, build(tmp)))
             print(check_netbox_reader(tmp, build(tmp)))
+            print(check_nautobot_reader(tmp, build(tmp)))
             print(check_orchestrator(tmp, build(tmp)))
         except Failure as failure:
             print(f"wheelcheck: {failure}", file=sys.stderr)

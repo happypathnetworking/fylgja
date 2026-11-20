@@ -1,4 +1,4 @@
-"""The publish check (D-106): `scripts/publish.py` holds the tag, `VERSION`, the changelog's head and `dist/`'s three
+"""The publish check (D-106): `scripts/publish.py` holds the tag, `VERSION`, the changelog's head and `dist/`'s four
 wheels to one another before anything is uploaded, naming every fault in one pass, and performs no upload itself. The
 script is loaded by path, as `test_wheelcheck.py` loads its own; the wheels are zip files made under `tmp_path` holding
 a `METADATA` and a `COMMIT`. The publish workflow, `.github/workflows/publish.yml`, is read as a file: it is never run
@@ -23,7 +23,12 @@ SCRIPT = ROOT / "scripts" / "publish.py"
 COMMIT = "a" * 40
 OTHER = "b" * 40
 WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
-PACKAGES = {"fylgja_core": "fylgja-core", "fylgja_infrahub": "fylgja-infrahub", "fylgja_netbox": "fylgja-netbox"}
+PACKAGES = {
+    "fylgja_core": "fylgja-core",
+    "fylgja_infrahub": "fylgja-infrahub",
+    "fylgja_netbox": "fylgja-netbox",
+    "fylgja_nautobot": "fylgja-nautobot",
+}
 # The upload jobs, one an index and a distribution, each named as its environment is (`<index>-<distribution>`).
 UPLOADS = {f"{index}-{name}": (index, name) for index in ("testpypi", "pypi") for name in PACKAGES.values()}
 
@@ -51,7 +56,7 @@ def wheel(dist: Path, package: str, version: str, *, meta_version: str | None = 
         z.writestr(f"{package}/COMMIT", commit + "\n")
 
 
-def three(dist: Path, version: str = "1.0.0rc1") -> None:
+def four(dist: Path, version: str = "1.0.0rc1") -> None:
     for package in PACKAGES:
         wheel(dist, package, version)
 
@@ -75,14 +80,14 @@ def test_the_index_is_told_by_the_versions_form() -> None:
 
 def test_a_tree_that_is_the_tag_passes(tmp_path: Path) -> None:
     root = tree(tmp_path / "root")
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     assert _script().check("v1.0.0rc1", COMMIT, tmp_path / "dist", root) == "testpypi"
 
 
 @pytest.mark.parametrize("tag", ["v1.0.0", "1.0.0rc1", "v1.0.0-rc1"])
 def test_a_tag_that_is_not_the_version_is_refused(tmp_path: Path, tag: str) -> None:
     root = tree(tmp_path / "root")
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     with pytest.raises(_script().Failure, match="tag"):
         _script().check(tag, COMMIT, tmp_path / "dist", root)
 
@@ -104,20 +109,21 @@ def test_every_fault_of_the_wheels_is_named_in_one_pass(tmp_path: Path) -> None:
     assert len(lines) == len(set(lines)) >= 6
     for fragment in ("fylgja_orchestrator-1.0.0rc1-py3-none-any.whl", "fylgja_core-1.0.0rc1.tar.gz",
                      "fylgja_netbox-1.0.0rc1-py3-none-any.whl: is missing", "fylgja_netbox-1.0.0rc2",
+                     "fylgja_nautobot-1.0.0rc1-py3-none-any.whl: is missing",
                      "METADATA Version is '1.0.0rc2'", "requires fylgja-core ['<2', '>=1.0'], not ['<2', '>=1.0.0rc1']",
                      OTHER):
         assert fragment in text, fragment
     # the other faults of a COMMIT: dirty and unknown
     for bad in (COMMIT + "-dirty", "unknown"):
         again = tmp_path / ("d" + bad[-5:])
-        three(again)
+        four(again)
         wheel(again, "fylgja_netbox", "1.0.0rc1", commit=bad)
         with pytest.raises(_script().Failure, match="fylgja_netbox"):
             _script().check("v1.0.0rc1", COMMIT, again, root)
 
 
 def test_an_undated_or_other_head_is_refused(tmp_path: Path) -> None:
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     for head, why in (("## 1.0.0rc1 - unreleased", "unreleased"), ("## 1.0.1 - 2026-11-20", "1.0.1"),
                       ("## 1.0.0rc1 2026-11-20", "heading"), ("## 1.0.0rc1 - 2026-99-99", "2026-99-99")):
         root = tree(tmp_path / "r", head=head)
@@ -204,7 +210,7 @@ def test_the_notes_command_needs_both_and_prints_the_absolute_links(tmp_path: Pa
 def test_the_index_is_written_for_the_workflow(tmp_path: Path, capsys: pytest.CaptureFixture[str],
                                                monkeypatch: pytest.MonkeyPatch) -> None:
     root = tree(tmp_path / "root")
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     out = tmp_path / "out"
     out.write_text("earlier=1\n")
     script = _script()
@@ -255,22 +261,23 @@ def test_only_the_upload_jobs_may_ask_for_an_identity_token() -> None:
 def test_each_upload_waits_for_its_own_environment_and_index() -> None:
     jobs = _workflow()["jobs"]
     assert jobs["build"]["outputs"] == {"index": "${{ steps.check.outputs.index }}"}
-    # Six environments and no other, one an upload job's alone: a pending publisher is unique on its repository, owner,
-    # workflow file and environment, not its project (design/verified-facts.md, "PyPI and TestPyPI").
+    # Eight environments and no other, one an upload job's alone: a pending publisher is unique on its repository,
+    # owner, workflow file and environment, not its project (design/verified-facts.md, "PyPI and TestPyPI").
     assert {job: spec.get("environment") for job, spec in jobs.items() if "environment" in spec} == {
         job: {"name": job} for job in UPLOADS}
     for job, (index, _) in UPLOADS.items():
         assert jobs[job]["needs"] == "build"
         assert jobs[job]["if"] == f"needs.build.outputs.index == '{index}'"
         assert jobs[job]["runs-on"] == "ubuntu-26.04"
-    assert jobs["release"]["needs"] == ["build", "pypi-fylgja-core", "pypi-fylgja-infrahub", "pypi-fylgja-netbox"]
+    assert jobs["release"]["needs"] == ["build", "pypi-fylgja-core", "pypi-fylgja-infrahub", "pypi-fylgja-netbox",
+                                          "pypi-fylgja-nautobot"]
     assert jobs["release"]["if"] == "needs.build.outputs.index == 'pypi'"
 
 
 def test_each_upload_job_downloads_then_publishes_its_one_wheel() -> None:
     jobs = _workflow()["jobs"]
     # The build job puts each wheel in an artifact of its own, named as its distribution; the check before it has held
-    # dist/ to the three wheels at the version, so each pattern finds one wheel.
+    # dist/ to the four wheels at the version, so each pattern finds one wheel.
     artifacts = {step["with"]["name"]: step["with"] for step in _uses("build", "actions/upload-artifact")}
     assert artifacts == {name: {"name": name, "path": f"dist/{package}-*.whl", "if-no-files-found": "error"}
                          for package, name in PACKAGES.items()}
@@ -282,7 +289,7 @@ def test_each_upload_job_downloads_then_publishes_its_one_wheel() -> None:
         if index == "testpypi":
             upload["with"] = {"repository-url": "https://test.pypi.org/legacy/"}
         assert _steps(job) == [{"uses": pin, "with": {"name": name, "path": "dist/"}}, upload], job
-    # No job but these six uploads.
+    # No job but these eight uploads.
     assert {job for job in jobs if _uses(job, "pypa/gh-action-pypi-publish")} == set(UPLOADS)
 
 
@@ -326,7 +333,7 @@ def test_the_build_gates_and_checks_before_anything_is_uploaded() -> None:
     assert setup["with"] == {"version": uv_version, "enable-cache": False}
     order = ["actions/checkout", "actions/setup-python", "astral-sh/setup-uv", "make venv", "make lint", "make test",
              "make wheelcheck", "make wheels", "check", "ancestry", "actions/upload-artifact",
-             "actions/upload-artifact", "actions/upload-artifact"]
+             "actions/upload-artifact", "actions/upload-artifact", "actions/upload-artifact"]
     found = []
     for i, step in enumerate(steps):
         if step.get("id") == "check":
@@ -373,7 +380,7 @@ def test_the_release_is_the_wheels_and_the_changelogs_notes() -> None:
 def test_a_requirement_with_a_marker_is_refused(tmp_path: Path) -> None:
     root = tree(tmp_path / "root")
     dist = tmp_path / "dist"
-    three(dist)
+    four(dist)
     wheel(dist, "fylgja_netbox", "1.0.0rc1",
           requirement="Requires-Dist: fylgja-core>=1.0.0rc1,<2; python_version > '3'\n")
     with pytest.raises(_script().Failure, match=r"fylgja_netbox.*python_version.*not plain") as caught:
@@ -384,7 +391,7 @@ def test_a_requirement_with_a_marker_is_refused(tmp_path: Path) -> None:
 def test_a_missing_version_file_is_one_line(tmp_path: Path) -> None:
     root = tree(tmp_path / "root")
     (root / "VERSION").unlink()
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     with pytest.raises(_script().Failure, match=r"VERSION cannot be read") as caught:
         _script().check("v1.0.0rc1", COMMIT, tmp_path / "dist", root)
     assert str(caught.value).count("\n") == 0
@@ -393,7 +400,7 @@ def test_a_missing_version_file_is_one_line(tmp_path: Path) -> None:
 def test_a_version_stated_in_two_headings_is_refused(tmp_path: Path) -> None:
     root = tree(tmp_path / "root")
     (root / "CHANGELOG.md").write_text((root / "CHANGELOG.md").read_text() + "\n## 1.0.0rc1 - 2026-11-01\n\nAgain.\n")
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     with pytest.raises(_script().Failure, match=r"1\.0\.0rc1 .*more than one heading") as caught:
         _script().check("v1.0.0rc1", COMMIT, tmp_path / "dist", root)
     assert str(caught.value).count("\n") == 0
@@ -401,7 +408,7 @@ def test_a_version_stated_in_two_headings_is_refused(tmp_path: Path) -> None:
 
 def test_a_malformed_commit_is_said_alone(tmp_path: Path) -> None:
     root = tree(tmp_path / "root")
-    three(tmp_path / "dist")
+    four(tmp_path / "dist")
     with pytest.raises(_script().Failure) as caught:
         _script().check("v1.0.0rc1", "abc", tmp_path / "dist", root)
     assert str(caught.value).splitlines() == ["commit 'abc' is not 40 lowercase hex characters"]

@@ -2,15 +2,15 @@
 
 A **verified fact** is something about a dependency that was checked against the running
 system, not taken from its documentation or from memory: how containerlab, clabernetes,
-kind, a network operating system, Docker, GitHub's runner, Infrahub, NetBox, Prefect or the host
-actually behaves.
+kind, a network operating system, Docker, GitHub's runner, Infrahub, NetBox, Nautobot, Prefect
+or the host actually behaves.
 
 This file holds the facts the core relies on: its runtimes, the nodes it boots, the probes
 it runs on a twin and the hosts it runs on. It also holds the facts the Infrahub reader and
-the example orchestrator rely on, each read again here on the version named, and those the
-NetBox reader and the example's NetBox change source rely on. The archived repository's
-facts about Infrahub 1.11.2, Prefect 3.8.8 and NetBox 4.7.4 stay there, and nothing here
-relies on them.
+the example orchestrator rely on, each read again here on the version named; those the
+NetBox reader and the example's NetBox change source rely on; and those the Nautobot
+reader and its development Nautobot rely on. The archived repository's facts about Infrahub
+1.11.2, Prefect 3.8.8 and NetBox 4.7.4 stay there, and nothing here relies on them.
 
 - Each fact names the version it was verified against and the date.
 - **Re-verify a fact on any upgrade** of the system it names.
@@ -9279,6 +9279,836 @@ on a host emptied first. *(2026-11-17)*
   2026-11-12, above), asked once more and started the worker. That wait is most of the demonstration's time from new
   volumes. NetBox listened on `127.0.0.1:8800` alone. *(2026-11-17)*
 
+## Nautobot 3.2.8 with Golden Config 3.0.8
+
+Read on the development host on 2026-11-19, before phase 11 was settled, by throwaway scripts over httpx 0.28.1 and by
+reading the installed source where a bullet says so. The stack was a Compose project, `fylgja-phase11-spike`, under
+`local/phase-11/spike/`:
+
+- `networktocode/nautobot:3.2.8-py3.12`, with one layer adding `nautobot-golden-config==3.0.8` by `pip install`, which
+  brought `nautobot_plugin_nornir` 3.4.0;
+- `postgres:17-alpine` and `redis:7-alpine`;
+- a worker running `nautobot-server celery worker`;
+- a Git server, `python -m http.server` over a bare repository made servable by `git update-server-info`, so a
+  repository Nautobot clones over plain HTTP from the Compose service `git`, port 8000, path `/templates.git`.
+
+The project's network was 203.0.113.0/24, and Nautobot was published on loopback port 8810.
+`nautobot_config.py` was the core settings, `ALLOWED_HOSTS = ["*"]`, and Golden Config with intended configuration and
+the SoT aggregation query enabled and its other features off. The fixture was made through the API: two to four
+devices tagged `fylgja` on one location, a platform `srl` (`network_driver` `nokia_srl`), one interface each, one
+cable and two addresses. No tracked file ran in these readings, and the spike was removed after them. Nautobot's
+Version Control app was not installed. *(2026-11-19)*
+
+- **The releases, as PyPI's JSON API answered on 2026-11-19:**
+  - `nautobot` 3.2.6 on 2026-09-28, 3.2.7 on 2026-10-13, 3.2.8 on 2026-10-27 and 3.2.9 on 2026-11-09, each beside a
+    2.4 release the same day;
+  - `nautobot-golden-config` 3.0.8 on 2026-09-28 and 3.1.0 on 2026-11-13, each requiring `nautobot<4.0.0,>=3.1.0`.
+
+  So 3.2.8 and 3.0.8 were each the newest release at least two weeks old that day. *(2026-11-19)*
+- **The image holds no `uv`** on its `PATH`, and `pip` 26.2.2. *(2026-11-19)*
+
+**Running it**
+
+- **A first start on new volumes answered `/health/` with 200 after about ten minutes**, nearly all of it
+  migrations. The names of the migrations include `dcim.0088_cabletocabletermination`,
+  `dcim.0090_remove_cable_old_gfk_fields` and `dcim.0091_cablepath_add_lane_fields`.
+  - Docker called `nautobot` unhealthy throughout the readings while `/health/` answered 200.
+  - A worker started beside it ran the image's entrypoint and migrated too, and failed with `relation
+    "extras_metadatatype" already exists`. Given the entrypoint `nautobot-server celery worker`, it started and
+    connected to Redis. *(2026-11-19)*
+- **`/api/status/`** names `nautobot-version 3.2.8`, `django-version 5.2.18` and `python-version 3.12.16`.
+  - It names `nautobot-apps` and `plugins`, each `{nautobot_golden_config: 3.0.8, nautobot_plugin_nornir: 3.4.0}`,
+    and `celery-workers-running`.
+  - Every response carried `API-Version: 3.2`.
+  - The superuser and a token, presented as `Authorization: Token <key>`, were made at the first start by
+    `NAUTOBOT_CREATE_SUPERUSER` and `NAUTOBOT_SUPERUSER_API_TOKEN`. *(2026-11-19)*
+
+**Lists and filters**
+
+- **A filter Nautobot does not know is refused.** It answers 400, `{"<name>": ["Unknown filter field"]}`, and
+  `ordering` is answered so too.
+  - Devices are scoped by a tag with `?tags=fylgja`; `?tag=` is refused.
+  - A tag no tag has is refused as a value: `?tags=nonexistent` answered 400, `{"tags": ["Select a valid choice.
+    nonexistent is not one of the available choices."]}`. `/api/extras/tags/?name=` answered `count 1` for `fylgja`
+    and `count 0` for a name no tag has.
+  - A list answers `count`, `next`, `previous` and `results`; `?limit=1` gave one row and a `next` with
+    `offset=1`.
+  - `?limit=0` and `?limit=5000` each answered all four rows with no `next`. The page-size limit, which in
+    Nautobot 3.2 is no Django setting, was not read. *(2026-11-19)*
+- **A cable is made with `termination_a_type`, `termination_a_id`, `termination_b_type` and `termination_b_id`**
+  (`dcim.interface` each), answered 201.
+  - Its representation holds `termination_a` and `termination_b`, their ids, and `terminations` as a map of lanes,
+    `{a1: …, b1: …}`.
+  - It also holds `total_lanes 1`, `connected_lanes 1` and `cable_type null`.
+  - `?device=r1` lists it. *(2026-11-19)*
+- **An address is made in the namespace `Global`** and takes as `parent` the prefix that holds it, `type host`.
+  - It is put on an interface by `POST /api/ipam/ip-address-to-interface/ {ip_address, interface}`.
+  - Two of the request's changelog rows were updates of the address and of the interface; whether it wrote one for
+    the assignment itself was not read. *(2026-11-19)*
+- **A configuration context made with `is_active: false`** is listed by `?name=` with `count 1` and `is_active
+  false`, its `data` as written. The fixture's device `r1` did not take it, its `config_context` `{}` read over
+  GraphQL and over REST with `?include=config_context`. *(2026-11-19)*
+
+- **A platform carries its `manufacturer`**, beside `network_driver`, `network_driver_mappings`, `napalm_driver`
+  and `napalm_args`. **An interface carries `enabled` and `mgmt_only`**, as booleans, and `type` as `{value,
+  label}`, with `cable`, `cable_peer`, `connected_endpoint`, `ip_address_count`, `lag`, `parent_interface` and
+  `module` among its members. *(2026-11-19)*
+- **Core's one render takes the template and the data in the request.** `POST /api/core/render-jinja-template/
+  {template_code, context}` answered 200 with `rendered_template` and `rendered_template_lines`. A device has no
+  render: `POST /api/dcim/devices/<id>/render-config/` and `…/config/` answered 404. *(2026-11-19)*
+
+**The changelog**
+
+- **`/api/extras/object-changes/` lists the newest row first, and a row's `id` is a UUID**, so no id orders the rows.
+  - A row carries `time` to the microsecond, `request_id`, which the rows of one request share, `action`,
+    `changed_object_type`, `changed_object_id`, `object_repr`, `user_name` and `change_context` (`web` for the API).
+  - `?time__gt=` and `?time__gte=` filter by time: `time__gt` of the newest row's time answered `count 0` and
+    `time__gte` `count 1`.
+  - In the installed source `time` is `auto_now_add`, set when the row is written. ~~When a row written inside a
+    longer transaction becomes visible was not read.~~ (Read the same day, below, "A row written inside a longer
+    transaction becomes visible at its commit, with the time it was written.") *(2026-11-19)*
+
+**Golden Config's render**
+
+- **The installed app holds one setting, `Default Settings`**, of weight 1000, with no `jinja_repository` and no
+  `sot_agg_query`, and with a dynamic group of devices, `GoldenConfigSetting Default Settings scope`, whose filter
+  `{}` had 0 members. *(2026-11-19)*
+- **A device is rendered only while it is a member of a setting's dynamic group, and the members are stored.**
+  - Before the filter was set, a render answered 400 `{"detail": "No Golden Config settings found for this
+    device"}`.
+  - `PATCH` of the filter to `{"tags": ["fylgja"]}` gave two members.
+  - Two devices tagged afterwards were refused in the same words until the group was saved again with the same
+    filter. That gave four members and added one changelog row, an update of `extras.dynamicgroup`.
+  - In the installed source, membership is recomputed when the group is saved, by `update_cached_members()`, or by
+    the job `RefreshDynamicGroupCaches`; ~~what that job writes to the changelog was not read~~ (read the same day,
+    below, "A device tagged after the group's save is refused until the group's members are refreshed, and
+    `RefreshDynamicGroupCaches` refreshes them writing no changelog row"). *(2026-11-19)*
+- **`GET /api/plugins/golden-config/generate-intended-config/?device_id=<id>`** answers 200 with JSON members
+  `intended_config`, `intended_config_lines`, `graphql_data`, `diff` and `diff_lines`.
+  - `intended_config` is the rendered text; `diff` was `null` with no stored intended configuration.
+  - A successful render took 0.45 to 0.90 s.
+  - In the installed source the view's only permission class is `IsAuthenticated`, and the device is looked up
+    within what the account may view. *(2026-11-19)*
+- **What a render answers when it cannot render**, each 400 `{"detail": …}`:
+  - a template that raises: `Error rendering Jinja template: Subtask: GENERATE CONFIG (failed)\n`, the cause (here
+    Jinja's `UndefinedError`, Golden Config's `E1010`) in Nautobot's log alone;
+  - a template file absent from the repository: `Error rendering Jinja template: Jinja template eos.j2 not found in
+    git repository templates`;
+  - a device id that names no device: `Device with id '<id>' not found`;
+  - an account with no permissions, for a device that exists: the same words, so neither is told from the other;
+  - read on 2026-11-20 for a well-formed id no device has (`?device_id=00000000-0000-4000-8000-000000000001`): HTTP
+    400, `Content-Type: application/json`, a body of one member, `detail`, whose message began `Device with id`; the
+    changelog (`/api/extras/object-changes/?limit=1`) read 6296 rows with the same newest row, `81c75f0b…`, at
+    `2026-11-20T18:05:35.429101Z`, before and after, so the refusal wrote none.
+
+  A template of whitespace alone answered 200 with `intended_config` `"   \n"`, so an empty render is the reader's
+  to tell. A failing render took 10.1 to 11.5 s. *(2026-11-19)*
+- **The template is given the query's `device` spread as names, and a top-level `name` is lost.**
+  - In the installed source, Golden Config puts the GraphQL data's `device` into the Nornir host's data, and its
+    dispatcher calls `task.run(**task.host, …)`.
+  - `name` is `task.run`'s own argument, so a query selecting `name` failed with `'name' is undefined` and the log
+    said `task 'r1' failed`.
+  - Selected as `hostname: name`, it rendered.
+  - A template's last newline is dropped: `…{% endfor %}\n` rendered ending in the loop's own newline, and
+    `"   \n\n"` as `"   \n"`. *(2026-11-19)*
+- **A render writes nothing of Golden Config's and starts no job.** The count of `GoldenConfig` rows and of job
+  results stayed 0 over every render. *(2026-11-19)*
+
+**The template repository**
+
+- **A Git repository registered over the API** with `provided_contents ["nautobot_golden_config.jinjatemplate"]`
+  answered 201 with `current_head ""`, and no job was started (job results: 0). *(2026-11-19)*
+- **Every render fetches the repository's branch first, and records a new head in the changelog.**
+  - In the installed source, the view calls `ensure_git_repository(repository)` with no `head`, which checks out the
+    branch's latest commit and saves `current_head` where it differs.
+  - Run against that:
+    - the first render, of a repository never synced, cloned it, moved `current_head` from `""` to the commit, and
+      added one changelog row, `update extras.gitrepository templates` by the rendering account;
+    - after each push, the next render moved `current_head` to the commit pushed and added one such row;
+    - a render with nothing new to fetch added none.
+  - A superuser's token with `write_enabled` false rendered, and its render moved `current_head` and added the row.
+  - So did an account that is no superuser and whose one permission was `view` on `dcim.device`. The row it
+    caused was written under its name.
+  - No response names the commit it rendered from. *(2026-11-19)*
+- **The query runs with the rendering account's grants, and a render of what the account cannot see is answered
+  200 without it.** That same account rendered `r1` with 200, but the template's loop over the device's interfaces
+  rendered none: `intended_config` held the hostname and no `interface` line. The superuser's render of the same
+  device, one push earlier, held it. *(2026-11-19)*
+- **Golden Config's `branch` names a branch of the template repository.** In the installed source, the view clones
+  the repository's `branch` into a directory and renders from it, and refuses the parameter below Nautobot 2.4.2.
+  It was not run. *(2026-11-19)*
+
+Read on 2026-11-19 on the development instance, before phase 11's install files were tracked: the three files phase
+11's first plan names for `nautobot/dev/` written under `local/nautobot/reading/dev/`, as the Compose project
+`fylgja-core-nautobot` (`-p fylgja-core-nautobot --project-directory <reading> --env-file <reading>/.env -f
+<reading>/dev/compose.yml`, the three versions and the two directories in Compose's environment) on loopback port
+8810, under Docker 29.8.1 and Docker Compose v5.6.0, started on new volumes and run by hand. Requests were curl's and
+throwaway scripts over httpx 0.28.1; the three passwords and key were `secrets.token_urlsafe(48)` and the superuser's
+token `secrets.token_hex(20)`, never printed, and no value of them was found in any container's log. The templates
+were a bare repository made by `git init --bare --initial-branch=main`, commits and `git update-server-info`. Scratch
+objects were named `p11-read-*`; the instance and its volumes were removed after, and the image kept. Each timing is
+one run. *(2026-11-19)*
+
+**The image and its pins**
+
+- **Network to Code publishes `networktocode/nautobot:3.2.8-py3.11`, `-py3.12`, `-py3.13` and `-py3.14`**, each an
+  index of `linux/amd64` and `linux/arm64` built 2026-10-27; `-py3.15` is not found.
+  - `-py3.14`'s index is `sha256:7818c7a0d0a9ca3eeb5af4e379f432653dceabcd9ccf654dea4458b547a6f6f9`, its Python
+    3.14.10; `-py3.12`'s is `sha256:1145d53abc59eab14fe9494ad2e209901627280ec7be1ac2f587b49abdd0862f`, its Python
+    3.12.16.
+  - Every reading below was made on `-py3.14`. *(2026-11-19)*
+- **The newest Postgres 17 and Redis 7 alpine tags whose index was pushed two weeks before**, as Docker Hub's tag API
+  and `docker buildx imagetools inspect` answered on 2026-11-19:
+  - `postgres:17.10-alpine`, index `sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193`, its
+    images built 2026-07-07 and the tag pushed 2026-07-08. `17.11-alpine`'s images were built 2026-11-05, but its
+    tag was pushed 2026-11-11, and `17.12-alpine`'s on 2026-11-19.
+  - `redis:7.4.11-alpine`, index `sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193`, its
+    images built 2026-10-21 and the tag pushed 2026-10-26. `7.4.12-alpine`'s images were built 2026-11-09.
+    *(2026-11-19)*
+- **The image runs as `nautobot` (uid 999), and its Python is no virtual environment.** `python` is
+  `/usr/local/bin/python`, `sys.prefix` `/usr/local`; Nautobot 3.2.8 is installed in
+  `/usr/local/lib/python3.14/site-packages`, owned by root and not writable by `nautobot`, and no
+  `EXTERNALLY-MANAGED` marker is there.
+  - The image exposes 8080 and 8443. Its entrypoint is `/docker-entrypoint.sh` and its command `nautobot-server start
+    --ini /opt/nautobot/uwsgi.ini`.
+  - Its health check is `nautobot-server health_check`, interval 10 s, timeout 10 s, start period 300 s, 3 retries.
+  - `git` 2.47.3 is at `/usr/bin/git`. The `-py3.12` image answered alike. *(2026-11-19)*
+- **The entrypoint makes the superuser on every start where `NAUTOBOT_CREATE_SUPERUSER` is `true`**, as its script
+  reads: it runs `nautobot-server post_upgrade`, then `check --deploy`, then a Python block that makes the user and a
+  token of `NAUTOBOT_SUPERUSER_API_TOKEN`'s key where no user of that name exists, and otherwise sets the email and
+  the password again and gives the user's first token that key where it differs. The values are written into the
+  block's text; only the name and the email are printed. *(2026-11-19)*
+- **uv adds Golden Config to the image's Python with neither `--system` nor `--break-system-packages`.** `uv pip
+  install --no-cache --python /usr/local/bin/python nautobot==3.2.8 nautobot-golden-config==3.0.8`, run as root,
+  said `Using Python 3.14.10 environment at: /usr/local`, resolved 183 packages and installed 24, removing none.
+  - Among the 24: `nautobot-golden-config` 3.0.8, `nautobot-plugin-nornir` 3.4.0, `nornir` 3.6.1, `nornir-nautobot`
+    5.0.1, `nautobot-capacity-metrics` 4.1.1, `pynautobot` 3.2.0 and `httpx` 0.28.1. Nautobot stayed 3.2.8.
+  - The build of `nautobot` exited 0 in 19.8 s, the image 1,422,981,314 bytes against the base's 1,292,894,587.
+  - A build argument declared before `FROM` is out of scope after it, so the Dockerfile declares `NAUTOBOT_VERSION`
+    again after `FROM` for the install's pin. *(2026-11-19)*
+- **In the installed source, Nornir's app merges `nornir_settings` over its defaults**: the ORM inventory, the
+  env-vars credentials class and the threaded runner of 20 workers. Golden Config's default Jinja environment is
+  `StrictUndefined` with `trim_blocks`. *(2026-11-19)*
+
+**Starting it**
+
+- **A first start on new volumes.** `up -d` exited 0 in 20.6 s. Polled from the host every 15 s, `/health/` reset the
+  connection until it answered 200 at 660 s from the start.
+  - Docker said `nautobot` and `worker` were `starting` until about 386 s and `unhealthy` from then to the end.
+    `.State.Health` said `Health check exceeded timeout (10s)` each time; the check run by hand in `nautobot` exited 0
+    after 21 s.
+  - About 40 minutes after the start, a health check held one CPU at about 100 % in `nautobot` and another in
+    `worker`, which inherits it; each container ran one, a new one as the last ended. *(2026-11-19)*
+- **The worker, given the entrypoint `nautobot-server celery worker`,** applied no migration; its log was Celery
+  5.6.3's banner, its transport the Compose service `redis` on port 6379, `concurrency: 10 (prefork)`, and no
+  line after. *(2026-11-19)*
+- **`/api/status/` with the superuser's token** answered 200: `nautobot-version 3.2.8`, `django-version 5.2.18`,
+  `python-version 3.14.10`, `nautobot-apps` and `plugins` each `{nautobot_golden_config: 3.0.8,
+  nautobot_plugin_nornir: 3.4.0}`, `celery-workers-running 1`, `API-Version: 3.2`.
+  - With no token it answered 403, `{"detail":"Authentication credentials were not provided."}`.
+  - After `stop worker` it said `celery-workers-running 0`; after `start worker`, 0 at once and 1 17 s later.
+    *(2026-11-19)*
+- **The alias resolves inside the project.** `git ls-remote http://templates.fylgja.example:8000/templates.git` from
+  `nautobot` exited 0 naming `HEAD` and `refs/heads/main`. *(2026-11-19)*
+- **The stack's memory**, `docker stats --no-stream` about 40 minutes after the start, before the fixture, while the
+  health checks ran: `nautobot` 616 MiB, `worker` 2.08 GiB, `db` 52 MiB, `git` 22 MiB, `redis` 5 MiB; summed, about
+  2,828 MiB. A second read gave `nautobot` 645 MiB and `worker` 1.87 GiB, the others the same; summed,
+  about 2,638 MiB. *(2026-11-19)*
+- **`stop --timeout 60` took 60.6 s.** `db`, `nautobot`, `redis` and `worker` exited 0; `git` exited 137, killed at
+  the timeout: `python -m http.server` as the container's first process did not stop on Docker's SIGTERM.
+  - `up -d` on the kept volumes exited 0 in 2.6 s, and `/health/` answered 200 at 109.4 s. The superuser's token was
+    still taken. *(2026-11-19)*
+- **A new token line is taken, and the old key refused.** With `FYLGJA_NAUTOBOT_WRITE_TOKEN` replaced by a new
+  `token_hex(20)`, `up -d` recreated `nautobot` alone, in 4.8 s, and `/health/` answered 200 at 111.5 s.
+  - The new key read `/api/status/` with 200 and listed one token of its own; the old key was answered 403,
+    `{"detail":"Invalid token"}`. `admin` stayed a superuser.
+  - The reader's token was still taken. A render after the recreate cloned the repository again, in 9.26 s.
+    *(2026-11-19)*
+- **`down -v` exited 0 in 11 s** and left no container, network or volume labelled
+  `com.docker.compose.project=fylgja-core-nautobot`; the image stayed. *(2026-11-19)*
+
+**The fixture**
+
+- **Every create of `three-node.json`'s network answered 201** by the superuser's token, in the seed's order: the
+  manufacturer; the platform with `manufacturer` and `network_driver`; the device type; the location type with
+  `content_types ["dcim.device"]`; the location with `status`; the role and the tag, each with `content_types
+  ["dcim.device"]`; three devices; fifteen interfaces with `device`, `name`, `type`, `mgmt_only`, `enabled` and
+  `status`; six prefixes with `namespace`, `type network` and `status`; six addresses with `namespace`, `parent`,
+  `type host` and `status`; six assignments; three cables; the context; the repository; the query.
+  - A status is taken by its name, `"status": "Active"` and a cable's `"Connected"`, and answered as `{id,
+    object_type, url}`.
+  - `1000base-t` and `25gbase-x-sfp28` were each accepted, answered `{value, label}`.
+  - Each lookup the seed finds an object by answered `count 1`: `?name=` of manufacturer, platform, location type,
+    location, role, tag, device, context, repository, query, the statuses and the namespace `Global`; `?model=` of
+    the device type; an interface by `?device_id=` or `?device=` with `?name=`; a prefix by `?prefix=` and
+    `?namespace=`; an address by `?address=` and `?namespace=`, the namespace's id or its name; an assignment by
+    `?ip_address=` and `?interface=`. `dcim/cables/` by `?device=` or `?device_id=` answered each device's two.
+    *(2026-11-19)*
+- **A device has no description, and a create that names one drops it without a word.** The three devices' creates
+  named `description` and answered 201; no device's representation holds a `description`, and GraphQL's `DeviceType`
+  has no such field (a query of it answered 400, `Cannot query field 'description' on type 'DeviceType'`). A device
+  carries `comments`, which GraphQL names too; `PATCH {comments}` answered 200. *(2026-11-19)*
+- **A cable's far interface is GraphQL's `cable_peer_interface`**, which named the far port and its device, `{name,
+  device {name}}`, at once after each cable's create, as did `connected_interface`. `InterfaceType` also has
+  `cable_peer`, `connected_endpoint`, `path`, `cable` and `cable_termination`. *(2026-11-19)*
+- **The installed `Default Settings` is found by `?slug=default`**, weight 1000, its `dynamic_group` an object.
+  `PATCH` of `jinja_repository`, `jinja_path_template` and `sot_agg_query` answered 200, and of its group's `filter`
+  to `{"tags": ["fylgja"]}` 200. The group's `members/` then listed the three devices. *(2026-11-19)*
+
+**Golden Config's render on the fixture**
+
+- **A query that selects a field its type lacks is stored, and its render fails at the template.** The query
+  selecting `description` on the device answered 201 to its create. Each render answered 400 `Error rendering Jinja
+  template: Subtask: GENERATE CONFIG (failed)\n`, the log naming `'description' is undefined`.
+  - In the installed source, Golden Config's `graph_ql_query` parses and executes the query without validating it,
+    and keeps the data's `device`.
+  - With `description: comments` in the query and the devices' `comments` `FYLGJA-MARKER-fixture`, every render
+    answered 200. *(2026-11-19)*
+- **Each device's render is `three-node.json`'s configuration for it after its first line.** The first line read `#
+  <name>: production configuration rendered by Golden Config (fylgja-templates)`.
+  - Every later line equalled the fixture's, and `intended_config` ended in one `\n`.
+  - `graphql_data` is the query's `device` itself, its members the query's (`config_context`, `description`,
+    `hostname`, `interfaces`, `platform`), with no `device` member.
+  - A render took 0.32 to 0.48 s. The first, failing, render cloned the repository in 2.19 s; the first after a
+    push took 8.17 s once, and 0.42 to 0.47 s three times. *(2026-11-19)*
+- **The configuration context reaches the template as the query's `config_context`, the inactive one absent.** A
+  pushed line `{{ config_context | tojson }}` rendered `{}` for `n1` beside `fylgja-probes` (`is_active false`).
+  Beside an active context `p11-read-active` of no assignment it rendered `{"p11_read": "active"}`. Both were then
+  removed, and the renders were the fixture's again. *(2026-11-19)*
+- **A device tagged after the group's save is refused until the group's members are refreshed, and
+  `RefreshDynamicGroupCaches` refreshes them writing no changelog row.**
+  - A fourth device tagged `fylgja` was refused, 400 `{"detail": "No Golden Config settings found for this device"}`.
+  - The job, found by `extras/jobs/?job_class_name=RefreshDynamicGroupCaches`, was installed and already enabled.
+    `POST extras/jobs/<id>/run/ {"data": {}}` answered 201, and its result was `SUCCESS` 1.2 s later. Its log said
+    `Cache refreshed successfully, now with 4 members`.
+  - The changelog's count was 73 before the run and 73 after, no row newer than the run's start.
+  - The group's members were then the four, and the device rendered with 200. After its delete, saving the group
+    with the same filter wrote one row, an update of `extras.dynamicgroup`, and left the three. *(2026-11-19)*
+- **Of two settings over one device, the heavier's template is rendered, and neither is refused.** Settings
+  `p11-read-heavy` (weight 2000) and `p11-read-light` (weight 500) were made, each with its own group of filter
+  `{"tags": ["fylgja"]}`, made first, and its own path template.
+  - Each device rendered `p11-read-heavy`'s file.
+  - With it deleted, `n1` rendered the default's (1000) over `p11-read-light`'s.
+  - A setting's group could not be deleted before the setting: 409, `Unable to delete object. 1 dependent objects
+    were found`. *(2026-11-19)*
+
+**The reader's account and its token**
+
+- **An account is made by `POST users/users/ {username}` alone**, answered 201 with `is_superuser` and `is_staff`
+  false and `is_active` true, and no `password` member. *(2026-11-19)*
+- **A token is the requesting account's, whoever it names.** The superuser's `POST users/tokens/ {user: <the
+  account's id>, write_enabled: false}` answered 201, but the token was the superuser's: its own list held it and
+  the answer has no `user` member. *(2026-11-19)*
+- **The account makes its own token under HTTP Basic, given a grant to add one.**
+  - The superuser's `PATCH users/users/<id>/ {password}` answered 200.
+  - With no permission, the account's own `POST users/tokens/` under Basic answered 403, `You do not have permission
+    to perform this action.`
+  - With a permission of `users.token`, `actions ["add"]`, `constraints {"user": "$user"}`, it answered 201: `key`,
+    40 lowercase hex characters, `write_enabled false`, `expires null`, `created`, `description`, `id`. The key
+    kept working after the permission was deleted. *(2026-11-19)*
+- **Only the token's own account can tell its owner and `write_enabled`.**
+  - The superuser's `users/tokens/` lists its own alone; `users/tokens/<the account's token>/` answered 404.
+    `?user=` answered 400, and GraphQL has no `users`.
+  - The account's key read `users/tokens/` with 403 until it was granted `users.token` `view` under `{"user":
+    "$user"}`. It then listed its one token, with `write_enabled` and `key`. *(2026-11-19)*
+- **The least grants under which the account reads what the superuser reads and renders what it renders are `view`
+  on twelve types**: `dcim.device`, `dcim.interface`, `dcim.cable`, `dcim.platform`, `dcim.manufacturer`,
+  `ipam.ipaddress`, `extras.tag`, `extras.configcontext`, `extras.objectchange`, `extras.gitrepository`,
+  `extras.dynamicgroup` and `nautobot_golden_config.goldenconfigsetting`, one permission each, removed one at a time.
+  - Under the twelve, each list read the superuser's count. Those lists were `extras/tags/?name=`,
+    `dcim/devices/?tags=`, `dcim/interfaces/` and `dcim/cables/` by `?device_id=`, `dcim/platforms/`,
+    `dcim/manufacturers/`, `extras/config-contexts/?name=`, `extras/object-changes/?limit=1`, Golden Config's
+    settings, `extras/git-repositories/`, `extras/dynamic-groups/` and the default group's `members/`.
+  - Each device's render equalled the superuser's in `intended_config` and in `graphql_data`. `status/` answered 200
+    with no grant.
+  - With no grant each list answered 403, `You do not have permission to perform this action.`, and each render 400,
+    `Device with id '<id>' not found`.
+  - Without any one of the twelve, the lists of its type answered 403. Without `dcim.device`, the default group's
+    `members/` also answered `count 0` and each render `not found`.
+  - Without `dcim.interface`, `dcim.platform`, `dcim.manufacturer` or `ipam.ipaddress`, each render answered 200 and
+    differed from the superuser's. From those removals, one at a time, the renders needed five of the twelve, and no
+    `view` on `dcim.cable` for the far port, and the other seven are the lists' (a derivation). A set from which no one
+    grant can be taken is the least, since a grant adds only what an account sees (a derivation). *(2026-11-19)*
+- **The account's token writes nothing.** Under the twelve, its `POST dcim/locations/`, `PATCH` of `n1` and
+  `DELETE` of `n1` each answered 403, `You do not have permission to perform this action.` The changelog's count
+  stayed 123. *(2026-11-19)*
+
+Read on 2026-11-19 on the development instance, with the three files as they stand under `nautobot/dev/` and the
+image's health check disabled on `nautobot` and `worker` (`healthcheck: {disable: true}`) and `init: true` on `git`:
+`make nautobot-up` and `make nautobot-down` (`scripts/nautobot_dev.py`) run in order against the main checkout's
+`local/`, under Docker 29.8.1 and Docker Compose v5.6.0, on Python 3.14 (`NAUTOBOT_PYTHON`'s value), with nothing of the
+project on Docker but the image `fylgja-core-nautobot:3.2.8-3.0.8-py3.14` and no `local/nautobot/`. No Infrahub, NetBox
+or containerlab ran. Each timing is one run, taken around the `make` command. *(2026-11-19)*
+
+- **`make nautobot-up` on nothing exited 0 in 690.1 s.** It added the five names of `local/.env` in its order,
+  `FYLGJA_NAUTOBOT_SECRET_KEY`, `FYLGJA_NAUTOBOT_DB_PASSWORD`, `FYLGJA_NAUTOBOT_SUPERUSER_PASSWORD`,
+  `FYLGJA_NAUTOBOT_WRITE_TOKEN` and `FYLGJA_NAUTOBOT_ADDRESS` (names printed by `cut -d= -f1`; the file's mode was 600
+  and every byte it held before was still its first bytes), and made `local/nautobot/git`. `/health/` answered 200
+  685 s after the start, and `/api/status/` with the token line named Nautobot 3.2.8, `nautobot_golden_config` 3.0.8
+  and one worker. No value was in the command's output. With the checks disabled, one sample of
+  `docker stats --no-stream` read 0.49%, 0.01%, 0.16%, 1.47% and 0.02% of a core for `worker`, `nautobot`, `db`, `redis`
+  and `git`, and 1.78 GiB, 361.5 MiB, 51.74 MiB, 4.05 MiB and 20.03 MiB of memory. *(2026-11-19)*
+- **`make nautobot-down` exited 0 in 5.9 s.** `docker ps -a` then read `worker`, `nautobot`, `db` and `redis` as
+  `Exited (0)` and `git` as `Exited (143)`: none exited 137. Nothing listened on port 8810. *(2026-11-19)*
+- **`make nautobot-up` again exited 0 in 112.1 s**, `/health/` answering 200 108 s after the start. It wrote nothing to
+  `local/.env`: `cmp` against a copy of mode 600 found the file identical. *(2026-11-19)*
+- **`make nautobot-down PURGE=1` exited 0 in 6.5 s.** No container, network or volume labelled
+  `com.docker.compose.project=fylgja-core-nautobot` remained; `local/.env` was identical to the copy, and
+  `local/nautobot/git` and the image stayed. *(2026-11-19)*
+- **`make nautobot-up` after the purge exited 0 in 723.0 s**, `/health/` answering 200 720 s after the start, and
+  `/api/status/` with the unchanged token line named both versions and a worker. `local/.env` was identical to the
+  copy. The project was left up, five containers, and the copy was removed. *(2026-11-19)*
+
+Read on 2026-11-19 on the development instance, left up by the run above and nothing seeded (no device, the changelog
+two rows): `make nautobot-seed` (`nautobot/seed/seed.py`) run twice, then `make contract-nautobot`, against the main
+checkout's `local/`, the templates' repository `local/nautobot/git/templates.git` absent before the first run. The
+state between runs was read by a script beside the run over `nautobot/seed/box.py`. Each timing is one run, taken
+around the `make` command. *(2026-11-19)*
+
+- **`make nautobot-seed` on an empty Nautobot exited 0 in 46.9 s.**
+  - It made the bare repository and its first commit, then made 49 objects in its order and found the namespace
+    `Global`, the installed `Default Settings` and its dynamic group.
+  - One `PATCH` pointed the setting at the repository, the path template and the query, and one gave the group its
+    filter. The group's `members/` then listed `n1`, `n2` and `n3`.
+  - Each device's render was `three-node.json`'s configuration after its first line, and the repository's
+    `current_head` was the commit. The changelog went from 2 rows to 66. *(2026-11-19)*
+- **`make nautobot-seed` again exited 0 in 24.2 s and wrote nothing.** Every line said `found`, and the templates
+  were not committed. The counts of the seed's kinds, the changelog's count and newest time, the head, the setting and
+  the group's filter and members read as they had before it. *(2026-11-19)*
+- **A GraphQL query's text is kept with its last newline dropped.** Phase 11's plan 1, Task 1, Step 7's create sent
+  `sotagg.graphql` ending `}\n` and was answered with `query` ending `}`. The seed sends the text stripped, and its
+  second run sent no `PATCH` of the query. *(2026-11-19)*
+- **An interface's row names its cable and the far port**, `cable` and `cable_peer`, each `{id, object_type, url}`
+  (with `cable_peer_type` `dcim.interface`), as phase 11's plan 1, Task 1's saved reads show; a cable listed by
+  `?device_id=` carries `termination_a_id` and `termination_b_id`. The seed finds a cable by these, and its read back
+  over them, with `ipam/ip-address-to-interface/` and `ipam/ip-addresses/` listed whole, found no difference.
+  *(2026-11-19)*
+- **`make contract-nautobot` passed its 11 tests in 111.5 s.**
+  - Renders right after a whole `seed.py` run moved no head and added no changelog row.
+  - A template committed was not fetched until the next render, which moved `current_head` to it and held the
+    line it added. Committed back, the tracked templates' tree made a new commit, which the next renders fetched.
+  - The changelog's count went from 66 to 70 over the run, in which the tier made and deleted one tag and two
+    renders moved the head.
+  - After it, a script found no object named `p11-read-*` or `fylgja-contract-*`. *(2026-11-19)*
+
+Read on 2026-11-19 on the development instance (Nautobot 3.2.8 with Golden Config 3.0.8, as `make nautobot-up`
+started it), while phase 11's plan 1, Task 5 built `nautobot/seed/account.py`, each run by `make nautobot-seed` or
+`make contract-nautobot` against the main checkout's `local/`:
+
+- **Nautobot's API shows no membership of a user.** A permission's row has no `users` or `groups` member; a list of
+  permissions is filtered by `?users=<id or username>` (answered 400 `Unknown filter field` for `user` and `user_id`).
+  A user's row has no `groups` member, a `PATCH` of its `groups` answered 200 and `users/groups/<id>/` then read
+  `user_count 1`, and `users/groups/` has no filter by user. So a group that holds an account cannot be read from it.
+  *(2026-11-19)*
+- **The account's token under its own grants.** `make nautobot-seed` made the account, its thirteen permissions, set a
+  password, made and deleted the temporary `add` permission and a token of `write_enabled false`, appended the line,
+  and a second run wrote nothing. After `make nautobot-down PURGE=1` and `make nautobot-up`, the next seed replaced the
+  line, and the other five `FYLGJA_NAUTOBOT_` names read `same`. `make contract-nautobot` passed 15 tests both times.
+  *(2026-11-19)*
+- **A render by the reader after a push moves the head and writes one changelog row.** With a template commit pushed,
+  the reader's render answered 200 with the added line; `current_head` moved and the changelog's count rose by one, 93
+  to 94. Pushed back, the superuser's render moved it again, to 95. *(2026-11-19)*
+
+Read on 2026-11-19 on the development instance, as `make nautobot-seed` left it, while phase 11's plan 2, Task 3 built
+the Nautobot reader's transport: throwaway scripts over httpx 0.28.1 and `nautobot/seed/box.py`, outside the tree,
+writing by the superuser's token and reading by the reader's, `fylgja-reader` under its thirteen grants. Scratch objects
+were named `fylgja-contract-<8 hex>`; the instance was left with no such object and the seed's 3 devices, 15
+interfaces and 3 cables. Each timing is one run. *(2026-11-19)*
+
+**Pages, filters and the rows' shapes**
+
+- **A page of 100 is whole.** A scratch device's 120 interfaces, listed by `?device_id=`, read twice:
+  - with no `limit`, 50 results, `count 120` and a `next` of `limit=50&offset=50`;
+  - `limit=100&offset=0`, 100 results and a `next` of `offset=100`; `offset=100`, 20 and no `next`, 120 distinct ids
+    over the two;
+  - `limit=1000`, `limit=2000` and `limit=0`, each the 120 and no `next`. The installed source's `MAX_PAGE_SIZE`
+    default is 1000, which 120 rows do not reach.
+  - The page of 100 took 3.79 to 3.90 s and the whole list 4.2 to 4.4 s. *(2026-11-19)*
+- **`?name=` of a tag or a configuration context is exact, letter case included.**
+  - `fylgja` answered `count 1`, and `FYLGJA` and `Fylgja` 0; `fylgja-probes` 1, and `FYLGJA-PROBES` and
+    `Fylgja-Probes` 0.
+  - A tag named as a scratch tag in capitals was taken beside it, and `?name=` of each answered that one alone.
+    `?name=` given twice answered both. *(2026-11-19)*
+- **Devices are listed by `?tags=` with a tag's name or its id.**
+  - Each answered the same count, 3 for `fylgja`.
+  - A name or a UUID no tag has, `fylgja-contract-none` among them, and `FYLGJA` were each 400, `{"tags": ["Select a
+    valid choice. <value> is not one of the available choices."]}`. A tag carried by no device answered `count 0`.
+  - Given two tags, `?tags=` answered the devices that carry both (`count 0` for `fylgja` and a tag on another
+    device).
+  - `?tag=` and `?tags_id=` were 400, `Unknown filter field`. *(2026-11-19)*
+- **`?id=` of platforms, manufacturers and cables answers no row, and no error, for an id no object has.**
+  - Two ids answered both, `count 2`; a known id beside an unknown one answered the known one, `count 1`; an unknown
+    one alone, `count 0`.
+  - A value that is no UUID was 400, `{"id": ["Enter a valid UUID."]}`. *(2026-11-19)*
+- **Interfaces are listed by `?device_id=` or `?device=`, and an unknown device is 400.**
+  - Each, given two devices' ids, answered their ten interfaces, and `?device=` given their names did too.
+  - An id no device has was 400 to each, `Select a valid choice. <id> is not one of the available choices.`
+  - `?device_id=n1` was 400, `is not a valid UUID`, and `?device=N1` 400. *(2026-11-19)*
+- **Cables by device.** `dcim/cables/?device_id=` of the three seeded devices answered `count 3`, three distinct, and
+  `?device=` of their names alike; of two scratch devices joined by 60 cables, 60, each once. `?cable=` on cables was
+  400 `Unknown filter field`; on interfaces it answered the cable's two. *(2026-11-19)*
+- **A request too long is dropped unanswered.**
+  - Every request whose path and query held 1825 bytes or more was closed with no response, httpx's
+    `RemoteProtocolError: Server disconnected without sending a response.`; 1824 bytes were answered.
+  - The bound was the same for `?id=` on interfaces and on cables and `?device_id=` on interfaces. Requests of 3000
+    and 4097 bytes were dropped alike.
+  - Nautobot's log said `invalid request block size: <n> (max 4096)...skip`, 4098 for the 1825 bytes. The image's
+    `/opt/nautobot/uwsgi.ini` sets `buffer-size = 4096`, its comment saying it can be as high as 65535.
+  - Counted in ids, with `limit=100&offset=0` beside them: 40 UUIDs of `?id=` were answered and 45 dropped (1640 and
+    1840 bytes on interfaces); 35 of `?device_id=` answered and 40 dropped (1685 and 1920). Of 50, 100 and 200 ids
+    none was answered. *(2026-11-19)*
+- **A device's `name` may be null, or empty.** A device made with no name was taken, `name null`, and a second beside
+  it; one made with `name ""` was taken, `name ""`. *(2026-11-19)*
+- **A related object is `{id, object_type, url}` at the default depth**: a device's `platform` and each of its `tags`,
+  a platform's `manufacturer`, an interface's `device` and `cable`. A platform has no member of a version.
+  `type.value` read `virtual`, `bridge`, `lag`, `1000base-t` and `25gbase-x-sfp28`. *(2026-11-19)*
+- **A cable's `terminations` is one member a connector of a side**, `a1`, `b1`, `b2`, each the object cabled there
+  as `{id, object_type, url}`, with no `display`, or null.
+  - A seeded cable has `label ""`, `cable_type null`, `termination_a_type` and `termination_b_type`
+    `dcim.interface`, `termination_a` and `termination_b` each `{id, object_type, url}`, `terminations {a1, b1}`,
+    `total_lanes 1` and `connected_lanes 1`.
+  - One to a front port answered `terminations.b1.object_type` `dcim.frontport`.
+  - One of the installed cable type `1x2 Breakout` (`a_connectors 1`, `b_connectors 2`, `total_lanes 2`) answered
+    `{a1, b1, b2}`, and the interface on `b2` named the cable. After `PATCH {"terminations": {"b2": null}}`, `b2` was
+    null and `connected_lanes` 1.
+  - One of a cable type of one connector a side and `total_lanes 4` answered `{a1, b1}`, `total_lanes 4`. A label
+    given was answered as written. *(2026-11-19)*
+- **A device's delete leaves its cables standing, with no ends.** After the scratch devices were deleted, 114 cables
+  stood with `termination_a_id` and `termination_b_id` null, `terminations {a1: null, b1: null}` and `connected_lanes
+  0`, listed by no device; a cable type such a cable used was refused deleting, 409. Each was deleted by its id.
+  Bulk writes were slow: a `POST` of 50 cables was not answered in 30 s, 60 made ten a request took 58.4 s, and an
+  interface's delete about 0.7 s. *(2026-11-19)*
+
+Read on 2026-11-19 on the development instance, as `make nautobot-seed` left it, while phase 11's plan 2, Task 5 built
+the Nautobot reader's bracket: throwaway scripts over httpx 0.28.1, outside the tree, reading by the reader's token,
+`fylgja-reader` under its thirteen grants, and writing by the superuser's; and the installed source, read inside the
+`nautobot` container. Scratch objects were named `fylgja-contract-<8 hex>`; the instance was left with no such object
+and the seed's 3 devices, 15 interfaces and 3 cables. Each timing is one run. *(2026-11-19)*
+
+**The settings and the repositories**
+
+- **Golden Config's settings are listed at `/api/plugins/golden-config/golden-config-settings/`**, the path
+  `/api/plugins/golden-config/` names as `golden-config-settings`; `…/golden-config-setting/` and `…/settings/`
+  answered 404. The reader's token listed the one setting, `count 1`.
+  - At the default depth the setting held `name` `Default Settings`, `slug` `default`, `weight` 1000 as a number, and
+    `jinja_repository`, `sot_agg_query` and `dynamic_group` each `{id, object_type, url}`, of `extras.gitrepository`,
+    `extras.graphqlquery` and `extras.dynamicgroup`; `backup_repository` and `intended_repository` were null.
+  - Its `object_type` was `nautobot_golden_config.goldenconfigsetting`. *(2026-11-19)*
+- **`/api/extras/git-repositories/?id=` answers no row, and no error, for an id no repository has.** The seeded
+  repository's id answered it, `count 1`; an id no repository has, `count 0`; the two together, `count 1`; a value
+  that is no UUID, 400 `{"id": ["Enter a valid UUID."]}`. A repository's row carries `name`, `branch` and
+  `current_head`, 40 hex characters. *(2026-11-19)*
+  - `?name=fylgja-templates` answered 200, `count 1`, and the row's members included `remote_url`, the Compose alias's
+    URL, `http://templates.fylgja.example:8000/templates.git`, beside `branch`, `current_head`, `name`, `slug`,
+    `secrets_group` and `provided_contents`. *(2026-11-20)*
+- **The newest row `?limit=1` answers carries `time` with a `Z` suffix**, `2026-11-19T23:12:28.833242Z`, and
+  `object_data`, `object_data_v2` and `user`, a related object, beside the members read before; the answer's `next`
+  held `offset=1`. *(2026-11-19)*
+
+**The bracket**
+
+- **A row written inside a longer transaction becomes visible at its commit, with the time it was written.** A
+  scratch device was given 120 interfaces. One bulk `PATCH /api/dcim/interfaces/` of the 120, setting `description`,
+  was sent by the superuser's token while a thread polled by the reader's token, each poll one
+  `extras/object-changes/?limit=1` and one list of the device's interfaces holding that `description` (`?device_id=`,
+  `?description=`, `limit=1`), the polls begun 0.26 to 1.34 s apart. Two runs:
+  - The changelog polled first in each poll. The `PATCH` was answered 200 in 38.6 s. Its 120 rows, each `update` of
+    `dcim.interface` and of one `request_id`, carried times over 35.0 s, from 23:33:54.894836 to 23:34:29.889471. The
+    count read 3025, the open's, in every poll to the one begun at 23:34:29.95, which then read the 120 interfaces
+    edited; from the poll begun at 23:34:30.61 it read 3145 and the newest row the edit's last. Of the polls begun
+    while the `PATCH` ran, 79 were begun after a row's time and read the open's count and newest row.
+  - The interfaces polled first in each poll. The `PATCH` was answered 200 in 36.0 s, its 120 rows' times over 33.5
+    s. Every poll read the interfaces unedited and the count 3387, the open's, to the one begun at 23:36:32.64; the
+    poll begun at 23:36:32.91 read the 120 edited and 3507. Of the polls begun while the `PATCH` ran, 78 were begun
+    after a row's time and read the open's count.
+
+  No poll of either run read a count between the open's and 120 more, nor a row of the edit before the edit. The
+  edit's first row was 35.7 s and 33.7 s older than the first poll that saw it, and its last 0.72 s and 0.18 s.
+  *(2026-11-19)*
+- **Several web instances, read in the installed source alone and not run.** `GIT_ROOT` is `NAUTOBOT_GIT_ROOT`, or
+  `<NAUTOBOT_ROOT>/git` where it is unset, `/opt/nautobot/git` in the image, and a repository is cloned to
+  `GIT_ROOT/<slug>` (`GitRepository.filesystem_path`).
+  - In the development stack it is no volume: `nautobot` held `fylgja_templates` there and `worker` an empty
+    directory. uWSGI runs 3 processes in the one container.
+  - Golden Config's render calls `ensure_git_repository(repository)` with no `head`. That fetches the repository's
+    branch into the directory and checks out its latest commit, then saves `current_head` where the record, as read
+    from the database for the request, holds another commit than the one checked out.
+  - So an instance with a `GIT_ROOT` of its own fetches the branch at each render, and compares the commit it checked
+    out with the one `current_head` the database holds (a derivation). *(2026-11-19)*
+
+Read on 2026-11-20 on the development instance, as `make nautobot-seed` left it, while phase 11's plan 2, Task 6 built
+the Nautobot reader's render and read: one throwaway script over httpx 0.28.1, outside the tree, marking, rendering and
+closing by the reader's token, `fylgja-reader` under its thirteen grants, through the reader's own `bracket.mark` and
+`bracket.close`, its render one `GET` of `generate-intended-config` by `device_id`; and writing by the superuser's
+token through `nautobot/seed/box.py`'s `Box`. The run is one. *(2026-11-20)*
+
+**A render while another request edits the device**
+
+- **Two loops of one open that each closed unmoved rendered one text.** For 64.3 s a thread set `n1`'s
+  `ethernet-1/1` `enabled` to the other value by `PATCH`, waiting 0.2 s between one answer and the next request;
+  each `PATCH` was answered 200, in 1.19 to 2.49 s, 1.23 s the median, so the thread made 41 edits, not the five a
+  second it waited for. Meanwhile a loop took the open, rendered `n1` and took the close, 49 times, each loop 1.02
+  to 1.47 s.
+  - Every render answered 200, and every `intended_config` was one of two texts, its line `set / interface
+    ethernet-1/1 admin-state` ending `enable` or `disable`.
+  - 33 closes filed `read.moved` of `extras.objectchange` alone, and no other finding; 16 filed none.
+  - The 16 unmoved loops were of 15 opens, by the newest row and the count; 8 rendered `enable` and 8 `disable`.
+    The one open of two unmoved loops rendered one text both times.
+
+  The interface was set back to `enabled` true after, as the seed holds it. *(2026-11-20)*
+
+Read on 2026-11-20 on the development instance, as `make nautobot-seed` left it, while phase 11's plan 2, Task 7 held a
+group's stored members to its filter: two throwaway scripts over httpx 0.28.1, outside the tree, reading by the reader's
+token, `fylgja-reader`, first under its thirteen grants and then under fourteen, and writing by the superuser's token
+through `nautobot/seed/box.py`'s `Box`; and the installed source, read inside the `nautobot` container. Scratch objects
+were named `fylgja-contract-<8 hex>`: one dynamic group of `dcim.device`, one tag and one device, each deleted, and the
+default group saved again with its filter after. The instance was left with no such object, the seed's 3 devices and
+the default group storing those 3. *(2026-11-20)*
+
+**A group's stored members**
+
+- **The setting's group, by `extras/dynamic-groups/?id=`**, answered `count 1` to the reader's token, and the same
+  row as `extras/dynamic-groups/<id>/`: `name` `GoldenConfigSetting Default Settings scope`, `group_type`
+  `dynamic-filter`, `filter` `{"tags": ["fylgja"]}`, `content_type` `dcim.device` and `tenant` null. Its id beside an
+  id no group has answered `count 1`. *(2026-11-20)*
+- **`extras/dynamic-groups/<id>/members/` lists the stored members as devices, whole and with a count, and takes no
+  restriction.** It answered the reader's token `count 3`, `n1`, `n2` and `n3`, each a whole device row; paged by
+  `limit=2`, three rows, each once. `?id=` of `n1` answered `count 3` all the same. *(2026-11-20)*
+- **`extras/static-group-associations/?dynamic_group=<id>` lists a dynamic group's stored members, whole, with a
+  count, and restricted by `?associated_object_id=`.**
+  - The reader's token under its thirteen grants was refused 403, `You do not have permission to perform this
+    action.`, with and without each parameter below.
+  - The superuser's answered `count 3`, a row a member: `associated_object_type` `dcim.device`,
+    `associated_object_id` the device's id, `associated_object` and `dynamic_group` each `{id, object_type, url}`.
+  - `?associated_object_id=` of `n1` and `n3` beside it answered those two, `count 2`; of an id no device has, `count
+    0`; of a value that is no UUID, 400 `{"associated_object_id": ["Enter a valid UUID."]}`. With no `dynamic_group`
+    it answered `count 0`; with an id no group has beside the group's, 400 `Select a valid choice`.
+  - With a permission `fylgja-reader-extras.staticgroupassociation`, `view` on `extras.staticgroupassociation`, made
+    by `make nautobot-seed`, the reader's token answered `count 3`, paged by `limit=2` three rows each once, and the
+    reader's own `stored` of `n1` and `n3`, `count 2`.
+  - In the installed source the list is of `StaticGroupAssociation.all_objects` where the query holds
+    `dynamic_group`, and of the static groups' associations alone where it does not; a dynamic group's members are
+    the rows `update_cached_members()` writes, and `to_objectchange` writes a changelog row for a static group's
+    association alone. *(2026-11-20)*
+- **The device list asked with a `dynamic-filter` group's filter as its query answered what a save of the filter
+  stored, for every filter read.** A scratch group of `dcim.device` was made with `{"tags": ["fylgja"]}` and its filter
+  set by `PATCH` to each below; after each, the group's associations (the superuser's) and its `members/` named the same
+  devices, and the reader's `dcim/devices/` asked with each key's value, a list sent once a member and a boolean as
+  `true` or `false`, named them too:
+  - `{"tags": ["fylgja"]}`: `n1`, `n2`, `n3`; `{"name": ["n1", "n2"]}`: `n1`, `n2`; `{"location": ["lab"]}` and
+    `{"platform": ["SR Linux"]}`: the three; `{"tags": ["fylgja"], "name": ["n3"]}`: `n3`;
+  - `{"has_interfaces": true}` and `{"has_primary_ip": false}`: the three; `{"vc_position": [1]}`: none;
+  - `{"name": "n2"}`, text where a list was: `n2`; `{"name": []}`, sent as nothing, and `{}`: the three;
+  - `{"name__ic": ["N1"]}`: `n1`; `{"name__n": ["n1"]}`: `n2`, `n3`.
+
+  `has_interfaces=True` and `=1` answered the three as `true` did. The device list asked `tags=fylgja` beside `id` of
+  `n1` and `n2` answered those two, and `name=n3` beside them none. *(2026-11-20)*
+- **A filter of other values is saved, and stores what no query can be sent for.** `{"name": [["n1"]]}` and `{"name":
+  {"x": "n1"}}` were each answered 200 and stored no member; `{"name": [null]}` was answered 200 and stored the three.
+  `{"cf_x": ["y"]}` was refused 400, `{"cf_x": ["Unknown filter field"]}`. *(2026-11-20)*
+- **A tag a group's filter names, deleted, leaves the filter and the stored members, and the device list refuses
+  it.** A scratch tag on `n1` in a scratch group's filter stored `n1`. After the tag's delete the group's filter still
+  named it and stored `n1`; `dcim/devices/?tags=<the tag>` answered 400, `Select a valid choice. <name> is not one of
+  the available choices.`, and saving the group with that filter was refused 400 in the same words. *(2026-11-20)*
+- **A device tagged after the default group's last save is in the device list and not in the stored members.** A
+  scratch device of no platform, tagged `fylgja`, was made by `POST`. The default group's associations and `members/`
+  named `n1`, `n2` and `n3`; the reader's `dcim/devices/?tags=fylgja` named the four; the reader's render of the device
+  answered 400 `No Golden Config settings found for this device`. After its delete, and before a save, the group
+  stored the three; saved again with its filter, it stored the three. *(2026-11-20)*
+
+Read on 2026-11-20 on the development instance, as `make nautobot-seed` left it, while phase 11's plan 2, Task 10 built
+the Nautobot reader's contract tier: one throwaway script over `nautobot/seed/box.py`, outside the tree, writing and
+rendering by the superuser's token, then `make contract-nautobot` run whole twice and `make nautobot-seed` after it,
+from `phase-11/2-reader` at 8a8185a with Task 10's tests and conftest beside it, against the main checkout's `local/`.
+Scratch objects were named `fylgja-contract-<8 hex>`, a device named `""` carrying the name as its comments; each was
+deleted, and the default group saved again with its filter after. Each timing is one run. *(2026-11-20)*
+
+**Renders of what the reader refuses**
+
+- **A device of no platform is refused at its template's path.** A scratch device tagged `fylgja` with no platform,
+  stored by the default group once the group was saved, was rendered 400 `Error rendering Jinja template: Jinja
+  template .j2 not found in git repository fylgja-templates`, in 0.33 s. *(2026-11-20)*
+- **A platform of no manufacturer is taken, and its device rendered.** `POST dcim/platforms/` of a name and
+  `network_driver` `nokia_srl` alone answered 201 with `manufacturer null`; a device of it, tagged and stored, rendered
+  200 in 0.59 s. *(2026-11-20)*
+- **A device named `""` is refused by Golden Config.** Tagged, of the seeded platform and stored, it was rendered 400
+  `Error rendering Jinja template: ('You have to call this after setting host and nornir attributes. ', 'You probably
+  called this from outside a nested task')`, in 0.56 s. *(2026-11-20)*
+- **A device's name in lower case is taken beside the same name in capitals, on one location.** A scratch device named
+  in capitals and a second of its name in lower case were each answered 201. *(2026-11-20)*
+
+**The contract tier**
+
+- **`make contract-nautobot` passed whole twice**, none skipped: `nautobot/`'s 15 tests in 119.41 s and 119.78 s,
+  and the reader's 41 in 393.82 s and 389.86 s; each `make` in 515.8 s and 512.7 s.
+  - The second run's sweep deleted nothing, and the script after the seed found no object of the tier's naming
+    among cables, devices, contexts, platforms, manufacturers, tags, permissions, users, cable types, locations and
+    dynamic groups.
+  - The fixture read by the reader's token with the seed's reader document gave one id before the first run and
+    after the seed, with no finding:
+    `2ee2f75096410c2c09946ff452e2e90362601ec86297fe4de18534113e12a639`.
+  - The changelog's count went from 4839 before the first run to 5567 after the seed. *(2026-11-20)*
+- **`make nautobot-seed` after it exited 0 in 28.7 s and wrote nothing.** It said `found templates.git`, committing
+  nothing, and `found` of each of the 53 objects it reads; the account line said nothing was written. The repository's
+  `current_head` was then `main` of the bare repository, the tier's last push-back, whose tree is the tracked
+  templates'. The seed's 3 devices, 15 interfaces and 3 cables stood, the default group's filter `{"tags": ["fylgja"]}`
+  storing the three, the context `fylgja-probes` inactive, the users `admin` and `fylgja-reader` alone, and 17
+  permissions, as before the first run. *(2026-11-20)*
+
+Read on 2026-11-20 on the development host, for phase 11's plan 3's Task 2, the dry run of the acceptance: the runbook
+`CONTRIBUTING.md`, "From the Nautobot reader", followed as written from Nautobot stopped, with Nautobot 3.2.8 and
+Golden Config 3.0.8, containerlab 0.81.0 (`containerlab version`) and the twin's images
+`ghcr.io/nokia/srlinux:24.7.1` and `alpine:3.24.2` (both read in `dry/after-readings.txt`, after the dry run), and the
+main checkout detached at `aad7545` (`make venv` run there), against its `local/`; the output of each command saved
+under `local/phase-11/acceptance/dry/` and shown whole before the next. The core was one background call, run from
+the main checkout with the local driver and its store `local/store`. Each timing is one run. *(2026-11-20)*
+
+- **The seed read by `fylgja-nautobot` into a blueprint, and a twin of it created, verified and destroyed on the local
+  driver:** every command ended as the runbook says, and the criterion of its "When it does not pass" table was met.
+  - **Bring it up.** `make nautobot-down` exited 0 in 6.7 s (its containers, network and volumes kept);
+    `make nautobot-up` exited 0 in 129.0 s on kept volumes, `/health/` answering 200 125 s after the start, and printed
+    `Nautobot 3.2.8 with nautobot_golden_config 3.0.8 answers at http://127.0.0.1:8810, 1 worker(s) running`;
+    `make nautobot-seed` exited 0 in 52.1 s and wrote nothing: each line said `found`, and the account's line said
+    its account, grants and token line were as they should be.
+  - **The block's refusals, each as the runbook says it.** With no core, A0, A1 and A2 passed and A3 refused, `nothing
+    of this user's listens on FYLGJA_LISTEN: start the core`, exit 1. The core was then started (pid 3955010,
+    `/v1/version` answering 200) and `make netbox-up` run (747.7 s); with NetBox up the block refused at A1,
+    `fylgja-core-netbox running: make infrahub-down or make netbox-down, volumes kept`, exit 1 (A0 passed). After
+    `make netbox-down` (8.7 s, exit 0) the block passed whole, exit 0: A2 read Nautobot 3.2.8, Golden Config 3.0.8,
+    `celery-workers-running` 1 and 3 devices tagged `fylgja`, `fylgja-templates` at `0a16ff29…`, main of the bare
+    repository; A3 read the core by pid 3955010 and 10 CPU and 20242 MiB free less pending, `twins` 0.
+  - **The provoked refusal.** An empty commit, `d5d48128…`, was pushed to `main` of the bare repository, and the block
+    refused at A2: `fylgja-templates' current_head is 0a16ff29…, main of the bare repository is d5d48128…`, with the
+    runbook's remedy, exit 1. The read the remedy names, into `warm.json`, exited 1 in 8.6 s with two findings,
+    `read.moved` on `extras.objectchange` (the changelog's count 5931 at the read's open and 5932 at its close, the
+    newest row's time 04:40:26) and `read.moved` on `fylgja-templates` (`current_head` `0a16ff29…` at the open and
+    `d5d48128…` at the close); `warm.json` was not written. The block then passed, exit 0, A2 reading the head as
+    `d5d48128…`, and 20222 MiB free less pending at A3.
+  - **The read.** The changelog read 5932 before and 5932 after it, its newest row unmoved. It exited 0 in 19.9 s with
+    the line `2ee2f75096410c2c09946ff452e2e90362601ec86297fe4de18534113e12a639 3 devices, 3 links, 1 probes` and nothing
+    on stderr; the second, into another file, exited 0 in 8.8 s with the same id. The check ran, exit 0:
+    `read ok: … twice; envelope source nautobot, scope tag:fylgja, templates at d5d48128…, three devices of
+    nokia_srlinux with a configuration`. The blueprint and the second were of the same size, 8025 bytes; no more of
+    either is recorded here, since each holds the devices' configurations.
+  - **The twin.** `twin create nautobot-acceptance --blueprint …` exited 0 in 64.9 s, its progress lines `compiled`,
+    `admitted`, `planned`, `applied`, `ready` and `pushed`, then `Ready: True (twin.ready)`, `phase: pushed`, bundle
+    `3a6d8442e85cfeea0f5f84ea02c58a9ff0446479df9f7ccb833007683d209a5f`, five addresses in 172.20.0.0/16 (the three
+    nodes and the two probe hosts) and `verdict: ok`. `twin verify` exited 0 in 3.4 s with `verdict: ok` and `held
+    19, failed 0, skipped 5`, the five skips being `info verify.skipped` lines: three host names reported and not
+    asserted, and two neighbours of `n1` not asserted since they are cabled to probe hosts. This is the first time the
+    seed's templates, rendered by Golden Config, were pushed to SR Linux and verified: the twin passed.
+  - **Mid-twin, between verify and destroy.** `capacity show --json`: driver `containerlab`, one host, CPU 8.3 free of
+    10, memory 15385 MiB free of 31065, `pending` 0, `twins` 1. `free -m`: 15667 MiB used, 6661 free, 13725
+    buff/cache, 15398 available, no swap in use. SR Linux, by cgroup `memory.current`: `n1` 1679245312, `n2` 1679405056
+    and `n3` 1679339520 bytes, 5037989888 bytes together, 4804.6 MiB or 4.69 GiB (a derivation). The project's five
+    services, by `docker stats --no-stream`: `worker` 1.795 GiB, `nautobot` 1.021 GiB, `db` 52.95 MiB, `redis` 7.16 MiB
+    and `git` 15.15 MiB, 2.89 GiB together (a derivation).
+  - **The destroy.** `twin destroy nautobot-acceptance` exited 0 in 3.1 s with `verdict: ok`, and `twin list` printed
+    `no twins`.
+  - **What was left: nothing.** No container labelled `containerlab` and no `clab-` directory under `local/store`
+    (`dry/after-readings.txt`, read after the dry run). The core, pid 3955010, was stopped by that pid on SIGTERM and
+    logged `stopped by SIGTERM`; its log at the stop was 62 lines (`dry/core-live.log`), all at `INFO`, and its copy
+    `dry/core.log`, taken at the destroy and before the stop, 57. Nautobot was left up, and Infrahub and NetBox down.
+    The token check found each of the 30 files of the run's directory printing 0, shown in the controller's session and
+    not saved.
+  - **Not read:** a run made from nothing on new volumes, which `make nautobot-up` takes about twelve minutes for; a
+    run by the maintainer's eyes, which Task 3 makes; the verdicts of `twin show` and of `run get`, which the run did
+    not read; the memory of the twin at any moment but between verify and destroy; the same run on a host with
+    Infrahub or NetBox up, which A1 refuses; the same blueprint through another driver or another SR Linux release.
+
+Read on 2026-11-20 on the development host, for phase 11's plan 3's Task 3, the acceptance run while the maintainer
+watched: the runbook `CONTRIBUTING.md`, "From the Nautobot reader", as it stood at `25f8f1c` (the main checkout
+detached there, `make venv` run), from Nautobot stopped, with Nautobot 3.2.8 and Golden Config 3.0.8, containerlab
+0.81.0 and the twin's images `ghcr.io/nokia/srlinux:24.7.1` and `alpine:3.24.2` (the last two read in
+`after-readings.txt`), against the main checkout's `local/`. The core answered `/v1/version` with build `1.0.1 (commit
+25f8f1c4277d…)` and every format at version 1 (`version.txt`). The runbook's seven blocks were run from files the
+controller had extracted verbatim from `CONTRIBUTING.md` at `25f8f1c` into `local/phase-11/runbook/`, the preamble's
+`out=` set to `local/phase-11/acceptance/maintainer`. The maintainer ran every command themselves at the Claude Code
+prompt with a leading `!`, each one's whole output shown in the session before the next, and started the core in a
+terminal of their own (`fylgja-core-server 2>&1 | tee local/phase-11/maintainer-core.log`). Each timing is one run.
+
+- **The seed read, and a twin of it made, verified and destroyed while the maintainer watched, and the verdict as they
+  read it:** every command ended as the runbook says and the criterion of its "When it does not pass" table was met, with
+  one command repeated by mistake (below). Each figure is from a file of `local/phase-11/acceptance/maintainer/`.
+  - **Bring it up.** `make nautobot-down` exited 0 in 6.9 s (`nautobot-down.txt`), its containers, network and volumes
+    kept; `make nautobot-up` exited 0 in 117.9 s on kept volumes, `/health/` answering 200 114 s after the start, and
+    printed `Nautobot 3.2.8 with nautobot_golden_config 3.0.8 answers at http://127.0.0.1:8810, 1 worker(s) running`
+    (`nautobot-up.txt`); `make nautobot-seed` exited 0 in 38.8 s and wrote nothing: 53 lines said `found` and the
+    account's said its account, grants and token line were as they should be (`nautobot-seed.txt`). `docker compose ls`,
+    run before the start, listed no project, not `fylgja-core-nautobot` either, whose five containers
+    `make nautobot-down` had stopped and kept (`compose-ls.txt`, `nautobot-down.txt`).
+  - **The block.** The core was listening on `127.0.0.1:7651`, pid 4078506 (`listen.txt`); the block's four lines
+    A0 to A3 each printed `ok` (`ready.txt`, which `tee` saved, so it holds the lines and not the block's exit status;
+    A3 was the block's last statement). A2 read Nautobot 3.2.8, Golden Config 3.0.8, `celery-workers-running` 1, three
+    devices tagged `fylgja`, and `fylgja-templates` at `d5d48128…`, main of the bare repository; A3 read the core by pid
+    4078506, 10 CPU and 20886 MiB free less pending, `twins` 0 and `twin list` empty.
+  - **The read.** The changelog read 5932 rows before and 5932 after, its newest row (`04:40:26`) unmoved
+    (`changelog-before.json`, `changelog-after.json`). `read` exited 0 in 19.6 s with
+    `2ee2f75096410c2c09946ff452e2e90362601ec86297fe4de18534113e12a639 3 devices, 3 links, 1 probes` and nothing else;
+    the second, into another file, exited 0 in 8.4 s with the same id, the same as the dry run's. The two blueprints
+    were each 8025 bytes and differed from byte 7801 on, as the dry run's two did from byte 7799, in the envelope's
+    `observed_at` alone, the read's own time, which the id does not address (`cmp`, and a comparison of the two as JSON,
+    readings made after the run). `check.stderr` was empty.
+    The read-check block was run by the maintainer during the run and its output shown at the prompt, not saved; the
+    line shown was `read ok: 2ee2f750…a639 twice; envelope source nautobot, scope tag:fylgja, templates at d5d48128…,
+    three devices of nokia_srlinux with a configuration`. `read-check.txt` is a re-run after the run, read-only, which
+    reads only the saved files and the bare repository's `main`: the same line, exit 0.
+  - **The twin.** `twin create nautobot-acceptance --blueprint …` exited 0 in 73.0 s, its progress lines `compiled`,
+    `admitted`, `planned`, `applied`, `ready` and `pushed`, then `Ready: True (twin.ready)`, `phase: pushed`, bundle
+    `3a6d8442e85cfeea0f5f84ea02c58a9ff0446479df9f7ccb833007683d209a5f`, five addresses in 172.20.0.0/16 (the three
+    nodes and the two probe hosts) and `verdict: ok`, run
+    `01M7WZ02WVF9AKZJRBT4QCHENY` (`create.txt`; its record as below). `twin verify` exited 0 in 3.5 s with `verdict: ok`
+    and `held 19, failed 0, skipped 5`, the five being `info verify.skipped` lines as in the dry run (`verify.txt`).
+  - **The departure: the create run a second time.** After the create the maintainer ran the same command again by
+    mistake. The core refused it, `412 twin.exists: Twin nautobot-acceptance exists, and If-None-Match asks for a
+    create.`, exit 2 in 1.1 s, and changed nothing; the controller moved that output to `create-repeated.txt`. `rec`
+    writes `$out/<name>.txt` anew, so the second run had overwritten `create.txt`. **`create.txt` was restored from the
+    maintainer's paste of the create's whole output from their screen**, and is not `rec`'s file; `create-run.txt`
+    (`fylgja-core run get 01M7WZ02WVF9AKZJRBT4QCHENY --json`, exit 0) is the core's corroboration, not a copy: the run
+    `ended`, `asked by developer` at 17:10:20Z and ended at 17:11:32Z, verdict `ok` with no finding, blueprint
+    `2ee2f750…`, bundle `3a6d8442…`; and `twin-show.txt` (exit 0) read the twin at generation 1, observed 1, `Ready: True
+    (twin.ready)`, `phase: pushed`, the same bundle and five addresses. The restored file and `create-run.txt` agree on
+    the run's id, bundle and verdict. (Ruling P3-R12.)
+  - **Mid-twin, between verify and destroy.** `capacity show --json`: driver `containerlab`, one host, CPU 8.3 free of
+    10, memory 15920 MiB free of 31065, `pending` 0, `twins` 1 (`capacity-mid.txt`). `free -m`: 15126 MiB used, 6737
+    free, 14190 buff/cache, 15939 available, no swap in use (`free-mid.txt`). SR Linux, by cgroup `memory.current`: `n1`
+    1679749120, `n2` 1680850944 and `n3` 1679515648 bytes, 5040115712 together, 4806.6 MiB or 4.69 GiB (a derivation;
+    `memory-mid.txt`). The project's five services, by `docker stats --no-stream` (`stats-mid.txt`): `worker` 1.782
+    GiB, `nautobot` 779.2 MiB, `db` 42.78 MiB, `redis` 5.039 MiB and `git` 12.45 MiB, 2.60 GiB together (a derivation).
+  - **The destroy.** `twin destroy nautobot-acceptance` exited 0 in 3.4 s with `verdict: ok` (run
+    `01M7WZ6DRNZ7SN9CNRA41DYATJ`), and `twin list` printed `no twins` (`destroy.txt`, `list.txt`).
+  - **The maintainer's verdict, in their words.** The verify verdict they read and the destroy's: "verify: verdict: ok,
+    held 19, failed 0, skipped 5; destroy: verdict: ok; the run counts despite the repeated create" *(the maintainer,
+    2026-11-20)*. The criterion's row of the table: Met. The counts they gave are the ones `verify.txt` holds.
+  - **What was left.** Read after the destroy (`after-readings.txt`): no process of pid 4078506 and nothing listening on
+    7651, no containerlab container, an empty store directory, and the project `fylgja-core-nautobot` running with five
+    services; Nautobot was left up. `core.log` was copied after the destroy and before the core was stopped, 59 lines,
+    all at `INFO`, the last the destroy's `torn down, and its record deleted`; `local/phase-11/maintainer-core.log`,
+    outside the directory, held the same 59 lines, so no line of the stop is in either (the maintainer stopped the core
+    with Ctrl-C after the token check; that the `tee` in the same pipeline took the signal too is an inference, not a
+    reading). The log has no `412` line. The maintainer's token check was shown at the prompt, not saved: 26 lines,
+    each 0, for the 26 files then in the directory; the implementer's, run over the 28 files now there
+    (`read-check.txt` included, by the second check), printed 0 for each.
+  - **Differences from the dry run.** `nautobot-up` took 117.9 s against 129.0 s, the seed 38.8 s against 52.1 s, the
+    create 73.0 s against 64.9 s, the verify 3.5 s against 3.4 s and the destroy 3.4 s against 3.1 s; the read's id,
+    counts and the changelog's count were the same; mid-twin free memory 15920 MiB against 15385. NetBox was not
+    started and no refusal was provoked. The controller's two reads came between the create and the verify,
+    `run get` and `twin show`, which "When it does not pass" names (`create-run.txt`, `twin-show.txt`); nothing else was
+    run between two commands that the runbook does not name, but for the repeated create.
+  - **Not read:** a run made from nothing on new volumes; the exit status of the readiness block, which `tee` hides;
+    what the core logged when it was stopped; the verdict of `twin show`, which the run did not print (`twin-show.txt`
+    shows the twin's state, not a verdict); the same run on a host with Infrahub or NetBox up, which A1 refuses; the
+    same blueprint through another driver or another SR Linux release.
+
+**Not read**
+
+How the changelog behaves under two concurrent writers, the readings above being of one; a deployment of several
+Nautobot web instances run, each with its own clone of the repository; the page-size limit, beyond 120 rows; changelog
+retention; a template repository behind credentials; Golden Config's `branch` parameter run. *(2026-11-19)* A
+`dynamic-set` group's stored members, and a static group's; a filter of a custom field, or of a related object by its
+id; a group of more members than a page; how long a refresh of a large group takes. *(2026-11-20)* The render of a
+device whose name is null. *(2026-11-20)*
+
 ## The base install at its floors
 
 Read on 2026-11-09 on the development host, with Python 3.14.4 and the pip 25.1.1 its `venv`
@@ -9653,6 +10483,9 @@ considerations", "Troubleshooting"), read as their source in `pypi/warehouse`'s
   `<v> (commit <the tag's commit>)`; `fylgja-core-server` with no `FYLGJA_PACKAGES` answered `/v1/version` 200 with
   that build, filed `three-node.json` (`98f106a1…`) and built its bundle (`6a6f441c…`), and SIGTERM ended it 143.
   The same for both candidates. *(2026-11-17)*
+- **`fylgja-nautobot` is held by no project on either index.** `GET /simple/fylgja-nautobot/` answered 404 on
+  `pypi.org` and on `test.pypi.org` at phase 11's closing gates
+  (`local/phase-11/acceptance/gates/wheels-check.txt`). Nothing was uploaded or registered. *(2026-11-20)*
 
 ---
 

@@ -7,7 +7,7 @@ installed with the extra `fylgja-core[server]`; the package alone carries the mo
 library, and `fylgja-core-server` then ends with a line that names the library it lacks.
 
 A client is `fylgja-core`, described in [the command page](cli.md), or a program that speaks API 1.
-`-h` and `--help` print a short summary of the command and exit. [What 1.0 holds](compatibility.md)
+`-h` and `--help` print a short summary of the command and exit. [What major version 1 holds](compatibility.md)
 says which of the command's options, settings and exit statuses are held across the releases of
 major version 1.
 

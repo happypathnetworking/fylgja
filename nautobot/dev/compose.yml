@@ -1,0 +1,75 @@
+x-nautobot: &nautobot
+  image: fylgja-core-nautobot:${FYLGJA_NAUTOBOT_VERSION:?}-${FYLGJA_GOLDEN_CONFIG_VERSION:?}-py${FYLGJA_NAUTOBOT_PYTHON:?}
+  pull_policy: never
+  depends_on: [db, redis]
+  volumes:
+    - "${FYLGJA_NAUTOBOT_DEV:?}/nautobot_config.py:/opt/nautobot/nautobot_config.py:ro"
+  environment: &environment
+    NAUTOBOT_CONFIG: /opt/nautobot/nautobot_config.py
+    NAUTOBOT_DB_HOST: db
+    NAUTOBOT_DB_NAME: nautobot
+    NAUTOBOT_DB_USER: nautobot
+    NAUTOBOT_DB_PASSWORD: "${FYLGJA_NAUTOBOT_DB_PASSWORD:?}"
+    NAUTOBOT_REDIS_HOST: redis
+    NAUTOBOT_SECRET_KEY: "${FYLGJA_NAUTOBOT_SECRET_KEY:?}"
+
+services:
+  nautobot:
+    <<: *nautobot
+    build:
+      context: "${FYLGJA_NAUTOBOT_DEV:?}"
+      args:
+        NAUTOBOT_VERSION: "${FYLGJA_NAUTOBOT_VERSION:?}"
+        NAUTOBOT_PYTHON: "${FYLGJA_NAUTOBOT_PYTHON:?}"
+        GOLDEN_CONFIG_VERSION: "${FYLGJA_GOLDEN_CONFIG_VERSION:?}"
+    # The image's check takes about 21 s against its 10 s timeout and holds a core at 100%: `make nautobot-up` waits on
+    # /health/ from the host, and never asks Docker.
+    healthcheck:
+      disable: true
+    ports:
+      - "127.0.0.1:8810:8080"
+    environment:
+      <<: *environment
+      NAUTOBOT_CREATE_SUPERUSER: "true"
+      NAUTOBOT_SUPERUSER_NAME: admin
+      NAUTOBOT_SUPERUSER_EMAIL: admin@fylgja.example
+      NAUTOBOT_SUPERUSER_PASSWORD: "${FYLGJA_NAUTOBOT_SUPERUSER_PASSWORD:?}"
+      NAUTOBOT_SUPERUSER_API_TOKEN: "${FYLGJA_NAUTOBOT_WRITE_TOKEN:?}"
+  worker:
+    <<: *nautobot
+    healthcheck:
+      disable: true
+    entrypoint: ["nautobot-server", "celery", "worker"]
+  db:
+    # postgres:17.10-alpine: the index's digest, read 2026-11-19, its images built 2026-07-07 and the tag pushed 2026-07-08.
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    environment:
+      POSTGRES_DB: nautobot
+      POSTGRES_USER: nautobot
+      POSTGRES_PASSWORD: "${FYLGJA_NAUTOBOT_DB_PASSWORD:?}"
+    volumes:
+      - "db:/var/lib/postgresql/data"
+  redis:
+    # redis:7.4.11-alpine: the index's digest, read 2026-11-19, its images built 2026-10-21 and the tag pushed 2026-10-26.
+    image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
+  git:
+    # python:3.14.9-slim, Python 3.14.9 on Debian trixie: the index's digest, read 2026-11-06, the index built
+    # 2026-10-21 (the root Dockerfile's).
+    image: python:3.14.9-slim@sha256:35caba83af2fe6da9a5d922f9b0156f21d1246a48278c58a08bd253303ba42e8
+    # init: python as PID 1 ignores SIGTERM, and a stop would wait its whole timeout and kill it (exit 137).
+    init: true
+    command: ["python", "-m", "http.server", "8000", "--directory", "/srv/git"]
+    volumes:
+      - "${FYLGJA_NAUTOBOT_GIT:?}:/srv/git:ro"
+    networks:
+      default:
+        aliases: [templates.fylgja.example]
+
+volumes:
+  db: {}
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 203.0.113.0/24

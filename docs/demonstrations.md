@@ -1,7 +1,7 @@
 # The demonstrations
 
 A demonstration rehearses a change of a source of truth on a twin, from nothing running. There is
-one for each source Fylgja reads: Infrahub and NetBox. Each starts the source, seeds it with a
+one for each source the example rehearses a change of: Infrahub and NetBox. Each starts the source, seeds it with a
 network, starts the core and the example orchestrator, makes a change in the source, waits for the
 twin to rehearse it and says the verdict and where the report is read.
 

@@ -1,5 +1,5 @@
 """`docs/compatibility.md` holds to the tree: the formats it holds are `formats/`'s files less the example's two, and
-the API's document; the commands it holds are the `project.scripts` of the three published `pyproject.toml`; the
+the API's document; the commands it holds are the `project.scripts` of the four published `pyproject.toml`; the
 example's two formats and its command are under "Not promised", and the enum values a client refuses are the ones
 the findings schema closes."""
 
@@ -12,7 +12,7 @@ import tomllib
 from pages import ROOT, USER_PAGES, prose, section, text
 
 PAGE = "docs/compatibility.md"
-PYPROJECTS = ("core", "readers/infrahub", "readers/netbox")
+PYPROJECTS = ("core", "readers/infrahub", "readers/netbox", "readers/nautobot")
 EXAMPLES = {"plan-1.schema.json", "rehearsal-1.schema.json"}
 
 
@@ -40,11 +40,37 @@ def test_the_page_holds_the_published_commands() -> None:
     for member in PYPROJECTS:
         project = tomllib.loads((ROOT / member / "pyproject.toml").read_text())["project"]
         published |= set(project["scripts"])
-    assert len(published) == 4, "the parse is blind"
+    assert len(published) == 5, "the parse is blind"
     held = {m.group(1) for line in section(text(PAGE), "### The commands") if (m := re.match(r"\| `([\w-]+)`", line))}
     assert held == published
     assert "`fylgja-orchestrator`" in _not_promised()
     assert "`fylgja-orchestrator`" not in _held()
+
+
+def test_the_page_holds_each_published_readers_settings_and_library() -> None:
+    """Each reader's README is linked under "The settings" at its command and under "The Python names" at its library,
+    and that README's "## The command" names a `FYLGJA_` variable and its "## The library" is there."""
+    settings = "\n".join(section(text(PAGE), "### The settings"))
+    names = "\n".join(section(text(PAGE), "### The Python names"))
+    readers = [member for member in PYPROJECTS if member != "core"]
+    assert len(readers) == 3, "the parse is blind"
+    for member in readers:
+        link = f"../{member}/README.md"
+        assert f"]({link}#the-command)" in settings, member
+        assert f"]({link}#the-library)" in names, member
+        readme = text(f"{member}/README.md")
+        assert re.search(r"`FYLGJA_\w+`", "\n".join(section(readme, "## The command"))), member
+        assert "## The library" in readme.splitlines(), member
+
+
+def test_the_nautobot_readers_rows_are_marked_from_1_1_0() -> None:
+    rows = [line for line in _held().splitlines() if line.startswith("|") and "nautobot" in line.lower()]
+    assert len(rows) == 2, "the parse is blind"
+    assert all("from 1.1.0" in row for row in rows), rows
+    for heading in ("### The settings", "### The Python names"):
+        body = " ".join("\n".join(section(text(PAGE), heading)).split())
+        assert "from 1.1.0, [the Nautobot reader's](../readers/nautobot/README.md#the-" in body, heading
+    assert "nautobot" not in _not_promised().lower()
 
 
 def _enums(node: object, path: tuple[str, ...] = ()) -> set[str]:

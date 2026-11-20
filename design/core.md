@@ -1,9 +1,11 @@
 # fylgja-core: a new Python core
 
 This is the design of the new core: a Python rebuild of `fylgja-core` with a clean break in
-formats, many named twins, and runtimes behind a driver seam. Phases 2–10 are planned from
+formats, many named twins, and runtimes behind a driver seam. Phases 2–11 are planned from
 it. The first release is built in this repository, as three distributions at one version, and
-what its major version holds is stated on [one page](../docs/compatibility.md).
+what its major version holds is stated on [one page](../docs/compatibility.md). A fourth
+distribution, the Nautobot reader, is built and checked here at phase 11 and published in 1.1.0,
+at phase 12's landing ([D-121](decisions.md#d-121)).
 
 - **Done:** phase 0 (the decisions, the constitution, this repository); phase 1: the
   measurements on both runtimes (2026-10-30), and the multi-host stage on three k3s hosts
@@ -13,19 +15,24 @@ what its major version holds is stated on [one page](../docs/compatibility.md).
   clabernetes driver, the core as a pod and the conformance suite (2026-11-08); phase 7:
   many twins at once, admitted by the runtime's room (2026-11-09); phase 8: the Infrahub
   reader, the example orchestrator and the cut-over (2026-11-12); phase 9: the NetBox reader
-  and the example's NetBox change source (2026-11-13); and phase 10: the first release, its
-  candidate `1.0.0rc2` published to TestPyPI and accepted (2026-11-17).
-- **Next:** 1.0.0 itself, from the accepted candidate, each act on the maintainer's word
-  ([D-117](decisions.md#d-117)). No item of "Sequence" is settled after phase 10. What each
-  phase left is under its item there and among the
-  [open questions](decisions.md#open-questions). The `hardware` driver is a later release's.
+  and the example's NetBox change source (2026-11-13); phase 10: the first release, its
+  candidate `1.0.0rc2` published to TestPyPI and accepted (2026-11-17), and 1.0.0 released
+  from it (2026-11-18); and phase 11: the Nautobot reader, built and publishable, its seed read
+  into a twin on the local driver and verified (2026-11-20, [D-125](decisions.md#d-125)).
+- **Next:** phase 12, the example's move out of this repository, designed on a branch of its
+  own and not yet an item of "Sequence", and with it 1.1.0, the release that publishes the
+  Nautobot reader ([D-121](decisions.md#d-121)). What each phase left is under its item in
+  "Sequence" and among the [open questions](decisions.md#open-questions). The `hardware` driver
+  is a later release's.
 - **Beside the core:** a reader for each source of truth, the Infrahub reader
-  (`readers/infrahub/`, the distribution `fylgja-infrahub`) and the NetBox reader
-  (`readers/netbox/`, `fylgja-netbox`), and the example orchestrator (`orchestrator/`), which
-  rehearses a change of either source, are in this repository; `infrahub/` and `netbox/` hold
-  what runs beside each source: Infrahub's checks, schema, queries and seed, and NetBox's seed
-  and development set-up ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081),
-  [D-095](decisions.md#d-095), [D-097](decisions.md#d-097)). The Go core is retired: it gets
+  (`readers/infrahub/`, the distribution `fylgja-infrahub`), the NetBox reader
+  (`readers/netbox/`, `fylgja-netbox`) and the Nautobot reader (`readers/nautobot/`,
+  `fylgja-nautobot`, published from 1.1.0), and the example orchestrator (`orchestrator/`),
+  which rehearses a change of Infrahub or of NetBox, are in this repository; `infrahub/`,
+  `netbox/` and `nautobot/` hold what runs beside each source: Infrahub's checks, schema, queries
+  and seed, and NetBox's and Nautobot's seed and development set-up
+  ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095),
+  [D-097](decisions.md#d-097), [D-118](decisions.md#d-118), [D-121](decisions.md#d-121)). The Go core is retired: it gets
   no more fixes, and nothing tracked here needs it or the archived repository to build, test or
   run.
 
@@ -45,7 +52,7 @@ The constitution is [`design/constitution.md`](constitution.md). The formats are
 | First outside user | Not yet known. OIDC and RBAC roles wait for one |
 | Node access | Direct, over SSH, gNMI or a CLI session, from outside the cluster |
 | Core CLI | A thin API client |
-| Repository | This repository: the core first; beside it, a reader for each source and the example orchestrator, the Infrahub reader and the example at cut-over, and the NetBox reader and the example's NetBox change source after it ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095), [D-097](decisions.md#d-097)) |
+| Repository | This repository: the core first; beside it, a reader for each source and the example orchestrator, the Infrahub reader and the example at cut-over, and the NetBox reader and the example's NetBox change source after it, and the Nautobot reader after them, published from 1.1.0 ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095), [D-097](decisions.md#d-097), [D-118](decisions.md#d-118), [D-121](decisions.md#d-121)) |
 | Process | Design document, decision entry, pull request ([D-033](decisions.md#d-033)) |
 | Constitution | One, for every piece, at `design/constitution.md` |
 | The Go core | Retired at the cut-over ([D-081](decisions.md#d-081)); the reference while this core was built |
@@ -1819,6 +1826,464 @@ with the section's approval: 1.0 does not yet take contributions. `CONTRIBUTING.
 pull request template go on saying so, and plan 5 corrects only their reason, that the
 formats and the API are still settling.
 
+## Phase 11: the Nautobot reader (settled 2026-11-19)
+
+Phase 11 gives someone who runs Nautobot what phase 9's reader gives someone who runs NetBox:
+a library that reads their source into a blueprint, and no more than that. Nobody has asked
+for Nautobot. The phase is there so that Fylgja reads the third DCIM source of truth most
+networks keep.
+
+Free Nautobot has no change to rehearse. By Network to Code's documentation, as read on
+2026-11-19:
+
+- branching is the Version Control app, on a Dolt database and offered as Early Access to
+  Nautobot Cloud's customers;
+- the Approval Workflows of Nautobot 3 gate a Job's run, not an edit of the data.
+
+So there is no change source, and the example orchestrator does not change: "reader only,
+free edition" (the maintainer, 2026-11-19). A twin read from Nautobot shows the network as
+Nautobot holds it now. [D-118](decisions.md#d-118) supersedes
+[D-004](decisions.md#d-004)'s demand for branching in that part.
+
+**What the phase is for.** One piece, the **Nautobot reader**, at [D-081](decisions.md#d-081)'s
+production standard, as the other two readers are held. It must not hand over a twin that is
+quietly not the network, it installs into a platform it does not own, and a Nautobot upgrade
+is a procedure, not a rewrite. It is as close to the NetBox reader as Nautobot allows, and
+shares nothing with it.
+
+The behaviour of the core, the two readers and the example stays as built. Only the tests
+that list the workspace's members and the distributions change, the release's tooling and the
+publishing workflow, and the documents that say how many readers there are. *As built
+([D-123](decisions.md#d-123), [D-124](decisions.md#d-124)):* five tests beyond that list gained
+the reader or its seed, each a list of what the tree holds: the core's `test_schemas.py`,
+`test_wheelcheck.py` and `test_docs_installing.py`, the tree's test in
+`infrahub/tests/test_tree.py`, and the example's `test_demo.py` with `scripts/demo.py`'s
+`MAKE_VARIABLES`, the three Nautobot variables a demonstration's make child does not inherit;
+and at the landing `test_release.py`'s `LIMITS`, for the reader's known limit in the release's
+notes. No behaviour of a reader or of the example changed. The reader is
+built and checked in this repository and **published in 1.1.0**, the release that phase 12's
+move of the example closes, and held by the promise as the other readers are
+([D-120](decisions.md#d-120), [D-121](decisions.md#d-121); the maintainer, 2026-11-19).
+
+**What is settled before code.**
+
+- **A third reader, beside the others and sharing nothing with them but the core's model**
+  ([D-118](decisions.md#d-118)). `fylgja-nautobot` in `readers/nautobot/`, the package
+  `fylgja_nautobot`, a library with a command of its own. It imports the core's base install
+  and httpx, and nothing of either reader or of the example, which a test over its imports
+  holds. No library common to the readers is made, a choice D-118 weighs now that there is a
+  third.
+- **It reads Nautobot as it stands, and takes no branch and no time**
+  ([D-118](decisions.md#d-118)).
+  - It takes a connection, a scope and a reader document, and answers a blueprint with its
+    source envelope, or the findings that refused it.
+  - The scope is a tag on devices. The tag is listed by its name first, so that a tag no tag
+    has is told from a tag on no device. The devices are then listed by `?tags=`.
+  - Nautobot refuses a filter it does not know, and a tag value no tag has, with 400
+    ([verified-facts.md](verified-facts.md), "Nautobot 3.2.8 with Golden Config 3.0.8"). So a
+    misspelt filter is a fault, never a wider list.
+  - Every list is read over REST, its pages followed, and counted against the `count`
+    Nautobot answers for it. *As built ([D-122](decisions.md#d-122)):* pages of 100, and a list
+    asked by ids batched so that a request's path and query stay within 1500 bytes and 50 ids,
+    since the development Nautobot's uWSGI dropped 1825 bytes unanswered.
+  - The same state read twice gives the same blueprint id.
+- **A device's configuration is Golden Config's render of it at the read**
+  ([D-118](decisions.md#d-118)). That is one
+  `GET /api/plugins/golden-config/generate-intended-config/?device_id=` a scoped device, its
+  `intended_config` taken verbatim and nothing else of the answer. Golden Config renders,
+  Fylgja does not ([Constitution IV](constitution.md#iv-fylgja-never-renders-configuration));
+  core Nautobot renders no device.
+  - The render uses the Golden Config setting that applies to the device, and that setting's
+    template repository and query. The reader names no query.
+  - It never sends Golden Config's `branch`, which renders from another branch of the template
+    repository.
+
+  Each of these is an error naming the device, and no blueprint:
+
+  - **A device in no setting's dynamic group.** Golden Config's words are "No Golden Config
+    settings found for this device". The remedy is to refresh the group's members, since they
+    are stored, and a device tagged since the last refresh is not among them.
+  - **A template the repository lacks.**
+  - **A template that raises.** Golden Config's words are quoted; the cause is in Nautobot's
+    log alone.
+  - **A render of whitespace alone**, which Golden Config answers 200.
+  - **A device Golden Config says it cannot find.** An account without the grant to view the
+    device is answered in the same words.
+  - **Any other answer.**
+- **The render sees what the reader's account sees** ([D-118](decisions.md#d-118)).
+  - Golden Config runs the setting's query with the rendering account's grants.
+  - An account that could view devices and not their interfaces got a render of 200 without
+    the interfaces.
+  - So the reader's account must be able to view everything the site's query reads. The
+    reader cannot check that, since the query is the site's. The README states it as the
+    account's requirement and a known limit.
+  - What the reader lists, it lists with the same account, so it sees at least what the
+    blueprint holds.
+- **The reader writes nothing it asks for, and names the one write a render makes**
+  ([D-118](decisions.md#d-118)).
+  - Every request is a `GET`.
+  - A render fetches its template repository's branch first. Where the branch has moved,
+    Nautobot saves the repository's new `current_head` and writes a row to the changelog, under
+    the rendering account. It did so for a superuser's token with writing disabled, and for an
+    account whose one grant was to view devices.
+  - The reader asks for none of this and cannot prevent it; its README states it. The reader's
+    account needs no grant to change anything.
+  - The NetBox reader writes nothing at all, and this is where the two differ.
+- **A read is of one state, or refused** ([D-118](decisions.md#d-118)). Nautobot's changelog
+  rows are keyed by UUIDs and listed newest first, so no id orders them, and NetBox's bracket
+  by the latest id has no counterpart. The bracket is the changelog's time and its count.
+  - **At the open**, before anything else is listed, the reader takes the newest row's time and
+    the changelog's total count. Inside the bracket it then lists Golden Config's settings and
+    the template repositories they name, and takes each repository's `current_head`.
+  - **At the close**, after the last render, it takes all three again. The read is refused,
+    `read.moved`, with the remedy "read again", where any of these holds:
+    - a row is newer than the open's time;
+    - the total count has changed, which a row of an earlier time that became visible late
+      would do;
+    - a head has moved.
+
+    *As built ([D-122](decisions.md#d-122)):* the open takes the newest row by its id beside its
+    time, and the close refuses where its newest row is another, a newer row or another of the
+    same time; and a repository the open listed and the close does not refuses the read too.
+  - Every kind of row counts, since nothing of Fylgja's writes to Nautobot. That includes the
+    row a render writes when its repository moved, because the renders before it used the
+    older templates. So a read is refused at most once after a push to a template repository:
+    the next read finds the head already fetched.
+  - **A changelog with no row** opens with no time. Then any row at the close refuses the read.
+  - **The close runs on every path past the open**, as the NetBox reader's does
+    ([D-098](decisions.md#d-098)). A device that Golden Config cannot find after the open, or
+    a list answered 400 then, is weighed at the close: where the bracket moved, the read is
+    `read.moved`, and otherwise the device's error stands. *As built
+    ([D-122](decisions.md#d-122)):* past an open that succeeded; a 400 where the close cannot
+    tell, its repositories not listed whole, is its `read.incomplete` carrying the 400's words, and
+    a 400 where nothing moved is raised; and a refusal past the open other than a 400 is a
+    `NautobotError` raised with no close.
+  - **The source envelope** carries the open's newest row, by its id and time, or none, and
+    each repository's head. It carries no `at`. That is the point in time
+    [Constitution VI](constitution.md#vi-intent-is-addressed) asks for, as near as Nautobot
+    gives one, and its reader is whoever reads a twin's provenance, as with the other readers.
+  - **What the bracket does not see is listed in `mapping.md`.** That includes a row pruned
+    while another becomes visible late, which cancel in the count, and a group's stored members
+    (next bullet). *As built ([D-122](decisions.md#d-122)):* of a group's members, a refresh by
+    the job `RefreshDynamicGroupCaches`, which writes no changelog row, alone.
+- **No configuration is stored, so there is no stale rule. A group's members are stored, and
+  that is the reader's known limit** ([D-118](decisions.md#d-118)). A device edited so that
+  it now matches the filter of another setting, before the groups are refreshed, renders under
+  the setting its stored membership gives, with no error. Plan 2 reads whether a group's filter
+  can be listed as devices and held to its stored members. If it can, a stale membership is an
+  error naming the group. If not, it is named in the README as a known limit. *As read and built
+  ([D-122](decisions.md#d-122)):* it can. Inside the bracket, before the renders, each setting's
+  group's stored members and the devices its filter lists are held to each other for the scoped
+  devices, `group.stale` an error naming the group; a group of another type than
+  `dynamic-filter`, a static or a dynamic-set group, or one whose filter cannot be sent as a
+  query, is `group.unchecked`, a warning. The account holds
+  `view` on `extras.staticgroupassociation` for the members' list.
+- **Golden Config must be there, and the versions are stated** ([D-119](decisions.md#d-119)).
+  - Nautobot's `/api/status/` is read first. A Nautobot whose `nautobot-apps` does not name
+    `nautobot_golden_config` is refused before any list.
+  - Outside the pairs of Nautobot's version and Golden Config's that the contract tier passed
+    on, the reader files a warning.
+  - The pair built against is Nautobot 3.2.8 with Golden Config 3.0.8. Each was the newest
+    release at least two weeks old on 2026-11-19, by PyPI's answer that day. Golden Config 3.0.8
+    and 3.1.0 each require Nautobot 3.1 or later.
+- **The reader document** ([D-118](decisions.md#d-118)) is a new format, `nautobot-reader-1`.
+  - It holds what Nautobot cannot: which pair of manufacturer and platform is which platform
+    package, and the name of the configuration context that declares the probes, or that none
+    are read.
+  - It names no query and no template, which are Golden Config's settings.
+  - It holds no address and no credential. Those are `FYLGJA_NAUTOBOT_ADDRESS` and
+    `FYLGJA_NAUTOBOT_TOKEN`, with an optional `FYLGJA_NAUTOBOT_CA` ([D-042](decisions.md#d-042)).
+- **Probes are a configuration context** ([D-118](decisions.md#d-118)): the one the reader
+  document names, inactive, and listed by its name. The fixture's device did not take an
+  inactive context, read over GraphQL and over REST. Its data is a probe declaration
+  ([`probes-1`](../formats/probes-1.schema.json)), held to the core's own loader. One left
+  active is an error.
+- **One mapping, `nautobot-dcim`**, documented in the reader's `mapping.md`
+  ([D-118](decisions.md#d-118)). It takes:
+  - the devices of the scope;
+  - each device's platform and that platform's manufacturer, matched to a package by the
+    reader document;
+  - each device's physical interfaces, with `enabled` and `mgmt_only` as Nautobot holds them;
+  - and a cable as a link where it has exactly one termination at each end, each a port of a
+    scoped device and neither `mgmt_only`.
+
+  Nautobot 3.2 answers a cable's ends both as `termination_a` and `termination_b` and as a
+  map of lanes, `terminations`. Any other cable is omitted with its reason as a fidelity row,
+  or is an error, by the NetBox reader's rows where the meaning is the same. Addresses are not
+  read: they are the template's to render, as in NetBox, and blueprint 1 has no member for
+  them.
+- **Plain HTTP, stated versions, and tests against a real Nautobot**
+  ([D-119](decisions.md#d-119)). httpx and no client library of Nautobot's, all contact in one
+  transport module. The README states the pairs the contract tier passed on.
+  - **The tests, as the NetBox reader's are built** ([D-099](decisions.md#d-099)). Nothing is
+    tested over recorded answers ([D-034](decisions.md#d-034)).
+    - The pure tier holds the mapping, the counting, the bracket, the renders, the probes, the
+      command and the documents, over a fake of Nautobot's HTTP built in the tests.
+    - The contract tier holds everything that meets Nautobot, on a seeded instance at versions
+      a make target takes, behind a marker and a make target of its own. Where a rule cannot be
+      provoked by writing to Nautobot, it is provoked by an answer altered in flight: Golden
+      Config absent, a row that becomes visible late.
+  - **The development Nautobot** is a Compose project under `local/`, from what `nautobot/dev/`
+    tracks. Its services:
+    - Network to Code's image of Nautobot at its version, the image's Python a make variable,
+      with one layer adding Golden Config at its version by `uv pip install`. The image holds
+      no uv, so the layer takes uv from its image pinned by digest, as the core's image does.
+    - Postgres and Redis, each pinned by the two-week rule ([D-039](decisions.md#d-039)).
+    - A worker, given its own entrypoint so that it does not migrate beside Nautobot.
+    - A Git service serving the template repository, made under `local/` from the templates
+      `nautobot/seed/` tracks. Its host is added to the hosts the tree's test allows.
+
+    It is published on loopback alone, port 8810. Its network is 203.0.113.0/24, a
+    documentation range off the local driver's lab pool and off the development NetBox's
+    198.51.100.0/24. Its secrets are lines of `local/.env`. *As built
+    ([D-123](decisions.md#d-123)):* the image's Python is 3.14; Postgres and Redis are
+    `postgres:17.10-alpine` and `redis:7.4.11-alpine`, a tag's age counted from its index's push;
+    the image's health check is disabled on Nautobot and its worker, and `make nautobot-up` waits
+    on `/health/` from the host; the Git service runs under `init`, and is the Compose alias
+    `templates.fylgja.example`, a name the tree's test already admits, so the test is not edited
+    for it; and the superuser's token is given to the image's entrypoint, which takes it at every
+    start.
+  - **The seed**, a script over REST, makes:
+    - `testdata/blueprint/three-node.json`'s network whole, its link from n1 to n3 among it,
+      Nautobot having no change for it to be held back for;
+    - the addresses its templates render;
+    - the probe of `three-node-probed.json` as the probes' context;
+    - and SR Linux templates that render a configuration the twin boots and verifies. Golden
+      Config drops a template's last newline, so the bytes are the template's to make, and no
+      equality with the NetBox seed's renders is asked.
+
+    It edits the installed `Default Settings` rather than making a setting of its own. It sets
+    the setting's repository, its path template, its query, which selects the device's name as
+    `hostname` since a top-level `name` is lost to the render, and its group's filter, the tag.
+    Golden Config is configured with intended configuration and its query on, and its other
+    features off. *As built ([D-123](decisions.md#d-123)):* the seed commits the templates into
+    the repository the Git service serves where they differ, so a change reaches Nautobot as a
+    push; the query, `nautobot/seed/sotagg.graphql`, selects each device's `comments` as
+    `description`, a device having no description; the seed's last act renders each device once
+    and holds it to `three-node.json`'s configuration after its first line; and it makes the
+    reader's account, `fylgja-reader`, of fourteen `view` grants, whose token the account mints
+    itself, under a grant to add one that the seed deletes once the token exists.
+- **Built here, and published in 1.1.0** ([D-120](decisions.md#d-120),
+  [D-121](decisions.md#d-121)).
+  - **In the tree:**
+    - The reader is a member of the uv workspace, versioned by `VERSION` with every member
+      ([D-115](decisions.md#d-115)), installed by `make venv`, and held by `make lint` and
+      `make test`; `make lint` gains a separate mypy run for `nautobot/`, as `infrahub/` and
+      `netbox/` have.
+    - Its wheel is built and installed outside the tree, beside the base install alone, by
+      `make wheelcheck`, which CI runs. Its metadata is the NetBox reader's in kind.
+  - **Published** ([D-121](decisions.md#d-121)):
+    - It requires the core at its own version or a later one below 2, as each reader does.
+      Phase 11's tree is at `VERSION` 1.0.1 once `main` is brought in at its landing, so the
+      floor is 1.0.1 there, and the version commits move it with the other readers' floors.
+    - `make wheels` builds four wheels, and `scripts/publish.py check` holds four to the tag and
+      `VERSION`.
+    - The publishing workflow gains `testpypi-fylgja-nautobot` and `pypi-fylgja-nautobot`, each
+      waiting on its GitHub environment of the same name. The maintainer makes the two
+      environments and the two pending publishers, on TestPyPI and PyPI, before the first
+      candidate's tag; nothing here makes them.
+    - `docs/compatibility.md` holds the reader as it holds the other two, from 1.1.0: its
+      command, its settings, `nautobot-reader-1` among the formats, and the names under "The
+      library" in its README, each of its rows marked "from 1.1.0". The page is retitled "What
+      major version 1 holds", and "The version" names four distributions. The page's test holds
+      them there.
+    - The changelog's unreleased head gains the reader's line; phase 12 retitles that head
+      1.1.0.
+    - The README states the pairs the contract tier passed on and the upgrade procedure, as the
+      other readers' do.
+  - **Released at phase 12's landing.** Phase 11 lands with the reader publishable and
+    `VERSION` unchanged; the release, 1.1.0, is made when phase 12 lands. 1.0.1 is not released
+    on its own, and its fixes ship in 1.1.0. The release's acceptance run installs
+    `fylgja-nautobot` from the candidate on TestPyPI beside the core's base install, outside
+    the tree, and reads the development Nautobot's seed into a blueprint the candidate's core
+    validates.
+
+**The formats touched.** One new format, `nautobot-reader-1`, carried by the reader's wheel
+([D-084](decisions.md#d-084)), listed in `formats/README.md` and held by the compatibility
+page from 1.1.0 ([D-121](decisions.md#d-121)). The reader's `rules.md` gains its rule ids, the
+NetBox reader's kept where the meaning is the same. Blueprint 1 does not change: the source envelope is the
+reader's to write ([D-006](decisions.md#d-006)). API 1, findings 1 and the probe declaration
+do not change. If building shows that one must, the change is made in `formats/` in the same
+change and entered at the landing. *As built:* none did; `nautobot-reader-1` is the one format
+the phase added.
+
+**Non-goals.**
+
+- **Nautobot's change features:** a change source, or anything of the example orchestrator's;
+  the Version Control app and Golden Config's `branch`; Nautobot Cloud; Approval Workflows.
+- **Golden Config beyond its render:** the stored intended configuration its job writes, and
+  its backup, compliance, configuration plans and deployment.
+- **Other ways to a configuration:** a configuration rendered by anything but Golden Config's
+  render.
+- **What the mapping leaves out:** addresses as members of a blueprint; virtual machines,
+  modules and virtual chassis; a cable of more than one termination an end; and a cable
+  through a patch panel.
+- **Deployments the development Nautobot does not have:** a template repository behind
+  credentials, and several web instances.
+- **Everything around the reader:** a demonstration target, a library shared by the readers,
+  a client library of Nautobot's, and a contract tier in CI.
+
+**Anti-goals**, each a failure even if the acceptance run passes:
+
+- a blueprint of a Nautobot that changed while it was read;
+- a valid blueprint of less than Nautobot holds, or with a device's configuration defaulted
+  where its render failed;
+- a reader that asks Nautobot or Golden Config to write anything, or that leaves unnamed the
+  write a render makes or the grants a render needs;
+- a reader that knows a stage, a twin or a workflow engine;
+- the same state read twice giving two blueprint ids;
+- a test that passes on a recording after Nautobot changed;
+- a token in a blueprint, a finding, a log line or the tree;
+- a published reader whose command, document, settings or library names the compatibility page
+  does not hold;
+- and either reader or the example behaving otherwise than it did.
+
+**What is not yet read.** The entries assert of Nautobot and Golden Config only what
+[verified-facts.md](verified-facts.md) records, in "Nautobot 3.2.8 with Golden Config 3.0.8",
+and, where they say so, what Network to Code's documentation says. What the code leans on
+beyond that is read at the start of the plan that needs it. Where a reading differs from what
+an entry supposes, the entry is restated at the landing.
+
+- **Plan 1**, whose seed needs them:
+  - a first start of the tracked Compose project, and the stack's memory;
+  - the image of the Python chosen, beside the 3.12 one read;
+  - uv taken into the layer;
+  - an account that is no superuser and the least grants that let it list what the reader
+    lists, read the changelog, the settings and the repositories, and render whole;
+  - what the job `RefreshDynamicGroupCaches` writes to the changelog;
+  - two settings of different weights over one device;
+  - a template that reads the device's configuration context;
+  - and the interface types the seed uses.
+- **Plan 2:**
+  - a list longer than a page, and the largest page Nautobot gives;
+  - how interfaces and cables are listed for the scope's devices, and how many devices a
+    request may name;
+  - a row written inside a longer transaction, and when it becomes visible;
+  - a render while another request edits the device;
+  - a cable of more lanes;
+  - a tag's name answered twice or not at all;
+  - whether a group's filter can be listed as devices to hold its stored members to;
+  - and what the reader's tests need of a second Nautobot web instance, which is a non-goal if
+    it is more than a reading.
+
+*As read (2026-11-19 and 2026-11-20; [verified-facts.md](verified-facts.md), "Nautobot 3.2.8 with
+Golden Config 3.0.8"; [D-122](decisions.md#d-122), [D-123](decisions.md#d-123)):* plan 1 read
+each of its items. A first start on new volumes took 690.1 s and 723.0 s, and the stack's five
+services held about 2,828 MiB and 2,638 MiB in two reads, each a sum; the image of Python 3.14
+answered as the 3.12 one had; uv adds Golden Config with no flag; twelve `view` grants were the
+least for the lists and the renders; `RefreshDynamicGroupCaches` writes no changelog row; the
+heavier of two settings is rendered, neither refused; a template reads the device's context as
+the query's `config_context`, the inactive one absent; and `1000base-t` and `25gbase-x-sfp28`
+were taken. Plan 2 read each of its own: a page of 100 is whole, and the source's `MAX_PAGE_SIZE`
+defaults to 1000; interfaces are listed by `?device_id=`, an unknown device answered 400, and
+cables by the ids the interfaces name, an id no cable has answering no row; a request of 1825
+bytes or more of path and query was dropped unanswered; a row of a longer transaction becomes
+visible at its commit, with its own time; two renders of one open that closed unmoved under one
+writer's edits gave one text; a cable of more lanes answers one member a connector; `?name=` is
+exact, letter case included; a group's filter can be listed as devices and held to its stored
+members; and of several web instances, the installed source alone, not run. Left unread: two
+writers at once; several web instances run; the page-size limit beyond 120 rows; the changelog's
+retention; a template repository behind credentials; a dynamic-set or a static group's members; a
+filter of a custom field or of a related object by its id; a group of more members than a page;
+and a device whose name is null rendered ([open questions](decisions.md#open-questions)).
+
+**Three plans, each a branch and a pull request useful on its own, in this order:**
+
+1. **The development Nautobot and its seed** ([D-119](decisions.md#d-119)), beginning with its
+   readings.
+   - The tracked files under `nautobot/dev/`.
+   - The make targets that take the versions; start, stop and purge the project; and give its
+     lines in `local/.env` and `.env.example`.
+   - The template repository and its Git service.
+   - The seed under `nautobot/seed/`.
+   - The tests of the scripts, as `netbox/tests/` holds NetBox's.
+   - The tree's test extended for the Git service's host, and the separate mypy run. *As
+     built:* not extended; the service is the alias `templates.fylgja.example`
+     ([D-123](decisions.md#d-123)).
+2. **The reader** ([D-118](decisions.md#d-118), [D-119](decisions.md#d-119),
+   [D-120](decisions.md#d-120), [D-121](decisions.md#d-121)), beginning with its readings.
+   - The transport, the version check, the read and its mapping, the count of every list, the
+     renders, the bracket, the reader document and its format, the probes and the command.
+   - `mapping.md`, `rules.md` and the README.
+   - The pure tier, and the contract tier on plan 1's Nautobot, the same state read twice
+     giving one id among it.
+   - The workspace member, and the tests that list the workspace's members and the
+     distributions.
+   - The wheel check, and `scripts/wheelcheck.py`'s docstrings.
+   - Four distributions published: `make wheels`' loop and its clean of each build directory;
+     `scripts/publish.py`'s `NAMES` and its messages; `.github/workflows/publish.yml`'s comment,
+     its upload artifact, its two upload jobs and the `release` job's `needs`; and their tests,
+     `core/tests/test_publish.py` (its count of environments), `core/tests/test_release.py`
+     (`PUBLISHED`, and the reader's floor) and `core/tests/test_compatibility_page.py`
+     (`PYPROJECTS`, the commands and the settings).
+   - The compatibility page, `formats/README.md`, the changelog's line, and
+     `docs/installing.md`'s table and install lines.
+3. **The acceptance run.**
+   - The seed's network is read by `fylgja-nautobot`, the blueprint given to the core on the
+     local driver, the twin created and verified, and the twin destroyed, with the maintainer
+     watching.
+   - The documents that say Fylgja reads two sources, or publishes three distributions, are
+     corrected: `AGENTS.md`, `CONTRIBUTING.md` (its `make wheels` row, and "Releasing": four
+     distributions, eight environments and eight pending publishers), `README.md`,
+     `docs/glossary.md`, `docs/integrating.md`, `design/architecture.md`, and this document's
+     opening, requirements and "Verification".
+     The constitution's line on contract tests was amended with this section.
+
+   It closes the phase.
+
+*As built*, the design was amended to [D-121](decisions.md#d-121) before plan 2 began, so plan 2
+also made the reader publishable. Plan 2 ran after plan 1's merge, each task in order, so none of
+its tasks ran beside plan 1. Plan 3's live tasks waited on a hold that phase 12's work kept, on
+the maintainer's word, on the host's containerlab, Infrahub and NetBox. Plan 3's runbook went
+into `CONTRIBUTING.md`, "The acceptance run", with a second read whose id must equal the first
+and a refused read provoked in the dry run, and the glossary gained **Nautobot** and **Template
+repository** ([D-125](decisions.md#d-125)).
+
+Each follows the one before it. Plan 2's pure tier may begin beside plan 1 once plan 0 has
+fixed the reader's signatures. Live runs are one at a time, and Infrahub and NetBox are
+stopped while the local driver's twin runs. Nautobot's network is off the lab pool, so it may
+stay up.
+
+**The phase is done** when the maintainer has watched this:
+
+- on the development host, `fylgja-nautobot` reads the development Nautobot's seed into a
+  blueprint;
+- the core, on the local driver, creates a twin of it;
+- verify passes on that twin;
+- and the twin is destroyed.
+
+The maintainer runs the commands, or the controller shows each command's whole output before
+the next. *As made (2026-11-20, [D-125](decisions.md#d-125)):* the maintainer ran each command
+at the session's prompt; the read gave the same id twice, `2ee2f750…a639`, and verify held 19 and
+failed none; and the create, run a second time by mistake, was refused `412 twin.exists` and
+changed nothing, and the maintainer ruled that the run counts. Beside that:
+
+- the reader's contract tier passes on Nautobot 3.2.8 with Golden Config 3.0.8, the same
+  state read twice giving one id;
+- `fylgja-nautobot` installs from its wheel outside the tree beside the base install alone,
+  and `make wheels` builds it among four; it is published at 1.1.0, when phase 12 lands;
+- the pure tiers pass, with no test of the core, either reader or the example changed but
+  those that list the workspace's members, the distributions, the release's uploads and
+  environments, and what the compatibility page holds;
+- and every behaviour of Nautobot and Golden Config the code relies on is recorded for the
+  versions it runs on.
+
+*As made* beside it: the contract tier passed whole on 2026-11-20, `nautobot/`'s 15 tests and the
+reader's 41; five wheels were checked, and `make wheels` builds four; and the pure tiers passed,
+with the tests beyond the list above ([D-123](decisions.md#d-123),
+[D-124](decisions.md#d-124)).
+
+**Left to the builder.**
+
+- The module names and the exact signatures.
+- The rule ids and the wording of each finding.
+- The mapping's rows: which interface types are physical ports, and what is omitted with a
+  fidelity row.
+- The reader document's members, each with its consumer, and the source envelope's members.
+- The make targets' names.
+- The images' pins within the two-week rule.
+- The development Nautobot's account and its grants, within plan 1's reading.
+
 ## Sequence
 
 0. **The baseline.** *Done.* The decision log ([decisions.md](decisions.md)), the
@@ -2057,6 +2522,39 @@ formats and the API are still settling.
     request, which no run met; and the release's known limits, each among the
     [open questions](decisions.md#open-questions) but two, flows across a step and the cancel's
     mark on the cluster.
+11. **Nautobot**, after the first release. *Settled on 2026-11-19*; see "Phase 11":
+    - Write the Nautobot reader, `fylgja-nautobot`, beside the other two: Nautobot as it
+      stands, each device's configuration rendered by Golden Config at the read, and a read
+      bracketed by the changelog's time and counts and the template repositories' heads
+      ([D-118](decisions.md#d-118)).
+    - Run a development Nautobot with Golden Config at stated versions, seeded, and test the
+      reader against it ([D-119](decisions.md#d-119)).
+    - Build the reader here, and publish it in 1.1.0, the release phase 12 closes
+      ([D-120](decisions.md#d-120), [D-121](decisions.md#d-121)).
+    - Read the seed into a blueprint and verify its twin on the local driver.
+
+    Built, in the three plans of "Phase 11": the development Nautobot with Golden Config behind
+    make targets, its image of Python 3.14, its Git service and its seed, with the reader's account
+    of fourteen `view` grants minting its own token ([D-119](decisions.md#d-119),
+    [D-123](decisions.md#d-123)); the Nautobot reader, `fylgja-nautobot`, with its bracket of the
+    changelog's newest row and count and the template repositories' heads, its renders, each
+    setting's group's stored members held to its filter, its reader document `nautobot-reader-1`
+    and its contract tier ([D-118](decisions.md#d-118), [D-122](decisions.md#d-122)); the fourth
+    distribution, built, checked and publishable, the compatibility page holding it from 1.1.0
+    ([D-120](decisions.md#d-120), [D-121](decisions.md#d-121), [D-124](decisions.md#d-124)); and
+    the acceptance run with its runbook and the documents. *Done on 2026-11-20*
+    ([D-125](decisions.md#d-125)): `fylgja-nautobot` read the development Nautobot's seed into a
+    blueprint, twice to one id, and the core on the local driver created a twin of it, verified
+    it, `held 19, failed 0`, and destroyed it, the maintainer running each command at the
+    session's prompt ([verified-facts.md](verified-facts.md), "Nautobot 3.2.8 with Golden Config
+    3.0.8", "The seed read, and a twin of it made, verified and destroyed while the maintainer
+    watched, and the verdict as they read it"). It left to later phases, or to the maintainer's
+    word: 1.1.0 itself, with the reader's two environments and pending publishers and its
+    candidate's acceptance from TestPyPI, and until then an installing page that names the reader
+    ([D-121](decisions.md#d-121), [D-124](decisions.md#d-124)); a change of Nautobot rehearsed,
+    which waits for branching in the free edition; a library the three readers share; and what the
+    reader does not yet rest on a reading of, several web instances and two writers at once among
+    it ([open questions](decisions.md#open-questions)).
 
 ## Verification
 
@@ -2101,13 +2599,16 @@ formats and the API are still settling.
   run unfinished ([D-072](decisions.md#d-072) names the two boundaries it did not on the
   cluster).
 - **The readers and the example orchestrator**: each reader's pure tier, and its contract
-  tier against a real instance of its source, Infrahub or NetBox, with the same read twice
-  giving one id; the example's rehearsal library over a fake source and the core's own server
-  on its fake runtime, and each change source's contract tier against its source; a proposed
-  change rehearsed through Infrahub's own check on each driver ("Phase 8"); and a branch
-  rehearsed from its tag in NetBox on each driver ("Phase 9").
+  tier against a real instance of its source, Infrahub, NetBox or Nautobot with Golden Config,
+  with the same read twice giving one id; the example's rehearsal library over a fake source and
+  the core's own server on its fake runtime, and each change source's contract tier against its
+  source; a proposed change rehearsed through Infrahub's own check on each driver ("Phase 8"); a
+  branch rehearsed from its tag in NetBox on each driver ("Phase 9"); and a twin created on the
+  local driver from the Nautobot reader's read of its seed, verified and destroyed ("Phase 11").
 - **The release**: the wheel check, which installs each published wheel into an empty
-  environment and starts the core's server with no `FYLGJA_PACKAGES`; the image check; the
+  environment, the Nautobot reader's too, and starts the core's server with no
+  `FYLGJA_PACKAGES`; `make wheels`, which builds four wheels, the Nautobot reader's published
+  from 1.1.0 ([D-121](decisions.md#d-121)); the image check; the
   release check before any upload, which holds the wheels to the tag, the commit and the version;
   the tests that hold each user page to the code; and, at a candidate, its wheels installed from
   TestPyPI and both demonstrations run from a fresh clone at its tag ("Phase 10").

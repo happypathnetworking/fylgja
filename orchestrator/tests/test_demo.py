@@ -4768,6 +4768,9 @@ HOSTILE = {
     "NETBOX_BRANCHING_VERSION": "9.9.5",
     "NETBOX_BRANCH": "mine",
     "NETBOX_TAG": "0",
+    "NAUTOBOT_VERSION": "9.9.6",
+    "GOLDEN_CONFIG_VERSION": "9.9.7",
+    "NAUTOBOT_PYTHON": "9.9",
     "SOURCE": "nautobot",
     "IMAGE": "registry.example/another",
     "DRIVER": "clabernetes",
@@ -4807,7 +4810,7 @@ def test_the_names_no_make_child_is_given_are_makes_own_and_the_makefiles() -> N
     makefile = (ROOT / "Makefile").read_text()
     # Every name the Makefile assigns by `?=`, in its order: one added there and not here fails this.
     assert tuple(assigned_by_default(makefile)) == demo.MAKE_VARIABLES
-    assert len(set(demo.MAKE_VARIABLES)) == 15 and {"PURGE", "SOURCE", "SEED_BRANCH", "NETBOX_BRANCH"} < set(
+    assert len(set(demo.MAKE_VARIABLES)) == 18 and {"PURGE", "SOURCE", "SEED_BRANCH", "NETBOX_BRANCH"} < set(
         demo.MAKE_VARIABLES
     )
     assert demo.MAKES_OWN == ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKELEVEL", "GNUMAKEFLAGS", "MAKEFILES")

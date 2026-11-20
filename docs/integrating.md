@@ -4,14 +4,15 @@ This page is for someone who runs a source of truth and an orchestration platfor
 own, and wants a change rehearsed on a twin before it reaches the network. Fylgja ships three
 pieces, held to three standards ([D-081](../design/decisions.md#d-081)): the **core**, which
 turns a blueprint into a twin; a **reader** for each source of truth, which turns that source
-into blueprints, Infrahub's and NetBox's; and an **example orchestrator**, which joins the two
-to Infrahub or to NetBox through Prefect. You take the first two and run them unchanged. The
+into blueprints, Infrahub's, NetBox's and Nautobot's, the last published from 1.1.0; and an
+**example orchestrator**, which joins the two to Infrahub or to NetBox through Prefect, and has
+no change of Nautobot to rehearse, since free Nautobot has none. You take the first two and run them unchanged. The
 third is written to be read once and replaced: it is honest on its main path and on plain
 failures, and it is not hardened.
 
 The page walks through the example and says, at each part, which files to read and what you
 would write in their place. The terms are in the [glossary](glossary.md). The names this page gives
-of the example's code are the example's and are not held ([what 1.0 holds](compatibility.md)).
+of the example's code are the example's and are not held ([What major version 1 holds](compatibility.md)).
 
 ## What you take unchanged
 
@@ -67,6 +68,26 @@ changelog or the branch moved under is refused, `read.moved`, to be read again
 [mapping.md](../readers/netbox/mapping.md) and [rules.md](../readers/netbox/rules.md); what its
 token must be allowed is its README's
 [last section](../readers/netbox/README.md#what-it-sends-and-what-its-token-must-be-allowed).
+
+**The reader for Nautobot**, `fylgja-nautobot`, under
+[`readers/nautobot/`](../readers/nautobot/README.md), published from 1.1.0 and installed as
+[installing](installing.md) says, installs beside the core's base alone too, and imports nothing
+of Prefect, a client library of Infrahub's, NetBox's or Nautobot's, the other readers or the
+core's server. Its calls are `connect(address, token, *, ca=None)`; `read(conn, *, scope,
+document)`, Nautobot as it stands, since Nautobot has no branch and reads no earlier time; and
+`check(conn)` ([its README](../readers/nautobot/README.md#the-library)). Its reader document
+([`nautobot-reader-1.schema.json`](../formats/nautobot-reader-1.schema.json)) says which
+manufacturer and platform pair is which platform package, and which configuration context, if any,
+declares the probes. Each device's configuration is what Golden Config renders for it at the read.
+That render is the one write a read can cause: Golden Config saves its template repository's new
+head, and a row of the changelog, under the reader's account, so that a read during which a
+template push is first fetched is refused once, `read.moved`, and the account must be allowed to
+view what the site's query reads, or the render is smaller and no error says so. A read the
+changelog or a template repository's head moved under is refused, `read.moved`, to be read again
+([D-118](../design/decisions.md#d-118)). What it reads and refuses is
+[mapping.md](../readers/nautobot/mapping.md) and [rules.md](../readers/nautobot/rules.md); what
+its token must be allowed is its README's
+[last section](../readers/nautobot/README.md#what-it-sends-and-what-its-account-must-be-allowed).
 
 ## What you replace
 
@@ -143,9 +164,9 @@ its verdict, from the record the write answered. It takes no timeout: the bound 
 a platform's time limit or an interrupt. A refusal is a `ProblemError`, with the HTTP status and
 the problem document, whose `rule` is stable; a core not reached is a `TransportError`.
 
-**The readers' calls**, over a connection from `connect`: the Infrahub reader's two, `read` and
-`head`, and the NetBox reader's one, `read`, of a branch or `main` as it stands
-([its README](../readers/netbox/README.md#the-library)). A reader knows no stage, proposed
+**The readers' calls**, over a connection from `connect`: the two readers the change sources
+call, the Infrahub reader's two, `read` and `head`, and the NetBox reader's one, `read`, of a
+branch or `main` as it stands ([its README](../readers/netbox/README.md#the-library)). A reader knows no stage, proposed
 change or twin: which branch to read, and for Infrahub at what time, is its caller's.
 
 **`ChangeSource`'s four calls**
@@ -571,6 +592,7 @@ The example is not hardened ([D-081](../design/decisions.md#d-081)). It leaves o
 - how an engineer marks a step in NetBox: the seed's script runs `stage mark`
   ([D-097](../design/decisions.md#d-097));
 - a request sent again: a lost one is asked again by setting the tag again;
+- a change of Nautobot, whose free edition has none to rehearse ([D-118](../design/decisions.md#d-118));
 - a gate on the merge: NetBox's report gates nothing;
 - what a mark's read found beside its blueprint, an omission among it, which is said when the
   mark is taken and is not carried to the rehearsal's report;

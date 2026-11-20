@@ -15,6 +15,10 @@ REMOVED = (
     "scripts/demo_dependencies.sh",
     "plan-1.schema.json",
     "rehearsal-1.schema.json",
+    "infrahub/checks/",
+    "infrahub/queries/fylgja_branch.gql",
+    "infrahub/schema/fylgja-stage.yml",
+    "infrahub/seed/account.py",
 )
 HISTORY = ("design/", "CHANGELOG.md")
 # A path is a name when no word character, dot or hyphen runs into it: fylgja_orchestrator/ is a package's.

@@ -293,8 +293,8 @@ def test_a_name_held_with_no_value_is_refused_before_anything(
 def test_the_env_files_rules_are_infrahub_devs() -> None:
     """Each script runs alone under `python3 -I` and imports no other, so `netbox_dev.py` holds its own copy of
     `infrahub_dev.py`'s rules for reading `local/.env`, and `netbox/seed/account.py` its own of `ASSIGNMENT` and
-    `COMMENT`, beside a `QUOTED` of another form, `infrahub/seed/account.py`'s; the one file is read by all three,
-    and the copies are held equal here, so that none changes alone."""
+    `COMMENT`, beside a `QUOTED` of another form, the Infrahub account script's, now in `fylgja-examples`; the one
+    file is read by all three, and the copies are held equal here, so that none changes alone."""
     for rule in ("ASSIGNMENT", "QUOTED", "COMMENT"):
         ours, theirs = getattr(netbox_dev, rule), getattr(infrahub_dev, rule)
         assert (ours.pattern, ours.flags) == (theirs.pattern, theirs.flags), rule

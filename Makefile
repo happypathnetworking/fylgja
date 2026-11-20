@@ -11,14 +11,12 @@ MAIN := $(shell dirname "$$(git rev-parse --path-format=absolute --git-common-di
 LOCAL ?= $(MAIN)/local
 
 # The development Infrahub (CONTRIBUTING.md): its version, the SDK's for infrahubctl, the ref registered, the
-# seeded branch, PURGE=1 (no other value) for an infrahub-down that removes the volumes, and PROPOSED_CHANGE=1 (no
-# other value) for an infrahub-seed that makes the seeded branch's proposed change.
+# seeded branch and PURGE=1 (no other value) for an infrahub-down that removes the volumes.
 INFRAHUB_VERSION ?= 1.11.11
 INFRAHUB_SDK_VERSION ?= 1.23.2
 REF ?= $(shell git branch --show-current)
 SEED_BRANCH ?= third-link
 PURGE ?=
-PROPOSED_CHANGE ?=
 
 # The development NetBox (CONTRIBUTING.md): NetBox's version, netbox-docker's release and the branching plugin's;
 # PURGE=1 above, and no other value, for a netbox-down that removes the volumes.
@@ -197,14 +195,12 @@ infrahub-register: $(LOCAL)/infrahub/.venv/bin/infrahubctl
 	$(if $(REF),,$(error REF is empty: a detached head names no branch to register; give REF=<branch>))
 	$(VENV)/bin/python infrahub/seed/register.py --ref $(REF) --commit $$(git rev-parse --verify '$(REF)^{commit}') --schema infrahub/schema/dcim --ctl $(LOCAL)/infrahub/.venv/bin/infrahubctl
 
-# The reader's FylgjaProbe kind and the example's FylgjaStage on main where main lacks them; the fixture network on
-# main from infrahub/seed/main/'s object files, loaded by infrahubctl, and its configurations generated and waited
-# for; then an earlier seed's marks and open proposed change of SEED_BRANCH removed, and the branch made anew with
-# infrahub/seed/stages/'s two edits, each generated, waited for, timed by the reader's head and marked on main; with
-# PROPOSED_CHANGE=1, last, its proposed change into main. Into local/infrahub/seed.json (CONTRIBUTING.md). Load
-# local/.env first.
+# The reader's FylgjaProbe kind on main where main lacks it; the fixture network on main from infrahub/seed/main/'s
+# object files, loaded by infrahubctl, and its configurations generated and waited for; then the branch SEED_BRANCH
+# made anew with infrahub/seed/stages/'s two edits, each generated, waited for and timed by the reader's head. Into
+# local/infrahub/seed.json (CONTRIBUTING.md). Load local/.env first.
 infrahub-seed: $(LOCAL)/infrahub/.venv/bin/infrahubctl
-	$(VENV)/bin/python infrahub/seed/seed.py --branch $(SEED_BRANCH) --files infrahub/seed --out $(LOCAL)/infrahub/seed.json --ctl $(LOCAL)/infrahub/.venv/bin/infrahubctl --schema readers/infrahub/schema/fylgja-probe.yml --schema infrahub/schema/fylgja-stage.yml $(if $(filter 1,$(PROPOSED_CHANGE)),--proposed-change)
+	$(VENV)/bin/python infrahub/seed/seed.py --branch $(SEED_BRANCH) --files infrahub/seed --out $(LOCAL)/infrahub/seed.json --ctl $(LOCAL)/infrahub/.venv/bin/infrahubctl --schema readers/infrahub/schema/fylgja-probe.yml
 
 # The contract tier: infrahub/'s code, then the reader's, against the running development Infrahub (CONTRIBUTING.md).
 # Load local/.env first.

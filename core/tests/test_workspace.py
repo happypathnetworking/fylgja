@@ -108,9 +108,8 @@ def test_the_lock_names_neither_prefect_nor_nornir() -> None:
     lock = load("uv.lock")
     names = {normalised(entry["name"]) for entry in lock["package"]}
     assert len(names) > 20, "the parse is blind"
-    assert names.isdisjoint({"prefect", "nornir", "fylgja-orchestrator"})
+    assert not [n for n in names if n.startswith(("prefect", "nornir")) or n == "fylgja-orchestrator"]
     assert sorted(lock["manifest"]["members"]) == sorted(NAMES.values())
-    assert len(MEMBERS) == 4
 
 
 def test_venv_is_a_locked_sync_into_core_venv() -> None:

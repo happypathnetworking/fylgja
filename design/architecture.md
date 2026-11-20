@@ -2,7 +2,8 @@
 
 This document describes Fylgja as this repository holds it: the core, at length, and the
 pieces beside it, a reader for each source of truth, and the example orchestrator, which is kept in
-`fylgja-examples` (section 5; [D-081](decisions.md#d-081), [D-126](decisions.md#d-126)). It says what each is, what is built at this commit, and the
+`fylgja-examples` (section 5; [D-081](decisions.md#d-081), [D-126](decisions.md#d-126)). It says
+what each is, what is built at this commit, and the
 architecture the core is built to. The non-negotiables are in the
 [constitution](constitution.md), the reasons in the [decision log](decisions.md), and the
 terms in the [glossary](../docs/glossary.md). The full design is [design/core.md](core.md),
@@ -38,7 +39,8 @@ reader**, under `readers/infrahub/`, the **NetBox reader**, under `readers/netbo
 ([D-095](decisions.md#d-095)), and the **Nautobot reader**, under `readers/nautobot/`, built here and
 published from 1.1.0 ([D-118](decisions.md#d-118), [D-121](decisions.md#d-121)), none importing
 another. An **example orchestrator**, kept in the repository
-[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples) ([D-126](decisions.md#d-126)),
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/)
+([D-126](decisions.md#d-126)),
 resolves each stage of a change, a proposed change in Infrahub or a branch in
 NetBox, to a blueprint through that source's reader, or, for a mark in NetBox, from the core
 that keeps the mark's blueprint, and rehearses the change ([D-081](decisions.md#d-081),
@@ -133,7 +135,8 @@ writes them.
   Infrahub into a blueprint, and the example, now in `fylgja-examples`, which rehearses a proposed
   change on a twin through its own check `fylgja-twin` and posts its report in the
   change's thread; the check and its stage kind are `fylgja-examples`', and what this repository's
-  `infrahub/` gives the development Infrahub is the registration, the schema library, the seed and the
+  `infrahub/` gives the development Infrahub is the registration, the schema library, the seed and
+  the
   Compose override alone. The two
   acceptance runs were made on 2026-11-12: a proposed change the maintainer created in
   Infrahub's UI was rehearsed through its check, once with the core on the local driver and
@@ -151,7 +154,8 @@ writes them.
   as it stands into a blueprint, and the change source in `fylgja-examples`, which marks each
   step of a branch as it is built, rehearses the branch once the tag `fylgja-rehearse` is set on
   it, through NetBox's own event rule and webhook to the edge's Prefect, and files its report as
-  one journal entry on the branch, with what the development NetBox is given under `netbox/`. On
+  one journal entry on the branch; `netbox/` gives the development NetBox the image, the override,
+  the seed and the reader's account alone. On
   2026-11-13 a branch built in the development NetBox by the seed's script, in two steps each
   marked, then given its tag, was rehearsed from that tag with the core on the local driver, and
   ended `passed`, a twin created at `main`, stepped and verified through the two marks and
@@ -577,8 +581,10 @@ The shipped packages, in platform package 1 and probe package 1, are
 
 Beside the core Fylgja ships a reader for each source of truth, in this repository: under
 `readers/infrahub/`, `readers/netbox/` and `readers/nautobot/`, the last published from 1.1.0. The
-example orchestrator ([D-081](decisions.md#d-081)) was built here and now lives in `fylgja-examples`,
-which keeps this repository's paths ([D-126](decisions.md#d-126)). The Infrahub reader and the example
+example orchestrator ([D-081](decisions.md#d-081)) was built here and now lives in
+`fylgja-examples`,
+which keeps this repository's paths ([D-126](decisions.md#d-126)). The Infrahub reader and the
+example
 were designed in [core.md](core.md), "Phase 8", and built in phase 8.
 
 **The Infrahub reader** is a library with a command of its own
@@ -589,7 +595,8 @@ that refused it: a list it could not read whole, a device with no ready configur
 configuration older than the intent it is read with. It sends no mutation and knows no
 stage, proposed change or twin. It is held to what a production workflow needs.
 
-**The example orchestrator**, in `fylgja-examples` and no part of this repository, shows how to join the core and a reader to a system that
+**The example orchestrator**, in `fylgja-examples` and no part of this repository, shows how to join
+the core and a reader to a system that
 already exists ([D-085](decisions.md#d-085)). It resolves a **stage** of a change to a
 blueprint: in Infrahub, a proposed change's branch point, a mark the operator records on the
 branch, or its head ([D-088](decisions.md#d-088)), each to what the reader reads; in NetBox,
@@ -633,7 +640,8 @@ Nautobot source.
 
 The example reaches the core through the API alone, never the store or the runtime, and
 renders every report itself from the core's documents, and the core and the readers import
-nothing of it, nor Prefect, which a test over each one's imports holds. The prototype of the Infrahub reader and
+nothing of it, nor Prefect, which each reader's import test holds, and the core depends on
+neither. The prototype of the Infrahub reader and
 of the example, the orchestrator in the archived repository, did both jobs against the frozen Go
 core's API, writing snapshot 2; it was the reference for their behaviour, and none of its code
 or formats is here. This repository holds no bridge between the two formats

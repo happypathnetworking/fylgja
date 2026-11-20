@@ -88,17 +88,21 @@ def test_no_user_page_cites_a_decision_number_or_a_phase() -> None:
             assert not re.search(r"D-\d{3}|[Pp]hase \d", line), f"{page}:{number}: {line}"
 
 
-EXAMPLES = re.compile(r"https://github\.com/happypathnetworking/fylgja-examples/(?:blob|tree)/([^/\s)>\"'`]+)")
+EXAMPLES = re.compile(r"https://github\.com/happypathnetworking/fylgja-examples"
+                      r"(?:/(?:blob|tree)/([^/\s)>\"'`]+))?(?=[\s)>\"'`/]|$)")
+
+# The two tests that name the prefix of such a link, the one in a pattern and the other in a constant.
+SKIPPED = ("core/tests/test_docs.py", "core/tests/test_docs_demonstrations.py")
 
 
 def _tracked_texts() -> dict[str, str]:
-    """Each tracked Markdown and `.py` file's text, outside `design/` and the CHANGELOG, which cite as they stood."""
+    """Each tracked Markdown and `.py` file's text, outside `design/` (but the architecture) and the CHANGELOG."""
     names = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
     found: dict[str, str] = {}
     for raw in names.split(b"\0"):
         name = raw.decode()
-        if name.endswith((".md", ".py")) and (ROOT / name).is_file() and not name.startswith("design/") \
-                and name != "CHANGELOG.md":
+        if name.endswith((".md", ".py")) and (ROOT / name).is_file() and \
+                (not name.startswith("design/") or name == "design/architecture.md") and name != "CHANGELOG.md":
             found[name] = (ROOT / name).read_text()
     return found
 
@@ -107,21 +111,22 @@ def test_no_link_into_fylgja_examples_is_at_main() -> None:
     texts = _tracked_texts()
     assert any(EXAMPLES.search(body) for body in texts.values()), "the parse is blind"
     for name, body in texts.items():
-        if name == "core/tests/test_docs.py":
+        if name in SKIPPED:
             continue
         for ref in EXAMPLES.findall(body):
-            assert ref not in ("main", "HEAD", "master"), f"{name}: a link into fylgja-examples at {ref}"
+            assert ref not in ("", "main", "HEAD", "master"), \
+                f"{name}: a link into fylgja-examples at {ref or 'no ref'}"
 
 
 def test_each_link_into_fylgja_examples_is_at_v1_1_0() -> None:
     texts = _tracked_texts()
     seen = 0
     for name, body in texts.items():
-        if name == "core/tests/test_docs.py":
+        if name in SKIPPED:
             continue
         for ref in EXAMPLES.findall(body):
             seen += 1
-            assert ref == "v1.1.0", f"{name}: a link into fylgja-examples at {ref}"
+            assert ref == "v1.1.0", f"{name}: a link into fylgja-examples at {ref or 'no ref'}"
     assert seen, "the parse is blind"
 
 

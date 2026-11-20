@@ -666,7 +666,7 @@ orchestrator: the core is given the blueprint by the CLI, on the local driver al
   checkout is checked out again on the branch it was on.
 - **Alone.** While it runs nothing else live runs on the host: no `make live`, `make cluster`, conformance run or
   contract tier; the development Infrahub and the development NetBox are stopped (`make infrahub-down`,
-  `make netbox-down`), their volumes kept; no demonstration of `fylgja-examples`; no twin on the local
+  `make netbox-down`), their volumes kept; nothing of `fylgja-examples` (A1 below checks the Compose projects and the containers, not that); no twin on the local
   core and no containerlab container on the host. Nautobot's network is off the lab pool, so it stays up between runs
   and beside the twin.
 - **Credentials.** `set -a; . local/.env; set +a` in the same command as what needs it. No token or password is put on

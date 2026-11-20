@@ -234,7 +234,7 @@ def test_the_names_the_tasks_share_are_one() -> None:
 
 
 def test_the_env_example_lists_each_name_commented() -> None:
-    """Six in the development NetBox's block, after Infrahub's, and the example's own in the example's block."""
+    """Six in the development NetBox's block, after Infrahub's, and the example's token's line after Nautobot's."""
     held = (ROOT / ".env.example").read_text().splitlines()
     at = {line: number for number, line in enumerate(held)}
     for name in (*NAMES, EXAMPLES):

@@ -37,6 +37,7 @@ def _tracked() -> list[str]:
 
 def test_the_scan_is_not_blind() -> None:
     assert len(_tracked()) > 100
+    assert set(PENDING) <= set(_tracked()), "a PENDING file is gone: take it off the list"
     link = "https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/x.md"
     assert LINK.sub("", f"see {link} now") == "see  now"
     assert LINK.sub("", f"see [`orchestrator/`]({link}) now") == "see  now"

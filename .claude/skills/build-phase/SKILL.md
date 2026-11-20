@@ -104,6 +104,19 @@ written.
 - **A bound a runbook states as a rule says what it is there to tell.** "A run with no
   validator 120 s after the creation is not the run" told a check that never starts; a run
   that passed 11 s later had to be ruled on, and the ruling got the bound's origin wrong.
+- **A runbook saves the output of each check, not only each command's.** Phase 11's read
+  check and token check were shown at the maintainer's prompt and saved nowhere; the read
+  check was re-run read-only afterwards to be cited, and the token check is cited as shown.
+  A maintainer at the prompt may run a command again from the shell's history: phase 11's
+  repeated `twin create` was refused, but its `rec` overwrote the create's file, which was
+  restored from the maintainer's paste and said to be, the core's `run get` beside it.
+- **A dry run follows the runbook's text and nothing else.** Phase 11's controller made the
+  run's directory by hand before the first `rec`, and the preamble's missing `mkdir` was
+  found only by the plan's last review. A process the maintainer starts in a terminal of
+  their own logs by redirection, not through `tee`: Ctrl-C ended both, and the core's stop
+  went unlogged.
+- **The runbook's blocks are run from files extracted verbatim** from the tree at the commit
+  under test, and compared with the dry run's: what runs is then what the document says.
 - **A runbook for an acceptance run from a fresh clone** says to clone at the tag and then
   `git switch -c <name>`: a clone at a tag is on a detached head, and `make infrahub-demo`
   refuses one, since it registers a branch. The clone's `local/.env` is made from the lines
@@ -221,7 +234,15 @@ Only on the maintainer's word.
    - a line of `design/decisions.md`'s preface the phase made untrue, corrected: the preface
      is conventions, not an entry, and append-only binds the entries;
    - the item of "Sequence" marked done, with its date, what it built and what it left to
-     later phases; what it left unanswered goes under "Open questions".
+     later phases; what it left unanswered goes under "Open questions". An open question is
+     named in the next release's notes: `test_every_open_question_is_a_known_limit_or_named`
+     (`core/tests/test_release.py`) fails until `CHANGELOG.md`'s head holds it and the test's
+     `LIMITS` or `NAMED` holds its row, which phase 11's as-built commit learnt at its gate.
+
+   Where a later phase's design holds decision numbers provisionally, tell that phase's
+   session before the as-built commit takes the next free numbers, and tell it the numbers
+   taken once the squash is made: phase 12's design and its other repository cited the
+   numbers phase 11's landing took.
 
    Before the tag, the as-built commit gets a review on the most capable model, one fix wave
    and one re-review, as a plan's last review does. The reviewer is a fresh one, or the one

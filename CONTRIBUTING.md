@@ -116,13 +116,26 @@ statement for people, and is the one that is right where the two disagree.
    - An install that follows an upload first reads the index's simple page for the version,
      which can lag the index's JSON API by about a minute; an install from PyPI that must use
      PyPI alone runs `pip --isolated`.
+   - A runbook saves the output of each of its checks, as it saves each command's: a line
+     seen only at the prompt is cited from a read-only re-run made afterwards, and the record
+     says so. A file a repeated command overwrote, and restored from the screen, is said to be
+     restored, beside what corroborates it.
+   - A dry run follows the runbook's text and nothing else: a step made by hand, such as a
+     directory, is a gap in the runbook, and is written into it before the maintainer's run.
+   - A process the maintainer starts in a terminal of their own writes its log by
+     redirection, never through a pipe: Ctrl-C ends a `tee` with it, and its stop goes
+     unlogged.
 4. **Land.** On the maintainer's word:
    - `main` is brought into the integration branch where it is not an ancestor of it
      (`git merge-base --is-ancestor main phase-N-integration`): merged in (`--no-ff`) and
      gated, so that the squash's tree is the gated one;
    - the phase is written as built on the integration branch: a decision entry for each
      place the build departed from a decision, the sentences it made untrue corrected, and
-     the item in "Sequence" marked done, with what it left to later phases;
+     the item in "Sequence" marked done, with what it left to later phases; an open question
+     it adds is named in the next release's notes, which `core/tests/test_release.py` holds;
+   - where a later phase's design holds decision numbers provisionally, its session is told
+     before that commit takes the next free numbers, and told the numbers taken after the
+     squash, since its other repositories may cite them;
    - that commit is reviewed afresh, its findings fixed by amending it and the fix read
      again, before the history is tagged; a figure it states is read from the run's own log
      by the controller, and not only by the reviewer;

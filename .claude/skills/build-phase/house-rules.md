@@ -56,7 +56,9 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
 - **A script you write for a run** goes where your dispatch says, under your task's name.
   Never overwrite a file another task left.
 - **Formats change in `formats/`**, in the same commit as the code. `design/decisions.md` is
-  append-only: never rewrite an entry. Its preface is conventions, not an entry.
+  append-only: never rewrite an entry. Its preface is conventions, not an entry. An open
+  question added to `design/core.md` is named in `CHANGELOG.md`'s head and in a row of
+  `core/tests/test_release.py`'s `LIMITS` or `NAMED`, or that test fails.
 - **Prose** in documents and docstrings follows the text around it: plain and specific.
   Wording that counts the phases, or names the last one, goes stale with the next item of
   "Sequence": say what is built, without a count.

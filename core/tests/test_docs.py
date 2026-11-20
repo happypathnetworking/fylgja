@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import re
 import shlex
+import subprocess
 
 import pytest
 from pages import DOCS, ROOT, USER_PAGES, blocks, flags, options, prose, rows, section, targets, text
@@ -85,6 +86,43 @@ def test_no_user_page_cites_a_decision_number_or_a_phase() -> None:
             if line.startswith("Why it is so"):
                 continue
             assert not re.search(r"D-\d{3}|[Pp]hase \d", line), f"{page}:{number}: {line}"
+
+
+EXAMPLES = re.compile(r"https://github\.com/happypathnetworking/fylgja-examples/(?:blob|tree)/([^/\s)>\"'`]+)")
+
+
+def _tracked_texts() -> dict[str, str]:
+    """Each tracked Markdown and `.py` file's text, outside `design/` and the CHANGELOG, which cite as they stood."""
+    names = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
+    found: dict[str, str] = {}
+    for raw in names.split(b"\0"):
+        name = raw.decode()
+        if name.endswith((".md", ".py")) and (ROOT / name).is_file() and not name.startswith("design/") \
+                and name != "CHANGELOG.md":
+            found[name] = (ROOT / name).read_text()
+    return found
+
+
+def test_no_link_into_fylgja_examples_is_at_main() -> None:
+    texts = _tracked_texts()
+    assert any(EXAMPLES.search(body) for body in texts.values()), "the parse is blind"
+    for name, body in texts.items():
+        if name == "core/tests/test_docs.py":
+            continue
+        for ref in EXAMPLES.findall(body):
+            assert ref not in ("main", "HEAD", "master"), f"{name}: a link into fylgja-examples at {ref}"
+
+
+def test_each_link_into_fylgja_examples_is_at_v1_1_0() -> None:
+    texts = _tracked_texts()
+    seen = 0
+    for name, body in texts.items():
+        if name == "core/tests/test_docs.py":
+            continue
+        for ref in EXAMPLES.findall(body):
+            seen += 1
+            assert ref == "v1.1.0", f"{name}: a link into fylgja-examples at {ref}"
+    assert seen, "the parse is blind"
 
 
 def test_a_table_row_keeps_a_pipe_in_backticks_or_escaped_and_an_empty_first_cell() -> None:

@@ -30,8 +30,8 @@ procedure, below, not a rewrite.
 - **It is read-only.** Every request it sends is a `GET`, and none carries `branch`. A render may still write: see
   "What it sends".
 - **It knows no stage, mark, tag, journal entry, twin or workflow engine.** What is read, and what is done with the
-  blueprint, are its caller's: the core's client files it, and the example orchestrator under `orchestrator/` is one
-  such caller.
+  blueprint, are its caller's: the core's client files it, and [the example orchestrator](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/orchestrator/) of `fylgja-examples` is
+  one such caller.
 - **It has one mapping, and it is not a user's to change.** What Nautobot cannot hold, the platform package of a pair of
   manufacturer and platform and the configuration context that declares the probes, is the reader document's
   ([`nautobot-reader-1.schema.json`](../../formats/nautobot-reader-1.schema.json)).

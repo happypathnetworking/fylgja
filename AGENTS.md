@@ -8,11 +8,12 @@ and what it left.
 Beside the core this repository holds a reader for each source of truth, which reads that
 source into blueprints: the Infrahub reader under `readers/infrahub/`, the NetBox reader
 under `readers/netbox/` and the Nautobot reader under `readers/nautobot/`, published from 1.1.0
-(D-118, D-121); and the example orchestrator, under `orchestrator/`, which rehearses a change of
-Infrahub or of NetBox on a twin, a proposed change in Infrahub or a branch in NetBox (D-081,
-D-095, D-097). The Go core is retired: it gets no more fixes, and nothing tracked here needs it
-or the project's archived repository to build, test or run. The archived repository is cited as
-history, and as the reference the Infrahub reader and the example were written against.
+(D-118, D-121). The example orchestrator, which rehearses a change of Infrahub or of NetBox on a
+twin, a proposed change in Infrahub or a branch in NetBox (D-081, D-095, D-097), and the
+demonstrations that run it live in `happypathnetworking/fylgja-examples` (D-126). The Go core is
+retired: it gets no more fixes, and nothing tracked here needs it or the project's archived
+repository to build, test or run. The archived repository is cited as history, and as the
+reference the Infrahub reader and the example were written against.
 
 ## Read first
 
@@ -22,7 +23,7 @@ history, and as the reference the Infrahub reader and the example were written a
 - `CONTRIBUTING.md`: setup, tiers, conventions.
 - `formats/`: every format, one current version each.
 - `docs/integrating.md`: how to join Fylgja to a source of truth and a platform of your own,
-  walked through the example orchestrator.
+  walked through the example orchestrator of `fylgja-examples`.
 - `readers/infrahub/README.md`: the Infrahub reader, the Infrahub versions it passed on and
   its upgrade procedure.
 - `readers/netbox/README.md`: the NetBox reader, the versions of NetBox and of its branching

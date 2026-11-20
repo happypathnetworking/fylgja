@@ -35,7 +35,7 @@ reads for itself. It needs five things.
   Linux package takes `FYLGJA_CREDENTIAL_SRLINUX_USERNAME` and `FYLGJA_CREDENTIAL_SRLINUX_PASSWORD`,
   and the shipped EOS package `FYLGJA_CREDENTIAL_EOS_USERNAME` and `FYLGJA_CREDENTIAL_EOS_PASSWORD`.
   For SR Linux the two carry the image's published default login, as
-  [the demonstrations](demonstrations.md#what-the-host-must-have) use it; for EOS they carry the
+  [the demonstrations](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/docs/demonstrations.md#what-the-host-must-have) use it; for EOS they carry the
   kind's default login, the [kind](glossary.md) being containerlab's `ceos`. A package of your own
   names its credential, and the [settings](#settings) give the variables that name makes.
 

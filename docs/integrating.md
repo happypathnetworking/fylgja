@@ -1,7 +1,9 @@
 # Integrating Fylgja with a system of your own
 
 This page is for someone who runs a source of truth and an orchestration platform of their
-own, and wants a change rehearsed on a twin before it reaches the network. Fylgja ships three
+own, and wants a change rehearsed on a twin before it reaches the network. The example lives
+in [`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/),
+and this page links its files at that tag. Fylgja ships three
 pieces, held to three standards ([D-081](../design/decisions.md#d-081)): the **core**, which
 turns a blueprint into a twin; a **reader** for each source of truth, which turns that source
 into blueprints, Infrahub's, NetBox's and Nautobot's, the last published from 1.1.0; and an
@@ -92,7 +94,8 @@ its token must be allowed is its README's
 ## What you replace
 
 The example is three layers ([D-085](../design/decisions.md#d-085)), its change source one for
-each source of truth it reads, under [`orchestrator/`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/orchestrator/src/fylgja_orchestrator/):
+each source of truth it reads, under
+[`orchestrator/`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/orchestrator/src/fylgja_orchestrator/):
 
 | Layer | Where | Who replaces it |
 |---|---|---|
@@ -137,22 +140,29 @@ and no server:
   Under `infrahub`, where the operator writes the marks, it is refused.
 - `serve`, the runner, the one command that loads Prefect.
 
-**The checks**, `fylgja-step` and `fylgja-twin` ([`.infrahub.yml`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/.infrahub.yml)), are glue
+**The checks**, `fylgja-step` and `fylgja-twin`
+([`.infrahub.yml`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/.infrahub.yml)),
+are glue
 on Infrahub's task worker, the standard library and httpx alone (`fylgja_glue.py`). Each finds
 the open proposed change of the branch it runs on, starts its deployment, waits, cancels at its
 own deadline, reads the run's document and concludes from its `status` alone. They decide
 nothing of the rehearsal's and write nothing to Infrahub.
 
 **NetBox's trigger** is NetBox's own: the tag `fylgja-rehearse`, an event rule and a webhook to
-Prefect's API, which [`netbox/seed/hook.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/hook.py) installs (the
-example's `netbox-hook` target). No code of the example's runs in NetBox, and nothing waits for the run
+Prefect's API, which
+[`netbox/seed/hook.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/hook.py)
+installs (the
+example's `netbox-hook` target). No code of the example's runs in NetBox, and nothing waits for the
+run
 ([The example with NetBox, end to end](#the-example-with-netbox-end-to-end)).
 
 **The change source**, for a source that is neither, is a class that answers the seam below.
 Read `infrahub/source.py` or `netbox/source.py` beside `rehearsal/source.py`: each shows one way
 to find a change from what a trigger names, order its stages, read each into a blueprint through
-a reader, and post a report. Their rules are their own, catalogued in the example's [`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md),
-[Infrahub's](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md#findings-the-infrahub-change-source) and
+a reader, and post a report. Their rules are their own, catalogued in the example's
+[`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md),
+[Infrahub's](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md#findings-the-infrahub-change-source)
+and
 [NetBox's](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md#findings-the-netbox-change-source).
 
 ## The seams
@@ -170,7 +180,8 @@ branch or `main` as it stands ([its README](../readers/netbox/README.md#the-libr
 change or twin: which branch to read, and for Infrahub at what time, is its caller's.
 
 **`ChangeSource`'s four calls**
-([`rehearsal/source.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/src/fylgja_orchestrator/rehearsal/source.py)), and three
+([`rehearsal/source.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/src/fylgja_orchestrator/rehearsal/source.py)),
+and three
 attributes:
 
 - `change(ref) -> Change`: the change a trigger names, with its id, its name, and `where`, the
@@ -196,7 +207,8 @@ stored artifact. So a source whose stages cannot be read twice, or whose trigger
 sent once, can answer the same four calls: NetBox's is such a source.
 
 **`EdgeSource`'s three more**
-([`edge/run.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/src/fylgja_orchestrator/edge/run.py)), which only the edge asks:
+([`edge/run.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/src/fylgja_orchestrator/edge/run.py)),
+which only the edge asks:
 `is_draft(change)`, whether the change is a draft, which the edge refuses before the core is
 asked anything (no NetBox branch is one); `claim(change)`, the request that started the
 rehearsal taken, so that it is used once, asked by `run.rehearse` alone and before the library
@@ -216,8 +228,12 @@ and the blueprints the core's. A label is unique within its branch and never tak
 change is seeded and marked once for each core it is rehearsed through, and a past step cannot
 be marked again, since NetBox reads no earlier time.
 
-**The two documents**, the plan ([`plan-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/plan-1.schema.json)) and the
-rehearsal ([`rehearsal-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/rehearsal-1.schema.json)). What runs the
+**The two documents**, the plan
+([`plan-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/plan-1.schema.json))
+and the
+rehearsal
+([`rehearsal-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/rehearsal-1.schema.json)).
+What runs the
 library reads two members of each, and nothing else need be read:
 
 - `status`: a plan is `planned`, `refused`, `empty` or `unfinished`, and only `planned` passes; a
@@ -232,7 +248,9 @@ Every other member is the report's or a command's
 ## The example with Infrahub, end to end
 
 The development host runs the example with Infrahub as the section
-[Running the example orchestrator](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/CONTRIBUTING.md#running-the-example-orchestrator) of the example's CONTRIBUTING sets it
+[Running the example
+orchestrator](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/CONTRIBUTING.md#running-the-example-orchestrator)
+of the example's CONTRIBUTING sets it
 up: the development Infrahub, the edge's Prefect server on port 4200 of the Docker bridge's
 gateway, the runner, and the core.
 
@@ -310,7 +328,9 @@ Two facts of Infrahub 1.11.11 bear on any deployment of these checks
 ## The example with NetBox, end to end
 
 The development host runs the example with NetBox as the section
-[With NetBox](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/CONTRIBUTING.md#with-netbox) of the example's CONTRIBUTING sets it up: the development NetBox, the edge's
+[With
+NetBox](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/CONTRIBUTING.md#with-netbox)
+of the example's CONTRIBUTING sets it up: the development NetBox, the edge's
 Prefect server on port 4200 of the Docker bridge's gateway, the runner of the source `netbox`,
 and the core. NetBox's worker reaches Prefect as `host.docker.internal:4200`, the name
 [`netbox/dev/compose.override.yml`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/dev/compose.override.yml)
@@ -334,13 +354,17 @@ runner       --> NetBox       the report, one journal entry, its kind the verdic
 runner       --> Prefect      the rehearsal 1 document, filed as the run's artifact
 ```
 
-1. **The change is built and marked.** [`netbox/seed/change.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/change.py) (the example's `netbox-change` target) deletes the
+1. **The change is built and marked.**
+   [`netbox/seed/change.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/change.py)
+   (the example's `netbox-change` target) deletes the
    branch `NETBOX_BRANCH` names, `third-link` by default, where it stands, every journal entry on
    it with it, and makes it anew from `main`, waited for until `ready`. It writes the change's two
    steps under the branch's header with the superuser's token, the cable between `n1` and `n3`,
    then the address `192.0.2.1/24` on `n1`'s end, and marks each as soon as it exists by the
    example's own command, `fylgja-orchestrator stage mark --branch <branch> --label <label>`, run
-   through [`scripts/edge_dev.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/scripts/edge_dev.py) `run --source netbox` under the example's token. `stage mark`
+   through
+   [`scripts/edge_dev.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/scripts/edge_dev.py)
+   `run --source netbox` under the example's token. `stage mark`
    (`edge/cli.py`, and `NetBoxSource.mark` in `netbox/source.py`) refuses a label the branch
    already has, `main`, `head` or one that is no label, with nothing read through the reader or
    written; it reads the branch as it stands, gives the blueprint to the core, and then writes
@@ -349,16 +373,20 @@ runner       --> Prefect      the rehearsal 1 document, filed as the run's artif
    `- read: <the read's observed_at>`, a line each (`mark_text`). A read refused writes no mark,
    exits 1 and stops the change, the branch left as it stands for reading. The core must be
    running while the change is marked, since a mark's blueprint is the core's.
-2. **The tag.** [`netbox/seed/hook.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/hook.py) (the example's `netbox-hook` target) installs the trigger on `main` with the
+2. **The tag.**
+   [`netbox/seed/hook.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/hook.py)
+   (the example's `netbox-hook` target) installs the trigger on `main` with the
    superuser's token, each part found by its name or made, and left: the tag `fylgja-rehearse`,
    limited to branches; the webhook `fylgja-rehearse`, a `POST` to
-   a `host.docker.internal` URL on port 4200 ending `/api/deployments/<id>/create_flow_run`, `<id>` the deployment
+   a `host.docker.internal` URL on port 4200 ending `/api/deployments/<id>/create_flow_run`, `<id>`
+   the deployment
    `twin-rehearse/main`'s as Prefect answers it, with the body
    `{"parameters": {"branch": {{ data.name | tojson }}}}`, which writes the branch's name as a
    JSON string, as read of names holding `"` or `\`, and Prefect's basic auth in its
    `additional_headers`; and the event rule `fylgja-rehearse` on a branch's `object_updated` while
    its tags hold `fylgja-rehearse`, its action the webhook. Setting the tag on a branch, in
-   NetBox or by the example's `netbox-change` target with `NETBOX_TAG=1`, which sets it last, is the request.
+   NetBox or by the example's `netbox-change` target with `NETBOX_TAG=1`, which sets it last, is the
+   request.
 3. **The webhook.** NetBox's worker sends the webhook as a background task, once, whatever is
    answered ([verified-facts.md](../design/verified-facts.md), "NetBox 4.7.5 with
    netbox-branching 1.2.3"). Prefect answers 201 and makes one run of `twin-rehearse/main`, the
@@ -390,7 +418,8 @@ runner       --> Prefect      the rehearsal 1 document, filed as the run's artif
    gates nothing, and the merge is NetBox's alone.
 
 **A mark the rehearsal cannot use** refuses its stage, by a finding of the source's that names it
-([`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md#findings-the-netbox-change-source)): two
+([`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md#findings-the-netbox-change-source)):
+two
 entries of one label, `mark.duplicate`; a line of an entry missing, there twice or malformed, or
 its label missing, `main`, `head` or not of a label's form, `mark.malformed`; one read under
 another scope than the rehearsal's, `mark.scope`; and one whose blueprint the core does not hold,
@@ -403,7 +432,8 @@ journal entries, which the example's account may not: of two entries of one labe
 (`mark.duplicate`); of any other mark the rehearsal cannot use, its entry, and the step is marked
 again, which can be done only while the branch still stands at that step; otherwise the change is
 seeded again.
-The example's `netbox-change` target run again for a branch deletes that branch, its marks with it, and builds
+The example's `netbox-change` target run again for a branch deletes that branch, its marks with it,
+and builds
 it again.
 
 **`main` moved since the branch was made or last synchronised** is the warning
@@ -461,7 +491,8 @@ NetBox's request as NetBox sends it, `POST /api/deployments/<id>/create_flow_run
 `Content-Type: application/json`, the basic auth in an `Authorization` header and
 `{"parameters": {"branch": <the branch>}}`, and answers 201
 ([verified-facts.md](../design/verified-facts.md), "Prefect 3.9.2"). The request names the
-deployment by its id, which a new Prefect home changes, so the example's `netbox-hook` target is run again after
+deployment by its id, which a new Prefect home changes, so the example's `netbox-hook` target is run
+again after
 one: a webhook naming an old id is answered 404 and starts nothing, which NetBox shows only as a
 failed background task.
 
@@ -521,14 +552,17 @@ be refused again.
   this repository's gives them neither. The rehearsal's
   code and its tokens stay in the runner.
 - **The Infrahub account `fylgja-orchestrator`** has one role, in one group, of four
-  permissions ([`infrahub/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/infrahub/seed/account.py)): `object:Core:ChangeThread:create:allow_default` and
+  permissions
+  ([`infrahub/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/infrahub/seed/account.py)):
+  `object:Core:ChangeThread:create:allow_default` and
   `object:Core:ThreadComment:create:allow_default`, which a thread and its comments take;
   `global:edit_default_branch:allow_default`, since both are written on `main`; and the
   instance's own `object:*:*:view:allow_all`. The three alone read nothing, every kind refused
   403, and a view of every kind with the default decision does not read the proposed change's
   branch. D-085 names three; the fourth was read to be needed
   ([D-093](../design/decisions.md#d-093)).
-- **Rotating the account's token.** The example's `orchestrator-env` target makes a token and appends or
+- **Rotating the account's token.** The example's `orchestrator-env` target makes a token and
+  appends or
   replaces the line only where the line is missing, or its token is refused by Infrahub or
   answered as another account's; a live token of the account is kept. So a token that leaked is
   deleted in Infrahub first. On 1.11.11 the token list answers the caller's own tokens, and takes
@@ -540,14 +574,18 @@ be refused again.
   and replaces it with a new token made by the account's own login. Nothing of either token is
   printed.
 - **Under NetBox the runner holds two tokens too**, the core's and the NetBox account
-  `fylgja-orchestrator`'s, as `FYLGJA_API_TOKEN` and `FYLGJA_NETBOX_TOKEN`. the example's
+  `fylgja-orchestrator`'s, as `FYLGJA_API_TOKEN` and `FYLGJA_NETBOX_TOKEN`. The example's
   `orchestrator-serve` target with `SOURCE=netbox` gives them from `local/.env`'s
   `FYLGJA_ORCHESTRATOR_API_TOKEN` and `FYLGJA_ORCHESTRATOR_NETBOX_TOKEN`, with Prefect's basic
   auth, and nothing of the superuser's, of the reader's account or of Infrahub's; a command by
-  hand is given the same through [`scripts/edge_dev.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/scripts/edge_dev.py) `run --source netbox`, with nothing of
+  hand is given the same through
+  [`scripts/edge_dev.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/scripts/edge_dev.py)
+  `run --source netbox`, with nothing of
   Prefect's.
 - **The NetBox account `fylgja-orchestrator`** is no superuser, and holds four grants
-  (`GRANTS` in [`netbox/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/account.py), made by the example's `netbox-seed` target): `view` of the nine types a
+  (`GRANTS` in
+  [`netbox/seed/account.py`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/netbox/seed/account.py),
+  made by the example's `netbox-seed` target): `view` of the nine types a
   read lists, and `view` with `render_config` on `dcim.device`, as the reader's account holds
   them, since the source reads through the reader with its own token; `view` and `add` on
   `extras.journalentry`, for its marks and its report; and `view` and `change` on
@@ -557,7 +595,8 @@ be refused again.
   and a branch's sync ([verified-facts.md](../design/verified-facts.md), "NetBox 4.7.5 with
   netbox-branching 1.2.3").
 - **NetBox holds Prefect's basic auth.** The webhook carries it in its `additional_headers`,
-  written by the example's `netbox-hook` target with the superuser's token from `FYLGJA_ORCHESTRATOR_AUTH`, and it
+  written by the example's `netbox-hook` target with the superuser's token from
+  `FYLGJA_ORCHESTRATOR_AUTH`, and it
   opens all of that Prefect's API. The reader's account and the example's are each refused a
   webhook and an event rule, by the list or by the id, 403; but both hold `view` on NetBox's
   changelog, and the webhook's rows in `main`'s changelog hold its `additional_headers`

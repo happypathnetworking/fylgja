@@ -2,7 +2,8 @@
 
 The terms Fylgja uses, alphabetically. A term marked *(orchestrator)* belongs to a reader under
 `readers/` or to the example orchestrator, which lives in the repository
-[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/), and to the source of truth they join: the core never uses it, but it is met in a
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/), and to the
+source of truth they join: the core never uses it, but it is met in a
 blueprint's `source` or in these documents. See also
 [architecture.md](../design/architecture.md) and the formats in [`formats/`](../formats/README.md).
 
@@ -396,7 +397,8 @@ generation it acted on, the phase, run, blueprint, bundle, deployment, nodes and
 and the *conditions* `Ready`, `Stepping` and `Diverged`, each with a stable reason.
 
 **Orchestrator** *(orchestrator)* — The example orchestrator, in the repository
-`fylgja-examples`: a worked example of joining the core and a *reader* to a system that already exists. It resolves stages, rehearses
+`fylgja-examples`: a worked example of joining the core and a *reader* to a system that already
+exists. It resolves stages, rehearses
 changes, an Infrahub proposed change or a NetBox branch, and reports on them, and is not
 hardened ([D-081](../design/decisions.md#d-081), [D-085](../design/decisions.md#d-085)). It is
 `fylgja-orchestrator`, in three layers, a rehearsal library, a *change
@@ -700,4 +702,6 @@ library does so itself when a stream ends early.
 **Work queue** — The loop's queue of twin names waiting to be reconciled. A name is never
 queued twice, and each twin has at most one worker at a time ([D-023](../design/decisions.md#d-023)).
 
-**Workspace** — The uv workspace at the repository's root: its four members, `core/`, `readers/infrahub/`, `readers/netbox/` and `readers/nautobot/`, and its lock, `uv.lock`, which `make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).
+**Workspace** — The uv workspace at the repository's root: its four members, `core/`,
+`readers/infrahub/`, `readers/netbox/` and `readers/nautobot/`, and its lock, `uv.lock`, which
+`make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).

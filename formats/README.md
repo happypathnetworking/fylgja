@@ -77,7 +77,8 @@ relative to them.
     [`readers/nautobot/rules.md`](../readers/nautobot/rules.md)
     ([D-118](../design/decisions.md#d-118)). Rules for stages and rehearsals are the example
     orchestrator's ([D-081](../design/decisions.md#d-081)), in
-    [`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md) of `fylgja-examples`.
+    [`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md)
+    of `fylgja-examples`.
 12. **A device name is a DNS-1123 label** of at most 63 characters
     ([D-038](../design/decisions.md#d-038)). It becomes the node's host name, its container
     or pod name and its bundle file name, so the blueprint requires the one form all of them
@@ -125,8 +126,11 @@ relative to them.
     carries verify's counts and the wait, as a step's does, and no loss. A run's verdict
     names its run's operation, so findings 1 gains `restore` beside API 1.
 23. **The plan and the rehearsal are the example orchestrator's documents,** and their
-    files, [`plan-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/plan-1.schema.json) and
-    [`rehearsal-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/rehearsal-1.schema.json), are in `fylgja-examples`,
+    files,
+    [`plan-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/plan-1.schema.json)
+    and
+    [`rehearsal-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/rehearsal-1.schema.json),
+    are in `fylgja-examples`,
     which carries them in its wheel and not the core's ([D-084](../design/decisions.md#d-084),
     [D-126](../design/decisions.md#d-126)). Each `$ref`s nothing outside the two files.
 24. **A platform package lists its versions, each with its image**

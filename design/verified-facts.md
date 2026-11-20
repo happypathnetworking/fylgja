@@ -12,6 +12,11 @@ NetBox reader and the example's NetBox change source rely on; and those the Naut
 reader and its development Nautobot rely on. The archived repository's facts about Infrahub
 1.11.2, Prefect 3.8.8 and NetBox 4.7.4 stay there, and nothing here relies on them.
 
+The example orchestrator is in `fylgja-examples` ([D-126](decisions.md#d-126)). The facts
+below about it stay here, as the readings they are, and bind that repository; a later reading
+of Prefect, of Infrahub's checks or of NetBox's webhooks is recorded in that repository's own
+`design/verified-facts.md`.
+
 - Each fact names the version it was verified against and the date.
 - **Re-verify a fact on any upgrade** of the system it names.
 - **A fact recorded here is trusted over recollection.** Before a change depends on a

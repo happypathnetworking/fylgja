@@ -150,6 +150,9 @@ already have been weighed.
 | [D-123](#d-123) | The development Nautobot and its seed as built: Python 3.14, Nautobot's own `/health/` asked and the image's check disabled, the Git service a `*.example` alias, and the reader's account of fourteen `view` grants minting its own token | The API and its clients |
 | [D-124](#d-124) | The Nautobot reader's publishing as built: three tests of the core beyond the design's list, each reader's settings linked by its command, the page's new title in every link, and the changelog's head and the installing page left to 1.1.0 | Process and repository |
 | [D-125](#d-125) | The Nautobot acceptance as made: the seed read and its twin created, verified and destroyed on the local driver, the maintainer running each command at the session's prompt, and a create repeated by mistake recorded as it was | The project and its shape |
+| [D-126](#d-126) | The example orchestrator and the demonstrations move to a repository of their own, `fylgja-examples`; the core and the readers stay | The project and its shape |
+| [D-127](#d-127) | Each repository has its own network and runs its own development sources; the core's are trimmed to what the readers' tiers read | The API and its clients |
+| [D-128](#d-128) | `fylgja-examples` installs the released packages, pinned exactly, takes their version as its own, and keeps its own process | Process and repository |
 
 The [Parked](#parked) and [Open questions](#open-questions) sections follow the entries.
 
@@ -402,6 +405,9 @@ Added to by [D-097](#d-097) on 2026-11-12 (phase 9): for NetBox the rehearsal's 
 not change, and its seam and its sentences gain what that entry names.
 Detailed by [D-101](#d-101) on 2026-11-13 (phase 9's landing): the NetBox acceptance as made.
 Detailed by [D-125](#d-125) on 2026-11-20 (phase 11's landing): the Nautobot acceptance as made.
+Superseded in part by [D-126](#d-126) on 2026-11-19 (phase 12): the example is written and kept in
+`fylgja-examples`, not in this repository, and the checks' registration moves there; the three
+pieces and their standards stand.
 
 #### Context
 
@@ -772,6 +778,8 @@ An answer gaining a member:
 
 **Status:** Accepted 2026-11-17 (phase 10's landing). Details [D-104](#d-104) and
 [D-106](#d-106): how the phase's criterion was met. Supersedes nothing.
+Detailed by [D-128](#d-128) on 2026-11-19 (phase 12): a release's acceptance run makes the
+demonstrations from a fresh clone of `fylgja-examples`.
 
 #### Context
 
@@ -965,6 +973,68 @@ Where the runs were made from:
 - 1.1.0's acceptance, the reader installed from its candidate on TestPyPI, is phase 12's
   ([D-121](#d-121)).
 - [core.md](core.md)'s "Sequence" marks item 11 done.
+
+<a id="d-126"></a>
+### D-126 — The example orchestrator and the demonstrations move to a repository of their own, `fylgja-examples`; the core and the readers stay
+
+**Status:** Accepted 2026-11-19 (phase 12), provisionally: its number is taken on a design branch,
+rebased onto `main` after phase 11 landed (taken as D-122 before phase 11's landing took D-122 to
+D-125), and is confirmed when phase 12 lands. Supersedes [D-081](#d-081) in one part:
+the example is written and kept in `fylgja-examples`, not in this repository. Supersedes
+[D-108](#d-108) in one part: the example is no member of this repository's workspace. Supersedes
+[D-104](#d-104) in one part: the demonstration targets are `fylgja-examples`' targets. Supersedes
+D-081's cut-over in one part: the registration of the checks moves to `fylgja-examples`, and this
+repository's registration carries the query, the transform and the artifact definition alone.
+
+#### Context
+
+The example is a member of the one uv workspace ([D-108](#d-108)), and the demonstrations' network
+is the core's fixture, each seed held against `testdata/blueprint/three-node.json`. The branch
+`nornir-ospf` tried an OSPF check over Nornir 3.7.0a1's asyncio runner in the example. A change of
+the example's alone, it put two alphas pinned exactly into the lock the core is released from, and
+its addresses on the demonstration's links changed eight of the core's blueprints, two compiler
+facts, four golden deployments and the ids `docs/cli.md` shows. The maintainer keeps it off `main`
+(2026-11-19), and asked for the monorepo to be broken up: "The demos should be in a separate repo,
+at least; the orchestrator probably should as well."
+
+#### Options considered
+
+- **Keep one repository, and hold an experiment on a branch.** Not taken: a branch carries the
+  lock and the fixtures with it, and must be rebased over every change of either. `nornir-ospf`
+  conflicted in `uv.lock`, a workspace test's pin count and `docs/cli.md`'s ids at its first rebase.
+- **The demonstrations alone in a repository of their own**, the example staying here. Not taken:
+  the pins that moved the lock were the example's, and the demonstrations are the example
+  rehearsing a change.
+- **The readers moved out too**, each released apart from the core. Not taken: a reader depends on
+  the core and httpx alone, so none moved the lock; and [D-106](#d-106)'s one version and a format
+  changed with its readers in one pull request would become a compatibility matrix and changes
+  across repositories, for no problem the readers have.
+- **The example and the demonstrations in `fylgja-examples`, the core and the readers here.**
+  Chosen.
+
+#### Decision
+
+- **`fylgja-examples`** holds the example orchestrator, `fylgja-orchestrator`, with its tests and
+  its `rules.md`; its two formats, `plan-1` and `rehearsal-1`, unchanged, in a `formats/` of its
+  own; the scripts `demo.py`, `demo_dependencies.sh` and `edge_dev.py`; the make targets that run
+  the example and the demonstrations; and the documents of running them.
+- **Its history starts at one commit**, the moved tree, its message naming the commit of this
+  repository it was taken from. The history before stays here.
+- **This repository holds the core and the readers**, `formats/` but for the example's two,
+  `psp/`, `probes/`, `testdata/`, `deploy/`, and the release's tooling. Its workspace's members
+  are the core and the readers.
+- **Imports still run one way** ([D-081](#d-081)): the example imports the readers and the core;
+  nothing here imports the example, and nothing here reads a path of its.
+- **`docs/integrating.md` stays here**, the integrator's page, and walks through the example in
+  `fylgja-examples`.
+
+#### Consequences
+
+- A pin or a network changed for the example changes no file here.
+- `formats/README.md` drops two rows and says where they went. [D-066](#d-066) holds in each
+  repository for its own formats.
+- The constitution's line on contract tests names the example's source tests as `fylgja-examples'`.
+- `nornir-ospf` is cut again there, and its branch here removed.
 
 ## Intent and the blueprint
 
@@ -6232,6 +6302,8 @@ workers read the registration from. Details [D-081](#d-081), D-083 and [D-088](#
 where what Infrahub fetches lives and in what the seed makes. The rest of each stands.
 Added to by [D-116](#d-116) on 2026-11-17 (phase 10's landing): the seed's transport waits out a shed request, the database's
 health check waits 180 s before a failed probe counts, and the published ports are on loopback.
+Detailed by [D-127](#d-127) on 2026-11-19 (phase 12): what Infrahub is given from this repository is
+what the readers' tiers read; the checks, their glue, the stage kind and the marks are `fylgja-examples`'.
 
 #### Context
 
@@ -6762,6 +6834,8 @@ for one pin, NetBox's; and [D-096](#d-096) in five: what the version warning com
 each tier holds, where the development NetBox's network lies, when NetBox is stopped, and whose
 the reader's `redact` is. Details D-096 in the seed's targets, the accounts and the wait for a
 branch. The rest of each stands.
+Detailed by [D-127](#d-127) on 2026-11-19 (phase 12): the development NetBox here keeps what the
+NetBox reader's tiers read; `fylgja-examples` runs its own, on a subnet of its own.
 
 #### Context
 
@@ -7392,6 +7466,55 @@ An image's age under [D-039](#d-039)'s two weeks:
   ([open questions](#open-questions)). It bears on the development Nautobot's other accounts,
   never the reader's.
 - [core.md](core.md)'s "Phase 11" says each bend beside the sentence it bends.
+
+<a id="d-127"></a>
+### D-127 — Each repository has its own network and runs its own development sources; the core's are trimmed to what the readers' tiers read
+
+**Status:** Accepted 2026-11-19 (phase 12), provisionally, as [D-126](#d-126) is. Details
+[D-091](#d-091) and [D-099](#d-099): the development Infrahub and NetBox here keep what the
+readers' contract tiers read, and `fylgja-examples` runs its own.
+
+#### Context
+
+`infrahub/` and `netbox/` serve two users. The readers' contract tiers read the seeds' network,
+the Infrahub seed's branch and its stages' times, the NetBox writer `box.py`, and each reader
+document. The example reads all of that too, and also Infrahub's two checks and their glue, the
+query `fylgja_branch`, the stage kind `FylgjaStage` and its marks, the seed's proposed change,
+and NetBox's webhook and tag. The seeds are held against `testdata/`'s fixtures.
+
+#### Options considered
+
+- **The development sources in `fylgja-examples` alone**, the readers' tiers checking it out. Not
+  taken: the readers, held to production's standard, would be tested by a repository that is not.
+- **Here alone**, the demonstrations running this repository's targets. Not taken: a
+  demonstration would need a checkout of this repository beside it, and a network changed for one
+  would be changed here.
+- **A third repository both take.** Not taken: a third thing to version for what two copies do.
+- **Each repository its own, the copies free to differ** (the maintainer, 2026-11-19). Chosen.
+
+#### Decision
+
+- **Here**, `infrahub/` keeps the schema library, the reader's probe kind, the seed's network, its
+  branch and its timed stages, and in `.infrahub.yml` the query, the transform and the artifact
+  definition. It loses the checks, their glue, `fylgja_branch`, `FylgjaStage`, the marks and the
+  proposed change. `netbox/` loses `hook.py` and `change.py`. The seeds stay held to `testdata/`.
+- **In `fylgja-examples`**, the whole of both as they stood before the trim, and copies of the
+  fixtures its tests read. Its tests hold its seeds to its own copies. A change there is not held
+  here.
+- **What only the example reads goes from here**, with the tests that hold it: besides the above,
+  the example's Infrahub account, its half of NetBox's, the task workers' settings for the edge,
+  the seed's `PROPOSED_CHANGE` and `NETBOX_TAG`, and the example's lines of `.env.example`.
+- **One source at a time on a host.** The Compose projects of each repository take names of their
+  own and the same published ports. A demonstration's check of free ports ([D-104](#d-104))
+  refuses it while the other repository's instance runs. Neither stops the other's.
+  `fylgja-examples`' NetBox takes a subnet of its own, off the lab pool and off this repository's
+  NetBox and Nautobot, since the development NetBox's subnet is fixed and kept by its `down`.
+
+#### Consequences
+
+- The seeds and the scripts that run each source are written twice, and may drift apart.
+- A fix to one copy of `scripts/infrahub_dev.py` or `netbox_dev.py` is made in the other by hand,
+  where it applies.
 
 ## Pushing, stepping and verifying
 
@@ -8499,6 +8622,9 @@ none of them: no seed, fixture, template or installed code changes.
 Superseded in part by [D-111](#d-111) on 2026-11-17 (phase 10's landing): Infrahub's order, the exit statuses, the
 demonstration's own store and token file, and what is refused and stopped. Detailed by
 [D-117](#d-117) the same day: both demonstrations from a fresh clone at the second candidate's tag.
+Superseded in part by [D-126](#d-126) on 2026-11-19 (phase 12): the demonstration targets are
+`fylgja-examples`' targets; and by [D-128](#d-128): its core is the installed release, with its
+wheel's packages, not the checkout's.
 
 #### Context
 
@@ -8584,6 +8710,8 @@ Added to by [D-120](#d-120) on 2026-11-19 (phase 11): a member of the workspace,
 reader, is built and checked at the one version and not published.
 Added to by [D-121](#d-121) on 2026-11-19 (phase 11): the Nautobot reader is the fourth
 distribution published, from 1.1.0.
+Detailed by [D-128](#d-128) on 2026-11-19 (phase 12): a release's acceptance run makes the
+demonstrations from a fresh clone of `fylgja-examples`, its pins moved to the candidate.
 
 #### Context
 
@@ -8706,6 +8834,8 @@ compares the server's routes with the OpenAPI's paths as sets.
 **Status:** Accepted 2026-11-14 (phase 10), provisionally: its number is taken on the phase's integration branch and confirmed at the phase's landing. Supersedes [D-090](#d-090) in one part: `core/.venv` is a locked sync of one uv workspace, not pip's install of each distribution in turn. Adds to [D-084](#d-084): the image and the wheel check build and install with uv, and the `server` extra's exact pins stay the statement a lock is checked against. Details [D-083](#d-083): `infrahubctl`'s own environment is made by uv.
 Confirmed under its number, and detailed, by [D-115](#d-115) on 2026-11-17 (phase 10's landing): the base image's
 pip stays, a `core/.venv` made by pip keeps its pip, and the root's settings gain `python-preference`.
+Superseded in part by [D-126](#d-126) on 2026-11-19 (phase 12): the example is no member of the
+workspace; `fylgja-examples` has a lock of its own ([D-128](#d-128)).
 
 #### Context
 
@@ -9252,6 +9382,65 @@ The page's old title, "What 1.0 holds", where it names the page:
   make before 1.1.0's first candidate ([D-121](#d-121)).
 - [core.md](core.md)'s "Phase 11" names the tests beyond its list: these three, the two of
   [D-123](#d-123), and `test_release.py`'s row of this landing.
+
+<a id="d-128"></a>
+### D-128 — `fylgja-examples` installs the released packages, pinned exactly, takes their version as its own, and keeps its own process
+
+**Status:** Accepted 2026-11-19 (phase 12), provisionally, as [D-126](#d-126) is. Supersedes
+[D-104](#d-104) in one part: the demonstration's core is the installed release, with its wheel's
+packages, not the checkout's. Details [D-106](#d-106) and [D-117](#d-117): a release's acceptance
+run makes the demonstrations from a fresh clone of `fylgja-examples`.
+Follows [D-121](#d-121): the first release it pins and is tagged at is 1.1.0.
+
+#### Context
+
+Here the example is built against the tree's core, in one lock. Moved out, it needs a core from
+somewhere. Its code imports the core's base install alone. Its tests serve the core in process,
+through `fylgja_core.server`, `containerlab`, `reconcile` and other modules no page gives, so they
+lean on more than [D-105](#d-105) holds.
+
+#### Options considered
+
+- **A checkout of this repository beside it, as a path source.** Not taken: every tier there would
+  need this repository, and a demonstration would show the core's `main`, not a release.
+- **Ranges within the major.** Not taken: the tests reach past the promise, and would break on a
+  release that kept it.
+- **The released packages, pinned exactly, in a lock of its own.** Chosen.
+
+#### Decision
+
+- **A uv project and a lock of its own**, at the uv version this repository requires, depending on
+  `fylgja-core[server]`, `fylgja-infrahub` and `fylgja-netbox` at one release, pinned exactly.
+- **A test there reads nothing here**: what it read here it reads from the installed packages, or
+  from the example's own copy.
+- **Moving to a release is a commit there**, with its tiers and both demonstrations made again.
+- **The packages are the core wheel's**: the demonstration's core runs with `FYLGJA_PACKAGES`
+  unset ([D-106](#d-106)), not set to a checkout's `psp/` and `probes/`.
+- **A change that needs both repositories** is built against a checkout of this one, named by a
+  make variable that installs its members over the locked environment. The lock stays the
+  release's, CI never sets it, and the change merges there once the release is out.
+- **Its first release is 1.1.0** ([D-121](#d-121)). While it is built it pins 1.0.0; its pins
+  move to 1.1.0's candidate for the acceptance run, and its first tag is `v1.1.0`. It does not
+  depend on `fylgja-nautobot`.
+- **Its `VERSION` is the release, or the candidate, it pins.** The example's distribution takes it
+  and is published nowhere.
+- **A release's acceptance run** makes both demonstrations from a fresh clone of `fylgja-examples`,
+  on a branch whose pins and `VERSION` are moved to the candidate as installed from TestPyPI.
+- **After the release**, `main` there takes the release's pins, its pure tier runs and both
+  demonstrations are made again; that commit is tagged `vX.Y.Z`. A run from a tag switches to a
+  branch first, since the Infrahub demonstration refuses a detached head ([D-111](#d-111)).
+- **Pages here link into it at a tag**, the tag of the release they ship with, never at `main`; it
+  is made just after the release.
+- **Its process is its own**: an `AGENTS.md`, a `CONTRIBUTING.md`, a decision log and a
+  `verified-facts.md` that begins by pointing here. The entries here about the example stay, and
+  bind it until an entry there supersedes one. Its CI gates every pull request by lint and its
+  pure tier.
+
+#### Consequences
+
+- A fix of the core that the example needs reaches it at the next release.
+- A release has one more step: the pins moved and the demonstrations made in `fylgja-examples`,
+  then its tag.
 
 ## Parked
 

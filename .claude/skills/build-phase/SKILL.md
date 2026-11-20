@@ -118,8 +118,8 @@ written.
 - **The runbook's blocks are run from files extracted verbatim** from the tree at the commit
   under test, and compared with the dry run's: what runs is then what the document says.
 - **A runbook for an acceptance run from a fresh clone** says to clone at the tag and then
-  `git switch -c <name>`: a clone at a tag is on a detached head, and `make infrahub-demo`
-  refuses one, since it registers a branch. The clone's `local/.env` is made from the lines
+  `git switch -c <name>`: a clone at a tag is on a detached head, and `fylgja-examples`' `make
+  infrahub-demo` target refuses one, since it registers a branch. The clone's `local/.env` is made from the lines
   the runbook names, the site's own (a platform's credentials), and never copied from an
   earlier clone: phase 10's first candidate's file held 25 generated values bound to
   instances purged since, and they were wrong for the new ones.

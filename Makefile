@@ -1,9 +1,8 @@
 # fylgja-core (CONTRIBUTING.md).
 
-.PHONY: all demo-dependencies venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck \
-	infrahub-up infrahub-down infrahub-register infrahub-seed contract orchestrator-env prefect-up prefect-down \
-	orchestrator-serve netbox-up netbox-down netbox-seed netbox-hook netbox-change contract-netbox nautobot-up \
-	nautobot-down nautobot-seed contract-nautobot infrahub-demo netbox-demo demo-down
+.PHONY: all venv test live cluster conformance lint linkcheck wheelcheck wheels image imagecheck infrahub-up \
+	infrahub-down infrahub-register infrahub-seed contract netbox-up netbox-down netbox-seed contract-netbox \
+	nautobot-up nautobot-down nautobot-seed contract-nautobot
 
 VENV := core/.venv
 
@@ -26,24 +25,12 @@ PROPOSED_CHANGE ?=
 NETBOX_VERSION ?= 4.7.5
 NETBOX_DOCKER_VERSION ?= 5.1.1
 NETBOX_BRANCHING_VERSION ?= 1.2.3
-# The branch netbox-change builds, and NETBOX_TAG=1 (no other value) for a netbox-change that sets the tag last, which
-# asks for the rehearsal.
-NETBOX_BRANCH ?= third-link
-NETBOX_TAG ?=
 
 # The development Nautobot (CONTRIBUTING.md): Nautobot's version, Golden Config's and the image's Python; PURGE=1
 # above, and no other value, for a nautobot-down that removes the volumes.
 NAUTOBOT_VERSION ?= 3.2.8
 GOLDEN_CONFIG_VERSION ?= 3.0.8
 NAUTOBOT_PYTHON ?= 3.14
-
-# The example orchestrator's change source, infrahub or netbox (D-097): the runner orchestrator-serve starts is
-# given that source's environment, and orchestrator-env SOURCE=netbox runs nothing of Infrahub's.
-SOURCE ?= infrahub
-SOURCES := infrahub netbox
-# Not empty where SOURCE is not one word of SOURCES: orchestrator-env then refuses before anything, as
-# orchestrator-serve's edge_dev.py does.
-SOURCE_REFUSED = $(filter-out 1,$(words $(SOURCE)))$(filter-out $(SOURCES),$(SOURCE))
 
 # The core's image, tagged by the commit it is built at: its first 12 characters, and -dirty
 # where `git status --porcelain` prints anything (D-062). Worked out once, as make starts, so
@@ -56,22 +43,7 @@ COMMIT := $(shell git rev-parse HEAD 2>/dev/null)$(if $(shell git status --porce
 
 all: lint test
 
-# What the demonstrations need of the host (docs/demonstrations.md, "What the host must have"), installed where it is
-# missing and checked where only its owner can give it (scripts/demo_dependencies.sh): git, ss and curl; uv at the
-# version pyproject.toml's required-version pins; python3 at the members' requires-python, checked and never
-# installed (D-115); Docker with its Compose plugin, and containerlab at the version the demonstrations were verified
-# on, by containerlab's setup script; the groups docker and clab_admins; the AppArmor widening on Ubuntu; and the node
-# login in local/.env and the memory, checked. DRY_RUN=1 prints each command that would change the host instead.
-UV_VERSION := $(shell sed -n 's/^required-version = "==\(.*\)"$$/\1/p' pyproject.toml)
-PYTHON_MIN := 3.14
-CONTAINERLAB_VERSION := 0.81.0
-
-demo-dependencies:
-	@test -n "$(UV_VERSION)" || { echo "demo-dependencies: no required-version in pyproject.toml" >&2; exit 1; }
-	@UV_VERSION=$(UV_VERSION) PYTHON_MIN=$(PYTHON_MIN) CONTAINERLAB_VERSION=$(CONTAINERLAB_VERSION) LOCAL='$(LOCAL)' \
-		bash scripts/demo_dependencies.sh
-
-# The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the five distributions editable with every
+# The core's venv, core/.venv, a locked sync of the uv workspace (D-108): the four distributions editable with every
 # extra, at the versions uv.lock holds, which a pin moved in a pyproject.toml without `uv lock` refuses. The
 # interpreter is the PATH's python3, never one uv fetches.
 venv:
@@ -85,7 +57,6 @@ test:
 	cd netbox && ../core/.venv/bin/pytest -q
 	cd nautobot && ../core/.venv/bin/pytest -q
 	cd readers/infrahub && ../../core/.venv/bin/pytest -q
-	cd orchestrator && ../core/.venv/bin/pytest -q
 	cd readers/netbox && ../../core/.venv/bin/pytest -q
 	cd readers/nautobot && ../../core/.venv/bin/pytest -q
 
@@ -111,7 +82,6 @@ conformance:
 lint:
 	cd core && .venv/bin/ruff check --config pyproject.toml . ../scripts ../readme_links.py ../infrahub ../netbox ../nautobot && .venv/bin/mypy && .venv/bin/mypy ../infrahub/seed ../infrahub/tests ../scripts/infrahub_dev.py && .venv/bin/mypy ../netbox/seed ../netbox/tests ../scripts/netbox_dev.py && .venv/bin/mypy ../nautobot/seed ../nautobot/tests ../scripts/nautobot_dev.py
 	cd readers/infrahub && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
-	cd orchestrator && ../core/.venv/bin/ruff check --config pyproject.toml . && ../core/.venv/bin/mypy
 	cd readers/netbox && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
 	cd readers/nautobot && ../../core/.venv/bin/ruff check --config pyproject.toml . && ../../core/.venv/bin/mypy
 
@@ -214,20 +184,6 @@ netbox-seed:
 	$(VENV)/bin/python netbox/seed/seed.py --files netbox/seed
 	$(VENV)/bin/python netbox/seed/account.py --env $(LOCAL)/.env
 
-# The trigger on the development NetBox: the tag fylgja-rehearse, a webhook to the edge's Prefect that starts
-# twin-rehearse/main, and the event rule that sends it when a branch carrying the tag is updated, each found by its
-# name or made, and left (D-097). The webhook names the deployment's id, read from Prefect at the API edge_dev.py api
-# prints, so it is run once make orchestrator-serve SOURCE=netbox serves, and again after every new Prefect home.
-# Load local/.env first.
-netbox-hook:
-	prefect=$$(python3 -I scripts/edge_dev.py api --local $(LOCAL) --main $(MAIN)) && $(VENV)/bin/python netbox/seed/hook.py --prefect "$$prefect"
-
-# The seeded change: the branch NETBOX_BRANCH, deleted where it stands with its marks and made anew from main, its two
-# steps written and each marked by the example's own stage mark under the source netbox, which needs the core running;
-# with NETBOX_TAG=1, last, the tag set, which asks for the rehearsal. Load local/.env first.
-netbox-change:
-	$(VENV)/bin/python netbox/seed/change.py --branch $(NETBOX_BRANCH) $(if $(filter 1,$(NETBOX_TAG)),--tag )-- python3 -I scripts/edge_dev.py run --source netbox --local $(LOCAL) --main $(MAIN) -- stage mark
-
 # infrahubctl, in a venv of its own under local/infrahub/, so that the SDK meets nothing else (D-083): made by uv, at
 # the SDK's pin, and no part of the workspace.
 $(LOCAL)/infrahub/.venv/bin/infrahubctl:
@@ -250,70 +206,20 @@ infrahub-register: $(LOCAL)/infrahub/.venv/bin/infrahubctl
 infrahub-seed: $(LOCAL)/infrahub/.venv/bin/infrahubctl
 	$(VENV)/bin/python infrahub/seed/seed.py --branch $(SEED_BRANCH) --files infrahub/seed --out $(LOCAL)/infrahub/seed.json --ctl $(LOCAL)/infrahub/.venv/bin/infrahubctl --schema readers/infrahub/schema/fylgja-probe.yml --schema infrahub/schema/fylgja-stage.yml $(if $(filter 1,$(PROPOSED_CHANGE)),--proposed-change)
 
-# The example orchestrator's lines in local/.env, generated and never printed: the basic auth the edge's Prefect, the
-# task workers and NetBox's webhook share, the runner's token of the core's, listed in the token file FYLGJA_TOKENS
-# names, the scope, the reader document and the records' directory, and NetBox's reader document and scope; then, but
-# with SOURCE=netbox, its Infrahub account and that account's token, checked where the line is there (CONTRIBUTING.md,
-# "Running the example orchestrator"). With SOURCE=netbox it needs no Infrahub: the example's NetBox token is make
-# netbox-seed's.
+# The contract tier: infrahub/'s code, then the reader's, against the running development Infrahub (CONTRIBUTING.md).
 # Load local/.env first.
-orchestrator-env: $(if $(SOURCE_REFUSED)$(filter netbox,$(SOURCE)),,$(LOCAL)/infrahub/.venv/bin/infrahubctl)
-	$(if $(SOURCE_REFUSED),$(error SOURCE is infrahub or netbox))python3 -I scripts/edge_dev.py env --local $(LOCAL) --main $(MAIN)
-	$(if $(filter netbox,$(SOURCE)),,$(VENV)/bin/python infrahub/seed/account.py --env $(LOCAL)/.env --ctl $(LOCAL)/infrahub/.venv/bin/infrahubctl)
-
-# The edge's Prefect server on port 4200 of the Docker bridge's gateway (PREFECT_BIND over it), under local/prefect/,
-# waited for until it answers; refused, with nothing started or stopped, where anything else listens on the port.
-# Load local/.env first.
-prefect-up:
-	python3 -I scripts/edge_dev.py prefect-up --local $(LOCAL) --main $(MAIN)
-
-# The server prefect-up started ended, and no other process.
-prefect-down:
-	python3 -I scripts/edge_dev.py prefect-down --local $(LOCAL) --main $(MAIN)
-
-# The runner, fylgja-orchestrator serve, in the foreground until it is stopped, given its own tokens of the change
-# source SOURCE and no other. Load local/.env first.
-orchestrator-serve:
-	python3 -I scripts/edge_dev.py serve --source $(SOURCE) --local $(LOCAL) --main $(MAIN)
-
-# The contract tier: infrahub/'s code, then the reader's, then the example orchestrator's, against the running
-# development Infrahub, the last with a Prefect server of its own on loopback (CONTRIBUTING.md). Load local/.env first.
 contract:
 	cd infrahub && FYLGJA_INFRAHUB_SEED=$(LOCAL)/infrahub/seed.json FYLGJA_INFRAHUB_CTL=$(LOCAL)/infrahub/.venv/bin/infrahubctl ../core/.venv/bin/pytest -q -rA -m contract tests/contract
 	cd readers/infrahub && FYLGJA_INFRAHUB_SEED=$(LOCAL)/infrahub/seed.json FYLGJA_INFRAHUB_CTL=$(LOCAL)/infrahub/.venv/bin/infrahubctl ../../core/.venv/bin/pytest -q -rA -m contract tests/contract
-	cd orchestrator && FYLGJA_INFRAHUB_SEED=$(LOCAL)/infrahub/seed.json FYLGJA_INFRAHUB_CTL=$(LOCAL)/infrahub/.venv/bin/infrahubctl ../core/.venv/bin/pytest -q -rA -m contract tests/contract
 
-# The NetBox contract tier: netbox/'s code, then the NetBox reader's, then the example orchestrator's NetBox change
-# source, against the running development NetBox, the last with a Prefect server of its own on the Docker bridge's
-# gateway (CONTRIBUTING.md). Load local/.env first.
+# The NetBox contract tier: netbox/'s code, then the NetBox reader's, against the running development NetBox
+# (CONTRIBUTING.md). Load local/.env first.
 contract-netbox:
 	cd netbox && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
 	cd readers/netbox && ../../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract
-	cd orchestrator && ../core/.venv/bin/pytest -q -rA -m contract_netbox tests/contract_netbox
 
 # The Nautobot contract tier: nautobot/'s code, then the Nautobot reader's, against the running development Nautobot
 # (CONTRIBUTING.md). Load local/.env first.
 contract-nautobot:
 	cd nautobot && ../core/.venv/bin/pytest -q -rA -m contract_nautobot tests/contract
 	cd readers/nautobot && ../../core/.venv/bin/pytest -q -rA -m contract_nautobot tests/contract
-
-# A demonstration of one source of truth, infrahub or netbox, with no step by hand (CONTRIBUTING.md, "The
-# demonstrations"; D-104): the host's preconditions checked, then the source's runbook taken in order through the
-# targets above, the core and the runner started in the background by recorded pids, to the change opened, then the
-# rehearsal it starts waited for on the edge's Prefect and its verdict read: exit 0 for passed alone. It reads
-# local/.env itself, before every step, and at REF it registers this repository with Infrahub. No other variable
-# given here, or held by the shell or local/.env, reaches a target: each is run at this file's own value, the script
-# saying which were not passed on.
-infrahub-demo netbox-demo: | $(VENV)/bin/fylgja-core-server
-	python3 -I scripts/demo.py up $(@:-demo=) --local $(LOCAL) --main $(MAIN) --ref='$(REF)'
-
-# The venv, made for a demonstration where the core's server command is missing, and never remade by one.
-$(VENV)/bin/fylgja-core-server:
-	$(MAKE) venv
-
-# What a demonstration started, ended: its runner, every twin its core holds, its core, the Prefect server it
-# started and its source, whose volumes are kept; PURGE=1 on a make command line removes them too, one a make above
-# hands down in MAKEFLAGS counting as a command line's, and no other value and no PURGE of the environment's,
-# exported by the shell or by a local/.env it loaded, does.
-demo-down:
-	python3 -I scripts/demo.py down --local $(LOCAL) --main $(MAIN) $(if $(and $(filter 1,$(PURGE)),$(filter command line,$(origin PURGE))),--purge)

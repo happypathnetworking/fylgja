@@ -241,5 +241,5 @@ def test_the_env_example_lists_each_name_commented() -> None:
         assert f"# {name}=" in at, name
     places = [at[f"# {name}="] for name in NAMES]
     assert places == sorted(places)
-    assert at["# FYLGJA_INFRAHUB_CA="] < places[0] and places[-1] < at["# FYLGJA_ORCHESTRATOR_AUTH="]
-    assert at[f"# {EXAMPLES}="] > at["# FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN="]
+    assert at["# FYLGJA_INFRAHUB_CA="] < places[0] and places[-1] < at["# FYLGJA_NAUTOBOT_CA="]
+    assert at[f"# {EXAMPLES}="] > at["# FYLGJA_NAUTOBOT_CA="]

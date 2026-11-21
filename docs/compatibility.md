@@ -100,10 +100,6 @@ A format's version 2 comes only with a major release, and replaces version 1.
 
 ## Not promised
 
-- The example orchestrator, `fylgja-orchestrator`, and its two documents, which the example writes
-  and reads: [`plan-1.schema.json`](../formats/plan-1.schema.json) and
-  [`rehearsal-1.schema.json`](../formats/rehearsal-1.schema.json). [Integrating](integrating.md)
-  describes it as a model to copy.
 - The make targets, the scripts, the demonstrations and `deploy/`.
 - The wording of a message. Read a refusal by its rule id.
 - A bundle's or a deployment's id from one release to the next: a package's content moves it.

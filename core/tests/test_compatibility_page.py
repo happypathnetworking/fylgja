@@ -1,6 +1,6 @@
-"""`docs/compatibility.md` holds to the tree: the formats it holds are `formats/`'s files less the example's two, and
-the API's document; the commands it holds are the `project.scripts` of the four published `pyproject.toml`; the
-example's two formats and its command are under "Not promised", and the enum values a client refuses are the ones
+"""`docs/compatibility.md` holds to the tree: the formats it holds are `formats/`'s files and the API's document; the
+commands it holds are the `project.scripts` of the four published `pyproject.toml`; "Not promised" names no format and
+no `fylgja-orchestrator`, and the enum values a client refuses are the ones
 the findings schema closes."""
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from pages import ROOT, USER_PAGES, prose, section, text
 
 PAGE = "docs/compatibility.md"
 PYPROJECTS = ("core", "readers/infrahub", "readers/netbox", "readers/nautobot")
-EXAMPLES = {"plan-1.schema.json", "rehearsal-1.schema.json"}
 
 
 def _held() -> str:
@@ -28,11 +27,11 @@ def _formats(body: str) -> set[str]:
     return set(re.findall(r"\]\(\.\./formats/([\w.-]+\.(?:schema\.json|openapi\.yaml))\)", body))
 
 
-def test_the_page_holds_every_format_but_the_examples() -> None:
+def test_the_page_holds_every_format() -> None:
     files = {path.name for path in (ROOT / "formats").glob("*.schema.json")} | {"api-1.openapi.yaml"}
     assert len(files) > 10, "the parse is blind"
-    assert _formats(_held()) == files - EXAMPLES
-    assert _formats(_not_promised()) == EXAMPLES
+    assert _formats(_held()) == files
+    assert _formats(_not_promised()) == set()
 
 
 def test_the_page_holds_the_published_commands() -> None:
@@ -43,7 +42,7 @@ def test_the_page_holds_the_published_commands() -> None:
     assert len(published) == 5, "the parse is blind"
     held = {m.group(1) for line in section(text(PAGE), "### The commands") if (m := re.match(r"\| `([\w-]+)`", line))}
     assert held == published
-    assert "`fylgja-orchestrator`" in _not_promised()
+    assert "`fylgja-orchestrator`" not in _not_promised()
     assert "`fylgja-orchestrator`" not in _held()
 
 

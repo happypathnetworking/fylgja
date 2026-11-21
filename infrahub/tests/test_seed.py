@@ -1,10 +1,9 @@
-"""`infrahub/seed/seed.py`: the reader's kind and the stage kind loaded on `main` where it lacks them; the fixture
-network on `main`, its configurations generated and waited for; an earlier seed's marks and open proposed change of
-the branch removed; the seeded branch made anew, each of its two staged edits loaded, generated, waited for, timed by
-`head` and marked; by a flag, its proposed change; and `seed.json`.
+"""`infrahub/seed/seed.py`: the reader's kind loaded on `main` where it lacks it; the fixture network on `main`, its
+configurations generated and waited for; the seeded branch made anew, each of its two staged edits loaded, generated,
+waited for and timed by `head`; and `seed.json`.
 
-Infrahub is a fake behind `httpx.MockTransport` that answers each GraphQL operation by its root fields, the branch's,
-the marks' and the proposed changes' mutations, the schema's read and the generation's REST call, `infrahubctl` a fake
+Infrahub is a fake behind `httpx.MockTransport` that answers each GraphQL operation by its root fields, the branch's
+mutations, the schema's read and the generation's REST call, `infrahubctl` a fake
 `run`, the reader's `head` the fake's own, and the clock a fake: nothing here opens a socket or starts a process.
 Infrahub's own times come from a second clock of the fake's, `server`, which moves with each write it is sent.
 """
@@ -39,8 +38,6 @@ SEED = Path(__file__).resolve().parents[1] / "seed"
 FILES = SEED / "main"
 PROBE_KIND = Path(__file__).resolve().parents[2] / "readers" / "infrahub" / "schema" / "fylgja-probe.yml"
 """The reader's kind, which `make infrahub-seed` passes as `--schema`."""
-STAGE_KIND = Path(__file__).resolve().parents[2] / "infrahub" / "schema" / "fylgja-stage.yml"
-"""The example's stage kind, which `make infrahub-seed` passes as a second `--schema`."""
 DEFINITION_ID = "18e6777e-0000-0000-0000-000000000001"
 NAMES = ("n1", "n2", "n3")
 BRANCH = "third-link"
@@ -114,10 +111,8 @@ class Infrahub:
     latest write: its last load, its checksums' stamps and its newest event, a generation's trailing it by 0.5 s, and
     Infrahub's own writes after it by 3 s, which `head` shows from its second read on; where `restless`, every read
     shows a later one. A create `unanswered` goes unanswered, the branch listed from that many reads of it on
-    (`math.inf`: never); a delete `undeleting` answers no `ok` and leaves its branch. `marks` are the `FylgjaStage`s
-    held, each its branch and label, and `proposed` the proposed changes, each its source branch and state; their
-    ids are `mark-<n>` and `pc-<n>` in the order made. `events` keeps every load, mutation, generation and read of
-    `head` in order, `mutations` each mutation's text.
+    (`math.inf`: never); a delete `undeleting` answers no `ok` and leaves its branch. `events` keeps every load,
+    mutation, generation and read of `head` in order, `mutations` each mutation's text.
     """
 
     def __init__(
@@ -135,17 +130,8 @@ class Infrahub:
         undeleting: bool = False,
         kinds: tuple[str, ...] = (),
         unlisted: bool = False,
-        marks: tuple[tuple[str, str], ...] = (),
-        proposed: tuple[tuple[str, str], ...] = (),
     ) -> None:
         self.kinds = set(kinds)
-        self.made_ids = 0
-        self.marks: list[dict[str, Any]] = []
-        self.proposed: list[dict[str, Any]] = []
-        for held, label in marks:
-            self.marks.append({"id": self.new_id("mark"), "branch": held, "label": label, "as_of": None})
-        for held, state in proposed:
-            self.proposed.append({"id": self.new_id("pc"), "branch": held, "state": state})
         self.unlisted = unlisted
         self.definitions = definitions
         self.devices = devices
@@ -200,10 +186,6 @@ class Infrahub:
             answer = {root: getattr(self, root)(branch, query, variables) for root in roots(query)}
         return httpx.Response(200, json={"data": answer})
 
-    def new_id(self, prefix: str) -> str:
-        self.made_ids += 1
-        return f"{prefix}-{self.made_ids}"
-
     def make(self, name: str) -> None:
         self.seconds += 10
         self.made[name] = server(self.seconds)
@@ -249,39 +231,6 @@ class Infrahub:
             if not self.listing:
                 self.make(name)
         return [{"name": name, "branched_from": self.made[name]}] if name in self.made else []
-
-    def FylgjaStage(self, branch: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
-        assert branch == "main"
-        edges = [{"node": {"id": mark["id"]}} for mark in self.marks if mark["branch"] == variables["branch"]]
-        return {"count": len(edges), "edges": edges}
-
-    def FylgjaStageCreate(self, request: httpx.Request, variables: dict[str, Any]) -> dict[str, Any]:
-        held = (variables["branch"], variables["label"])
-        assert held not in [(mark["branch"], mark["label"]) for mark in self.marks], "Violates uniqueness constraint"
-        mark = {"id": self.new_id("mark"), "branch": held[0], "label": held[1], "as_of": variables["at"]}
-        self.marks.append(mark | {"description": variables["description"]})
-        return {"FylgjaStageCreate": {"ok": True, "object": {"id": mark["id"]}}}
-
-    def FylgjaStageDelete(self, request: httpx.Request, variables: dict[str, Any]) -> dict[str, Any]:
-        self.marks = [mark for mark in self.marks if mark["id"] != variables["id"]]
-        return {"FylgjaStageDelete": {"ok": True}}
-
-    def CoreProposedChange(self, branch: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
-        assert branch == "main"
-        assert 'state__value: "open"' in query
-        found = [held for held in self.proposed if (held["branch"], held["state"]) == (variables["branch"], "open")]
-        edges = [{"node": {"id": held["id"]}} for held in found]
-        return {"count": len(edges), "edges": edges}
-
-    def CoreProposedChangeCreate(self, request: httpx.Request, variables: dict[str, Any]) -> dict[str, Any]:
-        assert not [held for held in self.proposed if (held["branch"], held["state"]) == (variables["branch"], "open")]
-        held = {"id": self.new_id("pc"), "branch": variables["branch"], "state": "open", "name": variables["name"]}
-        self.proposed.append(held)
-        return {"CoreProposedChangeCreate": {"ok": True, "object": {"id": held["id"]}}}
-
-    def CoreProposedChangeDelete(self, request: httpx.Request, variables: dict[str, Any]) -> dict[str, Any]:
-        self.proposed = [held for held in self.proposed if held["id"] != variables["id"]]
-        return {"CoreProposedChangeDelete": {"ok": True}}
 
     def head(self, name: str) -> str:
         """The branch's latest write, as the reader's `head` would time it for the test: the latest of its last load,
@@ -361,13 +310,13 @@ def seeded(**kwargs: Any) -> Infrahub:
 
 
 def seed_whole(infrahub: Infrahub, out: Path, monkeypatch: pytest.MonkeyPatch, *flags: str) -> int:
-    """`seed.main` run as `make infrahub-seed` runs it, the two kinds passed and `flags` after them, over the fake,
+    """`seed.main` run as `make infrahub-seed` runs it, the kind passed and `flags` after it, over the fake,
     its record written to `out`, each stage timed by the fake's `head`."""
     monkeypatch.setenv("FYLGJA_INFRAHUB_ADDRESS", ADDRESS)
     monkeypatch.setenv("FYLGJA_INFRAHUB_WRITE_TOKEN", "a-tests-token")
     clock = Clock()
     argv = ["--branch", BRANCH, "--files", str(SEED), "--out", str(out), "--ctl", str(CTL)]
-    argv += ["--schema", str(PROBE_KIND), "--schema", str(STAGE_KIND), *flags]
+    argv += ["--schema", str(PROBE_KIND), *flags]
     transport = httpx.MockTransport(infrahub)
     return seed.main(argv, transport=transport, run=Ctl(infrahub), clock=clock, sleep=clock.sleep, head=infrahub.head)
 
@@ -481,13 +430,12 @@ def test_a_kind_main_lacks_is_loaded_before_the_baseline_and_one_it_holds_is_not
     out = tmp_path / "seed.json"
     assert seed_whole(infrahub, out, monkeypatch) == 0
     loads = [("infrahubctl", "object", "load", str(path), "--branch", "main") for path in sorted(FILES.glob("*.yml"))]
-    assert infrahub.events[: len(loads) + 3] == [
+    assert infrahub.events[: len(loads) + 2] == [
         ("infrahubctl", "schema", "load", str(PROBE_KIND), "--branch", "main"),
-        ("infrahubctl", "schema", "load", str(STAGE_KIND), "--branch", "main"),
         *loads,
         ("generate", DEFINITION_ID, "main"),
     ]
-    assert infrahub.kinds == {"FylgjaProbe", "FylgjaStage"}
+    assert infrahub.kinds == {"FylgjaProbe"}
     capsys.readouterr()
 
     first = len(infrahub.events)
@@ -497,7 +445,27 @@ def test_a_kind_main_lacks_is_loaded_before_the_baseline_and_one_it_holds_is_not
     assert again[0] == ("generate", DEFINITION_ID, "main"), "a seeded main loads nothing"
     said = capsys.readouterr().out
     assert "main holds FylgjaProbe of fylgja-probe.yml already" in said
-    assert "main holds FylgjaStage of fylgja-stage.yml already" in said
+
+
+def test_repeated_schema_files_are_loaded_in_the_order_given(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    other = tmp_path / "other.yml"
+    other.write_text('version: "1.0"\nnodes:\n  - name: Other\n    namespace: Fylgja\n')
+    infrahub = Infrahub(generated=[{name: ready("c1") for name in NAMES}])
+    monkeypatch.setenv("FYLGJA_INFRAHUB_ADDRESS", ADDRESS)
+    monkeypatch.setenv("FYLGJA_INFRAHUB_WRITE_TOKEN", "a-tests-token")
+    clock = Clock()
+    argv = ["--branch", BRANCH, "--files", str(SEED), "--out", str(tmp_path / "seed.json"), "--ctl", str(CTL)]
+    for order in ((PROBE_KIND, other), (other, PROBE_KIND)):
+        infrahub.kinds.clear()
+        first = len(infrahub.events)
+        flags = [part for path in order for part in ("--schema", str(path))]
+        run = Ctl(infrahub)
+        transport = httpx.MockTransport(infrahub)
+        args = [*argv, *flags]
+        done = seed.main(args, transport=transport, run=run, clock=clock, sleep=clock.sleep, head=infrahub.head)
+        assert done == 0
+        loads = [event for event in infrahub.events[first:] if event[:2] == ("infrahubctl", "schema")]
+        assert [event[3] for event in loads] == [str(path) for path in order]
 
 
 def test_a_kind_main_never_lists_lapses_and_a_file_of_no_kind_is_refused(tmp_path: Path) -> None:
@@ -676,20 +644,16 @@ def test_each_edit_is_loaded_generated_waited_for_and_timed_in_order() -> None:
     first, second = (("infrahubctl", "object", "load", str(SEED / e.file), "--branch", BRANCH) for e in seed.EDITS)
     # The server's clock: the branch made at 10 s, the first load at 20 s, its generation at 30 s, the second load at
     # 40 s and its generation at 50 s; after each generation the branch's newest event is its own, then Infrahub's.
-    times = zip(seed.EDITS, (33, 53), strict=True)
-    marked = [("FylgjaStageCreate", BRANCH, e.label, server(at), seed.described(e)) for e, at in times]
     assert infrahub.events == [
         ("BranchCreate", BRANCH),
         first,
         ("generate", DEFINITION_ID, BRANCH),
         ("head", BRANCH, server(30.5)),
         *[("head", BRANCH, server(33))] * 2,
-        marked[0],
         second,
         ("generate", DEFINITION_ID, BRANCH),
         ("head", BRANCH, server(50.5)),
         *[("head", BRANCH, server(53))] * 2,
-        marked[1],
     ]
     assert stages == [{"label": "third-link", "at": server(33)}, {"label": "n1-address", "at": server(53)}]
     # Each generation's wait passed at its first read; `head` was read every 10 s until two readings agreed.
@@ -709,12 +673,9 @@ def test_main_seeds_main_then_the_branch_and_writes_the_file(tmp_path: Path, mon
         "branch": BRANCH,
         "scope": "tag:fylgja",
         "stages": [{"label": "third-link", "at": server(33)}, {"label": "n1-address", "at": server(53)}],
-        "marks": ["third-link", "n1-address"],
-        "proposed_change": None,
     }
-    assert infrahub.events[:4] == [
+    assert infrahub.events[:3] == [
         ("infrahubctl", "schema", "load", str(PROBE_KIND), "--branch", "main"),
-        ("infrahubctl", "schema", "load", str(STAGE_KIND), "--branch", "main"),
         ("generate", DEFINITION_ID, "main"),
         ("BranchCreate", BRANCH),
     ]
@@ -737,7 +698,7 @@ def test_a_wait_that_lapses_leaves_no_seed_file(
         assert not out.exists()
 
 
-def test_the_file_is_the_five_members(tmp_path: Path) -> None:
+def test_the_file_is_the_three_members(tmp_path: Path) -> None:
     path = tmp_path / "seed.json"
     path.write_text("an earlier run's\n")
     earlier = path.stat().st_ino
@@ -745,97 +706,14 @@ def test_the_file_is_the_five_members(tmp_path: Path) -> None:
         {"label": "third-link", "at": "2026-11-09T13:44:54.984697+00:00"},
         {"label": "n1-address", "at": "2026-11-09T13:45:12.000001+00:00"},
     ]
-    marks = ["third-link", "n1-address"]
-    seed.write(path, "third-link", stages, marks=marks)
+    seed.write(path, "third-link", stages)
     text = path.read_text()
-    held = {"branch": "third-link", "scope": "tag:fylgja", "stages": stages, "marks": marks, "proposed_change": None}
+    held = {"branch": "third-link", "scope": "tag:fylgja", "stages": stages}
     assert json.loads(text) == held
     assert text.endswith("}\n")
     # Written whole beside it and renamed over it: a new file, and nothing else left in the directory.
     assert path.stat().st_ino != earlier
     assert [found.name for found in tmp_path.iterdir()] == ["seed.json"]
-
-    proposed = {"id": "18e6cba4-0000-0000-0000-000000000001", "name": "Rehearse third-link"}
-    seed.write(path, "third-link", stages, marks=marks, proposed_change=proposed)
-    assert json.loads(path.read_text()) == held | {"proposed_change": proposed}
-    seed.write(path, "third-link", stages)
-    assert json.loads(path.read_text()) == held | {"marks": []}
-
-
-def test_an_earlier_seeds_marks_and_open_proposed_change_are_removed_before_the_branch(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A mark outlives its branch, and an open proposed change outlives its branch's delete (D-088;
-    design/verified-facts.md, "Infrahub 1.11.11"), so both are removed whether or not the branch is listed."""
-    earlier = ((BRANCH, "third-link"), (BRANCH, "n1-address"), ("another", "third-link"))
-    proposed = ((BRANCH, "open"), (BRANCH, "closed"), ("another", "open"))
-    for listed in (True, False):
-        infrahub = seeded(branches=(BRANCH,) if listed else (), marks=earlier, proposed=proposed)
-        hub, _ = hub_for(infrahub)
-        clock = Clock()
-        seed.branch(hub, BRANCH, SEED, head=infrahub.head, clock=clock, sleep=clock.sleep)
-        removed = [
-            ("FylgjaStageDelete", "mark-1"),
-            ("FylgjaStageDelete", "mark-2"),
-            ("CoreProposedChangeDelete", "pc-4"),
-        ]
-        branch = [("BranchDelete", BRANCH)] if listed else []
-        assert infrahub.events[: len(removed) + len(branch) + 1] == [*removed, *branch, ("BranchCreate", BRANCH)]
-        # The other branch's mark and proposed change, and the branch's closed one, are kept; the branch's marks are
-        # this run's.
-        assert [(mark["id"], mark["branch"]) for mark in infrahub.marks][:1] == [("mark-3", "another")]
-        assert [mark["label"] for mark in infrahub.marks if mark["branch"] == BRANCH] == ["third-link", "n1-address"]
-        assert [(held["id"], held["state"]) for held in infrahub.proposed] == [("pc-5", "closed"), ("pc-6", "open")]
-        said = capsys.readouterr().out
-        assert "removed 2 marks of third-link, an earlier seed's" in said
-        assert "removed the open proposed change pc-4 of third-link, an earlier seed's" in said
-
-
-def test_each_stage_is_marked_at_its_time() -> None:
-    """One `FylgjaStage` a stage on `main`, its `as_of` the stage's time verbatim, sent as a `String` variable: a
-    `DateTime!` one is refused, and the value is answered as written (design/verified-facts.md, "Infrahub 1.11.11";
-    P5-29)."""
-    infrahub = seeded()
-    hub, _ = hub_for(infrahub)
-    clock = Clock()
-    stages = seed.branch(hub, BRANCH, SEED, head=infrahub.head, clock=clock, sleep=clock.sleep)
-    creates = [text for text in infrahub.mutations if "FylgjaStageCreate" in text]
-    assert len(creates) == len(stages) == 2
-    assert all("$at: String!" in text for text in creates)
-    held = [(mark["branch"], mark["label"], mark["as_of"], mark["description"]) for mark in infrahub.marks]
-    staged = zip(stages, seed.EDITS, strict=True)
-    assert held == [(BRANCH, stage["label"], stage["at"], seed.described(edit)) for stage, edit in staged]
-    said = "the seed's stage third-link: stages/1-third-link.yml and its configurations"
-    assert seed.described(seed.EDITS[0]) == said
-
-
-def test_the_proposed_change_is_made_only_by_the_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Infrahub runs a proposed change's checks when it is created, so without the flag the seed makes none, and the
-    maintainer's opening one is what starts the rehearsal (D-088)."""
-    out = tmp_path / "seed.json"
-    infrahub = seeded()
-    assert seed_whole(infrahub, out, monkeypatch) == 0
-    assert [event for event in infrahub.events if event[0] == "CoreProposedChangeCreate"] == []
-    assert (infrahub.proposed, json.loads(out.read_text())["proposed_change"]) == ([], None)
-
-    infrahub = seeded()
-    assert seed_whole(infrahub, out, monkeypatch, "--proposed-change") == 0
-    made = [event for event in infrahub.events if event[0] == "CoreProposedChangeCreate"]
-    assert made == [("CoreProposedChangeCreate", "Rehearse third-link", BRANCH)]
-    # Made last, after both marks, so the rehearsal it starts finds them.
-    assert infrahub.events[-1] == made[0]
-    [text] = [text for text in infrahub.mutations if "CoreProposedChangeCreate" in text]
-    assert 'destination_branch: {value: "main"}' in text
-    assert "is_draft: {value: false}" in text
-    record = json.loads(out.read_text())
-    assert record["proposed_change"] == {"id": infrahub.proposed[0]["id"], "name": "Rehearse third-link"}
-    assert record["marks"] == ["third-link", "n1-address"]
-
-    # A second run with the flag removes the first's and makes its own: one open, of another id.
-    first = infrahub.proposed[0]["id"]
-    assert seed_whole(infrahub, out, monkeypatch, "--proposed-change") == 0
-    assert [(held["branch"], held["state"]) for held in infrahub.proposed] == [(BRANCH, "open")]
-    assert json.loads(out.read_text())["proposed_change"]["id"] == infrahub.proposed[0]["id"] != first
 
 
 @pytest.mark.parametrize(

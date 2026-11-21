@@ -1,15 +1,13 @@
-"""`netbox/seed/account.py`'s two accounts against the running development NetBox: what each token reads, what each
-may write and what each is refused, and the accounts made twice.
+"""`netbox/seed/account.py`'s account against the running development NetBox: what its token reads, what it is
+refused, and the account made twice.
 
-`reader` and `example` are each a `Box` over the account's own token, `FYLGJA_NETBOX_TOKEN` and
-`FYLGJA_ORCHESTRATOR_NETBOX_TOKEN`, which `make netbox-seed` writes into `local/.env`; `box` is the superuser's; each
-is made by the conftest's `writer`, whose `repr` holds no address. The module's fixture seeds `main` first, as
+`reader` is a `Box` over the account's own token, `FYLGJA_NETBOX_TOKEN`, which `make netbox-seed` writes into
+`local/.env`; `box` is the superuser's; the `reader` is made by the conftest's `writer`, whose `repr` holds no
+address. The module's fixture seeds `main` first, as
 `make netbox-seed` does; on a `main` the seed has already filled it writes nothing. Each refusal is asserted at the
 status it was read to answer (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3"): a write or a
-list refused for want of a permission is 403. Every write a test sends, and every write it expects refused, is under
-its own branch's header or of that branch, which the `branch` fixture deletes, so that one that wrongly succeeded
-lands on no row of `main`; the example's journal entry, written with no header as the example writes it, is deleted
-after by the superuser.
+list refused for want of a permission is 403. Every write a test expects refused is under its own branch's header or
+of that branch, which the `branch` fixture deletes, so that one that wrongly succeeded lands on no row of `main`.
 
 The tests rest on two budgets (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3"). The `branch`
 fixture waits up to `BRANCH_WAIT_S`, 120 s, for `ready`: branches read `ready` 11.1 s at most after their request,
@@ -62,12 +60,6 @@ def own(name: str) -> Iterator[Box]:
 def reader() -> Iterator[Box]:
     """The reader's `Box`, over `fylgja-reader`'s token."""
     yield from own(account.READER)
-
-
-@pytest.fixture(scope="module")
-def example() -> Iterator[Box]:
-    """The example's `Box`, over `fylgja-orchestrator`'s token."""
-    yield from own(account.ORCHESTRATOR)
 
 
 SITE = {"name": "fylgja-contract-site", "slug": "fylgja-contract-site"}
@@ -141,56 +133,8 @@ def test_the_readers_token_writes_nothing(
     assert box.one("dcim/devices/", branch=under, name="n1") is not None
 
 
-def test_the_examples_token_writes_a_journal_entry_and_a_branchs_tags_and_nothing_else(
-    box: Box, example: Box, fixture: dict[str, Any], branch: dict[str, Any]
-) -> None:
-    devices = read(example, box, None)
-    found = branch_named(example, branch["name"])
-    assert found is not None and found["id"] == branch["id"]
-    read(example, box, branch["schema_id"])
-
-    entry = example.post(
-        JOURNAL,
-        {
-            "assigned_object_type": BRANCH_TYPE,
-            "assigned_object_id": branch["id"],
-            "kind": "info",
-            "comments": "fylgja-contract: the example's journal entry",
-        },
-    )
-    try:
-        assert entry["kind"]["value"] == "info"
-        listed = example.listed(JOURNAL, assigned_object_type=BRANCH_TYPE, assigned_object_id=branch["id"])
-        assert [row["id"] for row in listed] == [entry["id"]]
-
-        tag = example.one("extras/tags/", name=seed.TAG)
-        assert tag is not None
-        path = f"{BRANCHES}{branch['id']}/"
-        tagged = example.patch(path, {"tags": [tag["id"]]})
-        assert [row["slug"] for row in tagged["tags"]] == [seed.TAG]
-        untagged = example.patch(path, {"tags": []})
-        assert untagged["tags"] == []
-        again = branch_named(example, branch["name"])
-        assert again is not None and again["tags"] == []
-
-        under = branch["schema_id"]
-        changes = changelogs(box, under)
-        n1 = devices["n1"]["id"]
-        refused(403, example.post, "dcim/sites/", SITE, branch=under)
-        refused(403, example.patch, f"dcim/devices/{n1}/", {"description": "fylgja-contract"}, branch=under)
-        refused(403, example.delete, f"dcim/devices/{n1}/", branch=under)
-        said = refused(403, example.post, f"{path}sync/", {"commit": False})
-        assert said.endswith("You do not have permission to perform this action.")
-        assert changelogs(box, under) == changes
-        assert box.one("dcim/sites/", branch=under, name=SITE["name"]) is None
-        held = box.get(f"dcim/devices/{n1}/", branch=under)
-        assert held["description"] == "FYLGJA-MARKER-fixture"
-    finally:
-        box.delete(f"{JOURNAL}{entry['id']}/")
-
-
 def test_the_accounts_made_twice_keep_their_tokens(box: Box, tmp_path: Path) -> None:
-    """The two lines the environment gives, in a file of mode 0600 of the test's own, removed after."""
+    """The line the environment gives, in a file of mode 0600 of the test's own, removed after."""
     names = [account.LINES[name] for name in account.GRANTS]
     need(*names)
     env = tmp_path / ".env"

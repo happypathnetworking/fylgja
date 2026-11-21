@@ -1,8 +1,7 @@
 # Formats
 
 Every format of every distribution, version 1: each format and interface the core reads
-and writes, the reader document each reader takes, and the example orchestrator's two
-documents. Each has one version,
+and writes and the reader document each reader takes. Each has one version,
 specified by its file here ([D-002](../design/decisions.md#d-002), Constitution XII). From 1.0 a
 change to a held format only adds ([What major version 1 holds](../docs/compatibility.md)). The design they
 follow is [design/core.md](../design/core.md). A change found while building the core is made
@@ -35,8 +34,6 @@ relative to them.
 | [`infrahub-reader-1.schema.json`](infrahub-reader-1.schema.json) | [D-082](../design/decisions.md#d-082) |
 | [`netbox-reader-1.schema.json`](netbox-reader-1.schema.json) | [D-095](../design/decisions.md#d-095) |
 | [`nautobot-reader-1.schema.json`](nautobot-reader-1.schema.json) | [D-118](../design/decisions.md#d-118) |
-| [`plan-1.schema.json`](plan-1.schema.json) | [D-086](../design/decisions.md#d-086) |
-| [`rehearsal-1.schema.json`](rehearsal-1.schema.json) | [D-086](../design/decisions.md#d-086) |
 
 ## Notes
 
@@ -80,7 +77,8 @@ relative to them.
     [`readers/nautobot/rules.md`](../readers/nautobot/rules.md)
     ([D-118](../design/decisions.md#d-118)). Rules for stages and rehearsals are the example
     orchestrator's ([D-081](../design/decisions.md#d-081)), in
-    [`orchestrator/rules.md`](../orchestrator/rules.md).
+    [`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md)
+    of `fylgja-examples`.
 12. **A device name is a DNS-1123 label** of at most 63 characters
     ([D-038](../design/decisions.md#d-038)). It becomes the node's host name, its container
     or pod name and its bundle file name, so the blueprint requires the one form all of them
@@ -127,9 +125,14 @@ relative to them.
     found replaced on a settled twin ([D-067](../design/decisions.md#d-067)). Its verdict
     carries verify's counts and the wait, as a step's does, and no loss. A run's verdict
     names its run's operation, so findings 1 gains `restore` beside API 1.
-23. **The plan and the rehearsal are the example orchestrator's documents** since phase 8,
-    carried by its wheel and not the core's ([D-084](../design/decisions.md#d-084)). Each
-    `$ref`s nothing outside the two files, so that wheel resolves them alone.
+23. **The plan and the rehearsal are the example orchestrator's documents,** and their
+    files,
+    [`plan-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/plan-1.schema.json)
+    and
+    [`rehearsal-1.schema.json`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/formats/rehearsal-1.schema.json),
+    are in `fylgja-examples`,
+    which carries them in its wheel and not the core's ([D-084](../design/decisions.md#d-084),
+    [D-126](../design/decisions.md#d-126)). Each `$ref`s nothing outside the two files.
 24. **A platform package lists its versions, each with its image**
     ([D-102](../design/decisions.md#d-102)). `versions` is a list of versions, each an object
     with a `name`, the release's own text, and `runtime.containerlab.images` names an image
@@ -156,8 +159,8 @@ relative to them.
     mended before 1.0, since a held format may only add ([D-105](../design/decisions.md#d-105)).
 27. **A reader of an answer passes over a member it does not know**
     ([D-105](../design/decisions.md#d-105)). Within API 1 what the core answers may gain a
-    member, so the client library, the CLI and the example orchestrator hold a problem document
-    and a verdict the core answered to its schema with each object closed by
+    member, so the client library, the CLI and the example orchestrator of `fylgja-examples`
+    hold a problem document and a verdict the core answered to its schema with each object closed by
     `additionalProperties: false` left open: what they use must still be there and of its kind,
     and a map of names is still held to the schema its `additionalProperties` gives. What a user
     writes, what is filed and what the server checks are still held whole. No format changed.

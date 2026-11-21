@@ -12,6 +12,11 @@ NetBox reader and the example's NetBox change source rely on; and those the Naut
 reader and its development Nautobot rely on. The archived repository's facts about Infrahub
 1.11.2, Prefect 3.8.8 and NetBox 4.7.4 stay there, and nothing here relies on them.
 
+The example orchestrator is in `fylgja-examples` ([D-126](decisions.md#d-126)). The facts
+below about it stay here, as the readings they are, and bind that repository; a later reading
+of Prefect, of Infrahub's checks or of NetBox's webhooks is recorded in that repository's own
+`design/verified-facts.md`.
+
 - Each fact names the version it was verified against and the date.
 - **Re-verify a fact on any upgrade** of the system it names.
 - **A fact recorded here is trusted over recollection.** Before a change depends on a
@@ -10108,6 +10113,76 @@ retention; a template repository behind credentials; Golden Config's `branch` pa
 `dynamic-set` group's stored members, and a static group's; a filter of a custom field, or of a related object by its
 id; a group of more members than a page; how long a refresh of a large group takes. *(2026-11-20)* The render of a
 device whose name is null. *(2026-11-20)*
+
+## fylgja-core, phase 12: the readers' contract tiers on the trimmed seeds
+
+Read on 2026-11-21 on the development host at the commit `152d0dd`, the tip of the trim (the
+example's checks, `FylgjaStage`, the marks, the example's accounts and the example's NetBox
+overrides removed). Each source's volumes were purged once, before the first of its attempts
+(`make infrahub-down PURGE=1`, `make netbox-down PURGE=1`; `1-infrahub-purge.log`,
+`2-netbox-purge.log`). The runs recorded below did not each begin on a purged instance: the
+Infrahub runs began on the volumes the first attempt's `make infrahub-up` made, which its
+`make infrahub-down` kept and whose registration failed at once, so that nothing was loaded;
+the NetBox runs began on the volumes the first attempt's `make netbox-up` made, which the
+second attempt's up, seed and failed contract run used and its `make netbox-down` kept. Each
+recorded tier run was made once; the NetBox seed was read twice, as below. The logs are
+`task-6/` of the plan's workspace
+(`.superpowers/sdd/2026-11-20-phase12-2-trim/`), numbered in run order; the seconds below are
+the tier's own, `pytest`'s, and the wall seconds are the ones a wrapper measured around each
+make target (`task-6/timings.txt`). *(2026-11-21)*
+
+- **Infrahub 1.11.11**, `make infrahub-up` (`3-infrahub-up.log`): answered 53 s after Compose's
+  start returned, 82 s wall. `make infrahub-register` (`4-infrahub-register.log`): main held none
+  of the schema library's 27 kinds, which `infrahubctl` loaded; the repository `fylgja` was
+  registered from `/srv/fylgja` at `phase-12/2-trim`, in sync and online at `152d0dd`, each of the
+  2 task workers holding its tree; 198 s wall. `make infrahub-seed` (`5-infrahub-seed.log`) on
+  those volumes, which nothing but this registration had loaded: the probe kind and the seven
+  object files loaded on `main`, the configurations of `n1`, `n2` and `n3` `Ready` on `main`,
+  then the branch `third-link` made with its two stages, each regenerated, and `seed.json`
+  written; 269 s wall. The seed loaded no `FylgjaStage` and no mark, and `seed.json` was
+  written whole by it.
+- **Infrahub's contract tier** (`6-contract.log`, `make contract`, 701 s wall):
+  `infrahub/tests/contract/` 6 passed in 236.47 s, then `readers/infrahub/tests/contract/`
+  30 passed in 461.28 s; no test skipped or failed in either. The first tier's second
+  registration and its second seed, on the instance this run's own register and seed had just
+  filled, are among its 6, and passed. The reader's tier read `seed.json`'s branch, scope and stages
+  as the trimmed seed wrote them.
+  `make infrahub-down` followed (`7-infrahub-down.log`, 20 s wall).
+- **NetBox 4.7.5 with netbox_branching 1.2.3**, `make netbox-up` (`8-netbox-up.log`): the image
+  `fylgja-core-netbox:4.7.5-1.2.3` built and started with the override of the tree, which at
+  `152d0dd`, saved as `override-at-152d0dd.yml`, holds no `extra_hosts` and no
+  `host.docker.internal` (`override-grep-at-152d0dd.txt`, a `git grep -n -e extra_hosts
+  -e host.docker.internal -e environment` of `netbox/dev/` at that commit, finds `environment`
+  alone: a comment and the two services' blocks, which name `SKIP_SUPERUSER`, `SUPERUSER_*`,
+  `SECRET_KEY` and `API_TOKEN_PEPPER_1`); NetBox healthy 60 s
+  after its start, 78 s wall. The seed was read twice. `second-attempt/9-netbox-seed.log`, on
+  the volumes the first attempt's up had made and kept, wrote 38 lines saying `made` in
+  29 s wall; that attempt's contract
+  run then failed for a cause of the run's own sequencing (a `local/.env` not reloaded), and
+  its volumes were kept. `make netbox-seed` (`9-netbox-seed.log`), the run recorded, on those
+  seeded volumes, took 19 s wall.
+- **NetBox's contract tier** (`10-contract-netbox.log`, `make contract-netbox`, 719 s wall):
+  `netbox/tests/contract/` 13 passed in 125.23 s, then `readers/netbox/tests/contract/` 45
+  passed in 591.11 s; nothing skipped or failed. `make netbox-down` followed
+  (`11-netbox-down.log`, 15 s wall).
+- **`make imagecheck`** (`12-imagecheck.log`, 47 s wall) passed on `fylgja-core:152d0ddb9457`:
+  uid 10001, the 10 formats byte for byte, no copy of `psp/` or `probes/`, and
+  `--version` naming the tree's version and `152d0dd`. **`make wheelcheck`**
+  (`13-wheelcheck.log`, 27 s wall) passed for the core's wheel and those of the three readers,
+  each at 1.0.1. **`make linkcheck`** (`14-linkcheck.log`, 1 s wall) read 41 files, 2780
+  relative links, 51 external skipped, 0 broken.
+- **Two attempts failed before these** for the controller's own sequencing, not for the trim:
+  a detached head given no `REF` to `make infrahub-register` (`first-attempt/`), and
+  `local/.env` not loaded again after `make netbox-up` and after `make netbox-seed`
+  (`first-attempt/` and `second-attempt/`). Their logs are kept and are no reading of the trim.
+
+The open points of the trim these runs settle, as far as the logs show: Infrahub's contract
+tier passes with no `FylgjaStage` and no mark; a second registration and a second seed, on the
+instance the recorded register and seed had filled, pass in it; NetBox's development
+instance starts with an override that has no `extra_hosts` and no `host.docker.internal`;
+`netbox/tests/contract/` holds 13 tests, all passing; and `make imagecheck` passes. A
+derivation: the Infrahub tier's two parts sum to 697.75 s of `pytest`'s time within the 701 s
+wall of the target; the NetBox tier's two sum to 716.34 s within 719 s.
 
 ## The base install at its floors
 

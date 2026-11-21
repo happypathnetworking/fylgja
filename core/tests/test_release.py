@@ -26,7 +26,7 @@ import pytest
 from fylgja_core import release
 
 ROOT = Path(__file__).resolve().parents[2]
-MEMBERS = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot", "orchestrator"]
+MEMBERS = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot"]
 READERS = ["readers/infrahub", "readers/netbox", "readers/nautobot"]
 # A release, X.Y.Z, or its candidate, X.Y.ZrcN.
 FORM = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(rc[1-9]\d*)?")
@@ -107,18 +107,11 @@ def test_each_reader_requires_the_core_at_its_own_version_within_the_major(membe
     assert on_core == [f"fylgja-core>={VERSION},<{int(VERSION.split('.')[0]) + 1}"]
 
 
-def test_the_example_names_the_core_and_the_readers_without_a_range() -> None:
-    dependencies = project("orchestrator")["dependencies"]
-    ours = [entry for entry in dependencies if entry.startswith("fylgja-")]
-    assert ours == ["fylgja-core", "fylgja-infrahub", "fylgja-netbox"]
-
-
 PACKAGES = {
     "core": "fylgja_core",
     "readers/infrahub": "fylgja_infrahub",
     "readers/netbox": "fylgja_netbox",
     "readers/nautobot": "fylgja_nautobot",
-    "orchestrator": "fylgja_orchestrator",
 }
 VARIABLE = "FYLGJA_BUILD_COMMIT"
 HEX = "0" * 40
@@ -347,12 +340,6 @@ def test_every_published_readme_is_rewritten_and_each_target_is_a_file_of_the_tr
                 assert (ROOT / target.removeprefix(prefix).split("#")[0]).is_file(), target
 
 
-def test_the_example_is_marked_never_to_be_uploaded() -> None:
-    found = project("orchestrator")
-    assert found["classifiers"] == ["Private :: Do Not Upload"]
-    assert "urls" not in found and "authors" not in found and "maintainers" not in found
-
-
 @pytest.mark.parametrize("member", PUBLISHED)
 def test_each_published_build_carries_the_licence(
     member: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -377,15 +364,6 @@ def test_each_published_build_carries_the_licence(
     step.build_lib = str(tmp_path / "lib2")
     with pytest.raises(SystemExit, match=re.escape(str(bare / "LICENSE"))):
         step.run()
-
-
-def test_the_example_build_is_not_given_the_licence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    module, _ = load_setup("orchestrator", monkeypatch)
-    monkeypatch.setenv(VARIABLE, HEX)
-    step = module.BuildPy()
-    step.build_lib = str(tmp_path / "lib")
-    step.run()
-    assert not (tmp_path / "lib" / "fylgja_orchestrator" / "LICENSE").exists()
 
 
 def test_the_changelogs_head_is_the_version() -> None:

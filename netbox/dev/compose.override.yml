@@ -13,8 +13,6 @@
 # members by a YAML anchor, which no override reaches, so the worker's are written again, less the superuser's.
 # Postgres and the two Valkeys keep the release's own env files: they publish no port.
 #
-# host.docker.internal names the Docker bridge's gateway, for a webhook NetBox sends to a listener on the host.
-#
 # The project's network is given a documentation range of its own, outside the private ranges Docker takes its
 # networks' subnets from, so that it never meets the local driver's default lab pool nor a network Docker gives itself;
 # netbox_dev.py's SUBNET is the same, and its `up` recreates a network that stands with another subnet, keeping the
@@ -33,8 +31,6 @@ services:
       - "127.0.0.1:8800:8080"
     volumes:
       - "${FYLGJA_NETBOX_DEV:?}/plugins.py:/etc/netbox/config/plugins.py:ro"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       SKIP_SUPERUSER: "false"
       SUPERUSER_NAME: admin
@@ -47,8 +43,6 @@ services:
     pull_policy: never
     volumes:
       - "${FYLGJA_NETBOX_DEV:?}/plugins.py:/etc/netbox/config/plugins.py:ro"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       SECRET_KEY: "${FYLGJA_NETBOX_SECRET_KEY:?}"
       API_TOKEN_PEPPER_1: "${FYLGJA_NETBOX_API_TOKEN_PEPPER:?}"

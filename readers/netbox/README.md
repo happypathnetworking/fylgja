@@ -32,8 +32,8 @@ does not own, and a NetBox upgrade is a procedure, below, not a rewrite.
 - **It is read-only.** Its one request that is no `GET` is the render (below), which writes
   nothing.
 - **It knows no stage, mark, tag, journal entry, twin or workflow engine.** Which branch to read,
-  and what is done with the blueprint, are its caller's: the core's client files it, and the
-  example orchestrator under `orchestrator/` is one such caller.
+  and what is done with the blueprint, are its caller's: the core's client files it, and
+  [the example orchestrator](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/orchestrator/) of `fylgja-examples` is one such caller.
 - **It has one mapping, and it is not a user's to change.** What NetBox cannot hold, the platform
   package of a pair of manufacturer and platform and the configuration context that declares the
   probes, is the reader document's

@@ -4,8 +4,7 @@ stated by no test, and an entry that is no range is refused; and the base module
 there are the seventeen `test_boundary_base.py` holds, read from the script by `ast`, so the two
 lists cannot drift. What it holds each reader's command never to load beside the base is that
 reader's import test's `FORBIDDEN`, the script's tuple read from the loaded module and the test's
-by `ast`, so those cannot drift either; nor can what it holds each change source never to load
-beside its own reader, which is the example's import scan's `CROSSED`. The check itself builds
+by `ast`, so those cannot drift either. The check itself builds
 and installs, and runs as `make wheelcheck`."""
 
 from __future__ import annotations
@@ -91,18 +90,15 @@ def _forbidden(path: Path) -> tuple[str, ...]:
 
 @pytest.mark.parametrize(
     ("name", "reader"),
-    [("NOT_BESIDE_READER", "infrahub"), ("NOT_BESIDE_NETBOX_READER", "netbox")],
+    [
+        ("NOT_BESIDE_READER", "infrahub"),
+        ("NOT_BESIDE_NETBOX_READER", "netbox"),
+        ("NOT_BESIDE_NAUTOBOT_READER", "nautobot"),
+    ],
 )
 def test_what_a_readers_command_never_loads_is_its_import_tests(name: str, reader: str) -> None:
     held = getattr(_script(), name)
     assert sorted(held) == sorted(_forbidden(ROOT / "readers" / reader / "tests" / "test_boundary.py"))
-
-
-def test_what_each_change_source_never_loads_is_the_example_scans() -> None:
-    """Importing the Infrahub change source loads nothing of the NetBox one or its reader, and the reverse."""
-    held = _assigned(SCRIPT, "CROSSED")
-    assert held == _assigned(ROOT / "orchestrator" / "tests" / "test_boundary_edge.py", "CROSSED")
-    assert sorted(str(pair[0]) for pair in held if isinstance(pair, tuple)) == ["infrahub", "netbox"]
 
 
 def _uv_says(monkeypatch: pytest.MonkeyPatch, module: ModuleType, said: str) -> None:
@@ -407,25 +403,14 @@ def test_a_published_wheel_states_the_projects_metadata_and_any_other_is_named(t
                                   core=True)
 
 
-def test_the_example_must_be_marked_never_to_be_uploaded(tmp_path: Path) -> None:
-    module = _script()
-    base = ["Metadata-Version: 2.4", "Name: fylgja-core", "Version: 1.0.0rc1"]
-    module.private_metadata(_described(tmp_path, [*base, "Classifier: Private :: Do Not Upload"]))
-    for fields in (base, [*base, "Classifier: Private :: Do Not Upload", "Classifier: Typing :: Typed"],
-                   [*base, "Classifier: Private :: Do Not Upload", f"Project-URL: Repository, {module.REPOSITORY}"]):
-        with pytest.raises(module.Failure):
-            module.private_metadata(_described(tmp_path, fields))
-
-
 def test_a_wheel_holds_the_roots_licence_or_is_named(tmp_path: Path) -> None:
     module = _script()
     text = (ROOT / "LICENSE").read_bytes()
     module.held_licence(_described(tmp_path, ["Name: x"], licence=text), "fylgja_core")
-    module.held_licence(_described(tmp_path, ["Name: x"]), "fylgja_core", expected=False)
-    for licence, expected in ((None, True), (text + b"x", True), (text, False)):
+    for licence in (None, text + b"x"):
         wheel = _described(tmp_path, ["Name: x"], licence=licence)
         with pytest.raises(module.Failure, match="LICENSE"):
-            module.held_licence(wheel, "fylgja_core", expected)
+            module.held_licence(wheel, "fylgja_core")
 
 
 def test_the_netbox_readers_links_directory_is_the_two_wheels_alone(tmp_path: Path,
@@ -453,6 +438,35 @@ def test_the_netbox_readers_links_directory_is_the_two_wheels_alone(tmp_path: Pa
     module.check_netbox_reader(tmp_path, core)
     version = module.tree_version()
     by_name = [links for requirements, links in installs if requirements == (f"fylgja-netbox=={version}",)]
+    assert by_name == [sorted([core.name, reader.name])]
+    assert [links for _, links in installs if links is not None] == by_name
+
+
+def test_the_nautobot_readers_links_directory_is_the_two_wheels_alone(tmp_path: Path,
+                                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _script()
+    core = tmp_path / "fylgja_core-1.0.0rc1-py3-none-any.whl"
+    reader = tmp_path / "nautobot-reader" / "dist" / "fylgja_nautobot-1.0.0rc1-py3-none-any.whl"
+    reader.parent.mkdir(parents=True)
+    for wheel in (core, reader):
+        wheel.write_bytes(b"a wheel")
+    (reader.parent / "fylgja_netbox-1.0.0rc1-py3-none-any.whl").write_bytes(b"another, built beside it")
+    for name in ("versioned", "requires_core", "held_commit", "published_metadata", "held_licence",
+                 "carried_by_nautobot_reader", "run", "answers_version", "refused_without_nautobot_token"):
+        monkeypatch.setattr(module, name, lambda *a, **k: None)
+    monkeypatch.setattr(module, "build_nautobot_reader", lambda tmp: reader)
+    monkeypatch.setattr(module, "base_requirements", lambda wheel: ["httpx>=0.27.0,<1"])
+    monkeypatch.setattr(module, "venv", lambda path: path / "bin")
+    installs: list[tuple[tuple[str, ...], list[str] | None]] = []
+
+    def install(env: Path, *requirements: str, constraints: Path | None = None,
+                find_links: Path | None = None) -> None:
+        installs.append((requirements, sorted(p.name for p in find_links.iterdir()) if find_links else None))
+
+    monkeypatch.setattr(module, "install", install)
+    module.check_nautobot_reader(tmp_path, core)
+    version = module.tree_version()
+    by_name = [links for requirements, links in installs if requirements == (f"fylgja-nautobot=={version}",)]
     assert by_name == [sorted([core.name, reader.name])]
     assert [links for _, links in installs if links is not None] == by_name
 

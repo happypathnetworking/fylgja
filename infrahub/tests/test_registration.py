@@ -1,5 +1,5 @@
 """What Infrahub is given from this repository, read as files: the schema library's DCIM at its commit, and the
-registration, `.infrahub.yml` with its queries, its template and its two checks.
+registration, `.infrahub.yml` with its query, its template and its artifact definition.
 
 Nothing here renders the template: Infrahub's own workers do, from the commit they fetch.
 """
@@ -32,7 +32,6 @@ SHA256 = {
 REGISTRATION = {
     "queries": [
         {"name": "device_config", "file_path": "infrahub/queries/device_config.gql"},
-        {"name": "fylgja_branch", "file_path": "infrahub/queries/fylgja_branch.gql"},
     ],
     "jinja2_transforms": [
         {
@@ -51,10 +50,6 @@ REGISTRATION = {
             "targets": "fylgja-devices",
             "transformation": "device_config",
         },
-    ],
-    "check_definitions": [
-        {"name": "fylgja-step", "file_path": "infrahub/checks/fylgja_step.py", "class_name": "FylgjaStep"},
-        {"name": "fylgja-twin", "file_path": "infrahub/checks/fylgja_twin.py", "class_name": "FylgjaTwin"},
     ],
 }
 
@@ -128,14 +123,12 @@ def test_the_library_is_the_pinned_commit() -> None:
     assert {name: hashlib.sha256((LIBRARY / name).read_bytes()).hexdigest() for name in SHA256} == SHA256
 
 
-def test_the_registration_is_two_queries_one_transform_one_artifact_definition_and_two_checks() -> None:
-    """An import loads the two queries, the transform, the artifact definition and the two check definitions, each
-    global: no schema and no object."""
+def test_the_registration_is_one_query_one_transform_and_one_artifact_definition() -> None:
+    """An import loads the query, the transform and the artifact definition: no check, no schema and no object."""
     registration = yaml.safe_load((ROOT / ".infrahub.yml").read_text())
     assert registration == REGISTRATION
     paths = [query["file_path"] for query in registration["queries"]]
     paths += [transform["template_path"] for transform in registration["jinja2_transforms"]]
-    paths += [check["file_path"] for check in registration["check_definitions"]]
     assert [path for path in paths if not (ROOT / path).is_file()] == []
 
 

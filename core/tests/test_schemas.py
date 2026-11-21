@@ -148,27 +148,6 @@ def _file(*parts: str) -> Callable[[], Any]:
     return lambda: (json.loads if path.suffix == ".json" else yaml.safe_load)(path.read_text())
 
 
-def _plan() -> dict[str, Any]:
-    """A plan of a change with no stage: the members every plan has."""
-    return {
-        "plan_version": "1", "status": "empty", "headline": "Nothing to plan\nNo stage selects a device.",
-        "change": {"id": "pc-1", "where": 'Change "third link"'}, "scope": "tag:fylgja",
-        "read_at": "2026-11-09T10:15:11Z",
-        "findings": [{"rule": "stages.none", "severity": "error", "message": "No stage selects a device."}],
-        "stages": [],
-    }
-
-
-def _rehearsal() -> dict[str, Any]:
-    """A rehearsal that ended before its plan began: the members every rehearsal has."""
-    return {
-        "rehearsal_version": "1", "status": "not_rehearsed", "headline": "Not rehearsed\nA twin is still there.",
-        "plan": None, "twin": "rh-00000000-11111111", "run_id": "run-1", "took_s": 120.4, "stages": [],
-        "already_failing": [], "reclaimed": [],
-        "findings": [{"rule": "twin.held", "severity": "error", "message": "A twin is still there."}],
-    }
-
-
 # Each format holding a `$`-ended pattern: a valid document of it, and the pointer of one patterned string member.
 DOLLAR_ENDED: list[tuple[str, str, Callable[[], Any], str]] = [
     ("blueprint-1", "testdata/blueprint/three-node.json", _file("testdata", "blueprint", "three-node.json"),
@@ -180,10 +159,10 @@ DOLLAR_ENDED: list[tuple[str, str, Callable[[], Any], str]] = [
     ("infrahub-reader-1", "infrahub/seed/reader.yaml", _file("infrahub", "seed", "reader.yaml"),
      "/platforms/0/package"),
     ("netbox-reader-1", "netbox/seed/reader.yaml", _file("netbox", "seed", "reader.yaml"), "/platforms/0/package"),
-    ("plan-1", "_plan", _plan, "/read_at"),
+    ("nautobot-reader-1", "nautobot/seed/reader.yaml", _file("nautobot", "seed", "reader.yaml"),
+     "/platforms/0/package"),
     ("platform-package-1", "psp/nokia_srlinux.yaml", _file("psp", "nokia_srlinux.yaml"), "/id"),
     ("probe-package-1", "probes/ping.yaml", _file("probes", "ping.yaml"), "/format"),
-    ("rehearsal-1", "_rehearsal", _rehearsal, "/twin"),
     ("twin-record-1", "test_twin_record.doc", test_twin_record.doc, "/status/last_step/run_id"),
 ]
 
@@ -191,7 +170,7 @@ DOLLAR_ENDED: list[tuple[str, str, Callable[[], Any], str]] = [
 def test_the_rows_are_every_format_with_a_dollar_ended_pattern() -> None:
     ended = {name: [p for p in _patterns(doc) if p.endswith("$")] for name, doc in _formats().items()}
     assert {name for name, found in ended.items() if found} == {row[0] for row in DOLLAR_ENDED}
-    assert sum(len(found) for found in ended.values()) == 31
+    assert sum(len(found) for found in ended.values()) == 27
 
 
 @pytest.mark.parametrize(("name", "source", "made", "pointer"), DOLLAR_ENDED, ids=[row[0] for row in DOLLAR_ENDED])

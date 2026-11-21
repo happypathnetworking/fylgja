@@ -14,7 +14,7 @@ from pages import ROOT, blocks, rows, section, text
 from fylgja_core import release
 
 PAGE = "docs/installing.md"
-PYPROJECTS = ("core", "readers/infrahub", "readers/netbox")
+PYPROJECTS = ("core", "readers/infrahub", "readers/netbox", "readers/nautobot")
 
 
 def _project(member: str) -> dict[str, object]:

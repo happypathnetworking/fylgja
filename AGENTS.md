@@ -6,12 +6,14 @@ running real network operating system images. It knows no source of truth. The d
 and what it left.
 
 Beside the core this repository holds a reader for each source of truth, which reads that
-source into blueprints: the Infrahub reader under `readers/infrahub/` and the NetBox reader
-under `readers/netbox/`; and the example orchestrator, under `orchestrator/`, which rehearses a
-change of either source on a twin, a proposed change in Infrahub or a branch in NetBox (D-081,
-D-095, D-097). The Go core is retired: it gets no more fixes, and nothing tracked here needs it
-or the project's archived repository to build, test or run. The archived repository is cited as
-history, and as the reference the Infrahub reader and the example were written against.
+source into blueprints: the Infrahub reader under `readers/infrahub/`, the NetBox reader
+under `readers/netbox/` and the Nautobot reader under `readers/nautobot/`, published from 1.1.0
+(D-118, D-121). The example orchestrator, which rehearses a change of Infrahub or of NetBox on a
+twin, a proposed change in Infrahub or a branch in NetBox (D-081, D-095, D-097), and the
+demonstrations that run it live in `happypathnetworking/fylgja-examples` (D-126). The Go core is
+retired: it gets no more fixes, and nothing tracked here needs it or the project's archived
+repository to build, test or run. The archived repository is cited as history, and as the
+reference the Infrahub reader and the example were written against.
 
 ## Read first
 
@@ -21,13 +23,17 @@ history, and as the reference the Infrahub reader and the example were written a
 - `CONTRIBUTING.md`: setup, tiers, conventions.
 - `formats/`: every format, one current version each.
 - `docs/integrating.md`: how to join Fylgja to a source of truth and a platform of your own,
-  walked through the example orchestrator.
+  walked through the example orchestrator of `fylgja-examples`.
 - `readers/infrahub/README.md`: the Infrahub reader, the Infrahub versions it passed on and
   its upgrade procedure.
 - `readers/netbox/README.md`: the NetBox reader, the versions of NetBox and of its branching
   plugin it passed on and its upgrade procedure.
+- `readers/nautobot/README.md`: the Nautobot reader, the versions of Nautobot and of Golden
+  Config it passed on ("Supported Nautobot versions") and its upgrade procedure ("Upgrading
+  Nautobot").
 - `design/verified-facts.md`: read it when a task touches containerlab, clabernetes,
-  Infrahub, NetBox, Prefect or a network operating system, and trust it over recollection.
+  Infrahub, NetBox, Nautobot, Prefect or a network operating system, and trust it over
+  recollection.
 
 ## Rules
 
@@ -36,7 +42,7 @@ history, and as the reference the Infrahub reader and the example were written a
   that supersedes the old one.
 - **A change to a format is made in `formats/`,** in the same change as the code.
 - **Verify against the running system** before asserting how containerlab, clabernetes,
-  Infrahub, NetBox, Prefect, uv or a network operating system behaves. Record the result in
+  Infrahub, NetBox, Nautobot, Prefect, uv or a network operating system behaves. Record the result in
   `design/verified-facts.md`.
 - **Never echo, log or persist a token or a password.** `local/.env` holds every value.
 - **Commit with a conventional-commit message whose body says why.** Never commit `local/`.

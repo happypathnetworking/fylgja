@@ -1,4 +1,4 @@
-# What 1.0 holds
+# What major version 1 holds
 
 This page says what a program, a document or a script of yours may rely on across the releases of
 major version 1, and what it may not. The other pages say how each thing works; this one says which
@@ -6,9 +6,9 @@ of them are held.
 
 ## The version
 
-The three published distributions, `fylgja-core`, `fylgja-infrahub` and `fylgja-netbox`, share one
-version and follow semantic versioning from 1.0.0. A release is never one distribution alone. Each
-reader requires the core at the reader's own version or a later one below 2, so it works with the
+The four published distributions, `fylgja-core`, `fylgja-infrahub`, `fylgja-netbox` and, from 1.1.0,
+`fylgja-nautobot`, share one version and follow semantic versioning from 1.0.0. A release is never one distribution
+alone. Each reader requires the core at the reader's own version or a later one below 2, so it works with the
 core of its own major version.
 
 ## What is held
@@ -28,6 +28,7 @@ at version 1 that you write or that the core answers with:
 | [probe declaration](../formats/probes-1.schema.json) | A blueprint's probes |
 | [Infrahub reader document](../formats/infrahub-reader-1.schema.json) | How `fylgja-infrahub` reads Infrahub, which you write |
 | [NetBox reader document](../formats/netbox-reader-1.schema.json) | How `fylgja-netbox` reads NetBox, which you write |
+| [Nautobot reader document](../formats/nautobot-reader-1.schema.json) | How `fylgja-nautobot` reads Nautobot, which you write, from 1.1.0 |
 | [findings](../formats/findings-1.schema.json) | A verdict, which the core answers |
 | [problem](../formats/problem-1.schema.json) | A refusal, which the core answers |
 | [twin record](../formats/twin-record-1.schema.json) | A twin, which the core answers |
@@ -44,11 +45,15 @@ Each command is held with its options and its exit statuses.
 | `fylgja-core-server` | [The server page](server.md#options), [its exit statuses](server.md#exit-statuses) |
 | `fylgja-infrahub` | [The Infrahub reader](../readers/infrahub/README.md#the-command) |
 | `fylgja-netbox` | [The NetBox reader](../readers/netbox/README.md#the-command) |
+| `fylgja-nautobot` | [The Nautobot reader](../readers/nautobot/README.md#the-command), from 1.1.0 |
 
 ### The settings
 
 The names of the variables those commands read are held: [the server's](server.md#settings),
-[the client's](cli.md#before-a-command) and each reader's, which its README gives. A credential's
+[the client's](cli.md#before-a-command) and each reader's, which its README gives under "The command":
+[the Infrahub reader's](../readers/infrahub/README.md#the-command),
+[the NetBox reader's](../readers/netbox/README.md#the-command) and, from 1.1.0,
+[the Nautobot reader's](../readers/nautobot/README.md#the-command). A credential's
 name is held by its pattern: `FYLGJA_CREDENTIAL_<NAME>_USERNAME`,
 `FYLGJA_CREDENTIAL_<NAME>_PASSWORD` and `FYLGJA_CREDENTIAL_<NAME>_REGISTRY`, for each `<NAME>` a
 platform package gives.
@@ -57,7 +62,8 @@ platform package gives.
 
 The names that [the client library](client.md) gives, and those under "The library" in
 [the Infrahub reader's README](../readers/infrahub/README.md#the-library) and in
-[the NetBox reader's](../readers/netbox/README.md#the-library). A module or a name no page gives is
+[the NetBox reader's](../readers/netbox/README.md#the-library) and, from 1.1.0,
+[the Nautobot reader's](../readers/nautobot/README.md#the-library). A module or a name no page gives is
 not held, and the names of the example's code that [Integrating](integrating.md) gives are the
 example's, which is not held.
 
@@ -94,10 +100,6 @@ A format's version 2 comes only with a major release, and replaces version 1.
 
 ## Not promised
 
-- The example orchestrator, `fylgja-orchestrator`, and its two documents, which the example writes
-  and reads: [`plan-1.schema.json`](../formats/plan-1.schema.json) and
-  [`rehearsal-1.schema.json`](../formats/rehearsal-1.schema.json). [Integrating](integrating.md)
-  describes it as a model to copy.
 - The make targets, the scripts, the demonstrations and `deploy/`.
 - The wording of a message. Read a refusal by its rule id.
 - A bundle's or a deployment's id from one release to the next: a package's content moves it.

@@ -1,18 +1,13 @@
-"""The reader's and the example's NetBox accounts, `fylgja-reader` and `fylgja-orchestrator`, at their least
-permissions, and their tokens' lines in `local/.env`.
+"""The reader's NetBox account, `fylgja-reader`, at its least permissions, and its token's line in `local/.env`.
 
 Run by `make netbox-seed` after the seed, as `core/.venv/bin/python netbox/seed/account.py --env <local/.env>`, with
 `local/.env` loaded for `FYLGJA_NETBOX_ADDRESS` and the superuser's `FYLGJA_NETBOX_WRITE_TOKEN` (D-042). The reader
-writes nothing to NetBox, and the example's writes are a journal entry on a branch and the branch's tags (D-095,
-D-097), so each runs under an account of its own, no superuser, granted what was read as least for those on the
-running instance (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3"), `GRANTS`: the reader's
-`view` of each type a read lists, under a branch's header too, which asks no grant of its own, and `view` with
-`render_config` on `dcim.device` for a render; the example's the same, with `view` and `add` on
-`extras.journalentry`, any object's journal and not a branch's alone, and `view` and `change` on
-`netbox_branching.branch`, which writes any member of a branch, its tags among them, and is all the plugin's source
-asks of a stuck branch's `recover`, read in the source and not run.
+writes nothing to NetBox, so it runs under an account of its own, no superuser, granted what was read as least for a
+read on the running instance (design/verified-facts.md, "NetBox 4.7.5 with netbox-branching 1.2.3"), `GRANTS`: `view`
+of each type a read lists, under a branch's header too, which asks no grant of its own, and `view` with
+`render_config` on `dcim.device` for a render.
 
-Each run, for each account in turn:
+Each run:
 
 - its user is found by its `username`, or made active with a password, which NetBox requires: generated, sent and
   kept nowhere. A user found inactive is set active. One found a superuser is refused, since no request of the API
@@ -24,9 +19,9 @@ Each run, for each account in turn:
   purge keeps `local/.env`, and a new instance holds no token of an old key. Else a token is made for the account by
   the superuser, which NetBox answers once, and is presented as `nbt_<key>.<token>`.
 
-The lines are written last, in one rename: each replaces the last line that holds its name, as a shell reads the
-file, or is appended where none does; every other byte is kept and the file left at mode `0600`. A replaced token is
-not revoked: a dead one is gone already, and a live one of the other account's is that account's. NetBox not
+The line is written last, in one rename: it replaces the last line that holds its name, as a shell reads the file,
+or is appended where none does; every other byte is kept and the file left at mode `0600`. A replaced token is not
+revoked: a dead one is gone already, and a live one is another user's. NetBox not
 answering, or refusing, is a failure, said with the remedy for what failed where one is known (`remedy`), and the
 file is left as it was.
 
@@ -58,10 +53,7 @@ from box import ADDRESS, TOKEN, Box, BoxError, Unfit, where
 READER = "fylgja-reader"
 """The reader's account."""
 
-ORCHESTRATOR = "fylgja-orchestrator"
-"""The example orchestrator's account."""
-
-LINES = MappingProxyType({READER: "FYLGJA_NETBOX_TOKEN", ORCHESTRATOR: "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN"})
+LINES = MappingProxyType({READER: "FYLGJA_NETBOX_TOKEN"})
 """The line of `local/.env` that holds each account's token."""
 
 
@@ -96,16 +88,9 @@ GRANTS: Mapping[str, tuple[Grant, ...]] = MappingProxyType(
             Grant("fylgja-reader", READS, ("view",)),
             Grant("fylgja-reader-render", RENDER, ("view", "render_config")),
         ),
-        ORCHESTRATOR: (
-            Grant("fylgja-orchestrator", READS, ("view",)),
-            Grant("fylgja-orchestrator-render", RENDER, ("view", "render_config")),
-            Grant("fylgja-orchestrator-journal", ("extras.journalentry",), ("view", "add")),
-            Grant("fylgja-orchestrator-branch", ("netbox_branching.branch",), ("view", "change")),
-        ),
     }
 )
-"""Each account's grants, the reader's first: the example reads through the reader with its own token, so it holds
-the reader's rows under names of its own, and beside them a journal entry's and a branch's."""
+"""Each account's grants: the reader's `view` of what a read lists and its render."""
 
 USERS = "users/users/"
 PERMISSIONS = "users/permissions/"
@@ -131,8 +116,8 @@ RELOAD = (
 """The remedy where NetBox refused the write token, 401 or 403, as `seed.py` says it."""
 
 NAMES = frozenset(grant.name for grants in GRANTS.values() for grant in grants)
-"""Every grant `account.py` keeps. One of another account's that names this user is brought to its own account
-alone by the same run, so it is no stray."""
+"""Every grant `account.py` keeps. A permission of this name that names another user is brought to its own
+user alone by the same run, so it is no stray."""
 
 FORM = re.compile(r"nbt_([A-Za-z0-9]+)\.([A-Za-z0-9]+)")
 """A token as NetBox presents it, `nbt_<key>.<token>`."""

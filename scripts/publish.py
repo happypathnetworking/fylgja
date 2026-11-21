@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The publish check (D-106): holds the tag, `VERSION`, `CHANGELOG.md`'s head and the three wheels in `dist/` to one
+"""The publish check (D-106): holds the tag, `VERSION`, `CHANGELOG.md`'s head and the four wheels in `dist/` to one
 another before anything is uploaded, since a version uploaded can never be uploaded again.
 
 Run as `python3 -I scripts/publish.py`, standard library alone. It performs no upload, tag or push, and contacts no
@@ -22,8 +22,13 @@ from email.parser import Parser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# The three published distributions: each wheel's prefix is the package that holds its COMMIT, and its project name.
-NAMES = {"fylgja_core": "fylgja-core", "fylgja_infrahub": "fylgja-infrahub", "fylgja_netbox": "fylgja-netbox"}
+# The four published distributions: each wheel's prefix is the package that holds its COMMIT, and its project name.
+NAMES = {
+    "fylgja_core": "fylgja-core",
+    "fylgja_infrahub": "fylgja-infrahub",
+    "fylgja_netbox": "fylgja-netbox",
+    "fylgja_nautobot": "fylgja-nautobot",
+}
 RELEASE = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)")
 CANDIDATE = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)rc[1-9]\d*")
 HEADING = re.compile(r"^## (\S+) - (unreleased|\d{4}-\d{2}-\d{2})$")
@@ -202,7 +207,7 @@ def check(tag: str, commit: str, dist: Path, root: Path = ROOT) -> str:
         faults.append(f"{dist} is not a directory")
     for name in present:
         if name not in expected:
-            faults.append(f"{dist.name}/{name}: is none of the three wheels at {version}")
+            faults.append(f"{dist.name}/{name}: is none of the four wheels at {version}")
     for name, package in expected.items():
         if name not in present:
             faults.append(f"{dist.name}/{name}: is missing ({package})")

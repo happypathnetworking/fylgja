@@ -42,25 +42,23 @@ Ready.
 
 ## A demonstration
 
-From a clone, one command starts a source of truth, seeds it with a network, makes a change in it
-and rehearses the change on a twin:
-
-```sh
-make netbox-demo
-```
-
-[The demonstrations](docs/demonstrations.md) say what the host needs and what each one writes.
+The demonstrations start a source of truth, seed it with a network, make a change in it and
+rehearse the change on a twin, from a clone of their own repository,
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/). [The demonstrations](docs/demonstrations.md) say
+where they went and link what the host needs and what each one writes.
 
 ## Read on
 
-- [What 1.0 holds](docs/compatibility.md) says what stays the same across the releases of major
+- [What major version 1 holds](docs/compatibility.md) says what stays the same across the releases of major
   version 1, and what does not.
 - [The documentation](docs/README.md) lists every page: the server, the command, API 1 and the
   client library.
-- [The Infrahub reader](readers/infrahub/README.md) and
-  [the NetBox reader](readers/netbox/README.md) read a source of truth into blueprints.
+- [The Infrahub reader](readers/infrahub/README.md),
+  [the NetBox reader](readers/netbox/README.md) and
+  [the Nautobot reader](readers/nautobot/README.md), published from 1.1.0, read a source of truth
+  into blueprints.
 - [Integrating Fylgja](docs/integrating.md) joins Fylgja to a source of truth and a platform of
-  your own, walked through the example orchestrator.
+  your own, walked through the example orchestrator of `fylgja-examples`.
 
 ## For contributors
 

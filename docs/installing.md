@@ -1,7 +1,7 @@
 # Installing Fylgja
 
-Fylgja is installed as up to four packages, which share one version. Each is a Python distribution,
-published to PyPI as a wheel from version 1.0.0 on.
+Fylgja is installed as up to five packages, which share one version. Each is a Python distribution,
+published to PyPI as a wheel from version 1.0.0 on; the Nautobot reader's is from 1.1.0.
 
 | Distribution | What it gives |
 |---|---|
@@ -9,6 +9,7 @@ published to PyPI as a wheel from version 1.0.0 on.
 | `fylgja-core[server]` | The same, with the libraries the server needs, and the `fylgja-core-server` command. |
 | `fylgja-infrahub` | The Infrahub reader, which reads an Infrahub into blueprints, and its `fylgja-infrahub` command. |
 | `fylgja-netbox` | The NetBox reader, which reads a NetBox into blueprints, and its `fylgja-netbox` command. |
+| `fylgja-nautobot` | The Nautobot reader, which reads a Nautobot into blueprints, and its `fylgja-nautobot` command, from 1.1.0. |
 
 Install `fylgja-core` where you only call a server or read a blueprint. Install the extra `server`
 where the server runs. Install a reader beside the core where you read that source of truth. A
@@ -16,7 +17,8 @@ reader requires the core at the reader's own version or a later one below 2, so 
 the core in.
 
 The example orchestrator, which rehearses a change of a source of truth on a twin, is not
-published. It is installed from a clone of the repository and is described in
+published, and lives in its own repository,
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/). It is installed from a clone of that repository and is described in
 [integrating Fylgja](integrating.md).
 
 ## What it needs
@@ -28,7 +30,7 @@ Make an environment of your own for the install, so that it touches no other.
 python3.14 -m venv fylgja-env
 fylgja-env/bin/pip install fylgja-core
 fylgja-env/bin/pip install "fylgja-core[server]"
-fylgja-env/bin/pip install fylgja-infrahub fylgja-netbox
+fylgja-env/bin/pip install fylgja-infrahub fylgja-netbox fylgja-nautobot
 ```
 
 Or with uv:
@@ -37,7 +39,7 @@ Or with uv:
 uv venv --python 3.14 fylgja-env
 uv pip install --python fylgja-env/bin/python fylgja-core
 uv pip install --python fylgja-env/bin/python "fylgja-core[server]"
-uv pip install --python fylgja-env/bin/python fylgja-infrahub fylgja-netbox
+uv pip install --python fylgja-env/bin/python fylgja-infrahub fylgja-netbox fylgja-nautobot
 ```
 
 The commands are then in `fylgja-env/bin/`. Activate the environment with
@@ -48,7 +50,7 @@ front of each.
 
 Where a version is not on PyPI yet, or you want the tree as it is, build the wheels from a clone.
 You need Python 3.14, git, GNU make, uv 0.12.23 and the network: the build fetches its tools.
-Another uv is refused. `make wheels` builds the three published wheels into `dist/`, at the version
+Another uv is refused. `make wheels` builds the four published wheels into `dist/`, at the version
 in the file `VERSION`, with the `python3` on the `PATH`, which must be Python 3.14. The shell finds
 each wheel by its name, since neither uv nor pip expands a pattern.
 
@@ -57,10 +59,11 @@ make wheels
 core=$(ls dist/fylgja_core-*.whl)
 infrahub=$(ls dist/fylgja_infrahub-*.whl)
 netbox=$(ls dist/fylgja_netbox-*.whl)
+nautobot=$(ls dist/fylgja_nautobot-*.whl)
 uv venv --python 3.14 fylgja-env
 uv pip install --python fylgja-env/bin/python "$core"
 uv pip install --python fylgja-env/bin/python "$core[server]"
-uv pip install --python fylgja-env/bin/python "$core" "$infrahub" "$netbox"
+uv pip install --python fylgja-env/bin/python "$core" "$infrahub" "$netbox" "$nautobot"
 ```
 
 Install a reader's wheel in the same command as the core's, as in the last line, so that the core it
@@ -69,8 +72,8 @@ requires is found beside it and not on an index.
 ## Checking it
 
 `--version` prints the command's name, the version and the commit the build was made at, and
-exits 0. `fylgja-core-server`, `fylgja-infrahub` and `fylgja-netbox` answer it the same way. The
-line is for people, and its form may change; parse nothing of it.
+exits 0. `fylgja-core-server`, `fylgja-infrahub`, `fylgja-netbox` and `fylgja-nautobot` answer it the
+same way. The line is for people, and its form may change; parse nothing of it.
 
 ```console
 $ fylgja-core --version

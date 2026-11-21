@@ -1,0 +1,27 @@
+query ($device_id: ID!) {
+  device(id: $device_id) {
+    hostname: name
+    description: comments
+    config_context
+    platform {
+      name
+      manufacturer {
+        name
+      }
+    }
+    interfaces {
+      name
+      mgmt_only
+      enabled
+      ip_addresses {
+        address
+      }
+      cable_peer_interface {
+        name
+        device {
+          name
+        }
+      }
+    }
+  }
+}

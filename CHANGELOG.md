@@ -4,19 +4,25 @@ What each release changed for a user, newest first, and its known limits ([D-106
 release's section is headed `## <version> - <date>`, `unreleased` standing in the date until the commit that is tagged
 dates it.
 
-## 1.0.1 - unreleased
+## 1.1.0rc1 - 2026-11-21
 
-A fix to the core's server. The three distributions are released at 1.0.1 together, and each reader
-requires the core at 1.0.1 or a later version below 2.
+The release candidate of 1.1.0. 1.0.1 was never released, so its fix is in this section. The four
+distributions are released at 1.1.0 together, and each reader requires the core at 1.1.0rc1 or a
+later version below 2.
 
 - **A SIGTERM while `fylgja-core-server` starts now ends it.** Python can run a signal handler where
   an exception it raises is printed and dropped, inside the callback of an import's lock among
   them. 1.0.0's handler raised one, so a SIGTERM handled there was lost and the server went on to
   serve: once in 284 starts under load. In a container the server is PID 1, and it ran until it was
   killed. The server now exits 143 at a SIGTERM wherever its start has reached.
-
-For a checkout, `make demo-dependencies` gives a host what [the demonstrations](docs/demonstrations.md)
-need where it is missing, and says what is left to do by hand.
+- **The Nautobot reader, `fylgja-nautobot`, is published.** It reads free Nautobot as it stands,
+  under a tag, into a blueprint whose every configuration is Golden Config's render at the read, or
+  the findings that refused it. Its command, its document, its settings and its library are held as
+  [the compatibility page](docs/compatibility.md) says.
+- **The example orchestrator and the demonstrations are in their own repository.** They are in
+  [`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/), no
+  longer here, and are installed from a clone of it. [The demonstrations](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/docs/demonstrations.md)
+  are run from there.
 
 ### Known limits
 
@@ -50,6 +56,10 @@ distributions. Each line that ends ([more]) is one question of
 - A `view` grant of NetBox that carries constraints may shorten a list and its count alike, so a
   read could pass on less than NetBox holds, and nothing in the read can tell. Give the reader's
   account a grant with none. ([more][oq])
+- The Nautobot reader was read against one Nautobot web instance and one writer at a time. Several
+  web instances, each with its own clone of a template repository, two writers at once, a changelog
+  that prunes rows, a template repository behind credentials, and the stored members of a
+  dynamic-set or a static group, which the reader warns of as unchecked, are unread. ([more][oq])
 - No rule of verify reads an address. A step that gives a port an address is shown pushed, not shown
   in force. ([more][oq])
 - A mark made through one core and planned through another is unread: the source reads a mark's
@@ -80,8 +90,8 @@ The example's, the test suites' and the development tooling's open questions are
 scenario's forty-node twin, the cluster's rehearsal time, the task worker's clone, a registration
 read from GitHub, Prefect's credential in NetBox's changelog, authoring a change of several steps in
 NetBox, three small gaps, `make netbox-up`'s network, a rehearsal's time on an Infrahub kept for
-days, and what the first release left unread. The development database's health check on such an
-Infrahub is answered: it allows 180 s.
+days, what the first release left unread, and a permission's groups the seed leaves. The
+development database's health check on such an Infrahub is answered: it allows 180 s.
 
 [oq]: design/decisions.md#open-questions
 

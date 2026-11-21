@@ -1,0 +1,12 @@
+# The reader document for the seeded fixture network: the Nautobot reader maps each device whose manufacturer and
+# platform are a pair below to the platform package named beside them (psp/nokia_srlinux.yaml's id). The member
+# `probes` names the configuration context that holds the probes, here `fylgja-probes` (main.yaml); that context is
+# inactive, so no device's configuration context takes it. Its format is the Nautobot reader's, nautobot-reader-1,
+# whose schema, formats/nautobot-reader-1.schema.json, the reader's distribution carries and holds this file to;
+# nautobot/tests/test_fixture.py holds its values.
+reader_version: "1"
+platforms:
+  - manufacturer: Nokia
+    platform: SR Linux
+    package: nokia_srlinux
+probes: fylgja-probes

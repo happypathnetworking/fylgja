@@ -8,7 +8,7 @@ A **problem** is a refusal at the door, answered as a problem document
 the member at fault. A **finding** is part of a verdict, each naming the object it is about.
 Rules the API, the drivers, the push and verify file arrive with their code. The example
 orchestrator's rules are its own, never the core's, and its catalogue is
-[`orchestrator/rules.md`](../orchestrator/rules.md).
+[`orchestrator/rules.md`](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/orchestrator/rules.md) in `fylgja-examples`.
 
 The Infrahub reader's rules are its own too, and its catalogue is
 [`readers/infrahub/rules.md`](../readers/infrahub/rules.md). The NetBox reader's are its own as

@@ -14,12 +14,12 @@ from typing import Any
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-MEMBERS = ["core", "readers/infrahub", "readers/netbox", "orchestrator"]
+MEMBERS = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot"]
 NAMES = {
     "core": "fylgja-core",
     "readers/infrahub": "fylgja-infrahub",
     "readers/netbox": "fylgja-netbox",
-    "orchestrator": "fylgja-orchestrator",
+    "readers/nautobot": "fylgja-nautobot",
 }
 PINNED = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;,]+)$")
 
@@ -45,7 +45,10 @@ def test_the_root_is_a_workspace_of_the_four_and_no_distribution() -> None:
     assert uv["python-downloads"] == "never"
     assert uv["python-preference"] == "only-system"
     assert uv["workspace"] == {"members": MEMBERS}
-    assert uv["sources"] == {name: {"workspace": True} for name in ("fylgja-core", "fylgja-infrahub", "fylgja-netbox")}
+    assert uv["sources"] == {
+        name: {"workspace": True}
+        for name in ("fylgja-core", "fylgja-infrahub", "fylgja-netbox", "fylgja-nautobot")
+    }
     assert set(uv) == {"required-version", "python-downloads", "python-preference", "workspace", "sources"}
     for member in MEMBERS:
         assert load(f"{member}/pyproject.toml")["project"]["name"] == NAMES[member]
@@ -97,6 +100,16 @@ def test_each_exact_pin_is_the_locks_version() -> None:
             versions = locked[normalised(pin[1])]
             assert [v["version"] for v in versions] == [pin[2]], f"{member}: {entry}"
     assert found == 30
+
+
+def test_the_lock_names_neither_prefect_nor_nornir() -> None:
+    """The example, the one member that reached them, lives in `fylgja-examples`: the lock holds the four members and
+    nothing that only the example needed."""
+    lock = load("uv.lock")
+    names = {normalised(entry["name"]) for entry in lock["package"]}
+    assert len(names) > 20, "the parse is blind"
+    assert not [n for n in names if n.startswith(("prefect", "nornir")) or n == "fylgja-orchestrator"]
+    assert sorted(lock["manifest"]["members"]) == sorted(NAMES.values())
 
 
 def test_venv_is_a_locked_sync_into_core_venv() -> None:

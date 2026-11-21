@@ -26,8 +26,8 @@ import pytest
 from fylgja_core import release
 
 ROOT = Path(__file__).resolve().parents[2]
-MEMBERS = ["core", "readers/infrahub", "readers/netbox", "orchestrator"]
-READERS = ["readers/infrahub", "readers/netbox"]
+MEMBERS = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot"]
+READERS = ["readers/infrahub", "readers/netbox", "readers/nautobot"]
 # A release, X.Y.Z, or its candidate, X.Y.ZrcN.
 FORM = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(rc[1-9]\d*)?")
 VERSION = (ROOT / "VERSION").read_text().strip()
@@ -107,17 +107,11 @@ def test_each_reader_requires_the_core_at_its_own_version_within_the_major(membe
     assert on_core == [f"fylgja-core>={VERSION},<{int(VERSION.split('.')[0]) + 1}"]
 
 
-def test_the_example_names_the_core_and_the_readers_without_a_range() -> None:
-    dependencies = project("orchestrator")["dependencies"]
-    ours = [entry for entry in dependencies if entry.startswith("fylgja-")]
-    assert ours == ["fylgja-core", "fylgja-infrahub", "fylgja-netbox"]
-
-
 PACKAGES = {
     "core": "fylgja_core",
     "readers/infrahub": "fylgja_infrahub",
     "readers/netbox": "fylgja_netbox",
-    "orchestrator": "fylgja_orchestrator",
+    "readers/nautobot": "fylgja_nautobot",
 }
 VARIABLE = "FYLGJA_BUILD_COMMIT"
 HEX = "0" * 40
@@ -255,7 +249,7 @@ def test_the_cores_build_ships_each_packages_yaml_and_nothing_else(
         build_core(module, tmp_path / "lib2")
 
 
-PUBLISHED = ["core", "readers/infrahub", "readers/netbox"]
+PUBLISHED = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot"]
 REPOSITORY = "https://github.com/happypathnetworking/fylgja"
 CLASSIFIERS = {
     "Development Status :: 5 - Production/Stable",
@@ -346,12 +340,6 @@ def test_every_published_readme_is_rewritten_and_each_target_is_a_file_of_the_tr
                 assert (ROOT / target.removeprefix(prefix).split("#")[0]).is_file(), target
 
 
-def test_the_example_is_marked_never_to_be_uploaded() -> None:
-    found = project("orchestrator")
-    assert found["classifiers"] == ["Private :: Do Not Upload"]
-    assert "urls" not in found and "authors" not in found and "maintainers" not in found
-
-
 @pytest.mark.parametrize("member", PUBLISHED)
 def test_each_published_build_carries_the_licence(
     member: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -376,15 +364,6 @@ def test_each_published_build_carries_the_licence(
     step.build_lib = str(tmp_path / "lib2")
     with pytest.raises(SystemExit, match=re.escape(str(bare / "LICENSE"))):
         step.run()
-
-
-def test_the_example_build_is_not_given_the_licence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    module, _ = load_setup("orchestrator", monkeypatch)
-    monkeypatch.setenv(VARIABLE, HEX)
-    step = module.BuildPy()
-    step.build_lib = str(tmp_path / "lib")
-    step.run()
-    assert not (tmp_path / "lib" / "fylgja_orchestrator" / "LICENSE").exists()
 
 
 def test_the_changelogs_head_is_the_version() -> None:
@@ -416,7 +395,7 @@ def test_make_wheels_removes_each_members_build_directory_first() -> None:
     removed = [line for line in recipe[:build] if line.startswith("rm -rf ")]
     assert removed, recipe
     gone = {word for line in removed for word in line.split()[2:]}
-    assert {"dist", "core/build", "readers/infrahub/build", "readers/netbox/build"} <= gone
+    assert {"dist", "core/build", "readers/infrahub/build", "readers/netbox/build", "readers/nautobot/build"} <= gone
 
 
 def test_make_wheels_builds_with_the_setuptools_the_build_constraints_name() -> None:
@@ -425,9 +404,15 @@ def test_make_wheels_builds_with_the_setuptools_the_build_constraints_name() -> 
     lines = [line.strip() for line in (ROOT / "build-constraints.txt").read_text().splitlines()]
     assert [line for line in lines if line and not line.startswith("#")] == ["setuptools==84.2.1"]
     # Each published member's backend allows the pinned version.
-    for member in ("core", "readers/infrahub", "readers/netbox"):
+    for member in PUBLISHED:
         with (ROOT / member / "pyproject.toml").open("rb") as f:
             assert tomllib.load(f)["build-system"]["requires"] == ["setuptools>=80"], member
+
+
+def test_make_wheels_builds_the_published_members_and_no_other() -> None:
+    (loop,) = [line for line in _wheels_recipe() if "for member in" in line]
+    words = loop.split(" in ")[1].split(";")[0].split()
+    assert words == PUBLISHED, loop
 
 
 # Every bold title of "Open questions" (design/decisions.md), as the start of its text, and where the notes put it: a
@@ -444,6 +429,7 @@ LIMITS = {
     "What the stale rule does not yet rest on a reading of": "The reader's stale rule",
     "A row of the changelog that commits below a higher one": "NetBox may commit a row",
     "A `view` grant with constraints, under the reader": "A `view` grant of NetBox",
+    "What the Nautobot reader does not yet rest on a reading of": "The Nautobot reader was read against",
     "No rule of verify reads an address": "No rule of verify reads an address",
     "A mark through another core": "A mark made through one core",
     "A fixed management address per node on clabernetes": "On the clabernetes driver, a node the dry run answers",
@@ -461,6 +447,7 @@ NAMED = {
     "`make netbox-up` where the network cannot be inspected": "`make netbox-up`'s network",
     "Infrahub on volumes kept for days": "a rehearsal's time on an Infrahub kept for days",
     "What the first release left unread": "what the first release left unread",
+    "A permission's groups, left by the seed's account": "a permission's groups the seed leaves",
 }
 ANSWERED = {
     "A core test whose margin is the host's load",  # the deploys' order is held by the test, the margin gone

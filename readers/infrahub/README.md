@@ -22,7 +22,7 @@ does not own, and an Infrahub upgrade is a procedure, below, not a rewrite.
 - **It is read-only.** It sends no mutation (below).
 - **It knows no stage, proposed change, twin or workflow engine.** Which branch and which time
   to read, and what is done with the blueprint, are its caller's: the core's client files it,
-  and the example orchestrator under `orchestrator/` is one such caller.
+  and [the example orchestrator](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/orchestrator/) of `fylgja-examples` is one such caller.
 - **It has one mapping, and it is not a user's to change.** It reads the DCIM library at the
   commit `schema.COMMIT` names, and a branch whose schema differs from the mapping's table is
   refused before anything of the network is read. What the schema cannot hold, the platform

@@ -73,31 +73,26 @@ The NetBox reader's check, `check_netbox_reader`, follows it in directories of i
    `fylgja-netbox check`, given an address and no token, exits 2 with the one line that names the
    token's variable, printing nothing on stdout and not the address.
 
-The example orchestrator's check, `check_orchestrator`, follows them in directories of its own,
-under `orchestrator/` in the same temporary directory:
+The Nautobot reader's check, `check_nautobot_reader`, follows it in directories of its own, under
+`nautobot-reader/` in the same temporary directory:
 
-1. **Its wheel.** It is built by `uv build --wheel` from a copy of `orchestrator/` and
-   `formats/` side by side, as `orchestrator/setup.py` finds `formats/`; its
-   `fylgja_orchestrator/formats/` holds the formats of the example's two documents,
-   `ORCHESTRATOR_FORMATS`, and no other, its `fylgja_orchestrator/infrahub/queries/` the tree's
-   GraphQL documents of the change source, of which there is at least one, and no other, and the
-   package carries `py.typed`.
-2. **Beside the base and the two readers**, `uv pip install <the core's wheel> <the reader's wheel>
-   <the NetBox reader's wheel> <its wheel>` in an empty environment, the core with no extra and the
-   readers' wheels `build_reader`'s and `build_netbox_reader`'s, since the example's two change
-   sources read through them: `PROBE_ORCHESTRATOR`, run outside the tree, finds the formats the
-   package reads beside it and not in the tree; a plan 1 and a rehearsal 1 document validate,
-   the second's `plan` held to the wheel's own plan 1, and `{}` does not; the rehearsal
-   library's entry points import; no module of the server's libraries, either reader or Prefect
-   (`NOT_BESIDE`) is loaded then, and none of the server's libraries that Prefect does not bring
-   (`NOT_INSTALLED`) is installed; and then the Infrahub change source imports and reads each of
-   its GraphQL documents from the installed package, outside the tree, and the NetBox change
-   source imports; each change source loads nothing of the other or of its reader (`CROSSED`),
-   the NetBox one judged once the Infrahub one's modules and its reader's are dropped from
-   `sys.modules`, so that an import of either is made again and seen. In a fresh interpreter
-   there, `PROBE_EDGE` imports the command's module and finds nothing of the server's libraries
-   or Prefect (`NOT_BESIDE_EDGE`) loaded; then `fylgja-orchestrator --help` and
-   `fylgja-orchestrator stage mark --help` exit 0.
+1. **Its wheel.** It is built once, by `build_nautobot_reader`, with `uv build --wheel` from a
+   copy of `readers/nautobot/` and `formats/` at their places, as `readers/nautobot/setup.py` finds
+   `formats/` two directories up; it requires the core as the Infrahub reader's does; its
+   `fylgja_nautobot/formats/` holds the format of the reader's document, `NAUTOBOT_READER_FORMATS`,
+   and no other, and the package carries `py.typed`.
+2. **Beside the base alone**, in an empty environment of its own: the core's base libraries from the
+   index, then `uv pip install --no-index --find-links <dir> fylgja-nautobot==<VERSION>`, the directory
+   holding the core's wheel and its own and nothing else, with no pre-release flag, so the reader's
+   requirement takes the candidate's core; the core with no extra: `PROBE_NAUTOBOT_READER`, run
+   outside the tree, finds the format the package reads beside it and not in the tree; a copy of
+   the seed's `nautobot/seed/reader.yaml` decodes, its probes the context `fylgja-probes`; the
+   mapping is `nautobot-dcim`; and once the command's module has imported, no module of the server's
+   libraries, Prefect, Infrahub's SDK, the client libraries of NetBox and Nautobot, the Infrahub and NetBox
+   readers or the example (`NOT_BESIDE_NAUTOBOT_READER`) is loaded, or installed. Then
+   `fylgja-nautobot --help` exits 0, and
+   `fylgja-nautobot check`, given an address and no token, exits 2 with the one line that names the
+   token's variable, printing nothing on stdout and not the address.
 
 `main` prints a line a check. Exit 0 when each passes; 1 with the reason on stderr otherwise.
 """
@@ -127,7 +122,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # The one version every distribution is built at (D-106), copied beside each build's copy of the tree, as `formats/` is.
 VERSION = ROOT / "VERSION"
-# What the builds read at the root: the version, the licence the three published wheels carry, and the core's long
+# What the builds read at the root: the version, the licence the four published wheels carry, and the core's long
 # description.
 ROOT_FILES = ("VERSION", "LICENSE", "README.md", "readme_links.py")
 # The metadata every published wheel states (D-106): the project's repository and what hangs off it, the classifiers
@@ -144,7 +139,6 @@ CLASSIFIERS = (
     "Typing :: Typed",
 )
 CORE_CLASSIFIER = "Operating System :: POSIX :: Linux"
-PRIVATE_CLASSIFIER = "Private :: Do Not Upload"
 # The variable the builds read the commit they are made at from (each `setup.py`).
 COMMIT_VARIABLE = "FYLGJA_BUILD_COMMIT"
 PREFIX = "fylgja_core/formats/"
@@ -411,79 +405,59 @@ installed = [name for name in absent if present(name)]
 assert not installed, f"installed beside the base alone: {installed}"
 """
 
-# The formats the example's wheel carries under `fylgja_orchestrator/formats/`, those of its two documents, and no
-# other: stated here and not read from `orchestrator/setup.py`, so a list emptied or widened there fails the check.
-ORCHESTRATOR_FORMATS = ("plan-1.schema.json", "rehearsal-1.schema.json")
-ORCHESTRATOR_PREFIX = "fylgja_orchestrator/formats/"
-ORCHESTRATOR_TYPED = "fylgja_orchestrator/py.typed"
-ORCHESTRATOR_QUERIES = "fylgja_orchestrator/infrahub/queries/"
-# The tree's GraphQL documents of the change source, each of which the example's wheel carries under
-# `ORCHESTRATOR_QUERIES`, and no other.
-SOURCE_QUERIES = ROOT / "orchestrator" / "src" / "fylgja_orchestrator" / "infrahub" / "queries"
-# What the example's rehearsal library never loads beside the base and the two readers: the libraries of the core's
-# `server` extra, either reader and Prefect, each a module or package; of those, what the command's module never loads,
-# all but the two readers, which the change sources it opens read through; and what is not installed there, the
-# server's libraries that Prefect does not bring: Prefect 3.9.2 brings starlette and uvicorn (verified-facts.md,
-# "Prefect 3.9.2"). A dotted name is judged whole, as `PROBE_READER` judges one.
-READERS = ("fylgja_infrahub", "fylgja_netbox")
-NOT_BESIDE = ("starlette", "uvicorn", "grpc", "google.protobuf", "httpx2", "lightkube", "msgspec", "pygnmi", "prefect",
-              *READERS)
-NOT_BESIDE_EDGE = tuple(name for name in NOT_BESIDE if name not in READERS)
-NOT_INSTALLED = ("grpc", "google.protobuf", "httpx2", "lightkube", "msgspec", "pygnmi")
-# What each change source, by its package under `fylgja_orchestrator`, never loads: the other source and its reader.
-# `orchestrator/tests/test_boundary_edge.py` holds the same of what each names, and `core/tests/test_wheelcheck.py`
-# holds the two tuples equal.
-CROSSED = (
-    ("infrahub", ("fylgja_netbox", "fylgja_orchestrator.netbox")),
-    ("netbox", ("fylgja_infrahub", "fylgja_orchestrator.infrahub")),
-)
+# The format the Nautobot reader's wheel carries under `fylgja_nautobot/formats/`, that of its one document, and no
+# other:
+# stated here and not read from `readers/nautobot/setup.py`, so a list emptied or widened there fails the check.
+NAUTOBOT_READER_FORMATS = ("nautobot-reader-1.schema.json",)
+NAUTOBOT_READER_PREFIX = "fylgja_nautobot/formats/"
+NAUTOBOT_READER_TYPED = "fylgja_nautobot/py.typed"
+# The seed's reader document, which the installed reader decodes from a copy outside the tree, and the configuration
+# context it names for the probes; the mapping the reader names in a blueprint's source.
+NAUTOBOT_READER_DOCUMENT = ROOT / "nautobot" / "seed" / "reader.yaml"
+NAUTOBOT_PROBES = "fylgja-probes"
+NAUTOBOT_MAPPING = "nautobot-dcim"
+# The command's two variables: an address it is given, a reserved name that is never reached, and the token it is not.
+NAUTOBOT_ADDRESS = ("FYLGJA_NAUTOBOT_ADDRESS", "http://nautobot.example:8810")
+NAUTOBOT_TOKEN = "FYLGJA_NAUTOBOT_TOKEN"
+# What the Nautobot reader's command never loads beside the base alone, and what is not installed there: the Infrahub
+# reader's list, the example among it, with the client libraries of NetBox and Nautobot and the Infrahub and NetBox
+# readers, as the reader's import
+# test forbids them (`readers/nautobot/tests/test_boundary.py`'s `FORBIDDEN`); `core/tests/test_wheelcheck.py` holds the
+# two to each other.
+NOT_BESIDE_NAUTOBOT_READER = (*NOT_BESIDE_READER, "pynetbox", "pynautobot", "fylgja_infrahub", "fylgja_netbox")
 
-# Run beside the base and the two readers, given the tree's root and then a JSON object of `NOT_BESIDE`,
-# `NOT_INSTALLED` and `CROSSED`: the example's formats, outside the tree; its two documents validated; its rehearsal
-# library imported; nothing of `NOT_BESIDE` loaded, and nothing of `NOT_INSTALLED` installed; then the Infrahub change
-# source imported, with nothing of what `CROSSED` gives it loaded, and each of its GraphQL documents read from the
-# installed package, outside the tree; then, the Infrahub source's modules and its reader's dropped from
-# `sys.modules`, the NetBox change source imported, with nothing of what `CROSSED` gives it loaded again.
-PROBE_ORCHESTRATOR = r"""
+# Run beside the base alone, given the tree's root, a copy of the seed's reader document, the probes' context, the
+# mapping and then `NOT_BESIDE_NAUTOBOT_READER`: the reader's format, outside the tree; the document decoded; the
+# mapping's name; and nothing of `NOT_BESIDE_NAUTOBOT_READER` loaded once the command's module has imported, or
+# installed. A dotted name is judged whole, as `PROBE_READER` judges one.
+PROBE_NAUTOBOT_READER = r"""
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
-import fylgja_orchestrator
+import fylgja_nautobot
 from fylgja_core import schemas
 
-root, given = Path(sys.argv[1]).resolve(), json.loads(sys.argv[2])
-crossed = dict(given["crossed"])
+root, reader, probes, mapping, absent = Path(sys.argv[1]).resolve(), Path(sys.argv[2]), *sys.argv[3:5], sys.argv[5:]
+here = Path(fylgja_nautobot.__file__).resolve().parent / "formats"
+found = schemas.formats_dir("fylgja_nautobot")
+assert found == here, f"formats_dir('fylgja_nautobot') is {found}, not {here}"
+assert root not in found.parents, f"formats_dir('fylgja_nautobot') {found} is under the tree {root}"
+assert root not in reader.resolve().parents, f"the reader document {reader} is under the tree {root}"
 
+from fylgja_nautobot import document
+import fylgja_nautobot.mapping
 
-def under(name, roots):
-    return any(name == root or name.startswith(f"{root}.") for root in roots)
+decoded = document.load(reader)
+assert isinstance(decoded, document.ReaderDocument), f"{reader.name} decodes to {decoded!r}"
+assert decoded.probes == probes, f"{reader.name}'s probes are {decoded.probes!r}, not {probes!r}"
+named = fylgja_nautobot.mapping.READER
+assert named == mapping, f"fylgja_nautobot.mapping.READER is {named!r}"
 
-here = Path(fylgja_orchestrator.__file__).resolve().parent / "formats"
-found = schemas.formats_dir("fylgja_orchestrator")
-assert found == here, f"formats_dir('fylgja_orchestrator') is {found}, not {here}"
-assert root not in found.parents, f"formats_dir('fylgja_orchestrator') {found} is under the tree {root}"
+import fylgja_nautobot.cli
 
-from fylgja_orchestrator.rehearsal import Limits, create, plan, rehearse, stage_list, step
-from fylgja_orchestrator.rehearsal.documents import validate
-from fylgja_orchestrator.rehearsal.report import render
-
-planned = {"plan_version": "1", "status": "empty", "headline": "Nothing to plan",
-           "change": {"id": "pc-1", "where": "a change"}, "scope": "tag:fylgja", "read_at": "2026-11-09T10:15:11Z",
-           "findings": [], "stages": []}
-rehearsed = {"rehearsal_version": "1", "status": "not_rehearsed", "headline": "Not rehearsed", "plan": planned,
-             "twin": "rh-00000000-00000000", "run_id": "run-1", "took_s": 0, "stages": [], "already_failing": [],
-             "reclaimed": [], "findings": []}
-assert validate("plan-1", planned) == [], validate("plan-1", planned)
-assert validate("rehearsal-1", rehearsed) == [], validate("rehearsal-1", rehearsed)
-assert schemas.validator("rehearsal-1", "fylgja_orchestrator").is_valid(rehearsed), "rehearsal-1 refuses a rehearsal"
-assert validate("rehearsal-1", {**rehearsed, "plan": {}}) != [], "rehearsal-1 does not hold its plan to plan 1"
-assert validate("plan-1", {}) != [], "plan-1 accepts {}"
-assert validate("rehearsal-1", {}) != [], "rehearsal-1 accepts {}"
-
-loaded = sorted(m for m in sys.modules if any(m == name or m.startswith(f"{name}.") for name in given["not_loaded"]))
-assert not loaded, f"loaded by the rehearsal library: {loaded}"
+loaded = sorted(m for m in sys.modules if any(m == name or m.startswith(f"{name}.") for name in absent))
+assert not loaded, f"loaded beside the base alone: {loaded}"
 
 
 def present(name):
@@ -494,54 +468,9 @@ def present(name):
         return False
 
 
-installed = [name for name in given["not_installed"] if present(name)]
-assert not installed, f"installed beside the base and the two readers: {installed}"
-
-# Only now, the rehearsal's loads judged: the Infrahub change source imports its reader, and reads each of its GraphQL
-# documents from the installed wheel's package data, each naming its operation.
-from fylgja_orchestrator.infrahub import transport
-
-assert "fylgja_infrahub" in sys.modules, "the Infrahub change source loaded no fylgja_infrahub: the probe is blind"
-loaded = sorted(m for m in sys.modules if under(m, crossed["infrahub"]))
-assert not loaded, f"loaded by the Infrahub change source: {loaded}"
-
-queries = Path(transport.__file__).resolve().parent / "queries"
-assert root not in queries.parents, f"the Infrahub change source's queries {queries} are under the tree {root}"
-names = sorted(path.stem for path in queries.glob("*.gql"))
-assert names, f"no *.gql under {queries}"
-for name in names:
-    text, operation = transport._document(name)
-    assert operation and operation in text, f"queries/{name}.gql names no operation"
-
-# And the NetBox change source, which imports its reader, from the installed package, outside the tree: the Infrahub
-# source's modules and its reader's dropped first, so that an import of either is made again and seen.
-for name in [m for m in sys.modules if under(m, crossed["netbox"])]:
-    del sys.modules[name]
-import fylgja_orchestrator.netbox
-
-assert "fylgja_netbox" in sys.modules, "the NetBox change source loaded no fylgja_netbox: the probe is blind"
-loaded = sorted(m for m in sys.modules if under(m, crossed["netbox"]))
-assert not loaded, f"loaded by the NetBox change source: {loaded}"
-
-here = Path(fylgja_orchestrator.netbox.__file__).resolve()
-assert root not in here.parents, f"the NetBox change source {here} is under the tree {root}"
-assert fylgja_orchestrator.netbox.NetBoxSource.comment_limit is None, "the NetBox change source bounds its report"
+installed = [name for name in absent if present(name)]
+assert not installed, f"installed beside the base alone: {installed}"
 """
-
-# Run in a fresh interpreter beside the base and the two readers, given `NOT_BESIDE_EDGE` as one JSON list: the
-# command's module imported, and nothing of the list loaded, Prefect among it, since a command calls the library in its
-# own process (D-085).
-PROBE_EDGE = r"""
-import json
-import sys
-
-import fylgja_orchestrator.edge.cli
-
-absent = json.loads(sys.argv[1])
-loaded = sorted(m for m in sys.modules if any(m == name or m.startswith(f"{name}.") for name in absent))
-assert not loaded, f"loaded by the command's module: {loaded}"
-"""
-
 
 class Failure(Exception):
     pass
@@ -756,31 +685,18 @@ def published_metadata(wheel: Path, documentation: str, core: bool = False) -> N
         raise Failure(f"{wheel.name}'s METADATA differs from the metadata of D-106:\n" + "\n".join(problems))
 
 
-def private_metadata(wheel: Path) -> None:
-    """Nothing, once the example's wheel is marked `Classifier: Private :: Do Not Upload`, the one classifier it holds,
-    so that PyPI refuses it (D-106), and holds no `Project-URL`; `Failure` otherwise."""
-    found = metadata(wheel)
-    if found.get_all("Classifier") != [PRIVATE_CLASSIFIER]:
-        raise Failure(f"{wheel.name} holds the classifiers {found.get_all('Classifier')}, "
-                      f"not [{PRIVATE_CLASSIFIER!r}]: it could be uploaded")
-    if found.get_all("Project-URL") or found.get_all("Author") or found.get_all("Author-email"):
-        raise Failure(f"{wheel.name} states a project URL or an author, and the example states neither")
-
-
-def held_licence(wheel: Path, package: str, expected: bool = True) -> None:
-    """Nothing, once the wheel holds `<package>/LICENSE`, the root `LICENSE`'s bytes (or, where `expected` is false,
-    holds no file of that name); `Failure` naming the wheel and the file otherwise."""
+def held_licence(wheel: Path, package: str) -> None:
+    """Nothing, once the wheel holds `<package>/LICENSE`, the root `LICENSE`'s bytes; `Failure` naming the wheel and the
+    file otherwise."""
     with zipfile.ZipFile(wheel) as archive:
         try:
             held = archive.read(f"{package}/LICENSE")
         except KeyError:
             held = None
-    if expected and held is None:
+    if held is None:
         raise Failure(f"{wheel.name} holds no {package}/LICENSE")
-    if expected and held != (ROOT / "LICENSE").read_bytes():
+    if held != (ROOT / "LICENSE").read_bytes():
         raise Failure(f"{wheel.name}'s {package}/LICENSE is not the root LICENSE's bytes")
-    if not expected and held is not None:
-        raise Failure(f"{wheel.name} holds {package}/LICENSE, and the example carries none")
 
 
 def answers_version(command: Path, program: str, version: str, commit: str, cwd: Path) -> None:
@@ -1239,73 +1155,98 @@ def check_netbox_reader(tmp: Path, core_wheel: Path) -> str:
             "variable")
 
 
-def carried_by_example(wheel: Path) -> int:
-    """How many GraphQL documents the example's wheel carries, once it carries under `ORCHESTRATOR_PREFIX` exactly
-    `ORCHESTRATOR_FORMATS`, under `ORCHESTRATOR_QUERIES` exactly the tree's `*.gql` in `SOURCE_QUERIES`, and
-    `ORCHESTRATOR_TYPED`; `Failure` otherwise."""
-    with zipfile.ZipFile(wheel) as archive:
-        names = archive.namelist()
-    queries = {path.name for path in SOURCE_QUERIES.glob("*.gql")}
-    if not queries:
-        raise Failure(f"the tree's {SOURCE_QUERIES.relative_to(ROOT)} holds no *.gql: the queries' comparison would "
-                      "pass vacuously")
-    problems: list[str] = []
-    for prefix, expected, listed in (
-        (ORCHESTRATOR_PREFIX, set(ORCHESTRATOR_FORMATS), "ORCHESTRATOR_FORMATS in scripts/wheelcheck.py"),
-        (ORCHESTRATOR_QUERIES, queries, f"the tree's {SOURCE_QUERIES.relative_to(ROOT)}"),
-    ):
-        found = {n[len(prefix) :] for n in names if n.startswith(prefix) and not n.endswith("/")}
-        problems += [f"missing from the wheel: {prefix}{n} ({listed})" for n in sorted(expected - found)]
-        problems += [f"extra in the wheel: {prefix}{n} ({listed})" for n in sorted(found - expected)]
-    if ORCHESTRATOR_TYPED not in names:
-        problems.append(f"missing from the wheel: {ORCHESTRATOR_TYPED}")
-    if problems:
-        raise Failure(f"{wheel.name} does not carry the example's formats, its GraphQL documents and py.typed, and no "
-                      "other:\n" + "\n".join(problems))
-    return sum(1 for n in names if n.startswith(ORCHESTRATOR_QUERIES) and n.endswith(".gql"))
-
-
-def check_orchestrator(tmp: Path, core_wheel: Path) -> str:
-    """The example orchestrator's check, under `tmp/orchestrator`: its wheel built from a copy of `orchestrator/` and
-    `formats/`, and what it carries; then the wheel installed beside `core_wheel`, the core with no extra, and the two
-    readers' wheels from `build_reader` and `build_netbox_reader`, which the example depends on, in an empty venv,
-    where `PROBE_ORCHESTRATOR` and then `PROBE_EDGE` run outside the tree, and the command answers `--help`, and its
-    `stage mark` too."""
-    here = tmp / "orchestrator"
+def build_nautobot_reader(tmp: Path) -> Path:
+    """The Nautobot reader's one wheel, built by `uv build --wheel` from a copy of `readers/nautobot/` and `formats/` at
+    their places under `tmp/nautobot-reader/src`, as `readers/nautobot/setup.py` finds `formats/` two directories up.
+    Built once: called again with the same `tmp`, it answers the wheel already there."""
+    here = tmp / "nautobot-reader"
     src, dist = here / "src", here / "dist"
-    shutil.copytree(
-        ROOT / "orchestrator",
-        src / "orchestrator",
-        ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
-    )
-    shutil.copytree(ROOT / "formats", src / "formats")
-    copy_root_files(src)
-    wheel(src / "orchestrator", dist)
+    if not dist.is_dir():
+        shutil.copytree(
+            ROOT / "readers" / "nautobot",
+            src / "readers" / "nautobot",
+            ignore=shutil.ignore_patterns(".venv", "tests", "build", "*.egg-info", "__pycache__", ".*_cache"),
+        )
+        shutil.copytree(ROOT / "formats", src / "formats")
+        copy_root_files(src)
+        wheel(src / "readers" / "nautobot", dist)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         raise Failure(f"expected one wheel in {dist}, found {[w.name for w in wheels]}")
-    built = wheels[0]
-    versioned(built, tree_version())
-    held_commit(built, "fylgja_orchestrator", tree_commit())
-    private_metadata(built)
-    held_licence(built, "fylgja_orchestrator", expected=False)
-    queries = carried_by_example(built)
-    reader, netbox_reader = build_reader(tmp), build_netbox_reader(tmp)
+    return wheels[0]
+
+
+def carried_by_nautobot_reader(wheel: Path) -> None:
+    """Nothing, once the Nautobot reader's wheel carries under `NAUTOBOT_READER_PREFIX` exactly
+    `NAUTOBOT_READER_FORMATS`, and `NAUTOBOT_READER_TYPED`; `Failure` otherwise."""
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+    prefix = NAUTOBOT_READER_PREFIX
+    found = {n[len(prefix) :] for n in names if n.startswith(prefix) and not n.endswith("/")}
+    expected = set(NAUTOBOT_READER_FORMATS)
+    listed = "NAUTOBOT_READER_FORMATS in scripts/wheelcheck.py"
+    problems = [f"missing from the wheel: {prefix}{n} ({listed})" for n in sorted(expected - found)]
+    problems += [f"extra in the wheel: {prefix}{n} ({listed})" for n in sorted(found - expected)]
+    if NAUTOBOT_READER_TYPED not in names:
+        problems.append(f"missing from the wheel: {NAUTOBOT_READER_TYPED}")
+    if problems:
+        raise Failure(f"{wheel.name} does not carry the Nautobot reader's format and py.typed, and no other:\n"
+                      + "\n".join(problems))
+
+
+def refused_without_nautobot_token(command: Path, tmp: Path) -> None:
+    """`command check`, given an address and no token, in this process's environment with every `FYLGJA_NAUTOBOT_`
+    variable taken out: it exits 2, prints nothing on stdout, and on stderr the one line that names the token's
+    variable, so not the address; `Failure` otherwise."""
+    name, address = NAUTOBOT_ADDRESS
+    env = {k: v for k, v in os.environ.items() if not k.startswith("FYLGJA_NAUTOBOT_")} | {name: address}
+    done = exits([str(command), "check"], tmp, 2, env)
+    expected = f"{NAUTOBOT_TOKEN} is not set\n"
+    if done.stdout or done.stderr != expected:
+        raise Failure(f"{command.name} check with no token exited 2, but did not print {expected!r} alone on stderr:\n"
+                      f"{done.stdout}{done.stderr}")
+
+
+def check_nautobot_reader(tmp: Path, core_wheel: Path) -> str:
+    """The Nautobot reader's check, under `tmp/nautobot-reader`: its wheel, from `build_nautobot_reader`, its version
+    and its requirement of the core, and what it carries; then, in an empty venv of its own, the core's base libraries
+    from the index and `fylgja-nautobot==<VERSION>` by name from a directory of `core_wheel` and its wheel alone, no
+    index, so the core with no extra, where `PROBE_NAUTOBOT_READER` runs outside the tree over a copy of the seed's
+    reader document, `fylgja-nautobot --help` exits 0 and `fylgja-nautobot check` with no token is refused, naming the
+    variable."""
+    wheel = build_nautobot_reader(tmp)
+    version = tree_version()
+    versioned(wheel, version)
+    requires_core(wheel, version)
+    held_commit(wheel, "fylgja_nautobot", tree_commit())
+    published_metadata(wheel, "tree/main/readers/nautobot")
+    held_licence(wheel, "fylgja_nautobot")
+    carried_by_nautobot_reader(wheel)
+    here = tmp / "nautobot-reader"
+    reader = here / NAUTOBOT_READER_DOCUMENT.name
+    shutil.copyfile(NAUTOBOT_READER_DOCUMENT, reader)
+    links = here / "links"
+    links.mkdir()
+    shutil.copyfile(core_wheel, links / core_wheel.name)
+    shutil.copyfile(wheel, links / wheel.name)
     env = venv(here / "venv")
-    install(env, str(core_wheel), str(reader), str(netbox_reader), str(built))
-    given = {"not_loaded": list(NOT_BESIDE), "not_installed": list(NOT_INSTALLED), "crossed": list(CROSSED)}
-    run([str(env / "python"), "-I", "-c", PROBE_ORCHESTRATOR, str(ROOT), json.dumps(given)], tmp)
-    run([str(env / "python"), "-I", "-c", PROBE_EDGE, json.dumps(list(NOT_BESIDE_EDGE))], tmp)
-    run([str(env / "fylgja-orchestrator"), "--help"], tmp)
-    answers_version(env / "fylgja-orchestrator", "fylgja-orchestrator", tree_version(), tree_commit(), tmp)
-    run([str(env / "fylgja-orchestrator"), "stage", "mark", "--help"], tmp)
-    return (f"wheelcheck: {built.name} is marked {PRIVATE_CLASSIFIER!r} and carries no licence file; it carries the "
-            f"example's {len(ORCHESTRATOR_FORMATS)} formats and no other, and "
-            f"its {queries} GraphQL documents; beside {core_wheel.name}, {reader.name} and {netbox_reader.name} alone "
-            "it validates a plan and a rehearsal outside the tree, its rehearsal library imports with nothing of the "
-            "server, either reader or Prefect, both change sources import, each with nothing of the other or its "
-            "reader, its command's module with nothing of the server or Prefect, and fylgja-orchestrator answers "
-            "--help, stage mark --help and --version")
+    install(env, *base_requirements(core_wheel))
+    install(env, f"fylgja-nautobot=={version}", find_links=links)
+    run([str(env / "python"), "-I", "-c", PROBE_NAUTOBOT_READER, str(ROOT), str(reader), NAUTOBOT_PROBES,
+         NAUTOBOT_MAPPING, *NOT_BESIDE_NAUTOBOT_READER], tmp)
+    run([str(env / "fylgja-nautobot"), "--help"], tmp)
+    answers_version(env / "fylgja-nautobot", "fylgja-nautobot", version, tree_commit(), tmp)
+    refused_without_nautobot_token(env / "fylgja-nautobot", tmp)
+    return (f"wheelcheck: {wheel.name} requires the core at {version} within the major, states the "
+            f"project's metadata and holds the licence's text, and fylgja-nautobot=={version} "
+            "installs by name from a directory of the two wheels and no index, with no pre-release flag; it carries "
+            f"the Nautobot reader's {len(NAUTOBOT_READER_FORMATS)} format and no other; beside {core_wheel.name} "
+            "alone it "
+            f"decodes {NAUTOBOT_READER_DOCUMENT.name} outside the tree, its command "
+            "imports with nothing of the server, Prefect, a client library of Infrahub's, NetBox's or Nautobot's, the "
+            "Infrahub or NetBox reader or the example, answers --help and --version, and refuses a check without a "
+            "token, naming the "
+            "variable")
 
 
 def main() -> int:
@@ -1320,7 +1261,7 @@ def main() -> int:
             print(check(tmp))
             print(check_reader(tmp, build(tmp)))
             print(check_netbox_reader(tmp, build(tmp)))
-            print(check_orchestrator(tmp, build(tmp)))
+            print(check_nautobot_reader(tmp, build(tmp)))
         except Failure as failure:
             print(f"wheelcheck: {failure}", file=sys.stderr)
             return 1

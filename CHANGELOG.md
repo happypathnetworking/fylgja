@@ -4,10 +4,11 @@ What each release changed for a user, newest first, and its known limits ([D-106
 release's section is headed `## <version> - <date>`, `unreleased` standing in the date until the commit that is tagged
 dates it.
 
-## 1.0.1 - unreleased
+## 1.1.0rc1 - 2026-11-21
 
-A fix to the core's server. The four distributions are released at 1.0.1 together, and each reader
-requires the core at 1.0.1 or a later version below 2.
+The release candidate of 1.1.0. 1.0.1 was never released, so its fix is in this section. The four
+distributions are released at 1.1.0 together, and each reader requires the core at 1.1.0rc1 or a
+later version below 2.
 
 - **A SIGTERM while `fylgja-core-server` starts now ends it.** Python can run a signal handler where
   an exception it raises is printed and dropped, inside the callback of an import's lock among
@@ -18,9 +19,10 @@ requires the core at 1.0.1 or a later version below 2.
   under a tag, into a blueprint whose every configuration is Golden Config's render at the read, or
   the findings that refused it. Its command, its document, its settings and its library are held as
   [the compatibility page](docs/compatibility.md) says.
-
-For a checkout, `make demo-dependencies` gives a host what [the demonstrations](docs/demonstrations.md)
-need where it is missing, and says what is left to do by hand.
+- **The example orchestrator and the demonstrations are in their own repository.** They are in
+  [`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/), no
+  longer here, and are installed from a clone of it. [The demonstrations](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/docs/demonstrations.md)
+  are run from there.
 
 ### Known limits
 

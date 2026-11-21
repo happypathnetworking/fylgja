@@ -28,8 +28,9 @@ at phase 12's landing ([D-121](decisions.md#d-121)).
 - **Beside the core:** a reader for each source of truth, the Infrahub reader
   (`readers/infrahub/`, the distribution `fylgja-infrahub`), the NetBox reader
   (`readers/netbox/`, `fylgja-netbox`) and the Nautobot reader (`readers/nautobot/`,
-  `fylgja-nautobot`, published from 1.1.0), and the example orchestrator (`orchestrator/`),
-  which rehearses a change of Infrahub or of NetBox, are in this repository; `infrahub/`,
+  `fylgja-nautobot`, published from 1.1.0) are in this repository, and the example
+  orchestrator, which rehearses a change of Infrahub or of NetBox, is in `fylgja-examples`
+  ([D-128](decisions.md#d-128)); `infrahub/`,
   `netbox/` and `nautobot/` hold what runs beside each source: Infrahub's checks, schema, queries
   and seed, and NetBox's and Nautobot's seed and development set-up
   ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095),
@@ -44,7 +45,7 @@ The constitution is [`design/constitution.md`](constitution.md). The formats are
 
 | Requirement | Value |
 |---|---|
-| The shape | Three pieces ([D-081](decisions.md#d-081), in place of [D-003](decisions.md#d-003)'s two deployables): a core that turns one blueprint into a twin and steps, verifies, shows and destroys it; a reader for each source, which turns it into blueprints; and an example orchestrator that owns stages, rehearsals and reports and drives the core through the API alone |
+| The shape | Three pieces ([D-081](decisions.md#d-081), in place of [D-003](decisions.md#d-003)'s two deployables): a core that turns one blueprint into a twin and steps, verifies, shows and destroys it; a reader for each source, which turns it into blueprints; and an example orchestrator, in `fylgja-examples` from 1.1.0, that owns stages, rehearsals and reports and drives the core through the API alone |
 | What goes | The Go core's accumulated fields and its foundations: one twin at a time, state on local disk, one lab host |
 | What must work | Many twins across many hosts |
 | Language | Python, for its audience (network engineers) and its ecosystem (Infrahub's SDK, NetBox's client, Nornir, NAPALM) ([D-001](decisions.md#d-001)) |
@@ -53,7 +54,7 @@ The constitution is [`design/constitution.md`](constitution.md). The formats are
 | First outside user | Not yet known. OIDC and RBAC roles wait for one |
 | Node access | Direct, over SSH, gNMI or a CLI session, from outside the cluster |
 | Core CLI | A thin API client |
-| Repository | This repository: the core first; beside it, a reader for each source and the example orchestrator, the Infrahub reader and the example at cut-over, and the NetBox reader and the example's NetBox change source after it, and the Nautobot reader after them, published from 1.1.0 ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095), [D-097](decisions.md#d-097), [D-118](decisions.md#d-118), [D-121](decisions.md#d-121)) |
+| Repository | This repository: the core first; beside it, a reader for each source, the Infrahub reader at cut-over, the NetBox reader after it and the Nautobot reader after them, published from 1.1.0; the example orchestrator and its change sources were here until 1.1.0 and are in `fylgja-examples` ([D-005](decisions.md#d-005), [D-081](decisions.md#d-081), [D-095](decisions.md#d-095), [D-097](decisions.md#d-097), [D-118](decisions.md#d-118), [D-121](decisions.md#d-121), [D-128](decisions.md#d-128)) |
 | Process | Design document, decision entry, pull request ([D-033](decisions.md#d-033)) |
 | Constitution | One, for every piece, at `design/constitution.md` |
 | The Go core | Retired at the cut-over ([D-081](decisions.md#d-081)); the reference while this core was built |
@@ -2902,20 +2903,22 @@ Beside that:
   or is cleaned up. The suite's kill scenarios do so on both drivers, where the kill found the
   run unfinished ([D-072](decisions.md#d-072) names the two boundaries it did not on the
   cluster).
-- **The readers and the example orchestrator**: each reader's pure tier, and its contract
-  tier against a real instance of its source, Infrahub, NetBox or Nautobot with Golden Config,
-  with the same read twice giving one id; the example's rehearsal library over a fake source and
-  the core's own server on its fake runtime, and each change source's contract tier against its
-  source; a proposed change rehearsed through Infrahub's own check on each driver ("Phase 8"); a
-  branch rehearsed from its tag in NetBox on each driver ("Phase 9"); and a twin created on the
-  local driver from the Nautobot reader's read of its seed, verified and destroyed ("Phase 11").
+- **The readers, and the example orchestrator in `fylgja-examples`**: each reader's pure tier,
+  and its contract tier against a real instance of its source, Infrahub, NetBox or Nautobot with
+  Golden Config, with the same read twice giving one id. The example's own tests are that
+  repository's: its rehearsal library over a fake source and the core's own server on its fake
+  runtime, and each change source's contract tier against its source. A proposed change was
+  rehearsed through Infrahub's own check on each driver ("Phase 8"), a branch from its tag in
+  NetBox on each driver ("Phase 9"), and a twin created on the local driver from the Nautobot
+  reader's read of its seed, verified and destroyed ("Phase 11").
 - **The release**: the wheel check, which installs each published wheel into an empty
   environment, the Nautobot reader's too, and starts the core's server with no
   `FYLGJA_PACKAGES`; `make wheels`, which builds four wheels, the Nautobot reader's published
   from 1.1.0 ([D-121](decisions.md#d-121)); the image check; the
   release check before any upload, which holds the wheels to the tag, the commit and the version;
   the tests that hold each user page to the code; and, at a candidate, its wheels installed from
-  TestPyPI and both demonstrations run from a fresh clone at its tag ("Phase 10").
+  TestPyPI and both demonstrations run from a fresh clone of `fylgja-examples` at its tag
+  ("Phase 10", "Phase 12").
 
 ## The multi-host stage (2026-11-02)
 

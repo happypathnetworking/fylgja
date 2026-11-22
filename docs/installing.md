@@ -17,7 +17,8 @@ reader requires the core at the reader's own version or a later one below 2, so 
 the core in.
 
 The example orchestrator, which rehearses a change of a source of truth on a twin, is not
-published. It is installed from a clone of the repository and is described in
+published, and lives in its own repository,
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/). It is installed from a clone of that repository and is described in
 [integrating Fylgja](integrating.md).
 
 ## What it needs

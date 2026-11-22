@@ -1,3 +1,0 @@
-# The query a check must name (the SDK refuses a check with none): the two checks bind it and read nothing of its
-# answer, the glue reading the proposed change itself.
-query fylgja_branch { Branch { name } }

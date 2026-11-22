@@ -41,8 +41,7 @@ REFERENCES = {
     "json-schema.org": "the dialect each format's schema names",
     "www.apache.org": "the licence's own text",
     "infrahub.opsmill.io": "Infrahub's published Compose file, fetched by scripts/infrahub_dev.py",
-    "containerlab.dev": "containerlab's documentation, and its setup script, which scripts/demo_dependencies.sh runs",
-    "astral.sh": "Astral's uv installer, fetched by scripts/demo_dependencies.sh",
+    "containerlab.dev": "containerlab's setup script, which design/verified-facts.md cites",
     "ghcr.io": "the registry a public image is pulled from",
     "test.pypi.org": "TestPyPI's upload address, where the publish workflow uploads a candidate's wheels",
 }
@@ -68,10 +67,6 @@ NOT_HOSTS = {
     ("s3", "fylgja"): "the S3 bucket an `s3` URL names in the place of a host, its endpoint given apart",
     ("http", "versity"): "the deploy base's own Service, named in its namespace",
     ("scheme", "host"): "the placeholder of the form of an address a docstring of the core's configuration gives",
-    ("http", "host.docker.internal"): (
-        "the name Compose's `host-gateway` gives the development host inside a container, where `make prefect-up` "
-        "serves the edge's Prefect"
-    ),
 }
 """Names in a URL's place of a host that name no host of a site's, each under the one scheme it is written with."""
 
@@ -207,10 +202,9 @@ Override.add_constructor("!override", replaced)
 
 
 def test_the_override_holds_no_value_and_no_host() -> None:
-    """The Compose override is two read-only mounts, their sources set by `infrahub_dev.py`, the edge's Prefect's
-    address and basic auth with the host's name they reach it by, Neo4j's cap, its health check's start period,
-    and every port the published file publishes, each bound to loopback in place of every interface: the
-    server's, the message queue's metrics, and the database's metrics and backup."""
+    """The Compose override is two read-only mounts, their sources set by `infrahub_dev.py`, Neo4j's cap, its health
+    check's start period, and every port the published file publishes, each bound to loopback in place of every
+    interface: the server's, the message queue's metrics, and the database's metrics and backup."""
     override = yaml.load((INFRAHUB / "dev" / "compose.override.yml").read_text(), Loader=Override)
     assert override == {
         "services": {
@@ -221,11 +215,6 @@ def test_the_override_holds_no_value_and_no_host() -> None:
                     "${FYLGJA_INFRAHUB_REPO:?}:/srv/fylgja:ro",
                     "${FYLGJA_INFRAHUB_REPOS:?}:/srv/fylgja-repos:ro",
                 ],
-                "extra_hosts": ["host.docker.internal:host-gateway"],
-                "environment": {
-                    "FYLGJA_ORCHESTRATOR_ADDRESS": "host.docker.internal:4200",
-                    "FYLGJA_ORCHESTRATOR_AUTH": "${FYLGJA_ORCHESTRATOR_AUTH:-}",
-                },
             },
             "database": {
                 "ports": Replaced(["127.0.0.1:2004:2004", "127.0.0.1:6362:6362"]),

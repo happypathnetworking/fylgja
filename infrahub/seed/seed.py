@@ -1,15 +1,14 @@
 """The fixture network on the development Infrahub's `main`, and the seeded branch with its two staged edits, each
-generated, waited for, timed and marked, and by a flag its proposed change.
+generated, waited for and timed.
 
 Run by `make infrahub-seed` as `core/.venv/bin/python infrahub/seed/seed.py --branch <branch> --files infrahub/seed
---out <seed.json> --ctl <infrahubctl> --schema readers/infrahub/schema/fylgja-probe.yml --schema
-infrahub/schema/fylgja-stage.yml [--proposed-change]`, with `local/.env` loaded (CONTRIBUTING.md, D-083):
+--out <seed.json> --ctl <infrahubctl> --schema readers/infrahub/schema/fylgja-probe.yml`, with `local/.env` loaded
+(CONTRIBUTING.md, D-083):
 
 - `main` is refused where it holds no artifact definition `DEFINITION`, before anything is written: the definition
   comes with this repository's import (`make infrahub-register`);
 - each `--schema` file, a kind of which `main` lacks, is loaded on `main` by `infrahubctl` and waited for until `main`
-  lists its kinds: the reader's `FylgjaProbe`, which `main/`'s probe is of, and the example's `FylgjaStage`, which
-  the marks are of, loaded before the branch is made, since a mark is branch-agnostic and written on `main` (D-088);
+  lists its kinds: the reader's `FylgjaProbe`, which `main/`'s probe is of, loaded before the branch is made;
 - `files`/`main/`'s object files are loaded by `infrahubctl`, one at a time in the order of their names, where
   `main` holds none of the devices they say; they say the whole network, every relationship named by its peer's
   name. Where `main` holds all of those devices, nothing is loaded: a second load left each device in the one group
@@ -18,10 +17,6 @@ infrahub/schema/fylgja-stage.yml [--proposed-change]`, with `local/.env` loaded 
   holding part of them is refused with nothing written;
 - the configurations are generated, and waited for until each device of the scope `SCOPE` has its artifact
   `DEFINITION`, `Ready`, and each device the run made shows a checksum that moved;
-- what an earlier seed left of the branch is removed: every `FylgjaStage` whose `branch` is its name, and its open
-  proposed change, whether or not the branch is listed. A mark names its branch as text and outlives it (D-088), and
-  Infrahub deletes a branch with an open proposed change and keeps that proposed change open, naming a branch gone
-  (design/verified-facts.md, "Infrahub 1.11.11"), so both go before the branch's delete;
 - the branch `--branch` is made anew from `main`, with `sync_with_git: false`: one an earlier seed left is deleted
   first, and the branch is refused where it does not read the definition, since a branch runs what was imported before
   it was made (D-088). A create that fails or goes unanswered within the request's timeout is read for its branch for
@@ -33,17 +28,9 @@ infrahub/schema/fylgja-stage.yml [--proposed-change]`, with `local/.env` loaded 
   `seed.json` and a read at its times cannot disagree; `head` is read with the reader's token,
   `FYLGJA_INFRAHUB_TOKEN`, never the writer's, connected before anything is removed or written. A `head` refused
   because a list it read was not whole is read again: just after a generation a page of the event log once answered
-  more events than its own count (design/verified-facts.md, "Infrahub 1.11.11"; P3-36). Then the stage is marked: one
-  `FylgjaStage` on `main` naming the branch, the stage's label, its time as `as_of`, verbatim, and a description, so
-  that the rehearsal reads each stage of the branch between its branch point and its head (D-088);
-- with `--proposed-change` (`make infrahub-seed PROPOSED_CHANGE=1`), last, the branch's proposed change into `main`,
-  not a draft, named `Rehearse <branch>`. Infrahub runs a proposed change's checks when it is created, so without the
-  flag the seed makes none, and the maintainer's opening one is what starts the rehearsal (D-088). Every run makes the
-  branch, its marks and, by the flag, its proposed change anew, and leaves no other mark and no other open proposed
-  change of that branch;
-- `seed.json` at `--out` holds the branch, the scope, each stage's label and time, the marks' labels in order, and the
-  proposed change's id and name, or null without the flag. It is removed before anything is written and written whole
-  at the end, so a run that fails leaves none.
+  more events than its own count (design/verified-facts.md, "Infrahub 1.11.11"; P3-36);
+- `seed.json` at `--out` holds the branch, the scope, and each stage's label and time. It is removed before anything
+  is written and written whole at the end, so a run that fails leaves none.
 
 The wait is for each configuration, not for the call: Infrahub answers the generation before anything is rendered,
 and a regeneration rewrites an artifact that read `Ready` before it in place, `Ready` again with a new checksum
@@ -129,25 +116,6 @@ BRANCH_CREATE = (
     "{ ok } }"
 )
 BRANCH_DELETE = "mutation ($name: String!) { BranchDelete(data: {name: $name}, wait_until_completion: true) { ok } }"
-MARKS_READ = "query ($branch: String!) { FylgjaStage(branch__value: $branch) { count edges { node { id } } } }"
-MARK_DELETE = "mutation ($id: String!) { FylgjaStageDelete(data: {id: $id}) { ok } }"
-MARK_CREATE = (
-    "mutation ($branch: String!, $label: String!, $at: String!, $description: String!) { FylgjaStageCreate(data: "
-    "{branch: {value: $branch}, label: {value: $label}, as_of: {value: $at}, description: {value: $description}}) "
-    "{ ok object { id } } }"
-)
-"""A mark's create. `as_of` is sent as a `String` variable: Infrahub 1.11.11 refuses a `DateTime!` one in that
-position, and answers the value as written (design/verified-facts.md, "Infrahub 1.11.11")."""
-OPEN_READ = (
-    'query ($branch: String!) { CoreProposedChange(source_branch__value: $branch, state__value: "open") '
-    "{ count edges { node { id } } } }"
-)
-PROPOSED_DELETE = "mutation ($id: String!) { CoreProposedChangeDelete(data: {id: $id}) { ok } }"
-PROPOSED_CREATE = (
-    "mutation ($name: String!, $branch: String!) { CoreProposedChangeCreate(data: {name: {value: $name}, "
-    'source_branch: {value: $branch}, destination_branch: {value: "main"}, is_draft: {value: false}}) '
-    "{ ok object { id } } }"
-)
 SCOPE_READ = "query ($tag: String!) { DcimDevice(tags__name__value: $tag) { edges { node { name { value } } } } }"
 ARTIFACTS_READ = """
 query ($tag: String!, $name: String!) {
@@ -395,67 +363,9 @@ def settled(head: Head, name: str, *, clock: Callable[[], float], sleep: Callabl
     return answered
 
 
-def ids(hub: Hub, query: str, root: str, name: str) -> list[str]:
-    """The ids `root` answers to `query` for the branch `name` on `main`; an answer holding fewer than its own `count`
-    is a `HubError`, since what it leaves out would be left behind."""
-    answer = hub.gql("main", query, {"branch": name})[root]
-    found = [str(edge["node"]["id"]) for edge in answer["edges"]]
-    if answer["count"] != len(found):
-        raise HubError(f"{root} of {name} counted {answer['count']} and answered {len(found)}")
-    return found
-
-
-def deleted(hub: Hub, query: str, root: str, node: str, what: str) -> None:
-    """Delete the node `node`, by its id, with `query`; an answer with no `ok` is a `HubError` naming `what`."""
-    answer = hub.gql("main", query, {"id": node}).get(root)
-    if not (isinstance(answer, dict) and answer.get("ok") is True):
-        raise HubError(f"deleting {what}, an earlier seed's: {root} answered no ok")
-
-
-def clear(hub: Hub, name: str) -> None:
-    """Remove what an earlier seed left of the branch `name` on `main`, whether or not the branch is listed: every
-    `FylgjaStage` naming it, then its open proposed change. A mark outlives its branch (D-088), and a branch deleted
-    under an open proposed change leaves it open (design/verified-facts.md, "Infrahub 1.11.11")."""
-    marks = ids(hub, MARKS_READ, "FylgjaStage", name)
-    for held in marks:
-        deleted(hub, MARK_DELETE, "FylgjaStageDelete", held, f"the mark {held} of {name}")
-    if marks:
-        say(f"removed {len(marks)} marks of {name}, an earlier seed's")
-    for change in ids(hub, OPEN_READ, "CoreProposedChange", name):
-        deleted(hub, PROPOSED_DELETE, "CoreProposedChangeDelete", change, f"the proposed change {change} of {name}")
-        say(f"removed the open proposed change {change} of {name}, an earlier seed's")
-
-
-def described(edit: Edit) -> str:
-    """The description of the mark of `edit`'s stage."""
-    return f"the seed's stage {edit.label}: {edit.file} and its configurations"
-
-
-def mark(hub: Hub, name: str, edit: Edit, at: str) -> None:
-    """One `FylgjaStage` on `main` naming the branch `name`, `edit`'s label, `at` as its `as_of`, verbatim, and
-    `described(edit)`; an answer with no `ok` is a `HubError`."""
-    variables = {"branch": name, "label": edit.label, "at": at, "description": described(edit)}
-    answer = hub.gql("main", MARK_CREATE, variables).get("FylgjaStageCreate")
-    if not (isinstance(answer, dict) and answer.get("ok") is True):
-        raise HubError(f"marking {edit.label} of {name}: FylgjaStageCreate answered no ok")
-    say(f"marked {edit.label} of {name} at {at}")
-
-
-def propose(hub: Hub, name: str) -> dict[str, str]:
-    """The branch `name`'s proposed change into `main`, not a draft, named `Rehearse <name>`: its id and name."""
-    title = f"Rehearse {name}"
-    answer = hub.gql("main", PROPOSED_CREATE, {"name": title, "branch": name}).get("CoreProposedChangeCreate")
-    if not (isinstance(answer, dict) and answer.get("ok") is True and isinstance(answer.get("object"), dict)):
-        raise HubError(f"proposing {name}: CoreProposedChangeCreate answered no ok")
-    made = {"id": str(answer["object"]["id"]), "name": title}
-    say(f"made the proposed change {made['id']}, {title}, of {name} into main")
-    return made
-
-
 def remove(hub: Hub, name: str, *, clock: Callable[[], float]) -> None:
     """Delete the branch `name` an earlier seed left; a delete that answers no `ok` is a `HubError` naming it, since
-    the branch it leaves would be listed after the create failed and taken for the new one. Its marks and its open
-    proposed change are removed before, by `clear`."""
+    the branch it leaves would be listed after the create failed and taken for the new one."""
     started = clock()
     answer = hub.gql("main", BRANCH_DELETE, {"name": name}).get("BranchDelete")
     if not (isinstance(answer, dict) and answer.get("ok") is True):
@@ -500,12 +410,10 @@ def branch(
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> list[dict[str, str]]:
-    """The seeded branch `name` made anew from `main`, an earlier seed's marks and open proposed change of it removed
-    first, and each of `EDITS` on it in order: its object file under `files` loaded, its configurations generated and
-    waited for until each device it changes shows a checksum that moved, its time `head(name)`, verbatim, once two
-    readings of it `QUIET_S` apart agree, and its mark at that time. Answers the stages, each its `label` and its
-    `at`, which are the marks'."""
-    clear(hub, name)
+    """The seeded branch `name` made anew from `main`, and each of `EDITS` on it in order: its object file under
+    `files` loaded, its configurations generated and waited for until each device it changes shows a checksum that
+    moved, and its time `head(name)`, verbatim, once two readings of it `QUIET_S` apart agree. Answers the stages, each
+    its `label` and its `at`."""
     if listed(hub, name) is not None:
         remove(hub, name, clock=clock)
     make(hub, name, clock=clock, sleep=sleep)
@@ -520,28 +428,17 @@ def branch(
         generate(hub, name, edit.changes, clock=clock, sleep=sleep)
         at = settled(head, name, clock=clock, sleep=sleep)
         say(f"{edit.label} is read at {at} on {name}")
-        mark(hub, name, edit, at)
         stages.append({"label": edit.label, "at": at})
     return stages
 
 
-def write(
-    path: Path,
-    branch: str,
-    stages: Sequence[Mapping[str, str]],
-    *,
-    marks: Sequence[str] = (),
-    proposed_change: Mapping[str, str] | None = None,
-) -> None:
-    """`seed.json` at `path`: the branch, the scope, each stage's label and time, in order, the marks' labels, in
-    order, and the proposed change's id and name, or null, written beside it and renamed over it, so that no reader
-    meets a part of it."""
+def write(path: Path, branch: str, stages: Sequence[Mapping[str, str]]) -> None:
+    """`seed.json` at `path`: the branch, the scope and each stage's label and time, in order, written beside it and
+    renamed over it, so that no reader meets a part of it."""
     record = {
         "branch": branch,
         "scope": SCOPE,
         "stages": [{"label": s["label"], "at": s["at"]} for s in stages],
-        "marks": list(marks),
-        "proposed_change": {"id": proposed_change["id"], "name": proposed_change["name"]} if proposed_change else None,
     }
     written = path.with_name(f".{path.name}.part")
     written.write_text(json.dumps(record, indent=2) + "\n")
@@ -589,11 +486,6 @@ def parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="a schema file loaded on main where main lacks a kind of it, before the network; repeatable",
     )
-    made.add_argument(
-        "--proposed-change",
-        action="store_true",
-        help="make the branch's proposed change into main, not a draft, last; without it the seed makes none",
-    )
     return made
 
 
@@ -636,8 +528,7 @@ def main(
         schemas(hub, args.schema, clock=clock, sleep=sleep)
         baseline(hub, args.files / "main", clock=clock, sleep=sleep)
         stages = branch(hub, args.branch, args.files, head=head, clock=clock, sleep=sleep)
-        proposed = propose(hub, args.branch) if args.proposed_change else None
-        write(args.out, args.branch, stages, marks=[stage["label"] for stage in stages], proposed_change=proposed)
+        write(args.out, args.branch, stages)
     except (
         HubError,
         fylgja_infrahub.InfrahubError,

@@ -143,8 +143,9 @@ A plan's check MUST cite the principle for each gate it passes or justifies.
   - **Pure tests** gate every PR and need no infrastructure: the model, the compiler, every
     driver's `plan`, and the packages.
   - **Contract tests** run against real systems, never fakes: Infrahub, NetBox and
-    Nautobot, each for its reader and for the example orchestrator's source of it where the
-    example has one ([D-119](decisions.md#d-119)).
+    Nautobot, each for its reader, and in `fylgja-examples` for the example orchestrator's
+    source of it where the example has one ([D-119](decisions.md#d-119),
+    [D-126](decisions.md#d-126)).
   - **Live tests** on booted images run on demand on the local driver.
   - **The driver conformance suite** runs on each driver's own runtime, a cluster for
     clabernetes.

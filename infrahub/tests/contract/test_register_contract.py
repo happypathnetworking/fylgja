@@ -22,9 +22,6 @@ query ($group: String!, $repository: String!) {
   CoreArtifactDefinition {
     edges { node { name { value } artifact_name { value } targets { node { id } } } }
   }
-  CoreCheckDefinition {
-    edges { node { name { value } file_path { value } class_name { value } timeout { value } } }
-  }
 }
 """
 
@@ -33,7 +30,6 @@ KINDS = (
     "CoreGraphQLQuery",
     "CoreTransformJinja2",
     "CoreArtifactDefinition",
-    "CoreCheckDefinition",
 )
 """The objects the group's making and the import put on `main`, besides the repository."""
 
@@ -53,21 +49,13 @@ def test_main_holds_the_library_the_group_and_the_registration_in_sync(hub: Hub)
     assert repository["sync_status"]["value"] == "in-sync"
     assert repository["operational_status"]["value"] == "online"
     assert re.fullmatch(r"[0-9a-f]{40}", repository["commit"]["value"])
-    assert sorted(names(data, "CoreGraphQLQuery")) == ["device_config", "fylgja_branch"]
+    assert sorted(names(data, "CoreGraphQLQuery")) == ["device_config"]
     assert names(data, "CoreTransformJinja2") == ["device_config"]
     assert data["CoreTransformJinja2"]["edges"][0]["node"]["query"]["node"]["name"]["value"] == "device_config"
     [definition] = [edge["node"] for edge in data["CoreArtifactDefinition"]["edges"]]
     assert definition["name"]["value"] == "device-config"
     assert definition["artifact_name"]["value"] == "device-config"
     assert definition["targets"]["node"]["id"] == group
-    checks = sorted(
-        (node["name"]["value"], node["file_path"]["value"], node["class_name"]["value"], node["timeout"]["value"])
-        for node in (edge["node"] for edge in data["CoreCheckDefinition"]["edges"])
-    )
-    assert checks == [
-        ("fylgja-step", "infrahub/checks/fylgja_step.py", "FylgjaStep", 900),
-        ("fylgja-twin", "infrahub/checks/fylgja_twin.py", "FylgjaTwin", 4260),
-    ]
 
 
 def snapshot(hub: Hub) -> tuple[dict[str, set[str]], dict[str, Any]]:

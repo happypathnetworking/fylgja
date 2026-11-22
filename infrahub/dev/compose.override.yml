@@ -6,11 +6,6 @@
 # is never mounted. The second is local/infrahub/repos/, for a bare mirror and throwaway repositories, and nothing
 # else of local/. infrahub_dev.py sets both sources in Compose's environment; a Compose command without them fails.
 #
-# The task workers are where Infrahub runs this repository's checks, which start the example's flows on the edge's
-# Prefect (D-085). They are given its address, the host's name with no scheme, and its basic auth as user:password,
-# which make orchestrator-env writes into local/.env and Compose reads from it; nothing else of Fylgja's, no token of
-# the core's or of Infrahub's. The host's name answers the Docker bridge's gateway, where make prefect-up serves it.
-#
 # Neo4j is capped as it was for the reading of 1.11.11 that held 5.5 GiB (design/verified-facts.md).
 #
 # The database's health check keeps the published probe, interval and retries, and waits 180 s before a failed probe
@@ -38,11 +33,6 @@ services:
     volumes:
       - "${FYLGJA_INFRAHUB_REPO:?}:/srv/fylgja:ro"
       - "${FYLGJA_INFRAHUB_REPOS:?}:/srv/fylgja-repos:ro"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      FYLGJA_ORCHESTRATOR_ADDRESS: host.docker.internal:4200
-      FYLGJA_ORCHESTRATOR_AUTH: ${FYLGJA_ORCHESTRATOR_AUTH:-}
   database:
     ports: !override
       - "127.0.0.1:2004:2004"

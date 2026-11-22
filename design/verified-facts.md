@@ -12,6 +12,11 @@ NetBox reader and the example's NetBox change source rely on; and those the Naut
 reader and its development Nautobot rely on. The archived repository's facts about Infrahub
 1.11.2, Prefect 3.8.8 and NetBox 4.7.4 stay there, and nothing here relies on them.
 
+The example orchestrator is in `fylgja-examples` ([D-126](decisions.md#d-126)). The facts
+below about it stay here, as the readings they are, and bind that repository; a later reading
+of Prefect, of Infrahub's checks or of NetBox's webhooks is recorded in that repository's own
+`design/verified-facts.md`.
+
 - Each fact names the version it was verified against and the date.
 - **Re-verify a fact on any upgrade** of the system it names.
 - **A fact recorded here is trusted over recollection.** Before a change depends on a
@@ -10109,6 +10114,204 @@ retention; a template repository behind credentials; Golden Config's `branch` pa
 id; a group of more members than a page; how long a refresh of a large group takes. *(2026-11-20)* The render of a
 device whose name is null. *(2026-11-20)*
 
+## fylgja-core, phase 12: the readers' contract tiers on the trimmed seeds
+
+Read on 2026-11-21 on the development host at the commit `152d0dd`, the tip of the trim (the
+example's checks, `FylgjaStage`, the marks, the example's accounts and the example's NetBox
+overrides removed). Each source's volumes were purged once, before the first of its attempts
+(`make infrahub-down PURGE=1`, `make netbox-down PURGE=1`; `1-infrahub-purge.log`,
+`2-netbox-purge.log`). The runs recorded below did not each begin on a purged instance: the
+Infrahub runs began on the volumes the first attempt's `make infrahub-up` made, which its
+`make infrahub-down` kept and whose registration failed at once, so that nothing was loaded;
+the NetBox runs began on the volumes the first attempt's `make netbox-up` made, which the
+second attempt's up, seed and failed contract run used and its `make netbox-down` kept. Each
+recorded tier run was made once; the NetBox seed was read twice, as below. The logs are
+`task-6/` of the plan's workspace
+(`.superpowers/sdd/2026-11-20-phase12-2-trim/`), numbered in run order; the seconds below are
+the tier's own, `pytest`'s, and the wall seconds are the ones a wrapper measured around each
+make target (`task-6/timings.txt`). *(2026-11-21)*
+
+- **Infrahub 1.11.11**, `make infrahub-up` (`3-infrahub-up.log`): answered 53 s after Compose's
+  start returned, 82 s wall. `make infrahub-register` (`4-infrahub-register.log`): main held none
+  of the schema library's 27 kinds, which `infrahubctl` loaded; the repository `fylgja` was
+  registered from `/srv/fylgja` at `phase-12/2-trim`, in sync and online at `152d0dd`, each of the
+  2 task workers holding its tree; 198 s wall. `make infrahub-seed` (`5-infrahub-seed.log`) on
+  those volumes, which nothing but this registration had loaded: the probe kind and the seven
+  object files loaded on `main`, the configurations of `n1`, `n2` and `n3` `Ready` on `main`,
+  then the branch `third-link` made with its two stages, each regenerated, and `seed.json`
+  written; 269 s wall. The seed loaded no `FylgjaStage` and no mark, and `seed.json` was
+  written whole by it.
+- **Infrahub's contract tier** (`6-contract.log`, `make contract`, 701 s wall):
+  `infrahub/tests/contract/` 6 passed in 236.47 s, then `readers/infrahub/tests/contract/`
+  30 passed in 461.28 s; no test skipped or failed in either. The first tier's second
+  registration and its second seed, on the instance this run's own register and seed had just
+  filled, are among its 6, and passed. The reader's tier read `seed.json`'s branch, scope and stages
+  as the trimmed seed wrote them.
+  `make infrahub-down` followed (`7-infrahub-down.log`, 20 s wall).
+- **NetBox 4.7.5 with netbox_branching 1.2.3**, `make netbox-up` (`8-netbox-up.log`): the image
+  `fylgja-core-netbox:4.7.5-1.2.3` built and started with the override of the tree, which at
+  `152d0dd`, saved as `override-at-152d0dd.yml`, holds no `extra_hosts` and no
+  `host.docker.internal` (`override-grep-at-152d0dd.txt`, a `git grep -n -e extra_hosts
+  -e host.docker.internal -e environment` of `netbox/dev/` at that commit, finds `environment`
+  alone: a comment and the two services' blocks, which name `SKIP_SUPERUSER`, `SUPERUSER_*`,
+  `SECRET_KEY` and `API_TOKEN_PEPPER_1`); NetBox healthy 60 s
+  after its start, 78 s wall. The seed was read twice. `second-attempt/9-netbox-seed.log`, on
+  the volumes the first attempt's up had made and kept, wrote 38 lines saying `made` in
+  29 s wall; that attempt's contract
+  run then failed for a cause of the run's own sequencing (a `local/.env` not reloaded), and
+  its volumes were kept. `make netbox-seed` (`9-netbox-seed.log`), the run recorded, on those
+  seeded volumes, took 19 s wall.
+- **NetBox's contract tier** (`10-contract-netbox.log`, `make contract-netbox`, 719 s wall):
+  `netbox/tests/contract/` 13 passed in 125.23 s, then `readers/netbox/tests/contract/` 45
+  passed in 591.11 s; nothing skipped or failed. `make netbox-down` followed
+  (`11-netbox-down.log`, 15 s wall).
+- **`make imagecheck`** (`12-imagecheck.log`, 47 s wall) passed on `fylgja-core:152d0ddb9457`:
+  uid 10001, the 10 formats byte for byte, no copy of `psp/` or `probes/`, and
+  `--version` naming the tree's version and `152d0dd`. **`make wheelcheck`**
+  (`13-wheelcheck.log`, 27 s wall) passed for the core's wheel and those of the three readers,
+  each at 1.0.1. **`make linkcheck`** (`14-linkcheck.log`, 1 s wall) read 41 files, 2780
+  relative links, 51 external skipped, 0 broken.
+- **Two attempts failed before these** for the controller's own sequencing, not for the trim:
+  a detached head given no `REF` to `make infrahub-register` (`first-attempt/`), and
+  `local/.env` not loaded again after `make netbox-up` and after `make netbox-seed`
+  (`first-attempt/` and `second-attempt/`). Their logs are kept and are no reading of the trim.
+
+The open points of the trim these runs settle, as far as the logs show: Infrahub's contract
+tier passes with no `FylgjaStage` and no mark; a second registration and a second seed, on the
+instance the recorded register and seed had filled, pass in it; NetBox's development
+instance starts with an override that has no `extra_hosts` and no `host.docker.internal`;
+`netbox/tests/contract/` holds 13 tests, all passing; and `make imagecheck` passes. A
+derivation: the Infrahub tier's two parts sum to 697.75 s of `pytest`'s time within the 701 s
+wall of the target; the NetBox tier's two sum to 716.34 s within 719 s.
+
+## fylgja-core, phase 12: the candidate `1.1.0rc1`
+
+Read on 2026-11-21 on the development host. The commit is `8477c73`, the tip of
+`phase-12-integration`, which the tag `v1.1.0rc1` names; the runs below name it themselves where
+they say so, and where they do not, it is the controller's account that the main checkout was
+detached at it (the ledger records that for the live, cluster and Nautobot and NetBox contract
+runs). The figures are read from each run's own file. The records are
+`local/phase-12/acceptance/` of the main checkout, in the subdirectories named below; none is
+committed. The wall seconds below are the ones a wrapper measured around
+each make target, read from its saved output (`wrapper.out` in `live/`, `cluster/` and
+`contracts/`).
+The seconds of a tier are `pytest`'s own, read from the tier's log. The candidate's runs in
+`fylgja-examples`, its lock over TestPyPI, both demonstrations and that repository's own contract
+tiers, are recorded in its `design/verified-facts.md` on its branch `phase-12/3-candidate`, and
+the run of `nornir-ospf` on its branch `nornir-ospf` ([D-132](decisions.md#d-132)). *(2026-11-21)*
+
+- **The tag's runs** (`publish/run-ci-44919378030.json`, `publish/run-publish-44919602635.json`,
+  `publish/run-publish-attempt-1-jobs.json`, `publish/run-publish-attempt-2-jobs.json`, saved
+  `gh` output). The CI run 44919378030 (event `pull_request`, head `8477c73`) concluded
+  success, its two jobs `image` and `lint-and-test` both success. The publish run 44919602635
+  (event `push`, ref `v1.1.0rc1`, head `8477c73`) concluded success: `build` and the four
+  `testpypi-*` jobs succeeded; `pypi-fylgja-core`, `pypi-fylgja-infrahub`,
+  `pypi-fylgja-netbox`, `pypi-fylgja-nautobot` and `release` were skipped. The run's first
+  attempt (`run-publish-attempt-1-jobs.json`) lists `testpypi-fylgja-nautobot` as completed
+  with conclusion failure at 15:34:11 UTC, and `publish/attempt-1-nautobot-job.json` shows it
+  with no steps; `publish/attempt-1-nautobot-annotations.json`, at head `8477c73`, carries the
+  messages `Tag "v1.1.0rc1" is not allowed to deploy to testpypi-fylgja-nautobot due to
+  environment protection rules.` and `The deployment was rejected or didn't satisfy other
+  protection rules.` The second attempt (`run-publish-attempt-2-jobs.json`) lists the job
+  succeeded at 16:25:04 UTC, and its `build` job's completion time, 15:34:08 UTC, equals
+  the first attempt's. From that equality it follows, as an inference and not a reading, that
+  the `build` job was not re-run and that the run's artifact is the first attempt's. That the
+  environment held a branch rule where a tag rule was needed, that the rule was corrected, that
+  the failed job alone was re-run, and that the refusal came before approval are the
+  controller's account; no saved file shows them.
+- **The four files on TestPyPI against the run's artifact** (`publish/hashes.txt`,
+  `publish/simple-*.json`, `publish/artifact/`). Each simple page lists `1.1.0rc1` and serves
+  its file from `test-files.pythonhosted.org`; the page's `sha256` equals the `sha256sum` of
+  the wheel in the run's artifact, read again here:
+  `fylgja_core-1.1.0rc1-py3-none-any.whl`
+  `96efd86ddac1fb8c42b8d1df6b9622e21b1f1e45429a74a5b6927ec1284c28c0`;
+  `fylgja_infrahub-1.1.0rc1-py3-none-any.whl`
+  `08bc134b05719de06368360cf70723a224a0897c70b000a6e23ea1ee4218e37e`;
+  `fylgja_netbox-1.1.0rc1-py3-none-any.whl`
+  `ae4b7fcaecd0fb2f2441c27916fb12dfb01430a4c35306c81dcc6ef9e1bf29d6`;
+  `fylgja_nautobot-1.1.0rc1-py3-none-any.whl`
+  `78970a576dfc8f0cc7e8afc7b07787a519f869bf134a9463b0235d62364b1b08`. The pages list
+  `1.0.0rc1`, `1.0.0rc2` and `1.1.0rc1` for `fylgja-core`, `fylgja-infrahub` and
+  `fylgja-netbox`, and `1.1.0rc1` alone for `fylgja-nautobot`.
+- **The install** (`install/`). An empty `python3.14` venv (CPython 3.14.4), pip
+  (`--isolated`, by the controller's account of the command; `pip.log` shows only a `Looking in
+  indexes` line naming TestPyPI's simple index and PyPI's) with TestPyPI as `--index-url` and
+  PyPI as `--extra-index-url`, installing `fylgja-core[server]==1.1.0rc1` with
+  `fylgja-infrahub`, `fylgja-netbox` and `fylgja-nautobot` at `==1.1.0rc1`: it succeeded. pip's
+  report (`report.json`, counted in `hosts.txt`) took the four fylgja wheels from
+  `test-files.pythonhosted.org` and 33 other packages from `files.pythonhosted.org`. `fylgja-core`,
+  `fylgja-core-server`, `fylgja-infrahub`, `fylgja-netbox` and `fylgja-nautobot` each answered
+  `--version` with `<name> 1.1.0rc1 (commit 8477c736da3a11a4e692dc7588a62cba143afd85)`
+  (`version-<name>.txt`): the tag's commit.
+- **The server from that install** (`install/server-2/`). Started with only `FYLGJA_STORE`,
+  `FYLGJA_TOKENS` and `FYLGJA_LISTEN` set (`FYLGJA_PACKAGES` unset): `GET /v1/version` answered
+  200 after 1.61 s with `"api": "1"` and `"build": "1.1.0rc1 (commit
+  8477c736da3a11a4e692dc7588a62cba143afd85)"`, the eight formats each at `"1"`. SIGTERM ended
+  it with exit 143, and its log's last line is `stopped by SIGTERM` (`result.json`,
+  `server.log`). A first start (`install/server/`) answered 200 (`version-code.txt`,
+  `version.json`) and its log ends `stopped by SIGTERM`, but no exit status is saved for it
+  (`install/server/` holds no `result.json`; that the wrapper that ran it lost the status is the
+  controller's account), so the exit is read from the second start alone.
+- **`make live`** (`live/make-live.log`, the driver `containerlab`; the log names no commit): 167
+  passed, 1 skipped in 3723.33 s of `pytest`'s time (1:02:03); the skip is
+  `tests/conformance/test_isolation.py:73`, whose reason the log gives as "the driver keeps
+  twins apart by names, not by the network".
+  The wrapper printed `make live ok 3726s` (`live/wrapper.out`).
+- **`make cluster`** (`cluster/make-cluster.log`; the log names no commit): 44 passed in
+  2156.16 s of `pytest`'s time (35:56); the wrapper printed `make cluster ok 2158s`
+  (`cluster/wrapper.out`). The deployed core (`fylgja/fylgja-core`) was scaled to 0 for the run
+  and back to 1, ready, after it. Its record is `cluster/scale-session.txt`, the controller's
+  transcription on 2026-11-22 of the session's own `kubectl` output of 2026-11-21 (the
+  cluster's events had expired): `kubectl scale --replicas=0` printed `scaled`, `rollout status`
+  `successfully rolled out`, and the pod of the core was `Terminating` and then gone, the
+  namespace's other pod `Running`; after the run `--replicas=1` printed `scaled`, `rollout
+  status` `successfully rolled out`, and a new pod of the core was `1/1 Running`. A read on
+  2026-11-22 (`cluster/scale.txt`) is a later reading and is not cited.
+- **The Nautobot read** (`nautobot/`). The development Nautobot answered
+  `http://127.0.0.1:8810/health/` 200 120 s after its start, Nautobot 3.2.8 with
+  `nautobot_golden_config` 3.0.8, 1 worker (`nautobot-up.log`); the seed's account step said
+  "as they should be; nothing written" (`nautobot-seed.log`). The check printed
+  `ok: Nautobot 3.2.8, Golden Config 3.0.8`, exit 0 (`read/check.out`). The read, made
+  twice (`read/read-1.out`, `read/read-2.out`), printed the same blueprint id both times,
+  `2ee2f75096410c2c09946ff452e2e90362601ec86297fe4de18534113e12a639`, "3 devices, 3 links,
+  1 probes", exit 0. The two blueprint files (`read/blueprint.json`, `read/blueprint-again.json`,
+  first differing at byte 7801) differ in one line, `observed_at`
+  (`2026-11-21T18:10:28.236274Z` against `2026-11-21T18:10:40.627857Z`), read with `cmp` and a
+  `diff` of the two files with sorted keys. A server of the install (loopback port 7652) took
+  the push: `blueprint 2ee2f750…a639`, exit 0 (`read/push.out`), and its store holds that
+  blueprint under that id. The bundle build printed
+  `bundle 3a6d8442e85cfeea0f5f84ea02c58a9ff0446479df9f7ccb833007683d209a5f`: nodes `n1`, `n2`
+  and `n3` (`nokia_srlinux`), 3 links, 1 probe, "fidelity: 7 approximations, 0 omitted,
+  2 synthesized", exit 0 (`read/build.out`). The server ended on SIGTERM with exit 143
+  after 17.66 s (`server/result.json`).
+- **The three contract tiers** (`contracts/`), each target's two parts run
+  once (only the Infrahub tier's `contract.log` and `infrahub-register.log` name the commit,
+  `8477c73`; the other two tiers' commit is the controller's account), nothing skipped or
+  failed in any (no `skipped` or `failed` in a log); each source brought up for its tier and
+  down after. Infrahub 1.11.11 was registered with the repository `fylgja` moved to
+  `phase-12-integration`, in sync and online at `8477c73` after 167 s, each of the 2 task
+  workers holding its tree after 8 s (`infrahub-register.log`).
+
+  | Target | Part | Passed | `pytest` s | Target's wall s |
+  |---|---|---|---|---|
+  | `make contract-nautobot` | `nautobot/tests/contract/` | 15 | 122.58 | 503 |
+  | | `readers/nautobot/tests/contract/` | 41 | 377.24 | |
+  | `make contract` (Infrahub) | `infrahub/tests/contract/` | 6 | 308.08 | 995 |
+  | | `readers/infrahub/tests/contract/` | 30 | 684.72 | |
+  | `make contract-netbox` | `netbox/tests/contract/` | 13 | 132.49 | 728 |
+  | | `readers/netbox/tests/contract/` | 45 | 593.59 | |
+
+  The wall column is read from `contracts/wrapper.out`, which printed `contract-nautobot ok
+  503s`, `contract ok 995s` and `contract-netbox ok 728s` and the same counts and `pytest`
+  seconds as the logs. The logs are
+  `contract-nautobot.log`, `contract.log` and `contract-netbox.log`.
+
+The Infrahub reader tier's 684.72 s beside plan 2's reading of the same part in the section
+above, 461.28 s at `152d0dd`: a derivation, 684.72 / 461.28 is 1.48, an excess of 223.44 s.
+The same file's other Infrahub part read 236.47 s there and 308.08 s here (1.30). The counts
+are the same in both readings: 6 and 30 for Infrahub, 13 and 45 for NetBox. This section
+names the difference and no cause.
+
 ## The base install at its floors
 
 Read on 2026-11-09 on the development host, with Python 3.14.4 and the pip 25.1.1 its `venv`
@@ -10483,7 +10686,9 @@ considerations", "Troubleshooting"), read as their source in `pypi/warehouse`'s
   `<v> (commit <the tag's commit>)`; `fylgja-core-server` with no `FYLGJA_PACKAGES` answered `/v1/version` 200 with
   that build, filed `three-node.json` (`98f106a1…`) and built its bundle (`6a6f441c…`), and SIGTERM ended it 143.
   The same for both candidates. *(2026-11-17)*
-- **`fylgja-nautobot` is held by no project on either index.** `GET /simple/fylgja-nautobot/` answered 404 on
+- ~~**`fylgja-nautobot` is held by no project on either index.**~~ (On TestPyPI it is held
+  since 2026-11-21, by the candidate's upload, "fylgja-core, phase 12: the candidate
+  `1.1.0rc1`"; PyPI was not read again.) `GET /simple/fylgja-nautobot/` answered 404 on
   `pypi.org` and on `test.pypi.org` at phase 11's closing gates
   (`local/phase-11/acceptance/gates/wheels-check.txt`). Nothing was uploaded or registered. *(2026-11-20)*
 

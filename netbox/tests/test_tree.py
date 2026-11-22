@@ -43,13 +43,10 @@ NAMES = (
     "FYLGJA_NETBOX_WRITE_TOKEN",
     "FYLGJA_NETBOX_TOKEN",
 )
-"""The development NetBox's names in `.env.example`, in its NetBox block; the seventh is the example's."""
-
-EXAMPLES = "FYLGJA_ORCHESTRATOR_NETBOX_TOKEN"
+"""The development NetBox's names in `.env.example`, in its NetBox block."""
 
 IMAGE = "fylgja-core-netbox:${FYLGJA_NETBOX_VERSION:?}-${FYLGJA_NETBOX_BRANCHING_VERSION:?}"
 PLUGINS = "${FYLGJA_NETBOX_DEV:?}/plugins.py:/etc/netbox/config/plugins.py:ro"
-HOSTS = ["host.docker.internal:host-gateway"]
 KEYS = {
     "SECRET_KEY": "${FYLGJA_NETBOX_SECRET_KEY:?}",
     "API_TOKEN_PEPPER_1": "${FYLGJA_NETBOX_API_TOKEN_PEPPER:?}",
@@ -99,7 +96,6 @@ def test_the_override_is_the_two_services_and_no_value() -> None:
                 },
                 "ports": ["127.0.0.1:8800:8080"],
                 "volumes": [PLUGINS],
-                "extra_hosts": HOSTS,
                 "environment": {
                     "SKIP_SUPERUSER": "false",
                     "SUPERUSER_NAME": "admin",
@@ -112,7 +108,6 @@ def test_the_override_is_the_two_services_and_no_value() -> None:
                 "image": IMAGE,
                 "pull_policy": "never",
                 "volumes": [PLUGINS],
-                "extra_hosts": HOSTS,
                 "environment": KEYS,
             },
         },
@@ -227,19 +222,18 @@ def test_netbox_names_no_host_and_the_script_two_addresses() -> None:
 
 
 def test_the_names_the_tasks_share_are_one() -> None:
-    """`make netbox-up` writes the address and the write token, which `box.py` reads, and `account.py` the two
-    accounts' tokens: each name is written where it is read, and the seven listed here are those."""
+    """`make netbox-up` writes the address and the write token, which `box.py` reads, and `account.py` the
+    account's token: each name is written where it is read, and the six listed here are those."""
     assert (netbox_dev.NAMES[3], netbox_dev.WRITE_TOKEN) == (box.ADDRESS, box.TOKEN)
-    assert (*NAMES, EXAMPLES) == (*netbox_dev.NAMES, netbox_dev.WRITE_TOKEN, *account.LINES.values())
+    assert (*netbox_dev.NAMES, netbox_dev.WRITE_TOKEN, *account.LINES.values()) == NAMES
 
 
 def test_the_env_example_lists_each_name_commented() -> None:
-    """Six in the development NetBox's block, after Infrahub's, and the example's own in the example's block."""
+    """Six in the development NetBox's block, after Infrahub's and before Nautobot's."""
     held = (ROOT / ".env.example").read_text().splitlines()
     at = {line: number for number, line in enumerate(held)}
-    for name in (*NAMES, EXAMPLES):
+    for name in NAMES:
         assert f"# {name}=" in at, name
     places = [at[f"# {name}="] for name in NAMES]
     assert places == sorted(places)
-    assert at["# FYLGJA_INFRAHUB_CA="] < places[0] and places[-1] < at["# FYLGJA_ORCHESTRATOR_AUTH="]
-    assert at[f"# {EXAMPLES}="] > at["# FYLGJA_ORCHESTRATOR_INFRAHUB_TOKEN="]
+    assert at["# FYLGJA_INFRAHUB_CA="] < places[0] and places[-1] < at["# FYLGJA_NAUTOBOT_CA="]

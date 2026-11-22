@@ -257,14 +257,14 @@ def test_nautobot_names_no_host_and_the_script_one_address() -> None:
 
 
 def test_the_env_example_lists_each_name_commented() -> None:
-    """Six in the development Nautobot's block, after NetBox's and before the example's."""
+    """Six in the development Nautobot's block, after NetBox's and before its own CA line."""
     held = (ROOT / ".env.example").read_text().splitlines()
     at = {line: number for number, line in enumerate(held)}
     for name in NAMES:
         assert f"# {name}=" in at, name
     places = [at[f"# {name}="] for name in NAMES]
     assert places == sorted(places)
-    assert at["# FYLGJA_NETBOX_CA="] < places[0] and places[-1] < at["# FYLGJA_ORCHESTRATOR_AUTH="]
+    assert at["# FYLGJA_NETBOX_CA="] < places[0] and places[-1] < at["# FYLGJA_NAUTOBOT_CA="]
     assert NAMES[:5] == nautobot_dev.NAMES
 
 

@@ -47,9 +47,11 @@ Report it privately, through GitHub's private vulnerability reporting: the repos
 **Security** tab, then **Report a vulnerability**. Do not open a public issue. Say what you
 found, how to reproduce it, and the commit it applies to.
 
-**In scope**: the core under `core/`, the readers under `readers/`, the example orchestrator
-under `orchestrator/`, `infrahub/` and `netbox/`, whose checks and scripts run beside a source
-of truth, the scripts under `scripts/`, and the workflows under `.github/workflows/`.
+**In scope**: the core under `core/`, the readers under `readers/`, `infrahub/` and `netbox/`, whose
+seeds and development setups run beside a source of truth, the scripts under `scripts/`, and the
+workflows under `.github/workflows/`. The example orchestrator and its checks live in
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/), a repository
+of their own, and are not this repository's.
 
 **Not in scope**:
 - **The network operating system images and their default logins,** which a twin uses on

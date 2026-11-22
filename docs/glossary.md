@@ -1,22 +1,22 @@
 # Glossary
 
 The terms Fylgja uses, alphabetically. A term marked *(orchestrator)* belongs to a reader under
-`readers/` or to the example orchestrator under `orchestrator/`, beside the core in this
-repository, and to the source of truth they join: the core never uses it, but it is met in a
+`readers/` or to the example orchestrator, which lives in the repository
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/), and to the
+source of truth they join: the core never uses it, but it is met in a
 blueprint's `source` or in these documents. See also
 [architecture.md](../design/architecture.md) and the formats in [`formats/`](../formats/README.md).
 
 **Acceptance run** — A phase's own gate, which the maintainer watches. Phase 8's and phase 9's were each
 made once with the core on the local driver and once with the core deployed on the cluster. Through
 Infrahub's check, phase 8's: the seeded branch's
-proposed change, created by the maintainer in the development Infrahub, rehearsed through
-Infrahub's own check `fylgja-twin`, the maintainer reading each report in its thread
+proposed change rehearsed through Infrahub's own check `fylgja-twin`
 ([core.md](../design/core.md#phase-8-the-infrahub-reader-and-the-example-orchestrator-settled-2026-11-09)).
-Through NetBox's tag, phase 9's: a branch built in the development NetBox in steps, each marked,
-then given the tag `fylgja-rehearse`, by the script's last act or by hand, which starts the
-rehearsal through NetBox's webhook and Prefect, the maintainer reading each report on the branch's
-journal
+Through NetBox's tag, phase 9's: a branch built in steps, each marked, then given the tag
+`fylgja-rehearse`, which starts the rehearsal through NetBox's webhook and Prefect
 ([core.md](../design/core.md#phase-9-the-netbox-reader-and-the-examples-netbox-change-source-settled-2026-11-12)).
+Those two runs are made on the example, which moved to `fylgja-examples`, and are run from its
+[CONTRIBUTING.md](https://github.com/happypathnetworking/fylgja-examples/blob/v1.1.0/CONTRIBUTING.md#the-acceptance-run).
 From the Nautobot reader, phase 11's: the seed read by `fylgja-nautobot`, a twin of it created,
 verified and destroyed on the local driver
 ([core.md](../design/core.md#phase-11-the-nautobot-reader-settled-2026-11-19)), with the runbook in
@@ -133,14 +133,14 @@ read into a blueprint or the findings that refused it, and the report posted; wi
 attributes, the bytes one part of a report may take there and the source's own sentences for
 asking again and for checking the scope; and three more the *edge* alone asks: whether a change
 is a draft, `claim`, the request that started the rehearsal taken so that it is used once, and
-its connections closed ([integrating.md](integrating.md#the-seams)). Infrahub's,
-`fylgja_orchestrator.infrahub`, finds the open proposed change of a branch, posts the report as
-a thread of two comments, and claims nothing, since a proposed change's checks ask again only
-when they run again ([D-085](../design/decisions.md#d-085)). NetBox's,
-`fylgja_orchestrator.netbox`, finds a branch by its name, reads its *marks* from the branch's
-journal and their blueprints from the core, takes the tag off the branch as its claim, and
-files the report as one journal entry on the branch, its kind the verdict
-([D-097](../design/decisions.md#d-097)).
+its connections closed ([integrating.md](integrating.md#the-seams)). Infrahub's finds the open
+proposed change of a branch, posts the report as a thread of two comments, and claims nothing,
+since a proposed change's checks ask again only when they run again
+([D-085](../design/decisions.md#d-085)). NetBox's finds a branch by its name, reads its *marks*
+from the branch's journal and their blueprints from the core, takes the tag off the branch as
+its claim, and files the report as one journal entry on the branch, its kind the verdict
+([D-097](../design/decisions.md#d-097)). Both are in the package `fylgja_orchestrator` of
+[`fylgja-examples`](https://github.com/happypathnetworking/fylgja-examples/tree/v1.1.0/orchestrator/src/fylgja_orchestrator/).
 
 **clabernetes** — containerlab on Kubernetes, one pod per node. The production *driver*,
 with a namespace and a NetworkPolicy per twin and a LoadBalancer per node
@@ -396,11 +396,12 @@ again by running the checks again, or in NetBox by setting the tag again
 generation it acted on, the phase, run, blueprint, bundle, deployment, nodes and last step,
 and the *conditions* `Ready`, `Stepping` and `Diverged`, each with a stable reason.
 
-**Orchestrator** *(orchestrator)* — The example orchestrator: a worked example of joining
-the core and a *reader* to a system that already exists. It resolves stages, rehearses
+**Orchestrator** *(orchestrator)* — The example orchestrator, in the repository
+`fylgja-examples`: a worked example of joining the core and a *reader* to a system that already
+exists. It resolves stages, rehearses
 changes, an Infrahub proposed change or a NetBox branch, and reports on them, and is not
 hardened ([D-081](../design/decisions.md#d-081), [D-085](../design/decisions.md#d-085)). It is
-`fylgja-orchestrator`, under `orchestrator/`, in three layers, a rehearsal library, a *change
+`fylgja-orchestrator`, in three layers, a rehearsal library, a *change
 source* and an *edge*, written to be read once and replaced ([integrating.md](integrating.md));
 its prototype, the orchestrator in the archived repository, was the reference it was written
 against.
@@ -701,4 +702,6 @@ library does so itself when a stream ends early.
 **Work queue** — The loop's queue of twin names waiting to be reconciled. A name is never
 queued twice, and each twin has at most one worker at a time ([D-023](../design/decisions.md#d-023)).
 
-**Workspace** — The uv workspace at the repository's root: its five members, `core/`, `readers/infrahub/`, `readers/netbox/`, `readers/nautobot/` and `orchestrator/`, and its lock, `uv.lock`, which `make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).
+**Workspace** — The uv workspace at the repository's root: its four members, `core/`,
+`readers/infrahub/`, `readers/netbox/` and `readers/nautobot/`, and its lock, `uv.lock`, which
+`make venv` syncs `core/.venv` from ([D-108](../design/decisions.md#d-108)).

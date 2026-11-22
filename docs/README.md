@@ -12,8 +12,8 @@ order.
 5. [The client library](client.md): the Python calls of API 1, for a script of your own.
 6. [What major version 1 holds](compatibility.md): what stays the same across the releases of major version 1,
    and what does not.
-7. [The demonstrations](demonstrations.md): a change of Infrahub or of NetBox rehearsed on a twin,
-   from nothing running.
+7. [The demonstrations](demonstrations.md): where they went, to `fylgja-examples`, which rehearses
+   a change of Infrahub or of NetBox on a twin from nothing running.
 
 Beside them:
 
@@ -23,7 +23,7 @@ Beside them:
   truth into blueprints. Each has a command and a library.
 - [Rules](rules.md) lists every finding and refusal the core files, by its rule id.
 - [The glossary](glossary.md) defines the terms these pages use.
-- [Integrating Fylgja](integrating.md) walks through the example orchestrator, to join Fylgja to a
+- [Integrating Fylgja](integrating.md) walks through the example orchestrator of `fylgja-examples`, to join Fylgja to a
   source of truth and a platform of your own. The example is a model to copy. It is not part of
   what version 1.0 promises, and its commands may change.
 - [The formats](../formats/README.md) say what a blueprint and a package are written in, for

@@ -1,4 +1,4 @@
-"""The uv workspace and its lock (D-108): the root `pyproject.toml` is uv's tables alone and names the five
+"""The uv workspace and its lock (D-108): the root `pyproject.toml` is uv's tables alone and names the four
 distributions as members; `uv.lock` holds them editable, their version dynamic, and each exact pin of theirs at that
 version, so the pins stay the statement the lock is checked against (`uv sync --locked` checks the rest); and
 `make venv` is a locked sync into `core/.venv`."""
@@ -14,13 +14,12 @@ from typing import Any
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-MEMBERS = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot", "orchestrator"]
+MEMBERS = ["core", "readers/infrahub", "readers/netbox", "readers/nautobot"]
 NAMES = {
     "core": "fylgja-core",
     "readers/infrahub": "fylgja-infrahub",
     "readers/netbox": "fylgja-netbox",
     "readers/nautobot": "fylgja-nautobot",
-    "orchestrator": "fylgja-orchestrator",
 }
 PINNED = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;,]+)$")
 
@@ -37,7 +36,7 @@ def normalised(name: str) -> str:
 UV_VERSION = load("pyproject.toml")["tool"]["uv"]["required-version"].removeprefix("==")
 
 
-def test_the_root_is_a_workspace_of_the_five_and_no_distribution() -> None:
+def test_the_root_is_a_workspace_of_the_four_and_no_distribution() -> None:
     root = load("pyproject.toml")
     assert list(root) == ["tool"]
     assert list(root["tool"]) == ["uv"]
@@ -64,7 +63,7 @@ def packages() -> dict[str, list[dict[str, Any]]]:
     return found
 
 
-def test_the_lock_holds_the_five_editable_and_their_version_dynamic() -> None:
+def test_the_lock_holds_the_four_editable_and_their_version_dynamic() -> None:
     """Each member's version is `VERSION`'s, read by its `setup.py` (`test_release.py`), so `uv lock` records none."""
     locked = packages()
     for member in MEMBERS:
@@ -100,7 +99,17 @@ def test_each_exact_pin_is_the_locks_version() -> None:
             found += 1
             versions = locked[normalised(pin[1])]
             assert [v["version"] for v in versions] == [pin[2]], f"{member}: {entry}"
-    assert found == 34
+    assert found == 30
+
+
+def test_the_lock_names_neither_prefect_nor_nornir() -> None:
+    """The example, the one member that reached them, lives in `fylgja-examples`: the lock holds the four members and
+    nothing that only the example needed."""
+    lock = load("uv.lock")
+    names = {normalised(entry["name"]) for entry in lock["package"]}
+    assert len(names) > 20, "the parse is blind"
+    assert not [n for n in names if n.startswith(("prefect", "nornir")) or n == "fylgja-orchestrator"]
+    assert sorted(lock["manifest"]["members"]) == sorted(NAMES.values())
 
 
 def test_venv_is_a_locked_sync_into_core_venv() -> None:

@@ -1,11 +1,10 @@
 """`make infrahub-seed`'s work as the development Infrahub holds it: the fixture network on `main`, the seeded branch
-with its two staged edits, each read at its time and marked, no open proposed change of it, and a second seed's.
+with its two staged edits, each read at its time, and a second seed's.
 
-A module fixture runs the seed whole, as `make infrahub-seed` does, the reader's kind and the stage kind passed as
-`--schema`, with no `--proposed-change`, and each stage timed by the reader's `head`, read with the reader's token,
-writing `seed.json` where `FYLGJA_INFRAHUB_SEED` names it, so that the tiers `make contract` runs after this one read
-the branch as it leaves it. On an instance seeded already it loads nothing on `main`, removes the earlier seed's marks
-and open proposed change, and makes the branch anew.
+A module fixture runs the seed whole, as `make infrahub-seed` does, the reader's kind passed as `--schema`, and each
+stage timed by the reader's `head`, read with the reader's token, writing `seed.json` where `FYLGJA_INFRAHUB_SEED`
+names it, so that the tiers `make contract` runs after this one read the branch as it leaves it. On an instance seeded
+already it loads nothing on `main` and makes the branch anew.
 """
 
 from __future__ import annotations
@@ -28,8 +27,6 @@ FIXTURE = Path(__file__).resolve().parents[3] / "testdata" / "blueprint" / "thre
 PROBE_KIND = Path(__file__).resolve().parents[3] / "readers" / "infrahub" / "schema" / "fylgja-probe.yml"
 """The reader's kind, which `make infrahub-seed` passes as `--schema`: absolute, since this tier runs from
 `infrahub/`."""
-STAGE_KIND = Path(__file__).resolve().parents[2] / "schema" / "fylgja-stage.yml"
-"""The example's stage kind, which `make infrahub-seed` passes as a second `--schema`."""
 
 BRANCH = "third-link"
 """The seeded branch, `make infrahub-seed`'s `SEED_BRANCH` as the Makefile gives it."""
@@ -87,7 +84,7 @@ def seed_whole() -> dict[str, Any]:
     out = Path(os.environ["FYLGJA_INFRAHUB_SEED"])
     ctl = os.environ["FYLGJA_INFRAHUB_CTL"]
     argv = ["--branch", BRANCH, "--files", str(SEED), "--out", str(out), "--ctl", ctl]
-    assert seed.main([*argv, "--schema", str(PROBE_KIND), "--schema", str(STAGE_KIND)]) == 0
+    assert seed.main([*argv, "--schema", str(PROBE_KIND)]) == 0
     record: dict[str, Any] = json.loads(out.read_text())
     return record
 
@@ -96,25 +93,6 @@ def seed_whole() -> dict[str, Any]:
 def seeded(hub: Hub) -> dict[str, Any]:
     need("FYLGJA_INFRAHUB_SEED", seed.READER_TOKEN)
     return seed_whole()
-
-
-MARKS = """
-query ($branch: String!) {
-  FylgjaStage(branch__value: $branch) { count edges { node { label { value } as_of { value } description { value } } } }
-  CoreProposedChange(source_branch__value: $branch, state__value: "open") { count }
-}
-"""
-
-
-def marks(hub: Hub) -> tuple[list[dict[str, str]], int]:
-    """The seeded branch's marks on `main`, each its label and `as_of`, in the order of their labels in `seed.EDITS`,
-    and how many open proposed changes the branch has."""
-    data = hub.gql("main", MARKS, {"branch": BRANCH})
-    held = [edge["node"] for edge in data["FylgjaStage"]["edges"]]
-    assert data["FylgjaStage"]["count"] == len(held)
-    order = [edit.label for edit in seed.EDITS]
-    found = [{"label": node["label"]["value"], "at": node["as_of"]["value"]} for node in held]
-    return sorted(found, key=lambda mark: order.index(mark["label"])), data["CoreProposedChange"]["count"]
 
 
 def network(hub: Hub, branch: str, at: str | None = None) -> dict[str, Any]:
@@ -165,18 +143,11 @@ def test_main_is_left_the_baseline(seeded: dict[str, Any], hub: Hub) -> None:
 
 
 def test_the_file_names_the_branch_the_scope_and_two_stages_in_order(seeded: dict[str, Any]) -> None:
-    held = {"branch": BRANCH, "scope": seed.SCOPE, "stages": seeded["stages"], "marks": ["third-link", "n1-address"]}
-    assert seeded == held | {"proposed_change": None}
+    assert seeded == {"branch": BRANCH, "scope": seed.SCOPE, "stages": seeded["stages"]}
     assert [sorted(found) for found in seeded["stages"]] == [["at", "label"], ["at", "label"]]
     assert [found["label"] for found in seeded["stages"]] == ["third-link", "n1-address"]
     first, second = (found["at"] for found in seeded["stages"])
     assert times.later(second, first)
-
-
-def test_each_stage_is_marked_at_its_time_and_no_proposed_change_is_open(seeded: dict[str, Any], hub: Hub) -> None:
-    """One mark a stage, its `as_of` answered as the seed wrote it, the stage's time verbatim (P5-12); without
-    `--proposed-change` the seed leaves the branch no open proposed change (D-088)."""
-    assert marks(hub) == (seeded["stages"], 0)
 
 
 def test_each_stage_reads_its_own_configuration_at_its_time(seeded: dict[str, Any], hub: Hub) -> None:
@@ -202,7 +173,6 @@ def test_a_second_seed_gives_the_same_network_and_later_times(seeded: dict[str, 
     on_main = network(hub, "main")
     earlier = [stage(hub, found["at"]) for found in seeded["stages"]]
     again = seed_whole()
-    assert marks(hub) == (again["stages"], 0), "the earlier seed's marks removed, this one's written"
     assert [stage(hub, found["at"]) for found in again["stages"]] == earlier
     for old, new in zip(seeded["stages"], again["stages"], strict=True):
         assert new["label"] == old["label"]

@@ -12,7 +12,9 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
   and `make linkcheck` where Markdown changed. Read a gate's status directly, never through a
   pipe: `if make lint > /tmp/lint.log 2>&1; then echo ok; else tail -20 /tmp/lint.log; fi`.
   A gate that outlasts the foreground limit is run whole in one background call of the tool,
-  and its status read from the notification, never re-run in pieces.
+  and its status read from the notification, never re-run in pieces. A gate is never an `&`
+  job either: phase 12's fix-wave implementer reported before its gates ended and ran them
+  again.
 - **Tests first means run first.** Run each new test and see it fail before the code that
   makes it pass exists, and keep that output for your report.
 - **Never run a formatter.** The tree is wrapped by hand, and a reflow of lines your task did
@@ -26,6 +28,12 @@ The controller hands this file to each subagent with its task. Read `AGENTS.md` 
 - **Credentials are never printed, logged or written.** `local/.env` exists in the main
   checkout alone: load it in the same command as the run that needs it
   (`set -a; . <main checkout>/local/.env; set +a; …`) and never show it.
+- **`local/.env` is loaded again after every target that writes it:** `make netbox-up`,
+  `make netbox-seed`, `make nautobot-seed`, `make orchestrator-env` and `make infrahub-up`.
+  `make infrahub-register` on a detached head needs `REF=<branch>`. Phase 12's Task 6 failed
+  three times on these: it sent a token `netbox-up` had re-provisioned after it was loaded
+  (HTTP 403), read a reader token the seed had since rewritten (403), and registered with no
+  REF on a detached head.
 - **Live, Docker and cluster runs** happen only when your dispatch says the window is yours,
   one at a time, and you remove whatever you started.
 - **A behaviour of a running system** is read before a line relies on it, and recorded in

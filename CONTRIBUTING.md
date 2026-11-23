@@ -93,7 +93,8 @@ statement for people, and is the one that is right where the two disagree.
 2. **Plan.** One working document for each of the design's plans, and a "plan 0" that holds
    the branches, the order and the names the plans share. They live under `local/plans/`,
    git-ignored: a plan is how a branch gets built, and the design and the decision log are
-   the record.
+   the record. A commit hash plan 0 names is recorded after the plan's trailers are made
+   uniform, or again then, since the rewrite changes it.
 3. **Execute.** The integration branch `phase-N-integration` is cut from `main` with the
    design merged in. Each plan is a branch `phase-N/<n>-<name>` in a worktree beside the
    repository (`../fylgja-core-wt/<n>-<name>`).
@@ -103,6 +104,11 @@ statement for people, and is the one that is right where the two disagree.
      wrong; one that leaves an item for the landing also puts it in one list, as it is ruled.
    - A plan's whole branch is reviewed once more, then merged into the integration branch.
    - Live runs are one at a time.
+   - Where a phase changes a second repository, its acceptance runs that repository's tiers
+     too, and `local/.env` is loaded again after each target that writes it.
+   - An integration branch's worktree gets `make venv` before its gates, and gates run in
+     the foreground, never as an `&` job; where the tool backgrounds one, its status is read
+     from the notification.
    - The maintainer's word on an acceptance run says what they read, the report in its
      thread, not only that it passed.
    - Where a phase is done when the maintainer has watched a thing, the plan says how they
@@ -110,11 +116,14 @@ statement for people, and is the one that is right where the two disagree.
      act, and their word on whether that was their watching is recorded as they gave it.
    - A live run made from the main checkout, the one that holds `local/`, runs that
      checkout's code: it is checked out at the code under test for the run, and put back.
-   - A runbook for an acceptance run from a fresh clone says to clone at the tag and
-     `git switch -c <name>`, since a clone at a tag is on a detached head and
-     `fylgja-examples`' `make infrahub-demo` refuses one; the clone's `local/.env` is made from the
-     lines the
-     runbook names, never copied from an earlier clone.
+   - A runbook for an acceptance run from a fresh clone says to clone at the tag or, where
+     the repository is tagged only after its acceptance (`fylgja-examples` is), at the branch
+     under test, and `git switch -c <name>` either way, since a clone at a tag is on a
+     detached head and `fylgja-examples`' `make infrahub-demo` refuses one; the clone's
+     `local/.env` is made from the lines the runbook names, never copied from an earlier
+     clone. After the branch is switched, `make venv` is run again: `fylgja-examples`'
+     demonstrations never remake an existing `.venv`, and a `nornir-ospf` demonstration run
+     without it failed with `ModuleNotFoundError: nornir`.
    - An install that follows an upload first reads the index's simple page for the version,
      which can lag the index's JSON API by about a minute; an install from PyPI that must use
      PyPI alone runs `pip --isolated`.
@@ -1078,8 +1087,11 @@ environment, registers a publisher, tags, pushes a tag or approves an upload.
   exists, given these rules, by hand, since a workflow that names an environment that does not
   exist makes it with no protection rule. Each has the maintainer as its required reviewer,
   "Prevent self-review" off (the maintainer pushes the tag and approves its uploads),
-  deployment tags `v*` alone, and no secret. On GitHub's Free plan an environment and its
-  required reviewers need the repository public.
+  deployment tags `v*` alone, and no secret. The deployment rule is of type **Tag**: GitHub's
+  settings page makes a **Branch** rule by default, and a candidate's first publish was refused
+  before any approval ("Tag v1.1.0rc1 is not allowed to deploy ... protection rules") by an
+  environment so made. On GitHub's Free plan an environment and its required reviewers need the
+  repository public.
 - **Eight pending publishers**, one an index and a distribution, each with its own environment,
   each from an account with two-factor authentication: on TestPyPI, PyPI Project Name
   `fylgja-core` with Environment name `testpypi-fylgja-core`, `fylgja-infrahub` with

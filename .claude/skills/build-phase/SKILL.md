@@ -117,19 +117,29 @@ written.
   went unlogged.
 - **The runbook's blocks are run from files extracted verbatim** from the tree at the commit
   under test, and compared with the dry run's: what runs is then what the document says.
-- **A runbook for an acceptance run from a fresh clone** says to clone at the tag and then
-  `git switch -c <name>`: a clone at a tag is on a detached head, and `fylgja-examples`' `make
-  infrahub-demo` target refuses one, since it registers a branch. The clone's `local/.env` is made from the lines
-  the runbook names, the site's own (a platform's credentials), and never copied from an
-  earlier clone: phase 10's first candidate's file held 25 generated values bound to
-  instances purged since, and they were wrong for the new ones.
+- **A runbook for an acceptance run from a fresh clone** says to clone at the tag or, where
+  the repository is tagged only after its acceptance, at the branch under test, and then
+  `git switch -c <name>` either way: a clone at a tag is on a detached head, and
+  `fylgja-examples`' `make infrahub-demo` target refuses one, since it registers a branch.
+  `fylgja-examples` is tagged only after its release, so phase 12's candidate clone was made
+  at its candidate branch and its release clone at the release branch. The clone's
+  `local/.env` is made from the lines the runbook names, the site's own (a platform's
+  credentials), and never copied from an earlier clone: phase 10's first candidate's file
+  held 25 generated values bound to instances purged since, and they were wrong for the new
+  ones. After a clone's branch is switched, `make venv` is run again: `fylgja-examples`'
+  demonstrations never remake an existing `.venv`, and phase 12's first `nornir-ospf`
+  demonstration, run in the candidate's clone switched to that branch, failed at step 7 with
+  `ModuleNotFoundError: nornir`.
 - **An install that follows an upload** first reads the package index's simple page for the
   version: TestPyPI's lagged its JSON API by about a minute, and pip found only an older
   candidate. An install from PyPI that must use PyPI alone runs `pip --isolated`, so that no
   local configuration can name another index.
 - **Plan 0 keeps the bends.** Each place a plan, or later a ruling, departs from a
   decision's text is added to plan 0 when it is made, with the entry it bends. The landing
-  writes its decision entries from that list.
+  writes its decision entries from that list. A commit hash plan 0 names is recorded after
+  the plan's trailers are made uniform, or recorded again then: plan 0 named
+  `fylgja-examples`' first commit as 4c4a74e, the rewrite of plan 1's trailers made it
+  62af120, and the as-built entry had to find that.
 - The maintainer reviews the plans and chooses how they are executed.
 
 ## 3. Execute
@@ -138,7 +148,9 @@ written.
   merged in first (`--no-ff`).
 - **Each plan** gets the branch `phase-N/<n>-<name>`, cut from the integration branch when it
   starts, in a worktree beside the repository, `../fylgja-core-wt/<n>-<name>`. Run
-  `make venv` there, then a baseline `make test`, in the foreground.
+  `make venv` there, then a baseline `make test`, in the foreground. The integration
+  branch's worktree gets `make venv` too, before the gates of a merge into it: phase 12's
+  had no `.venv`, and `make lint` and `make test` exited 127.
 - **The controller**, the session running the phase, keeps a workspace for each plan outside
   the tracked tree (`.superpowers/sdd/<plan>/` with the plugin). It holds:
   - `progress.md`, the ledger: its first line names the plan; then the pre-flight scan (a
@@ -173,6 +185,11 @@ written.
 - **A fix that changes a test run live is followed by one run of that test**, so that the
   merged code has run; where no window allows it, the landing says at which commit the
   facts were read.
+- **`local/.env` is loaded again after every target that writes it** (`make netbox-up`,
+  `make netbox-seed`, `make nautobot-seed`, `make orchestrator-env`, `make infrahub-up`), and
+  `make infrahub-register` on a detached head needs `REF=<branch>`: phase 12's Task 6 failed
+  three times on a token re-provisioned or rewritten after it was loaded (HTTP 403) and on a
+  missing REF.
 - **A live run made from the main checkout runs the main checkout's code.** `local/` is
   there alone, and the `make` targets run the working directory's scripts and venv. For a
   plan's live run the main checkout is checked out detached at the code under test, the
@@ -184,7 +201,14 @@ written.
   it is removed when a commit of the same tree stands in the rewritten history.
 - **What a fact cites is in a file of its run's directory** before the task is reviewed. A
   script a later task reuses is kept in the plan's workspace under its task's name: phase
-  9's scratch reader of one run was overwritten by the next task's.
+  9's scratch reader of one run was overwritten by the next task's. Output read only in the
+  session is transcribed to a file whose header says it is a transcription, before the
+  review: phase 12's cluster scale was read from the session after the cluster's events had
+  expired, and is `scale-session.txt`, headed so.
+- **Where a phase changes a second repository, its acceptance runs that repository's tiers
+  too.** Phase 12's whole-branch review found that `fylgja-examples`' own contract tiers had
+  not run on the candidate (finding I3); run then, the candidate passed and `nornir-ospf`
+  failed two tests of its own.
 - **A fact is a reading.** A reviewer is asked whether each new fact says only what its run
   showed. A figure worked out from others is called a derivation, and whether a bound or a
   wider wait is needed is a ruling, recorded in the ledger and entered at the landing.
